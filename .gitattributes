@@ -1,0 +1,1 @@
+*.sol linguist-language=Solidity

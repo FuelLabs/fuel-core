@@ -102,3 +102,11 @@ dist
 
 # TernJS port file
 .tern-port
+
+#Intellij
+*.iml
+.idea/
+
+#Buidler files
+cache
+artifacts
