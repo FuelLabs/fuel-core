@@ -5,14 +5,17 @@ import "./FuelEnums.sol";
 
 contract FuelInterpreter {
 
-    bytes32[] register;
+    uint256[] register;
 
-    // initialize stack: a stack is common in register-based VM approaches
     uint256[] stackStorage;
 
-    constructor(bytes32[] memory _initialRegister) public {
-        console.log("Deploying a FuelInterpreter with registers:", _initialRegister.length);
+    function init(uint256[] calldata _initialRegister) external {
+        console.log("Deploying a FuelInterpreter with uint256 registers:", _initialRegister.length);
         register = _initialRegister;
+    }
+
+    function getRegisterCount() external view returns (uint result) {
+        result = register.length;
     }
 
     function processRegister(Opcode[] calldata codes, uint256[] calldata extra) external returns (interpret_result result) {
@@ -35,11 +38,9 @@ contract FuelInterpreter {
                 // presumably, return code can include register and stack values, e.g. hash
                 // this is a starting point for recursive covenant approaches
             } else if (current == Opcode.OP_INC) {
-                uint256 tmp = uint(register[0]);
-                register[0] = bytes32(tmp++);
+                register[0] = register[0]++;
             } else if (current == Opcode.OP_DEC) {
-                uint256 tmp = uint(register[0]);
-                register[0] = bytes32(tmp--);
+                register[0] = register[0]--;
             } else if (current == Opcode.OP_VERIFY_MERKLE_PROOF) {
                 // WIP
                 // generally preceded by a push3 of:
@@ -92,7 +93,7 @@ contract FuelInterpreter {
                     uint256 output = extra[pc_extra + maskLength * 2];
                     if (template != output) {
                         // record the template failure offset of extra data
-                        register[0] = bytes32(pc_extra);
+                        register[0] = pc_extra;
                         result = interpret_result.ERROR_TEMPLATE_FAILURE;
                         return result;
                     }
