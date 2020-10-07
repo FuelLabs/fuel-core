@@ -12,9 +12,7 @@ describe("FuelInterpreter", function() {
     await interpreter.init([1, 2]);
     expect(await interpreter.getRegisterCount()).to.equal(2);
   });
-});
 
-describe("FuelInterpreter", function() {
   it("Should validate access to opcodes test", async function() {
     const FuelInterpreter = await ethers.getContractFactory("FuelInterpreter");
 
@@ -37,9 +35,7 @@ describe("FuelInterpreter", function() {
     expect(op_add).to.equal(1); // ADD
 
   });
-});
 
-describe("FuelInterpreter", function() {
   it("Should run interpreter and return status test", async function() {
     const FuelInterpreter = await ethers.getContractFactory("FuelInterpreter");
 
