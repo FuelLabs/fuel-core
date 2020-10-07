@@ -47,7 +47,6 @@ describe("FuelInterpreter", function() {
 
     const FuelEnums = await ethers.getContractFactory("Opcode_Contract");
     const enums = await FuelEnums.deploy();
-    await enums.deployTransaction.wait();
 
     let op_stop = await enums.OP_STOP();
     console.log("op_stop:",op_stop);
