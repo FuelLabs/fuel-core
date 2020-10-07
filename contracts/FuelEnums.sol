@@ -90,7 +90,7 @@ enum Opcode {
     OP_DEC
 }
 
-enum interpret_result {
+enum interpreter_result {
     INITIAL,
     SUCCESS,
     STOPPED,

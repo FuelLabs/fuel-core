@@ -53,7 +53,7 @@ describe("FuelInterpreter", function() {
     console.log("op_stop:",op_stop);
     expect(op_stop).to.equal(0); // STOP
 
-    const InterpreterResult = await ethers.getContractFactory("interpret_result_Contract");
+    const InterpreterResult = await ethers.getContractFactory("interpreter_result_Contract");
     const interpreterResult = await InterpreterResult.deploy();
     let tx_res0 = await interpreter.getLastResult();
     let initial = await interpreterResult.INITIAL();

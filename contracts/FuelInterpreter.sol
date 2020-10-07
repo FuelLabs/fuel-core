@@ -14,17 +14,17 @@ contract FuelInterpreter {
         register = _initialRegister;
     }
 
-    function getRegisterCount() external view returns (uint result) {
-        result = register.length;
+    function getRegisterCount() external view returns (uint res) {
+        res = register.length;
     }
 
-    interpret_result last_result = interpret_result.INITIAL;
+    interpreter_result last_result = interpreter_result.INITIAL;
 
-    function getLastResult() external view returns (interpret_result res) {
+    function getLastResult() external view returns (interpreter_result res) {
         res = last_result;
     }
 
-    function setLastResult (interpret_result res) internal {
+    function setLastResult (interpreter_result res) internal {
         last_result = res;
     }
 
@@ -40,14 +40,14 @@ contract FuelInterpreter {
 
             // set default value to failure
             // method return of 'result' can be invoked eagerly based on VM semantics config
-            setLastResult(interpret_result.ERROR_UNKNOWN_OPCODE);
-//            result = interpret_result.ERROR_UNKNOWN_OPCODE;
+            setLastResult(interpreter_result.ERROR_UNKNOWN_OPCODE);
+//            result = interpreter_result.ERROR_UNKNOWN_OPCODE;
 
             // we try to produce results to register[0]
             if (current == Opcode.OP_STOP) {
-                setLastResult(interpret_result.STOPPED);
+                setLastResult(interpreter_result.STOPPED);
                 return;
-//              result = result = interpret_result.STOPPED;
+//              result = result = interpreter_result.STOPPED;
                 // presumably, return code can include register and stack values, e.g. hash
                 // this is a starting point for recursive covenant approaches
             } else if (current == Opcode.OP_INC) {
@@ -107,8 +107,8 @@ contract FuelInterpreter {
                     if (template != output) {
                         // record the template failure offset of extra data
                         register[0] = pc_extra;
-                        setLastResult(interpret_result.ERROR_TEMPLATE_FAILURE);
-//                        result = interpret_result.ERROR_TEMPLATE_FAILURE;
+                        setLastResult(interpreter_result.ERROR_TEMPLATE_FAILURE);
+//                        result = interpreter_result.ERROR_TEMPLATE_FAILURE;
 //                        return result;
                         return;
                     }
@@ -124,16 +124,16 @@ contract FuelInterpreter {
                 // TODO - implement OP_EXECUTE_ETH_SMART_CONTRACT
             } else {
                 // set error return
-                setLastResult(interpret_result.ERROR_UNKNOWN_OPCODE);
-//                result = interpret_result.ERROR_UNKNOWN_OPCODE;
+                setLastResult(interpreter_result.ERROR_UNKNOWN_OPCODE);
+//                result = interpreter_result.ERROR_UNKNOWN_OPCODE;
 //                return result;
                 return;
             }
         }
 
         // if completed successfully, set success status
-        setLastResult(interpret_result.SUCCESS);
-//        result = interpret_result.SUCCESS;
+        setLastResult(interpreter_result.SUCCESS);
+//        result = interpreter_result.SUCCESS;
     }
 
 
