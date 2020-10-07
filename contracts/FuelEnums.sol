@@ -1,5 +1,6 @@
 pragma solidity ^0.6.8;
 
+
 enum Opcode {
     OP_STOP,
     OP_ADD,
