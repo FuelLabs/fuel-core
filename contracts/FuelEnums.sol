@@ -91,6 +91,7 @@ enum Opcode {
 }
 
 enum interpret_result {
+    INITIAL,
     SUCCESS,
     STOPPED,
     ERROR_TEMPLATE_FAILURE, // applies only to OP_CHECK_TEMPLATE_VERIFY

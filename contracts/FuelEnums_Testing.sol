@@ -1,5 +1,13 @@
 import "./FuelEnums.sol";
 
+contract interpret_result_Contract {
+    function INITIAL() external view returns (interpret_result ret) { ret = interpret_result.INITIAL; }
+    function SUCCESS() external view returns (interpret_result ret) { ret = interpret_result.SUCCESS; }
+    function STOPPED() external view returns (interpret_result ret) { ret = interpret_result.STOPPED; }
+    function ERROR_TEMPLATE_FAILURE() external view returns (interpret_result ret) { ret = interpret_result.ERROR_TEMPLATE_FAILURE; }
+    function ERROR_UNKNOWN_OPCODE() external view returns (interpret_result ret) { ret = interpret_result.ERROR_UNKNOWN_OPCODE; }
+}
+
 contract Opcode_Contract {
     function OP_STOP() external view returns (Opcode ret) { ret = Opcode.OP_STOP; }
     function OP_ADD() external view returns (Opcode ret) { ret = Opcode.OP_ADD; }
