@@ -15,7 +15,7 @@ describe("FuelInterpreter", function() {
 });
 
 describe("FuelInterpreter", function() {
-  it("Should run initial opcode test", async function() {
+  it("Should validate access to opcodes test", async function() {
     const FuelInterpreter = await ethers.getContractFactory("FuelInterpreter");
 
     const interpreter = await FuelInterpreter.deploy();
