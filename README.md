@@ -1,2 +1,3 @@
-# fuel-vm-evm
-EVM interpreter for the Fuel Virtual Machine
+# fuel-vm-rs
+
+Rust interpreter for the Fuel Virtual Machine
