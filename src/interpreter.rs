@@ -1058,13 +1058,13 @@ pub struct FTx {
 
 #[derive(Clone, Debug)]
 pub struct FInput {
+    pub utxo_id: FUtxoId,
     pub input_type: FInputTypeEnum,
     pub data: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct FInputCoin {
-    pub utxo_id: FUtxoId,
     pub data_length: u16,
     pub data: Vec<u8>,
     pub witness_index: u8,
@@ -1072,7 +1072,6 @@ pub struct FInputCoin {
 
 #[derive(Clone, Debug, Default)]
 pub struct FInputContract {
-    pub utxo_id: FUtxoId,
     pub contract_id: FContractId,
 }
 
