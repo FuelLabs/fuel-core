@@ -1043,3 +1043,76 @@ impl Program {
         }
     }
 }
+
+#[derive(Clone, Debug, Default)]
+pub struct FTx {
+    pub script_length: u16,
+    pub script: Vec<u8>,
+    pub gas_price: u64,
+    pub gas_limit: u64,
+    pub inputs_count: u8,
+    pub inputs: Vec<FInput>,
+    pub outputs_count: u8,
+    pub outputs: Vec<FOutput>,
+}
+
+#[derive(Clone, Debug)]
+pub struct FInput {
+    pub input_type: FInputTypeEnum,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FInputCoin {
+    pub utxo_id: FUtxoId,
+    pub data_length: u16,
+    pub data: Vec<u8>,
+    pub witness_index: u8,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FInputContract {
+    pub utxo_id: FUtxoId,
+    pub contract_id: FContractId,
+}
+
+#[derive(Clone, Debug)]
+pub enum FInputTypeEnum {
+    Coin(FInputCoin),
+    Contract(FInputContract)
+}
+
+#[derive(Clone, Debug)]
+pub struct FOutput {
+    pub input_type: FOutputTypeEnum,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FOutputCoin {
+    pub to: [u8; 32],
+    pub amount: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FOutputContract {
+    pub input_index: u8,
+    pub amount_witness_index: u8,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FWitness {
+    pub data_length: u16,
+    pub data: Vec<u8>,
+}
+
+#[derive(Clone, Debug)]
+pub enum FOutputTypeEnum {
+    Coin(FOutputCoin),
+    Contract
+}
+
+pub type FInputType = u8;
+pub type FOutputType = u8;
+pub type FUtxoId =  [u8; 32];
+pub type FContractId =  [u8; 32];
