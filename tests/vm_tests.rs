@@ -237,3 +237,38 @@ pub fn test_program_w_tx() {
     child.join().unwrap();
 }
 
+
+fn setup_program_w_new_tx_format() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_abi(p);
+
+    let mut tx: FTx = FTx::default();
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 4,
+        data: vec![0,0,0,0]
+    };
+    tx.inputs = vec![tx_input];
+
+    handle_ftx(tx, &mut vm);
+
+    vm.dump_registers();
+}
+
+#[test]
+pub fn test_program_w_new_tx_format() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_new_tx_format)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}

@@ -964,6 +964,36 @@ pub fn handle_fueltx_init(tx: FuelTx, vm: &mut VM) {
     vm.run();
 }
 
+pub fn handle_ftx(tx: FTx, vm: &mut VM) {
+    if let Some(top_frame) = vm.get_framestack().last_mut() {
+        for v in tx.inputs {
+            match v.input_type {
+                FInputTypeEnum::Coin(_) => {
+                    // noop
+                }
+                FInputTypeEnum::Contract(_) => {
+                    if v.data_length % 4 != 0 {
+                        panic!("Insufficient u8 bytes to form u32");
+                    }
+                    let mut p: Program = Program::new();
+                    for b in 0 .. v.data_length / 4 {
+                        // msb-first
+                        let mut op: u32 = (v.data[(b * 4) as usize] as u32) << (32 - 8 - 1) as u32;
+                        op = op | (v.data[((b * 4) + 1) as usize] as u32) << (32 - 16 - 1) as u32;
+                        op = op | (v.data[((b * 4) + 2) as usize] as u32) << (32 - 24 - 1) as u32;
+                        op = op | (v.data[((b * 4) + 3) as usize] as u32);
+                        p.code.push(op);
+                    }
+                    top_frame.program = p;
+                }
+            }
+        }
+
+    }
+
+    vm.run();
+}
+
 pub fn handle_fueltx_data(tx: FuelTx, vm: &mut VM) {
     // metadata contains function selector, and function parameters
     let data = tx.eth_tx.data;
@@ -1060,13 +1090,12 @@ pub struct FTx {
 pub struct FInput {
     pub utxo_id: FUtxoId,
     pub input_type: FInputTypeEnum,
+    pub data_length: u16,
     pub data: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct FInputCoin {
-    pub data_length: u16,
-    pub data: Vec<u8>,
     pub witness_index: u8,
 }
 
