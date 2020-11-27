@@ -1,3 +1,4 @@
+#![allow(warnings)]
 pub mod interpreter;
 pub mod opcodes;
 pub mod consts;

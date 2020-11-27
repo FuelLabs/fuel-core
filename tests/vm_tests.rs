@@ -1,3 +1,5 @@
+#![allow(warnings)]
+
 mod common;
 
 use crate::common::setup;
@@ -196,6 +198,72 @@ fn setup_program_w_tx() {
 
 fn build_program_for_abi(p: &mut Program) {
 // function selector from tx
+    // retrieve meta
+    p.code.push(Opcode::Pop(0).ser());
+
+    // contract ABI
+    p.code.push(Opcode::SetI(1, 0).ser());
+    p.code.push(Opcode::SetI(2, 1).ser());
+
+    // function selector
+    p.code.push(Opcode::Beq(0, 1, 6).ser());
+    p.code.push(Opcode::Beq(0, 2, 8).ser());
+    p.code.push(Opcode::J(5).ser());
+
+    // func
+    p.code.push(Opcode::Add(3, 3, 3).ser());
+    p.code.push(Opcode::J(3).ser());
+    // func
+    p.code.push(Opcode::Add(3, 3, 3).ser());
+    p.code.push(Opcode::Add(3, 3, 3).ser());
+
+    p.code.push(Opcode::Stop().ser());
+}
+
+#[test]
+pub fn test_program_w_tx() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_tx)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
+
+fn setup_program_w_new_tx_format() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_abi_new_tx(p);
+
+    let mut tx: FTx = FTx::default();
+    let data_vec = transform_from_u32_to_u8(&p.code);
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: data_vec.len() as u16,
+        data: data_vec,
+    };
+    tx.inputs = vec![tx_input];
+
+    handle_ftx(tx, &mut vm);
+
+    vm.dump_registers();
+}
+
+
+fn build_program_for_abi_new_tx(p: &mut Program) {
+// function selector from tx
+    // set meta data
+    p.code.push(Opcode::SetI(0, 0).ser());
+    p.code.push(Opcode::Push(0).ser());
+
     // 0
     p.code.push(Opcode::Pop(0).ser());
 
@@ -223,42 +291,6 @@ fn build_program_for_abi(p: &mut Program) {
     p.code.push(Opcode::Add(3, 3, 3).ser());
     // 10
     p.code.push(Opcode::Stop().ser());
-}
-
-#[test]
-pub fn test_program_w_tx() {
-    // Spawn thread with explicit stack size
-    let child = thread::Builder::new()
-        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
-        .spawn(setup_program_w_tx)
-        .unwrap();
-
-    // Wait for thread to join
-    child.join().unwrap();
-}
-
-
-fn setup_program_w_new_tx_format() {
-    let mut vm: VM = VM::new();
-
-    let p: &mut Program = &mut vm.program;
-
-    build_program_for_abi(p);
-
-    let mut tx: FTx = FTx::default();
-    let mut tx_input = FInput {
-        utxo_id: [0; 32],
-        input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
-        }),
-        data_length: 4,
-        data: vec![0,0,0,0]
-    };
-    tx.inputs = vec![tx_input];
-
-    handle_ftx(tx, &mut vm);
-
-    vm.dump_registers();
 }
 
 #[test]

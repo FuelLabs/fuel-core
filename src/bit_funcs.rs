@@ -84,3 +84,40 @@ pub fn from_u64_to_u8_recurse(v: u64, left: u8, len: u8) -> u64 {
         (1 << len) - 1
     )
 }
+
+pub fn transform_from_u8_to_u32(input: &Vec<u8>) -> Vec<u32> {
+    let mut out: Vec<u32> = Vec::new();
+    if input.len() % 4 != 0 {
+        panic!("Insufficient u8 bytes to form u32");
+    }
+    for b in 0..input.len() / 4 {
+        println!("input[0]: {}, {:08b}", (input[(b * 4) as usize] ), (input[(b * 4) as usize] ));
+        println!("input[1]: {:08b}", (input[((b * 4) + 1) as usize] ));
+        println!("input[2]: {:08b}", (input[((b * 4) + 2) as usize] ) as u8);
+        println!("input[3]: {:08b}", (input[((b * 4) + 3) as usize] as u8));
+
+        let mut op: u32 = (input[(b * 4) as usize] as u32) << 24 as u32;
+        op = op | (input[((b * 4) + 1) as usize] as u32) << 16 as u32;
+        op = op | (input[((b * 4) + 2) as usize] as u32) << 8 as u32;
+        op = op | (input[((b * 4) + 3) as usize] as u32);
+
+        println!("op: {:032b}", op);
+        out.push(op);
+    }
+    out
+}
+
+
+pub fn transform_from_u32_to_u8(input: &Vec<u32>) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    for b in 0..input.len() {
+        println!("op: {:032b}", input[b] as u32);
+        out.push((input[b] >> 24 & u8::MAX as u32) as u8);
+        out.push((input[b] >> 16 & u8::MAX as u32) as u8);
+        out.push((input[b] >> 8 & u8::MAX as u32) as u8);
+        out.push((input[b] & u8::MAX as u32) as u8);
+    }
+    println!("vec: {:?}", out);
+    out
+}
+

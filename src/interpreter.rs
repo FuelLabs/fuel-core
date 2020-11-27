@@ -5,6 +5,7 @@ use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
+use crate::bit_funcs::transform_from_u8_to_u32;
 
 #[derive(Clone)]
 pub struct VM {
@@ -256,10 +257,10 @@ impl VM {
             Opcode::Beq(rs, rt, imm) => {
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
+                let pc = vm.get_pc();
                 if v2 == v1 {
-                    vm.set_pc(imm as u8);
+                    vm.set_pc(pc + imm as u8);
                 } else {
-                    let pc = vm.get_pc();
                     vm.set_pc(pc + 1);
                 }
             }
@@ -972,19 +973,7 @@ pub fn handle_ftx(tx: FTx, vm: &mut VM) {
                     // noop
                 }
                 FInputTypeEnum::Contract(_) => {
-                    if v.data_length % 4 != 0 {
-                        panic!("Insufficient u8 bytes to form u32");
-                    }
-                    let mut p: Program = Program::new();
-                    for b in 0 .. v.data_length / 4 {
-                        // msb-first
-                        let mut op: u32 = (v.data[(b * 4) as usize] as u32) << (32 - 8 - 1) as u32;
-                        op = op | (v.data[((b * 4) + 1) as usize] as u32) << (32 - 16 - 1) as u32;
-                        op = op | (v.data[((b * 4) + 2) as usize] as u32) << (32 - 24 - 1) as u32;
-                        op = op | (v.data[((b * 4) + 3) as usize] as u32);
-                        p.code.push(op);
-                    }
-                    top_frame.program = p;
+                    top_frame.program.code = transform_from_u8_to_u32(&v.data);
                 }
             }
         }
