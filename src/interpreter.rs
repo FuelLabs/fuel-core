@@ -1115,6 +1115,7 @@ pub struct FOutputCoin {
 pub struct FOutputContract {
     pub input_index: u8,
     pub amount_witness_index: u8,
+    pub state_witness_index: u8,
 }
 
 #[derive(Clone, Debug, Default)]
