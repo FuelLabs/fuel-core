@@ -81,8 +81,11 @@ pub enum Opcode {
     FuelRootProducer(RegisterId),
     FuelBlockProducer(RegisterId),
 
-    Utxoid(RegisterId),
+    Utxoid(RegisterId, ImmediateValue),
     Contractid(RegisterId),
+
+    FtxOutputTo(RegisterId, ImmediateValue),
+    FtxOutputAmount(RegisterId, ImmediateValue),
 }
 
 pub trait Programmable {
@@ -637,10 +640,11 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v
             }
-            Utxoid(rd) => {
+            Utxoid(rd, imm) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 168, 0, 8);
                 v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm as u16);
                 v
             }
             Contractid(rd) => {
@@ -649,6 +653,21 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v
             }
+            FtxOutputTo(rd, imm) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 170, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm);
+                v
+            }
+            FtxOutputAmount(rd, imm) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 171, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm);
+                v
+            }
+
 
         };
     }
@@ -1006,11 +1025,22 @@ impl Programmable for Opcode {
             }
             168 => {
                 let rd = Opcode::get_rd(v);
-                Utxoid(rd)
+                let imm = Opcode::get_imm(v);
+                Utxoid(rd, imm)
             }
             169 => {
                 let rd = Opcode::get_rd(v);
                 Contractid(rd)
+            }
+            170 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                FtxOutputTo(rd, imm)
+            }
+            171 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                FtxOutputAmount(rd, imm)
             }
 
             _ => {

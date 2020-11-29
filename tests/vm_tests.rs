@@ -240,7 +240,7 @@ fn setup_program_w_new_tx_format() {
 
     build_program_for_abi_new_tx(p);
 
-    let mut tx: FTx = FTx::default();
+    let mut tx: Ftx = Ftx::default();
     let data_vec = transform_from_u32_to_u8(&p.code);
     let mut tx_input = FInput {
         utxo_id: [0; 32],
@@ -259,10 +259,8 @@ fn setup_program_w_new_tx_format() {
 
 
 fn build_program_for_abi_new_tx(p: &mut Program) {
-// function selector from tx
-    // set meta data
-    p.code.push(Opcode::SetI(0, 0).ser());
-    p.code.push(Opcode::Push(0).ser());
+
+    // function selector from tx
 
     // 0
     p.code.push(Opcode::Pop(0).ser());
@@ -303,4 +301,65 @@ pub fn test_program_w_new_tx_format() {
 
     // Wait for thread to join
     child.join().unwrap();
+}
+
+
+#[test]
+pub fn test_program_w_new_tx_format_extended() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_new_tx_format_extended)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
+
+fn setup_program_w_new_tx_format_extended() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+    build_program_for_abi_new_tx(p);
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx1_output = FOutput {
+        output_type: FOutputTypeEnum::FOutputContract {
+            input_index: 0,
+            amount_witness_index: 0,
+            state_witness_index: 0,
+        },
+        data: vec![0],
+    };
+    tx1.outputs = vec![tx1_output];
+
+    let mut tx2: Ftx = Ftx::default();
+
+    let mut tx_ops: Vec<u32> = Vec::new();
+    &tx_ops.push(Opcode::SetI(0, 0).ser());
+    &tx_ops.push(Opcode::Push(0).ser());
+
+    let mut tx_data: Vec<u8> = transform_from_u32_to_u8(&tx_ops);
+
+    let mut tx_input2 = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [0; 32]
+        }),
+        data_length: tx_data.len() as u16,
+        data: tx_data,
+    };
+    tx2.inputs = vec![tx_input2];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.set_state(1);
+    handle_ftx(tx2, &mut vm);
+
+    vm.dump_registers();
 }

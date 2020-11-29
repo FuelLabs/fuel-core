@@ -5,11 +5,11 @@ use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
-use crate::bit_funcs::transform_from_u8_to_u32;
+use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u32_to_u64};
 
 #[derive(Clone)]
 pub struct VM {
-    pub fuel_tx: FuelTx,
+    pub fuel_tx: Ftx,
     pub memory: [MemWord; FUEL_MAX_MEMORY_SIZE as usize],
     pub program: Program,
     pub hi: u64,
@@ -31,7 +31,7 @@ impl VM {
         new_callframes.push(CallFrame::new());
 
         VM {
-            fuel_tx: FuelTx::create_default(),
+            fuel_tx: Default::default(),
             memory: [3 as MemWord; FUEL_MAX_MEMORY_SIZE as usize],
             program: Program::new(),
             hi: 0u64,
@@ -487,9 +487,9 @@ impl VM {
                 vm.create_and_push_new_frame(address, n);
             }
 
-            Opcode::Ret(address) => {
-                let mut p : Program = Program::new();
-                let mut c2 : bool = false;
+            Opcode::Ret(imm) => {
+                let mut p: Program = Program::new();
+                let mut c2: bool = false;
                 let mut code_mapping = Default::default();
                 if let Some(top_frame) = vm.get_top_frame() {
                     c2 = top_frame.create2_frame;
@@ -507,7 +507,8 @@ impl VM {
                         prev_frame.address_program_mapping.extend(code_mapping);
                     }
                 }
-                vm.set_pc(address as u8);
+                // let pc = vm.get_pc();
+                vm.set_pc(imm as u8);
             }
 
             Opcode::Halt(rs) => {
@@ -601,12 +602,12 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Gaslimit(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.eth_tx.gas_limit);
+                vm.set_register_value(rd, vm.fuel_tx.gas_limit);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Gasprice(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.eth_tx.gas_price);
+                vm.set_register_value(rd, vm.fuel_tx.gas_price);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -645,7 +646,7 @@ impl VM {
                 let out_offset = vm.get_memory(rs + 5);
                 let out_size = vm.get_memory(rs + 6);
 
-                let mut p : Program = Program::new();
+                let mut p: Program = Program::new();
                 if let Some(to_contract_code) = vm.get_top_frame().unwrap().address_program_mapping.get(&to) {
                     p = to_contract_code.clone();
                 }
@@ -700,22 +701,25 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelBlockHeight(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.block_height);
+                vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelRootProducer(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.root_producer);
+                vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelBlockProducer(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.block_producer);
+                vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::Utxoid(rd) => {
-                vm.set_register_value(rd, vm.fuel_tx.utxo_tx_id);
+            Opcode::Utxoid(rd, imm) => {
+                let rd_val = vm.get_register_value(rd);
+                let x = vm.fuel_tx.inputs[imm as usize].utxo_id;
+                vm.set_memory(rd_val as u8, transform_from_u32_to_u64(&transform_from_u8_to_u32(&x.to_vec()))[0]);
+
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -723,6 +727,27 @@ impl VM {
                 if let Some(top_frame) = vm.get_top_frame() {
                     vm.set_register_value(rd, calculate_hash(&top_frame.program));
                 }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::FtxOutputTo(rd, imm) => {
+                match vm.fuel_tx.outputs[imm as usize].output_type {
+                    FOutputTypeEnum::FOutputCoin { to, amount } => {
+                        vm.set_register_value(rd, transform_from_u32_to_u64(&transform_from_u8_to_u32(&to.to_vec()))[0]);
+                    }
+                    FOutputTypeEnum::FOutputContract { input_index, amount_witness_index, state_witness_index } => {}
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::FtxOutputAmount(rd, imm) => {
+                match vm.fuel_tx.outputs[imm as usize].output_type {
+                    FOutputTypeEnum::FOutputCoin { to, amount } => {
+                        vm.set_register_value(rd, amount);
+                    }
+                    FOutputTypeEnum::FOutputContract { input_index, amount_witness_index, state_witness_index } => {}
+                }
+
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -965,15 +990,20 @@ pub fn handle_fueltx_init(tx: FuelTx, vm: &mut VM) {
     vm.run();
 }
 
-pub fn handle_ftx(tx: FTx, vm: &mut VM) {
-    if let Some(top_frame) = vm.get_framestack().last_mut() {
-        for v in tx.inputs {
-            match v.input_type {
-                FInputTypeEnum::Coin(_) => {
-                    // noop
-                }
-                FInputTypeEnum::Contract(_) => {
-                    top_frame.program.code = transform_from_u8_to_u32(&v.data);
+pub fn handle_ftx(tx: Ftx, vm: &mut VM) {
+    if tx.script_length > 0 {
+        vm.program.code = transform_from_u8_to_u32(&tx.script);
+    }
+
+    for v in tx.inputs {
+        match v.input_type {
+            FInputTypeEnum::Coin(_) => {
+                // noop
+            }
+            FInputTypeEnum::Contract(_) => {
+                let d_vec = transform_from_u8_to_u32(&v.data);
+                for d in 0..d_vec.len() {
+                    vm.program.code.insert(d, d_vec[d]);
                 }
             }
         }
@@ -1064,7 +1094,7 @@ impl Program {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FTx {
+pub struct Ftx {
     pub script_length: u16,
     pub script: Vec<u8>,
     pub gas_price: u64,
@@ -1096,26 +1126,13 @@ pub struct FInputContract {
 #[derive(Clone, Debug)]
 pub enum FInputTypeEnum {
     Coin(FInputCoin),
-    Contract(FInputContract)
+    Contract(FInputContract),
 }
 
 #[derive(Clone, Debug)]
 pub struct FOutput {
-    pub input_type: FOutputTypeEnum,
+    pub output_type: FOutputTypeEnum,
     pub data: Vec<u8>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct FOutputCoin {
-    pub to: [u8; 32],
-    pub amount: u64,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct FOutputContract {
-    pub input_index: u8,
-    pub amount_witness_index: u8,
-    pub state_witness_index: u8,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1126,11 +1143,18 @@ pub struct FWitness {
 
 #[derive(Clone, Debug)]
 pub enum FOutputTypeEnum {
-    Coin(FOutputCoin),
-    Contract
+    FOutputCoin {
+        to: [u8; 32],
+        amount: u64,
+    },
+    FOutputContract {
+        input_index: u8,
+        amount_witness_index: u8,
+        state_witness_index: u8
+    },
 }
 
 pub type FInputType = u8;
 pub type FOutputType = u8;
-pub type FUtxoId =  [u8; 32];
-pub type FContractId =  [u8; 32];
+pub type FUtxoId = [u8; 32];
+pub type FContractId = [u8; 32];
