@@ -1019,3 +1019,20 @@ pub fn test_op_jr() {
     vm.execute(Opcode::Jr(0));
     assert_eq!(vm.get_top_frame().unwrap().pc, 3);
 }
+
+#[test]
+pub fn test_op_jnz() {
+    let mut vm: VM = VM::new();
+    vm.execute(Opcode::Jnz(0, 1));
+    assert_eq!(vm.get_top_frame().unwrap().pc, 3);
+}
+
+#[test]
+pub fn test_op_jnzi() {
+    let mut vm: VM = VM::new();
+    vm.execute(Opcode::Jnzi(0, 1));
+    assert_eq!(vm.get_top_frame().unwrap().pc, 3);
+
+    vm.execute(Opcode::Jnzi(0, 0));
+    assert_eq!(vm.get_top_frame().unwrap().pc, 4);
+}
