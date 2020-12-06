@@ -5,7 +5,7 @@ use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor, Rem};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
-use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u32_to_u64, transform_from_u64_to_u32, transform_from_u64_to_u8, transform_from_u8_to_u64};
+use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u64_to_u8, transform_from_u8_to_u64};
 use keccak_hash::keccak;
 use tiny_keccak::{Sha3, Hasher as sha3hasher};
 
@@ -15,15 +15,13 @@ pub struct VM {
     pub memory: [MemWord; FUEL_MAX_MEMORY_SIZE as usize],
     pub program: Program,
     pub hi: u64,
-    pub lo: u64,
     pub ret: u64,
     state: u8,
     error: u8,
     of: MemWord,
-    pub of_flag: bool,
-    uf_flag: bool,
     registers: [MemWord; VM_REGISTER_COUNT as usize],
     pub callframes: Vec<CallFrame>,
+    pub store: Box<HashMap<u64, u64>>,
 }
 
 impl VM {
@@ -38,15 +36,13 @@ impl VM {
             memory: [3 as MemWord; FUEL_MAX_MEMORY_SIZE as usize],
             program: Program::new(),
             hi: 0u64,
-            lo: 0u64,
             ret: 0u64,
             state: 1u8,
             error: 0u8,
             of: 0u64,
-            of_flag: false,
-            uf_flag: false,
             registers: [3 as MemWord; VM_REGISTER_COUNT as usize],
             callframes: new_callframes,
+            store: Box::new(HashMap::new() as HashMap<u64, u64>),
         }
     }
 
@@ -95,12 +91,20 @@ impl VM {
         self.error
     }
 
-    pub fn set_of(&mut self, b: bool) {
-        self.of_flag = b;
+    pub fn get_of(&mut self) -> u64 {
+        self.of
     }
 
-    pub fn set_uf(&mut self, b: bool) {
-        self.uf_flag = b;
+    pub fn set_of(&mut self, v: u64) {
+        self.of = v;
+    }
+
+    pub fn set_of_b(&mut self, b: bool) {
+        if b {
+            self.of = 8;
+        } else {
+            self.of = 7;
+        }
     }
 
     pub fn set_state(&mut self, new_state: u8) {
@@ -225,7 +229,7 @@ impl VM {
                 let (r, b) = v1.overflowing_add(v2);
                 vm.set_register_value(rd, r);
                 // set overflow
-                vm.set_of(b);
+                vm.set_of_b(b);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -239,7 +243,7 @@ impl VM {
                 let (r, b) = v1.overflowing_add(x);
                 vm.set_register_value(rd, r);
                 // set overflow
-                vm.set_of(b);
+                vm.set_of_b(b);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -341,6 +345,25 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 vm.set_pc(rs_val as u8);
             }
+            Opcode::Jnz(rs, rt) => {
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+                if rt_val != 0 {
+                    vm.set_pc(rs_val as u8);
+                } else {
+                    let pc = vm.get_pc();
+                    vm.set_pc(pc + 1);
+                }
+            }
+            Opcode::Jnzi(rs, imm) => {
+                let rs_val = vm.get_register_value(rs);
+                if imm != 0 {
+                    vm.set_pc(rs_val as u8);
+                } else {
+                    let pc = vm.get_pc();
+                    vm.set_pc(pc + 1);
+                }
+            }
             Opcode::Lw(rd, rs, imm) => {
                 let rs_val = vm.get_register_value(rs);
                 let lw_val = vm.memory[(rs_val + imm as u64) as usize];
@@ -352,7 +375,7 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let (r, o) = rs_val.overflowing_mul(rt_val);
-                vm.set_of(o);
+                vm.set_of_b(o);
                 vm.set_register_value(rd, r);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -360,7 +383,7 @@ impl VM {
             Opcode::Multi(rd, rs, imm) => {
                 let rs_val = vm.get_register_value(rs);
                 let (r, o) = rs_val.overflowing_mul(imm as u64);
-                vm.set_of(o);
+                vm.set_of_b(o);
                 vm.set_register_value(rd, r);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -471,7 +494,7 @@ impl VM {
                 let (r, b) = v1.overflowing_sub(v2);
                 vm.set_register_value(rd, r);
                 // set overflow
-                vm.set_of(b);
+                vm.set_of_b(b);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -485,7 +508,7 @@ impl VM {
                 let (r, b) = v1.overflowing_sub(x);
                 vm.set_register_value(rd, r);
                 // set overflow
-                vm.set_of(b);
+                vm.set_of_b(b);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -510,12 +533,12 @@ impl VM {
                 let ru_val = vm.get_register_value(ru);
                 if ru_val == 0 {
                     vm.set_register_value(rd, 0);
-                    vm.of = 3;
+                    vm.set_of(3);
                 } else {
                     let (r, o) = rs_val.overflowing_add(rt_val);
                     let r1 = r % ru_val;
                     vm.set_register_value(rd, r1);
-                    vm.set_of(o);
+                    vm.set_of_b(o);
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -526,12 +549,12 @@ impl VM {
                 let ru_val = vm.get_register_value(ru);
                 if ru_val == 0 {
                     vm.set_register_value(rd, 0);
-                    vm.of = 3;
+                    vm.set_of(4);
                 } else {
                     let (r, o) = rs_val.overflowing_mul(rt_val);
                     let r1 = r % ru_val;
                     vm.set_register_value(rd, r1);
-                    vm.set_of(o);
+                    vm.set_of_b(o);
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -860,6 +883,71 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
+            Opcode::Srw(rd, rs) => {
+                let rs_val = vm.get_register_value(rs);
+
+                let i1 = vm.store.get_word(rs_val);
+                vm.set_register_value(rd, i1 as u64);
+
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Srwx(rd, rs) => {
+                let rs_val = vm.get_register_value(rs);
+
+                let i1 = vm.store.get_word_x(rs_val);
+                vm.set_register_value(rd, i1 as u64);
+
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Sww(rd, rs) => {
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+
+                vm.store.set_word(rd_val, rs_val);
+
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Swwx(rd, rs) => {
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+
+                vm.store.set_word_x(rd_val, rs_val);
+
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::MemEq(rd, rs, rt, ru) => {
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+                let ru_val = vm.get_register_value(ru);
+
+                let mut cmp: bool = true;
+                for x in 0 .. ru_val {
+                    let i_0 = vm.get_memory(rs_val as u8 + x as u8);
+                    let i_1 = vm.get_memory(rt_val as u8 + x as u8);
+                    if i_0 != i_1 {
+                        cmp = false;
+                        break;
+                    }
+                }
+                vm.set_register_value(rd, cmp as u64);
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::MemCp(rd, rs, rt) => {
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+
+                for x in 0 .. rt_val {
+                    vm.set_memory(rd_val as u8 + x as u8, vm.get_memory(rs_val as u8 + x as u8))
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
 
             _ => {
                 panic!("####Encountered unimplemented op");
@@ -937,6 +1025,47 @@ fn calculate_hash<T: Hash>(t: &T) -> u64 {
     let mut s = DefaultHasher::new();
     t.hash(&mut s);
     s.finish()
+}
+
+trait FuelStore {
+    fn get_word(&self, k: u64) -> u8;
+    fn get_word_x(&self, k: u64) -> u64;
+    fn set_word(&mut self, k: u64, v: u64);
+    fn set_word_x(&mut self, k: u64, v: u64);
+}
+
+impl FuelStore for HashMap<u64, u64> {
+    fn get_word(&self, k: u64) -> u8 {
+        match self.get(&k) {
+            None => {
+                0
+            }
+            v => {
+                let x: &u64 = v.unwrap();
+                transform_from_u64_to_u8(&[*x].to_vec())[0]
+            }
+        }
+    }
+
+    fn get_word_x(&self, k: u64) -> u64 {
+        match self.get(&k) {
+            None => {
+                0
+            }
+            v => {
+                *v.unwrap()
+            }
+        }
+    }
+
+    fn set_word(&mut self, k: u64, v: u64) {
+        let i = transform_from_u64_to_u8(&[v].to_vec())[0];
+        self.insert(k, i as u64);
+    }
+
+    fn set_word_x(&mut self, k: u64, v: u64) {
+        self.insert(k, v);
+    }
 }
 
 // Fuel Unsigned Tx Format

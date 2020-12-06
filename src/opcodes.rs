@@ -20,6 +20,8 @@ pub enum Opcode {
     Gt(RegisterId, RegisterId, RegisterId),
     J(ImmediateValue),
     Jr(RegisterId),
+    Jnz(RegisterId, RegisterId),
+    Jnzi(RegisterId, ImmediateValue),
     Lw(RegisterId, RegisterId, ImmediateValue),
     Mult(RegisterId, RegisterId, RegisterId),
     Multi(RegisterId, RegisterId, ImmediateValue),
@@ -94,6 +96,14 @@ pub enum Opcode {
 
     FtxOutputTo(RegisterId, ImmediateValue),
     FtxOutputAmount(RegisterId, ImmediateValue),
+
+    Srw(RegisterId, RegisterId),
+    Srwx(RegisterId, RegisterId),
+    Sww(RegisterId, RegisterId),
+    Swwx(RegisterId, RegisterId),
+
+    MemEq(RegisterId, RegisterId, RegisterId, RegisterId),
+    MemCp(RegisterId, RegisterId, RegisterId),
 }
 
 pub trait Programmable {
@@ -265,6 +275,20 @@ impl Programmable for Opcode {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 14, 0, 8);
                 v = Opcode::set_rs(v, rs);
+                v
+            }
+            Jnz(rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 180, 0, 8);
+                v = Opcode::set_rs(v, rs);
+                v = Opcode::set_rt(v, rt);
+                v
+            }
+            Jnzi(rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 181, 0, 8);
+                v = Opcode::set_rs(v, rs);
+                v = Opcode::set_imm(v, i);
                 v
             }
             Lw(rd, rs, i) => {
@@ -738,6 +762,52 @@ impl Programmable for Opcode {
                 v = Opcode::set_imm(v, imm);
                 v
             }
+
+            Srw(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 172, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Srwx(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 173, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Sww(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 174, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Swwx(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 175, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            MemEq(rd, rs, rt, ru) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 176, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v = Opcode::set_ru(v, ru as u8);
+                v
+            }
+            MemCp(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 177, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
         };
     }
 
@@ -1157,6 +1227,51 @@ impl Programmable for Opcode {
                 let rd = Opcode::get_rd(v);
                 let imm = Opcode::get_imm(v);
                 FtxOutputAmount(rd, imm)
+            }
+
+            172 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Srw(rd, rs)
+            }
+            173 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Srwx(rd, rs)
+            }
+            174 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Sww(rd, rs)
+            }
+            175 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Swwx(rd, rs)
+            }
+            176=> {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                let ru = Opcode::get_ru(v);
+                MemEq(rd, rs, rt, ru)
+            }
+            177 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                MemCp(rd, rs, rt)
+            }
+
+            180 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Jnz(rd, rs)
+            }
+            181 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                Jnzi(rd, imm)
             }
 
             _ => {

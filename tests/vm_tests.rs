@@ -495,6 +495,141 @@ pub fn test_program_w_sha256() {
     child.join().unwrap();
 }
 
+fn build_program_for_storage(p: &mut Program) {
+
+    // function selector from tx
+
+    // 0
+    p.code.push(Opcode::SetI(0, 6).ser());
+    p.code.push(Opcode::SetI(1, 1).ser());
+    p.code.push(Opcode::SetI(2, 2).ser());
+    p.code.push(Opcode::SetI(3, 3).ser());
+
+    p.code.push(Opcode::Swwx(4, 2).ser());
+    p.code.push(Opcode::Srwx(0, 4).ser());
+    // p.code.push(Opcode::Swwx(4, 1).ser());
+    // p.code.push(Opcode::Srwx(0, 4).ser());
+
+    p.code.push(Opcode::Push(0).ser());
+
+    // 10
+    p.code.push(Opcode::Stop().ser());
+}
+
+
+fn setup_program_w_storage() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_storage(p);
+
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 0,
+        data: Vec::new(),
+    };
+    tx1.inputs = vec![tx_input];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.dump_registers();
+
+    println!("keyvalue store dump");
+    for (k, v) in vm.store.iter() {
+        println!("k: {}, v: {}", k, v);
+    }
+}
+
+
+#[test]
+pub fn test_program_w_storage() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_storage)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
+
+fn build_program_for_mem(p: &mut Program) {
+
+    // function selector from tx
+
+    // 0
+    p.code.push(Opcode::SetI(0, 6).ser());
+    p.code.push(Opcode::SetI(1, 1).ser());
+    p.code.push(Opcode::SetI(2, 2).ser());
+    p.code.push(Opcode::SetI(3, 3).ser());
+
+    p.code.push(Opcode::MemCp(0, 1, 1).ser());
+    p.code.push(Opcode::MemEq(0, 1, 1, 1).ser());
+
+    p.code.push(Opcode::Push(0).ser());
+
+    // 10
+    p.code.push(Opcode::Stop().ser());
+}
+
+
+fn setup_program_w_mem() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_mem(p);
+
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 0,
+        data: Vec::new(),
+    };
+    tx1.inputs = vec![tx_input];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.dump_registers();
+
+    println!("keyvalue store dump");
+    for (k, v) in vm.store.iter() {
+        println!("k: {}, v: {}", k, v);
+    }
+}
+
+
+#[test]
+pub fn test_program_w_mem() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_mem)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
 #[test]
 pub fn test_op_add() {
     let mut vm: VM = VM::new();
@@ -506,7 +641,7 @@ pub fn test_op_add() {
 
     vm.set_register_value(0, MemWord::MAX);
     vm.execute(Opcode::Add(2, 0, 1));
-    assert_eq!(vm.of_flag, true);
+    assert_eq!(vm.get_of(), 8);
 }
 
 #[test]
@@ -520,7 +655,7 @@ pub fn test_op_addi() {
 
     vm.set_register_value(0, MemWord::MAX);
     vm.execute(Opcode::Addi(2, 0, 1));
-    assert_eq!(vm.of_flag, true);
+    assert_eq!(vm.get_of(), 8);
 }
 
 #[test]
@@ -813,14 +948,14 @@ pub fn test_op_sub() {
     vm.execute(Opcode::Sub(2, 0, 1));
     let i: MemWord = vm.get_register_value(2);
     assert_eq!(i, 1);
-    assert_eq!(vm.of_flag, false);
+    assert_eq!(vm.get_of(), 7);
 
     vm.set_register_value(0, 2);
     vm.set_register_value(1, 3);
     vm.execute(Opcode::Sub(2, 0, 1));
     let i: MemWord = vm.get_register_value(2);
     assert_eq!(i, u64::MAX);
-    assert_eq!(vm.of_flag, true);
+    assert_eq!(vm.get_of(), 8);
 }
 
 #[test]
@@ -830,13 +965,13 @@ pub fn test_op_subi() {
     vm.execute(Opcode::Subi(2, 0, 1));
     let i: MemWord = vm.get_register_value(2);
     assert_eq!(i, 1);
-    assert_eq!(vm.of_flag, false);
+    assert_eq!(vm.get_of(), 7);
 
     vm.set_register_value(0, 2);
     vm.execute(Opcode::Subi(2, 0, 3));
     let i: MemWord = vm.get_register_value(2);
     assert_eq!(i, u64::MAX);
-    assert_eq!(vm.of_flag, true);
+    assert_eq!(vm.get_of(), 8);
 }
 
 #[test]
