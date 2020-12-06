@@ -12,10 +12,17 @@ pub enum Opcode {
     And(RegisterId, RegisterId, RegisterId),
     Andi(RegisterId, RegisterId, ImmediateValue),
     Beq(RegisterId, RegisterId, ImmediateValue),
-    Div(RegisterId, RegisterId),
+    Div(RegisterId, RegisterId, RegisterId),
+    Divi(RegisterId, RegisterId, ImmediateValue),
+    Mod(RegisterId, RegisterId, RegisterId),
+    Modi(RegisterId, RegisterId, ImmediateValue),
+    Eq(RegisterId, RegisterId, RegisterId),
+    Gt(RegisterId, RegisterId, RegisterId),
     J(ImmediateValue),
+    Jr(RegisterId),
     Lw(RegisterId, RegisterId, ImmediateValue),
     Mult(RegisterId, RegisterId, RegisterId),
+    Multi(RegisterId, RegisterId, ImmediateValue),
     Noop(),
     Or(RegisterId, RegisterId, RegisterId),
     Ori(RegisterId, RegisterId, ImmediateValue),
@@ -69,6 +76,7 @@ pub enum Opcode {
     Create2(RegisterId, RegisterId, ImmediateValue),
     Revert(RegisterId, RegisterId),
     Keccak(RegisterId, RegisterId, RegisterId),
+    Sha256(RegisterId, RegisterId, RegisterId),
 
     SetI(RegisterId, ImmediateValue),
 
@@ -199,17 +207,64 @@ impl Programmable for Opcode {
                 v = Opcode::set_imm(v, i);
                 v
             }
-            Div(rd, rs) => {
+            Div(rd, rs, rt) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 15, 0, 8);
                 v = Opcode::set_rd(v, rd as u8);
                 v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Divi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 16, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
+                v
+            }
+            Mod(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 20, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Modi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 21, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
+                v
+            }
+            Eq(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 18, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Gt(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 19, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
                 v
             }
             J(i) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 17, 0, 8);
                 v = Opcode::set_imm(v, i);
+                v
+            }
+            Jr(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 14, 0, 8);
+                v = Opcode::set_rs(v, rs);
                 v
             }
             Lw(rd, rs, i) => {
@@ -226,6 +281,14 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v = Opcode::set_rs(v, rs as u8);
                 v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Multi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 26, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
                 v
             }
             Noop() => {
@@ -582,6 +645,14 @@ impl Programmable for Opcode {
                 v = Opcode::set_rt(v, rt as u8);
                 v
             }
+            Sha256(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 159, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
             SetI(rd, imm) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 160, 0, 8);
@@ -667,8 +738,6 @@ impl Programmable for Opcode {
                 v = Opcode::set_imm(v, imm);
                 v
             }
-
-
         };
     }
 
@@ -715,11 +784,46 @@ impl Programmable for Opcode {
             15 => {
                 let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
-                Div(rd, rs)
+                let rt = Opcode::get_rt(v);
+                Div(rd, rs, rt)
+            }
+            16 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Divi(rd, rs, i)
+            }
+            20 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Mod(rd, rs, rt)
+            }
+            21 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Modi(rd, rs, i)
             }
             17 => {
                 let i = Opcode::get_imm(v);
                 J(i)
+            }
+            14 => {
+                let rs = Opcode::get_rs(v);
+                Jr(rs)
+            }
+            18 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Eq(rd, rs, rt)
+            }
+            19 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Gt(rd, rs, rt)
             }
             22 => {
                 let rd = Opcode::get_rd(v);
@@ -732,6 +836,12 @@ impl Programmable for Opcode {
                 let rs = Opcode::get_rs(v);
                 let rt = Opcode::get_rt(v);
                 Mult(rd, rs, rt)
+            }
+            26 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Multi(rd, rs, i)
             }
             27 => {
                 Noop()
@@ -749,10 +859,10 @@ impl Programmable for Opcode {
                 Ori(rd, rs, i)
             }
             43 => {
-                let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
                 let i = Opcode::get_imm(v);
-                Sw(rd, rs, i)
+                Sw(rs, rt, i)
             }
             31 => {
                 let rd = Opcode::get_rd(v);
@@ -980,6 +1090,12 @@ impl Programmable for Opcode {
                 let rs = Opcode::get_rs(v);
                 let rt = Opcode::get_rt(v);
                 Keccak(rd, rs, rt)
+            }
+            159 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Sha256(rd, rs, rt)
             }
 
             160 => {

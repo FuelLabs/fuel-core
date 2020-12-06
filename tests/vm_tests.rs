@@ -4,7 +4,7 @@ mod common;
 
 use crate::common::setup;
 use std::thread;
-use fuel_vm_rust::consts::{FUEL_MAX_MEMORY_SIZE};
+use fuel_vm_rust::consts::{FUEL_MAX_MEMORY_SIZE, MemWord};
 use fuel_vm_rust::opcodes::*;
 use fuel_vm_rust::interpreter::*;
 use fuel_vm_rust::bit_funcs::*;
@@ -254,6 +254,7 @@ fn setup_program_w_new_tx_format() {
 
     handle_ftx(tx, &mut vm);
 
+
     vm.dump_registers();
 }
 
@@ -362,4 +363,524 @@ fn setup_program_w_new_tx_format_extended() {
     handle_ftx(tx2, &mut vm);
 
     vm.dump_registers();
+}
+
+
+fn build_program_for_keccak(p: &mut Program) {
+
+    // function selector from tx
+
+    // 0
+    p.code.push(Opcode::SetI(0, 6).ser());
+    p.code.push(Opcode::SetI(1, 1).ser());
+    p.code.push(Opcode::SetI(2, 2).ser());
+    p.code.push(Opcode::SetI(3, 3).ser());
+
+    p.code.push(Opcode::Sw(0, 1, 0).ser());
+    p.code.push(Opcode::Sw(0, 2, 1).ser());
+    p.code.push(Opcode::Sw(0, 3, 2).ser());
+
+    p.code.push(Opcode::Keccak(0, 1, 2).ser());
+
+    p.code.push(Opcode::Push(0).ser());
+
+    // 10
+    p.code.push(Opcode::Stop().ser());
+}
+
+
+fn setup_program_w_keccak() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_keccak(p);
+
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 0,
+        data: Vec::new(),
+    };
+    tx1.inputs = vec![tx_input];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.dump_registers();
+}
+
+
+#[test]
+pub fn test_program_w_keccak() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_keccak)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
+
+fn build_program_for_sha256(p: &mut Program) {
+
+    // function selector from tx
+
+    // 0
+    p.code.push(Opcode::SetI(0, 6).ser());
+    p.code.push(Opcode::SetI(1, 1).ser());
+    p.code.push(Opcode::SetI(2, 2).ser());
+    p.code.push(Opcode::SetI(3, 3).ser());
+
+    p.code.push(Opcode::Sw(0, 1, 0).ser());
+    p.code.push(Opcode::Sw(0, 2, 1).ser());
+    p.code.push(Opcode::Sw(0, 3, 2).ser());
+
+    p.code.push(Opcode::Sha256(0, 1, 2).ser());
+
+    p.code.push(Opcode::Push(0).ser());
+
+    // 10
+    p.code.push(Opcode::Stop().ser());
+}
+
+
+fn setup_program_w_sha256() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_sha256(p);
+
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 0,
+        data: Vec::new(),
+    };
+    tx1.inputs = vec![tx_input];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.dump_registers();
+}
+
+
+#[test]
+pub fn test_program_w_sha256() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_sha256)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
+#[test]
+pub fn test_op_add() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Add(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+
+    vm.set_register_value(0, MemWord::MAX);
+    vm.execute(Opcode::Add(2, 0, 1));
+    assert_eq!(vm.of_flag, true);
+}
+
+#[test]
+pub fn test_op_addi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Addi(2, 0, 1));
+
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+
+    vm.set_register_value(0, MemWord::MAX);
+    vm.execute(Opcode::Addi(2, 0, 1));
+    assert_eq!(vm.of_flag, true);
+}
+
+#[test]
+pub fn test_op_and() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::And(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 3);
+    vm.execute(Opcode::And(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_andi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Andi(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Andi(2, 0, 3));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_cpsr() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::CopyRegister(1, 0));
+    let i: MemWord = vm.get_register_value(1);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_div() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 4);
+    vm.set_register_value(1, 2);
+    vm.execute(Opcode::Div(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+
+    vm.set_register_value(0, 4);
+    vm.set_register_value(1, 3);
+    vm.execute(Opcode::Div(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+
+    assert_eq!(i, 1);
+    assert_eq!(vm.hi, 1);
+}
+
+#[test]
+pub fn test_op_divi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 4);
+    vm.execute(Opcode::Divi(2, 0, 2));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+
+    vm.set_register_value(0, 4);
+    vm.execute(Opcode::Divi(2, 0, 3));
+    let i: MemWord = vm.get_register_value(2);
+
+    assert_eq!(i, 1);
+    assert_eq!(vm.hi, 1);
+}
+
+#[test]
+pub fn test_op_eq() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Eq(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(1, 0);
+    vm.execute(Opcode::Eq(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+}
+
+#[test]
+pub fn test_op_exp() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 0);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Exp(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Eq(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 2);
+    vm.execute(Opcode::Exp(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 4);
+}
+
+#[test]
+pub fn test_op_expi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 0);
+    vm.execute(Opcode::Expi(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Expi(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Expi(2, 0, 2));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 4);
+}
+
+#[test]
+pub fn test_op_gt() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Gt(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(1, 0);
+    vm.execute(Opcode::Gt(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+
+#[test]
+pub fn test_op_mod() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 4);
+    vm.set_register_value(1, 2);
+    vm.execute(Opcode::Mod(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 4);
+    vm.set_register_value(1, 3);
+    vm.execute(Opcode::Mod(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_modi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 4);
+    vm.execute(Opcode::Modi(2, 0, 2));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.execute(Opcode::Modi(2, 0, 3));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+
+#[test]
+pub fn test_op_mult() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 2);
+    vm.execute(Opcode::Mult(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 4);
+
+    vm.set_register_value(0, 4);
+    vm.set_register_value(1, 3);
+    vm.execute(Opcode::Mult(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 12);
+}
+
+#[test]
+pub fn test_op_multi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Multi(2, 0, 2));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 4);
+
+    vm.execute(Opcode::Multi(2, 0, 3));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 6);
+}
+
+#[test]
+pub fn test_op_or() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 0);
+    vm.set_register_value(1, 0);
+    vm.execute(Opcode::Or(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 0);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Or(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 2);
+    vm.execute(Opcode::Or(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 3);
+}
+
+#[test]
+pub fn test_op_ori() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 0);
+    vm.execute(Opcode::Ori(2, 0, 0));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 0);
+    vm.execute(Opcode::Ori(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Ori(2, 0, 2));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 3);
+}
+
+#[test]
+pub fn test_op_sll() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Sll(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+}
+
+#[test]
+pub fn test_op_sllv() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Sllv(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 2);
+}
+
+#[test]
+pub fn test_op_srl() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Srl(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_srlv() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Srlv(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+}
+
+#[test]
+pub fn test_op_sub() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Sub(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+    assert_eq!(vm.of_flag, false);
+
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 3);
+    vm.execute(Opcode::Sub(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, u64::MAX);
+    assert_eq!(vm.of_flag, true);
+}
+
+#[test]
+pub fn test_op_subi() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Subi(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 1);
+    assert_eq!(vm.of_flag, false);
+
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Subi(2, 0, 3));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, u64::MAX);
+    assert_eq!(vm.of_flag, true);
+}
+
+#[test]
+pub fn test_op_xor() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Xor(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 2);
+    vm.set_register_value(1, 1);
+    vm.execute(Opcode::Xor(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 3);
+}
+
+#[test]
+pub fn test_op_xori() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::Xori(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 0);
+
+    vm.set_register_value(0, 2);
+    vm.execute(Opcode::Xori(2, 0, 1));
+    let i: MemWord = vm.get_register_value(2);
+    assert_eq!(i, 3);
+}
+
+#[test]
+pub fn test_op_j() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 1);
+    vm.execute(Opcode::J(3));
+    assert_eq!(vm.get_top_frame().unwrap().pc, 3);
+}
+
+#[test]
+pub fn test_op_jr() {
+    let mut vm: VM = VM::new();
+    vm.set_register_value(0, 3);
+    vm.execute(Opcode::Jr(0));
+    assert_eq!(vm.get_top_frame().unwrap().pc, 3);
 }

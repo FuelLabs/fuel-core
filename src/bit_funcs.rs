@@ -143,3 +143,11 @@ pub fn transform_from_u64_to_u32(input: &Vec<u64>) -> Vec<u32> {
     }
     out
 }
+
+pub fn transform_from_u64_to_u8(input: &Vec<u64>) -> Vec<u8> {
+    transform_from_u32_to_u8(&transform_from_u64_to_u32(input))
+}
+
+pub fn transform_from_u8_to_u64(input: &Vec<u8>) -> Vec<u64> {
+    transform_from_u32_to_u64(&transform_from_u8_to_u32(input))
+}

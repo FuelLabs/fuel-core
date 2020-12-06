@@ -1,11 +1,13 @@
 use std::vec::Vec;
 use crate::consts::*;
 use crate::opcodes::{Programmable, Opcode, OpcodeInstruction};
-use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor};
+use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor, Rem};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::collections::HashMap;
-use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u32_to_u64};
+use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u32_to_u64, transform_from_u64_to_u32, transform_from_u64_to_u8, transform_from_u8_to_u64};
+use keccak_hash::keccak;
+use tiny_keccak::{Sha3, Hasher as sha3hasher};
 
 #[derive(Clone)]
 pub struct VM {
@@ -17,8 +19,9 @@ pub struct VM {
     pub ret: u64,
     state: u8,
     error: u8,
-    of: bool,
-    uf: bool,
+    of: MemWord,
+    pub of_flag: bool,
+    uf_flag: bool,
     registers: [MemWord; VM_REGISTER_COUNT as usize],
     pub callframes: Vec<CallFrame>,
 }
@@ -39,8 +42,9 @@ impl VM {
             ret: 0u64,
             state: 1u8,
             error: 0u8,
-            of: false,
-            uf: false,
+            of: 0u64,
+            of_flag: false,
+            uf_flag: false,
             registers: [3 as MemWord; VM_REGISTER_COUNT as usize],
             callframes: new_callframes,
         }
@@ -92,11 +96,11 @@ impl VM {
     }
 
     pub fn set_of(&mut self, b: bool) {
-        self.of = b;
+        self.of_flag = b;
     }
 
     pub fn set_uf(&mut self, b: bool) {
-        self.uf = b;
+        self.uf_flag = b;
     }
 
     pub fn set_state(&mut self, new_state: u8) {
@@ -264,16 +268,78 @@ impl VM {
                     vm.set_pc(pc + 1);
                 }
             }
-            Opcode::Div(rs, rt) => {
+            Opcode::Div(rd, rs, rt) => {
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
-                vm.lo = v1.div(v2);
+                if v2 == 0 {
+                    vm.of = 1;
+                    vm.set_register_value(rd, 0);
+                    vm.hi = 0;
+                } else {
+                    vm.set_register_value(rd, v1.div(v2));
+                    vm.hi = v1.rem(v2);
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Divi(rd, rs, imm) => {
+                let v1 = vm.get_register_value(rs);
+                if imm == 0 {
+                    vm.set_register_value(rd, 0);
+                    vm.hi = 0;
+                } else {
+                    vm.set_register_value(rd, v1.div(imm as u64));
+                    vm.hi = v1.rem(imm as u64);
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Mod(rd, rs, rt) => {
+                let v1 = vm.get_register_value(rs);
+                let v2 = vm.get_register_value(rt);
+                if v2 == 0 {
+                    vm.set_register_value(rd, 0);
+                    vm.of = 2;
+                } else {
+                    vm.set_register_value(rd, v1.rem(v2));
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Modi(rd, rs, imm) => {
+                let v1 = vm.get_register_value(rs);
+                if imm == 0 {
+                    vm.set_register_value(rd, 0);
+                    vm.of = 2;
+                } else {
+                    vm.set_register_value(rd, v1.rem(imm as u64));
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Eq(rd, rs, rt) => {
+                let v1 = vm.get_register_value(rs);
+                let v2 = vm.get_register_value(rt);
+                vm.set_register_value(rd, u64::from(v1.eq(&v2)));
+
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Gt(rd, rs, rt) => {
+                let v1 = vm.get_register_value(rs);
+                let v2 = vm.get_register_value(rt);
+                vm.set_register_value(rd, u64::from(v1.gt(&v2)));
+
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::J(imm) => {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + imm as u8);
+            }
+            Opcode::Jr(rs) => {
+                let rs_val = vm.get_register_value(rs);
+                vm.set_pc(rs_val as u8);
             }
             Opcode::Lw(rd, rs, imm) => {
                 let rs_val = vm.get_register_value(rs);
@@ -286,6 +352,14 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let (r, o) = rs_val.overflowing_mul(rt_val);
+                vm.set_of(o);
+                vm.set_register_value(rd, r);
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Multi(rd, rs, imm) => {
+                let rs_val = vm.get_register_value(rs);
+                let (r, o) = rs_val.overflowing_mul(imm as u64);
                 vm.set_of(o);
                 vm.set_register_value(rd, r);
                 let pc = vm.get_pc();
@@ -310,10 +384,10 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::Sw(rd, rs, imm) => {
-                let rd_val = vm.get_register_value(rd);
+            Opcode::Sw(rs, rt, imm) => {
                 let rs_val = vm.get_register_value(rs);
-                vm.memory[(rs_val + imm as u64) as usize] = rd_val;
+                let rt_val = vm.get_register_value(rt);
+                vm.memory[(rs_val + imm as u64) as usize] = rt_val;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -434,10 +508,15 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let ru_val = vm.get_register_value(ru);
-                let (r, o) = rs_val.overflowing_add(rt_val);
-                let r1 = r % ru_val;
-                vm.set_register_value(rd, r1);
-                vm.set_of(o);
+                if ru_val == 0 {
+                    vm.set_register_value(rd, 0);
+                    vm.of = 3;
+                } else {
+                    let (r, o) = rs_val.overflowing_add(rt_val);
+                    let r1 = r % ru_val;
+                    vm.set_register_value(rd, r1);
+                    vm.set_of(o);
+                }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -445,10 +524,15 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let ru_val = vm.get_register_value(ru);
-                let (r, o) = rs_val.overflowing_mul(rt_val);
-                let r1 = r % ru_val;
-                vm.set_register_value(rd, r1);
-                vm.set_of(o);
+                if ru_val == 0 {
+                    vm.set_register_value(rd, 0);
+                    vm.of = 3;
+                } else {
+                    let (r, o) = rs_val.overflowing_mul(rt_val);
+                    let r1 = r % ru_val;
+                    vm.set_register_value(rd, r1);
+                    vm.set_of(o);
+                }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -696,7 +780,32 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::Keccak(_rd, _rs, _rt) => {
+            Opcode::Keccak(rd, rs, rt) => {
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+                let keccak_input: Vec<u8> = transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
+                let h256_result = keccak(keccak_input);
+                let to_place_in_mem = transform_from_u8_to_u64(&h256_result.to_fixed_bytes().to_vec());
+                for to_loc_index in 0..to_place_in_mem.len() {
+                    vm.set_memory(to_loc_index as u8 + rd_val as u8, *to_place_in_mem.get(to_loc_index).unwrap());
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Sha256(rd, rs, rt) => {
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+                let input: Vec<u8> = transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
+                let mut sha3 = Sha3::v256();
+                sha3.update(input.as_slice());
+                let mut output = [0; 32];
+                sha3.finalize(&mut output);
+                let to_place_in_mem = transform_from_u8_to_u64(&output.to_vec());
+                for to_loc_index in 0..to_place_in_mem.len() {
+                    vm.set_memory(to_loc_index as u8 + rd_val as u8, *to_place_in_mem.get(to_loc_index).unwrap());
+                }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
@@ -717,8 +826,8 @@ impl VM {
             }
             Opcode::Utxoid(rd, imm) => {
                 let rd_val = vm.get_register_value(rd);
-                let x = vm.fuel_tx.inputs[imm as usize].utxo_id;
-                vm.set_memory(rd_val as u8, transform_from_u32_to_u64(&transform_from_u8_to_u32(&x.to_vec()))[0]);
+                let x: [u8; 32] = vm.fuel_tx.inputs[imm as usize].utxo_id;
+                vm.set_memory(rd_val as u8, transform_from_u8_to_u64(&x.to_vec())[0]);
 
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -733,7 +842,7 @@ impl VM {
             Opcode::FtxOutputTo(rd, imm) => {
                 match vm.fuel_tx.outputs[imm as usize].output_type {
                     FOutputTypeEnum::FOutputCoin { to, amount } => {
-                        vm.set_register_value(rd, transform_from_u32_to_u64(&transform_from_u8_to_u32(&to.to_vec()))[0]);
+                        vm.set_register_value(rd, transform_from_u8_to_u64(&to.to_vec())[0]);
                     }
                     FOutputTypeEnum::FOutputContract { input_index, amount_witness_index, state_witness_index } => {}
                 }
@@ -1007,7 +1116,6 @@ pub fn handle_ftx(tx: Ftx, vm: &mut VM) {
                 }
             }
         }
-
     }
 
     vm.run();
@@ -1150,7 +1258,7 @@ pub enum FOutputTypeEnum {
     FOutputContract {
         input_index: u8,
         amount_witness_index: u8,
-        state_witness_index: u8
+        state_witness_index: u8,
     },
 }
 
