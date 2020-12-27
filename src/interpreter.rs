@@ -22,6 +22,8 @@ pub struct VM {
     registers: [MemWord; VM_REGISTER_COUNT as usize],
     pub callframes: Vec<CallFrame>,
     pub store: Box<HashMap<u64, u64>>,
+    pub gas_used: u64,
+    pub gas_price: u64,
 }
 
 impl VM {
@@ -43,6 +45,8 @@ impl VM {
             registers: [3 as MemWord; VM_REGISTER_COUNT as usize],
             callframes: new_callframes,
             store: Box::new(HashMap::new() as HashMap<u64, u64>),
+            gas_used: 0u64,
+            gas_price: 0u64,
         }
     }
 
@@ -224,6 +228,7 @@ impl VM {
         let vm = self;
         match o {
             Opcode::Add(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 let (r, b) = v1.overflowing_add(v2);
@@ -234,6 +239,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Addi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let sign = imm & 1 << 15;
                 let mut x: u64 = imm as u64;
@@ -248,6 +254,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::And(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 let r = v1.bitand(v2);
@@ -256,6 +263,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Andi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let r = v1.bitand(imm as u64);
                 vm.set_register_value(rd, r);
@@ -263,6 +271,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Beq(rs, rt, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 let pc = vm.get_pc();
@@ -273,6 +282,7 @@ impl VM {
                 }
             }
             Opcode::Div(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 if v2 == 0 {
@@ -287,6 +297,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Divi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 if imm == 0 {
                     vm.set_register_value(rd, 0);
@@ -299,6 +310,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Mod(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 if v2 == 0 {
@@ -311,6 +323,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Modi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 if imm == 0 {
                     vm.set_register_value(rd, 0);
@@ -322,6 +335,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Eq(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 vm.set_register_value(rd, u64::from(v1.eq(&v2)));
@@ -330,6 +344,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Gt(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 vm.set_register_value(rd, u64::from(v1.gt(&v2)));
@@ -338,14 +353,17 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::J(imm) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + imm as u8);
             }
             Opcode::Jr(rs) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 vm.set_pc(rs_val as u8);
             }
             Opcode::Jnz(rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 if rt_val != 0 {
@@ -356,6 +374,7 @@ impl VM {
                 }
             }
             Opcode::Jnzi(rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 if imm != 0 {
                     vm.set_pc(rs_val as u8);
@@ -365,6 +384,7 @@ impl VM {
                 }
             }
             Opcode::Lw(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let lw_val = vm.memory[(rs_val + imm as u64) as usize];
                 vm.set_register_value(rd, lw_val);
@@ -372,6 +392,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Mult(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let (r, o) = rs_val.overflowing_mul(rt_val);
@@ -381,6 +402,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Multi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let (r, o) = rs_val.overflowing_mul(imm as u64);
                 vm.set_of_b(o);
@@ -389,10 +411,12 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Noop() => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Or(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let r = rs_val.bitor(rt_val);
@@ -401,6 +425,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Ori(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let r = rs_val.bitor(imm as MemWord);
                 vm.set_register_value(rd, r);
@@ -408,6 +433,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sw(rs, rt, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 vm.memory[(rs_val + imm as u64) as usize] = rt_val;
@@ -415,6 +441,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sll(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let x = rs_val.shl(imm);
                 vm.set_register_value(rd, x);
@@ -422,6 +449,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sllv(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let x = rs_val.shl(rt_val);
@@ -430,6 +458,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Sltiu(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 if rs_val < imm as u64 {
                     vm.set_register_value(rd, 1);
@@ -440,6 +469,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sltu(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 if rs_val < rt_val {
@@ -451,6 +481,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Srl(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let x = rs_val.shr(imm);
                 vm.set_register_value(rd, x);
@@ -458,6 +489,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Srlv(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let x = rs_val.shr(rt_val);
@@ -466,6 +498,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Sra(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let sign: u64 = rs_val & 1 << 63;
                 let mut x: u64 = rs_val;
@@ -477,6 +510,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Srav(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let sign: u64 = rs_val & 1 << 63;
@@ -489,6 +523,7 @@ impl VM {
                 vm.set_pc(pc as u8 + 1);
             }
             Opcode::Sub(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let v2 = vm.get_register_value(rt);
                 let (r, b) = v1.overflowing_sub(v2);
@@ -499,6 +534,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Subi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 let sign = imm & 1 << 15;
                 let mut x: u64 = imm as u64;
@@ -513,6 +549,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Xor(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let r = rs_val.bitxor(rt_val);
@@ -521,6 +558,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Xori(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let r = rs_val.bitxor(imm as MemWord);
                 vm.set_register_value(rd, r);
@@ -528,6 +566,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Addmod(rd, rs, rt, ru) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let ru_val = vm.get_register_value(ru);
@@ -544,6 +583,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Mulmod(rd, rs, rt, ru) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let ru_val = vm.get_register_value(ru);
@@ -560,6 +600,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Exp(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let r = rs_val.pow(rt_val as u32);
@@ -568,6 +609,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Expi(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 let r = rs_val.pow(imm as u32);
                 vm.set_register_value(rd, r);
@@ -576,6 +618,7 @@ impl VM {
             }
 
             Opcode::Pop(rd) => {
+                vm.gas_used += 1;
                 if let Some(v) = vm.pop_from_latest_framestack() {
                     vm.set_register_value(rd, v);
                 }
@@ -584,6 +627,7 @@ impl VM {
             }
 
             Opcode::Push(rs) => {
+                vm.gas_used += 1;
                 let v1 = vm.get_register_value(rs);
                 vm.push_to_latest_framestack(v1);
                 let pc = vm.get_pc();
@@ -591,10 +635,12 @@ impl VM {
             }
 
             Opcode::Call(address, n) => {
+                vm.gas_used += 1;
                 vm.create_and_push_new_frame(address, n);
             }
 
             Opcode::Ret(imm) => {
+                vm.gas_used += 1;
                 let mut p: Program = Program::new();
                 let mut c2: bool = false;
                 let mut code_mapping = Default::default();
@@ -619,15 +665,18 @@ impl VM {
             }
 
             Opcode::Halt(rs) => {
+                vm.gas_used += 1;
                 vm.set_error(rs as u8);
                 vm.state = 0;
             }
 
             Opcode::Stop() => {
+                vm.gas_used += 0;
                 vm.state = 0;
             }
 
             Opcode::Malloc(_rs, imm) => {
+                vm.gas_used += 0;
                 if let Some(frame) = vm.get_framestack().last_mut() {
                     frame.stack.reserve(imm as usize);
                 }
@@ -635,6 +684,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Free(rs) => {
+                vm.gas_used += 0;
                 if let Some(frame) = vm.get_framestack().last_mut() {
                     let cap = frame.stack.capacity();
                     frame.stack.resize(cap - rs as usize, 2);
@@ -644,6 +694,7 @@ impl VM {
             }
 
             Opcode::CopyRegister(rd, rs) => {
+                vm.gas_used += 1;
                 let rs = vm.get_register_value(rs);
                 vm.set_register_value(rd, rs);
                 let pc = vm.get_pc();
@@ -651,6 +702,7 @@ impl VM {
             }
 
             Opcode::LoadLocal(rd, imm) => {
+                vm.gas_used += 1;
                 if let Some(top_frame) = &mut vm.get_top_frame() {
                     if let Some(local_val) = top_frame.stack.get(imm as usize) {
                         vm.set_register_value(rd, *local_val);
@@ -660,6 +712,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::WriteLocal(rd, imm) => {
+                vm.gas_used += 1;
                 if let Some(top_frame) = vm.get_framestack().last_mut() {
                     if top_frame.stack.len() > imm as usize {
                         top_frame.stack[rd as usize] = imm as u64;
@@ -669,11 +722,13 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::SetI(rd, imm) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, imm as u64);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Rotr(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs = vm.get_register_value(rs);
                 let rt = vm.get_register_value(rt);
                 let x = rs.rotate_right(rt as u32);
@@ -682,6 +737,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Rotri(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs = vm.get_register_value(rs);
                 let x = rs.rotate_right(imm as u32);
                 vm.set_register_value(rd, x);
@@ -689,6 +745,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Rotl(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rs = vm.get_register_value(rs);
                 let rt = vm.get_register_value(rt);
                 let x = rs.rotate_left(rt as u32);
@@ -697,6 +754,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Rotli(rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs = vm.get_register_value(rs);
                 let x = rs.rotate_left(imm as u32);
                 vm.set_register_value(rd, x);
@@ -704,31 +762,37 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Gas(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Gaslimit(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, vm.fuel_tx.gas_limit);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Gasprice(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, vm.fuel_tx.gas_price);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Balance(rd, _rs) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Blockhash(rd, _rs) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Codesize(rd, _rs) => {
+                vm.gas_used += 1;
                 let mut s = 0;
                 for i in 0..vm.callframes.len() {
                     s += vm.callframes.get(i).unwrap().program.code.len();
@@ -738,10 +802,12 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Codecopy(_rd, _rs, _imm) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::EthCall(_rd, rs) => {
+                vm.gas_used += 1;
                 // get params from memory
                 // gas, to, value, in offset, in size, out offset, out size
 
@@ -763,22 +829,27 @@ impl VM {
                 }
             }
             Opcode::Callcode(_rd, _rs) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Delegatecall(_rd, _rs) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Staticcall(_rd, _rs) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Ethreturn(_rd, _rs) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Create2(_rd, rs, imm) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
                 if imm == 0 || (imm as u64) < rs_val {
                     panic!("Create2: Invalid stack offset and length provided");
@@ -800,10 +871,12 @@ impl VM {
                 }
             }
             Opcode::Revert(_rd, _rs) => {
+                vm.gas_used += 1;
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Keccak(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
@@ -817,6 +890,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sha256(rd, rs, rt) => {
+                vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
@@ -833,21 +907,25 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelBlockHeight(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelRootProducer(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::FuelBlockProducer(rd) => {
+                vm.gas_used += 1;
                 vm.set_register_value(rd, 0);
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
             Opcode::Utxoid(rd, imm) => {
+                vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let x: [u8; 32] = vm.fuel_tx.inputs[imm as usize].utxo_id;
                 vm.set_memory(rd_val as u8, transform_from_u8_to_u64(&x.to_vec())[0]);
@@ -856,6 +934,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Contractid(rd) => {
+                vm.gas_used += 1;
                 if let Some(top_frame) = vm.get_top_frame() {
                     vm.set_register_value(rd, calculate_hash(&top_frame.program));
                 }
@@ -863,6 +942,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::FtxOutputTo(rd, imm) => {
+                vm.gas_used += 1;
                 match vm.fuel_tx.outputs[imm as usize].output_type {
                     FOutputTypeEnum::FOutputCoin { to, amount } => {
                         vm.set_register_value(rd, transform_from_u8_to_u64(&to.to_vec())[0]);
@@ -873,6 +953,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::FtxOutputAmount(rd, imm) => {
+                vm.gas_used += 1;
                 match vm.fuel_tx.outputs[imm as usize].output_type {
                     FOutputTypeEnum::FOutputCoin { to, amount } => {
                         vm.set_register_value(rd, amount);
@@ -884,6 +965,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Srw(rd, rs) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
 
                 let i1 = vm.store.get_word(rs_val);
@@ -893,6 +975,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Srwx(rd, rs) => {
+                vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
 
                 let i1 = vm.store.get_word_x(rs_val);
@@ -902,6 +985,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Sww(rd, rs) => {
+                vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
 
@@ -911,6 +995,7 @@ impl VM {
                 vm.set_pc(pc + 1);
             }
             Opcode::Swwx(rd, rs) => {
+                vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
 
@@ -923,6 +1008,8 @@ impl VM {
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
                 let ru_val = vm.get_register_value(ru);
+
+                vm.gas_used += ru_val;
 
                 let mut cmp: bool = true;
                 for x in 0 .. ru_val {
@@ -941,6 +1028,8 @@ impl VM {
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
+
+                vm.gas_used += rt_val;
 
                 for x in 0 .. rt_val {
                     vm.set_memory(rd_val as u8 + x as u8, vm.get_memory(rs_val as u8 + x as u8))
