@@ -1040,9 +1040,9 @@ impl FuelStore for HashMap<u64, u64> {
             None => {
                 0
             }
-            v => {
-                let x: &u64 = v.unwrap();
-                transform_from_u64_to_u8(&[*x].to_vec())[0]
+            Some(v) => {
+                // let x: &u64 = v.unwrap();
+                transform_from_u64_to_u8(&[*v].to_vec())[0]
             }
         }
     }
@@ -1052,8 +1052,8 @@ impl FuelStore for HashMap<u64, u64> {
             None => {
                 0
             }
-            v => {
-                *v.unwrap()
+            Some(v) => {
+                *v
             }
         }
     }
