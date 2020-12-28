@@ -105,6 +105,9 @@ pub enum Opcode {
 
     MemEq(RegisterId, RegisterId, RegisterId, RegisterId),
     MemCp(RegisterId, RegisterId, RegisterId),
+
+    Cfe(RegisterId),
+    Cfs(RegisterId),
 }
 
 pub trait Programmable {
@@ -817,6 +820,18 @@ impl Programmable for Opcode {
                 v = Opcode::set_rt(v, rt as u8);
                 v
             }
+            Cfe(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 182, 0, 8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Cfs(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 183, 0, 8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
         };
     }
 
@@ -1287,6 +1302,14 @@ impl Programmable for Opcode {
                 let rd = Opcode::get_rd(v);
                 let imm = Opcode::get_imm(v);
                 Jnzi(rd, imm)
+            }
+            182 => {
+                let rs = Opcode::get_rs(v);
+                Cfe(rs)
+            }
+            183 => {
+                let rs = Opcode::get_rs(v);
+                Cfs(rs)
             }
 
             _ => {

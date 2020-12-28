@@ -1070,6 +1070,16 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
+            Opcode::Cfe(rs) => {
+                let _rs_val = vm.get_register_value(rs);
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Cfs(rs) => {
+                let _rs_val = vm.get_register_value(rs);
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
 
             _ => {
                 panic!("####Encountered unimplemented op");
@@ -1084,6 +1094,9 @@ pub struct CallFrame {
     pub pc: u8,
     pub sp: u8,
     pub fp: u8,
+    pub fpp: u8,
+    pub hp: u8,
+    pub hpp: u8,
     pub prev_registers: [MemWord; VM_REGISTER_COUNT as usize],
     pub stack: Vec<MemWord>,
     pub args: Vec<MemWord>,
@@ -1098,6 +1111,9 @@ impl CallFrame {
             pc: 0,
             sp: 0,
             fp: 0,
+            fpp: 0,
+            hp: 0,
+            hpp: 0,
             prev_registers: [0; VM_REGISTER_COUNT as usize],
             stack: Vec::new(),
             args: Vec::new(),
