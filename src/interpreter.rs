@@ -8,6 +8,8 @@ use std::collections::HashMap;
 use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u64_to_u8, transform_from_u8_to_u64};
 use keccak_hash::keccak;
 use tiny_keccak::{Sha3, Hasher as sha3hasher};
+use sp_io::crypto;
+use std::convert::TryFrom;
 
 #[derive(Clone)]
 pub struct VM {
@@ -902,6 +904,37 @@ impl VM {
                 let to_place_in_mem = transform_from_u8_to_u64(&output.to_vec());
                 for to_loc_index in 0..to_place_in_mem.len() {
                     vm.set_memory(to_loc_index as u8 + rd_val as u8, *to_place_in_mem.get(to_loc_index).unwrap());
+                }
+                let pc = vm.get_pc();
+                vm.set_pc(pc + 1);
+            }
+            Opcode::Ecrecover(rd, rs, rt) => {
+                vm.gas_used += 1;
+                let rd_val = vm.get_register_value(rd);
+                let rs_val = vm.get_register_value(rs);
+                let rt_val = vm.get_register_value(rt);
+
+                let mut sig: [u8; 65] = [0; 65];
+                let mut msg:[u8; 32] = [0; 32];
+
+                let sig_a = transform_from_u64_to_u8(&vm.memory[rs_val as usize..(rs_val + 9) as usize].to_vec());
+                let msg_a = transform_from_u64_to_u8(&vm.memory[rs_val as usize..(rt_val + 4) as usize].to_vec());
+
+                sig.copy_from_slice(&sig_a.as_slice()[0..65]);
+                msg.copy_from_slice(&msg_a.as_slice()[0..32]);
+
+                let result = sp_io::crypto::secp256k1_ecdsa_recover(&sig, &msg);
+
+                match result {
+                    Ok(v) => {
+                        let x2 = transform_from_u8_to_u64(&v.to_vec());
+                        for l in 0..8 {
+                            vm.set_memory(rd_val as u8 + l as u8, x2[l]);
+                        }
+                    }
+                    _ => {
+                        println!("ECDSA recover did not pass");
+                    }
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);

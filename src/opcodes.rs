@@ -79,6 +79,7 @@ pub enum Opcode {
     Revert(RegisterId, RegisterId),
     Keccak(RegisterId, RegisterId, RegisterId),
     Sha256(RegisterId, RegisterId, RegisterId),
+    Ecrecover(RegisterId, RegisterId, RegisterId),
 
     SetI(RegisterId, ImmediateValue),
 
@@ -808,6 +809,14 @@ impl Programmable for Opcode {
                 v = Opcode::set_rt(v, rt as u8);
                 v
             }
+            Ecrecover(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 178, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
         };
     }
 
@@ -1261,6 +1270,12 @@ impl Programmable for Opcode {
                 let rs = Opcode::get_rs(v);
                 let rt = Opcode::get_rt(v);
                 MemCp(rd, rs, rt)
+            }
+            178 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Ecrecover(rd, rs, rt)
             }
 
             180 => {

@@ -495,6 +495,71 @@ pub fn test_program_w_sha256() {
     child.join().unwrap();
 }
 
+
+fn build_program_for_ecrecover(p: &mut Program) {
+
+    // function selector from tx
+
+    // 0
+    p.code.push(Opcode::SetI(0, 6).ser());
+    p.code.push(Opcode::SetI(1, 1).ser());
+    p.code.push(Opcode::SetI(2, 2).ser());
+    p.code.push(Opcode::SetI(3, 3).ser());
+
+    p.code.push(Opcode::Sw(0, 1, 0).ser());
+    p.code.push(Opcode::Sw(0, 2, 1).ser());
+    p.code.push(Opcode::Sw(0, 3, 2).ser());
+
+    p.code.push(Opcode::Ecrecover(0, 1, 2).ser());
+
+    p.code.push(Opcode::Push(0).ser());
+
+    // 10
+    p.code.push(Opcode::Stop().ser());
+}
+
+
+fn setup_program_w_ecrecover() {
+    let mut vm: VM = VM::new();
+
+    let p: &mut Program = &mut vm.program;
+
+    build_program_for_ecrecover(p);
+
+    let data_vec = transform_from_u32_to_u8(&p.code);
+
+    let mut tx1: Ftx = Ftx::default();
+    tx1.script_length = data_vec.len() as u16;
+    tx1.script = data_vec;
+
+    let mut tx_input = FInput {
+        utxo_id: [0; 32],
+        input_type: FInputTypeEnum::Contract(FInputContract {
+            contract_id: [1; 32]
+        }),
+        data_length: 0,
+        data: Vec::new(),
+    };
+    tx1.inputs = vec![tx_input];
+
+    handle_ftx(tx1, &mut vm);
+
+    vm.dump_registers();
+}
+
+
+#[test]
+pub fn test_program_w_ecrecover() {
+    // Spawn thread with explicit stack size
+    let child = thread::Builder::new()
+        .stack_size(FUEL_MAX_MEMORY_SIZE as usize * 1024)
+        .spawn(setup_program_w_ecrecover)
+        .unwrap();
+
+    // Wait for thread to join
+    child.join().unwrap();
+}
+
 fn build_program_for_storage(p: &mut Program) {
 
     // function selector from tx
