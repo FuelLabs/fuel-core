@@ -12,10 +12,19 @@ pub enum Opcode {
     And(RegisterId, RegisterId, RegisterId),
     Andi(RegisterId, RegisterId, ImmediateValue),
     Beq(RegisterId, RegisterId, ImmediateValue),
-    Div(RegisterId, RegisterId),
+    Div(RegisterId, RegisterId, RegisterId),
+    Divi(RegisterId, RegisterId, ImmediateValue),
+    Mod(RegisterId, RegisterId, RegisterId),
+    Modi(RegisterId, RegisterId, ImmediateValue),
+    Eq(RegisterId, RegisterId, RegisterId),
+    Gt(RegisterId, RegisterId, RegisterId),
     J(ImmediateValue),
+    Jr(RegisterId),
+    Jnz(RegisterId, RegisterId),
+    Jnzi(RegisterId, ImmediateValue),
     Lw(RegisterId, RegisterId, ImmediateValue),
     Mult(RegisterId, RegisterId, RegisterId),
+    Multi(RegisterId, RegisterId, ImmediateValue),
     Noop(),
     Or(RegisterId, RegisterId, RegisterId),
     Ori(RegisterId, RegisterId, ImmediateValue),
@@ -69,6 +78,8 @@ pub enum Opcode {
     Create2(RegisterId, RegisterId, ImmediateValue),
     Revert(RegisterId, RegisterId),
     Keccak(RegisterId, RegisterId, RegisterId),
+    Sha256(RegisterId, RegisterId, RegisterId),
+    Ecrecover(RegisterId, RegisterId, RegisterId),
 
     SetI(RegisterId, ImmediateValue),
 
@@ -81,8 +92,22 @@ pub enum Opcode {
     FuelRootProducer(RegisterId),
     FuelBlockProducer(RegisterId),
 
-    Utxoid(RegisterId),
+    Utxoid(RegisterId, ImmediateValue),
     Contractid(RegisterId),
+
+    FtxOutputTo(RegisterId, ImmediateValue),
+    FtxOutputAmount(RegisterId, ImmediateValue),
+
+    Srw(RegisterId, RegisterId),
+    Srwx(RegisterId, RegisterId),
+    Sww(RegisterId, RegisterId),
+    Swwx(RegisterId, RegisterId),
+
+    MemEq(RegisterId, RegisterId, RegisterId, RegisterId),
+    MemCp(RegisterId, RegisterId, RegisterId),
+
+    Cfe(RegisterId),
+    Cfs(RegisterId),
 }
 
 pub trait Programmable {
@@ -196,16 +221,77 @@ impl Programmable for Opcode {
                 v = Opcode::set_imm(v, i);
                 v
             }
-            Div(rd, rs) => {
+            Div(rd, rs, rt) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 15, 0, 8);
                 v = Opcode::set_rd(v, rd as u8);
                 v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Divi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 16, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
+                v
+            }
+            Mod(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 20, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Modi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 21, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
+                v
+            }
+            Eq(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 18, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Gt(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 19, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
                 v
             }
             J(i) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 17, 0, 8);
+                v = Opcode::set_imm(v, i);
+                v
+            }
+            Jr(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 14, 0, 8);
+                v = Opcode::set_rs(v, rs);
+                v
+            }
+            Jnz(rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 180, 0, 8);
+                v = Opcode::set_rs(v, rs);
+                v = Opcode::set_rt(v, rt);
+                v
+            }
+            Jnzi(rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 181, 0, 8);
+                v = Opcode::set_rs(v, rs);
                 v = Opcode::set_imm(v, i);
                 v
             }
@@ -223,6 +309,14 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v = Opcode::set_rs(v, rs as u8);
                 v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Multi(rd, rs, i) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 26, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_imm(v, i);
                 v
             }
             Noop() => {
@@ -579,6 +673,14 @@ impl Programmable for Opcode {
                 v = Opcode::set_rt(v, rt as u8);
                 v
             }
+            Sha256(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 159, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
             SetI(rd, imm) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 160, 0, 8);
@@ -637,10 +739,11 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v
             }
-            Utxoid(rd) => {
+            Utxoid(rd, imm) => {
                 let mut v: OpcodeInstruction = 0;
                 v = set_bits_in_u32(v, 168, 0, 8);
                 v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm as u16);
                 v
             }
             Contractid(rd) => {
@@ -649,7 +752,86 @@ impl Programmable for Opcode {
                 v = Opcode::set_rd(v, rd as u8);
                 v
             }
+            FtxOutputTo(rd, imm) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 170, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm);
+                v
+            }
+            FtxOutputAmount(rd, imm) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 171, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_imm(v, imm);
+                v
+            }
 
+            Srw(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 172, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Srwx(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 173, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Sww(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 174, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Swwx(rd, rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 175, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            MemEq(rd, rs, rt, ru) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 176, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v = Opcode::set_ru(v, ru as u8);
+                v
+            }
+            MemCp(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 177, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Ecrecover(rd, rs, rt) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 178, 0, 8);
+                v = Opcode::set_rd(v, rd as u8);
+                v = Opcode::set_rs(v, rs as u8);
+                v = Opcode::set_rt(v, rt as u8);
+                v
+            }
+            Cfe(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 182, 0, 8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
+            Cfs(rs) => {
+                let mut v: OpcodeInstruction = 0;
+                v = set_bits_in_u32(v, 183, 0, 8);
+                v = Opcode::set_rs(v, rs as u8);
+                v
+            }
         };
     }
 
@@ -696,11 +878,46 @@ impl Programmable for Opcode {
             15 => {
                 let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
-                Div(rd, rs)
+                let rt = Opcode::get_rt(v);
+                Div(rd, rs, rt)
+            }
+            16 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Divi(rd, rs, i)
+            }
+            20 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Mod(rd, rs, rt)
+            }
+            21 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Modi(rd, rs, i)
             }
             17 => {
                 let i = Opcode::get_imm(v);
                 J(i)
+            }
+            14 => {
+                let rs = Opcode::get_rs(v);
+                Jr(rs)
+            }
+            18 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Eq(rd, rs, rt)
+            }
+            19 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Gt(rd, rs, rt)
             }
             22 => {
                 let rd = Opcode::get_rd(v);
@@ -713,6 +930,12 @@ impl Programmable for Opcode {
                 let rs = Opcode::get_rs(v);
                 let rt = Opcode::get_rt(v);
                 Mult(rd, rs, rt)
+            }
+            26 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let i = Opcode::get_imm(v);
+                Multi(rd, rs, i)
             }
             27 => {
                 Noop()
@@ -730,10 +953,10 @@ impl Programmable for Opcode {
                 Ori(rd, rs, i)
             }
             43 => {
-                let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
                 let i = Opcode::get_imm(v);
-                Sw(rd, rs, i)
+                Sw(rs, rt, i)
             }
             31 => {
                 let rd = Opcode::get_rd(v);
@@ -962,6 +1185,12 @@ impl Programmable for Opcode {
                 let rt = Opcode::get_rt(v);
                 Keccak(rd, rs, rt)
             }
+            159 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Sha256(rd, rs, rt)
+            }
 
             160 => {
                 let rd = Opcode::get_rd(v);
@@ -1006,11 +1235,81 @@ impl Programmable for Opcode {
             }
             168 => {
                 let rd = Opcode::get_rd(v);
-                Utxoid(rd)
+                let imm = Opcode::get_imm(v);
+                Utxoid(rd, imm)
             }
             169 => {
                 let rd = Opcode::get_rd(v);
                 Contractid(rd)
+            }
+            170 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                FtxOutputTo(rd, imm)
+            }
+            171 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                FtxOutputAmount(rd, imm)
+            }
+
+            172 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Srw(rd, rs)
+            }
+            173 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Srwx(rd, rs)
+            }
+            174 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Sww(rd, rs)
+            }
+            175 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Swwx(rd, rs)
+            }
+            176=> {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                let ru = Opcode::get_ru(v);
+                MemEq(rd, rs, rt, ru)
+            }
+            177 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                MemCp(rd, rs, rt)
+            }
+            178 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                let rt = Opcode::get_rt(v);
+                Ecrecover(rd, rs, rt)
+            }
+
+            180 => {
+                let rd = Opcode::get_rd(v);
+                let rs = Opcode::get_rs(v);
+                Jnz(rd, rs)
+            }
+            181 => {
+                let rd = Opcode::get_rd(v);
+                let imm = Opcode::get_imm(v);
+                Jnzi(rd, imm)
+            }
+            182 => {
+                let rs = Opcode::get_rs(v);
+                Cfe(rs)
+            }
+            183 => {
+                let rs = Opcode::get_rs(v);
+                Cfs(rs)
             }
 
             _ => {

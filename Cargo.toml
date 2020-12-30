@@ -12,6 +12,11 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.63"
+#parity-crypto = "0.6.2"
+keccak-hash = "0.5.1"
+tiny-keccak = { version = "2.0.0", features = ["sha3"] }
+
+sp-io = "2.0.0"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
