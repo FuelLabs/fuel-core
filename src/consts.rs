@@ -26,4 +26,4 @@ pub const VM_REGISTER_WIDTH: u8 = 6;
 
 // internal representation for register ids
 // simpler to represent as usize since it avoids casts
-pub type RegisterId = u8;
+pub type RegId = u8;

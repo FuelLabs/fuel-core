@@ -38,7 +38,7 @@ wasm-bindgen-test = "0.3.13"
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
 
-[[bin]]
-name="mywork"
-bench=false
-path="src/mywork.rs"
+#[[bin]]
+#name="mywork"
+#bench=false
+#path="src/mywork.rs"

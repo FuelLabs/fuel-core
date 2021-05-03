@@ -1,9 +1,11 @@
-#![allow(warnings)]
-pub mod interpreter;
-pub mod opcodes;
-pub mod consts;
-pub mod bit_funcs;
+#![feature(arbitrary_enum_discriminant)]
 
+//pub mod interpreter;
+pub mod consts;
+pub mod opcodes;
+//pub mod bit_funcs;
+
+/*
 use wasm_bindgen::prelude::*;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
@@ -21,3 +23,4 @@ extern {
 pub fn greet() {
     alert("Hello, fuel-vm-rust!");
 }
+*/
