@@ -1,3 +1,64 @@
+use crate::consts::{RegisterId, Word, VM_REGISTER_COUNT};
+
+mod alu;
+mod execution;
+mod flow;
+mod memory;
+
+#[derive(Debug, Clone, Default)]
+pub struct Context {
+    memory: Vec<u8>,
+}
+
+impl Context {
+    pub fn memory(&self) -> &[u8] {
+        self.memory.as_slice()
+    }
+
+    pub fn memory_mut(&mut self) -> &mut [u8] {
+        self.memory.as_mut()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Interpreter {
+    registers: [Word; VM_REGISTER_COUNT],
+
+    gas_used: u64,
+    gas_limit: u64,
+}
+
+impl Interpreter {
+    pub const fn is_unsafe_math(&self) -> bool {
+        self.registers[0x0f] & 0x01 == 0x01
+    }
+
+    pub const fn is_wrapping(&self) -> bool {
+        self.registers[0x0f] & 0x02 == 0x02
+    }
+
+    pub const fn is_valid_register_triple_alu(
+        ra: RegisterId,
+        rb: RegisterId,
+        rc: RegisterId,
+    ) -> bool {
+        ra > 15 && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_couple_alu(ra: RegisterId, rb: RegisterId) -> bool {
+        ra > 15 && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_couple(ra: RegisterId, rb: RegisterId) -> bool {
+        ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register(ra: RegisterId) -> bool {
+        ra < VM_REGISTER_COUNT
+    }
+}
+
+/*
 use std::vec::Vec;
 use crate::consts::*;
 use crate::opcodes::{Programmable, Opcode, OpcodeInstruction};
@@ -1533,3 +1594,4 @@ pub type FInputType = u8;
 pub type FOutputType = u8;
 pub type FUtxoId = [u8; 32];
 pub type FContractId = [u8; 32];
+*/

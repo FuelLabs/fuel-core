@@ -1,9 +1,13 @@
 #![feature(arbitrary_enum_discriminant)]
 
-//pub mod interpreter;
 pub mod consts;
+pub mod interpreter;
 pub mod opcodes;
 //pub mod bit_funcs;
+
+pub mod prelude {
+    pub use crate::opcodes::Opcode;
+}
 
 /*
 use wasm_bindgen::prelude::*;

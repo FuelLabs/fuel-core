@@ -1,178 +1,206 @@
-use crate::consts::RegId;
+use std::convert::TryFrom;
+use std::io;
+
+use crate::consts::RegisterId;
 //use crate::bit_funcs::{from_u32_to_u8_recurse, set_bits_in_u32};
 
-pub type Imm06 = u8;
-pub type Imm12 = u16;
-pub type Imm18 = u32;
-pub type Imm24 = u32;
+pub type Immediate06 = u8;
+pub type Immediate12 = u16;
+pub type Immediate18 = u32;
+pub type Immediate24 = u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 #[rustfmt::skip]
 pub enum Opcode {
     // Arithmetic/Logic (ALU)
-    Add         (RegId, RegId, RegId)            = 0x10,
-    AddI        (RegId, RegId, Imm12)            = 0x11,
-    And         (RegId, RegId, RegId)            = 0x12,
-    AndI        (RegId, RegId, Imm12)            = 0x13,
-    Div         (RegId, RegId, RegId)            = 0x14,
-    DivI        (RegId, RegId, Imm12)            = 0x15,
-    Eq          (RegId, RegId, RegId)            = 0x16,
-    Exp         (RegId, RegId, RegId)            = 0x17,
-    ExpI        (RegId, RegId, Imm12)            = 0x18,
-    GT          (RegId, RegId, RegId)            = 0x19,
-    LogB        (RegId, RegId, RegId)            = 0x1a,
-    RootN       (RegId, RegId, RegId)            = 0x1b,
-    Mod         (RegId, RegId, RegId)            = 0x1c,
-    ModI        (RegId, RegId, Imm12)            = 0x1d,
-    Mul         (RegId, RegId, RegId)            = 0x1e,
-    MulI        (RegId, RegId, Imm12)            = 0x1f,
-    Not         (RegId, RegId)                   = 0x20,
-    Or          (RegId, RegId, RegId)            = 0x21,
-    OrI         (RegId, RegId, Imm12)            = 0x22,
-    SLL         (RegId, RegId, RegId)            = 0x23,
-    SLLI        (RegId, RegId, Imm12)            = 0x24,
-    SRL         (RegId, RegId, RegId)            = 0x25,
-    SRLI        (RegId, RegId, Imm12)            = 0x26,
-    Sub         (RegId, RegId, RegId)            = 0x27,
-    SubI        (RegId, RegId, Imm12)            = 0x28,
-    Xor         (RegId, RegId, RegId)            = 0x29,
-    XorI        (RegId, RegId, Imm12)            = 0x2a,
+    Add         (RegisterId, RegisterId, RegisterId)                 = 0x10,
+    AddI        (RegisterId, RegisterId, Immediate12)                = 0x11,
+    And         (RegisterId, RegisterId, RegisterId)                 = 0x12,
+    AndI        (RegisterId, RegisterId, Immediate12)                = 0x13,
+    Div         (RegisterId, RegisterId, RegisterId)                 = 0x14,
+    DivI        (RegisterId, RegisterId, Immediate12)                = 0x15,
+    Eq          (RegisterId, RegisterId, RegisterId)                 = 0x16,
+    Exp         (RegisterId, RegisterId, RegisterId)                 = 0x17,
+    ExpI        (RegisterId, RegisterId, Immediate12)                = 0x18,
+    GT          (RegisterId, RegisterId, RegisterId)                 = 0x19,
+    MathLog     (RegisterId, RegisterId, RegisterId)                 = 0x1a,
+    MathRoot    (RegisterId, RegisterId, RegisterId)                 = 0x1b,
+    Mod         (RegisterId, RegisterId, RegisterId)                 = 0x1c,
+    ModI        (RegisterId, RegisterId, Immediate12)                = 0x1d,
+    Mul         (RegisterId, RegisterId, RegisterId)                 = 0x1e,
+    MulI        (RegisterId, RegisterId, Immediate12)                = 0x1f,
+    Not         (RegisterId, RegisterId)                             = 0x20,
+    Or          (RegisterId, RegisterId, RegisterId)                 = 0x21,
+    OrI         (RegisterId, RegisterId, Immediate12)                = 0x22,
+    SLL         (RegisterId, RegisterId, RegisterId)                 = 0x23,
+    SLLI        (RegisterId, RegisterId, Immediate12)                = 0x24,
+    SRL         (RegisterId, RegisterId, RegisterId)                 = 0x25,
+    SRLI        (RegisterId, RegisterId, Immediate12)                = 0x26,
+    Sub         (RegisterId, RegisterId, RegisterId)                 = 0x27,
+    SubI        (RegisterId, RegisterId, Immediate12)                = 0x28,
+    Xor         (RegisterId, RegisterId, RegisterId)                 = 0x29,
+    XorI        (RegisterId, RegisterId, Immediate12)                = 0x2a,
 
     // Control Flow
-    CIMV        (RegId, RegId, RegId)            = 0x30,
-    CMTV        (RegId, RegId)                   = 0x31,
-    JI          (Imm24)                          = 0x32,
-    JNEI        (RegId, RegId, Imm12)            = 0x33,
-    Return      (RegId)                          = 0x34,
+    CIMV        (RegisterId, RegisterId, RegisterId)                 = 0x30,
+    CMTV        (RegisterId, RegisterId)                             = 0x31,
+    JI          (Immediate24)                                        = 0x32,
+    JNEI        (RegisterId, RegisterId, Immediate12)                = 0x33,
+    Return      (RegisterId)                                         = 0x34,
 
     // Memory
-    CFE         (RegId)                          = 0x40,
-    CFS         (RegId)                          = 0x41,
-    LB          (RegId, RegId, Imm12)            = 0x42,
-    LW          (RegId, RegId, Imm12)            = 0x43,
-    Malloc      (RegId)                          = 0x44,
-    MemClear    (RegId, RegId)                   = 0x45,
-    MemCp       (RegId, RegId, RegId)            = 0x46,
-    MemEq       (RegId, RegId, RegId, RegId)     = 0x47,
-    SB          (RegId, RegId, Imm12)            = 0x48,
-    SW          (RegId, RegId, Imm12)            = 0x49,
+    CFEI        (Immediate24)                                        = 0x40,
+    CFSI        (Immediate24)                                        = 0x41,
+    LB          (RegisterId, RegisterId, Immediate12)                = 0x42,
+    LW          (RegisterId, RegisterId, Immediate12)                = 0x43,
+    Malloc      (RegisterId)                                         = 0x44,
+    MemClear    (RegisterId, RegisterId)                             = 0x45,
+    MemCp       (RegisterId, RegisterId, RegisterId)                 = 0x46,
+    MemEq       (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x47,
+    SB          (RegisterId, RegisterId, Immediate12)                = 0x48,
+    SW          (RegisterId, RegisterId, Immediate12)                = 0x49,
 
     // Contract
-    Blockhash   (RegId, RegId)                   = 0x50,
-    Blockheight (RegId)                          = 0x51,
-    Burn        (RegId)                          = 0x52,
-    Call        (RegId, RegId, RegId, RegId)     = 0x53,
-    CodeCopy    (RegId, RegId, RegId, RegId)     = 0x54,
-    CodeRoot    (RegId, RegId)                   = 0x55,
-    CodeSize    (RegId, RegId)                   = 0x56,
-    Coinbase    (RegId)                          = 0x57,
-    Loadcode    (RegId, RegId, RegId)            = 0x58,
-    Log         (RegId, RegId, RegId, RegId)     = 0x59,
-    Mint        (RegId)                          = 0x5a,
-    Revert      (RegId)                          = 0x5b,
-    SLoadCode   (RegId, RegId, RegId)            = 0x5c,
-    SRW         (RegId, RegId)                   = 0x5d,
-    SRWx        (RegId, RegId)                   = 0x5e,
-    SWW         (RegId, RegId)                   = 0x5f,
-    SWWx        (RegId, RegId)                   = 0x60,
-    Transfer    (RegId, RegId, RegId)            = 0x61,
-    TransferOut (RegId, RegId, RegId, RegId)     = 0x62,
+    Blockhash   (RegisterId, RegisterId)                             = 0x50,
+    Blockheight (RegisterId)                                         = 0x51,
+    Burn        (RegisterId)                                         = 0x52,
+    Call        (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x53,
+    CodeCopy    (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x54,
+    CodeRoot    (RegisterId, RegisterId)                             = 0x55,
+    CodeSize    (RegisterId, RegisterId)                             = 0x56,
+    Coinbase    (RegisterId)                                         = 0x57,
+    Loadcode    (RegisterId, RegisterId, RegisterId)                 = 0x58,
+    Log         (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x59,
+    Mint        (RegisterId)                                         = 0x5a,
+    Revert      (RegisterId)                                         = 0x5b,
+    SLoadCode   (RegisterId, RegisterId, RegisterId)                 = 0x5c,
+    SRW         (RegisterId, RegisterId)                             = 0x5d,
+    SRWx        (RegisterId, RegisterId)                             = 0x5e,
+    SWW         (RegisterId, RegisterId)                             = 0x5f,
+    SWWx        (RegisterId, RegisterId)                             = 0x60,
+    Transfer    (RegisterId, RegisterId, RegisterId)                 = 0x61,
+    TransferOut (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x62,
 
     // Crypto
-    ECRecover   (RegId, RegId, RegId)            = 0x70,
-    Keccak256   (RegId, RegId, RegId)            = 0x71,
-    Sha256      (RegId, RegId, RegId)            = 0x72,
+    ECRecover   (RegisterId, RegisterId, RegisterId)                 = 0x70,
+    Keccak256   (RegisterId, RegisterId, RegisterId)                 = 0x71,
+    Sha256      (RegisterId, RegisterId, RegisterId)                 = 0x72,
 
     // Other
-    Noop                                         = 0x00,
-    Flag        (RegId)                          = 0x01,
-    Undefined                                    = 0x0f,
+    Noop                                                             = 0x00,
+    Flag        (RegisterId)                                         = 0x01,
+    Undefined                                                        = 0x0f,
+}
+
+impl Opcode {
+    pub const fn new(
+        op: u8,
+        ra: RegisterId,
+        rb: RegisterId,
+        rc: RegisterId,
+        rd: RegisterId,
+        _imm06: Immediate06,
+        imm12: Immediate12,
+        _imm18: Immediate18,
+        imm24: Immediate24,
+    ) -> Self {
+        use Opcode::*;
+
+        match op {
+            0x00 => Noop,
+            0x01 => Flag(ra),
+            0x10 => Add(ra, rb, rc),
+            0x11 => AddI(ra, rb, imm12),
+            0x12 => And(ra, rb, rc),
+            0x13 => AndI(ra, rb, imm12),
+            0x14 => Div(ra, rb, rc),
+            0x15 => DivI(ra, rb, imm12),
+            0x16 => Eq(ra, rb, rc),
+            0x17 => Exp(ra, rb, rc),
+            0x18 => ExpI(ra, rb, imm12),
+            0x19 => GT(ra, rb, rc),
+            0x1a => MathLog(ra, rb, rc),
+            0x1b => MathRoot(ra, rb, rc),
+            0x1c => Mod(ra, rb, rc),
+            0x1d => ModI(ra, rb, imm12),
+            0x1e => Mul(ra, rb, rc),
+            0x1f => MulI(ra, rb, imm12),
+            0x20 => Not(ra, rb),
+            0x21 => Or(ra, rb, rc),
+            0x22 => OrI(ra, rb, imm12),
+            0x23 => SLL(ra, rb, rc),
+            0x24 => SLLI(ra, rb, imm12),
+            0x25 => SRL(ra, rb, rc),
+            0x26 => SRLI(ra, rb, imm12),
+            0x27 => Sub(ra, rb, rc),
+            0x28 => SubI(ra, rb, imm12),
+            0x29 => Xor(ra, rb, rc),
+            0x2a => XorI(ra, rb, imm12),
+            0x30 => CIMV(ra, rb, rc),
+            0x31 => CMTV(ra, rb),
+            0x32 => JI(imm24),
+            0x33 => JNEI(ra, rb, imm12),
+            0x34 => Return(ra),
+            0x40 => CFEI(imm24),
+            0x41 => CFSI(imm24),
+            0x42 => LB(ra, rb, imm12),
+            0x43 => LW(ra, rb, imm12),
+            0x44 => Malloc(ra),
+            0x45 => MemClear(ra, rb),
+            0x46 => MemCp(ra, rb, rc),
+            0x47 => MemEq(ra, rb, rc, rd),
+            0x48 => SB(ra, rb, imm12),
+            0x49 => SW(ra, rb, imm12),
+            0x50 => Blockhash(ra, rb),
+            0x51 => Blockheight(ra),
+            0x52 => Burn(ra),
+            0x53 => Call(ra, rb, rc, rd),
+            0x54 => CodeCopy(ra, rb, rc, rd),
+            0x55 => CodeRoot(ra, rb),
+            0x56 => CodeSize(ra, rb),
+            0x57 => Coinbase(ra),
+            0x58 => Loadcode(ra, rb, rc),
+            0x59 => Log(ra, rb, rc, rd),
+            0x5a => Mint(ra),
+            0x5b => Revert(ra),
+            0x5c => SLoadCode(ra, rb, rc),
+            0x5d => SRW(ra, rb),
+            0x5e => SRWx(ra, rb),
+            0x5f => SWW(ra, rb),
+            0x60 => SWWx(ra, rb),
+            0x61 => Transfer(ra, rb, rc),
+            0x62 => TransferOut(ra, rb, rc, rd),
+            0x70 => ECRecover(ra, rb, rc),
+            0x71 => Keccak256(ra, rb, rc),
+            0x72 => Sha256(ra, rb, rc),
+            // TODO set panic strategy
+            _ => Undefined,
+        }
+    }
+
+    pub const fn gas_cost(&self) -> u64 {
+        // TODO define gas costs
+        1
+    }
 }
 
 impl From<u32> for Opcode {
     fn from(instruction: u32) -> Self {
+        // TODO Optimize with native architecture (eg SIMD?) or facilitate auto-vectorization
         let op = (instruction >> 24) as u8;
 
-        let ra = ((instruction >> 18) & 0x3f) as u8;
-        let rb = ((instruction >> 12) & 0x3f) as u8;
-        let rc = ((instruction >> 6) & 0x3f) as u8;
-        let rd = (instruction & 0x3f) as u8;
+        let ra = ((instruction >> 18) & 0x3f) as RegisterId;
+        let rb = ((instruction >> 12) & 0x3f) as RegisterId;
+        let rc = ((instruction >> 6) & 0x3f) as RegisterId;
+        let rd = (instruction & 0x3f) as RegisterId;
 
-        let _imm06 = (instruction & 0xff) as u8;
-        let imm12 = (instruction & 0x0fff) as u16;
-        let _imm18 = (instruction & 0x3ffff) as u32;
-        let imm24 = (instruction & 0xffffff) as u32;
+        let imm06 = (instruction & 0xff) as Immediate06;
+        let imm12 = (instruction & 0x0fff) as Immediate12;
+        let imm18 = (instruction & 0x3ffff) as Immediate18;
+        let imm24 = (instruction & 0xffffff) as Immediate24;
 
-        match op {
-            0x00 => Self::Noop,
-            0x01 => Self::Flag(ra),
-            0x10 => Self::Add(ra, rb, rc),
-            0x11 => Self::AddI(ra, rb, imm12),
-            0x12 => Self::And(ra, rb, rc),
-            0x13 => Self::AndI(ra, rb, imm12),
-            0x14 => Self::Div(ra, rb, rc),
-            0x15 => Self::DivI(ra, rb, imm12),
-            0x16 => Self::Eq(ra, rb, rc),
-            0x17 => Self::Exp(ra, rb, rc),
-            0x18 => Self::ExpI(ra, rb, imm12),
-            0x19 => Self::GT(ra, rb, rc),
-            0x1a => Self::LogB(ra, rb, rc),
-            0x1b => Self::RootN(ra, rb, rc),
-            0x1c => Self::Mod(ra, rb, rc),
-            0x1d => Self::ModI(ra, rb, imm12),
-            0x1e => Self::Mul(ra, rb, rc),
-            0x1f => Self::MulI(ra, rb, imm12),
-            0x20 => Self::Not(ra, rb),
-            0x21 => Self::Or(ra, rb, rc),
-            0x22 => Self::OrI(ra, rb, imm12),
-            0x23 => Self::SLL(ra, rb, rc),
-            0x24 => Self::SLLI(ra, rb, imm12),
-            0x25 => Self::SRL(ra, rb, rc),
-            0x26 => Self::SRLI(ra, rb, imm12),
-            0x27 => Self::Sub(ra, rb, rc),
-            0x28 => Self::SubI(ra, rb, imm12),
-            0x29 => Self::Xor(ra, rb, rc),
-            0x2a => Self::XorI(ra, rb, imm12),
-            0x30 => Self::CIMV(ra, rb, rc),
-            0x31 => Self::CMTV(ra, rb),
-            0x32 => Self::JI(imm24),
-            0x33 => Self::JNEI(ra, rb, imm12),
-            0x34 => Self::Return(ra),
-            0x40 => Self::CFE(ra),
-            0x41 => Self::CFS(ra),
-            0x42 => Self::LB(ra, rb, imm12),
-            0x43 => Self::LW(ra, rb, imm12),
-            0x44 => Self::Malloc(ra),
-            0x45 => Self::MemClear(ra, rb),
-            0x46 => Self::MemCp(ra, rb, rc),
-            0x47 => Self::MemEq(ra, rb, rc, rd),
-            0x48 => Self::SB(ra, rb, imm12),
-            0x49 => Self::SW(ra, rb, imm12),
-            0x50 => Self::Blockhash(ra, rb),
-            0x51 => Self::Blockheight(ra),
-            0x52 => Self::Burn(ra),
-            0x53 => Self::Call(ra, rb, rc, rd),
-            0x54 => Self::CodeCopy(ra, rb, rc, rd),
-            0x55 => Self::CodeRoot(ra, rb),
-            0x56 => Self::CodeSize(ra, rb),
-            0x57 => Self::Coinbase(ra),
-            0x58 => Self::Loadcode(ra, rb, rc),
-            0x59 => Self::Log(ra, rb, rc, rd),
-            0x5a => Self::Mint(ra),
-            0x5b => Self::Revert(ra),
-            0x5c => Self::SLoadCode(ra, rb, rc),
-            0x5d => Self::SRW(ra, rb),
-            0x5e => Self::SRWx(ra, rb),
-            0x5f => Self::SWW(ra, rb),
-            0x60 => Self::SWWx(ra, rb),
-            0x61 => Self::Transfer(ra, rb, rc),
-            0x62 => Self::TransferOut(ra, rb, rc, rd),
-            0x70 => Self::ECRecover(ra, rb, rc),
-            0x71 => Self::Keccak256(ra, rb, rc),
-            0x72 => Self::Sha256(ra, rb, rc),
-            _ => Self::Undefined,
-        }
+        Self::new(op, ra, rb, rc, rd, imm06, imm12, imm18, imm24)
     }
 }
 
@@ -211,10 +239,10 @@ impl From<Opcode> for u32 {
             Opcode::GT(ra, rb, rc) => {
                 (0x19 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6)
             }
-            Opcode::LogB(ra, rb, rc) => {
+            Opcode::MathLog(ra, rb, rc) => {
                 (0x1a << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6)
             }
-            Opcode::RootN(ra, rb, rc) => {
+            Opcode::MathRoot(ra, rb, rc) => {
                 (0x1b << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6)
             }
             Opcode::Mod(ra, rb, rc) => {
@@ -269,8 +297,8 @@ impl From<Opcode> for u32 {
                 (0x33 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32)
             }
             Opcode::Return(ra) => (0x34 << 24) | ((ra as u32) << 18),
-            Opcode::CFE(ra) => (0x40 << 24) | ((ra as u32) << 18),
-            Opcode::CFS(ra) => (0x41 << 24) | ((ra as u32) << 18),
+            Opcode::CFEI(imm24) => (0x40 << 24) | (imm24 as u32),
+            Opcode::CFSI(imm24) => (0x41 << 24) | (imm24 as u32),
             Opcode::LB(ra, rb, imm12) => {
                 (0x42 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32)
             }
@@ -358,11 +386,42 @@ impl From<Opcode> for u32 {
     }
 }
 
+impl io::Read for Opcode {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        buf.chunks_exact_mut(4)
+            .next()
+            .map(|chunk| chunk.copy_from_slice(&u32::from(*self).to_be_bytes()))
+            .map(|_| 4)
+            .ok_or(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "The provided buffer is not big enough!",
+            ))
+    }
+}
+
+impl io::Write for Opcode {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        buf.chunks_exact(4)
+            .next()
+            .ok_or(io::Error::new(
+                io::ErrorKind::UnexpectedEof,
+                "The provided buffer is not big enough!",
+            ))
+            .and_then(|chunk| <[u8; 4]>::try_from(chunk).map_err(|_| unreachable!()))
+            .map(|bytes| *self = u32::from_be_bytes(bytes).into())
+            .map(|_| 4)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 #[test]
 fn opcode_encoding() {
-    let r = 0b00111111;
-    let imm12 = 0b0000111111111111;
-    let imm24 = 0b00000000111111111111111111111111;
+    let r = 0x3f;
+    let imm12 = 0xfff;
+    let imm24 = 0xffffff;
 
     let data = vec![
         Opcode::Add(r, r, r),
@@ -375,8 +434,8 @@ fn opcode_encoding() {
         Opcode::Exp(r, r, r),
         Opcode::ExpI(r, r, imm12),
         Opcode::GT(r, r, r),
-        Opcode::LogB(r, r, r),
-        Opcode::RootN(r, r, r),
+        Opcode::MathLog(r, r, r),
+        Opcode::MathRoot(r, r, r),
         Opcode::Mod(r, r, r),
         Opcode::ModI(r, r, imm12),
         Opcode::Mul(r, r, r),
@@ -397,8 +456,8 @@ fn opcode_encoding() {
         Opcode::JI(imm24),
         Opcode::JNEI(r, r, imm12),
         Opcode::Return(r),
-        Opcode::CFE(r),
-        Opcode::CFS(r),
+        Opcode::CFEI(imm24),
+        Opcode::CFSI(imm24),
         Opcode::LB(r, r, imm12),
         Opcode::LW(r, r, imm12),
         Opcode::Malloc(r),
@@ -434,12 +493,29 @@ fn opcode_encoding() {
         Opcode::Undefined,
     ];
 
-    for op in data {
+    use std::io::{Read, Write};
+
+    let mut bytes: Vec<u8> = vec![];
+    let mut buffer = [0u8; 4];
+
+    for mut op in data.clone() {
+        op.read(&mut buffer)
+            .expect("Failed to write opcode to buffer");
+        bytes.extend(&buffer);
+
         let op_p = u32::from(op);
         let op_p = Opcode::from(op_p);
 
         assert_eq!(op, op_p);
     }
+
+    let mut op_p = Opcode::Undefined;
+    bytes.chunks(4).zip(data.iter()).for_each(|(chunk, op)| {
+        op_p.write(chunk)
+            .expect("Failed to parse opcode from chunk");
+
+        assert_eq!(op, &op_p);
+    });
 }
 
 /*
