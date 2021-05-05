@@ -1,11 +1,49 @@
-use super::{Context, Interpreter};
-use crate::consts::{RegisterId, Word, VM_MAX_RAM};
+use super::Interpreter;
+use crate::consts::{MEM_MAX_ACCESS_SIZE, VM_MAX_RAM};
+use crate::types::{RegisterId, Word};
 
 use std::convert::TryFrom;
+use std::ptr;
+
+impl Interpreter {
+    pub const fn has_ownership_range(&self, a: Word, ab: Word) -> bool {
+        let a_is_stack = a < self.registers[0x05];
+        let a_is_heap = a > self.registers[0x07];
+
+        let ab_is_stack = ab < self.registers[0x05];
+        let ab_is_heap = ab > self.registers[0x07];
+
+        a < ab
+            && (a_is_stack
+                && ab_is_stack
+                && self.has_ownership_stack(a)
+                && self.has_ownership_stack(ab)
+                || a_is_heap
+                    && ab_is_heap
+                    && self.has_ownership_heap(a)
+                    && self.has_ownership_heap(ab))
+    }
+
+    pub const fn has_ownership_stack(&self, a: Word) -> bool {
+        self.registers[0x04] <= a && a < self.registers[0x05]
+    }
+
+    pub const fn has_ownership_heap(&self, a: Word) -> bool {
+        let external = self.registers[0x06] == 0;
+
+        // TODO implement fp->hp and (addr, size) validations
+        // fp->hp
+        // it means $hp from the previous context, i.e. what's saved in the "Saved registers from
+        // previous context" of the call frame at $fp`
+        external && self.registers[0x07] < a && a < VM_MAX_RAM - 1
+            || !external && self.registers[0x07] < a
+    }
+}
 
 impl Interpreter {
     pub fn stack_pointer_overflow(&mut self, f: fn(Word, Word) -> (Word, bool), v: Word) -> bool {
         let (result, overflow) = f(self.registers[0x05], v);
+        self.inc_pc();
 
         if overflow || result > self.registers[0x07] {
             false
@@ -15,44 +53,140 @@ impl Interpreter {
         }
     }
 
-    pub fn load_byte(
-        &mut self,
-        ctx: &Context,
-        ra: RegisterId,
-        b: RegisterId,
-        c: RegisterId,
-    ) -> bool {
+    pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
         let bc = b.saturating_add(c);
+        self.inc_pc();
 
         if bc >= VM_MAX_RAM as RegisterId {
             false
         } else {
             // TODO ensure the byte should be cast and not overwrite the encoding
-            self.registers[ra] = ctx.memory()[bc] as Word;
+            self.registers[ra] = self.memory[bc] as Word;
 
             true
         }
     }
 
-    pub fn load_word(
-        &mut self,
-        ctx: &Context,
-        ra: RegisterId,
-        b: RegisterId,
-        c: RegisterId,
-    ) -> bool {
+    pub fn load_word(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
         let (bc, overflow) = b.overflowing_add(c);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
+        self.inc_pc();
 
         if overflow || bcw >= VM_MAX_RAM as RegisterId {
             false
         } else {
             // TODO check if it is expected to be BE
             // Safe conversion of sized slice
-            self.registers[ra] = <[u8; 8]>::try_from(&ctx.memory()[bc..bc + 8])
+            self.registers[ra] = <[u8; 8]>::try_from(&self.memory[bc..bc + 8])
                 .map(|bytes| Word::from_be_bytes(bytes))
                 .unwrap_or_else(|_| unreachable!());
+
+            true
+        }
+    }
+
+    pub fn store_byte(&mut self, a: Word, b: Word, c: Word) -> bool {
+        let (ac, overflow) = a.overflowing_add(c);
+        let (result, of) = ac.overflowing_add(1);
+        let overflow = overflow || of;
+        self.inc_pc();
+
+        if overflow
+            || result > VM_MAX_RAM
+            || !(self.has_ownership_stack(ac) || self.has_ownership_heap(ac))
+        {
+            false
+        } else {
+            self.memory[ac as usize] = b.to_le_bytes()[0];
+            true
+        }
+    }
+
+    pub fn store_word(&mut self, a: Word, b: Word, c: Word) -> bool {
+        let (ac, overflow) = a.overflowing_add(c);
+        let (result, of) = ac.overflowing_add(8);
+        let overflow = overflow || of;
+        self.inc_pc();
+
+        if overflow || result > VM_MAX_RAM || !self.has_ownership_range(ac, ac + 8) {
+            false
+        } else {
+            // TODO review if BE is intended
+            self.memory[ac as usize..ac as usize + 8].copy_from_slice(&b.to_be_bytes());
+            true
+        }
+    }
+
+    pub fn malloc(&mut self, a: Word) -> bool {
+        let (result, overflow) = self.registers[0x07].overflowing_sub(a);
+        self.inc_pc();
+
+        if overflow || result < self.registers[0x05] {
+            false
+        } else {
+            self.registers[0x07] = result;
+            true
+        }
+    }
+
+    pub fn memclear(&mut self, a: Word, b: Word) -> bool {
+        let (ab, overflow) = a.overflowing_add(b);
+        self.inc_pc();
+
+        if overflow
+            || ab > VM_MAX_RAM
+            || b > MEM_MAX_ACCESS_SIZE
+            || !self.has_ownership_range(a, ab)
+        {
+            false
+        } else {
+            // trivial compiler optimization for memset when best
+            for i in &mut self.memory[a as usize..ab as usize] {
+                *i = 0
+            }
+            true
+        }
+    }
+
+    pub fn memcopy(&mut self, a: Word, b: Word, c: Word) -> bool {
+        let (ac, overflow) = a.overflowing_add(c);
+        let (bc, of) = b.overflowing_add(c);
+        let overflow = overflow || of;
+        self.inc_pc();
+
+        if overflow
+            || ac > VM_MAX_RAM
+            || bc > VM_MAX_RAM
+            || c > MEM_MAX_ACCESS_SIZE
+            || !self.has_ownership_range(a, ac)
+        {
+            false
+        } else {
+            // The memory may overlap, so `memmove` is used instead
+            // The pointers are granted to be aligned so this is a safe operation
+            let src = &self.memory[b as usize] as *const u8;
+            let dst = &mut self.memory[a as usize] as *mut u8;
+
+            unsafe {
+                ptr::copy(src, dst, c as usize);
+            }
+
+            true
+        }
+    }
+
+    pub fn memeq(&mut self, ra: RegisterId, b: Word, c: Word, d: Word) -> bool {
+        let (bd, overflow) = b.overflowing_add(d);
+        let (cd, of) = c.overflowing_add(d);
+        let overflow = overflow || of;
+        self.inc_pc();
+
+        if overflow || bd > VM_MAX_RAM || cd > VM_MAX_RAM || d > MEM_MAX_ACCESS_SIZE {
+            false
+        } else {
+            self.registers[ra] = (self.memory[b as usize..bd as usize]
+                == self.memory[c as usize..cd as usize]) as Word;
 
             true
         }

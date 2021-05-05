@@ -1,5 +1,6 @@
 use super::Interpreter;
-use crate::consts::{Word, VM_MAX_RAM};
+use crate::consts::VM_MAX_RAM;
+use crate::types::Word;
 
 impl Interpreter {
     pub fn program_counter_inc(&mut self) -> bool {

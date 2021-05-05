@@ -1,34 +1,59 @@
-use crate::consts::{RegisterId, Word, VM_REGISTER_COUNT};
+use crate::consts::{VM_MAX_RAM, VM_REGISTER_COUNT};
+use crate::types::{RegisterId, Word};
 
 mod alu;
+mod crypto;
 mod execution;
 mod flow;
 mod memory;
 
-#[derive(Debug, Clone, Default)]
-pub struct Context {
-    memory: Vec<u8>,
-}
-
-impl Context {
-    pub fn memory(&self) -> &[u8] {
-        self.memory.as_slice()
-    }
-
-    pub fn memory_mut(&mut self) -> &mut [u8] {
-        self.memory.as_mut()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     registers: [Word; VM_REGISTER_COUNT],
+    memory: Vec<u8>,
+}
 
-    gas_used: u64,
-    gas_limit: u64,
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self {
+            registers: [0; VM_REGISTER_COUNT],
+            memory: vec![],
+        }
+    }
 }
 
 impl Interpreter {
+    pub fn init(mut self) -> Self {
+        self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
+        self.memory = vec![0; VM_MAX_RAM as usize];
+
+        // TODO push tx hash to stack
+        // TODO push pairs of colors to stack
+        // TODO push length and bytes of tx to stack
+
+        // TODO set current stack pointer
+        self.registers[0x04] = 0;
+        self.registers[0x05] = self.registers[0x04];
+
+        // Set heap area
+        self.registers[0x06] = VM_MAX_RAM - 1;
+        self.registers[0x07] = self.registers[0x06];
+
+        self
+    }
+
+    pub fn set_flag(&mut self, a: Word) {
+        self.registers[0x0f] = a;
+    }
+
+    pub fn inc_pc(&mut self) {
+        self.registers[0x03] = self.registers[0x03].saturating_add(4);
+    }
+
+    pub const fn registers(&self) -> &[Word] {
+        &self.registers
+    }
+
     pub const fn is_unsafe_math(&self) -> bool {
         self.registers[0x0f] & 0x01 == 0x01
     }
@@ -47,6 +72,23 @@ impl Interpreter {
 
     pub const fn is_valid_register_couple_alu(ra: RegisterId, rb: RegisterId) -> bool {
         ra > 15 && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_quadruple_alu(
+        ra: RegisterId,
+        rb: RegisterId,
+        rc: RegisterId,
+        rd: RegisterId,
+    ) -> bool {
+        ra > 15
+            && ra < VM_REGISTER_COUNT
+            && rb < VM_REGISTER_COUNT
+            && rc < VM_REGISTER_COUNT
+            && rd < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_triple(ra: RegisterId, rb: RegisterId, rc: RegisterId) -> bool {
+        ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_couple(ra: RegisterId, rb: RegisterId) -> bool {

@@ -1,10 +1,4 @@
-/// Register ID representation
-pub type RegisterId = usize;
-
 /* MEMORY TYPES */
-
-/// Register type
-pub type Word = u64;
 
 /// Maximum contract size, in bytes.
 pub const CONTRACT_MAX_SIZE: u64 = 16 * 1024;
