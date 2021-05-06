@@ -174,3 +174,74 @@ fn sha256() {
     vm.execute(Opcode::MemEq(0x17, 0x14, 0x15, 0x18));
     assert_eq!(0x00, vm.registers()[0x17]);
 }
+
+#[test]
+fn keccak256() {
+    use crate::prelude::*;
+    use sha3::{Digest, Keccak256};
+
+    let message = b"...and, moreover, I consider it my duty to warn you that the cat is an ancient, inviolable animal.";
+    let mut hasher = Keccak256::new();
+    hasher.update(message);
+    let hash = hasher.finalize();
+
+    let vm = Interpreter::default();
+    let mut vm = vm.init();
+
+    // r[0x10] := 162
+    vm.execute(Opcode::AddI(0x10, 0x10, 162));
+    vm.execute(Opcode::Malloc(0x10));
+
+    // r[0x12] := r[hp]
+    vm.execute(Opcode::Move(0x12, 0x07));
+
+    // m[hp + 1..hp + |message| + |hash| + 1] <- message + hash
+    message
+        .iter()
+        .chain(hash.iter())
+        .enumerate()
+        .for_each(|(i, b)| {
+            vm.execute(Opcode::AddI(0x11, 0x13, (*b) as Immediate12));
+            vm.execute(Opcode::SB(0x12, 0x11, (i + 1) as Immediate12));
+        });
+
+    // Set message address to 0x11
+    // r[0x11] := r[hp] + 1
+    vm.execute(Opcode::AddI(0x11, 0x12, 1));
+
+    // Set hash address to 0x14
+    // r[0x14] := r[0x11] + |message|
+    vm.execute(Opcode::AddI(0x14, 0x11, message.len() as Immediate12));
+
+    // Set calculated hash address to 0x15
+    // r[0x15] := r[0x14] + |hash|
+    vm.execute(Opcode::AddI(0x15, 0x14, hash.len() as Immediate12));
+
+    // Set hash size
+    // r[0x16] := |message|
+    vm.execute(Opcode::AddI(0x16, 0x16, message.len() as Immediate12));
+
+    // Compute the Keccak256
+    vm.execute(Opcode::Keccak256(0x15, 0x11, 0x16));
+
+    // r[0x18] := |hash|
+    // r[0x17] := m[hash] == m[computed hash]
+    vm.execute(Opcode::AddI(0x18, 0x18, hash.len() as Immediate12));
+    vm.execute(Opcode::MemEq(0x17, 0x14, 0x15, 0x18));
+    assert_eq!(0x01, vm.registers()[0x17]);
+
+    // Corrupt the message
+    // r[0x19] := 0xff
+    // m[message] := r[0x19]
+    vm.execute(Opcode::AddI(0x19, 0x19, 0xff));
+    vm.execute(Opcode::SB(0x11, 0x19, 0));
+
+    // Compute the Keccak256 of the corrupted message
+    vm.execute(Opcode::Keccak256(0x15, 0x11, 0x16));
+
+    // r[0x18] := |hash|
+    // r[0x17] := m[hash] == m[computed hash]
+    // r[0x17] must be false
+    vm.execute(Opcode::MemEq(0x17, 0x14, 0x15, 0x18));
+    assert_eq!(0x00, vm.registers()[0x17]);
+}
