@@ -1,6 +1,7 @@
 #![feature(arbitrary_enum_discriminant)]
 
 pub mod consts;
+pub mod crypto;
 pub mod interpreter;
 pub mod opcodes;
 pub mod transaction;

@@ -52,6 +52,10 @@ impl Interpreter {
         self.registers[REG_FLAG] = a;
     }
 
+    pub fn set_err(&mut self) {
+        self.registers[REG_ERR] = 1;
+    }
+
     pub fn inc_pc(&mut self) -> bool {
         let (result, overflow) = self.registers[REG_PC].overflowing_add(4);
 
