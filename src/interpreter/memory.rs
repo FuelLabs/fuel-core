@@ -1,5 +1,5 @@
 use super::Interpreter;
-use crate::consts::{MEM_MAX_ACCESS_SIZE, VM_MAX_RAM};
+use crate::consts::*;
 use crate::types::{RegisterId, Word};
 
 use std::convert::TryFrom;
@@ -7,48 +7,42 @@ use std::ptr;
 
 impl Interpreter {
     pub const fn has_ownership_range(&self, a: Word, ab: Word) -> bool {
-        let a_is_stack = a < self.registers[0x05];
-        let a_is_heap = a > self.registers[0x07];
+        let a_is_stack = a < self.registers[REG_SP];
+        let a_is_heap = a > self.registers[REG_HP];
 
-        let ab_is_stack = ab < self.registers[0x05];
-        let ab_is_heap = ab > self.registers[0x07];
+        let ab_is_stack = ab < self.registers[REG_SP];
+        let ab_is_heap = ab > self.registers[REG_HP];
 
         a < ab
-            && (a_is_stack
-                && ab_is_stack
-                && self.has_ownership_stack(a)
-                && self.has_ownership_stack(ab)
-                || a_is_heap
-                    && ab_is_heap
-                    && self.has_ownership_heap(a)
-                    && self.has_ownership_heap(ab))
+            && (a_is_stack && ab_is_stack && self.has_ownership_stack(a) && self.has_ownership_stack(ab)
+                || a_is_heap && ab_is_heap && self.has_ownership_heap(a) && self.has_ownership_heap(ab))
     }
 
     pub const fn has_ownership_stack(&self, a: Word) -> bool {
-        self.registers[0x04] <= a && a < self.registers[0x05]
+        self.registers[REG_SSP] <= a && a < self.registers[REG_SP]
     }
 
     pub const fn has_ownership_heap(&self, a: Word) -> bool {
-        let external = self.registers[0x06] == 0;
+        let external = self.registers[REG_FP] == 0;
 
         // TODO implement fp->hp and (addr, size) validations
         // fp->hp
-        // it means $hp from the previous context, i.e. what's saved in the "Saved registers from
-        // previous context" of the call frame at $fp`
-        external && self.registers[0x07] < a && a < VM_MAX_RAM - 1
-            || !external && self.registers[0x07] < a
+        // it means $hp from the previous context, i.e. what's saved in the
+        // "Saved registers from previous context" of the call frame at
+        // $fp`
+        external && self.registers[REG_HP] < a && a < VM_MAX_RAM - 1 || !external && self.registers[REG_HP] < a
     }
 }
 
 impl Interpreter {
     pub fn stack_pointer_overflow(&mut self, f: fn(Word, Word) -> (Word, bool), v: Word) -> bool {
-        let (result, overflow) = f(self.registers[0x05], v);
+        let (result, overflow) = f(self.registers[REG_SP], v);
         self.inc_pc();
 
-        if overflow || result > self.registers[0x07] {
+        if overflow || result > self.registers[REG_HP] {
             false
         } else {
-            self.registers[0x05] = result;
+            self.registers[REG_SP] = result;
             true
         }
     }
@@ -60,7 +54,8 @@ impl Interpreter {
         if bc >= VM_MAX_RAM as RegisterId {
             false
         } else {
-            // TODO ensure the byte should be cast and not overwrite the encoding
+            // TODO ensure the byte should be cast and not overwrite the
+            // encoding
             self.registers[ra] = self.memory[bc] as Word;
 
             true
@@ -92,10 +87,7 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow
-            || result > VM_MAX_RAM
-            || !(self.has_ownership_stack(ac) || self.has_ownership_heap(ac))
-        {
+        if overflow || result > VM_MAX_RAM || !(self.has_ownership_stack(ac) || self.has_ownership_heap(ac)) {
             false
         } else {
             self.memory[ac as usize] = b.to_le_bytes()[0];
@@ -119,13 +111,13 @@ impl Interpreter {
     }
 
     pub fn malloc(&mut self, a: Word) -> bool {
-        let (result, overflow) = self.registers[0x07].overflowing_sub(a);
+        let (result, overflow) = self.registers[REG_HP].overflowing_sub(a);
         self.inc_pc();
 
-        if overflow || result < self.registers[0x05] {
+        if overflow || result < self.registers[REG_SP] {
             false
         } else {
-            self.registers[0x07] = result;
+            self.registers[REG_HP] = result;
             true
         }
     }
@@ -134,11 +126,7 @@ impl Interpreter {
         let (ab, overflow) = a.overflowing_add(b);
         self.inc_pc();
 
-        if overflow
-            || ab > VM_MAX_RAM
-            || b > MEM_MAX_ACCESS_SIZE
-            || !self.has_ownership_range(a, ab)
-        {
+        if overflow || ab > VM_MAX_RAM || b > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ab) {
             false
         } else {
             // trivial compiler optimization for memset when best
@@ -155,16 +143,13 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow
-            || ac > VM_MAX_RAM
-            || bc > VM_MAX_RAM
-            || c > MEM_MAX_ACCESS_SIZE
-            || !self.has_ownership_range(a, ac)
+        if overflow || ac > VM_MAX_RAM || bc > VM_MAX_RAM || c > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ac)
         {
             false
         } else {
             // The memory may overlap, so `memmove` is used instead
-            // The pointers are granted to be aligned so this is a safe operation
+            // The pointers are granted to be aligned so this is a safe
+            // operation
             let src = &self.memory[b as usize] as *const u8;
             let dst = &mut self.memory[a as usize] as *mut u8;
 
@@ -185,8 +170,7 @@ impl Interpreter {
         if overflow || bd > VM_MAX_RAM || cd > VM_MAX_RAM || d > MEM_MAX_ACCESS_SIZE {
             false
         } else {
-            self.registers[ra] = (self.memory[b as usize..bd as usize]
-                == self.memory[c as usize..cd as usize]) as Word;
+            self.registers[ra] = (self.memory[b as usize..bd as usize] == self.memory[c as usize..cd as usize]) as Word;
 
             true
         }

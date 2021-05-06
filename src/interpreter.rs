@@ -1,11 +1,15 @@
-use crate::consts::{VM_MAX_RAM, VM_REGISTER_COUNT};
+use crate::consts::*;
+use crate::transaction::Transaction;
 use crate::types::{RegisterId, Word};
 
 mod alu;
 mod crypto;
+mod error;
 mod execution;
 mod flow;
 mod memory;
+
+pub use error::ExecuteError;
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
@@ -23,31 +27,37 @@ impl Default for Interpreter {
 }
 
 impl Interpreter {
-    pub fn init(mut self) -> Self {
+    pub fn init(mut self, _tx: &Transaction) -> Self {
         self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
         self.memory = vec![0; VM_MAX_RAM as usize];
+
+        self.registers[REG_ONE] = 1;
 
         // TODO push tx hash to stack
         // TODO push pairs of colors to stack
         // TODO push length and bytes of tx to stack
 
         // TODO set current stack pointer
-        self.registers[0x04] = 0;
-        self.registers[0x05] = self.registers[0x04];
+        self.registers[REG_SSP] = 0;
+        self.registers[REG_SP] = self.registers[REG_SSP];
 
         // Set heap area
-        self.registers[0x06] = VM_MAX_RAM - 1;
-        self.registers[0x07] = self.registers[0x06];
+        self.registers[REG_FP] = VM_MAX_RAM - 1;
+        self.registers[REG_HP] = self.registers[REG_FP];
 
         self
     }
 
     pub fn set_flag(&mut self, a: Word) {
-        self.registers[0x0f] = a;
+        self.registers[REG_FLAG] = a;
     }
 
-    pub fn inc_pc(&mut self) {
-        self.registers[0x03] = self.registers[0x03].saturating_add(4);
+    pub fn inc_pc(&mut self) -> bool {
+        let (result, overflow) = self.registers[REG_PC].overflowing_add(4);
+
+        self.registers[REG_PC] = result;
+
+        !overflow
     }
 
     pub const fn registers(&self) -> &[Word] {
@@ -55,23 +65,19 @@ impl Interpreter {
     }
 
     pub const fn is_unsafe_math(&self) -> bool {
-        self.registers[0x0f] & 0x01 == 0x01
+        self.registers[REG_FLAG] & 0x01 == 0x01
     }
 
     pub const fn is_wrapping(&self) -> bool {
-        self.registers[0x0f] & 0x02 == 0x02
+        self.registers[REG_FLAG] & 0x02 == 0x02
     }
 
-    pub const fn is_valid_register_triple_alu(
-        ra: RegisterId,
-        rb: RegisterId,
-        rc: RegisterId,
-    ) -> bool {
-        ra > 15 && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
+    pub const fn is_valid_register_triple_alu(ra: RegisterId, rb: RegisterId, rc: RegisterId) -> bool {
+        ra > REG_FLAG && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_couple_alu(ra: RegisterId, rb: RegisterId) -> bool {
-        ra > 15 && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
+        ra > REG_FLAG && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_quadruple_alu(
@@ -80,7 +86,7 @@ impl Interpreter {
         rc: RegisterId,
         rd: RegisterId,
     ) -> bool {
-        ra > 15
+        ra > REG_FLAG
             && ra < VM_REGISTER_COUNT
             && rb < VM_REGISTER_COUNT
             && rc < VM_REGISTER_COUNT
