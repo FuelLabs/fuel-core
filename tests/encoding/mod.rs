@@ -5,6 +5,7 @@ use std::io::{Read, Write};
 fn opcode() {
     let r = 0x3f;
     let imm12 = 0xfff;
+    let imm18 = 0x3ffff;
     let imm24 = 0xffffff;
 
     let data = vec![
@@ -47,6 +48,7 @@ fn opcode() {
         Opcode::LW(r, r, imm12),
         Opcode::Malloc(r),
         Opcode::MemClear(r, r),
+        Opcode::MemClearI(r, imm18),
         Opcode::MemCp(r, r, r),
         Opcode::MemEq(r, r, r, r),
         Opcode::SB(r, r, imm12),

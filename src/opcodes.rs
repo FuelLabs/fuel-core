@@ -51,10 +51,11 @@ pub enum Opcode {
     LW          (RegisterId, RegisterId, Immediate12)                = 0x43,
     Malloc      (RegisterId)                                         = 0x44,
     MemClear    (RegisterId, RegisterId)                             = 0x45,
-    MemCp       (RegisterId, RegisterId, RegisterId)                 = 0x46,
-    MemEq       (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x47,
-    SB          (RegisterId, RegisterId, Immediate12)                = 0x48,
-    SW          (RegisterId, RegisterId, Immediate12)                = 0x49,
+    MemClearI   (RegisterId, Immediate18)                            = 0x46,
+    MemCp       (RegisterId, RegisterId, RegisterId)                 = 0x47,
+    MemEq       (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x48,
+    SB          (RegisterId, RegisterId, Immediate12)                = 0x49,
+    SW          (RegisterId, RegisterId, Immediate12)                = 0x4a,
 
     // Contract
     Blockhash   (RegisterId, RegisterId)                             = 0x50,
@@ -97,7 +98,7 @@ impl Opcode {
         rd: RegisterId,
         _imm06: Immediate06,
         imm12: Immediate12,
-        _imm18: Immediate18,
+        imm18: Immediate18,
         imm24: Immediate24,
     ) -> Self {
         use Opcode::*;
@@ -144,10 +145,11 @@ impl Opcode {
             0x43 => LW(ra, rb, imm12),
             0x44 => Malloc(ra),
             0x45 => MemClear(ra, rb),
-            0x46 => MemCp(ra, rb, rc),
-            0x47 => MemEq(ra, rb, rc, rd),
-            0x48 => SB(ra, rb, imm12),
-            0x49 => SW(ra, rb, imm12),
+            0x46 => MemClearI(ra, imm18),
+            0x47 => MemCp(ra, rb, rc),
+            0x48 => MemEq(ra, rb, rc, rd),
+            0x49 => SB(ra, rb, imm12),
+            0x4a => SW(ra, rb, imm12),
             0x50 => Blockhash(ra, rb),
             0x51 => Blockheight(ra),
             0x52 => Burn(ra),
@@ -249,12 +251,13 @@ impl From<Opcode> for u32 {
             Opcode::LW(ra, rb, imm12) => (0x43 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32),
             Opcode::Malloc(ra) => (0x44 << 24) | ((ra as u32) << 18),
             Opcode::MemClear(ra, rb) => (0x45 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
-            Opcode::MemCp(ra, rb, rc) => (0x46 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6),
+            Opcode::MemClearI(ra, imm18) => (0x46 << 24) | ((ra as u32) << 18) | (imm18 as u32),
+            Opcode::MemCp(ra, rb, rc) => (0x47 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6),
             Opcode::MemEq(ra, rb, rc, rd) => {
-                (0x47 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6) | (rd as u32)
+                (0x48 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6) | (rd as u32)
             }
-            Opcode::SB(ra, rb, imm12) => (0x48 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32),
-            Opcode::SW(ra, rb, imm12) => (0x49 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32),
+            Opcode::SB(ra, rb, imm12) => (0x49 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32),
+            Opcode::SW(ra, rb, imm12) => (0x4a << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | (imm12 as u32),
             Opcode::Blockhash(ra, rb) => (0x50 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
             Opcode::Blockheight(ra) => (0x51 << 24) | ((ra as u32) << 18),
             Opcode::Burn(ra) => (0x52 << 24) | ((ra as u32) << 18),
