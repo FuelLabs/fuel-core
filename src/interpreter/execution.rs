@@ -53,7 +53,7 @@ impl Interpreter {
                 self.alu_set(ra, (self.registers[rb] > self.registers[rc]) as Word)
             }
 
-            Opcode::MathLog(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::Mlog(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 |b, c| (b as f64).log(c as f64).trunc() as Word,
                 self.registers[rb],
@@ -61,7 +61,7 @@ impl Interpreter {
                 self.registers[rb] == 0 || self.registers[rc] <= 1,
             ),
 
-            Opcode::MathRoot(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::MRoo(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 |b, c| (b as f64).powf((c as f64).recip()).trunc() as Word,
                 self.registers[rb],
@@ -143,7 +143,7 @@ impl Interpreter {
                 if Self::is_valid_register_couple(ra, rb)
                     && (self.registers[ra] != self.registers[rb] && self.jump(imm as Word) || self.inc_pc()) => {}
 
-            // TODO RETURN: Return from context
+            // TODO RET: Return from context
             Opcode::CFEI(imm) if self.stack_pointer_overflow(Word::overflowing_add, imm as Word) => {}
 
             Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) => {}
@@ -154,12 +154,14 @@ impl Interpreter {
             Opcode::LW(ra, rb, imm)
                 if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as RegisterId) => {}
 
-            Opcode::Malloc(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
+            Opcode::MAlc(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
 
-            Opcode::MemClear(ra, rb)
+            Opcode::MCl(ra, rb)
                 if Self::is_valid_register_couple(ra, rb) && self.memclear(self.registers[ra], self.registers[rb]) => {}
 
-            Opcode::MemCp(ra, rb, rc)
+            Opcode::MClI(ra, imm) if Self::is_valid_register(ra) && self.memclear(self.registers[ra], imm as Word) => {}
+
+            Opcode::MCp(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
                     && self.memcopy(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
 

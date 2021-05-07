@@ -790,7 +790,7 @@ impl VM {
                 vm.state = 0;
             }
 
-            Opcode::Malloc(_rs, imm) => {
+            Opcode::MAlc(_rs, imm) => {
                 vm.gas_used += 0;
                 if let Some(frame) = vm.get_framestack().last_mut() {
                     frame.stack.reserve(imm as usize);
@@ -1170,7 +1170,7 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::MemCp(rd, rs, rt) => {
+            Opcode::MCp(rd, rs, rt) => {
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
