@@ -72,9 +72,9 @@ pub enum Opcode {
     Revert      (RegisterId)                                         = 0x5b,
     SLoadCode   (RegisterId, RegisterId, RegisterId)                 = 0x5c,
     SRW         (RegisterId, RegisterId)                             = 0x5d,
-    SRWx        (RegisterId, RegisterId)                             = 0x5e,
+    SRWQ        (RegisterId, RegisterId)                             = 0x5e,
     SWW         (RegisterId, RegisterId)                             = 0x5f,
-    SWWx        (RegisterId, RegisterId)                             = 0x60,
+    SWWQ        (RegisterId, RegisterId)                             = 0x60,
     Transfer    (RegisterId, RegisterId, RegisterId)                 = 0x61,
     TransferOut (RegisterId, RegisterId, RegisterId, RegisterId)     = 0x62,
 
@@ -164,9 +164,9 @@ impl Opcode {
             0x5b => Revert(ra),
             0x5c => SLoadCode(ra, rb, rc),
             0x5d => SRW(ra, rb),
-            0x5e => SRWx(ra, rb),
+            0x5e => SRWQ(ra, rb),
             0x5f => SWW(ra, rb),
-            0x60 => SWWx(ra, rb),
+            0x60 => SWWQ(ra, rb),
             0x61 => Transfer(ra, rb, rc),
             0x62 => TransferOut(ra, rb, rc, rd),
             0x70 => ECRecover(ra, rb, rc),
@@ -282,9 +282,9 @@ impl From<Opcode> for u32 {
                 (0x5c << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6)
             }
             Opcode::SRW(ra, rb) => (0x5d << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
-            Opcode::SRWx(ra, rb) => (0x5e << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
+            Opcode::SRWQ(ra, rb) => (0x5e << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
             Opcode::SWW(ra, rb) => (0x5f << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
-            Opcode::SWWx(ra, rb) => (0x60 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
+            Opcode::SWWQ(ra, rb) => (0x60 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12),
             Opcode::Transfer(ra, rb, rc) => {
                 (0x61 << 24) | ((ra as u32) << 18) | ((rb as u32) << 12) | ((rc as u32) << 6)
             }

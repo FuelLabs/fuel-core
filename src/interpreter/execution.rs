@@ -189,9 +189,9 @@ impl Interpreter {
             // TODO REVERT: Revert
             // TODO SLOADCODE: Load code from static list
             // TODO SRW: State read word
-            // TODO SRWX: State read 32 bytes
+            // TODO SRWQ: State read 32 bytes
             // TODO SWW: State write word
-            // TODO SWWX: State write 32 bytes
+            // TODO SWWQ: State write 32 bytes
             // TODO TRANSFER: Transfer coins to contract
             // TODO TRANSFEROUT: Transfer coins to output
             Opcode::ECRecover(ra, rb, rc)

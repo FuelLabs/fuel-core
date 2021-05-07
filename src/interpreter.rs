@@ -1120,7 +1120,7 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::Srwx(rd, rs) => {
+            Opcode::SRWQ(rd, rs) => {
                 vm.gas_used += 1;
                 let rs_val = vm.get_register_value(rs);
 
@@ -1140,7 +1140,7 @@ impl VM {
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
             }
-            Opcode::Swwx(rd, rs) => {
+            Opcode::SWWQ(rd, rs) => {
                 vm.gas_used += 1;
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
