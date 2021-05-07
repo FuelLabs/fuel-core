@@ -28,7 +28,7 @@ fn ecrecover() {
 
     // r[0x10] := 256
     vm.execute(Opcode::AddI(0x10, 0x10, 288)).unwrap();
-    vm.execute(Opcode::MAlc(0x10)).unwrap();
+    vm.execute(Opcode::Aloc(0x10)).unwrap();
 
     // r[0x12] := r[hp]
     vm.execute(Opcode::Move(0x12, 0x07)).unwrap();
@@ -104,7 +104,7 @@ fn sha256() {
 
     // r[0x10] := 128
     vm.execute(Opcode::AddI(0x10, 0x10, 128)).unwrap();
-    vm.execute(Opcode::MAlc(0x10)).unwrap();
+    vm.execute(Opcode::Aloc(0x10)).unwrap();
 
     // r[0x12] := r[hp]
     vm.execute(Opcode::Move(0x12, 0x07)).unwrap();
@@ -172,7 +172,7 @@ fn keccak256() {
 
     // r[0x10] := 162
     vm.execute(Opcode::AddI(0x10, 0x10, 162)).unwrap();
-    vm.execute(Opcode::MAlc(0x10)).unwrap();
+    vm.execute(Opcode::Aloc(0x10)).unwrap();
 
     // r[0x12] := r[hp]
     vm.execute(Opcode::Move(0x12, 0x07)).unwrap();

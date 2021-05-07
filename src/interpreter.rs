@@ -790,7 +790,7 @@ impl VM {
                 vm.state = 0;
             }
 
-            Opcode::MAlc(_rs, imm) => {
+            Opcode::Aloc(_rs, imm) => {
                 vm.gas_used += 0;
                 if let Some(frame) = vm.get_framestack().last_mut() {
                     frame.stack.reserve(imm as usize);

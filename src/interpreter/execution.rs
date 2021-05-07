@@ -154,7 +154,7 @@ impl Interpreter {
             Opcode::LW(ra, rb, imm)
                 if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as RegisterId) => {}
 
-            Opcode::MAlc(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
+            Opcode::Aloc(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
 
             Opcode::MCl(ra, rb)
                 if Self::is_valid_register_couple(ra, rb) && self.memclear(self.registers[ra], self.registers[rb]) => {}
