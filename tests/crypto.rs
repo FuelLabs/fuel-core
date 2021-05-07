@@ -2,7 +2,6 @@ use fuel_vm_rust::crypto;
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
-use sha2::{Digest, Sha256};
 
 use std::convert::TryFrom;
 
@@ -21,9 +20,7 @@ fn ecrecover() {
         let public = PublicKey::from_secret_key(&secp, &secret).serialize_uncompressed();
         let public = <[u8; 64]>::try_from(&public[1..]).expect("Failed to parse public key!");
 
-        let mut hasher = Sha256::new();
-        hasher.update(&message);
-        let e = hasher.finalize();
+        let e = crypto::sha256(&message);
 
         let sig =
             crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");

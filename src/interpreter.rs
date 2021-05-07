@@ -1,6 +1,9 @@
 use crate::consts::*;
+use crate::crypto::sha256;
 use crate::transaction::Transaction;
 use crate::types::{RegisterId, Word};
+
+use std::io::Read;
 
 mod alu;
 mod crypto;
@@ -27,18 +30,26 @@ impl Default for Interpreter {
 }
 
 impl Interpreter {
-    pub fn init(mut self, _tx: &Transaction) -> Self {
+    pub fn init(mut self, tx: &Transaction) -> Self {
+        // TODO Consider casting immutable to mut so cloning will be avoided
+        let mut tx = tx.clone();
+
         self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
         self.memory = vec![0; VM_MAX_RAM as usize];
 
         self.registers[REG_ONE] = 1;
+        self.registers[REG_SSP] = 0;
 
-        // TODO push tx hash to stack
         // TODO push pairs of colors to stack
-        // TODO push length and bytes of tx to stack
+
+        // Push tx len and bytes to stack
+        let tx_len = tx.read(&mut self.memory[40..]).unwrap_or_else(|_| unreachable!());
+        let tx_hash = sha256(&self.memory[40..40 + tx_len]);
+        self.memory[32..40].copy_from_slice(&(tx_len as u64).to_be_bytes());
+        self.memory[..32].copy_from_slice(&tx_hash);
 
         // TODO set current stack pointer
-        self.registers[REG_SSP] = 0;
+        self.registers[REG_SSP] = 40 + tx_len as Word;
         self.registers[REG_SP] = self.registers[REG_SSP];
 
         // Set heap area

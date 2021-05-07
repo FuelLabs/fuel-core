@@ -50,8 +50,6 @@ impl Interpreter {
     }
 
     pub fn sha256(&mut self, a: Word, b: Word, c: Word) -> bool {
-        use sha2::{Digest, Sha256};
-
         let (ax, overflow) = a.overflowing_add(32);
         let (bc, of) = b.overflowing_add(c);
         let overflow = overflow || of;
@@ -61,9 +59,7 @@ impl Interpreter {
         {
             false
         } else {
-            let mut h = Sha256::new();
-            h.update(&self.memory[b as usize..bc as usize]);
-            let result = h.finalize();
+            let result = crypto::sha256(&self.memory[b as usize..bc as usize]);
 
             self.memory[a as usize..ax as usize].copy_from_slice(&result);
             true

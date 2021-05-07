@@ -2,7 +2,6 @@ use super::common;
 use fuel_vm_rust::consts::*;
 use fuel_vm_rust::crypto;
 use fuel_vm_rust::prelude::*;
-use sha2::{Digest, Sha256};
 
 use std::convert::TryFrom;
 use std::str::FromStr;
@@ -17,9 +16,7 @@ fn ecrecover() {
     let public = <[u8; 64]>::try_from(&public[1..]).expect("Failed to parse public key!");
 
     let message = b"The gift of words is the gift of deception and illusion.";
-    let mut hasher = Sha256::new();
-    hasher.update(&message);
-    let e = hasher.finalize();
+    let e = crypto::sha256(&message[..]);
     let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
 
     let vm = Interpreter::default();
@@ -94,9 +91,7 @@ fn ecrecover() {
 #[test]
 fn sha256() {
     let message = b"I say let the world go to hell, but I should always have my tea.";
-    let mut hasher = Sha256::new();
-    hasher.update(message);
-    let hash = hasher.finalize();
+    let hash = crypto::sha256(message);
 
     let vm = Interpreter::default();
     let tx = common::dummy_tx();
