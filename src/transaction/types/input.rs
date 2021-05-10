@@ -1,7 +1,7 @@
 use super::{Color, Id, Root};
+use crate::bytes;
 use crate::types::Word;
 
-use std::convert::TryFrom;
 use std::{io, mem};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -66,8 +66,13 @@ impl Input {
     }
 }
 
+const ID_SIZE: usize = mem::size_of::<Id>();
+const WORD_SIZE: usize = mem::size_of::<Word>();
+const COLOR_SIZE: usize = mem::size_of::<Color>();
+const ROOT_SIZE: usize = mem::size_of::<Root>();
+
 impl io::Read for Input {
-    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::Coin {
                 utxo_id,
@@ -79,69 +84,33 @@ impl io::Read for Input {
                 predicate,
                 predicate_data,
             } => {
-                let amount = amount.to_be_bytes();
-                let maturity = maturity.to_be_bytes();
-
-                let utxo_id_len = utxo_id.len();
-                let owner_len = owner.len();
-                let amount_len = amount.len();
-                let color_len = color.len();
-                let maturity_len = maturity.len();
-                let predicate_len = predicate.len();
-                let predicate_data_len = predicate_data.len();
-
-                let n = 18
-                    + utxo_id_len
-                    + owner_len
-                    + amount_len
-                    + color_len
-                    + maturity_len
-                    + predicate_len
-                    + predicate_data_len;
+                let mut n = 1 + 2 * ID_SIZE + 5 * WORD_SIZE + COLOR_SIZE;
 
                 if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
                 buf[0] = 0x00;
-                buf = &mut buf[1..];
+                let buf = bytes::store_array_unchecked(&mut buf[1..], utxo_id);
+                let buf = bytes::store_array_unchecked(buf, owner);
+                let buf = bytes::store_number_unchecked(buf, *amount);
+                let buf = bytes::store_array_unchecked(buf, color);
+                let buf = bytes::store_number_unchecked(buf, *witness_index);
+                let buf = bytes::store_number_unchecked(buf, *maturity);
 
-                buf[..utxo_id_len].copy_from_slice(&utxo_id[..]);
-                buf = &mut buf[utxo_id_len..];
+                let buf = bytes::store_number_unchecked(buf, predicate.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, predicate_data.len() as Word);
 
-                buf[..owner_len].copy_from_slice(&owner[..]);
-                buf = &mut buf[owner_len..];
+                let (size, buf) = bytes::store_raw_bytes(buf, predicate.as_slice())?;
+                n += size;
 
-                buf[..amount_len].copy_from_slice(&amount[..]);
-                buf = &mut buf[amount_len..];
-
-                buf[..color_len].copy_from_slice(&color[..]);
-                buf = &mut buf[color_len..];
-
-                buf[0] = *witness_index;
-                buf = &mut buf[1..];
-
-                buf[..maturity_len].copy_from_slice(&maturity[..]);
-                buf = &mut buf[maturity_len..];
-
-                let predicate_len_bytes = (predicate_len as u64).to_be_bytes();
-                buf[..8].copy_from_slice(&predicate_len_bytes[..]);
-                buf = &mut buf[8..];
-
-                buf[..predicate_len].copy_from_slice(predicate.as_slice());
-                buf = &mut buf[predicate_len..];
-
-                let predicate_data_len_bytes = (predicate_data_len as u64).to_be_bytes();
-                buf[..8].copy_from_slice(&predicate_data_len_bytes[..]);
-                buf = &mut buf[8..];
-
-                buf[..predicate_data_len].copy_from_slice(predicate_data.as_slice());
+                let (size, _) = bytes::store_raw_bytes(buf, predicate_data.as_slice())?;
+                n += size;
 
                 Ok(n)
             }
+
+            Self::Contract { .. } if buf.len() < 1 + 2 * ID_SIZE + 2 * ROOT_SIZE => Err(bytes::eof()),
 
             Self::Contract {
                 utxo_id,
@@ -149,35 +118,13 @@ impl io::Read for Input {
                 state_root,
                 contract_id,
             } => {
-                let utxo_id_len = utxo_id.len();
-                let balance_root_len = balance_root.len();
-                let state_root_len = state_root.len();
-                let contract_id_len = contract_id.len();
-
-                let n = 1 + utxo_id_len + balance_root_len + state_root_len + contract_id_len;
-
-                if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
                 buf[0] = 0x01;
-                buf = &mut buf[1..];
+                let buf = bytes::store_array_unchecked(&mut buf[1..], utxo_id);
+                let buf = bytes::store_array_unchecked(buf, balance_root);
+                let buf = bytes::store_array_unchecked(buf, state_root);
+                bytes::store_array_unchecked(buf, contract_id);
 
-                buf[..utxo_id_len].copy_from_slice(&utxo_id[..]);
-                buf = &mut buf[utxo_id_len..];
-
-                buf[..balance_root_len].copy_from_slice(&balance_root[..]);
-                buf = &mut buf[balance_root_len..];
-
-                buf[..state_root_len].copy_from_slice(&state_root[..]);
-                buf = &mut buf[state_root_len..];
-
-                buf[..contract_id_len].copy_from_slice(&contract_id[..]);
-
-                Ok(n)
+                Ok(1 + 2 * ID_SIZE + 2 * ROOT_SIZE)
             }
         }
     }
@@ -195,77 +142,27 @@ impl io::Write for Input {
         let identifier = buf[0];
         buf = &buf[1..];
 
-        const ID_SIZE: usize = mem::size_of::<Id>();
-        const WORD_SIZE: usize = mem::size_of::<Word>();
-        const COLOR_SIZE: usize = mem::size_of::<Color>();
-        const ROOT_SIZE: usize = mem::size_of::<Root>();
-
         match identifier {
+            0x00 if buf.len() < 2 * ID_SIZE + 5 * WORD_SIZE + COLOR_SIZE => Err(bytes::eof()),
+
             0x00 => {
-                let mut n = 22 + 2 * ID_SIZE + WORD_SIZE + COLOR_SIZE;
+                let mut n = 1 + 2 * ID_SIZE + 5 * WORD_SIZE + COLOR_SIZE;
 
-                if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
+                let (utxo_id, buf) = bytes::restore_array_unchecked(buf);
+                let (owner, buf) = bytes::restore_array_unchecked(buf);
+                let (amount, buf) = bytes::restore_number_unchecked(buf);
+                let (color, buf) = bytes::restore_array_unchecked(buf);
+                let (witness_index, buf) = bytes::restore_u8_unchecked(buf);
+                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
 
-                let utxo_id = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ID_SIZE..];
+                let (predicate_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (predicate_data_len, buf) = bytes::restore_usize_unchecked(buf);
 
-                let owner = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ID_SIZE..];
+                let (size, predicate, buf) = bytes::restore_raw_bytes(buf, predicate_len)?;
+                n += size;
 
-                let amount = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let amount = Word::from_be_bytes(amount);
-
-                let color = Color::try_from(&buf[..COLOR_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[COLOR_SIZE..];
-
-                let witness_index = buf[0];
-                buf = &buf[1..];
-
-                let maturity = <[u8; 4]>::try_from(&buf[..4]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[4..];
-                let maturity = u32::from_be_bytes(maturity);
-
-                let predicate_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let predicate_len = u64::from_be_bytes(predicate_len) as usize;
-
-                if buf.len() < predicate_len {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let predicate = (&buf[..predicate_len]).to_vec();
-                buf = &buf[predicate_len..];
-                n += predicate_len;
-
-                if buf.len() < 8 {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let predicate_data_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let predicate_data_len = u64::from_be_bytes(predicate_data_len) as usize;
-
-                if buf.len() < predicate_data_len {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let predicate_data = (&buf[..predicate_data_len]).to_vec();
-                n += predicate_data_len;
+                let (size, predicate_data, _) = bytes::restore_raw_bytes(buf, predicate_data_len)?;
+                n += size;
 
                 *self = Self::Coin {
                     utxo_id,
@@ -281,26 +178,13 @@ impl io::Write for Input {
                 Ok(n)
             }
 
+            0x01 if buf.len() < 2 * ID_SIZE + 2 * ROOT_SIZE => Err(bytes::eof()),
+
             0x01 => {
-                let n = 1 + 2 * (ROOT_SIZE + ID_SIZE);
-
-                if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let utxo_id = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ID_SIZE..];
-
-                let balance_root = Root::try_from(&buf[..ROOT_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ROOT_SIZE..];
-
-                let state_root = Root::try_from(&buf[..ROOT_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ROOT_SIZE..];
-
-                let contract_id = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
+                let (utxo_id, buf) = bytes::restore_array_unchecked(buf);
+                let (balance_root, buf) = bytes::restore_array_unchecked(buf);
+                let (state_root, buf) = bytes::restore_array_unchecked(buf);
+                let (contract_id, _) = bytes::restore_array_unchecked(buf);
 
                 *self = Self::Contract {
                     utxo_id,
@@ -309,7 +193,7 @@ impl io::Write for Input {
                     contract_id,
                 };
 
-                Ok(n)
+                Ok(1 + 2 * ROOT_SIZE + 2 * ID_SIZE)
             }
 
             _ => Err(io::Error::new(

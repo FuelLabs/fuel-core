@@ -1,9 +1,10 @@
 use crate::consts::*;
 use crate::crypto::sha256;
-use crate::transaction::Transaction;
+use crate::transaction::{Color, Input, Transaction};
 use crate::types::{RegisterId, Word};
 
 use std::io::Read;
+use std::mem;
 
 mod alu;
 mod crypto;
@@ -41,6 +42,17 @@ impl Interpreter {
         self.registers[REG_SSP] = 0;
 
         // TODO push pairs of colors to stack
+        let mut ssp = 0;
+        for i in 0..(MAX_INPUTS as usize) {
+            let (color, balance) = match tx.inputs().get(i) {
+                Some(Input::Coin { color, .. }) => (color, 0),
+                _ => (&[0; mem::size_of::<Color>()], 0u64),
+            };
+
+            self.memory[ssp..color.len() + ssp].copy_from_slice(color);
+            self.memory[ssp + color.len()..color.len() + 8 + ssp].copy_from_slice(&balance.to_be_bytes());
+            ssp += color.len() + 8;
+        }
 
         // Push tx len and bytes to stack
         let tx_len = tx.read(&mut self.memory[40..]).unwrap_or_else(|_| unreachable!());

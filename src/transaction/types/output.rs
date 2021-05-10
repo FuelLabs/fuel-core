@@ -1,7 +1,7 @@
 use super::{Color, Id, Root};
+use crate::bytes;
 use crate::types::Word;
 
-use std::convert::TryFrom;
 use std::{io, mem};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -89,31 +89,26 @@ impl io::Read for Output {
         };
 
         match self {
+            Self::Coin { .. } | Self::Withdrawal { .. } | Self::Change { .. } | Self::Variable { .. }
+                if buf.len() < 1 + ID_SIZE + WORD_SIZE + COLOR_SIZE =>
+            {
+                Err(bytes::eof())
+            }
+
+            Self::Contract { .. } if buf.len() < 1 + WORD_SIZE + 2 * ROOT_SIZE => Err(bytes::eof()),
+
+            Self::ContractCreated { .. } if buf.len() < 1 + ID_SIZE => Err(bytes::eof()),
+
             Self::Coin { to, amount, color }
             | Self::Withdrawal { to, amount, color }
             | Self::Change { to, amount, color }
             | Self::Variable { to, amount, color } => {
-                let n = 1 + ID_SIZE + WORD_SIZE + COLOR_SIZE;
-
-                if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
                 buf[0] = identifier;
-                buf = &mut buf[1..];
+                buf = bytes::store_array_unchecked(&mut buf[1..], to);
+                buf = bytes::store_number_unchecked(buf, *amount);
+                bytes::store_array_unchecked(buf, color);
 
-                buf[..ID_SIZE].copy_from_slice(&to[..]);
-                buf = &mut buf[ID_SIZE..];
-
-                buf[..WORD_SIZE].copy_from_slice(&amount.to_be_bytes()[..]);
-                buf = &mut buf[WORD_SIZE..];
-
-                buf[..COLOR_SIZE].copy_from_slice(&color[..]);
-
-                Ok(n)
+                Ok(1 + ID_SIZE + WORD_SIZE + COLOR_SIZE)
             }
 
             Self::Contract {
@@ -121,41 +116,19 @@ impl io::Read for Output {
                 balance_root,
                 state_root,
             } => {
-                let n = 2 + 2 * ROOT_SIZE;
-
-                if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
                 buf[0] = identifier;
-                buf[1] = *input_index;
-                buf = &mut buf[2..];
+                buf = bytes::store_number_unchecked(&mut buf[1..], *input_index);
+                buf = bytes::store_array_unchecked(buf, balance_root);
+                bytes::store_array_unchecked(buf, state_root);
 
-                buf[..ROOT_SIZE].copy_from_slice(&balance_root[..]);
-                buf = &mut buf[ROOT_SIZE..];
-
-                buf[..ROOT_SIZE].copy_from_slice(&state_root[..]);
-
-                Ok(n)
+                Ok(1 + WORD_SIZE + 2 * ROOT_SIZE)
             }
 
             Self::ContractCreated { contract_id } => {
-                let n = 1 + ID_SIZE;
-
-                if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
                 buf[0] = identifier;
-                buf[1..1 + ID_SIZE].copy_from_slice(&contract_id[..]);
+                bytes::store_array_unchecked(&mut buf[1..], contract_id);
 
-                Ok(n)
+                Ok(1 + ID_SIZE)
             }
         }
     }
@@ -164,34 +137,23 @@ impl io::Read for Output {
 impl io::Write for Output {
     fn write(&mut self, mut buf: &[u8]) -> io::Result<usize> {
         if buf.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ));
+            return Err(bytes::eof());
         }
 
         let identifier = buf[0];
         buf = &buf[1..];
 
         match identifier {
+            0x00 | 0x02 | 0x03 | 0x4 if buf.len() < ID_SIZE + WORD_SIZE + COLOR_SIZE => Err(bytes::eof()),
+
+            0x01 if buf.len() < WORD_SIZE + 2 * ROOT_SIZE => Err(bytes::eof()),
+
+            0x05 if buf.len() < ID_SIZE => Err(bytes::eof()),
+
             0x00 | 0x02 | 0x03 | 0x4 => {
-                let n = 1 + ID_SIZE + WORD_SIZE + COLOR_SIZE;
-
-                if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let to = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[ID_SIZE..];
-
-                let amount = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let amount = Word::from_be_bytes(amount);
-
-                let color = Id::try_from(&buf[..COLOR_SIZE]).unwrap_or_else(|_| unreachable!());
+                let (to, buf) = bytes::restore_array_unchecked(buf);
+                let (amount, buf) = bytes::restore_number_unchecked(buf);
+                let (color, _) = bytes::restore_array_unchecked(buf);
 
                 match identifier {
                     0x00 => *self = Self::Coin { to, amount, color },
@@ -202,25 +164,13 @@ impl io::Write for Output {
                     _ => unreachable!(),
                 }
 
-                Ok(n)
+                Ok(1 + ID_SIZE + WORD_SIZE + COLOR_SIZE)
             }
 
             0x01 => {
-                let n = 2 + 2 * ROOT_SIZE;
-
-                if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let input_index = buf[0];
-
-                let balance_root = Root::try_from(&buf[1..1 + ROOT_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[1 + ID_SIZE..];
-
-                let state_root = Root::try_from(&buf[..ROOT_SIZE]).unwrap_or_else(|_| unreachable!());
+                let (input_index, buf) = bytes::restore_u8_unchecked(buf);
+                let (balance_root, buf) = bytes::restore_array_unchecked(buf);
+                let (state_root, _) = bytes::restore_array_unchecked(buf);
 
                 *self = Self::Contract {
                     input_index,
@@ -228,23 +178,14 @@ impl io::Write for Output {
                     state_root,
                 };
 
-                Ok(n)
+                Ok(1 + WORD_SIZE + 2 * ROOT_SIZE)
             }
 
             0x05 => {
-                let n = 1 + ID_SIZE;
-
-                if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let contract_id = Id::try_from(&buf[..ID_SIZE]).unwrap_or_else(|_| unreachable!());
+                let (contract_id, _) = bytes::restore_array_unchecked(buf);
                 *self = Self::ContractCreated { contract_id };
 
-                Ok(n)
+                Ok(1 + ID_SIZE)
             }
 
             _ => Err(io::Error::new(

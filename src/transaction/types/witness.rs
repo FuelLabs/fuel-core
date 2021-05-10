@@ -1,4 +1,5 @@
-use std::convert::TryFrom;
+use crate::bytes;
+
 use std::io;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -32,46 +33,16 @@ impl Extend<u8> for Witness {
 
 impl io::Read for Witness {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        if buf.len() < 8 + self.data.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ));
-        }
-
-        let len = (self.data.len() as u64).to_be_bytes();
-        buf[..8].copy_from_slice(&len);
-        buf[8..8 + self.data.len()].copy_from_slice(self.data.as_slice());
-
-        Ok(8 + self.data.len())
+        bytes::store_bytes(buf, self.data.as_slice()).map(|(n, _)| n)
     }
 }
 
 impl io::Write for Witness {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        if buf.len() < 8 {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ));
-        }
-
-        let len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-        let len = u64::from_be_bytes(len) as usize;
-        if len == 0 {
-            self.data.clear();
-            return Ok(8);
-        }
-
-        if buf.len() < 8 + len {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ));
-        }
-
-        self.data = (&buf[8..8 + len]).to_vec();
-        Ok(8 + self.data.len())
+        bytes::restore_bytes(buf).map(|(n, data, _)| {
+            self.data = data;
+            n
+        })
     }
 
     fn flush(&mut self) -> io::Result<()> {

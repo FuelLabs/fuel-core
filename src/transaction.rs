@@ -1,6 +1,6 @@
+use crate::bytes;
 use crate::types::Word;
 
-use std::convert::TryFrom;
 use std::{io, mem};
 
 mod types;
@@ -152,7 +152,7 @@ const WORD_SIZE: usize = mem::size_of::<Word>();
 const ID_SIZE: usize = mem::size_of::<Id>();
 
 impl io::Read for Transaction {
-    fn read(&mut self, mut buf: &mut [u8]) -> io::Result<usize> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         match self {
             Self::Script {
                 gas_price,
@@ -164,53 +164,27 @@ impl io::Read for Transaction {
                 outputs,
                 witnesses,
             } => {
-                let script_len = script.len();
-                let script_data_len = script_data.len();
-
-                let mut n = 45 + 2 * WORD_SIZE + script_len + script_data_len;
+                let mut n = 1 + 8 * WORD_SIZE;
 
                 if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
                 buf[0] = 0x00;
-                buf = &mut buf[1..];
+                let buf = bytes::store_number_unchecked(&mut buf[1..], *gas_price);
+                let buf = bytes::store_number_unchecked(buf, *gas_limit);
+                let buf = bytes::store_number_unchecked(buf, *maturity);
+                let buf = bytes::store_number_unchecked(buf, script.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, script_data.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, inputs.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, outputs.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, witnesses.len() as Word);
 
-                buf[..WORD_SIZE].copy_from_slice(&gas_price.to_be_bytes()[..]);
-                buf = &mut buf[WORD_SIZE..];
+                let (size, buf) = bytes::store_raw_bytes(buf, script.as_slice())?;
+                n += size;
 
-                buf[..WORD_SIZE].copy_from_slice(&gas_limit.to_be_bytes()[..]);
-                buf = &mut buf[WORD_SIZE..];
-
-                buf[..4].copy_from_slice(&maturity.to_be_bytes()[..]);
-                buf = &mut buf[4..];
-
-                buf[..8].copy_from_slice(&(script_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                buf[..8].copy_from_slice(&(script_data_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                let inputs_len = inputs.len();
-                buf[..8].copy_from_slice(&(inputs_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                let outputs_len = outputs.len();
-                buf[..8].copy_from_slice(&(outputs_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                let witnesses_len = witnesses.len();
-                buf[..8].copy_from_slice(&(witnesses_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                buf[..script_len].copy_from_slice(script.as_slice());
-                buf = &mut buf[script_len..];
-
-                buf[..script_data_len].copy_from_slice(script_data.as_slice());
-                buf = &mut buf[script_data_len..];
+                let (size, mut buf) = bytes::store_raw_bytes(buf, script_data.as_slice())?;
+                n += size;
 
                 for input in self.inputs_mut() {
                     let input_len = input.read(buf)?;
@@ -245,56 +219,25 @@ impl io::Read for Transaction {
                 outputs,
                 witnesses,
             } => {
-                let static_contracts_len = static_contracts.len();
-                let inputs_len = inputs.len();
-                let outputs_len = outputs.len();
-                let witnesses_len = witnesses.len();
-
-                let mut n = 72 + 2 * WORD_SIZE + static_contracts_len * ID_SIZE;
-
+                let mut n = 33 + 9 * WORD_SIZE + static_contracts.len() * ID_SIZE;
                 if buf.len() < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
                 buf[0] = 0x01;
-                buf = &mut buf[1..];
-
-                buf[..WORD_SIZE].copy_from_slice(&gas_price.to_be_bytes()[..]);
-                buf = &mut buf[WORD_SIZE..];
-
-                buf[..WORD_SIZE].copy_from_slice(&gas_limit.to_be_bytes()[..]);
-                buf = &mut buf[WORD_SIZE..];
-
-                buf[..4].copy_from_slice(&maturity.to_be_bytes()[..]);
-                buf = &mut buf[4..];
-
-                buf[..2].copy_from_slice(&bytecode_length.to_be_bytes()[..]);
-                buf = &mut buf[2..];
-
-                buf[0] = *bytecode_witness_index;
-                buf = &mut buf[1..];
-
-                buf[..32].copy_from_slice(&salt[..]);
-                buf = &mut buf[32..];
-
-                buf[..8].copy_from_slice(&(static_contracts_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                buf[..8].copy_from_slice(&(inputs_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                buf[..8].copy_from_slice(&(outputs_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
-
-                buf[..8].copy_from_slice(&(witnesses_len as u64).to_be_bytes()[..]);
-                buf = &mut buf[8..];
+                let buf = bytes::store_number_unchecked(&mut buf[1..], *gas_price);
+                let buf = bytes::store_number_unchecked(buf, *gas_limit);
+                let buf = bytes::store_number_unchecked(buf, *maturity);
+                let buf = bytes::store_number_unchecked(buf, *bytecode_length);
+                let buf = bytes::store_number_unchecked(buf, *bytecode_witness_index);
+                let buf = bytes::store_number_unchecked(buf, static_contracts.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, inputs.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, outputs.len() as Word);
+                let buf = bytes::store_number_unchecked(buf, witnesses.len() as Word);
+                let mut buf = bytes::store_array_unchecked(buf, salt);
 
                 for static_contract in static_contracts.iter() {
-                    buf[..ID_SIZE].copy_from_slice(static_contract);
-                    buf = &mut buf[ID_SIZE..];
+                    buf = bytes::store_array_unchecked(buf, static_contract);
                 }
 
                 for input in self.inputs_mut() {
@@ -335,61 +278,26 @@ impl io::Write for Transaction {
 
         match identifier {
             0x00 => {
-                let mut n = 45 + 2 * WORD_SIZE;
+                let mut n = 1 + 8 * WORD_SIZE;
 
                 if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
-                let gas_price = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let gas_price = Word::from_be_bytes(gas_price);
+                let (gas_price, buf) = bytes::restore_number_unchecked(buf);
+                let (gas_limit, buf) = bytes::restore_number_unchecked(buf);
+                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
+                let (script_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (script_data_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (inputs_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (outputs_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (witnesses_len, buf) = bytes::restore_usize_unchecked(buf);
 
-                let gas_limit = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let gas_limit = Word::from_be_bytes(gas_limit);
+                let (size, script, buf) = bytes::restore_raw_bytes(buf, script_len)?;
+                n += size;
 
-                let maturity = <[u8; 4]>::try_from(&buf[..4]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[4..];
-                let maturity = u32::from_be_bytes(maturity);
-
-                let script_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let script_len = u64::from_be_bytes(script_len) as usize;
-
-                let script_data_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let script_data_len = u64::from_be_bytes(script_data_len) as usize;
-
-                let inputs_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let inputs_len = u64::from_be_bytes(inputs_len) as usize;
-
-                let outputs_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let outputs_len = u64::from_be_bytes(outputs_len) as usize;
-
-                let witnesses_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let witnesses_len = u64::from_be_bytes(witnesses_len) as usize;
-
-                if buf.len() < script_len + script_data_len {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
-                }
-
-                let script = (&buf[..script_len]).to_vec();
-                buf = &buf[script_len..];
-                n += script_len;
-
-                let script_data = (&buf[..script_data_len]).to_vec();
-                buf = &buf[script_data_len..];
-                n += script_data_len;
+                let (size, script_data, mut buf) = bytes::restore_raw_bytes(buf, script_data_len)?;
+                n += size;
 
                 let mut inputs = vec![Input::contract([0x00; 32], [0x00; 32], [0x00; 32], [0x00; 32]); inputs_len];
                 for input in inputs.iter_mut() {
@@ -427,58 +335,25 @@ impl io::Write for Transaction {
             }
 
             0x01 => {
-                let mut n = 72 + 2 * WORD_SIZE;
+                let mut n = 33 + 9 * WORD_SIZE;
 
                 if buf.len() + 1 < n {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
-                let gas_price = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let gas_price = Word::from_be_bytes(gas_price);
-
-                let gas_limit = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[WORD_SIZE..];
-                let gas_limit = Word::from_be_bytes(gas_limit);
-
-                let maturity = <[u8; 4]>::try_from(&buf[..4]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[4..];
-                let maturity = u32::from_be_bytes(maturity);
-
-                let bytecode_length = <[u8; 2]>::try_from(&buf[..2]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[2..];
-                let bytecode_length = u16::from_be_bytes(bytecode_length);
-
-                let bytecode_witness_index = buf[0];
-                buf = &buf[1..];
-
-                let salt = <[u8; 32]>::try_from(&buf[..32]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[32..];
-
-                let static_contracts_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let static_contracts_len = u64::from_be_bytes(static_contracts_len) as usize;
-
-                let inputs_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let inputs_len = u64::from_be_bytes(inputs_len) as usize;
-
-                let outputs_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let outputs_len = u64::from_be_bytes(outputs_len) as usize;
-
-                let witnesses_len = <[u8; 8]>::try_from(&buf[..8]).unwrap_or_else(|_| unreachable!());
-                buf = &buf[8..];
-                let witnesses_len = u64::from_be_bytes(witnesses_len) as usize;
+                let (gas_price, buf) = bytes::restore_number_unchecked(buf);
+                let (gas_limit, buf) = bytes::restore_number_unchecked(buf);
+                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
+                let (bytecode_length, buf) = bytes::restore_u16_unchecked(buf);
+                let (bytecode_witness_index, buf) = bytes::restore_u8_unchecked(buf);
+                let (static_contracts_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (inputs_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (outputs_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (witnesses_len, buf) = bytes::restore_usize_unchecked(buf);
+                let (salt, mut buf) = bytes::restore_array_unchecked(buf);
 
                 if buf.len() < static_contracts_len * ID_SIZE {
-                    return Err(io::Error::new(
-                        io::ErrorKind::UnexpectedEof,
-                        "The provided buffer is not big enough!",
-                    ));
+                    return Err(bytes::eof());
                 }
 
                 let mut static_contracts = vec![[0x00; ID_SIZE]; static_contracts_len];
