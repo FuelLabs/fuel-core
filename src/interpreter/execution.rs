@@ -186,7 +186,9 @@ impl Interpreter {
             // TODO CODESIZE: Code size
             // TODO COINBASE: Block proposer address
             // TODO LOADCODE: Load code from an external contract
-            // TODO LOG: Log event
+            Opcode::Log(ra, rb, rc, rd)
+                if Self::is_valid_register_quadruple(ra, rb, rc, rd) && self.log_append(&[ra, rb, rc, rd]) => {}
+
             // TODO MINT: Mint new coins
             // TODO REVERT: Revert
             // TODO SLOADCODE: Load code from static list

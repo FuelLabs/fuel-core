@@ -2,7 +2,7 @@ use super::common;
 use fuel_vm_rust::consts::*;
 use fuel_vm_rust::prelude::*;
 
-fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, register: RegisterId, value: Word) {
+fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId, expected: Word) {
     let vm = Interpreter::default();
     let tx = common::dummy_tx();
     let mut vm = vm.init(&tx);
@@ -13,7 +13,13 @@ fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, register: Regis
     });
 
     vm.execute(op).expect("Failed to execute the final opcode!");
-    assert_eq!(vm.registers()[register], value);
+    vm.execute(Opcode::Log(reg, 0, 0, 0))
+        .expect("Failed to call log instruction");
+
+    match vm.log().first() {
+        Some(LogEvent::Register { register, value, .. }) if *register == reg && *value == expected => (),
+        _ => panic!("Unexpected log output"),
+    }
 }
 
 fn alu_err(registers_init: &[(RegisterId, Immediate12)], op: Opcode) {

@@ -11,14 +11,17 @@ mod crypto;
 mod error;
 mod execution;
 mod flow;
+mod log;
 mod memory;
 
 pub use error::ExecuteError;
+pub use log::LogEvent;
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     registers: [Word; VM_REGISTER_COUNT],
     memory: Vec<u8>,
+    log: Vec<LogEvent>,
 }
 
 impl Default for Interpreter {
@@ -26,6 +29,7 @@ impl Default for Interpreter {
         Self {
             registers: [0; VM_REGISTER_COUNT],
             memory: vec![],
+            log: vec![],
         }
     }
 }
@@ -118,6 +122,10 @@ impl Interpreter {
             && rb < VM_REGISTER_COUNT
             && rc < VM_REGISTER_COUNT
             && rd < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_quadruple(ra: RegisterId, rb: RegisterId, rc: RegisterId, rd: RegisterId) -> bool {
+        ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT && rd < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_triple(ra: RegisterId, rb: RegisterId, rc: RegisterId) -> bool {
