@@ -16,7 +16,7 @@ fn ecrecover() {
     let public = <[u8; 64]>::try_from(&public[1..]).expect("Failed to parse public key!");
 
     let message = b"The gift of words is the gift of deception and illusion.";
-    let e = crypto::sha256(&message[..]);
+    let e = crypto::hash(&message[..]);
     let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
 
     let vm = Interpreter::default();
@@ -91,7 +91,7 @@ fn ecrecover() {
 #[test]
 fn sha256() {
     let message = b"I say let the world go to hell, but I should always have my tea.";
-    let hash = crypto::sha256(message);
+    let hash = crypto::hash(message);
 
     let vm = Interpreter::default();
     let tx = common::dummy_tx();

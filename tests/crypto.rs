@@ -20,7 +20,7 @@ fn ecrecover() {
         let public = PublicKey::from_secret_key(&secp, &secret).serialize_uncompressed();
         let public = <[u8; 64]>::try_from(&public[1..]).expect("Failed to parse public key!");
 
-        let e = crypto::sha256(&message);
+        let e = crypto::hash(&message);
 
         let sig =
             crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");

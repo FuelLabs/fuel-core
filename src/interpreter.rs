@@ -1,5 +1,5 @@
 use crate::consts::*;
-use crate::crypto::sha256;
+use crate::crypto::hash;
 use crate::transaction::{Color, Input, Transaction};
 use crate::types::{RegisterId, Word};
 
@@ -56,7 +56,7 @@ impl Interpreter {
 
         // Push tx len and bytes to stack
         let tx_len = tx.read(&mut self.memory[40..]).unwrap_or_else(|_| unreachable!());
-        let tx_hash = sha256(&self.memory[40..40 + tx_len]);
+        let tx_hash = hash(&self.memory[40..40 + tx_len]);
         self.memory[32..40].copy_from_slice(&(tx_len as u64).to_be_bytes());
         self.memory[..32].copy_from_slice(&tx_hash);
 

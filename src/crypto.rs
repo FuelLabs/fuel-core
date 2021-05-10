@@ -40,7 +40,7 @@ pub fn secp256k1_sign_compact_recover(signature: &[u8], message: &[u8]) -> Resul
     <[u8; 64]>::try_from(&pk[1..]).map_err(|_| Secp256k1Error::InvalidPublicKey)
 }
 
-pub fn sha256(data: &[u8]) -> [u8; 32] {
+pub fn hash(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().into()

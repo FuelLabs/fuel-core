@@ -59,7 +59,7 @@ impl Interpreter {
         {
             false
         } else {
-            let result = crypto::sha256(&self.memory[b as usize..bc as usize]);
+            let result = crypto::hash(&self.memory[b as usize..bc as usize]);
 
             self.memory[a as usize..ax as usize].copy_from_slice(&result);
             true
