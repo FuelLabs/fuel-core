@@ -2,11 +2,15 @@ use super::{ExecuteError, Interpreter};
 use crate::opcodes::Opcode;
 use crate::types::{RegisterId, Word};
 
+use tracing::trace;
+
 use std::ops::Div;
 
 impl Interpreter {
     pub fn execute(&mut self, op: Opcode) -> Result<(), ExecuteError> {
         let mut result = Ok(());
+
+        trace!("Executing {:?}", op);
 
         match op {
             Opcode::Add(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {

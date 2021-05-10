@@ -8,7 +8,7 @@ edition = "2018"
 sha2 = "0.9"
 sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}
-tracing = {version="0.1", optional=true}
+tracing = "0.1"
 tracing-subscriber = {version="0.2", optional=true}
 clap = {version="2.33", optional=true}
 json = {version="0.12", optional=true}
@@ -17,7 +17,7 @@ json = {version="0.12", optional=true}
 rand = "0.8"
 
 [features]
-log = ["tracing", "tracing-subscriber"]
+log = ["tracing-subscriber"]
 cli = ["clap", "json"]
 
 [[bin]]
