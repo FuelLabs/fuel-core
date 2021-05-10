@@ -1,6 +1,7 @@
 use crate::bytes;
 use crate::types::Word;
 
+use std::io::Write;
 use std::{io, mem};
 
 mod types;
@@ -145,6 +146,14 @@ impl Transaction {
             Self::Script { witnesses, .. } => witnesses.as_mut_slice(),
             Self::Create { witnesses, .. } => witnesses.as_mut_slice(),
         }
+    }
+
+    pub fn try_from_bytes(bytes: &[u8]) -> io::Result<(usize, Self)> {
+        let mut tx = Self::script(0, 0, 0, vec![], vec![], vec![], vec![], vec![]);
+
+        let n = tx.write(bytes)?;
+
+        Ok((n, tx))
     }
 }
 
