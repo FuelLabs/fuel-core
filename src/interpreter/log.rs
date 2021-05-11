@@ -2,6 +2,8 @@ use super::Interpreter;
 use crate::consts::*;
 use crate::types::{RegisterId, Word};
 
+use tracing::debug;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LogEvent {
@@ -23,10 +25,15 @@ impl Interpreter {
         let log = &mut self.log;
 
         let entries = reg.iter().filter(|r| r > &&0).filter_map(|r| {
-            registers.get(*r).map(|v| LogEvent::Register {
-                pc,
-                register: *r,
-                value: *v,
+            registers.get(*r).map(|v| {
+                let log = LogEvent::Register {
+                    pc,
+                    register: *r,
+                    value: *v,
+                };
+
+                debug!("Appending log {:?}", log);
+                log
             })
         });
 

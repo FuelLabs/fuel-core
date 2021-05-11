@@ -2,7 +2,7 @@ use super::{ExecuteError, Interpreter};
 use crate::opcodes::Opcode;
 use crate::types::{RegisterId, Word};
 
-use tracing::trace;
+use tracing::debug;
 
 use std::ops::Div;
 
@@ -10,7 +10,15 @@ impl Interpreter {
     pub fn execute(&mut self, op: Opcode) -> Result<(), ExecuteError> {
         let mut result = Ok(());
 
-        trace!("Executing {:?}", op);
+        debug!("Executing {:?}", op);
+        debug!(
+            "Current state: {:?}",
+            op.registers()
+                .iter()
+                .filter_map(|r| *r)
+                .map(|r| (r, self.registers.get(r).copied()))
+                .collect::<Vec<(RegisterId, Option<Word>)>>()
+        );
 
         match op {
             Opcode::Add(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
@@ -218,6 +226,15 @@ impl Interpreter {
 
             _ => result = Err(ExecuteError::OpcodeFailure(op)),
         }
+
+        debug!(
+            "After   state: {:?}",
+            op.registers()
+                .iter()
+                .filter_map(|r| *r)
+                .map(|r| (r, self.registers.get(r).copied()))
+                .collect::<Vec<(RegisterId, Option<Word>)>>()
+        );
 
         result
     }

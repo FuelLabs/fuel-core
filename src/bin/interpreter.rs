@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use json::{array, object};
-use tracing::{debug, info, trace};
+use tracing::{info, trace};
 use tracing_subscriber::fmt::Subscriber;
 
 use std::io::{self, Read};
@@ -76,7 +76,7 @@ fn main() -> io::Result<()> {
         let opcode = u32::from_be_bytes(opcode_buffer);
         let opcode = Opcode::from(opcode);
 
-        debug!("{:?} parsed", opcode);
+        trace!("{:?} parsed", opcode);
         interpreter.execute(opcode).expect("Instruction failed!");
     }
 
