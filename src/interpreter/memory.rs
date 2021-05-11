@@ -143,18 +143,23 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow || ac > VM_MAX_RAM || bc > VM_MAX_RAM || c > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ac)
+        if overflow
+            || ac > VM_MAX_RAM
+            || bc > VM_MAX_RAM
+            || c > MEM_MAX_ACCESS_SIZE
+            || a <= b && b < ac
+            || b <= a && a < bc
+            || !self.has_ownership_range(a, ac)
         {
             false
         } else {
-            // The memory may overlap, so `memmove` is used instead
             // The pointers are granted to be aligned so this is a safe
             // operation
             let src = &self.memory[b as usize] as *const u8;
             let dst = &mut self.memory[a as usize] as *mut u8;
 
             unsafe {
-                ptr::copy(src, dst, c as usize);
+                ptr::copy_nonoverlapping(src, dst, c as usize);
             }
 
             true
