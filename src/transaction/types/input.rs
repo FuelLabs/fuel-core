@@ -1,4 +1,4 @@
-use super::{Color, Id, Root};
+use super::{Color, Id, Output, Root, ValidationError, Witness};
 use crate::bytes;
 use crate::consts::*;
 use crate::types::Word;
@@ -14,7 +14,7 @@ pub enum Input {
         amount: Word,
         color: Color,
         witness_index: u8,
-        maturity: u32,
+        maturity: Word,
         predicate: Vec<u8>,
         predicate_data: Vec<u8>,
     } = 0x00,
@@ -34,7 +34,7 @@ impl Input {
         amount: Word,
         color: Color,
         witness_index: u8,
-        maturity: u32,
+        maturity: Word,
         predicate: Vec<u8>,
         predicate_data: Vec<u8>,
     ) -> Self {
@@ -66,19 +66,36 @@ impl Input {
         }
     }
 
-    pub fn is_valid(&self) -> bool {
+    pub fn validate(&self, index: usize, outputs: &[Output], witnesses: &[Witness]) -> Result<(), ValidationError> {
         match self {
-            // TODO If h is the block height the UTXO being spent was created,
-            // transaction is invalid if blockheight() < h + maturity.
-            Self::Coin {
-                predicate,
-                predicate_data,
-                ..
-            } => predicate.len() <= MAX_PREDICATE_LENGTH && predicate_data.len() <= MAX_PREDICATE_DATA_LENGTH,
+            Self::Coin { predicate, .. } if predicate.len() > MAX_PREDICATE_LENGTH => {
+                Err(ValidationError::InputCoinPredicateLength { index })
+            }
 
-            // TODO there is not exactly one output of type OutputType.Contract
-            // with inputIndex equal to this input's index
-            Self::Contract { .. } => true,
+            Self::Coin { predicate_data, .. } if predicate_data.len() > MAX_PREDICATE_DATA_LENGTH => {
+                Err(ValidationError::InputCoinPredicateDataLength { index })
+            }
+
+            Self::Coin { witness_index, .. } if *witness_index as usize >= witnesses.len() => {
+                Err(ValidationError::InputCoinWitnessIndexBounds { index })
+            }
+
+            // ∀ inputContract ∃! outputContract : outputContract.inputIndex = inputContract.index
+            Self::Contract { .. }
+                if 1 != outputs
+                    .iter()
+                    .filter_map(|output| match output {
+                        Output::Contract { input_index, .. } if *input_index as usize == index => Some(()),
+                        _ => None,
+                    })
+                    .count() =>
+            {
+                Err(ValidationError::InputContractAssociatedOutputContract { index })
+            }
+
+            // TODO If h is the block height the UTXO being spent was created, transaction is
+            // invalid if `blockheight() < h + maturity`.
+            _ => Ok(()),
         }
     }
 }
@@ -170,7 +187,7 @@ impl io::Write for Input {
                 let (amount, buf) = bytes::restore_number_unchecked(buf);
                 let (color, buf) = bytes::restore_array_unchecked(buf);
                 let (witness_index, buf) = bytes::restore_u8_unchecked(buf);
-                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
+                let (maturity, buf) = bytes::restore_number_unchecked(buf);
 
                 let (predicate_len, buf) = bytes::restore_usize_unchecked(buf);
                 let (predicate_data_len, buf) = bytes::restore_usize_unchecked(buf);

@@ -1,5 +1,6 @@
 mod input;
 mod output;
+mod validation;
 mod witness;
 
 pub type Color = [u8; 32];
@@ -8,4 +9,5 @@ pub type Root = [u8; 32];
 
 pub use input::Input;
 pub use output::Output;
+pub use validation::ValidationError;
 pub use witness::Witness;

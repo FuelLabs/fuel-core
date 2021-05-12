@@ -3,9 +3,9 @@ use fuel_vm_rust::consts::*;
 use fuel_vm_rust::prelude::*;
 
 fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId, expected: Word) {
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     registers_init.iter().for_each(|(r, v)| {
         vm.execute(Opcode::AddI(*r, *r, *v))
@@ -23,9 +23,9 @@ fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId
 }
 
 fn alu_err(registers_init: &[(RegisterId, Immediate12)], op: Opcode) {
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     registers_init.iter().for_each(|(r, v)| {
         vm.execute(Opcode::AddI(*r, *r, *v))

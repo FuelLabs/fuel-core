@@ -65,8 +65,8 @@ fn main() -> io::Result<()> {
         tx
     };
 
-    let interpreter = Interpreter::default();
-    let mut interpreter = interpreter.init(&tx);
+    let mut interpreter = Interpreter::default();
+    interpreter.init(&tx).expect("Failed to initialize VM");
 
     info!("Fuel VM Interpreter {} initialized", VERSION);
 

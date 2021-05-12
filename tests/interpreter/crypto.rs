@@ -19,9 +19,9 @@ fn ecrecover() {
     let e = crypto::hash(&message[..]);
     let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
 
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     // r[0x10] := 256
     vm.execute(Opcode::AddI(0x10, 0x10, 288)).unwrap();
@@ -93,9 +93,9 @@ fn sha256() {
     let message = b"I say let the world go to hell, but I should always have my tea.";
     let hash = crypto::hash(message);
 
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     // r[0x10] := 128
     vm.execute(Opcode::AddI(0x10, 0x10, 128)).unwrap();
@@ -161,9 +161,9 @@ fn keccak256() {
     hasher.update(message);
     let hash = hasher.finalize();
 
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     // r[0x10] := 162
     vm.execute(Opcode::AddI(0x10, 0x10, 162)).unwrap();

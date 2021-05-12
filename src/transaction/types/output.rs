@@ -1,4 +1,4 @@
-use super::{Color, Id, Root};
+use super::{Color, Id, Input, Root, ValidationError};
 use crate::bytes;
 use crate::types::Word;
 
@@ -81,12 +81,14 @@ impl Output {
         }
     }
 
-    pub fn is_valid(&self) -> bool {
+    pub fn validate(&self, index: usize, inputs: &[Input]) -> Result<(), ValidationError> {
         match self {
-            // TODO inputIndex >= tx.inputsCount
-            // TODO tx.inputs[inputIndex].type != InputType.Contract
-            Self::Contract { .. } => true,
-            _ => true,
+            Self::Contract { input_index, .. } => match inputs.get(*input_index as usize) {
+                Some(Input::Contract { .. }) => Ok(()),
+                _ => Err(ValidationError::OutputContractInputIndex { index }),
+            },
+
+            _ => Ok(()),
         }
     }
 }

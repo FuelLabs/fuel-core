@@ -1,6 +1,6 @@
 use crate::consts::*;
 use crate::crypto::hash;
-use crate::transaction::{Color, Input, Transaction};
+use crate::transaction::{Color, Input, Transaction, ValidationError};
 use crate::types::{RegisterId, Word};
 
 use std::io::Read;
@@ -35,7 +35,11 @@ impl Default for Interpreter {
 }
 
 impl Interpreter {
-    pub fn init(mut self, tx: &Transaction) -> Self {
+    pub fn init(&mut self, tx: &Transaction) -> Result<(), ValidationError> {
+        // TODO define block height fn
+        let block_height = 1000;
+        tx.validate(block_height)?;
+
         // TODO Consider casting immutable to mut so cloning will be avoided
         let mut tx = tx.clone();
 
@@ -72,7 +76,7 @@ impl Interpreter {
         self.registers[REG_FP] = VM_MAX_RAM - 1;
         self.registers[REG_HP] = self.registers[REG_FP];
 
-        self
+        Ok(())
     }
 
     pub const fn block_height(&self) -> u32 {

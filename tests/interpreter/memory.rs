@@ -4,9 +4,9 @@ use fuel_vm_rust::prelude::*;
 
 #[test]
 fn memcopy() {
-    let vm = Interpreter::default();
+    let mut vm = Interpreter::default();
     let tx = common::dummy_tx();
-    let mut vm = vm.init(&tx);
+    vm.init(&tx).expect("Failed to init VM");
 
     let alloc = 1024;
 

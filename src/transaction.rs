@@ -1,6 +1,5 @@
 use crate::bytes;
 use crate::consts::*;
-use crate::interpreter::Interpreter;
 use crate::types::Word;
 
 use itertools::Itertools;
@@ -10,7 +9,7 @@ use std::{io, mem};
 
 mod types;
 
-pub use types::{Color, Id, Input, Output, Root, Witness};
+pub use types::{Color, Id, Input, Output, Root, ValidationError, Witness};
 
 const COLOR_SIZE: usize = mem::size_of::<Color>();
 
@@ -32,7 +31,6 @@ pub enum Transaction {
         gas_price: Word,
         gas_limit: Word,
         maturity: u32,
-        bytecode_length: u16,
         bytecode_witness_index: u8,
         salt: [u8; 32],
         static_contracts: Vec<Id>,
@@ -69,7 +67,6 @@ impl Transaction {
         gas_price: Word,
         gas_limit: Word,
         maturity: u32,
-        bytecode_length: u16,
         bytecode_witness_index: u8,
         salt: [u8; 32],
         static_contracts: Vec<Id>,
@@ -81,7 +78,6 @@ impl Transaction {
             gas_price,
             gas_limit,
             maturity,
-            bytecode_length,
             bytecode_witness_index,
             salt,
             static_contracts,
@@ -91,143 +87,146 @@ impl Transaction {
         }
     }
 
-    pub fn is_valid(&self, vm: &Interpreter) -> bool {
-        // TODO test and optimize
-        self.gas_limit() <= MAX_GAS_PER_TX
-            && self.inputs().len() <= MAX_INPUTS
-            && self.outputs().len() <= MAX_OUTPUTS
-            && self.witnesses().len() <= MAX_WITNESSES
-            && vm.block_height() >= self.maturity()
+    pub fn validate(&self, block_height: Word) -> Result<(), ValidationError> {
+        if self.gas_price() > MAX_GAS_PER_TX {
+            Err(ValidationError::TransactionGasLimit)?
+        }
 
-            // Grant every unique input color contains zero or one corresponding output change
-            // color
-            && 1 == self.input_colors().fold(1, |acc, input_color| {
-                acc * 1.max(
-                    self.outputs()
-                        .iter()
-                        .filter_map(|output| match output {
-                            Output::Change { color, .. } if color == input_color => Some(()),
-                            _ => None,
-                        })
-                        .count(),
-                )
-            })
+        if block_height < self.maturity() as Word {
+            Err(ValidationError::TransactionMaturity)?;
+        }
 
-            // TODO use the interpreter to get the unique colors list from stack
-            // Grant every output change color exists in the inputs color
-            && 1 == self.outputs()
+        if self.inputs().len() > MAX_INPUTS {
+            Err(ValidationError::TransactionInputsMax)?
+        }
+
+        if self.outputs().len() > MAX_OUTPUTS {
+            Err(ValidationError::TransactionOutputsMax)?
+        }
+
+        if self.witnesses().len() > MAX_WITNESSES {
+            Err(ValidationError::TransactionWitnessesMax)?
+        }
+
+        let input_colors: Vec<&Color> = self.input_colors().collect();
+        for input_color in input_colors.as_slice() {
+            if self
+                .outputs()
                 .iter()
                 .filter_map(|output| match output {
-                    Output::Change { color, .. } => Some(color),
+                    Output::Change { color, .. } if color != &Color::default() && input_color == &color => Some(()),
                     _ => None,
                 })
-                .dedup()
-                .fold(1, |acc, output_color| {
-                    acc * self
-                        .input_colors()
-                        .find(|input_color| input_color == &output_color)
-                        .map(|_| 1)
-                        .unwrap_or(0)
-                })
+                .count()
+                > 1
+            {
+                Err(ValidationError::TransactionOutputChangeColorDuplicated)?
+            }
+        }
 
-                && self.is_valid_script()
-                && self.is_valid_create(vm)
+        for (index, input) in self.inputs().iter().enumerate() {
+            input.validate(index, self.outputs(), self.witnesses())?;
+        }
 
-                && self.inputs().iter().fold(true, |acc, input| acc && input.is_valid())
-                && self.outputs().iter().fold(true, |acc, output| acc && output.is_valid())
-    }
+        for (index, output) in self.outputs().iter().enumerate() {
+            output.validate(index, self.inputs())?;
+            if let Output::Change { color, .. } = output {
+                if input_colors.iter().find(|input_color| input_color == &&color).is_none() {
+                    Err(ValidationError::TransactionOutputChangeColorNotFound)?
+                }
+            }
+        }
 
-    fn is_valid_script(&self) -> bool {
         match self {
             Self::Script {
-                script, script_data, ..
-            } => {
-                // Invalid: any output is of type OutputType.ContractCreated
-                self.outputs()
-                    .iter()
-                    .filter_map(|output| match output {
-                        Output::ContractCreated { .. } => Some(()),
-                        _ => None,
-                    })
-                    .count()
-                    == 0
-                    && script.len() <= MAX_SCRIPT_LENGTH
-                    && script_data.len() <= MAX_SCRIPT_DATA_LENGTH
-            }
-            _ => true,
-        }
-    }
-
-    fn is_valid_create(&self, _vm: &Interpreter) -> bool {
-        match self {
-            Self::Create {
-                bytecode_length,
-                bytecode_witness_index,
-                static_contracts,
-                witnesses,
+                outputs,
+                script,
+                script_data,
                 ..
             } => {
-                (*bytecode_length as u64) * 4 <= CONTRACT_MAX_SIZE
+                if script.len() > MAX_SCRIPT_LENGTH {
+                    Err(ValidationError::TransactionScriptLength)?;
+                }
 
-                    && static_contracts.len() <= MAX_STATIC_CONTRACTS
-                    && static_contracts.as_slice().is_sorted()
-                    // TODO Any contract with ID in staticContracts is not in the state
-                    // TODO The computed contract ID (see below) is not equal to the contractID
-                    // of the one OutputType.ContractCreated output
+                if script_data.len() > MAX_SCRIPT_DATA_LENGTH {
+                    Err(ValidationError::TransactionScriptDataLength)?;
+                }
 
-                    // tx.data.witnesses[bytecodeWitnessIndex].dataLength != bytecodeLength * 4
-                    && witnesses.get(*bytecode_witness_index as usize)
-                        .map(|witness| witness.as_ref().len() == (*bytecode_length as usize) * 4)
-                        .unwrap_or(false)
+                outputs
+                    .iter()
+                    .enumerate()
+                    .try_for_each(|(index, output)| match output {
+                        Output::ContractCreated { .. } => {
+                            Err(ValidationError::TransactionScriptOutputContractCreated { index })
+                        }
+                        _ => Ok(()),
+                    })?;
 
-                    // Invalid: Any input is of type InputType.Contract
-                    && 0 == self
-                        .inputs()
-                        .iter()
-                        .filter_map(|input| match input {
-                            Input::Contract { .. } => Some(()),
-                            _ => None,
-                        })
-                        .count()
-
-                    // Invalid: Any output is of type OutputType.Contract or OutputType.Variable
-                    && 0 == self
-                        .outputs()
-                        .iter()
-                        .filter_map(|output| match output {
-                            Output::Contract { .. } | Output::Variable { .. } => Some(()),
-                            _ => None,
-                        })
-                        .count()
-
-                    // Invalid: More than one output is of type OutputType.Change with color of zero
-                    && 1 <= self
-                        .outputs()
-                        .iter()
-                        .filter_map(|output| match output.color() {
-                            Some(c) if c == &[0; COLOR_SIZE] => Some(()),
-                            _ => None,
-                        })
-                        .count()
-
-                    // Invalid: Any output is of type OutputType.Change with non-zero color
-                    && 0 == self.outputs().iter().filter_map(|output| match output {
-                        Output::Change { color, .. } if color != &[0; COLOR_SIZE] => Some(()),
-                        _ => None,
-                    }).count()
-
-                    // Invalid: More than one output is of type OutputType.ContractCreated
-                    && 1 <= self
-                        .outputs()
-                        .iter()
-                        .filter_map(|output| match output {
-                            Output::ContractCreated { .. } => Some(()),
-                            _ => None,
-                        })
-                        .count()
+                Ok(())
             }
 
-            _ => true,
+            Self::Create {
+                inputs,
+                outputs,
+                witnesses,
+                bytecode_witness_index,
+                static_contracts,
+                ..
+            } => {
+                match witnesses.get(*bytecode_witness_index as usize) {
+                    Some(witness) if witness.as_ref().len() as u64 * 4 > CONTRACT_MAX_SIZE => {
+                        Err(ValidationError::TransactionCreateBytecodeLen)?
+                    }
+                    None => Err(ValidationError::TransactionCreateBytecodeWitnessIndex)?,
+                    _ => (),
+                }
+
+                if static_contracts.len() > MAX_STATIC_CONTRACTS {
+                    Err(ValidationError::TransactionCreateStaticContractsMax)?;
+                }
+
+                if !static_contracts.as_slice().is_sorted() {
+                    Err(ValidationError::TransactionCreateStaticContractsOrder)?;
+                }
+
+                // TODO Any contract with ID in staticContracts is not in the state
+                // TODO The computed contract ID (see below) is not equal to the contractID of
+                // the one OutputType.ContractCreated output
+
+                for (index, input) in inputs.iter().enumerate() {
+                    match input {
+                        Input::Contract { .. } => Err(ValidationError::TransactionCreateInputContract { index })?,
+
+                        _ => (),
+                    }
+                }
+
+                let mut change_color_zero = false;
+                let mut contract_created = false;
+                for (index, output) in outputs.iter().enumerate() {
+                    match output {
+                        Output::Contract { .. } => Err(ValidationError::TransactionCreateOutputContract { index })?,
+                        Output::Variable { .. } => Err(ValidationError::TransactionCreateOutputVariable { index })?,
+
+                        Output::Change { color, .. } if color == &[0u8; COLOR_SIZE] && change_color_zero => {
+                            Err(ValidationError::TransactionCreateOutputChangeColorZero { index })?
+                        }
+                        Output::Change { color, .. } if color == &[0u8; COLOR_SIZE] => change_color_zero = true,
+                        Output::Change { .. } => {
+                            Err(ValidationError::TransactionCreateOutputChangeColorNonZero { index })?
+                        }
+
+                        Output::ContractCreated { .. } if contract_created => {
+                            Err(ValidationError::TransactionCreateOutputContractCreatedMultiple { index })?
+                        }
+                        Output::ContractCreated { .. } => contract_created = true,
+
+                        _ => (),
+                    }
+                }
+
+                Ok(())
+            }
         }
     }
 
@@ -383,7 +382,6 @@ impl io::Read for Transaction {
                 gas_price,
                 gas_limit,
                 maturity,
-                bytecode_length,
                 bytecode_witness_index,
                 salt,
                 static_contracts,
@@ -396,11 +394,16 @@ impl io::Read for Transaction {
                     return Err(bytes::eof());
                 }
 
+                let bytecode_length = witnesses
+                    .get(*bytecode_witness_index as usize)
+                    .map(|witness| witness.as_ref().len() as Word / 4)
+                    .unwrap_or(0);
+
                 buf[0] = 0x01;
                 let buf = bytes::store_number_unchecked(&mut buf[1..], *gas_price);
                 let buf = bytes::store_number_unchecked(buf, *gas_limit);
                 let buf = bytes::store_number_unchecked(buf, *maturity);
-                let buf = bytes::store_number_unchecked(buf, *bytecode_length);
+                let buf = bytes::store_number_unchecked(buf, bytecode_length);
                 let buf = bytes::store_number_unchecked(buf, *bytecode_witness_index);
                 let buf = bytes::store_number_unchecked(buf, static_contracts.len() as Word);
                 let buf = bytes::store_number_unchecked(buf, inputs.len() as Word);
@@ -516,7 +519,7 @@ impl io::Write for Transaction {
                 let (gas_price, buf) = bytes::restore_number_unchecked(buf);
                 let (gas_limit, buf) = bytes::restore_number_unchecked(buf);
                 let (maturity, buf) = bytes::restore_u32_unchecked(buf);
-                let (bytecode_length, buf) = bytes::restore_u16_unchecked(buf);
+                let (_bytecode_length, buf) = bytes::restore_u16_unchecked(buf);
                 let (bytecode_witness_index, buf) = bytes::restore_u8_unchecked(buf);
                 let (static_contracts_len, buf) = bytes::restore_usize_unchecked(buf);
                 let (inputs_len, buf) = bytes::restore_usize_unchecked(buf);
@@ -560,7 +563,6 @@ impl io::Write for Transaction {
                     gas_price,
                     gas_limit,
                     maturity,
-                    bytecode_length,
                     bytecode_witness_index,
                     salt,
                     static_contracts,
