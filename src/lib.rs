@@ -1,4 +1,5 @@
 #![feature(arbitrary_enum_discriminant)]
+#![feature(is_sorted)]
 
 pub mod bytes;
 pub mod consts;

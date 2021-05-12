@@ -5,6 +5,7 @@ authors = ["Shahan Khatchadourian <shahan.k.code@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+itertools = "0.10"
 sha2 = "0.9"
 sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}

@@ -70,6 +70,25 @@ impl Output {
     pub const fn contract_created(contract_id: Id) -> Self {
         Self::ContractCreated { contract_id }
     }
+
+    pub const fn color(&self) -> Option<&Color> {
+        match self {
+            Self::Coin { color, .. } => Some(color),
+            Self::Withdrawal { color, .. } => Some(color),
+            Self::Change { color, .. } => Some(color),
+            Self::Variable { color, .. } => Some(color),
+            _ => None,
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        match self {
+            // TODO inputIndex >= tx.inputsCount
+            // TODO tx.inputs[inputIndex].type != InputType.Contract
+            Self::Contract { .. } => true,
+            _ => true,
+        }
+    }
 }
 
 const ID_SIZE: usize = mem::size_of::<Id>();

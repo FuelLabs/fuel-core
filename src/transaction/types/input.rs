@@ -1,5 +1,6 @@
 use super::{Color, Id, Root};
 use crate::bytes;
+use crate::consts::*;
 use crate::types::Word;
 
 use std::{io, mem};
@@ -62,6 +63,22 @@ impl Input {
         match self {
             Self::Coin { utxo_id, .. } => &utxo_id,
             Self::Contract { utxo_id, .. } => &utxo_id,
+        }
+    }
+
+    pub fn is_valid(&self) -> bool {
+        match self {
+            // TODO If h is the block height the UTXO being spent was created,
+            // transaction is invalid if blockheight() < h + maturity.
+            Self::Coin {
+                predicate,
+                predicate_data,
+                ..
+            } => predicate.len() <= MAX_PREDICATE_LENGTH && predicate_data.len() <= MAX_PREDICATE_DATA_LENGTH,
+
+            // TODO there is not exactly one output of type OutputType.Contract
+            // with inputIndex equal to this input's index
+            Self::Contract { .. } => true,
         }
     }
 }

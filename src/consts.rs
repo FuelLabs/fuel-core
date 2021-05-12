@@ -66,7 +66,35 @@ pub const REG_FLAG: usize = 0x0f;
 /* TRANSACTION VALUES */
 
 /// Maximum number of inputs.
-pub const MAX_INPUTS: u64 = 8;
+pub const MAX_INPUTS: usize = 8;
+
+/// Maximum number of outputs.
+pub const MAX_OUTPUTS: usize = 8;
+
+/// Maximum number of witnesses.
+pub const MAX_WITNESSES: usize = 16;
+
+/// Maximum gas per transaction.
+pub const MAX_GAS_PER_TX: u64 = 1000000;
+
+// TODO set max script length const
+/// Maximum length of script, in instructions.
+pub const MAX_SCRIPT_LENGTH: usize = 1024 * 1024 * 1024;
+
+// TODO set max script length const
+/// Maximum length of script data, in bytes.
+pub const MAX_SCRIPT_DATA_LENGTH: usize = 1024 * 1024 * 1024;
+
+/// Maximum number of static contracts.
+pub const MAX_STATIC_CONTRACTS: usize = 256;
+
+// TODO set max predicate length value
+/// Maximum length of predicate, in instructions.
+pub const MAX_PREDICATE_LENGTH: usize = 1024 * 1024;
+
+// TODO set max predicate data length value
+/// Maximum length of predicate data, in bytes.
+pub const MAX_PREDICATE_DATA_LENGTH: usize = 1024 * 1024;
 
 /* END */
 

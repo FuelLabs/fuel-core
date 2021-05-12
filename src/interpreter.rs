@@ -75,6 +75,11 @@ impl Interpreter {
         self
     }
 
+    pub const fn block_height(&self) -> u32 {
+        // TODO fetch block height
+        u32::MAX >> 1
+    }
+
     pub fn set_flag(&mut self, a: Word) {
         self.registers[REG_FLAG] = a;
     }
