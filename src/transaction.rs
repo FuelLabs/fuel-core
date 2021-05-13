@@ -131,7 +131,7 @@ impl Transaction {
         for (index, output) in self.outputs().iter().enumerate() {
             output.validate(index, self.inputs())?;
             if let Output::Change { color, .. } = output {
-                if input_colors.iter().find(|input_color| input_color == &&color).is_none() {
+                if !input_colors.iter().any(|input_color| input_color == &color) {
                     Err(ValidationError::TransactionOutputChangeColorNotFound)?
                 }
             }
@@ -194,10 +194,8 @@ impl Transaction {
                 // the one OutputType.ContractCreated output
 
                 for (index, input) in inputs.iter().enumerate() {
-                    match input {
-                        Input::Contract { .. } => Err(ValidationError::TransactionCreateInputContract { index })?,
-
-                        _ => (),
+                    if let Input::Contract { .. } = input {
+                        Err(ValidationError::TransactionCreateInputContract { index })?
                     }
                 }
 
@@ -262,10 +260,7 @@ impl Transaction {
     }
 
     pub const fn is_script(&self) -> bool {
-        match self {
-            Self::Script { .. } => true,
-            _ => false,
-        }
+        matches!(self, Self::Script { .. })
     }
 
     pub fn inputs(&self) -> &[Input] {

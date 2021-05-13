@@ -42,8 +42,8 @@ impl error::Error for ValidationError {
     }
 }
 
-impl Into<io::Error> for ValidationError {
-    fn into(self) -> io::Error {
-        io::Error::new(io::ErrorKind::Other, self)
+impl From<ValidationError> for io::Error {
+    fn from(v: ValidationError) -> io::Error {
+        io::Error::new(io::ErrorKind::Other, v)
     }
 }

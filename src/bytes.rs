@@ -56,7 +56,7 @@ pub fn restore_bytes(mut buf: &[u8]) -> io::Result<(usize, Vec<u8>, &[u8])> {
         .next()
         .map(|chunk| <[u8; WORD_SIZE]>::try_from(chunk).unwrap_or_else(|_| unreachable!()))
         .map(|len| Word::from_be_bytes(len) as usize)
-        .ok_or(eof())?;
+        .ok_or_else(eof)?;
     buf = &buf[WORD_SIZE..];
 
     let pad = len % WORD_SIZE;
@@ -91,7 +91,7 @@ where
     buf.chunks_exact_mut(WORD_SIZE)
         .next()
         .map(|chunk| chunk.copy_from_slice(&number.into().to_be_bytes()))
-        .ok_or(eof())?;
+        .ok_or_else(eof)?;
 
     Ok((WORD_SIZE, &mut buf[WORD_SIZE..]))
 }
@@ -152,7 +152,7 @@ where
         .next()
         .map(|chunk| <[u8; WORD_SIZE]>::try_from(chunk).unwrap_or_else(|_| unreachable!()))
         .map(|chunk| Word::from_be_bytes(chunk).into())
-        .ok_or(eof())?;
+        .ok_or_else(eof)?;
 
     Ok((number, &buf[WORD_SIZE..]))
 }
@@ -161,7 +161,7 @@ pub fn store_array<'a, const N: usize>(buf: &'a mut [u8], array: &[u8; N]) -> io
     buf.chunks_exact_mut(N)
         .next()
         .map(|chunk| chunk.copy_from_slice(array))
-        .ok_or(eof())?;
+        .ok_or_else(eof)?;
 
     Ok(&mut buf[N..])
 }

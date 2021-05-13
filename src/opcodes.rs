@@ -379,10 +379,7 @@ impl io::Read for Opcode {
             .next()
             .map(|chunk| chunk.copy_from_slice(&u32::from(*self).to_be_bytes()))
             .map(|_| 4)
-            .ok_or(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "The provided buffer is not big enough!"))
     }
 }
 
@@ -390,10 +387,7 @@ impl io::Write for Opcode {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         buf.chunks_exact(4)
             .next()
-            .ok_or(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "The provided buffer is not big enough!",
-            ))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "The provided buffer is not big enough!"))
             .and_then(|chunk| <[u8; 4]>::try_from(chunk).map_err(|_| unreachable!()))
             .map(|bytes| *self = u32::from_be_bytes(bytes).into())
             .map(|_| 4)
