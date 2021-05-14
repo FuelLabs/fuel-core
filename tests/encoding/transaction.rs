@@ -125,7 +125,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![0xfa],
             vec![0xfb, 0xfc],
             vec![i.clone()],
@@ -135,7 +135,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![],
             vec![0xfb, 0xfc],
             vec![i.clone()],
@@ -145,7 +145,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![0xfa],
             vec![],
             vec![i.clone()],
@@ -155,7 +155,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![],
             vec![],
             vec![i.clone()],
@@ -165,7 +165,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![],
             vec![],
             vec![],
@@ -175,7 +175,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![],
             vec![],
             vec![],
@@ -185,7 +185,7 @@ fn transaction() {
         Transaction::script(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             vec![],
             vec![],
             vec![],
@@ -195,7 +195,7 @@ fn transaction() {
         Transaction::create(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             0xba,
             [0xdd; 32],
             vec![[0xce; 32]],
@@ -206,7 +206,7 @@ fn transaction() {
         Transaction::create(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             0xba,
             [0xdd; 32],
             vec![],
@@ -217,7 +217,7 @@ fn transaction() {
         Transaction::create(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             0xba,
             [0xdd; 32],
             vec![],
@@ -228,7 +228,7 @@ fn transaction() {
         Transaction::create(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             0xba,
             [0xdd; 32],
             vec![],
@@ -239,7 +239,7 @@ fn transaction() {
         Transaction::create(
             Word::MAX >> 1,
             Word::MAX >> 2,
-            u32::MAX >> 3,
+            Word::MAX >> 3,
             0xba,
             [0xdd; 32],
             vec![],

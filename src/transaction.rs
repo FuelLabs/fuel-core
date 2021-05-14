@@ -19,7 +19,7 @@ pub enum Transaction {
     Script {
         gas_price: Word,
         gas_limit: Word,
-        maturity: u32,
+        maturity: Word,
         script: Vec<u8>,
         script_data: Vec<u8>,
         inputs: Vec<Input>,
@@ -30,7 +30,7 @@ pub enum Transaction {
     Create {
         gas_price: Word,
         gas_limit: Word,
-        maturity: u32,
+        maturity: Word,
         bytecode_witness_index: u8,
         salt: [u8; 32],
         static_contracts: Vec<Id>,
@@ -40,11 +40,27 @@ pub enum Transaction {
     } = 0x01,
 }
 
+impl Default for Transaction {
+    fn default() -> Self {
+        Transaction::create(
+            1,
+            1000000,
+            10,
+            0,
+            [0u8; 32],
+            vec![],
+            vec![],
+            vec![],
+            vec![vec![0xffu8].into()],
+        )
+    }
+}
+
 impl Transaction {
     pub const fn script(
         gas_price: Word,
         gas_limit: Word,
-        maturity: u32,
+        maturity: Word,
         script: Vec<u8>,
         script_data: Vec<u8>,
         inputs: Vec<Input>,
@@ -66,7 +82,7 @@ impl Transaction {
     pub const fn create(
         gas_price: Word,
         gas_limit: Word,
-        maturity: u32,
+        maturity: Word,
         bytecode_witness_index: u8,
         salt: [u8; 32],
         static_contracts: Vec<Id>,
@@ -235,7 +251,17 @@ impl Transaction {
                 Input::Coin { color, .. } => Some(color),
                 _ => None,
             })
-            .dedup()
+            .unique()
+    }
+
+    pub fn input_contracts(&self) -> impl Iterator<Item = &Id> {
+        self.inputs()
+            .iter()
+            .filter_map(|input| match input {
+                Input::Contract { contract_id, .. } => Some(contract_id),
+                _ => None,
+            })
+            .unique()
     }
 
     pub const fn gas_price(&self) -> Word {
@@ -252,7 +278,7 @@ impl Transaction {
         }
     }
 
-    pub const fn maturity(&self) -> u32 {
+    pub const fn maturity(&self) -> Word {
         match self {
             Self::Script { maturity, .. } => *maturity,
             Self::Create { maturity, .. } => *maturity,
@@ -456,7 +482,7 @@ impl io::Write for Transaction {
 
                 let (gas_price, buf) = bytes::restore_number_unchecked(buf);
                 let (gas_limit, buf) = bytes::restore_number_unchecked(buf);
-                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
+                let (maturity, buf) = bytes::restore_number_unchecked(buf);
                 let (script_len, buf) = bytes::restore_usize_unchecked(buf);
                 let (script_data_len, buf) = bytes::restore_usize_unchecked(buf);
                 let (inputs_len, buf) = bytes::restore_usize_unchecked(buf);
@@ -513,7 +539,7 @@ impl io::Write for Transaction {
 
                 let (gas_price, buf) = bytes::restore_number_unchecked(buf);
                 let (gas_limit, buf) = bytes::restore_number_unchecked(buf);
-                let (maturity, buf) = bytes::restore_u32_unchecked(buf);
+                let (maturity, buf) = bytes::restore_number_unchecked(buf);
                 let (_bytecode_length, buf) = bytes::restore_u16_unchecked(buf);
                 let (bytecode_witness_index, buf) = bytes::restore_u8_unchecked(buf);
                 let (static_contracts_len, buf) = bytes::restore_usize_unchecked(buf);

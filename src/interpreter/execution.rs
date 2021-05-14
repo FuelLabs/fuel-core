@@ -156,6 +156,7 @@ impl Interpreter {
                     && (self.registers[ra] != self.registers[rb] && self.jump(imm as Word) || self.inc_pc()) => {}
 
             // TODO RET: Return from context
+            //Opcode::Ret(ra)
             Opcode::CFEI(imm) if self.stack_pointer_overflow(Word::overflowing_add, imm as Word) => {}
 
             Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) => {}

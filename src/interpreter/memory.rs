@@ -5,8 +5,15 @@ use crate::types::{RegisterId, Word};
 use std::convert::TryFrom;
 use std::ptr;
 
+mod range;
+
+pub use range::MemoryRange;
+
 impl Interpreter {
-    pub const fn has_ownership_range(&self, a: Word, ab: Word) -> bool {
+    /// Grant ownership of the range `[a..ab[`
+    pub const fn has_ownership_range(&self, range: &MemoryRange) -> bool {
+        let (a, ab) = range.boundaries(self);
+
         let a_is_stack = a < self.registers[REG_SP];
         let a_is_heap = a > self.registers[REG_HP];
 
@@ -19,7 +26,7 @@ impl Interpreter {
     }
 
     pub const fn has_ownership_stack(&self, a: Word) -> bool {
-        self.registers[REG_SSP] <= a && a < self.registers[REG_SP]
+        a <= VM_MAX_RAM && self.registers[REG_SSP] <= a && a < self.registers[REG_SP]
     }
 
     pub const fn has_ownership_heap(&self, a: Word) -> bool {
@@ -30,7 +37,11 @@ impl Interpreter {
         // it means $hp from the previous context, i.e. what's saved in the
         // "Saved registers from previous context" of the call frame at
         // $fp`
-        (a < VM_MAX_RAM - 1 || !external) && self.registers[REG_HP] < a
+        a <= VM_MAX_RAM && (a < VM_MAX_RAM - 1 || !external) && self.registers[REG_HP] < a
+    }
+
+    pub const fn is_stack_address(&self, a: Word) -> bool {
+        a < self.registers[REG_SP]
     }
 }
 
@@ -101,7 +112,8 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow || result > VM_MAX_RAM || !self.has_ownership_range(ac, ac + 8) {
+        let range = MemoryRange::new(ac, 8);
+        if overflow || result > VM_MAX_RAM || !self.has_ownership_range(&range) {
             false
         } else {
             // TODO review if BE is intended
@@ -126,7 +138,8 @@ impl Interpreter {
         let (ab, overflow) = a.overflowing_add(b);
         self.inc_pc();
 
-        if overflow || ab > VM_MAX_RAM || b > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ab) {
+        let range = MemoryRange::new(a, b);
+        if overflow || ab > VM_MAX_RAM || b > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(&range) {
             false
         } else {
             // trivial compiler optimization for memset when best
@@ -143,13 +156,14 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
+        let range = MemoryRange::new(a, c);
         if overflow
             || ac > VM_MAX_RAM
             || bc > VM_MAX_RAM
             || c > MEM_MAX_ACCESS_SIZE
             || a <= b && b < ac
             || b <= a && a < bc
-            || !self.has_ownership_range(a, ac)
+            || !self.has_ownership_range(&range)
         {
             false
         } else {

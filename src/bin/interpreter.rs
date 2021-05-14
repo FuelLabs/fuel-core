@@ -57,7 +57,7 @@ fn main() -> io::Result<()> {
     let dummy_tx = matches.is_present("dummy-tx");
     let tx = if dummy_tx {
         info!("Using dummy transaction...");
-        Transaction::script(0, 0, 0, vec![], vec![], vec![], vec![], vec![])
+        Transaction::default()
     } else {
         let (n, tx) = Transaction::try_from_bytes(input)?;
         info!("Transaction parsed with {} bytes consumed...", n);
@@ -66,7 +66,7 @@ fn main() -> io::Result<()> {
     };
 
     let mut interpreter = Interpreter::default();
-    interpreter.init(&tx).expect("Failed to initialize VM");
+    interpreter.init(tx).expect("Failed to initialize VM");
 
     info!("Fuel VM Interpreter {} initialized", VERSION);
 

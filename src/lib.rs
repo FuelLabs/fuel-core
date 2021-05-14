@@ -10,7 +10,7 @@ pub mod transaction;
 pub mod types;
 
 pub mod prelude {
-    pub use crate::interpreter::{ExecuteError, Interpreter, LogEvent};
+    pub use crate::interpreter::{Call, CallFrame, ExecuteError, Interpreter, LogEvent, MemoryRange};
     pub use crate::opcodes::Opcode;
     pub use crate::transaction::{Color, Id, Input, Output, Root, Transaction, ValidationError, Witness};
     pub use crate::types::*;

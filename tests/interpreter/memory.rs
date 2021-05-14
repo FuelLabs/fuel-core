@@ -1,12 +1,10 @@
-use super::common;
 use fuel_vm_rust::consts::*;
 use fuel_vm_rust::prelude::*;
 
 #[test]
 fn memcopy() {
     let mut vm = Interpreter::default();
-    let tx = common::dummy_tx();
-    vm.init(&tx).expect("Failed to init VM");
+    vm.init(Transaction::default()).expect("Failed to init VM");
 
     let alloc = 1024;
 
@@ -48,4 +46,33 @@ fn memcopy() {
     vm.execute(Opcode::SubI(0x25, 0x12, 1)).unwrap();
     let overlapping = vm.execute(Opcode::MCp(0x11, 0x25, 0x20));
     assert!(overlapping.is_err());
+}
+
+#[test]
+fn memrange() {
+    let m = MemoryRange::from(..1024);
+    let m_p = MemoryRange::new(0, 1024);
+    assert_eq!(m, m_p);
+
+    let mut vm = Interpreter::default();
+    vm.init(Transaction::default()).expect("Failed to init VM");
+
+    let bytes = 1024;
+    vm.execute(Opcode::AddI(0x10, REG_ZERO, bytes as Immediate12)).unwrap();
+    vm.execute(Opcode::Aloc(0x10)).unwrap();
+
+    let m = MemoryRange::new(vm.registers()[REG_HP], bytes);
+    assert!(!vm.has_ownership_range(&m));
+
+    let m = MemoryRange::new(vm.registers()[REG_HP] + 1, bytes);
+    assert!(vm.has_ownership_range(&m));
+
+    let m = MemoryRange::new(vm.registers()[REG_HP] + 1, bytes + 1);
+    assert!(!vm.has_ownership_range(&m));
+
+    let m = MemoryRange::new(0, bytes).to_heap(&vm);
+    assert!(vm.has_ownership_range(&m));
+
+    let m = MemoryRange::new(0, bytes + 1).to_heap(&vm);
+    assert!(!vm.has_ownership_range(&m));
 }

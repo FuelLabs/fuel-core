@@ -38,7 +38,7 @@ fn opcode() {
         Opcode::Xor(r, r, r),
         Opcode::XorI(r, r, imm12),
         Opcode::CIMV(r, r, r),
-        Opcode::CMTV(r, r),
+        Opcode::CTMV(r, r),
         Opcode::JI(imm24),
         Opcode::JNEI(r, r, imm12),
         Opcode::Ret(r),

@@ -115,6 +115,13 @@ where
     (number, &buf[WORD_SIZE..])
 }
 
+pub fn restore_word_unchecked(buf: &[u8]) -> (Word, &[u8]) {
+    let number = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
+    let number = Word::from_be_bytes(number);
+
+    (number, &buf[WORD_SIZE..])
+}
+
 pub fn restore_u8_unchecked(buf: &[u8]) -> (u8, &[u8]) {
     let number = <[u8; WORD_SIZE]>::try_from(&buf[..WORD_SIZE]).unwrap_or_else(|_| unreachable!());
     let number = Word::from_be_bytes(number) as u8;

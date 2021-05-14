@@ -14,4 +14,16 @@ impl Interpreter {
             true
         }
     }
+
+    /*
+    pub fn call(&mut self, a: Word, b: Word, c: Word, d: Word) -> bool {
+        let (ax, overflow) = a.overflowing_add(32);
+        let (cx, of) = c.overflowing_add(32);
+        let overflow = overflow || of;
+
+        //self.tx.input_contracts().any(|contract| );
+
+        true
+    }
+    */
 }

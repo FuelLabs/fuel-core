@@ -1,4 +1,3 @@
-use super::common;
 use fuel_vm_rust::consts::*;
 use fuel_vm_rust::crypto;
 use fuel_vm_rust::prelude::*;
@@ -20,8 +19,7 @@ fn ecrecover() {
     let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
 
     let mut vm = Interpreter::default();
-    let tx = common::dummy_tx();
-    vm.init(&tx).expect("Failed to init VM");
+    vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 256
     vm.execute(Opcode::AddI(0x10, 0x10, 288)).unwrap();
@@ -94,8 +92,7 @@ fn sha256() {
     let hash = crypto::hash(message);
 
     let mut vm = Interpreter::default();
-    let tx = common::dummy_tx();
-    vm.init(&tx).expect("Failed to init VM");
+    vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 128
     vm.execute(Opcode::AddI(0x10, 0x10, 128)).unwrap();
@@ -162,8 +159,7 @@ fn keccak256() {
     let hash = hasher.finalize();
 
     let mut vm = Interpreter::default();
-    let tx = common::dummy_tx();
-    vm.init(&tx).expect("Failed to init VM");
+    vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 162
     vm.execute(Opcode::AddI(0x10, 0x10, 162)).unwrap();

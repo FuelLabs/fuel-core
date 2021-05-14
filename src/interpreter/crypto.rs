@@ -1,4 +1,4 @@
-use super::Interpreter;
+use super::{Interpreter, MemoryRange};
 use crate::consts::{MEM_MAX_ACCESS_SIZE, VM_MAX_RAM};
 use crate::crypto;
 use crate::types::Word;
@@ -12,7 +12,8 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow || ax > VM_MAX_RAM || bx > VM_MAX_RAM || cx > VM_MAX_RAM || !self.has_ownership_range(a, ax) {
+        let range = MemoryRange::new(a, 64);
+        if overflow || ax > VM_MAX_RAM || bx > VM_MAX_RAM || cx > VM_MAX_RAM || !self.has_ownership_range(&range) {
             false
         } else {
             let e = &self.memory[c as usize..cx as usize];
@@ -36,7 +37,12 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow || ax > VM_MAX_RAM || bc > VM_MAX_RAM || c > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ax)
+        let range = MemoryRange::new(a, 32);
+        if overflow
+            || ax > VM_MAX_RAM
+            || bc > VM_MAX_RAM
+            || c > MEM_MAX_ACCESS_SIZE
+            || !self.has_ownership_range(&range)
         {
             false
         } else {
@@ -55,7 +61,12 @@ impl Interpreter {
         let overflow = overflow || of;
         self.inc_pc();
 
-        if overflow || ax > VM_MAX_RAM || bc > VM_MAX_RAM || c > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(a, ax)
+        let range = MemoryRange::new(a, 32);
+        if overflow
+            || ax > VM_MAX_RAM
+            || bc > VM_MAX_RAM
+            || c > MEM_MAX_ACCESS_SIZE
+            || !self.has_ownership_range(&range)
         {
             false
         } else {

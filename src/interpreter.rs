@@ -11,17 +11,22 @@ mod crypto;
 mod error;
 mod execution;
 mod flow;
+mod frame;
 mod log;
 mod memory;
 
 pub use error::ExecuteError;
+pub use frame::{Call, CallFrame};
 pub use log::LogEvent;
+pub use memory::MemoryRange;
 
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     registers: [Word; VM_REGISTER_COUNT],
     memory: Vec<u8>,
     log: Vec<LogEvent>,
+    // TODO review all opcodes that mutates the tx in the stack and keep this one sync
+    tx: Transaction,
 }
 
 impl Default for Interpreter {
@@ -30,18 +35,16 @@ impl Default for Interpreter {
             registers: [0; VM_REGISTER_COUNT],
             memory: vec![],
             log: vec![],
+            tx: Transaction::default(),
         }
     }
 }
 
 impl Interpreter {
-    pub fn init(&mut self, tx: &Transaction) -> Result<(), ValidationError> {
+    pub fn init(&mut self, mut tx: Transaction) -> Result<(), ValidationError> {
         // TODO define block height fn
         let block_height = 1000;
         tx.validate(block_height)?;
-
-        // TODO Consider casting immutable to mut so cloning will be avoided
-        let mut tx = tx.clone();
 
         self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
         self.memory = vec![0; VM_MAX_RAM as usize];
@@ -75,6 +78,8 @@ impl Interpreter {
         // Set heap area
         self.registers[REG_FP] = VM_MAX_RAM - 1;
         self.registers[REG_HP] = self.registers[REG_FP];
+
+        self.tx = tx;
 
         Ok(())
     }
