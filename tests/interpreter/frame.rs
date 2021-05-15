@@ -13,9 +13,6 @@ fn call_output_ownership() {
     vm.execute(Opcode::AddI(0x10, 0x10, bytes as Immediate12)).unwrap();
     vm.execute(Opcode::Aloc(0x10)).unwrap();
 
-    println!("{:?}", VM_MAX_RAM);
-    println!("{:?}", MemorySlice::from(1024u64..));
-    println!("{:?}", MemorySlice::from(1024u64..).to_heap(&vm));
     let (start, end) = MemorySlice::from(1024u64..).to_heap(&vm).boundaries().unwrap();
     assert!(vm.has_ownership_range(start, end));
 

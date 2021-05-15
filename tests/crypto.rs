@@ -1,9 +1,13 @@
+#![feature(once_cell)]
+
 use fuel_vm_rust::crypto;
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
 use std::convert::TryFrom;
+
+pub mod common;
 
 #[test]
 fn ecrecover() {

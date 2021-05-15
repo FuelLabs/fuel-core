@@ -24,6 +24,7 @@ pub use memory::MemoryRange;
 pub struct Interpreter {
     registers: [Word; VM_REGISTER_COUNT],
     memory: Vec<u8>,
+    frames: Vec<CallFrame>,
     log: Vec<LogEvent>,
     // TODO review all opcodes that mutates the tx in the stack and keep this one sync
     tx: Transaction,
@@ -34,6 +35,7 @@ impl Default for Interpreter {
         Self {
             registers: [0; VM_REGISTER_COUNT],
             memory: vec![],
+            frames: vec![],
             log: vec![],
             tx: Transaction::default(),
         }
@@ -45,6 +47,9 @@ impl Interpreter {
         // TODO define block height fn
         let block_height = 1000;
         tx.validate(block_height)?;
+
+        self.frames.clear();
+        self.log.clear();
 
         self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
         self.memory = vec![0; VM_MAX_RAM as usize];
@@ -65,14 +70,16 @@ impl Interpreter {
             ssp += color.len() + 8;
         }
 
+        let tx_stack = self.tx_stack();
+
         // Push tx len and bytes to stack
-        let tx_len = tx.read(&mut self.memory[40..]).unwrap_or_else(|_| unreachable!());
-        let tx_hash = hash(&self.memory[40..40 + tx_len]);
+        let tx_len = tx.read(&mut self.memory[tx_stack..]).unwrap_or_else(|_| unreachable!());
+        let tx_hash = hash(&self.memory[tx_stack..tx_stack + tx_len]);
         self.memory[32..40].copy_from_slice(&(tx_len as u64).to_be_bytes());
         self.memory[..32].copy_from_slice(&tx_hash);
 
         // TODO set current stack pointer
-        self.registers[REG_SSP] = 40 + tx_len as Word;
+        self.registers[REG_SSP] = tx_stack as Word + tx_len as Word;
         self.registers[REG_SP] = self.registers[REG_SSP];
 
         // Set heap area
@@ -82,6 +89,11 @@ impl Interpreter {
         self.tx = tx;
 
         Ok(())
+    }
+
+    pub const fn tx_stack(&self) -> usize {
+        // TODO update tx address in stack according to specs
+        40
     }
 
     pub const fn block_height(&self) -> u32 {
@@ -103,6 +115,10 @@ impl Interpreter {
         self.registers[REG_PC] = result;
 
         !overflow
+    }
+
+    pub fn memory(&self) -> &[u8] {
+        self.memory.as_slice()
     }
 
     pub const fn registers(&self) -> &[Word] {

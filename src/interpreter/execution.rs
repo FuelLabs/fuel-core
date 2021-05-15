@@ -193,7 +193,15 @@ impl Interpreter {
             // TODO BLOCKHASH: Block hash
             // TODO BLOCKHEIGHT: Block height
             // TODO BURN: Burn existing coins
-            // TODO CALL: Call contract
+            Opcode::Call(ra, rb, rc, rd)
+                if Self::is_valid_register_quadruple(ra, rb, rc, rd)
+                    && self.call(
+                        self.registers[ra],
+                        self.registers[rb],
+                        self.registers[rc],
+                        self.registers[rd],
+                    ) => {}
+
             // TODO CODECOPY: Code copy
             // TODO CODEROOT: Code Merkle root
             // TODO CODESIZE: Code size
