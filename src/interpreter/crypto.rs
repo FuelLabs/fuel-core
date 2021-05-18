@@ -1,7 +1,8 @@
 use super::{Interpreter, MemoryRange};
 use crate::consts::{MEM_MAX_ACCESS_SIZE, VM_MAX_RAM};
 use crate::crypto;
-use crate::types::Word;
+
+use fuel_asm::Word;
 
 impl Interpreter {
     pub fn ecrecover(&mut self, a: Word, b: Word, c: Word) -> bool {

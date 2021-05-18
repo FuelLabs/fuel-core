@@ -1,6 +1,7 @@
 use super::Interpreter;
 use crate::consts::*;
-use crate::types::{RegisterId, Word};
+
+use fuel_asm::{RegisterId, Word};
 
 use std::convert::TryFrom;
 use std::ptr;

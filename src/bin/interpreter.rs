@@ -1,4 +1,5 @@
 use clap::{App, Arg};
+use fuel_asm::Opcode;
 use json::{array, object};
 use tracing::{info, trace};
 use tracing_subscriber::fmt::Subscriber;

@@ -1,6 +1,7 @@
 use super::Interpreter;
 use crate::consts::*;
-use crate::types::{RegisterId, Word};
+
+use fuel_asm::{RegisterId, Word};
 
 impl Interpreter {
     pub fn alu_overflow<B, C>(&mut self, ra: RegisterId, f: fn(B, C) -> (Word, bool), b: B, c: C) {

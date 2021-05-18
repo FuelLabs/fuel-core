@@ -1,4 +1,4 @@
-use crate::opcodes::Opcode;
+use fuel_asm::Opcode;
 
 use std::{error, fmt};
 

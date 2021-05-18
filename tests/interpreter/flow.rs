@@ -39,8 +39,8 @@ fn call() {
     );
     vm.init(tx).expect("Failed to init VM!");
 
-    vm.execute(Opcode::AddI(0x20, REG_ZERO, alloc as Immediate12)).unwrap();
-    vm.execute(Opcode::Aloc(0x20)).unwrap();
+    vm.execute(Opcode::ADDI(0x20, REG_ZERO, alloc as Immediate12)).unwrap();
+    vm.execute(Opcode::ALOC(0x20)).unwrap();
 
     // Transaction script starts after 1 byte and 8 words
     let code_address = vm.tx_stack() + 65;
@@ -66,15 +66,15 @@ fn call() {
     assert_eq!(call, call_p);
 
     let color_addr = 0x10;
-    vm.execute(Opcode::AddI(color_addr, REG_ZERO, color_address as Immediate12))
+    vm.execute(Opcode::ADDI(color_addr, REG_ZERO, color_address as Immediate12))
         .unwrap();
 
     let call_addr = 0x11;
-    vm.execute(Opcode::AddI(call_addr, REG_ZERO, call_address as Immediate12))
+    vm.execute(Opcode::ADDI(call_addr, REG_ZERO, call_address as Immediate12))
         .unwrap();
 
     let frame = vm.call_frame(call, color);
-    vm.execute(Opcode::Call(call_addr, REG_ZERO, color_addr, REG_ZERO))
+    vm.execute(Opcode::CALL(call_addr, REG_ZERO, color_addr, REG_ZERO))
         .unwrap();
 
     let mut frame_p = frame.clone();

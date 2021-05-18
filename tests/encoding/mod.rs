@@ -2,7 +2,6 @@ use std::fmt;
 use std::io::{self, Read, Write};
 
 mod interpreter;
-mod opcodes;
 mod transaction;
 
 pub use super::common;

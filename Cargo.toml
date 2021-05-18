@@ -1,15 +1,23 @@
 [package]
 name = "fuel-vm-rust"
+description = "FuelVM interpreter."
 version = "0.1.0"
-authors = ["Shahan Khatchadourian <shahan.k.code@gmail.com>"]
+authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
 edition = "2018"
+repository = "https://github.com/FuelLabs/fuel-core"
+license = "Apache-2.0"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 
 [dependencies]
-itertools = "0.10"
 sha2 = "0.9"
 sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}
 tracing = "0.1"
+fuel-asm = {git="https://github.com/FuelLabs/fuel-asm"}
+fuel-tx = {git="https://github.com/FuelLabs/fuel-tx"}
+
+# Bin dependencies
 tracing-subscriber = {version="0.2", optional=true}
 clap = {version="2.33", optional=true}
 json = {version="0.12", optional=true}

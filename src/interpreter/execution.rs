@@ -1,7 +1,6 @@
 use super::{ExecuteError, Interpreter};
-use crate::opcodes::Opcode;
-use crate::types::{RegisterId, Word};
 
+use fuel_asm::{Opcode, RegisterId, Word};
 use tracing::debug;
 
 use std::ops::Div;
@@ -21,23 +20,23 @@ impl Interpreter {
         );
 
         match op {
-            Opcode::Add(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::ADD(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_overflow(ra, Word::overflowing_add, self.registers[rb], self.registers[rc])
             }
 
-            Opcode::AddI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::ADDI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_overflow(ra, Word::overflowing_add, self.registers[rb], imm as Word)
             }
 
-            Opcode::And(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::AND(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_set(ra, self.registers[rb] & self.registers[rc])
             }
 
-            Opcode::AndI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::ANDI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_set(ra, self.registers[rb] & (imm as Word))
             }
 
-            Opcode::Div(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::DIV(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 Word::div,
                 self.registers[rb],
@@ -45,19 +44,19 @@ impl Interpreter {
                 self.registers[rc] == 0,
             ),
 
-            Opcode::DivI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::DIVI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_error(ra, Word::div, self.registers[rb], imm as Word, imm == 0)
             }
 
-            Opcode::Eq(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::EQ(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_set(ra, (self.registers[rb] == self.registers[rc]) as Word)
             }
 
-            Opcode::Exp(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::EXP(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_overflow(ra, Word::overflowing_pow, self.registers[rb], self.registers[rc] as u32)
             }
 
-            Opcode::ExpI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::EXPI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_overflow(ra, Word::overflowing_pow, self.registers[rb], imm as u32)
             }
 
@@ -65,7 +64,7 @@ impl Interpreter {
                 self.alu_set(ra, (self.registers[rb] > self.registers[rc]) as Word)
             }
 
-            Opcode::Mlog(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::MLOG(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 |b, c| (b as f64).log(c as f64).trunc() as Word,
                 self.registers[rb],
@@ -73,7 +72,7 @@ impl Interpreter {
                 self.registers[rb] == 0 || self.registers[rc] <= 1,
             ),
 
-            Opcode::MRoo(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::MROO(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 |b, c| (b as f64).powf((c as f64).recip()).trunc() as Word,
                 self.registers[rb],
@@ -81,7 +80,7 @@ impl Interpreter {
                 self.registers[rc] == 0,
             ),
 
-            Opcode::Mod(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
+            Opcode::MOD(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => self.alu_error(
                 ra,
                 Word::wrapping_rem,
                 self.registers[rb],
@@ -89,29 +88,29 @@ impl Interpreter {
                 self.registers[rc] == 0,
             ),
 
-            Opcode::ModI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::MODI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_error(ra, Word::wrapping_rem, self.registers[rb], imm as Word, imm == 0)
             }
 
-            Opcode::Move(ra, rb) if Self::is_valid_register_couple_alu(ra, rb) => self.alu_set(ra, self.registers[rb]),
+            Opcode::MOVE(ra, rb) if Self::is_valid_register_couple_alu(ra, rb) => self.alu_set(ra, self.registers[rb]),
 
-            Opcode::Mul(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::MUL(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_overflow(ra, Word::overflowing_mul, self.registers[rb], self.registers[rc])
             }
 
-            Opcode::MulI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::MULI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_overflow(ra, Word::overflowing_mul, self.registers[rb], imm as Word)
             }
 
-            Opcode::Noop => self.alu_clear(),
+            Opcode::NOOP => self.alu_clear(),
 
-            Opcode::Not(ra, rb) if Self::is_valid_register_couple_alu(ra, rb) => self.alu_set(ra, !self.registers[rb]),
+            Opcode::NOT(ra, rb) if Self::is_valid_register_couple_alu(ra, rb) => self.alu_set(ra, !self.registers[rb]),
 
-            Opcode::Or(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::OR(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_set(ra, self.registers[rb] | self.registers[rc])
             }
 
-            Opcode::OrI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::ORI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_set(ra, self.registers[rb] | (imm as Word))
             }
 
@@ -131,19 +130,19 @@ impl Interpreter {
                 self.alu_overflow(ra, Word::overflowing_shr, self.registers[rb], imm as u32)
             }
 
-            Opcode::Sub(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::SUB(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_overflow(ra, Word::overflowing_sub, self.registers[rb], self.registers[rc])
             }
 
-            Opcode::SubI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::SUBI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_overflow(ra, Word::overflowing_sub, self.registers[rb], imm as Word)
             }
 
-            Opcode::Xor(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
+            Opcode::XOR(ra, rb, rc) if Self::is_valid_register_triple_alu(ra, rb, rc) => {
                 self.alu_set(ra, self.registers[rb] ^ self.registers[rc])
             }
 
-            Opcode::XorI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
+            Opcode::XORI(ra, rb, imm) if Self::is_valid_register_couple_alu(ra, rb) => {
                 self.alu_set(ra, self.registers[rb] ^ (imm as Word))
             }
 
@@ -156,7 +155,6 @@ impl Interpreter {
                     && (self.registers[ra] != self.registers[rb] && self.jump(imm as Word) || self.inc_pc()) => {}
 
             // TODO RET: Return from context
-            //Opcode::Ret(ra)
             Opcode::CFEI(imm) if self.stack_pointer_overflow(Word::overflowing_add, imm as Word) => {}
 
             Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) => {}
@@ -167,18 +165,18 @@ impl Interpreter {
             Opcode::LW(ra, rb, imm)
                 if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as RegisterId) => {}
 
-            Opcode::Aloc(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
+            Opcode::ALOC(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
 
-            Opcode::MCl(ra, rb)
+            Opcode::MCL(ra, rb)
                 if Self::is_valid_register_couple(ra, rb) && self.memclear(self.registers[ra], self.registers[rb]) => {}
 
-            Opcode::MClI(ra, imm) if Self::is_valid_register(ra) && self.memclear(self.registers[ra], imm as Word) => {}
+            Opcode::MCLI(ra, imm) if Self::is_valid_register(ra) && self.memclear(self.registers[ra], imm as Word) => {}
 
-            Opcode::MCp(ra, rb, rc)
+            Opcode::MCP(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
                     && self.memcopy(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
 
-            Opcode::MemEq(ra, rb, rc, rd)
+            Opcode::MEQ(ra, rb, rc, rd)
                 if Self::is_valid_register_quadruple_alu(ra, rb, rc, rd)
                     && self.memeq(ra, self.registers[rb], self.registers[rc], self.registers[rd]) => {}
 
@@ -193,7 +191,7 @@ impl Interpreter {
             // TODO BLOCKHASH: Block hash
             // TODO BLOCKHEIGHT: Block height
             // TODO BURN: Burn existing coins
-            Opcode::Call(ra, rb, rc, rd)
+            Opcode::CALL(ra, rb, rc, rd)
                 if Self::is_valid_register_quadruple(ra, rb, rc, rd)
                     && self.call(
                         self.registers[ra],
@@ -207,7 +205,7 @@ impl Interpreter {
             // TODO CODESIZE: Code size
             // TODO COINBASE: Block proposer address
             // TODO LOADCODE: Load code from an external contract
-            Opcode::Log(ra, rb, rc, rd)
+            Opcode::LOG(ra, rb, rc, rd)
                 if Self::is_valid_register_quadruple(ra, rb, rc, rd) && self.log_append(&[ra, rb, rc, rd]) => {}
 
             // TODO MINT: Mint new coins
@@ -219,19 +217,19 @@ impl Interpreter {
             // TODO SWWQ: State write 32 bytes
             // TODO TRANSFER: Transfer coins to contract
             // TODO TRANSFEROUT: Transfer coins to output
-            Opcode::ECRecover(ra, rb, rc)
+            Opcode::ECR(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
                     && self.ecrecover(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
 
-            Opcode::Keccak256(ra, rb, rc)
+            Opcode::K256(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
                     && self.keccak256(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
 
-            Opcode::Sha256(ra, rb, rc)
+            Opcode::S256(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
                     && self.sha256(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
 
-            Opcode::Flag(ra) if Self::is_valid_register(ra) => self.set_flag(self.registers[ra]),
+            Opcode::FLAG(ra) if Self::is_valid_register(ra) => self.set_flag(self.registers[ra]),
 
             _ => result = Err(ExecuteError::OpcodeFailure(op)),
         }

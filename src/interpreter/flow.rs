@@ -1,6 +1,7 @@
 use super::{Call, Color, Interpreter};
 use crate::consts::*;
-use crate::types::Word;
+
+use fuel_asm::Word;
 
 use std::convert::TryFrom;
 use std::io::{Read, Write};

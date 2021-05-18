@@ -1,8 +1,8 @@
 use super::{Interpreter, MemoryRange};
-use crate::bytes;
 use crate::consts::*;
-use crate::transaction::{Color, Id};
-use crate::types::Word;
+
+use fuel_asm::Word;
+use fuel_tx::{bytes, Color, Id};
 
 use std::{io, mem};
 
