@@ -1,6 +1,6 @@
+use crate::bit_funcs::{from_u32_to_u8_recurse, set_bits_in_u32};
 use crate::consts::RegisterId;
 use crate::opcodes::Opcode::*;
-use crate::bit_funcs::{from_u32_to_u8_recurse, set_bits_in_u32};
 
 pub type ImmediateValue = u16;
 pub type OpcodeInstruction = u32;
@@ -154,7 +154,6 @@ impl Programmable for Opcode {
     fn get_imm(v: OpcodeInstruction) -> ImmediateValue {
         return from_u32_to_u8_recurse(v, 20, 16) as ImmediateValue;
     }
-
 
     fn set_rs(v: OpcodeInstruction, o: u8) -> OpcodeInstruction {
         return set_bits_in_u32(v, o as OpcodeInstruction, 14, 6);
@@ -838,9 +837,7 @@ impl Programmable for Opcode {
     fn deser(v: OpcodeInstruction) -> Opcode {
         let op: OpcodeInstruction = from_u32_to_u8_recurse(v, 0, 8);
         match op {
-            0 => {
-                Stop()
-            }
+            0 => Stop(),
             107 => {
                 let rs = Opcode::get_rs(v);
                 Halt(rs)
@@ -937,9 +934,7 @@ impl Programmable for Opcode {
                 let i = Opcode::get_imm(v);
                 Multi(rd, rs, i)
             }
-            27 => {
-                Noop()
-            }
+            27 => Noop(),
             28 => {
                 let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
@@ -1067,9 +1062,7 @@ impl Programmable for Opcode {
                 Free(rd)
             }
 
-            102 => {
-                Savestate()
-            }
+            102 => Savestate(),
             103 => {
                 let rs = Opcode::get_rs(v);
                 Ret(rs)
@@ -1273,7 +1266,7 @@ impl Programmable for Opcode {
                 let rs = Opcode::get_rs(v);
                 Swwx(rd, rs)
             }
-            176=> {
+            176 => {
                 let rd = Opcode::get_rd(v);
                 let rs = Opcode::get_rs(v);
                 let rt = Opcode::get_rt(v);

@@ -1,19 +1,17 @@
+mod bit_funcs;
+mod consts;
 mod interpreter;
 mod opcodes;
-mod consts;
-mod bit_funcs;
 
+use crate::consts::FUEL_MAX_MEMORY_SIZE;
 use interpreter::Program;
 use interpreter::VM;
 use std::thread;
-use crate::consts::{FUEL_MAX_MEMORY_SIZE};
 
 fn run() {
-
     let _p = Program::new();
 
     let mut vm = VM::new();
-
 }
 
 fn main() {
@@ -28,4 +26,3 @@ fn main() {
     // Wait for thread to join
     child.join().unwrap();
 }
-
