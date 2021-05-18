@@ -1,6 +1,3 @@
-#![feature(arbitrary_enum_discriminant)]
-#![feature(is_sorted)]
-
 pub mod consts;
 pub mod crypto;
 pub mod interpreter;

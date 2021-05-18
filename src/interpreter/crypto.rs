@@ -23,8 +23,12 @@ impl Interpreter {
             crypto::secp256k1_sign_compact_recover(&sig, &e)
                 .map(|pk| {
                     self.memory[a as usize..ax as usize].copy_from_slice(&pk);
+                    self.clear_err();
                 })
-                .unwrap_or_else(|_| self.set_err());
+                .unwrap_or_else(|_| {
+                    self.memory[a as usize..ax as usize].copy_from_slice(&[0; 64]);
+                    self.set_err();
+                });
 
             true
         }

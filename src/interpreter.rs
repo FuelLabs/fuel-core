@@ -107,6 +107,10 @@ impl Interpreter {
         self.registers[REG_FLAG] = a;
     }
 
+    pub fn clear_err(&mut self) {
+        self.registers[REG_ERR] = 1;
+    }
+
     pub fn set_err(&mut self) {
         self.registers[REG_ERR] = 1;
     }
