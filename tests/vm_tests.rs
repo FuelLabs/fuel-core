@@ -3,11 +3,11 @@
 mod common;
 
 use crate::common::setup;
-use std::thread;
-use fuel_vm_rust::consts::{FUEL_MAX_MEMORY_SIZE, MemWord};
-use fuel_vm_rust::opcodes::*;
-use fuel_vm_rust::interpreter::*;
 use fuel_vm_rust::bit_funcs::*;
+use fuel_vm_rust::consts::{MemWord, FUEL_MAX_MEMORY_SIZE};
+use fuel_vm_rust::interpreter::*;
+use fuel_vm_rust::opcodes::*;
+use std::thread;
 
 fn local_vm_setup() {
     let mut vm: VM = VM::new();
@@ -40,7 +40,6 @@ pub fn test_vm_start() {
     // Wait for thread to join
     child.join().unwrap();
 }
-
 
 #[test]
 pub fn test_u32_bits() {
@@ -101,7 +100,7 @@ pub fn test_program_create() {
                 assert_eq!(line, 2);
                 println!("Halt({})", rs)
             }
-            _ => println!("Oops")
+            _ => println!("Oops"),
         }
         line += 1;
     }
@@ -136,7 +135,6 @@ fn setup_program_w_pushpop() {
     vm.dump_registers();
 }
 
-
 #[test]
 pub fn test_program_w_pushpop() {
     // Spawn thread with explicit stack size
@@ -148,7 +146,6 @@ pub fn test_program_w_pushpop() {
     // Wait for thread to join
     child.join().unwrap();
 }
-
 
 fn setup_program_w_call() {
     let mut vm: VM = VM::new();
@@ -180,7 +177,6 @@ pub fn test_program_w_call() {
     child.join().unwrap();
 }
 
-
 fn setup_program_w_tx() {
     let mut vm: VM = VM::new();
 
@@ -197,7 +193,7 @@ fn setup_program_w_tx() {
 }
 
 fn build_program_for_abi(p: &mut Program) {
-// function selector from tx
+    // function selector from tx
     // retrieve meta
     p.code.push(Opcode::Pop(0).ser());
 
@@ -232,7 +228,6 @@ pub fn test_program_w_tx() {
     child.join().unwrap();
 }
 
-
 fn setup_program_w_new_tx_format() {
     let mut vm: VM = VM::new();
 
@@ -245,7 +240,7 @@ fn setup_program_w_new_tx_format() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: data_vec.len() as u16,
         data: data_vec,
@@ -254,13 +249,10 @@ fn setup_program_w_new_tx_format() {
 
     handle_ftx(tx, &mut vm);
 
-
     vm.dump_registers();
 }
 
-
 fn build_program_for_abi_new_tx(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -304,7 +296,6 @@ pub fn test_program_w_new_tx_format() {
     child.join().unwrap();
 }
 
-
 #[test]
 pub fn test_program_w_new_tx_format_extended() {
     // Spawn thread with explicit stack size
@@ -316,7 +307,6 @@ pub fn test_program_w_new_tx_format_extended() {
     // Wait for thread to join
     child.join().unwrap();
 }
-
 
 fn setup_program_w_new_tx_format_extended() {
     let mut vm: VM = VM::new();
@@ -350,7 +340,7 @@ fn setup_program_w_new_tx_format_extended() {
     let mut tx_input2 = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [0; 32]
+            contract_id: [0; 32],
         }),
         data_length: tx_data.len() as u16,
         data: tx_data,
@@ -365,9 +355,7 @@ fn setup_program_w_new_tx_format_extended() {
     vm.dump_registers();
 }
 
-
 fn build_program_for_keccak(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -388,7 +376,6 @@ fn build_program_for_keccak(p: &mut Program) {
     p.code.push(Opcode::Stop().ser());
 }
 
-
 fn setup_program_w_keccak() {
     let mut vm: VM = VM::new();
 
@@ -405,7 +392,7 @@ fn setup_program_w_keccak() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: 0,
         data: Vec::new(),
@@ -416,7 +403,6 @@ fn setup_program_w_keccak() {
 
     vm.dump_registers();
 }
-
 
 #[test]
 pub fn test_program_w_keccak() {
@@ -430,9 +416,7 @@ pub fn test_program_w_keccak() {
     child.join().unwrap();
 }
 
-
 fn build_program_for_sha256(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -453,7 +437,6 @@ fn build_program_for_sha256(p: &mut Program) {
     p.code.push(Opcode::Stop().ser());
 }
 
-
 fn setup_program_w_sha256() {
     let mut vm: VM = VM::new();
 
@@ -470,7 +453,7 @@ fn setup_program_w_sha256() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: 0,
         data: Vec::new(),
@@ -481,7 +464,6 @@ fn setup_program_w_sha256() {
 
     vm.dump_registers();
 }
-
 
 #[test]
 pub fn test_program_w_sha256() {
@@ -495,9 +477,7 @@ pub fn test_program_w_sha256() {
     child.join().unwrap();
 }
 
-
 fn build_program_for_ecrecover(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -518,7 +498,6 @@ fn build_program_for_ecrecover(p: &mut Program) {
     p.code.push(Opcode::Stop().ser());
 }
 
-
 fn setup_program_w_ecrecover() {
     let mut vm: VM = VM::new();
 
@@ -535,7 +514,7 @@ fn setup_program_w_ecrecover() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: 0,
         data: Vec::new(),
@@ -546,7 +525,6 @@ fn setup_program_w_ecrecover() {
 
     vm.dump_registers();
 }
-
 
 #[test]
 pub fn test_program_w_ecrecover() {
@@ -561,7 +539,6 @@ pub fn test_program_w_ecrecover() {
 }
 
 fn build_program_for_storage(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -581,7 +558,6 @@ fn build_program_for_storage(p: &mut Program) {
     p.code.push(Opcode::Stop().ser());
 }
 
-
 fn setup_program_w_storage() {
     let mut vm: VM = VM::new();
 
@@ -598,7 +574,7 @@ fn setup_program_w_storage() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: 0,
         data: Vec::new(),
@@ -615,7 +591,6 @@ fn setup_program_w_storage() {
     }
 }
 
-
 #[test]
 pub fn test_program_w_storage() {
     // Spawn thread with explicit stack size
@@ -628,9 +603,7 @@ pub fn test_program_w_storage() {
     child.join().unwrap();
 }
 
-
 fn build_program_for_mem(p: &mut Program) {
-
     // function selector from tx
 
     // 0
@@ -648,7 +621,6 @@ fn build_program_for_mem(p: &mut Program) {
     p.code.push(Opcode::Stop().ser());
 }
 
-
 fn setup_program_w_mem() {
     let mut vm: VM = VM::new();
 
@@ -665,7 +637,7 @@ fn setup_program_w_mem() {
     let mut tx_input = FInput {
         utxo_id: [0; 32],
         input_type: FInputTypeEnum::Contract(FInputContract {
-            contract_id: [1; 32]
+            contract_id: [1; 32],
         }),
         data_length: 0,
         data: Vec::new(),
@@ -681,7 +653,6 @@ fn setup_program_w_mem() {
         println!("k: {}, v: {}", k, v);
     }
 }
-
 
 #[test]
 pub fn test_program_w_mem() {
@@ -866,7 +837,6 @@ pub fn test_op_gt() {
     assert_eq!(i, 1);
 }
 
-
 #[test]
 pub fn test_op_mod() {
     let mut vm: VM = VM::new();
@@ -895,7 +865,6 @@ pub fn test_op_modi() {
     let i: MemWord = vm.get_register_value(2);
     assert_eq!(i, 1);
 }
-
 
 #[test]
 pub fn test_op_mult() {

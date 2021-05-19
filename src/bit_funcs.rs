@@ -8,11 +8,8 @@ pub fn set_bits_in_u32(v: u32, toset: u32, left: u8, len: u8) -> u32 {
     // need to clear bits with an AND first
     let new_v = !(((1 << len) - 1) << (32 - left - len)) & v;
     // then set bits with an OR
-    new_v | (
-        toset << (32 - left - len)
-    )
+    new_v | (toset << (32 - left - len))
 }
-
 
 pub fn from_u32_to_u8_recurse(v: u32, left: u8, len: u8) -> u32 {
     if (left + len) > 32 {
@@ -24,12 +21,11 @@ pub fn from_u32_to_u8_recurse(v: u32, left: u8, len: u8) -> u32 {
         // to prevent overflow on left-shift below
         return v;
     }
-    (
-        v >> (32 - left - len)
-    ) & (
-        // can overflow when len = 64
-        (1 << len) - 1
-    )
+    (v >> (32 - left - len))
+        & (
+            // can overflow when len = 64
+            (1 << len) - 1
+        )
 }
 
 pub fn set_bits_in_u64(v: u64, toset: u64, left: u8, len: u8) -> u64 {
@@ -42,9 +38,7 @@ pub fn set_bits_in_u64(v: u64, toset: u64, left: u8, len: u8) -> u64 {
     // need to clear bits with an AND first
     let new_v = !(((1 << len) - 1) << (64 - left - len)) & v;
     // then set bits with an OR
-    new_v | (
-        toset << (64 - left - len)
-    )
+    new_v | (toset << (64 - left - len))
 }
 
 pub fn from_u64_to_u8(v: u64, left: u8, len: u8) -> u64 {
@@ -59,12 +53,11 @@ pub fn from_u64_to_u8(v: u64, left: u8, len: u8) -> u64 {
         // to prevent overflow on left-shift below
         return v;
     }
-    (
-        v >> (64 - left - local_len)
-    ) & (
-        // can overflow when len = 64
-        (1 << local_len) - 1
-    )
+    (v >> (64 - left - local_len))
+        & (
+            // can overflow when len = 64
+            (1 << local_len) - 1
+        )
 }
 
 pub fn from_u64_to_u8_recurse(v: u64, left: u8, len: u8) -> u64 {
@@ -77,12 +70,11 @@ pub fn from_u64_to_u8_recurse(v: u64, left: u8, len: u8) -> u64 {
         // to prevent overflow on left-shift below
         return v;
     }
-    (
-        v >> (64 - left - len)
-    ) & (
-        // can overflow when len = 64
-        (1 << len) - 1
-    )
+    (v >> (64 - left - len))
+        & (
+            // can overflow when len = 64
+            (1 << len) - 1
+        )
 }
 
 pub fn transform_from_u8_to_u32(input: &Vec<u8>) -> Vec<u32> {
@@ -107,7 +99,6 @@ pub fn transform_from_u8_to_u32(input: &Vec<u8>) -> Vec<u32> {
     out
 }
 
-
 pub fn transform_from_u32_to_u8(input: &Vec<u32>) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     for b in 0..input.len() {
@@ -127,7 +118,6 @@ pub fn transform_from_u32_to_u64(input: &Vec<u32>) -> Vec<u64> {
     }
     let mut out: Vec<u64> = Vec::new();
     for b in 0..input.len() / 2 {
-
         let mut op: u64 = (input[(b * 2) as usize] as u64) << 32 as u64;
         op = op | input[((b * 2) + 1) as usize] as u64;
         out.push(op);

@@ -1,15 +1,17 @@
-use std::vec::Vec;
+use crate::bit_funcs::{
+    transform_from_u64_to_u8, transform_from_u8_to_u32, transform_from_u8_to_u64,
+};
 use crate::consts::*;
-use crate::opcodes::{Programmable, Opcode, OpcodeInstruction};
-use std::ops::{BitAnd, Div, BitOr, Shl, Shr, BitXor, Rem};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::collections::HashMap;
-use crate::bit_funcs::{transform_from_u8_to_u32, transform_from_u64_to_u8, transform_from_u8_to_u64};
+use crate::opcodes::{Opcode, OpcodeInstruction, Programmable};
 use keccak_hash::keccak;
-use tiny_keccak::{Sha3, Hasher as sha3hasher};
 use sp_io::crypto;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::hash::{Hash, Hasher};
+use std::ops::{BitAnd, BitOr, BitXor, Div, Rem, Shl, Shr};
+use std::vec::Vec;
+use tiny_keccak::{Hasher as sha3hasher, Sha3};
 
 #[derive(Clone)]
 pub struct VM {
@@ -30,7 +32,6 @@ pub struct VM {
 
 impl VM {
     pub fn new() -> VM {
-
         // some initialization code
         let mut new_callframes: Vec<CallFrame> = Vec::new();
         new_callframes.push(CallFrame::new());
@@ -178,11 +179,18 @@ impl VM {
 
             new_frame.args.clear();
             if num_params <= new_frame.stack.len() as u8 {
-                let (_, right) = &new_frame.stack.split_at(new_frame.stack.len() - num_params as usize);
+                let (_, right) = &new_frame
+                    .stack
+                    .split_at(new_frame.stack.len() - num_params as usize);
                 new_frame.stack = Vec::from(*right);
 
                 for i in 0..num_params {
-                    new_frame.args.push(*current_stack_frame.stack.get(current_stack_frame.stack.len() - 1 - i as usize).unwrap());
+                    new_frame.args.push(
+                        *current_stack_frame
+                            .stack
+                            .get(current_stack_frame.stack.len() - 1 - i as usize)
+                            .unwrap(),
+                    );
                 }
             } else {
                 panic!("Invalid number of args found for call!");
@@ -198,7 +206,6 @@ impl VM {
     pub fn release_frame(&mut self) -> Option<CallFrame> {
         self.callframes.pop()
     }
-
 
     pub fn run(&mut self) {
         loop {
@@ -658,7 +665,9 @@ impl VM {
                 vm.release_frame();
                 if c2 {
                     if let Some(prev_frame) = vm.get_framestack().last_mut() {
-                        prev_frame.address_program_mapping.insert(p.code.pop().unwrap() as u64, p);
+                        prev_frame
+                            .address_program_mapping
+                            .insert(p.code.pop().unwrap() as u64, p);
                         prev_frame.address_program_mapping.extend(code_mapping);
                     }
                 }
@@ -822,7 +831,9 @@ impl VM {
                 let out_size = vm.get_memory(rs + 6);
 
                 let mut p: Program = Program::new();
-                if let Some(to_contract_code) = vm.get_top_frame().unwrap().address_program_mapping.get(&to) {
+                if let Some(to_contract_code) =
+                    vm.get_top_frame().unwrap().address_program_mapping.get(&to)
+                {
                     p = to_contract_code.clone();
                 }
                 vm.create_and_push_new_frame(0, in_size as u8);
@@ -863,7 +874,8 @@ impl VM {
                         panic!("Create2: insufficient stack length");
                     }
                     for i in rs_val as u16..imm {
-                        p.code.push(*top_frame.stack.get(len - 1 - i as usize).unwrap() as u32);
+                        p.code
+                            .push(*top_frame.stack.get(len - 1 - i as usize).unwrap() as u32);
                     }
                 }
                 vm.create_and_push_new_frame(0, (rs_val - 1) as u8);
@@ -882,11 +894,16 @@ impl VM {
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
-                let keccak_input: Vec<u8> = transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
+                let keccak_input: Vec<u8> =
+                    transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
                 let h256_result = keccak(keccak_input);
-                let to_place_in_mem = transform_from_u8_to_u64(&h256_result.to_fixed_bytes().to_vec());
+                let to_place_in_mem =
+                    transform_from_u8_to_u64(&h256_result.to_fixed_bytes().to_vec());
                 for to_loc_index in 0..to_place_in_mem.len() {
-                    vm.set_memory(to_loc_index as u8 + rd_val as u8, *to_place_in_mem.get(to_loc_index).unwrap());
+                    vm.set_memory(
+                        to_loc_index as u8 + rd_val as u8,
+                        *to_place_in_mem.get(to_loc_index).unwrap(),
+                    );
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -896,14 +913,18 @@ impl VM {
                 let rd_val = vm.get_register_value(rd);
                 let rs_val = vm.get_register_value(rs);
                 let rt_val = vm.get_register_value(rt);
-                let input: Vec<u8> = transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
+                let input: Vec<u8> =
+                    transform_from_u64_to_u8(&vm.memory[rs_val as usize..rt_val as usize].to_vec());
                 let mut sha3 = Sha3::v256();
                 sha3.update(input.as_slice());
                 let mut output = [0; 32];
                 sha3.finalize(&mut output);
                 let to_place_in_mem = transform_from_u8_to_u64(&output.to_vec());
                 for to_loc_index in 0..to_place_in_mem.len() {
-                    vm.set_memory(to_loc_index as u8 + rd_val as u8, *to_place_in_mem.get(to_loc_index).unwrap());
+                    vm.set_memory(
+                        to_loc_index as u8 + rd_val as u8,
+                        *to_place_in_mem.get(to_loc_index).unwrap(),
+                    );
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -915,10 +936,14 @@ impl VM {
                 let rt_val = vm.get_register_value(rt);
 
                 let mut sig: [u8; 65] = [0; 65];
-                let mut msg:[u8; 32] = [0; 32];
+                let mut msg: [u8; 32] = [0; 32];
 
-                let sig_a = transform_from_u64_to_u8(&vm.memory[rs_val as usize..(rs_val + 9) as usize].to_vec());
-                let msg_a = transform_from_u64_to_u8(&vm.memory[rs_val as usize..(rt_val + 4) as usize].to_vec());
+                let sig_a = transform_from_u64_to_u8(
+                    &vm.memory[rs_val as usize..(rs_val + 9) as usize].to_vec(),
+                );
+                let msg_a = transform_from_u64_to_u8(
+                    &vm.memory[rs_val as usize..(rt_val + 4) as usize].to_vec(),
+                );
 
                 sig.copy_from_slice(&sig_a.as_slice()[0..65]);
                 msg.copy_from_slice(&msg_a.as_slice()[0..32]);
@@ -980,7 +1005,11 @@ impl VM {
                     FOutputTypeEnum::FOutputCoin { to, amount } => {
                         vm.set_register_value(rd, transform_from_u8_to_u64(&to.to_vec())[0]);
                     }
-                    FOutputTypeEnum::FOutputContract { input_index, amount_witness_index, state_witness_index } => {}
+                    FOutputTypeEnum::FOutputContract {
+                        input_index,
+                        amount_witness_index,
+                        state_witness_index,
+                    } => {}
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -991,7 +1020,11 @@ impl VM {
                     FOutputTypeEnum::FOutputCoin { to, amount } => {
                         vm.set_register_value(rd, amount);
                     }
-                    FOutputTypeEnum::FOutputContract { input_index, amount_witness_index, state_witness_index } => {}
+                    FOutputTypeEnum::FOutputContract {
+                        input_index,
+                        amount_witness_index,
+                        state_witness_index,
+                    } => {}
                 }
 
                 let pc = vm.get_pc();
@@ -1045,7 +1078,7 @@ impl VM {
                 vm.gas_used += ru_val;
 
                 let mut cmp: bool = true;
-                for x in 0 .. ru_val {
+                for x in 0..ru_val {
                     let i_0 = vm.get_memory(rs_val as u8 + x as u8);
                     let i_1 = vm.get_memory(rt_val as u8 + x as u8);
                     if i_0 != i_1 {
@@ -1064,8 +1097,11 @@ impl VM {
 
                 vm.gas_used += rt_val;
 
-                for x in 0 .. rt_val {
-                    vm.set_memory(rd_val as u8 + x as u8, vm.get_memory(rs_val as u8 + x as u8))
+                for x in 0..rt_val {
+                    vm.set_memory(
+                        rd_val as u8 + x as u8,
+                        vm.get_memory(rs_val as u8 + x as u8),
+                    )
                 }
                 let pc = vm.get_pc();
                 vm.set_pc(pc + 1);
@@ -1175,9 +1211,7 @@ trait FuelStore {
 impl FuelStore for HashMap<u64, u64> {
     fn get_word(&self, k: u64) -> u8 {
         match self.get(&k) {
-            None => {
-                0
-            }
+            None => 0,
             Some(v) => {
                 // let x: &u64 = v.unwrap();
                 transform_from_u64_to_u8(&[*v].to_vec())[0]
@@ -1187,12 +1221,8 @@ impl FuelStore for HashMap<u64, u64> {
 
     fn get_word_x(&self, k: u64) -> u64 {
         match self.get(&k) {
-            None => {
-                0
-            }
-            Some(v) => {
-                *v
-            }
+            None => 0,
+            Some(v) => *v,
         }
     }
 
@@ -1454,17 +1484,14 @@ impl FuelTx {
     }
 }
 
-
 #[derive(Clone, Default, Hash, Debug)]
 pub struct Program {
-    pub code: Vec<OpcodeInstruction>
+    pub code: Vec<OpcodeInstruction>,
 }
 
 impl Program {
     pub fn new() -> Program {
-        Program {
-            code: Vec::new()
-        }
+        Program { code: Vec::new() }
     }
 }
 
