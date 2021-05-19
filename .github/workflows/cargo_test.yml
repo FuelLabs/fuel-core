@@ -30,7 +30,7 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: 1.50.0
+        toolchain: nightly
         override: true
 
     - name: Install rustfmt
