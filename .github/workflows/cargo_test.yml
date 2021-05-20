@@ -19,10 +19,18 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
+    - name: Setup SSH agent
+      uses: webfactory/ssh-agent@v0.5.2
+      with:
+        ssh-private-key: |
+          ${{ secrets.PRIVATE_KEY_FUEL_ASM }}
+          ${{ secrets.PRIVATE_KEY_FUEL_TX }}
+
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: 1.50.0
+        profile: minimal
+        toolchain: nightly
         override: true
 
     - name: Install rustfmt
