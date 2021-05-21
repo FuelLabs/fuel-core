@@ -1,3 +1,5 @@
+use fuel_tx::ContractAddress;
+
 /* MEMORY TYPES */
 
 /// Maximum memory access size, in bytes.
@@ -77,3 +79,5 @@ pub const FUEL_MAX_PROGRAM_SIZE: u8 = 16;
 // register-based addressing for 32MB of memory in bytecode-land
 // used for serder
 pub const VM_REGISTER_WIDTH: u8 = 6;
+
+pub const VM_CONTRACT_ID_BASE: ContractAddress = [0xab; 32];

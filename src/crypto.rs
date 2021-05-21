@@ -1,3 +1,4 @@
+use fuel_tx::Hash;
 use secp256k1::recovery::{RecoverableSignature, RecoveryId};
 use secp256k1::Error as Secp256k1Error;
 use secp256k1::{Message, Secp256k1, SecretKey};
@@ -44,4 +45,9 @@ pub fn hash(data: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(data);
     hasher.finalize().into()
+}
+
+pub fn merkle_root(data: &[u8]) -> Hash {
+    // TODO implement merkle root
+    hash(data)
 }

@@ -2,23 +2,23 @@ use super::{Interpreter, MemoryRange};
 use crate::consts::*;
 
 use fuel_asm::Word;
-use fuel_tx::{bytes, Color, Id};
+use fuel_tx::{bytes, Address, Color};
 
 use std::{io, mem};
 
-const ID_SIZE: usize = mem::size_of::<Id>();
+const ADDRESS_SIZE: usize = mem::size_of::<Address>();
 const COLOR_SIZE: usize = mem::size_of::<Color>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Call {
-    to: Id,
+    to: Address,
     inputs: Vec<MemoryRange>,
     outputs: Vec<MemoryRange>,
 }
 
 impl Call {
-    pub const fn new(to: Id, inputs: Vec<MemoryRange>, outputs: Vec<MemoryRange>) -> Self {
+    pub const fn new(to: Address, inputs: Vec<MemoryRange>, outputs: Vec<MemoryRange>) -> Self {
         Self { to, inputs, outputs }
     }
 
@@ -28,7 +28,7 @@ impl Call {
             .fold(true, |acc, range| acc && vm.has_ownership_range(range))
     }
 
-    pub const fn to(&self) -> &Id {
+    pub const fn to(&self) -> &Address {
         &self.to
     }
 
@@ -40,14 +40,14 @@ impl Call {
         self.outputs.as_slice()
     }
 
-    pub fn into_inner(self) -> (Id, Vec<MemoryRange>, Vec<MemoryRange>) {
+    pub fn into_inner(self) -> (Address, Vec<MemoryRange>, Vec<MemoryRange>) {
         (self.to, self.inputs, self.outputs)
     }
 }
 
 impl io::Read for Call {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = ID_SIZE + 2 * WORD_SIZE * (1 + self.outputs.len() + self.inputs.len());
+        let n = ADDRESS_SIZE + 2 * WORD_SIZE * (1 + self.outputs.len() + self.inputs.len());
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -67,7 +67,7 @@ impl io::Read for Call {
 
 impl io::Write for Call {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut n = ID_SIZE + 2 * WORD_SIZE;
+        let mut n = ADDRESS_SIZE + 2 * WORD_SIZE;
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -115,7 +115,7 @@ impl io::Write for Call {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CallFrame {
-    to: Id,
+    to: Address,
     color: Color,
     registers: [Word; VM_REGISTER_COUNT],
     inputs: Vec<MemoryRange>,
@@ -125,7 +125,7 @@ pub struct CallFrame {
 
 impl CallFrame {
     pub const fn new(
-        to: Id,
+        to: Address,
         color: Color,
         registers: [Word; VM_REGISTER_COUNT],
         inputs: Vec<MemoryRange>,
@@ -149,8 +149,9 @@ impl CallFrame {
 
 impl io::Read for CallFrame {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut n =
-            ID_SIZE + COLOR_SIZE + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
+        let mut n = ADDRESS_SIZE
+            + COLOR_SIZE
+            + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -180,8 +181,9 @@ impl io::Read for CallFrame {
 
 impl io::Write for CallFrame {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut n =
-            ID_SIZE + COLOR_SIZE + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
+        let mut n = ADDRESS_SIZE
+            + COLOR_SIZE
+            + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
         if buf.len() < n {
             return Err(bytes::eof());
         }

@@ -3,12 +3,15 @@ use crate::crypto::hash;
 
 use fuel_asm::{RegisterId, Word};
 use fuel_tx::consts::*;
-use fuel_tx::{Color, Input, Transaction, ValidationError};
+use fuel_tx::{Color, ContractAddress, Input, Output, Transaction, ValidationError};
 
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::io::Read;
 use std::mem;
 
 mod alu;
+mod contract;
 mod crypto;
 mod error;
 mod execution;
@@ -17,6 +20,7 @@ mod frame;
 mod log;
 mod memory;
 
+pub use contract::Contract;
 pub use error::ExecuteError;
 pub use frame::{Call, CallFrame};
 pub use log::LogEvent;
@@ -30,6 +34,7 @@ pub struct Interpreter {
     log: Vec<LogEvent>,
     // TODO review all opcodes that mutates the tx in the stack and keep this one sync
     tx: Transaction,
+    contracts: HashMap<ContractAddress, Contract>,
 }
 
 impl Default for Interpreter {
@@ -40,15 +45,14 @@ impl Default for Interpreter {
             frames: vec![],
             log: vec![],
             tx: Transaction::default(),
+            contracts: HashMap::new(),
         }
     }
 }
 
 impl Interpreter {
     pub fn init(&mut self, mut tx: Transaction) -> Result<(), ValidationError> {
-        // TODO define block height fn
-        let block_height = 1000;
-        tx.validate(block_height)?;
+        tx.validate(self.block_height() as Word)?;
 
         self.frames.clear();
         self.log.clear();
@@ -90,6 +94,59 @@ impl Interpreter {
 
         self.tx = tx;
 
+        Ok(())
+    }
+
+    pub fn run(&mut self) -> Result<(), ExecuteError> {
+        let tx = &self.tx;
+
+        match tx {
+            Transaction::Create {
+                salt, static_contracts, ..
+            } => {
+                if static_contracts.iter().any(|id| !self.check_contract_exists(id)) {
+                    Err(ExecuteError::TransactionCreateStaticContractNotFound)?
+                }
+
+                let contract = Contract::try_from(tx)?;
+                let id = contract.address(salt);
+                if !tx.outputs().iter().any(|output| match output {
+                    Output::ContractCreated { contract_id } if contract_id == &id => true,
+                    _ => false,
+                }) {
+                    Err(ExecuteError::TransactionCreateIdNotInTx)?;
+                }
+
+                self.contracts.insert(id, contract);
+
+                // Verify predicates
+                // https://github.com/FuelLabs/fuel-specs/blob/master/specs/protocol/tx_validity.md#predicate-verification
+                let offsets: Vec<usize> = tx
+                    .inputs()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, input)| match input {
+                        Input::Coin { predicate, .. } if !predicate.is_empty() => tx.input_coin_data_offset(i),
+                        _ => None,
+                    })
+                    .collect();
+
+                for offset in offsets {
+                    self.registers[REG_PC] = offset as Word;
+                    self.registers[REG_IS] = offset as Word;
+
+                    self.verify_predicate()?;
+                }
+
+                Ok(())
+            }
+
+            _ => unimplemented!(),
+        }
+    }
+
+    pub fn verify_predicate(&mut self) -> Result<(), ExecuteError> {
+        // TODO
         Ok(())
     }
 

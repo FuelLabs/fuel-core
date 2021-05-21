@@ -14,8 +14,8 @@ sha2 = "0.9"
 sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}
 tracing = "0.1"
-fuel-asm = {git="https://github.com/FuelLabs/fuel-asm"}
-fuel-tx = {git="https://github.com/FuelLabs/fuel-tx"}
+fuel-asm = {git="ssh://git@github.com/FuelLabs/fuel-asm.git"}
+fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git"}
 
 # Bin dependencies
 tracing-subscriber = {version="0.2", optional=true}

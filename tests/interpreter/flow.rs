@@ -42,11 +42,11 @@ fn call() {
     vm.execute(Opcode::ADDI(0x20, REG_ZERO, alloc as Immediate12)).unwrap();
     vm.execute(Opcode::ALOC(0x20)).unwrap();
 
-    // Transaction script starts after 1 byte and 8 words
-    let code_address = vm.tx_stack() + 65;
+    // Transaction script starts after 9 words
+    let code_address = vm.tx_stack() + 72;
     assert_eq!(code.as_slice(), &vm.memory()[code_address..code_address + code.len()]);
 
-    let code_data_address = vm.tx_stack() + 65 + code.len();
+    let code_data_address = vm.tx_stack() + 72 + code.len();
     assert_eq!(
         code_data.as_slice(),
         &vm.memory()[code_data_address..code_data_address + code_data.len()]
