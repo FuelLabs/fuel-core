@@ -1,13 +1,13 @@
 use crate::consts::*;
-use crate::crypto::hash;
 
-use fuel_asm::{RegisterId, Word};
+use fuel_asm::{Opcode, RegisterId, Word};
+use fuel_tx::bytes::{SerializableVec, SizedBytes};
 use fuel_tx::consts::*;
-use fuel_tx::{Color, ContractAddress, Input, Output, Transaction, ValidationError};
+use fuel_tx::{Color, ContractAddress, Hash, Input, Output, Transaction};
+use itertools::Itertools;
 
 use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::io::Read;
+use std::convert::{TryFrom, TryInto};
 use std::mem;
 
 mod alu;
@@ -26,6 +26,10 @@ pub use frame::{Call, CallFrame};
 pub use log::LogEvent;
 pub use memory::MemoryRange;
 
+const COLOR_SIZE: usize = mem::size_of::<Color>();
+const HASH_SIZE: usize = mem::size_of::<Hash>();
+const WORD_SIZE: usize = mem::size_of::<Word>();
+
 #[derive(Debug, Clone)]
 pub struct Interpreter {
     registers: [Word; VM_REGISTER_COUNT],
@@ -35,62 +39,75 @@ pub struct Interpreter {
     // TODO review all opcodes that mutates the tx in the stack and keep this one sync
     tx: Transaction,
     contracts: HashMap<ContractAddress, Contract>,
+    color_balances: HashMap<Color, Word>,
 }
 
 impl Default for Interpreter {
     fn default() -> Self {
         Self {
             registers: [0; VM_REGISTER_COUNT],
-            memory: vec![],
+            memory: vec![0; VM_MAX_RAM as usize],
             frames: vec![],
             log: vec![],
             tx: Transaction::default(),
             contracts: HashMap::new(),
+            color_balances: HashMap::new(),
         }
     }
 }
 
 impl Interpreter {
-    pub fn init(&mut self, mut tx: Transaction) -> Result<(), ValidationError> {
+    pub fn init(&mut self, tx: Transaction) -> Result<(), ExecuteError> {
+        self._init(tx, false)
+    }
+
+    fn _init(&mut self, mut tx: Transaction, predicate: bool) -> Result<(), ExecuteError> {
         tx.validate(self.block_height() as Word)?;
 
         self.frames.clear();
         self.log.clear();
 
-        self.registers.copy_from_slice(&[0; VM_REGISTER_COUNT]);
-        self.memory = vec![0; VM_MAX_RAM as usize];
+        // Optimized for memset
+        self.registers.iter_mut().for_each(|r| *r = 0);
 
         self.registers[REG_ONE] = 1;
         self.registers[REG_SSP] = 0;
 
-        // TODO push pairs of colors to stack
-        let mut ssp = 0;
-        for i in 0..(MAX_INPUTS as usize) {
-            let (color, balance) = match tx.inputs().get(i) {
-                Some(Input::Coin { color, .. }) => (color, 0),
-                _ => (&[0; mem::size_of::<Color>()], 0u64),
-            };
-
-            self.memory[ssp..color.len() + ssp].copy_from_slice(color);
-            self.memory[ssp + color.len()..color.len() + 8 + ssp].copy_from_slice(&balance.to_be_bytes());
-            ssp += color.len() + 8;
-        }
-
-        let tx_stack = self.tx_stack();
-
-        // Push tx len and bytes to stack
-        let tx_len = tx.read(&mut self.memory[tx_stack..]).unwrap_or_else(|_| unreachable!());
-        let tx_hash = hash(&self.memory[tx_stack..tx_stack + tx_len]);
-        self.memory[32..40].copy_from_slice(&(tx_len as u64).to_be_bytes());
-        self.memory[..32].copy_from_slice(&tx_hash);
-
-        // TODO set current stack pointer
-        self.registers[REG_SSP] = tx_stack as Word + tx_len as Word;
-        self.registers[REG_SP] = self.registers[REG_SSP];
-
         // Set heap area
         self.registers[REG_FP] = VM_MAX_RAM - 1;
         self.registers[REG_HP] = self.registers[REG_FP];
+
+        self.push_stack(&tx.id())?;
+
+        let zeroes = &[0; MAX_INPUTS as usize * (COLOR_SIZE + WORD_SIZE)];
+        let mut ssp = self.registers[REG_SSP] as usize;
+
+        self.push_stack(zeroes)?;
+        if !predicate {
+            tx.inputs()
+                .iter()
+                .filter_map(|input| match input {
+                    Input::Coin { color, .. } => Some(color),
+                    _ => None,
+                })
+                .sorted()
+                .take(MAX_INPUTS as usize)
+                .for_each(|color| {
+                    let balance = self.color_balance(color);
+
+                    self.memory[ssp..ssp + COLOR_SIZE].copy_from_slice(color);
+                    ssp += COLOR_SIZE;
+
+                    self.memory[ssp..ssp + WORD_SIZE].copy_from_slice(&balance.to_be_bytes());
+                    ssp += WORD_SIZE;
+                });
+        }
+
+        let tx_size = tx.serialized_size() as Word;
+        self.push_stack(&tx_size.to_be_bytes())?;
+        self.push_stack(tx.to_bytes().as_slice())?;
+
+        self.registers[REG_SP] = self.registers[REG_SSP];
 
         self.tx = tx;
 
@@ -121,22 +138,23 @@ impl Interpreter {
 
                 // Verify predicates
                 // https://github.com/FuelLabs/fuel-specs/blob/master/specs/protocol/tx_validity.md#predicate-verification
-                let offsets: Vec<usize> = tx
+                let predicates: Vec<MemoryRange> = tx
                     .inputs()
                     .iter()
                     .enumerate()
                     .filter_map(|(i, input)| match input {
-                        Input::Coin { predicate, .. } if !predicate.is_empty() => tx.input_coin_data_offset(i),
+                        Input::Coin { predicate, .. } if !predicate.is_empty() => tx
+                            .input_coin_predicate_offset(i)
+                            .map(|ofs| (ofs as Word, predicate.len() as Word)),
                         _ => None,
                     })
+                    .map(|(ofs, len)| (ofs + Self::tx_mem_address() as Word, len))
+                    .map(|(ofs, len)| MemoryRange::new(ofs, len))
                     .collect();
 
-                for offset in offsets {
-                    self.registers[REG_PC] = offset as Word;
-                    self.registers[REG_IS] = offset as Word;
-
-                    self.verify_predicate()?;
-                }
+                predicates
+                    .iter()
+                    .try_for_each(|predicate| self.verify_predicate(predicate))?;
 
                 Ok(())
             }
@@ -145,14 +163,63 @@ impl Interpreter {
         }
     }
 
-    pub fn verify_predicate(&mut self) -> Result<(), ExecuteError> {
-        // TODO
-        Ok(())
+    pub fn verify_predicate(&mut self, predicate: &MemoryRange) -> Result<(), ExecuteError> {
+        // TODO initialize VM with tx prepared for sign
+        let (start, end) = predicate.boundaries(&self);
+
+        self.registers[REG_PC] = start;
+        self.registers[REG_IS] = start;
+
+        // TODO optimize
+        loop {
+            let pc = self.registers[REG_PC];
+            let op = self.memory[pc as usize..]
+                .chunks_exact(4)
+                .next()
+                .ok_or(ExecuteError::PredicateOverflow)?;
+            let op = u32::from_be_bytes(op.try_into().expect("Unreachable error protected by chunks_exact(4)"));
+            let op = Opcode::from(op);
+
+            if let Opcode::RET(ra) = op {
+                return self
+                    .registers
+                    .get(ra)
+                    .ok_or(ExecuteError::OpcodeFailure(op))
+                    .and_then(|ret| {
+                        if ret == &1 {
+                            Ok(())
+                        } else {
+                            Err(ExecuteError::PredicateFailure)
+                        }
+                    });
+            }
+
+            self.execute(op)?;
+
+            if self.registers[REG_PC] < pc || self.registers[REG_PC] >= end {
+                return Err(ExecuteError::PredicateOverflow);
+            }
+        }
     }
 
-    pub const fn tx_stack(&self) -> usize {
-        // TODO update tx address in stack according to specs
-        40
+    pub fn push_stack(&mut self, data: &[u8]) -> Result<(), ExecuteError> {
+        let (ssp, overflow) = self.registers[REG_SSP].overflowing_add(data.len() as Word);
+
+        if overflow || ssp > self.registers[REG_FP] {
+            Err(ExecuteError::StackOverflow)
+        } else {
+            self.memory[self.registers[REG_SSP] as usize..ssp as usize].copy_from_slice(data);
+            self.registers[REG_SSP] = ssp;
+
+            Ok(())
+        }
+    }
+
+    pub const fn tx_mem_address() -> usize {
+        HASH_SIZE // Tx ID
+            + WORD_SIZE // Tx size
+            + MAX_INPUTS as usize * (COLOR_SIZE + WORD_SIZE) // Color/Balance
+                                                             // coin input pairs
     }
 
     pub const fn block_height(&self) -> u32 {
@@ -160,12 +227,16 @@ impl Interpreter {
         u32::MAX >> 1
     }
 
+    pub fn color_balance(&self, color: &Color) -> Word {
+        self.color_balances.get(color).copied().unwrap_or(0)
+    }
+
     pub fn set_flag(&mut self, a: Word) {
         self.registers[REG_FLAG] = a;
     }
 
     pub fn clear_err(&mut self) {
-        self.registers[REG_ERR] = 1;
+        self.registers[REG_ERR] = 0;
     }
 
     pub fn set_err(&mut self) {

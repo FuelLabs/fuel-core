@@ -9,6 +9,9 @@ pub enum ExecuteError {
     ValidationError(ValidationError),
     TransactionCreateStaticContractNotFound,
     TransactionCreateIdNotInTx,
+    StackOverflow,
+    PredicateOverflow,
+    PredicateFailure,
 }
 
 impl fmt::Display for ExecuteError {

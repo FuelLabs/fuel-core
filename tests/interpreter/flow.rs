@@ -3,6 +3,9 @@ use fuel_vm_rust::consts::*;
 use fuel_vm_rust::prelude::*;
 
 use std::io::{Read, Write};
+use std::mem;
+
+const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[test]
 fn call() {
@@ -42,11 +45,20 @@ fn call() {
     vm.execute(Opcode::ADDI(0x20, REG_ZERO, alloc as Immediate12)).unwrap();
     vm.execute(Opcode::ALOC(0x20)).unwrap();
 
-    // Transaction script starts after 9 words
-    let code_address = vm.tx_stack() + 72;
+    const TX_SCRIPT: usize = WORD_SIZE // Identifier
+        + WORD_SIZE // Gas price
+        + WORD_SIZE // Gas limit
+        + WORD_SIZE // Maturity
+        + WORD_SIZE // Script size
+        + WORD_SIZE // Script data size
+        + WORD_SIZE // Inputs size
+        + WORD_SIZE // Outputs size
+        + WORD_SIZE; // Witnesses size
+
+    let code_address = Interpreter::tx_mem_address() + TX_SCRIPT;
     assert_eq!(code.as_slice(), &vm.memory()[code_address..code_address + code.len()]);
 
-    let code_data_address = vm.tx_stack() + 72 + code.len();
+    let code_data_address = Interpreter::tx_mem_address() + TX_SCRIPT + code.len();
     assert_eq!(
         code_data.as_slice(),
         &vm.memory()[code_data_address..code_data_address + code_data.len()]

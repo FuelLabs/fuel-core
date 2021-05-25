@@ -1,8 +1,7 @@
-use fuel_tx::Hash;
+use fuel_tx::{crypto as tx_crypto, Hash};
 use secp256k1::recovery::{RecoverableSignature, RecoveryId};
 use secp256k1::Error as Secp256k1Error;
 use secp256k1::{Message, Secp256k1, SecretKey};
-use sha2::{Digest, Sha256};
 
 use std::convert::TryFrom;
 
@@ -41,13 +40,7 @@ pub fn secp256k1_sign_compact_recover(signature: &[u8], message: &[u8]) -> Resul
     <[u8; 64]>::try_from(&pk[1..]).map_err(|_| Secp256k1Error::InvalidPublicKey)
 }
 
-pub fn hash(data: &[u8]) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    hasher.finalize().into()
-}
-
 pub fn merkle_root(data: &[u8]) -> Hash {
     // TODO implement merkle root
-    hash(data)
+    tx_crypto::hash(data)
 }

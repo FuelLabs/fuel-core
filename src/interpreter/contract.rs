@@ -1,6 +1,7 @@
 use super::Interpreter;
 use crate::{consts, crypto};
 
+use fuel_tx::crypto as tx_crypto;
 use fuel_tx::{ContractAddress, Transaction, ValidationError};
 
 use std::convert::TryFrom;
@@ -70,7 +71,7 @@ impl Contract {
         input.extend_from_slice(salt);
         input.extend_from_slice(&crypto::merkle_root(self.0.as_slice()));
 
-        crypto::hash(input.as_slice())
+        tx_crypto::hash(input.as_slice())
     }
 }
 
