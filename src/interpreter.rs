@@ -138,6 +138,7 @@ impl Interpreter {
 
                 // Verify predicates
                 // https://github.com/FuelLabs/fuel-specs/blob/master/specs/protocol/tx_validity.md#predicate-verification
+                // TODO this should be abstracted with the client
                 let predicates: Vec<MemoryRange> = tx
                     .inputs()
                     .iter()
