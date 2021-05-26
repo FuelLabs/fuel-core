@@ -27,7 +27,9 @@ jobs:
           ${{ secrets.PRIVATE_KEY_FUEL_ASM }}
           ${{ secrets.PRIVATE_KEY_FUEL_TX }}
 
-    - run: cat ~/.ssh/config
+    - run: |
+        git clone ssh://git@github.com/FuelLabs/fuel-asm.git
+        git clone ssh://git@github.com/FuelLabs/fuel-tx.git
 
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
