@@ -27,6 +27,8 @@ jobs:
           ${{ secrets.PRIVATE_KEY_FUEL_ASM }}
           ${{ secrets.PRIVATE_KEY_FUEL_TX }}
 
+    - run: cat ~/.ssh/config
+
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
       with:
