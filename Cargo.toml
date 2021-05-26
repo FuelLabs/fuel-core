@@ -11,6 +11,7 @@ categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 
 [dependencies]
 itertools = "0.10"
+serde = { version = "1.0", features = ["derive"] }
 sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}
 tracing = "0.1"
