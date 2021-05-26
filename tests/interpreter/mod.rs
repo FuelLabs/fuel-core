@@ -1,4 +1,5 @@
 mod alu;
+mod blockchain;
 mod crypto;
 mod flow;
 mod frame;

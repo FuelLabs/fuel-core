@@ -145,6 +145,10 @@ impl CallFrame {
     pub fn code(&self) -> &[u8] {
         self.code.as_slice()
     }
+
+    pub const fn registers(&self) -> &[Word] {
+        &self.registers
+    }
 }
 
 impl io::Read for CallFrame {

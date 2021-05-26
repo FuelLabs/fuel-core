@@ -12,7 +12,6 @@ impl Interpreter {
         let overflow = overflow || of;
         let (cx, of) = c.overflowing_add(32);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(a, 64);
         if overflow || ax > VM_MAX_RAM || bx > VM_MAX_RAM || cx > VM_MAX_RAM || !self.has_ownership_range(&range) {
@@ -41,7 +40,6 @@ impl Interpreter {
         let (ax, overflow) = a.overflowing_add(32);
         let (bc, of) = b.overflowing_add(c);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(a, 32);
         if overflow
@@ -65,7 +63,6 @@ impl Interpreter {
         let (ax, overflow) = a.overflowing_add(32);
         let (bc, of) = b.overflowing_add(c);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(a, 32);
         if overflow

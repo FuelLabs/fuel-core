@@ -15,30 +15,34 @@ impl Interpreter {
 
         self.registers[REG_OF] = overflow as Word;
         self.registers[REG_ERR] = 0;
-        self.inc_pc();
 
         self.registers[ra] = result;
+
+        self.inc_pc();
     }
 
     pub fn alu_error<B, C>(&mut self, ra: RegisterId, f: fn(B, C) -> Word, b: B, c: C, err: bool) {
         self.registers[REG_OF] = 0;
         self.registers[REG_ERR] = err as Word;
-        self.inc_pc();
 
         self.registers[ra] = if err { 0 } else { f(b, c) };
+
+        self.inc_pc();
     }
 
     pub fn alu_set(&mut self, ra: RegisterId, b: Word) {
         self.registers[REG_OF] = 0;
         self.registers[REG_ERR] = 0;
-        self.inc_pc();
 
         self.registers[ra] = b;
+
+        self.inc_pc();
     }
 
     pub fn alu_clear(&mut self) {
         self.registers[REG_OF] = 0;
         self.registers[REG_ERR] = 0;
+
         self.inc_pc();
     }
 }

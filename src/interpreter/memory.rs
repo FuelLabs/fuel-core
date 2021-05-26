@@ -49,7 +49,6 @@ impl Interpreter {
 impl Interpreter {
     pub fn stack_pointer_overflow(&mut self, f: fn(Word, Word) -> (Word, bool), v: Word) -> bool {
         let (result, overflow) = f(self.registers[REG_SP], v);
-        self.inc_pc();
 
         if overflow || result > self.registers[REG_HP] {
             false
@@ -61,7 +60,6 @@ impl Interpreter {
 
     pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
         let bc = b.saturating_add(c);
-        self.inc_pc();
 
         if bc >= VM_MAX_RAM as RegisterId {
             false
@@ -78,7 +76,6 @@ impl Interpreter {
         let (bc, overflow) = b.overflowing_add(c);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
-        self.inc_pc();
 
         if overflow || bcw >= VM_MAX_RAM as RegisterId {
             false
@@ -97,7 +94,6 @@ impl Interpreter {
         let (ac, overflow) = a.overflowing_add(c);
         let (result, of) = ac.overflowing_add(1);
         let overflow = overflow || of;
-        self.inc_pc();
 
         if overflow || result > VM_MAX_RAM || !(self.has_ownership_stack(ac) || self.has_ownership_heap(ac)) {
             false
@@ -111,7 +107,6 @@ impl Interpreter {
         let (ac, overflow) = a.overflowing_add(c);
         let (result, of) = ac.overflowing_add(8);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(ac, 8);
         if overflow || result > VM_MAX_RAM || !self.has_ownership_range(&range) {
@@ -125,7 +120,6 @@ impl Interpreter {
 
     pub fn malloc(&mut self, a: Word) -> bool {
         let (result, overflow) = self.registers[REG_HP].overflowing_sub(a);
-        self.inc_pc();
 
         if overflow || result < self.registers[REG_SP] {
             false
@@ -137,7 +131,6 @@ impl Interpreter {
 
     pub fn memclear(&mut self, a: Word, b: Word) -> bool {
         let (ab, overflow) = a.overflowing_add(b);
-        self.inc_pc();
 
         let range = MemoryRange::new(a, b);
         if overflow || ab > VM_MAX_RAM || b > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(&range) {
@@ -155,7 +148,6 @@ impl Interpreter {
         let (ac, overflow) = a.overflowing_add(c);
         let (bc, of) = b.overflowing_add(c);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(a, c);
         if overflow
@@ -185,7 +177,6 @@ impl Interpreter {
         let (bd, overflow) = b.overflowing_add(d);
         let (cd, of) = c.overflowing_add(d);
         let overflow = overflow || of;
-        self.inc_pc();
 
         if overflow || bd > VM_MAX_RAM || cd > VM_MAX_RAM || d > MEM_MAX_ACCESS_SIZE {
             false

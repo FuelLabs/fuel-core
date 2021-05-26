@@ -7,10 +7,11 @@ use fuel_tx::{Color, ContractAddress, Hash, Input, Output, Transaction};
 use itertools::Itertools;
 
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::mem;
 
 mod alu;
+mod blockchain;
 mod contract;
 mod crypto;
 mod error;
@@ -161,7 +162,42 @@ impl Interpreter {
                 Ok(())
             }
 
-            _ => unimplemented!(),
+            Transaction::Script { .. } => {
+                let offset = (Self::tx_mem_address() + Transaction::script_offset()) as Word;
+
+                self.registers[REG_PC] = offset;
+                self.registers[REG_IS] = offset;
+                self.registers[REG_GGAS] = self.tx.gas_limit();
+                self.registers[REG_CGAS] = self.tx.gas_limit();
+
+                // TODO set tree balance
+
+                self.run_program()
+            }
+        }
+    }
+
+    pub fn run_program(&mut self) -> Result<(), ExecuteError> {
+        loop {
+            if self.registers[REG_PC] >= VM_MAX_RAM {
+                return Err(ExecuteError::ProgramOverflow);
+            }
+
+            let op = self.memory[self.registers[REG_PC] as usize..]
+                .chunks_exact(4)
+                .next()
+                .map(Opcode::from_bytes_unchecked)
+                .ok_or(ExecuteError::ProgramOverflow)?;
+
+            if let Opcode::RET(ra) = op {
+                if Self::is_valid_register(ra) && self.ret(ra) && self.inc_pc() {
+                    return Ok(());
+                } else {
+                    return Err(ExecuteError::OpcodeFailure(op));
+                }
+            }
+
+            self.execute(op)?;
         }
     }
 
@@ -176,11 +212,10 @@ impl Interpreter {
         loop {
             let pc = self.registers[REG_PC];
             let op = self.memory[pc as usize..]
-                .chunks_exact(4)
+                .chunks_exact(Opcode::BYTES_SIZE)
                 .next()
+                .map(Opcode::from_bytes_unchecked)
                 .ok_or(ExecuteError::PredicateOverflow)?;
-            let op = u32::from_be_bytes(op.try_into().expect("Unreachable error protected by chunks_exact(4)"));
-            let op = Opcode::from(op);
 
             if let Opcode::RET(ra) = op {
                 return self
@@ -229,6 +264,10 @@ impl Interpreter {
         u32::MAX >> 1
     }
 
+    pub fn set_color_balance(&mut self, color: Color, balance: Word) {
+        self.color_balances.insert(color, balance);
+    }
+
     pub fn color_balance(&self, color: &Color) -> Word {
         self.color_balances.get(color).copied().unwrap_or(0)
     }
@@ -269,12 +308,16 @@ impl Interpreter {
         self.registers[REG_FLAG] & 0x02 == 0x02
     }
 
-    pub const fn is_valid_register_triple_alu(ra: RegisterId, rb: RegisterId, rc: RegisterId) -> bool {
-        ra > REG_FLAG && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
+    pub const fn is_valid_register_alu(ra: RegisterId) -> bool {
+        ra > REG_FLAG && ra < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_couple_alu(ra: RegisterId, rb: RegisterId) -> bool {
         ra > REG_FLAG && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT
+    }
+
+    pub const fn is_valid_register_triple_alu(ra: RegisterId, rb: RegisterId, rc: RegisterId) -> bool {
+        ra > REG_FLAG && ra < VM_REGISTER_COUNT && rb < VM_REGISTER_COUNT && rc < VM_REGISTER_COUNT
     }
 
     pub const fn is_valid_register_quadruple_alu(
