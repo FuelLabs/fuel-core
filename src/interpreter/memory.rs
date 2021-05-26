@@ -59,8 +59,8 @@ impl Interpreter {
         }
     }
 
-    pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
-        let bc = b.saturating_add(c);
+    pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: Word) -> bool {
+        let bc = b.saturating_add(c as RegisterId);
         self.inc_pc();
 
         if bc >= VM_MAX_RAM as RegisterId {
@@ -74,8 +74,11 @@ impl Interpreter {
         }
     }
 
-    pub fn load_word(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
-        let (bc, overflow) = b.overflowing_add(c);
+    pub fn load_word(&mut self, ra: RegisterId, b: RegisterId, c: Word) -> bool {
+        // LW immediate is multiple of a Word
+        let c = c << 3;
+
+        let (bc, overflow) = b.overflowing_add(c as RegisterId);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
         self.inc_pc();
@@ -108,6 +111,9 @@ impl Interpreter {
     }
 
     pub fn store_word(&mut self, a: Word, b: Word, c: Word) -> bool {
+        // SW immediate is multiple of a Word
+        let c = c << 3;
+
         let (ac, overflow) = a.overflowing_add(c);
         let (result, of) = ac.overflowing_add(8);
         let overflow = overflow || of;

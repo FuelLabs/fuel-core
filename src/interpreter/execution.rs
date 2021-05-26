@@ -160,10 +160,10 @@ impl Interpreter {
             Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) => {}
 
             Opcode::LB(ra, rb, imm)
-                if Self::is_valid_register_couple_alu(ra, rb) && self.load_byte(ra, rb, imm as RegisterId) => {}
+                if Self::is_valid_register_couple_alu(ra, rb) && self.load_byte(ra, rb, imm as Word) => {}
 
             Opcode::LW(ra, rb, imm)
-                if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as RegisterId) => {}
+                if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as Word) => {}
 
             Opcode::ALOC(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
 
