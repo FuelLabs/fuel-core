@@ -1,12 +1,13 @@
 use fuel_asm::Opcode;
 use fuel_tx::ValidationError;
 
-use std::{error, fmt};
+use std::{error, fmt, io};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug)]
 pub enum ExecuteError {
     OpcodeFailure(Opcode),
     ValidationError(ValidationError),
+    Io(io::Error),
     TransactionCreateStaticContractNotFound,
     TransactionCreateIdNotInTx,
     StackOverflow,
@@ -25,6 +26,10 @@ impl fmt::Display for ExecuteError {
                 write!(f, "Failed to validate the transaction: {}", e)
             }
 
+            Self::Io(e) => {
+                write!(f, "I/O failure: {}", e)
+            }
+
             _ => write!(f, "Execution error: {:?}", self),
         }
     }
@@ -34,6 +39,7 @@ impl error::Error for ExecuteError {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         match self {
             Self::ValidationError(e) => Some(e),
+            Self::Io(e) => Some(e),
             _ => None,
         }
     }
@@ -42,5 +48,11 @@ impl error::Error for ExecuteError {
 impl From<ValidationError> for ExecuteError {
     fn from(e: ValidationError) -> Self {
         Self::ValidationError(e)
+    }
+}
+
+impl From<io::Error> for ExecuteError {
+    fn from(e: io::Error) -> Self {
+        Self::Io(e)
     }
 }
