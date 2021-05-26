@@ -28,8 +28,8 @@ jobs:
           ${{ secrets.PRIVATE_KEY_FUEL_TX }}
 
     - run: |
-        git clone ssh://git@github.com/FuelLabs/fuel-asm.git
         git clone git@github.com:FuelLabs/fuel-tx.git
+        git clone ssh://git@github.com/FuelLabs/fuel-asm.git
 
     - name: Install toolchain
       uses: actions-rs/toolchain@v1
