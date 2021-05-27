@@ -59,12 +59,12 @@ impl Interpreter {
     // TODO add CCP tests
     pub fn code_copy(&mut self, a: Word, b: Word, c: Word, d: Word) -> bool {
         let (ad, overflow) = a.overflowing_add(d);
-        let (bx, of) = a.overflowing_add(CONTRACT_ADDRESS_SIZE as Word);
+        let (bx, of) = b.overflowing_add(CONTRACT_ADDRESS_SIZE as Word);
         let overflow = overflow || of;
         let (cd, of) = c.overflowing_add(d);
         let overflow = overflow || of;
 
-        let range = MemoryRange::new(a, ad);
+        let range = MemoryRange::new(a, d);
         if overflow
             || ad >= VM_MAX_RAM
             || bx >= VM_MAX_RAM

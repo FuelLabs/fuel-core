@@ -31,7 +31,16 @@ fn call_frame() {
             (vec![(0..1024).into(), (4096..5092).into()], vec![(..2059).into()]),
         ]
         .into_iter()
-        .map(|(inputs, outputs)| CallFrame::new(r(), r(), [r(); VM_REGISTER_COUNT], inputs, outputs, vec![r(); 200]))
+        .map(|(inputs, outputs)| {
+            CallFrame::new(
+                r(),
+                r(),
+                [r(); VM_REGISTER_COUNT],
+                inputs,
+                outputs,
+                vec![r(); 200].into(),
+            )
+        })
         .collect::<Vec<CallFrame>>()
         .as_slice(),
     );

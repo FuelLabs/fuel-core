@@ -2,10 +2,11 @@ use super::{Call, Color, Interpreter};
 use crate::consts::*;
 
 use fuel_asm::{RegisterId, Word};
+use fuel_tx::bytes::SerializableVec;
 use fuel_tx::Input;
 
 use std::convert::TryFrom;
-use std::io::{Read, Write};
+use std::io::Write;
 
 impl Interpreter {
     // TODO add CIMV tests
@@ -75,24 +76,25 @@ impl Interpreter {
             let color = Color::try_from(&self.memory[c as usize..cx as usize]).unwrap_or_else(|_| unreachable!());
             // TODO update color balance
 
-            let mut frame = self.call_frame(call, color);
-
-            let sp = self.registers[REG_SP];
-            self.registers[REG_FP] = self.registers[REG_SP];
-            match frame.read(&mut self.memory[sp as usize..]) {
-                Ok(n) => self.registers[REG_SP] = self.registers[REG_SP].saturating_add(n as Word),
+            let mut frame = match self.call_frame(call, color) {
+                Ok(frame) => frame,
                 Err(_) => return false,
+            };
+
+            self.registers[REG_FP] = self.registers[REG_SP];
+            if self.push_stack_bypass_fp(frame.to_bytes().as_slice()).is_err() {
+                return false;
             }
-            self.registers[REG_SSP] = self.registers[REG_SP];
-            self.registers[REG_PC] = self.registers[REG_SP].saturating_sub(frame.code().len() as Word);
-            self.registers[REG_IS] = self.registers[REG_PC];
 
             // TODO set balance for forward coins to $bal
             // TODO set forward gas to $cgas
 
+            self.registers[REG_PC] = self.registers[REG_FP].saturating_add(frame.code_offset() as Word);
+            self.registers[REG_IS] = self.registers[REG_PC];
             self.frames.push(frame);
 
-            true
+            // TODO report the error of the called routine
+            self.run_program().is_ok()
         }
     }
 
@@ -100,8 +102,8 @@ impl Interpreter {
         // TODO define the return strategy for internal/external contexts
         // TODO Return the unused forwarded gas to the caller
 
-        // TODO review if a frame is mandatory for every return. For `run_program`, no frame is
-        // created and we may still have a valid `RET`
+        // TODO review if a frame is mandatory for every return. For `run_program`, no
+        // frame is created and we may still have a valid `RET`
         if let Some(frame) = self.frames.pop() {
             frame
                 .registers()

@@ -14,6 +14,7 @@ pub enum ExecuteError {
     PredicateOverflow,
     ProgramOverflow,
     PredicateFailure,
+    ContractNotFound,
 }
 
 impl fmt::Display for ExecuteError {

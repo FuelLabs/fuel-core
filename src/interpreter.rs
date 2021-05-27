@@ -252,6 +252,19 @@ impl Interpreter {
         }
     }
 
+    pub fn push_stack_bypass_fp(&mut self, data: &[u8]) -> Result<(), ExecuteError> {
+        let (ssp, overflow) = self.registers[REG_SSP].overflowing_add(data.len() as Word);
+
+        if overflow {
+            Err(ExecuteError::StackOverflow)
+        } else {
+            self.memory[self.registers[REG_SSP] as usize..ssp as usize].copy_from_slice(data);
+            self.registers[REG_SSP] = ssp;
+
+            Ok(())
+        }
+    }
+
     pub const fn tx_mem_address() -> usize {
         HASH_SIZE // Tx ID
             + WORD_SIZE // Tx size
