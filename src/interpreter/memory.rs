@@ -62,8 +62,8 @@ impl Interpreter {
         }
     }
 
-    pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
-        let bc = b.saturating_add(c);
+    pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: Word) -> bool {
+        let bc = b.saturating_add(c as RegisterId);
 
         if bc >= VM_MAX_RAM as RegisterId {
             false

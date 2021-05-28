@@ -61,7 +61,7 @@ fn mint_burn() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset();
+    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[0] = Opcode::ADDI(0x10, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 
@@ -93,7 +93,7 @@ fn mint_burn() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset();
+    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[0] = Opcode::ADDI(0x10, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 
@@ -127,7 +127,7 @@ fn mint_burn() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset();
+    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[0] = Opcode::ADDI(0x10, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 
@@ -160,7 +160,7 @@ fn mint_burn() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset();
+    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[0] = Opcode::ADDI(0x10, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 

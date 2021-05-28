@@ -172,7 +172,7 @@ impl Interpreter {
 
             Opcode::LB(ra, rb, imm)
                 if Self::is_valid_register_couple_alu(ra, rb)
-                    && self.load_byte(ra, rb, imm as RegisterId)
+                    && self.load_byte(ra, rb, imm as Word)
                     && self.inc_pc() => {}
 
             Opcode::LW(ra, rb, imm)
