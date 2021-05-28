@@ -110,16 +110,17 @@ impl Interpreter {
     }
 
     pub fn store_word(&mut self, a: Word, b: Word, c: Word) -> bool {
-        let (ac, overflow) = a.overflowing_add(c);
-        let (result, of) = ac.overflowing_add(8);
+        let (ac, overflow) = a.overflowing_add(c << 3);
+        let (acw, of) = ac.overflowing_add(8);
         let overflow = overflow || of;
 
         let range = MemoryRange::new(ac, 8);
-        if overflow || result > VM_MAX_RAM || !self.has_ownership_range(&range) {
+        if overflow || acw > VM_MAX_RAM || !self.has_ownership_range(&range) {
             false
         } else {
             // TODO review if BE is intended
-            self.memory[ac as usize..ac as usize + 8].copy_from_slice(&b.to_be_bytes());
+            self.memory[ac as usize..acw as usize].copy_from_slice(&b.to_be_bytes());
+
             true
         }
     }
