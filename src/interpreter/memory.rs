@@ -18,16 +18,20 @@ impl Interpreter {
         let a_is_stack = a < self.registers[REG_SP];
         let a_is_heap = a > self.registers[REG_HP];
 
-        let ab_is_stack = ab < self.registers[REG_SP];
-        let ab_is_heap = ab > self.registers[REG_HP];
+        let ab_is_stack = ab <= self.registers[REG_SP];
+        let ab_is_heap = ab >= self.registers[REG_HP];
 
         a < ab
-            && (a_is_stack && ab_is_stack && self.has_ownership_stack(a) && self.has_ownership_stack(ab)
+            && (a_is_stack && ab_is_stack && self.has_ownership_stack(a) && self.has_ownership_stack_exclusive(ab)
                 || a_is_heap && ab_is_heap && self.has_ownership_heap(a) && self.has_ownership_heap(ab))
     }
 
     pub const fn has_ownership_stack(&self, a: Word) -> bool {
         a <= VM_MAX_RAM && self.registers[REG_SSP] <= a && a < self.registers[REG_SP]
+    }
+
+    pub const fn has_ownership_stack_exclusive(&self, a: Word) -> bool {
+        a <= VM_MAX_RAM && self.registers[REG_SSP] <= a && a <= self.registers[REG_SP]
     }
 
     pub const fn has_ownership_heap(&self, a: Word) -> bool {
