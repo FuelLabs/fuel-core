@@ -177,7 +177,7 @@ impl Interpreter {
 
             Opcode::LW(ra, rb, imm)
                 if Self::is_valid_register_couple_alu(ra, rb)
-                    && self.load_word(ra, rb, imm as RegisterId)
+                    && self.load_word(ra, self.registers[rb], imm as Word)
                     && self.inc_pc() => {}
 
             Opcode::MCL(ra, rb)

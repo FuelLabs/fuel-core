@@ -159,6 +159,15 @@ impl CallFrame {
             + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()))
     }
 
+    pub const fn inputs_outputs_offset() -> usize {
+        CONTRACT_ADDRESS_SIZE // To
+            + COLOR_SIZE // Color
+            + VM_REGISTER_COUNT * WORD_SIZE // Registers
+            + WORD_SIZE // Inputs size
+            + WORD_SIZE // Outputs size
+            + WORD_SIZE // Code size
+    }
+
     pub const fn registers(&self) -> &[Word] {
         &self.registers
     }

@@ -1,4 +1,5 @@
 use super::common::{d, r};
+use super::program_to_bytes;
 use fuel_vm_rust::consts::*;
 use fuel_vm_rust::prelude::*;
 
@@ -7,14 +8,6 @@ use std::mem;
 const CONTRACT_ADDRESS_SIZE: usize = mem::size_of::<ContractAddress>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
-fn program_to_bytes(program: &[Opcode]) -> Vec<u8> {
-    program
-        .iter()
-        .map(|op| u32::from(*op).to_be_bytes())
-        .flatten()
-        .collect()
-}
-
 #[test]
 fn code_copy() {
     let mut vm = Interpreter::default();
@@ -22,6 +15,7 @@ fn code_copy() {
     let gas_price = 10;
     let gas_limit = 1_000_000;
     let maturity = 100;
+
     let salt: Salt = r();
 
     let program = vec![

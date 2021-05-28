@@ -76,17 +76,19 @@ impl Interpreter {
         }
     }
 
-    pub fn load_word(&mut self, ra: RegisterId, b: RegisterId, c: RegisterId) -> bool {
-        let (bc, overflow) = b.overflowing_add(c);
+    pub fn load_word(&mut self, ra: RegisterId, b: Word, c: Word) -> bool {
+        let (bc, overflow) = b.overflowing_add(c << 3);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
+
+        let bc = bc as usize;
+        let bcw = bcw as usize;
 
         if overflow || bcw >= VM_MAX_RAM as RegisterId {
             false
         } else {
-            // TODO check if it is expected to be BE
             // Safe conversion of sized slice
-            self.registers[ra] = <[u8; 8]>::try_from(&self.memory[bc..bc + 8])
+            self.registers[ra] = <[u8; 8]>::try_from(&self.memory[bc..bcw])
                 .map(Word::from_be_bytes)
                 .unwrap_or_else(|_| unreachable!());
 
