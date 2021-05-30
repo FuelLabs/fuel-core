@@ -35,14 +35,12 @@ impl Interpreter {
     }
 
     pub const fn has_ownership_heap(&self, a: Word) -> bool {
-        let external = self.registers[REG_FP] == 0;
-
         // TODO implement fp->hp and (addr, size) validations
         // fp->hp
         // it means $hp from the previous context, i.e. what's saved in the
         // "Saved registers from previous context" of the call frame at
         // $fp`
-        a <= VM_MAX_RAM && (a < VM_MAX_RAM - 1 || !external) && self.registers[REG_HP] < a
+        a <= VM_MAX_RAM && (a < VM_MAX_RAM - 1 || !self.is_external_context()) && self.registers[REG_HP] < a
     }
 
     pub const fn is_stack_address(&self, a: Word) -> bool {

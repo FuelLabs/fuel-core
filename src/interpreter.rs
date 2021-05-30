@@ -313,6 +313,10 @@ impl Interpreter {
         &self.registers
     }
 
+    pub const fn is_external_context(&self) -> bool {
+        self.registers[REG_FP] == 0
+    }
+
     pub const fn is_unsafe_math(&self) -> bool {
         self.registers[REG_FLAG] & 0x01 == 0x01
     }

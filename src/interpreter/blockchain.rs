@@ -17,7 +17,7 @@ impl Interpreter {
         let (xc, of) = x.overflowing_add(COLOR_SIZE as Word);
         let overflow = overflow || of;
 
-        if overflow || self.registers[REG_FP] == 0 || xc >= VM_MAX_RAM {
+        if overflow || self.is_external_context() || xc >= VM_MAX_RAM {
             return false;
         }
 
@@ -39,7 +39,7 @@ impl Interpreter {
         let (xc, of) = x.overflowing_add(COLOR_SIZE as Word);
         let overflow = overflow || of;
 
-        if overflow || self.registers[REG_FP] == 0 || xc >= VM_MAX_RAM {
+        if overflow || self.is_external_context() || xc >= VM_MAX_RAM {
             return false;
         }
 
