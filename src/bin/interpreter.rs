@@ -71,13 +71,11 @@ fn main() -> io::Result<()> {
 
     info!("Fuel VM Interpreter {} initialized", VERSION);
 
-    let mut opcode_buffer = [0u8; 4];
-    for opcode in input.chunks_exact(4) {
-        opcode_buffer.copy_from_slice(opcode);
-        let opcode = u32::from_be_bytes(opcode_buffer);
-        let opcode = Opcode::from(opcode);
+    for opcode in input.chunks_exact(Opcode::BYTES_SIZE) {
+        let opcode = Opcode::from_bytes_unchecked(opcode);
 
         trace!("{:?} parsed", opcode);
+
         interpreter.execute(opcode).expect("Instruction failed!");
     }
 
@@ -85,15 +83,17 @@ fn main() -> io::Result<()> {
 
     let mut output = array![];
     for log in interpreter.log() {
-        match log {
-            LogEvent::Register { pc, register, value } => {
-                output
-                    .push(object! {
-                        program_counter: *pc, register: *register, value: *value
-                    })
-                    .expect("Failed to append log to JSON!");
-            }
-        }
+        let obj = match log {
+            LogEvent::Register { pc, register, value } => object! {
+                log: "register", program_counter: *pc, register: *register, value: *value
+            },
+
+            LogEvent::Return { register, value } => object! {
+                log: "return", register: *register, value: *value
+            },
+        };
+
+        output.push(obj).expect("Failed to append log to JSON!");
     }
 
     println!("{}", output.dump());

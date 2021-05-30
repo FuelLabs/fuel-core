@@ -18,11 +18,11 @@ impl Interpreter {
         let a_is_stack = a < self.registers[REG_SP];
         let a_is_heap = a > self.registers[REG_HP];
 
-        let ab_is_stack = ab < self.registers[REG_SP];
-        let ab_is_heap = ab > self.registers[REG_HP];
+        let ab_is_stack = ab <= self.registers[REG_SP];
+        let ab_is_heap = ab >= self.registers[REG_HP];
 
         a < ab
-            && (a_is_stack && ab_is_stack && self.has_ownership_stack(a) && self.has_ownership_stack(ab)
+            && (a_is_stack && ab_is_stack && self.has_ownership_stack(a) && self.has_ownership_stack_exclusive(ab)
                 || a_is_heap && ab_is_heap && self.has_ownership_heap(a) && self.has_ownership_heap(ab))
     }
 
@@ -30,15 +30,17 @@ impl Interpreter {
         a <= VM_MAX_RAM && self.registers[REG_SSP] <= a && a < self.registers[REG_SP]
     }
 
-    pub const fn has_ownership_heap(&self, a: Word) -> bool {
-        let external = self.registers[REG_FP] == 0;
+    pub const fn has_ownership_stack_exclusive(&self, a: Word) -> bool {
+        a <= VM_MAX_RAM && self.registers[REG_SSP] <= a && a <= self.registers[REG_SP]
+    }
 
+    pub const fn has_ownership_heap(&self, a: Word) -> bool {
         // TODO implement fp->hp and (addr, size) validations
         // fp->hp
         // it means $hp from the previous context, i.e. what's saved in the
         // "Saved registers from previous context" of the call frame at
         // $fp`
-        a <= VM_MAX_RAM && (a < VM_MAX_RAM - 1 || !external) && self.registers[REG_HP] < a
+        a <= VM_MAX_RAM && (a < VM_MAX_RAM - 1 || !self.is_external_context()) && self.registers[REG_HP] < a
     }
 
     pub const fn is_stack_address(&self, a: Word) -> bool {
@@ -49,7 +51,6 @@ impl Interpreter {
 impl Interpreter {
     pub fn stack_pointer_overflow(&mut self, f: fn(Word, Word) -> (Word, bool), v: Word) -> bool {
         let (result, overflow) = f(self.registers[REG_SP], v);
-        self.inc_pc();
 
         if overflow || result > self.registers[REG_HP] {
             false
@@ -61,7 +62,6 @@ impl Interpreter {
 
     pub fn load_byte(&mut self, ra: RegisterId, b: RegisterId, c: Word) -> bool {
         let bc = b.saturating_add(c as RegisterId);
-        self.inc_pc();
 
         if bc >= VM_MAX_RAM as RegisterId {
             false
@@ -74,21 +74,20 @@ impl Interpreter {
         }
     }
 
-    pub fn load_word(&mut self, ra: RegisterId, b: RegisterId, c: Word) -> bool {
-        // LW immediate is multiple of a Word
-        let c = c << 3;
-
-        let (bc, overflow) = b.overflowing_add(c as RegisterId);
+    pub fn load_word(&mut self, ra: RegisterId, b: Word, c: Word) -> bool {
+        // C is expressed in words; mul by 8
+        let (bc, overflow) = b.overflowing_add(c * 8);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
-        self.inc_pc();
+
+        let bc = bc as usize;
+        let bcw = bcw as usize;
 
         if overflow || bcw >= VM_MAX_RAM as RegisterId {
             false
         } else {
-            // TODO check if it is expected to be BE
             // Safe conversion of sized slice
-            self.registers[ra] = <[u8; 8]>::try_from(&self.memory[bc..bc + 8])
+            self.registers[ra] = <[u8; 8]>::try_from(&self.memory[bc..bcw])
                 .map(Word::from_be_bytes)
                 .unwrap_or_else(|_| unreachable!());
 
@@ -100,7 +99,6 @@ impl Interpreter {
         let (ac, overflow) = a.overflowing_add(c);
         let (result, of) = ac.overflowing_add(1);
         let overflow = overflow || of;
-        self.inc_pc();
 
         if overflow || result > VM_MAX_RAM || !(self.has_ownership_stack(ac) || self.has_ownership_heap(ac)) {
             false
@@ -111,27 +109,24 @@ impl Interpreter {
     }
 
     pub fn store_word(&mut self, a: Word, b: Word, c: Word) -> bool {
-        // SW immediate is multiple of a Word
-        let c = c << 3;
-
-        let (ac, overflow) = a.overflowing_add(c);
-        let (result, of) = ac.overflowing_add(8);
+        // C is expressed in words; mul by 8
+        let (ac, overflow) = a.overflowing_add(c * 8);
+        let (acw, of) = ac.overflowing_add(8);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(ac, 8);
-        if overflow || result > VM_MAX_RAM || !self.has_ownership_range(&range) {
+        if overflow || acw > VM_MAX_RAM || !self.has_ownership_range(&range) {
             false
         } else {
             // TODO review if BE is intended
-            self.memory[ac as usize..ac as usize + 8].copy_from_slice(&b.to_be_bytes());
+            self.memory[ac as usize..acw as usize].copy_from_slice(&b.to_be_bytes());
+
             true
         }
     }
 
     pub fn malloc(&mut self, a: Word) -> bool {
         let (result, overflow) = self.registers[REG_HP].overflowing_sub(a);
-        self.inc_pc();
 
         if overflow || result < self.registers[REG_SP] {
             false
@@ -143,7 +138,6 @@ impl Interpreter {
 
     pub fn memclear(&mut self, a: Word, b: Word) -> bool {
         let (ab, overflow) = a.overflowing_add(b);
-        self.inc_pc();
 
         let range = MemoryRange::new(a, b);
         if overflow || ab > VM_MAX_RAM || b > MEM_MAX_ACCESS_SIZE || !self.has_ownership_range(&range) {
@@ -161,7 +155,6 @@ impl Interpreter {
         let (ac, overflow) = a.overflowing_add(c);
         let (bc, of) = b.overflowing_add(c);
         let overflow = overflow || of;
-        self.inc_pc();
 
         let range = MemoryRange::new(a, c);
         if overflow
@@ -191,7 +184,6 @@ impl Interpreter {
         let (bd, overflow) = b.overflowing_add(d);
         let (cd, of) = c.overflowing_add(d);
         let overflow = overflow || of;
-        self.inc_pc();
 
         if overflow || bd > VM_MAX_RAM || cd > VM_MAX_RAM || d > MEM_MAX_ACCESS_SIZE {
             false

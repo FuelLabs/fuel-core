@@ -12,6 +12,11 @@ pub enum LogEvent {
         register: RegisterId,
         value: Word,
     },
+
+    Return {
+        register: RegisterId,
+        value: Word,
+    },
 }
 
 impl Interpreter {
@@ -40,5 +45,16 @@ impl Interpreter {
         log.extend(entries);
 
         true
+    }
+
+    pub fn log_return(&mut self, register: RegisterId) -> bool {
+        match self.registers.get(register as usize).copied() {
+            Some(value) => {
+                self.log.push(LogEvent::Return { register, value });
+                true
+            }
+
+            _ => false,
+        }
     }
 }

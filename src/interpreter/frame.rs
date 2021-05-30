@@ -1,24 +1,25 @@
-use super::{Interpreter, MemoryRange};
+use super::{Contract, ExecuteError, Interpreter, MemoryRange};
 use crate::consts::*;
 
 use fuel_asm::Word;
-use fuel_tx::{bytes, Address, Color};
+use fuel_tx::bytes::SizedBytes;
+use fuel_tx::{bytes, Color, ContractAddress};
 
 use std::{io, mem};
 
-const ADDRESS_SIZE: usize = mem::size_of::<Address>();
+const CONTRACT_ADDRESS_SIZE: usize = mem::size_of::<ContractAddress>();
 const COLOR_SIZE: usize = mem::size_of::<Color>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Call {
-    to: Address,
+    to: ContractAddress,
     inputs: Vec<MemoryRange>,
     outputs: Vec<MemoryRange>,
 }
 
 impl Call {
-    pub const fn new(to: Address, inputs: Vec<MemoryRange>, outputs: Vec<MemoryRange>) -> Self {
+    pub const fn new(to: ContractAddress, inputs: Vec<MemoryRange>, outputs: Vec<MemoryRange>) -> Self {
         Self { to, inputs, outputs }
     }
 
@@ -28,7 +29,7 @@ impl Call {
             .fold(true, |acc, range| acc && vm.has_ownership_range(range))
     }
 
-    pub const fn to(&self) -> &Address {
+    pub const fn to(&self) -> &ContractAddress {
         &self.to
     }
 
@@ -40,14 +41,20 @@ impl Call {
         self.outputs.as_slice()
     }
 
-    pub fn into_inner(self) -> (Address, Vec<MemoryRange>, Vec<MemoryRange>) {
+    pub fn into_inner(self) -> (ContractAddress, Vec<MemoryRange>, Vec<MemoryRange>) {
         (self.to, self.inputs, self.outputs)
+    }
+}
+
+impl SizedBytes for Call {
+    fn serialized_size(&self) -> usize {
+        CONTRACT_ADDRESS_SIZE + 2 * WORD_SIZE * (1 + self.outputs.len() + self.inputs.len())
     }
 }
 
 impl io::Read for Call {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = ADDRESS_SIZE + 2 * WORD_SIZE * (1 + self.outputs.len() + self.inputs.len());
+        let n = self.serialized_size();
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -67,7 +74,7 @@ impl io::Read for Call {
 
 impl io::Write for Call {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut n = ADDRESS_SIZE + 2 * WORD_SIZE;
+        let mut n = CONTRACT_ADDRESS_SIZE + 2 * WORD_SIZE;
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -115,22 +122,22 @@ impl io::Write for Call {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CallFrame {
-    to: Address,
+    to: ContractAddress,
     color: Color,
     registers: [Word; VM_REGISTER_COUNT],
     inputs: Vec<MemoryRange>,
     outputs: Vec<MemoryRange>,
-    code: Vec<u8>,
+    code: Contract,
 }
 
 impl CallFrame {
     pub const fn new(
-        to: Address,
+        to: ContractAddress,
         color: Color,
         registers: [Word; VM_REGISTER_COUNT],
         inputs: Vec<MemoryRange>,
         outputs: Vec<MemoryRange>,
-        code: Vec<u8>,
+        code: Contract,
     ) -> Self {
         Self {
             to,
@@ -143,15 +150,41 @@ impl CallFrame {
     }
 
     pub fn code(&self) -> &[u8] {
-        self.code.as_slice()
+        self.code.as_ref()
+    }
+
+    pub fn code_offset(&self) -> usize {
+        CONTRACT_ADDRESS_SIZE
+            + COLOR_SIZE
+            + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()))
+    }
+
+    pub const fn inputs_outputs_offset() -> usize {
+        CONTRACT_ADDRESS_SIZE // To
+            + COLOR_SIZE // Color
+            + VM_REGISTER_COUNT * WORD_SIZE // Registers
+            + WORD_SIZE // Inputs size
+            + WORD_SIZE // Outputs size
+            + WORD_SIZE // Code size
+    }
+
+    pub const fn registers(&self) -> &[Word] {
+        &self.registers
+    }
+}
+
+impl SizedBytes for CallFrame {
+    fn serialized_size(&self) -> usize {
+        CONTRACT_ADDRESS_SIZE
+            + COLOR_SIZE
+            + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()))
+            + bytes::padded_len(self.code.as_ref())
     }
 }
 
 impl io::Read for CallFrame {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let mut n = ADDRESS_SIZE
-            + COLOR_SIZE
-            + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
+        let n = self.serialized_size();
         if buf.len() < n {
             return Err(bytes::eof());
         }
@@ -165,15 +198,14 @@ impl io::Read for CallFrame {
 
         let buf = bytes::store_number_unchecked(buf, self.inputs.len() as Word);
         let buf = bytes::store_number_unchecked(buf, self.outputs.len() as Word);
-        let buf = bytes::store_number_unchecked(buf, self.code.len() as Word);
+        let buf = bytes::store_number_unchecked(buf, self.code.as_ref().len() as Word);
 
         let buf = self.inputs.iter().chain(self.outputs.iter()).fold(buf, |buf, range| {
             let buf = bytes::store_number_unchecked(buf, range.start());
             bytes::store_number_unchecked(buf, range.len())
         });
 
-        let (bytes, _) = bytes::store_raw_bytes(buf, self.code.as_slice())?;
-        n += bytes;
+        bytes::store_raw_bytes(buf, self.code.as_ref())?;
 
         Ok(n)
     }
@@ -181,7 +213,7 @@ impl io::Read for CallFrame {
 
 impl io::Write for CallFrame {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut n = ADDRESS_SIZE
+        let mut n = CONTRACT_ADDRESS_SIZE
             + COLOR_SIZE
             + WORD_SIZE * (3 + VM_REGISTER_COUNT + 2 * (self.inputs.len() + self.outputs.len()));
         if buf.len() < n {
@@ -227,7 +259,7 @@ impl io::Write for CallFrame {
         self.color = color;
         self.outputs = inputs.split_off(inputs_len as usize);
         self.inputs = inputs;
-        self.code = code;
+        self.code = code.into();
 
         Ok(n)
     }
@@ -238,13 +270,14 @@ impl io::Write for CallFrame {
 }
 
 impl Interpreter {
-    pub fn call_frame(&self, call: Call, color: Color) -> CallFrame {
+    pub fn call_frame(&self, call: Call, color: Color) -> Result<CallFrame, ExecuteError> {
         let (to, inputs, outputs) = call.into_inner();
 
-        // TODO fetch code
-        let code = vec![0xcd; 256];
+        let code = self.contract(&to).cloned().ok_or(ExecuteError::ContractNotFound)?;
         let registers = self.registers.clone();
 
-        CallFrame::new(to, color, registers, inputs, outputs, code)
+        let frame = CallFrame::new(to, color, registers, inputs, outputs, code);
+
+        Ok(frame)
     }
 }

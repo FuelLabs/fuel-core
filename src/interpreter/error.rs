@@ -12,7 +12,9 @@ pub enum ExecuteError {
     TransactionCreateIdNotInTx,
     StackOverflow,
     PredicateOverflow,
+    ProgramOverflow,
     PredicateFailure,
+    ContractNotFound,
 }
 
 impl fmt::Display for ExecuteError {

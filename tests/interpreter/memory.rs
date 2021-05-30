@@ -76,3 +76,15 @@ fn memrange() {
     let m = MemoryRange::new(0, bytes + 1).to_heap(&vm);
     assert!(!vm.has_ownership_range(&m));
 }
+
+#[test]
+fn stack_alloc_ownership() {
+    let mut vm = Interpreter::default();
+    vm.init(Transaction::default()).expect("Failed to init VM");
+
+    vm.execute(Opcode::MOVE(0x10, REG_SP)).unwrap();
+    vm.execute(Opcode::CFEI(2)).unwrap();
+
+    // Assert allocated stack is writable
+    vm.execute(Opcode::MCLI(0x10, 2)).unwrap();
+}

@@ -146,51 +146,75 @@ impl Interpreter {
                 self.alu_set(ra, self.registers[rb] ^ (imm as Word))
             }
 
-            // TODO CIMV: Check input maturity verify
-            // TODO CTMV: Check transaction maturity verify
+            Opcode::CIMV(ra, rb, rc)
+                if Self::is_valid_register_triple_alu(ra, rb, rc)
+                    && self.check_input_maturity(ra, self.registers[rb], self.registers[rc])
+                    && self.inc_pc() => {}
+
+            Opcode::CTMV(ra, rb)
+                if Self::is_valid_register_couple_alu(ra, rb)
+                    && self.check_tx_maturity(ra, self.registers[rb])
+                    && self.inc_pc() => {}
+
             Opcode::JI(imm) if self.jump(imm as Word) => {}
 
             Opcode::JNEI(ra, rb, imm)
                 if Self::is_valid_register_couple(ra, rb)
-                    && (self.registers[ra] != self.registers[rb] && self.jump(imm as Word) || self.inc_pc()) => {}
+                    && self.jump_not_equal_imm(self.registers[ra], self.registers[rb], imm as Word) => {}
 
-            // TODO RET: Return from context
-            Opcode::CFEI(imm) if self.stack_pointer_overflow(Word::overflowing_add, imm as Word) => {}
+            Opcode::RET(ra) if Self::is_valid_register(ra) && self.ret(ra) && self.inc_pc() => {}
 
-            Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) => {}
+            Opcode::ALOC(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) && self.inc_pc() => {}
+
+            Opcode::CFEI(imm) if self.stack_pointer_overflow(Word::overflowing_add, imm as Word) && self.inc_pc() => {}
+
+            Opcode::CFSI(imm) if self.stack_pointer_overflow(Word::overflowing_sub, imm as Word) && self.inc_pc() => {}
 
             Opcode::LB(ra, rb, imm)
-                if Self::is_valid_register_couple_alu(ra, rb) && self.load_byte(ra, rb, imm as Word) => {}
+                if Self::is_valid_register_couple_alu(ra, rb)
+                    && self.load_byte(ra, rb, imm as Word)
+                    && self.inc_pc() => {}
 
             Opcode::LW(ra, rb, imm)
-                if Self::is_valid_register_couple_alu(ra, rb) && self.load_word(ra, rb, imm as Word) => {}
-
-            Opcode::ALOC(ra) if Self::is_valid_register(ra) && self.malloc(self.registers[ra]) => {}
+                if Self::is_valid_register_couple_alu(ra, rb)
+                    && self.load_word(ra, self.registers[rb], imm as Word)
+                    && self.inc_pc() => {}
 
             Opcode::MCL(ra, rb)
-                if Self::is_valid_register_couple(ra, rb) && self.memclear(self.registers[ra], self.registers[rb]) => {}
+                if Self::is_valid_register_couple(ra, rb)
+                    && self.memclear(self.registers[ra], self.registers[rb])
+                    && self.inc_pc() => {}
 
-            Opcode::MCLI(ra, imm) if Self::is_valid_register(ra) && self.memclear(self.registers[ra], imm as Word) => {}
+            Opcode::MCLI(ra, imm)
+                if Self::is_valid_register(ra) && self.memclear(self.registers[ra], imm as Word) && self.inc_pc() => {}
 
             Opcode::MCP(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
-                    && self.memcopy(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
+                    && self.memcopy(self.registers[ra], self.registers[rb], self.registers[rc])
+                    && self.inc_pc() => {}
 
             Opcode::MEQ(ra, rb, rc, rd)
                 if Self::is_valid_register_quadruple_alu(ra, rb, rc, rd)
-                    && self.memeq(ra, self.registers[rb], self.registers[rc], self.registers[rd]) => {}
+                    && self.memeq(ra, self.registers[rb], self.registers[rc], self.registers[rd])
+                    && self.inc_pc() => {}
 
             Opcode::SB(ra, rb, imm)
                 if Self::is_valid_register_couple(ra, rb)
-                    && self.store_byte(self.registers[ra], self.registers[rb], imm as Word) => {}
+                    && self.store_byte(self.registers[ra], self.registers[rb], imm as Word)
+                    && self.inc_pc() => {}
 
             Opcode::SW(ra, rb, imm)
                 if Self::is_valid_register_couple(ra, rb)
-                    && self.store_word(self.registers[ra], self.registers[rb], imm as Word) => {}
+                    && self.store_word(self.registers[ra], self.registers[rb], imm as Word)
+                    && self.inc_pc() => {}
+
+            Opcode::BHEI(ra) if Self::is_valid_register_alu(ra) && self.inc_pc() => {
+                self.registers[ra] = self.block_height() as Word
+            }
 
             // TODO BLOCKHASH: Block hash
-            // TODO BLOCKHEIGHT: Block height
-            // TODO BURN: Burn existing coins
+            Opcode::BURN(ra) if Self::is_valid_register(ra) && self.burn(self.registers[ra]) && self.inc_pc() => {}
+
             Opcode::CALL(ra, rb, rc, rd)
                 if Self::is_valid_register_quadruple(ra, rb, rc, rd)
                     && self.call(
@@ -200,15 +224,27 @@ impl Interpreter {
                         self.registers[rd],
                     ) => {}
 
-            // TODO CODECOPY: Code copy
+            Opcode::CCP(ra, rb, rc, rd)
+                if Self::is_valid_register_quadruple(ra, rb, rc, rd)
+                    && self.code_copy(
+                        self.registers[ra],
+                        self.registers[rb],
+                        self.registers[rc],
+                        self.registers[rd],
+                    )
+                    && self.inc_pc() => {}
+
             // TODO CODEROOT: Code Merkle root
             // TODO CODESIZE: Code size
             // TODO COINBASE: Block proposer address
             // TODO LOADCODE: Load code from an external contract
             Opcode::LOG(ra, rb, rc, rd)
-                if Self::is_valid_register_quadruple(ra, rb, rc, rd) && self.log_append(&[ra, rb, rc, rd]) => {}
+                if Self::is_valid_register_quadruple(ra, rb, rc, rd)
+                    && self.log_append(&[ra, rb, rc, rd])
+                    && self.inc_pc() => {}
 
-            // TODO MINT: Mint new coins
+            Opcode::MINT(ra) if Self::is_valid_register(ra) && self.mint(self.registers[ra]) && self.inc_pc() => {}
+
             // TODO REVERT: Revert
             // TODO SLOADCODE: Load code from static list
             // TODO SRW: State read word
@@ -219,17 +255,20 @@ impl Interpreter {
             // TODO TRANSFEROUT: Transfer coins to output
             Opcode::ECR(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
-                    && self.ecrecover(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
+                    && self.ecrecover(self.registers[ra], self.registers[rb], self.registers[rc])
+                    && self.inc_pc() => {}
 
             Opcode::K256(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
-                    && self.keccak256(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
+                    && self.keccak256(self.registers[ra], self.registers[rb], self.registers[rc])
+                    && self.inc_pc() => {}
 
             Opcode::S256(ra, rb, rc)
                 if Self::is_valid_register_triple(ra, rb, rc)
-                    && self.sha256(self.registers[ra], self.registers[rb], self.registers[rc]) => {}
+                    && self.sha256(self.registers[ra], self.registers[rb], self.registers[rc])
+                    && self.inc_pc() => {}
 
-            Opcode::FLAG(ra) if Self::is_valid_register(ra) => self.set_flag(self.registers[ra]),
+            Opcode::FLAG(ra) if Self::is_valid_register(ra) && self.inc_pc() => self.set_flag(self.registers[ra]),
 
             _ => result = Err(ExecuteError::OpcodeFailure(op)),
         }
