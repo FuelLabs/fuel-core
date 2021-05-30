@@ -38,18 +38,25 @@ pub trait TransactionalProxy {
 }
 
 #[async_trait::async_trait]
-pub trait Transactional {
-    type Store: KeyValueStore + Send;
-    async fn transaction<F, Fut, R, E>(&mut self, f: F) -> TransactionResult<R, E>
+pub trait Transactional<K, V, S, P>
+where
+    K: AsRef<[u8]> + Debug + Send + Clone,
+    V: Debug + DeserializeOwned + Clone,
+    S: KeyValueStore<Key = K, Value = V>,
+    P: KeyValueStore<Key = K, Value = V>,
+{
+    async fn transaction<F, Fut, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut Self::Store) -> Fut + Send,
-        Fut: Future<Output = TransactionResult<R, E>> + Send;
+        F: FnOnce(&mut P) -> Fut + Send,
+        Fut: Future<Output = TransactionResult<R>> + Send,
+        R: Send;
 }
 
-pub type TransactionResult<T, E> = Result<T, TransactionError<E>>;
+pub type TransactionResult<T> = Result<T, TransactionError>;
 
-pub enum TransactionError<T> {
-    Aborted(T),
+#[derive(Clone, Debug)]
+pub enum TransactionError {
+    Aborted,
 }
 
 pub mod in_memory;
