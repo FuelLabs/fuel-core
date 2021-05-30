@@ -77,7 +77,8 @@ impl Interpreter {
     }
 
     pub fn load_word(&mut self, ra: RegisterId, b: Word, c: Word) -> bool {
-        let (bc, overflow) = b.overflowing_add(c << 3);
+        // C is expressed in words; mul by 8
+        let (bc, overflow) = b.overflowing_add(c * 8);
         let (bcw, of) = bc.overflowing_add(8);
         let overflow = overflow || of;
 
@@ -110,7 +111,8 @@ impl Interpreter {
     }
 
     pub fn store_word(&mut self, a: Word, b: Word, c: Word) -> bool {
-        let (ac, overflow) = a.overflowing_add(c << 3);
+        // C is expressed in words; mul by 8
+        let (ac, overflow) = a.overflowing_add(c * 8);
         let (acw, of) = ac.overflowing_add(8);
         let overflow = overflow || of;
 
