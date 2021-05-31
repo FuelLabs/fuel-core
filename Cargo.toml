@@ -1,5 +1,5 @@
 [package]
-name = "fuel-vm-rust"
+name = "fuel-core"
 description = "FuelVM interpreter."
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]

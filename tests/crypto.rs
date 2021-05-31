@@ -1,7 +1,7 @@
 #![feature(once_cell)]
 
+use fuel_core::crypto;
 use fuel_tx::crypto as tx_crypto;
-use fuel_vm_rust::crypto;
 use rand::rngs::StdRng;
 use rand::{RngCore, SeedableRng};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
