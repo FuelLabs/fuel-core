@@ -1,5 +1,5 @@
-use fuel_vm_rust::consts::*;
-use fuel_vm_rust::prelude::*;
+use fuel_core::consts::*;
+use fuel_core::prelude::*;
 
 fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId, expected: Word) {
     let mut vm = Interpreter::default();

@@ -1,7 +1,7 @@
 use super::assert_encoding_correct;
 use super::common::r;
-use fuel_vm_rust::consts::*;
-use fuel_vm_rust::prelude::*;
+use fuel_core::consts::*;
+use fuel_core::prelude::*;
 
 #[test]
 fn call() {

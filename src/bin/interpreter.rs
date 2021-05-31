@@ -6,7 +6,7 @@ use tracing_subscriber::fmt::Subscriber;
 
 use std::io::{self, Read};
 
-use fuel_vm_rust::prelude::*;
+use fuel_core::prelude::*;
 
 const NAME: &'static str = env!("CARGO_PKG_NAME");
 const VERSION: &'static str = env!("CARGO_PKG_VERSION");
