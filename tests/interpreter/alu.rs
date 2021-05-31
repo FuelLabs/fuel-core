@@ -2,7 +2,8 @@ use fuel_core::consts::*;
 use fuel_core::prelude::*;
 
 fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId, expected: Word) {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     registers_init.iter().for_each(|(r, v)| {
@@ -21,7 +22,8 @@ fn alu(registers_init: &[(RegisterId, Immediate12)], op: Opcode, reg: RegisterId
 }
 
 fn alu_err(registers_init: &[(RegisterId, Immediate12)], op: Opcode) {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     registers_init.iter().for_each(|(r, v)| {

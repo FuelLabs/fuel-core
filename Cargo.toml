@@ -17,18 +17,5 @@ tracing = "0.1"
 fuel-asm = {git="ssh://git@github.com/FuelLabs/fuel-asm.git"}
 fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git"}
 
-# Bin dependencies
-tracing-subscriber = {version="0.2", optional=true}
-clap = {version="2.33", optional=true}
-json = {version="0.12", optional=true}
-
 [dev-dependencies]
 rand = "0.8"
-
-[features]
-log = ["tracing-subscriber"]
-cli = ["clap", "json"]
-
-[[bin]]
-name = "interpreter"
-required-features = ["log", "cli"]

@@ -10,7 +10,7 @@ mod range;
 
 pub use range::MemoryRange;
 
-impl Interpreter {
+impl<S> Interpreter<S> {
     /// Grant ownership of the range `[a..ab[`
     pub const fn has_ownership_range(&self, range: &MemoryRange) -> bool {
         let (a, ab) = range.boundaries(self);
@@ -48,7 +48,7 @@ impl Interpreter {
     }
 }
 
-impl Interpreter {
+impl<S> Interpreter<S> {
     pub fn stack_pointer_overflow(&mut self, f: fn(Word, Word) -> (Word, bool), v: Word) -> bool {
         let (result, overflow) = f(self.registers[REG_SP], v);
 

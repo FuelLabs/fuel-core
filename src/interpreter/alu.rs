@@ -3,7 +3,7 @@ use crate::consts::*;
 
 use fuel_asm::{RegisterId, Word};
 
-impl Interpreter {
+impl<S> Interpreter<S> {
     pub fn alu_overflow<B, C>(&mut self, ra: RegisterId, f: fn(B, C) -> (Word, bool), b: B, c: C) {
         let (result, overflow) = f(b, c);
 

@@ -19,7 +19,7 @@ pub enum LogEvent {
     },
 }
 
-impl Interpreter {
+impl<S> Interpreter<S> {
     pub fn log(&self) -> &[LogEvent] {
         self.log.as_slice()
     }

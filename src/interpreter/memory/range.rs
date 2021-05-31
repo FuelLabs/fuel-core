@@ -49,7 +49,7 @@ impl MemoryRange {
     /// Return the boundaries of the slice with exclusive end `[a, b[`
     ///
     /// Remap the unbound boundaries to stack or heap when applicable.
-    pub const fn boundaries(&self, vm: &Interpreter) -> (Word, Word) {
+    pub const fn boundaries<S>(&self, vm: &Interpreter<S>) -> (Word, Word) {
         use ops::Bound::*;
 
         let stack = vm.registers()[REG_SP];
@@ -77,7 +77,7 @@ impl MemoryRange {
 
     /// Return an owned memory slice with a relative address to the heap space
     /// defined in `r[$hp]`
-    pub const fn to_heap(mut self, vm: &Interpreter) -> Self {
+    pub const fn to_heap<S>(mut self, vm: &Interpreter<S>) -> Self {
         use ops::Bound::*;
 
         let heap = vm.registers()[REG_HP].saturating_add(1);

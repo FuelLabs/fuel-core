@@ -1,5 +1,6 @@
 use super::{Contract, ExecuteError, Interpreter, MemoryRange};
 use crate::consts::*;
+use crate::data::Storage;
 
 use fuel_asm::Word;
 use fuel_tx::bytes::SizedBytes;
@@ -23,7 +24,7 @@ impl Call {
         Self { to, inputs, outputs }
     }
 
-    pub fn has_outputs_ownership(&self, vm: &Interpreter) -> bool {
+    pub fn has_outputs_ownership<S>(&self, vm: &Interpreter<S>) -> bool {
         self.outputs
             .iter()
             .fold(true, |acc, range| acc && vm.has_ownership_range(range))
@@ -269,11 +270,14 @@ impl io::Write for CallFrame {
     }
 }
 
-impl Interpreter {
+impl<S> Interpreter<S>
+where
+    S: Storage<ContractAddress, Contract> + Storage<Color, Word>,
+{
     pub fn call_frame(&self, call: Call, color: Color) -> Result<CallFrame, ExecuteError> {
         let (to, inputs, outputs) = call.into_inner();
 
-        let code = self.contract(&to).cloned().ok_or(ExecuteError::ContractNotFound)?;
+        let code = self.contract(&to)?.cloned().ok_or(ExecuteError::ContractNotFound)?;
         let registers = self.registers.clone();
 
         let frame = CallFrame::new(to, color, registers, inputs, outputs, code);

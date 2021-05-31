@@ -19,7 +19,8 @@ fn ecrecover() {
     let e = tx_crypto::hash(&message[..]);
     let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
 
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 256
@@ -92,7 +93,8 @@ fn sha256() {
     let message = b"I say let the world go to hell, but I should always have my tea.";
     let hash = tx_crypto::hash(message);
 
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 128
@@ -159,7 +161,8 @@ fn keccak256() {
     hasher.update(message);
     let hash = hasher.finalize();
 
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     // r[0x10] := 162

@@ -5,7 +5,7 @@ use crate::crypto;
 use fuel_asm::Word;
 use fuel_tx::crypto as tx_crypto;
 
-impl Interpreter {
+impl<S> Interpreter<S> {
     pub fn ecrecover(&mut self, a: Word, b: Word, c: Word) -> bool {
         let (ax, overflow) = a.overflowing_add(64);
         let (bx, of) = b.overflowing_add(64);

@@ -1,5 +1,6 @@
-use super::{Interpreter, MemoryRange};
+use super::{Contract, Interpreter, MemoryRange};
 use crate::consts::*;
+use crate::data::Storage;
 
 use fuel_asm::Word;
 use fuel_tx::{Address, Color, ContractAddress, Input};
@@ -11,7 +12,10 @@ const ADDRESS_SIZE: usize = mem::size_of::<Address>();
 const COLOR_SIZE: usize = mem::size_of::<Color>();
 const CONTRACT_ADDRESS_SIZE: usize = mem::size_of::<ContractAddress>();
 
-impl Interpreter {
+impl<S> Interpreter<S>
+where
+    S: Storage<ContractAddress, Contract> + Storage<Color, Word>,
+{
     pub fn burn(&mut self, a: Word) -> bool {
         let (x, overflow) = self.registers[REG_FP].overflowing_add(ADDRESS_SIZE as Word);
         let (xc, of) = x.overflowing_add(COLOR_SIZE as Word);
@@ -22,16 +26,18 @@ impl Interpreter {
         }
 
         let color = Color::try_from(&self.memory[x as usize..xc as usize]).expect("Memory bounds logically verified");
-        let balance = self.color_balance(&color);
+        let balance = match self.color_balance(&color) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+
         let (balance, underflow) = balance.overflowing_sub(a);
 
         if underflow {
             return false;
         }
 
-        self.set_color_balance(color, balance);
-
-        true
+        self.set_color_balance(color, balance).is_ok()
     }
 
     pub fn mint(&mut self, a: Word) -> bool {
@@ -44,16 +50,18 @@ impl Interpreter {
         }
 
         let color = Color::try_from(&self.memory[x as usize..xc as usize]).expect("Memory bounds logically verified");
-        let balance = self.color_balance(&color);
+        let balance = match self.color_balance(&color) {
+            Ok(b) => b,
+            Err(_) => return false,
+        };
+
         let (balance, overflow) = balance.overflowing_add(a);
 
         if overflow {
             return false;
         }
 
-        self.set_color_balance(color, balance);
-
-        true
+        self.set_color_balance(color, balance).is_ok()
     }
 
     // TODO add CCP tests
@@ -85,8 +93,8 @@ impl Interpreter {
         }
 
         // TODO optmize
-        let contract = match self.contract(&contract).cloned() {
-            Some(c) => c,
+        let contract = match self.contract(&contract).map(|c| c.cloned()) {
+            Ok(Some(c)) => c,
             _ => return false,
         };
 

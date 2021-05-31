@@ -1,11 +1,16 @@
-use super::{ExecuteError, Interpreter};
+use super::{Contract, ExecuteError, Interpreter};
+use crate::data::Storage;
 
 use fuel_asm::{Opcode, RegisterId, Word};
+use fuel_tx::{Color, ContractAddress};
 use tracing::debug;
 
 use std::ops::Div;
 
-impl Interpreter {
+impl<S> Interpreter<S>
+where
+    S: Storage<ContractAddress, Contract> + Storage<Color, Word>,
+{
     pub fn execute(&mut self, op: Opcode) -> Result<(), ExecuteError> {
         let mut result = Ok(());
 

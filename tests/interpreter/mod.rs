@@ -19,13 +19,16 @@ pub fn program_to_bytes(program: &[Opcode]) -> Vec<u8> {
         .collect()
 }
 
-pub fn deploy_contract(
+pub fn deploy_contract<S>(
     gas_price: Word,
     gas_limit: Word,
     maturity: Word,
-    vm: &mut Interpreter,
+    vm: &mut Interpreter<S>,
     program: &[Opcode],
-) -> ContractAddress {
+) -> ContractAddress
+where
+    S: Storage<ContractAddress, Contract> + Storage<Color, Word>,
+{
     let salt: Salt = common::r();
     let program = Witness::from(program_to_bytes(program));
 

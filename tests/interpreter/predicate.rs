@@ -5,7 +5,8 @@ use fuel_tx::bytes;
 
 #[test]
 fn predicate() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
 
     let predicate_data = 0x23 as Word;
     let mut predicate = vec![];
@@ -60,7 +61,7 @@ fn predicate() {
             let mut p = vec![];
 
             let predicate_data_offset =
-                Interpreter::tx_mem_address() + predicate_offset + bytes::padded_len(predicate.as_slice()) + 16; // 4 additional opcodes represented as u32
+                Interpreter::<()>::tx_mem_address() + predicate_offset + bytes::padded_len(predicate.as_slice()) + 16; // 4 additional opcodes represented as u32
             p.push(Opcode::ADDI(0x10, REG_ZERO, 0x08));
             p.push(Opcode::ADDI(0x11, REG_ZERO, predicate_data_offset as Immediate12));
             p.push(Opcode::MEQ(0x10, 0x11, 0x12, 0x10));
@@ -79,7 +80,8 @@ fn predicate() {
 
 #[test]
 fn predicate_false() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
 
     let predicate_data = 0x24 as Word;
     let mut predicate = vec![];
@@ -134,7 +136,7 @@ fn predicate_false() {
             let mut p = vec![];
 
             let predicate_data_offset =
-                Interpreter::tx_mem_address() + predicate_offset + bytes::padded_len(predicate.as_slice()) + 16; // 4 additional opcodes represented as u32
+                Interpreter::<()>::tx_mem_address() + predicate_offset + bytes::padded_len(predicate.as_slice()) + 16; // 4 additional opcodes represented as u32
             p.push(Opcode::ADDI(0x10, REG_ZERO, 0x08));
             p.push(Opcode::ADDI(0x11, REG_ZERO, predicate_data_offset as Immediate12));
             p.push(Opcode::MEQ(0x10, 0x11, 0x12, 0x10));

@@ -3,7 +3,8 @@ use fuel_core::prelude::*;
 
 #[test]
 fn memcopy() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     let alloc = 1024;
@@ -54,7 +55,8 @@ fn memrange() {
     let m_p = MemoryRange::new(0, 1024);
     assert_eq!(m, m_p);
 
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     let bytes = 1024;
@@ -79,7 +81,8 @@ fn memrange() {
 
 #[test]
 fn stack_alloc_ownership() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).expect("Failed to init VM");
 
     vm.execute(Opcode::MOVE(0x10, REG_SP)).unwrap();

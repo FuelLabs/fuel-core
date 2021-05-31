@@ -1,3 +1,5 @@
+use crate::data::DataError;
+
 use fuel_asm::Opcode;
 use fuel_tx::ValidationError;
 
@@ -8,6 +10,7 @@ pub enum ExecuteError {
     OpcodeFailure(Opcode),
     ValidationError(ValidationError),
     Io(io::Error),
+    Data(DataError),
     TransactionCreateStaticContractNotFound,
     TransactionCreateIdNotInTx,
     StackOverflow,
@@ -42,6 +45,7 @@ impl error::Error for ExecuteError {
         match self {
             Self::ValidationError(e) => Some(e),
             Self::Io(e) => Some(e),
+            Self::Data(e) => Some(e),
             _ => None,
         }
     }
@@ -56,5 +60,11 @@ impl From<ValidationError> for ExecuteError {
 impl From<io::Error> for ExecuteError {
     fn from(e: io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<DataError> for ExecuteError {
+    fn from(e: DataError) -> Self {
+        Self::Data(e)
     }
 }

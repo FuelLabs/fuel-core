@@ -10,7 +10,8 @@ const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[test]
 fn code_copy() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
 
     let gas_price = 10;
     let gas_limit = 1_000_000;
@@ -77,7 +78,7 @@ fn code_copy() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
+    let script_data_mem = Interpreter::<()>::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[3] = Opcode::ADDI(0x20, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 
@@ -94,7 +95,8 @@ fn code_copy() {
 
 #[test]
 fn call() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
 
     let gas_price = 10;
     let gas_limit = 1_000_000;
@@ -153,7 +155,7 @@ fn call() {
         vec![],
     );
 
-    let script_data_mem = Interpreter::tx_mem_address() + tx.script_data_offset().unwrap();
+    let script_data_mem = Interpreter::<()>::tx_mem_address() + tx.script_data_offset().unwrap();
     script_ops[0] = Opcode::ADDI(0x10, REG_ZERO, script_data_mem as Immediate12);
     let script_mem = program_to_bytes(script_ops.as_slice());
 

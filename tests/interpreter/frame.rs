@@ -4,7 +4,8 @@ use fuel_core::prelude::*;
 
 #[test]
 fn call_output_ownership() {
-    let mut vm = Interpreter::default();
+    let storage = MemoryStorage::default();
+    let mut vm = Interpreter::with_storage(storage);
     vm.init(Transaction::default()).unwrap();
 
     let bytes = 1024u64;
