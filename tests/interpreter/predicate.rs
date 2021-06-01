@@ -30,7 +30,7 @@ fn predicate() {
     let salt: Salt = r();
     let witness = vec![];
     let contract = Contract::from(witness.as_slice());
-    let contract = contract.address(&salt);
+    let contract = contract.address(salt.as_ref());
 
     let input = Input::coin(r(), r(), 0, r(), 0, maturity, predicate, predicate_data);
     let output = Output::contract_created(contract);
@@ -105,7 +105,7 @@ fn predicate_false() {
     let salt: Salt = r();
     let witness = vec![];
     let contract = Contract::from(witness.as_slice());
-    let contract = contract.address(&salt);
+    let contract = contract.address(salt.as_ref());
 
     let input = Input::coin(r(), r(), 0, r(), 0, maturity, predicate, predicate_data);
     let output = Output::contract_created(contract);

@@ -21,8 +21,8 @@ impl Storage<ContractAddress, Contract> for MemoryStorage {
         Ok(self.contracts.remove(key))
     }
 
-    fn get(&self, key: &ContractAddress) -> Result<Option<&Contract>, DataError> {
-        Ok(self.contracts.get(key))
+    fn get(&self, key: &ContractAddress) -> Result<Option<Contract>, DataError> {
+        Ok(self.contracts.get(key).cloned())
     }
 
     fn contains_key(&self, key: &ContractAddress) -> Result<bool, DataError> {
@@ -35,15 +35,15 @@ impl Storage<Color, Word> for MemoryStorage {
         Ok(self.color_balances.insert(key, value))
     }
 
-    fn get(&self, key: &Color) -> Result<Option<&Word>, DataError> {
-        Ok(self.color_balances.get(key))
+    fn get(&self, key: &Color) -> Result<Option<Word>, DataError> {
+        Ok(self.color_balances.get(key).copied())
     }
 
     fn remove(&mut self, key: &Color) -> Result<Option<Word>, DataError> {
         Ok(self.color_balances.remove(key))
     }
 
-    fn contains_key(&self, key: &ContractAddress) -> Result<bool, DataError> {
+    fn contains_key(&self, key: &Color) -> Result<bool, DataError> {
         Ok(self.color_balances.contains_key(key))
     }
 }

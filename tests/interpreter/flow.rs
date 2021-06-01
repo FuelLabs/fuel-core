@@ -5,7 +5,6 @@ use fuel_core::prelude::*;
 
 use std::mem;
 
-const CONTRACT_ADDRESS_SIZE: usize = mem::size_of::<ContractAddress>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[test]
@@ -28,7 +27,7 @@ fn code_copy() {
     ];
     let program = Witness::from(program_to_bytes(program.as_slice()));
 
-    let contract = Contract::from(program.as_ref()).address(&salt);
+    let contract = Contract::from(program.as_ref()).address(salt.as_ref());
     let contract_size = program.as_ref().len();
     let output = Output::contract_created(contract);
 
@@ -56,7 +55,7 @@ fn code_copy() {
         Opcode::ADD(0x11, REG_ZERO, 0x20),
         Opcode::ADDI(0x12, REG_ZERO, contract_size as Immediate12),
         Opcode::CCP(0x10, 0x11, REG_ZERO, 0x12),
-        Opcode::ADDI(0x21, 0x20, CONTRACT_ADDRESS_SIZE as Immediate12),
+        Opcode::ADDI(0x21, 0x20, ContractAddress::size_of() as Immediate12),
         Opcode::MEQ(0x30, 0x21, 0x10, 0x12),
         Opcode::RET(0x30),
     ];
@@ -112,7 +111,7 @@ fn call() {
     ];
     let program = Witness::from(program_to_bytes(program.as_slice()));
 
-    let contract = Contract::from(program.as_ref()).address(&salt);
+    let contract = Contract::from(program.as_ref()).address(salt.as_ref());
     let output = Output::contract_created(contract);
 
     // Deploy the contract
@@ -133,7 +132,7 @@ fn call() {
 
     let mut script_ops = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0x00),
-        Opcode::ADDI(0x11, 0x10, CONTRACT_ADDRESS_SIZE as Immediate12),
+        Opcode::ADDI(0x11, 0x10, ContractAddress::size_of() as Immediate12),
         Opcode::CALL(0x10, REG_ZERO, 0x10, 0x10),
         Opcode::RET(0x30),
     ];

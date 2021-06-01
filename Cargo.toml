@@ -15,7 +15,7 @@ sha3 = "0.9"
 secp256k1 = {version="0.20", features=["recovery"]}
 tracing = "0.1"
 fuel-asm = {git="ssh://git@github.com/FuelLabs/fuel-asm.git"}
-fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git"}
+fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git", branch="vlopes11/wrapper-coercion"}
 
 [dev-dependencies]
 rand = "0.8"

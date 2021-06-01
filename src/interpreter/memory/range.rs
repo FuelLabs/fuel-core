@@ -5,7 +5,9 @@ use fuel_asm::Word;
 
 use std::ops;
 
-// TODO replace all VM slices for this struct
+// Memory bounds must be manually checked and cannot follow general PartialEq
+// rules
+#[allow(clippy::derive_hash_xor_eq)]
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct MemoryRange {
     start: ops::Bound<Word>,
@@ -44,6 +46,10 @@ impl MemoryRange {
 
     pub const fn len(&self) -> Word {
         self.len
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
     }
 
     /// Return the boundaries of the slice with exclusive end `[a, b[`

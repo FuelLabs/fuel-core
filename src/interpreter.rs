@@ -24,8 +24,6 @@ pub use frame::{Call, CallFrame};
 pub use log::LogEvent;
 pub use memory::MemoryRange;
 
-const COLOR_SIZE: usize = mem::size_of::<Color>();
-const HASH_SIZE: usize = mem::size_of::<Hash>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[derive(Debug, Clone)]
@@ -78,10 +76,11 @@ impl<S> Interpreter<S> {
     }
 
     pub const fn tx_mem_address() -> usize {
-        HASH_SIZE // Tx ID
+        Hash::size_of() // Tx ID
             + WORD_SIZE // Tx size
-            + MAX_INPUTS as usize * (COLOR_SIZE + WORD_SIZE) // Color/Balance
-                                                             // coin input pairs
+            + MAX_INPUTS as usize * (Color::size_of() + WORD_SIZE) // Color/Balance
+                                                                   // coin input
+                                                                   // pairs
     }
 
     pub const fn block_height(&self) -> u32 {

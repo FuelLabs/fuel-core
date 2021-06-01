@@ -32,7 +32,7 @@ where
     let salt: Salt = common::r();
     let program = Witness::from(program_to_bytes(program));
 
-    let contract = Contract::from(program.as_ref()).address(&salt);
+    let contract = Contract::from(program.as_ref()).address(salt.as_ref());
     let output = Output::contract_created(contract);
 
     // Deploy the contract

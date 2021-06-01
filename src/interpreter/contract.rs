@@ -13,7 +13,6 @@ use itertools::Itertools;
 use std::convert::TryFrom;
 use std::mem;
 
-const COLOR_SIZE: usize = mem::size_of::<Color>();
 const WORD_SIZE: usize = mem::size_of::<Word>();
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -79,9 +78,9 @@ impl Contract {
         let mut input = VM_CONTRACT_ID_BASE.to_vec();
 
         input.extend_from_slice(salt);
-        input.extend_from_slice(&crypto::merkle_root(self.0.as_slice()));
+        input.extend_from_slice(crypto::merkle_root(self.0.as_slice()).as_ref());
 
-        tx_crypto::hash(input.as_slice())
+        (*tx_crypto::hash(input.as_slice())).into()
     }
 }
 
@@ -89,15 +88,12 @@ impl<S> Interpreter<S>
 where
     S: Storage<ContractAddress, Contract> + Storage<Color, Word>,
 {
-    pub fn contract(&self, address: &ContractAddress) -> Result<Option<&Contract>, ExecuteError> {
+    pub fn contract(&self, address: &ContractAddress) -> Result<Option<Contract>, ExecuteError> {
         Ok(self.storage.get(address)?)
     }
 
     pub fn check_contract_exists(&self, address: &ContractAddress) -> Result<bool, ExecuteError> {
-        Ok(<S as Storage<ContractAddress, Contract>>::contains_key(
-            &self.storage,
-            address,
-        )?)
+        Ok(self.storage.contains_key(address)?)
     }
 
     pub fn set_color_balance(&mut self, color: Color, balance: Word) -> Result<(), ExecuteError> {
@@ -107,7 +103,7 @@ where
     }
 
     pub fn color_balance(&self, color: &Color) -> Result<Word, ExecuteError> {
-        Ok(self.storage.get(color)?.copied().unwrap_or(0))
+        Ok(self.storage.get(color)?.unwrap_or(0))
     }
 
     pub fn init(&mut self, tx: Transaction) -> Result<(), ExecuteError> {
@@ -130,9 +126,9 @@ where
         self.registers[REG_FP] = VM_MAX_RAM - 1;
         self.registers[REG_HP] = self.registers[REG_FP];
 
-        self.push_stack(&tx.id())?;
+        self.push_stack(tx.id().as_ref())?;
 
-        let zeroes = &[0; MAX_INPUTS as usize * (COLOR_SIZE + WORD_SIZE)];
+        let zeroes = &[0; MAX_INPUTS as usize * (Color::size_of() + WORD_SIZE)];
         let mut ssp = self.registers[REG_SSP] as usize;
 
         self.push_stack(zeroes)?;
@@ -148,8 +144,8 @@ where
                 .try_for_each::<_, Result<_, ExecuteError>>(|color| {
                     let balance = self.color_balance(color)?;
 
-                    self.memory[ssp..ssp + COLOR_SIZE].copy_from_slice(color);
-                    ssp += COLOR_SIZE;
+                    self.memory[ssp..ssp + Color::size_of()].copy_from_slice(color.as_ref());
+                    ssp += Color::size_of();
 
                     self.memory[ssp..ssp + WORD_SIZE].copy_from_slice(&balance.to_be_bytes());
                     ssp += WORD_SIZE;
@@ -184,11 +180,12 @@ where
                 }
 
                 let contract = Contract::try_from(tx)?;
-                let id = contract.address(salt);
-                if !tx.outputs().iter().any(|output| match output {
-                    Output::ContractCreated { contract_id } if contract_id == &id => true,
-                    _ => false,
-                }) {
+                let id = contract.address(salt.as_ref());
+                if !tx
+                    .outputs()
+                    .iter()
+                    .any(|output| matches!(output, Output::ContractCreated { contract_id } if contract_id == &id))
+                {
                     Err(ExecuteError::TransactionCreateIdNotInTx)?;
                 }
 

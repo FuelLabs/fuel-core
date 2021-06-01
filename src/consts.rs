@@ -1,7 +1,5 @@
 use fuel_tx::ContractAddress;
 
-use std::mem;
-
 /* MEMORY TYPES */
 
 /// Maximum memory access size, in bytes.
@@ -82,5 +80,4 @@ pub const FUEL_MAX_PROGRAM_SIZE: u8 = 16;
 // used for serder
 pub const VM_REGISTER_WIDTH: u8 = 6;
 
-const CONTRACT_ADDRESS_SIZE: usize = mem::size_of::<ContractAddress>();
-pub const VM_CONTRACT_ID_BASE: ContractAddress = [0xab; CONTRACT_ADDRESS_SIZE];
+pub const VM_CONTRACT_ID_BASE: ContractAddress = ContractAddress::new([0xab; ContractAddress::size_of()]);

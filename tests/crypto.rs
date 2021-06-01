@@ -27,9 +27,10 @@ fn ecrecover() {
 
         let e = tx_crypto::hash(&message);
 
-        let sig =
-            crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
-        let pk_p = crypto::secp256k1_sign_compact_recover(&sig, &e).expect("Failed to recover PK from signature");
+        let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), e.as_ref())
+            .expect("Failed to generate signature");
+        let pk_p =
+            crypto::secp256k1_sign_compact_recover(&sig, e.as_ref()).expect("Failed to recover PK from signature");
 
         assert_eq!(public, pk_p);
     }

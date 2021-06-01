@@ -25,9 +25,7 @@ impl Call {
     }
 
     pub fn has_outputs_ownership<S>(&self, vm: &Interpreter<S>) -> bool {
-        self.outputs
-            .iter()
-            .fold(true, |acc, range| acc && vm.has_ownership_range(range))
+        self.outputs.iter().all(|range| vm.has_ownership_range(range))
     }
 
     pub const fn to(&self) -> &ContractAddress {
@@ -83,6 +81,8 @@ impl io::Write for Call {
         let (to, buf) = bytes::restore_array_unchecked(buf);
         let (outputs_len, buf) = bytes::restore_word_unchecked(buf);
         let (inputs_len, mut buf) = bytes::restore_word_unchecked(buf);
+
+        let to = to.into();
 
         let size = 2 * WORD_SIZE * (outputs_len + inputs_len) as usize;
         if buf.len() < size {
@@ -224,6 +224,9 @@ impl io::Write for CallFrame {
         let (to, buf) = bytes::restore_array_unchecked(buf);
         let (color, buf) = bytes::restore_array_unchecked(buf);
 
+        let to = to.into();
+        let color = color.into();
+
         let buf = self.registers.iter_mut().fold(buf, |buf, reg| {
             let (r, buf) = bytes::restore_word_unchecked(buf);
             *reg = r;
@@ -277,8 +280,8 @@ where
     pub fn call_frame(&self, call: Call, color: Color) -> Result<CallFrame, ExecuteError> {
         let (to, inputs, outputs) = call.into_inner();
 
-        let code = self.contract(&to)?.cloned().ok_or(ExecuteError::ContractNotFound)?;
-        let registers = self.registers.clone();
+        let code = self.contract(&to)?.ok_or(ExecuteError::ContractNotFound)?;
+        let registers = self.registers;
 
         let frame = CallFrame::new(to, color, registers, inputs, outputs, code);
 

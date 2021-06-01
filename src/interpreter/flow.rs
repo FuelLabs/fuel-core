@@ -70,10 +70,7 @@ where
             || cx > VM_MAX_RAM
             || call.write(&self.memory[a as usize..]).is_err()
             || !self.tx.input_contracts().any(|contract| call.to() == contract)
-            || !call
-                .outputs()
-                .iter()
-                .fold(true, |acc, output| acc && self.has_ownership_range(output))
+            || !call.outputs().iter().all(|output| self.has_ownership_range(output))
         {
             false
         } else {

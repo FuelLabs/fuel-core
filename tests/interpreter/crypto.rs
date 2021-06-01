@@ -17,7 +17,8 @@ fn ecrecover() {
 
     let message = b"The gift of words is the gift of deception and illusion.";
     let e = tx_crypto::hash(&message[..]);
-    let sig = crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), &e).expect("Failed to generate signature");
+    let sig =
+        crypto::secp256k1_sign_compact_recoverable(secret.as_ref(), e.as_ref()).expect("Failed to generate signature");
 
     let storage = MemoryStorage::default();
     let mut vm = Interpreter::with_storage(storage);
