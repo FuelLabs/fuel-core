@@ -1,4 +1,5 @@
-use crate::state::{BatchOperations, KeyValueStore, WriteOperation};
+use crate::state::in_memory::transaction::MemoryTransactionView;
+use crate::state::{BatchOperations, KeyValueStore, Transactional, WriteOperation};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -23,16 +24,15 @@ impl<K, V> MemoryStore<K, V> {
     }
 }
 
-#[async_trait::async_trait]
 impl<K, V> KeyValueStore for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Send + Sync + Debug + Clone,
-    V: Into<Vec<u8>> + Send + Sync + Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
 {
     type Key = K;
     type Value = V;
 
-    async fn get(&self, key: Self::Key) -> Option<Self::Value> {
+    fn get(&self, key: Self::Key) -> Option<Self::Value> {
         self.inner
             .read()
             .expect("poisoned")
@@ -40,7 +40,7 @@ where
             .map(|v| bincode::deserialize(v).unwrap())
     }
 
-    async fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
         self.inner
             .write()
             .expect("poisoned")
@@ -48,7 +48,7 @@ where
             .map(|res| bincode::deserialize(&res).unwrap())
     }
 
-    async fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
+    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
         self.inner
             .write()
             .expect("poisoned")
@@ -56,33 +56,41 @@ where
             .map(|res| bincode::deserialize(&res).unwrap())
     }
 
-    async fn exists(&self, key: Self::Key) -> bool {
+    fn exists(&self, key: Self::Key) -> bool {
         self.inner.read().expect("poisoned").contains_key(key.as_ref())
     }
 }
 
-#[async_trait::async_trait]
 impl<K, V> BatchOperations for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Send + Sync + Debug + Clone,
-    V: Into<Vec<u8>> + Send + Sync + Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
 {
     type Key = K;
     type Value = V;
 
-    async fn batch_write<I>(&mut self, entries: I)
+    fn batch_write<I>(&mut self, entries: I)
     where
-        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>> + Send,
+        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>,
     {
         for entry in entries {
             match entry {
                 WriteOperation::Insert(key, value) => {
-                    let _ = self.put(key, value).await;
+                    let _ = self.put(key, value);
                 }
                 WriteOperation::Remove(key) => {
-                    let _ = self.delete(key).await;
+                    let _ = self.delete(key);
                 }
             }
         }
     }
+}
+
+/// Configure memory store to use the MemoryTransactionView
+impl<K, V> Transactional<K, V> for MemoryStore<K, V>
+where
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
+{
+    type View = MemoryTransactionView<K, V, Self>;
 }

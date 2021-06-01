@@ -1,55 +1,45 @@
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
-use std::future::Future;
 
-pub trait Database {}
-
-#[async_trait::async_trait]
 pub trait KeyValueStore {
-    type Key: AsRef<[u8]> + Debug + Send + Clone;
+    type Key: AsRef<[u8]> + Debug + Clone;
     type Value: Debug + DeserializeOwned + Clone;
 
-    async fn get(&self, key: Self::Key) -> Option<Self::Value>;
-    async fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
-    async fn delete(&mut self, key: Self::Key) -> Option<Self::Value>;
-    async fn exists(&self, key: Self::Key) -> bool;
+    fn get(&self, key: Self::Key) -> Option<Self::Value>;
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
+    fn delete(&mut self, key: Self::Key) -> Option<Self::Value>;
+    fn exists(&self, key: Self::Key) -> bool;
 }
 
-#[async_trait::async_trait]
+/// Used to indicate if a type may be transacted upon
+pub trait Transactional<K, V>: KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V> {
+    type View: KeyValueStore<Key = K, Value = V>;
+}
+
 pub trait BatchOperations {
-    type Key: AsRef<[u8]> + Debug + Send + Clone;
+    type Key: AsRef<[u8]> + Debug + Clone;
     type Value: Debug + DeserializeOwned + Clone;
 
-    async fn batch_write<I>(&mut self, entries: I)
+    fn batch_write<I>(&mut self, entries: I)
     where
-        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>> + Send;
+        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>;
 }
 
 #[derive(Debug)]
-enum WriteOperation<K, V> {
+pub enum WriteOperation<K, V> {
     Insert(K, V),
     Remove(K),
 }
 
-#[async_trait::async_trait]
-pub trait TransactionalProxy {
-    type UnderlyingStore: BatchOperations;
-    async fn commit(&mut self);
-}
-
-#[async_trait::async_trait]
-pub trait Transactional<K, V, S, P>
+pub trait Transaction<K, V, View>: KeyValueStore<Key = K, Value = V>
 where
-    K: AsRef<[u8]> + Debug + Send + Clone,
+    K: AsRef<[u8]> + Debug + Clone,
     V: Debug + DeserializeOwned + Clone,
-    S: KeyValueStore<Key = K, Value = V>,
-    P: KeyValueStore<Key = K, Value = V>,
+    View: KeyValueStore<Key = K, Value = V>,
 {
-    async fn transaction<F, Fut, R>(&mut self, f: F) -> TransactionResult<R>
+    fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut P) -> Fut + Send,
-        Fut: Future<Output = TransactionResult<R>> + Send,
-        R: Send;
+        F: FnOnce(&mut View) -> TransactionResult<R>;
 }
 
 pub type TransactionResult<T> = Result<T, TransactionError>;

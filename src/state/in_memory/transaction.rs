@@ -1,42 +1,97 @@
-use crate::state::in_memory::transaction_proxy::MemoryTransactionProxy;
-use crate::state::{BatchOperations, KeyValueStore, TransactionResult, Transactional, TransactionalProxy};
+use crate::state::in_memory::memory_store::MemoryStore;
+use crate::state::{BatchOperations, KeyValueStore, Transaction, TransactionResult, Transactional, WriteOperation};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fmt::Debug;
-use std::future::Future;
 
-pub struct Transaction<K, V, S> {
-    proxy: MemoryTransactionProxy<K, V, S>,
+pub struct MemoryTransactionView<K, V, S> {
+    view_layer: MemoryStore<K, V>,
+    // use hashmap to collapse changes (e.g. insert then remove the same key)
+    changes: HashMap<Vec<u8>, WriteOperation<K, V>>,
+    data_source: S,
 }
 
-impl<K, V, S> Transaction<K, V, S>
+impl<K, V, S> MemoryTransactionView<K, V, S>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Send + Sync + Debug + Clone,
-    V: Into<Vec<u8>> + Send + Sync + Serialize + DeserializeOwned + Debug + Clone,
     S: KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V>,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    pub fn new(store: S) -> Self {
+    pub fn new(source: S) -> Self {
         Self {
-            proxy: MemoryTransactionProxy::new(store),
+            view_layer: MemoryStore::<K, V>::new(),
+            changes: Default::default(),
+            data_source: source,
+        }
+    }
+
+    fn commit(&mut self) {
+        self.data_source.batch_write(self.changes.drain().map(|t| t.1))
+    }
+}
+
+impl<K, V, S> KeyValueStore for MemoryTransactionView<K, V, S>
+where
+    S: KeyValueStore<Key = K, Value = V>,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
+{
+    type Key = K;
+    type Value = V;
+
+    fn get(&self, key: Self::Key) -> Option<Self::Value> {
+        // try to fetch data from View layer if any changes to the key
+        if self.changes.contains_key(key.as_ref()) {
+            self.view_layer.get(key)
+        } else {
+            // fall-through to original data source
+            self.data_source.get(key)
+        }
+    }
+
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
+        self.changes
+            .insert(key.clone().into(), WriteOperation::Insert(key.clone(), value.clone()));
+        self.view_layer.put(key, value)
+    }
+
+    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
+        let contained_key = self.changes.contains_key(key.as_ref());
+        self.changes
+            .insert(key.clone().into(), WriteOperation::Remove(key.clone()));
+        let res = self.view_layer.delete(key.clone());
+        if contained_key {
+            res
+        } else {
+            self.data_source.get(key)
+        }
+    }
+
+    fn exists(&self, key: Self::Key) -> bool {
+        if self.changes.contains_key(key.as_ref()) {
+            self.view_layer.exists(key)
+        } else {
+            self.data_source.exists(key)
         }
     }
 }
 
-#[async_trait::async_trait]
-impl<K, V, S> Transactional<K, V, S, MemoryTransactionProxy<K, V, S>> for Transaction<K, V, S>
+impl<K, V, T> Transaction<K, V, MemoryTransactionView<K, V, T>> for T
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Send + Sync + Debug + Clone,
-    V: Into<Vec<u8>> + Send + Sync + Serialize + DeserializeOwned + Debug + Clone,
-    S: KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V> + Sync + Send,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Into<Vec<u8>> + Serialize + DeserializeOwned + Debug + Clone,
+    T: Transactional<K, V, View = MemoryTransactionView<K, V, T>> + Clone,
 {
-    async fn transaction<F, Fut, R>(&mut self, f: F) -> TransactionResult<R>
+    fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut MemoryTransactionProxy<K, V, S>) -> Fut + Send,
-        Fut: Future<Output = TransactionResult<R>> + Send,
-        R: Send,
+        F: FnOnce(&mut MemoryTransactionView<K, V, T>) -> TransactionResult<R>,
     {
-        let result = f(&mut self.proxy).await;
-        self.proxy.commit().await;
+        let mut view = MemoryTransactionView::new(self.clone());
+        let result = f(&mut view);
+        if let Ok(_) = result {
+            view.commit();
+        }
         result
     }
 }
@@ -44,26 +99,197 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::in_memory::memory_store::MemoryStore;
+    use crate::state::TransactionError;
 
-    #[tokio::test]
-    async fn transaction_commit_is_applied_if_successful() {
+    #[test]
+    fn get_returns_from_view() {
+        // setup
         let store = MemoryStore::<String, String>::new();
-        let mut transaction = Transaction::new(store);
-
-        transaction
-            .transaction(|store| async {
-                store.put("k1".to_string(), "v1".to_string()).await;
-                Ok(())
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(store.get("k1".to_string()).await.unwrap(), "v1")
+        let mut view = MemoryTransactionView::new(store);
+        view.put("test".to_string(), "value".to_string());
+        // test
+        let ret = view.get("test".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()))
     }
 
-    #[tokio::test]
-    async fn transaction_commit_is_not_applied_if_aborted() {
-        todo!()
+    #[test]
+    fn get_returns_from_data_store_when_key_not_in_view() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let view = MemoryTransactionView::new(store);
+        // test
+        let ret = view.get("test".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()))
+    }
+
+    #[test]
+    fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let mut view = MemoryTransactionView::new(store.clone());
+        view.delete("test".to_string());
+        // test
+        let ret = view.get("test".to_string());
+        let original = store.get("test".to_string());
+        // verify
+        assert_eq!(ret, None);
+        // also ensure the original value is still intact and we aren't just passing
+        // through None from the data store
+        assert_eq!(original, Some("value".to_string()))
+    }
+
+    #[test]
+    fn can_insert_value_into_view() {
+        // setup
+        let store = MemoryStore::<String, String>::new();
+        let mut view = MemoryTransactionView::new(store);
+        view.put("test".to_string(), "value".to_string());
+        // test
+        let ret = view.put("test".to_string(), "value2".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()))
+    }
+
+    #[test]
+    fn delete_value_from_view_returns_value() {
+        // setup
+        let store = MemoryStore::<String, String>::new();
+        let mut view = MemoryTransactionView::new(store);
+        view.put("test".to_string(), "value".to_string());
+        // test
+        let ret = view.delete("test".to_string());
+        let get = view.get("test".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()));
+        assert_eq!(get, None)
+    }
+
+    #[test]
+    fn delete_returns_datastore_value_when_not_in_view() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let mut view = MemoryTransactionView::new(store);
+        // test
+        let ret = view.delete("test".to_string());
+        let get = view.get("test".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()));
+        assert_eq!(get, None)
+    }
+
+    #[test]
+    fn delete_does_not_return_datastore_value_when_deleted_twice() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let mut view = MemoryTransactionView::new(store);
+        // test
+        let ret1 = view.delete("test".to_string());
+        let ret2 = view.delete("test".to_string());
+        let get = view.get("test".to_string());
+        // verify
+        assert_eq!(ret1, Some("value".to_string()));
+        assert_eq!(ret2, None);
+        assert_eq!(get, None)
+    }
+
+    #[test]
+    fn exists_checks_view_values() {
+        // setup
+        let store = MemoryStore::<String, String>::new();
+        let mut view = MemoryTransactionView::new(store);
+        view.put("test".to_string(), "value".to_string());
+        // test
+        let ret = view.exists("test".to_string());
+        // verify
+        assert!(ret)
+    }
+
+    #[test]
+    fn exists_checks_data_store_when_not_in_view() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let view = MemoryTransactionView::new(store);
+        // test
+        let ret = view.exists("test".to_string());
+        // verify
+        assert!(ret)
+    }
+
+    #[test]
+    fn exists_doesnt_check_data_store_after_intentional_removal_from_view() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let mut view = MemoryTransactionView::new(store.clone());
+        view.delete("test".to_string());
+        // test
+        let ret = view.exists("test".to_string());
+        let original = store.exists("test".to_string());
+        // verify
+        assert!(!ret);
+        // also ensure the original value is still intact and we aren't just passing
+        // through None from the data store
+        assert!(original)
+    }
+
+    #[test]
+    fn commit_applies_puts() {
+        // setup
+        let store = MemoryStore::<String, String>::new();
+        let mut view = MemoryTransactionView::new(store.clone());
+        view.put("test".to_string(), "value".to_string());
+        // test
+        view.commit();
+        let ret = store.get("test".to_string());
+        // verify
+        assert_eq!(ret, Some("value".to_string()))
+    }
+
+    #[test]
+    fn commit_applies_deletes() {
+        // setup
+        let mut store = MemoryStore::<String, String>::new();
+        store.put("test".to_string(), "value".to_string());
+        let mut view = MemoryTransactionView::new(store.clone());
+        // test
+        view.delete("test".to_string());
+        view.commit();
+        let ret = store.get("test".to_string());
+        // verify
+        assert_eq!(ret, None)
+    }
+
+    #[test]
+    fn transaction_commit_is_applied_if_successful() {
+        let mut store = MemoryStore::<String, String>::new();
+
+        store
+            .transaction(|store| {
+                store.put("k1".to_string(), "v1".to_string());
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(store.get("k1".to_string()).unwrap(), "v1")
+    }
+
+    #[test]
+    fn transaction_commit_is_not_applied_if_aborted() {
+        let mut store = MemoryStore::<String, String>::new();
+
+        let _result = store.transaction(|store| {
+            store.put("k1".to_string(), "v1".to_string());
+            Err(TransactionError::Aborted)?;
+            Ok(())
+        });
+
+        assert_eq!(store.get("k1".to_string()), None)
     }
 }
