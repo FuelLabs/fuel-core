@@ -2,7 +2,7 @@ use crate::state::{KeyValueStore, Transaction, TransactionResult};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::transaction::{ConflictableTransactionError, TransactionError, TransactionalTree};
-use sled::{Tree};
+use sled::Tree;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -251,27 +251,80 @@ mod tests {
     }
 
     mod new_transactional_tree {
-        
-        
+
+        use super::*;
+        use sled::Config;
 
         #[test]
         fn can_get_from_tree() {
-            todo!()
+            // setup
+            let config = Config::new().temporary(true);
+            let db = config.open().unwrap();
+            let tree = db.open_tree(b"test_tree").unwrap();
+
+            let v = bincode::serialize("value").unwrap();
+            tree.insert("test".to_string(), v.clone()).unwrap();
+            // convert from sled tree to our storage interface
+            let mut sled_store: SledStore<String, String> = tree.into();
+
+            let result = sled_store.transaction(|view| Ok(view.get("test".to_string()))).unwrap();
+
+            assert_eq!(result, Some("value".to_string()));
         }
 
         #[test]
         fn can_insert_into_tree() {
-            todo!()
+            // setup
+            let config = Config::new().temporary(true);
+            let db = config.open().unwrap();
+            let tree = db.open_tree(b"test_tree").unwrap();
+            let mut sled_store: SledStore<String, String> = tree.into();
+
+            let result = sled_store
+                .transaction(|view| Ok(view.put("test".to_string(), "value".to_string())))
+                .unwrap();
+
+            assert_eq!(result, None);
+            assert_eq!(sled_store.get("test".to_string()), Some("value".to_string()));
         }
 
         #[test]
         fn can_remove_from_tree() {
-            todo!()
+            // setup
+            let config = Config::new().temporary(true);
+            let db = config.open().unwrap();
+            let tree = db.open_tree(b"test_tree").unwrap();
+
+            let v = bincode::serialize("value").unwrap();
+            tree.insert("test".to_string(), v.clone()).unwrap();
+            // convert from sled tree to our storage interface
+            let mut sled_store: SledStore<String, String> = tree.into();
+
+            let result = sled_store
+                .transaction(|view| Ok(view.delete("test".to_string())))
+                .unwrap();
+
+            assert_eq!(result, Some("value".to_string()));
+            assert_eq!(sled_store.get("test".to_string()), None);
         }
 
         #[test]
         fn check_key_existence_from_tree() {
-            todo!()
+            // setup
+            let config = Config::new().temporary(true);
+            let db = config.open().unwrap();
+            let tree = db.open_tree(b"test_tree").unwrap();
+
+            let v = bincode::serialize("value").unwrap();
+            tree.insert("test".to_string(), v.clone()).unwrap();
+            // convert from sled tree to our storage interface
+            let mut sled_store: SledStore<String, String> = tree.into();
+
+            let result = sled_store
+                .transaction(|view| Ok(view.exists("test".to_string())))
+                .unwrap();
+
+            assert!(result);
         }
     }
 }
