@@ -19,6 +19,7 @@ tracing = "0.1"
 tokio = {version = "1.6", features = ["rt", "macros"] }
 fuel-asm = {git="ssh://git@github.com/FuelLabs/fuel-asm.git"}
 fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git"}
+sled = { version = "0.34" , optional = true }
 
 # Bin dependencies
 tracing-subscriber = {version="0.2", optional=true}
@@ -31,6 +32,7 @@ rand = "0.8"
 [features]
 log = ["tracing-subscriber"]
 cli = ["clap", "json"]
+sled-db = ["sled"]
 
 [[bin]]
 name = "interpreter"

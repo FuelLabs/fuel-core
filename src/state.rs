@@ -39,7 +39,7 @@ where
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut View) -> TransactionResult<R>;
+        F: FnOnce(&mut View) -> TransactionResult<R> + Copy;
 }
 
 pub type TransactionResult<T> = Result<T, TransactionError>;
@@ -50,3 +50,5 @@ pub enum TransactionError {
 }
 
 pub mod in_memory;
+#[cfg(feature = "sled-db")]
+pub mod sled_db;
