@@ -1,8 +1,8 @@
 use crate::state::{KeyValueStore, Transaction, TransactionResult};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sled::transaction::{abort, ConflictableTransactionError, TransactionError, TransactionalTree};
-use sled::{Error, IVec, Tree};
+use sled::transaction::{ConflictableTransactionError, TransactionError, TransactionalTree};
+use sled::{Tree};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -251,8 +251,8 @@ mod tests {
     }
 
     mod new_transactional_tree {
-        use super::*;
-        use sled::Config;
+        
+        
 
         #[test]
         fn can_get_from_tree() {
