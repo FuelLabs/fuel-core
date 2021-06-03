@@ -1,3 +1,3 @@
-# fuel-vm-rs
+# fuel-core
 
-Rust interpreter for the Fuel Virtual Machine
+Fuel client implementation.

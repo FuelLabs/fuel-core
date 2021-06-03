@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core"
-description = "FuelVM interpreter."
+description = "Fuel client."
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
 edition = "2018"
@@ -10,25 +10,3 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 
 [dependencies]
-itertools = "0.10"
-sha3 = "0.9"
-secp256k1 = {version="0.20", features=["recovery"]}
-tracing = "0.1"
-fuel-asm = {git="ssh://git@github.com/FuelLabs/fuel-asm.git"}
-fuel-tx = {git="ssh://git@github.com/FuelLabs/fuel-tx.git"}
-
-# Bin dependencies
-tracing-subscriber = {version="0.2", optional=true}
-clap = {version="2.33", optional=true}
-json = {version="0.12", optional=true}
-
-[dev-dependencies]
-rand = "0.8"
-
-[features]
-log = ["tracing-subscriber"]
-cli = ["clap", "json"]
-
-[[bin]]
-name = "interpreter"
-required-features = ["log", "cli"]
