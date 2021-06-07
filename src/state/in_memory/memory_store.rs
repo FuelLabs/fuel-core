@@ -1,5 +1,8 @@
-use crate::state::in_memory::transaction::MemoryTransactionView;
-use crate::state::{BatchOperations, KeyValueStore, Transactional, WriteOperation};
+use crate::state::Error::Codec;
+use crate::state::{
+    in_memory::transaction::MemoryTransactionView, BatchOperations, Error, KeyValueStore, Result, Transactional,
+    WriteOperation,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -32,32 +35,35 @@ where
     type Key = K;
     type Value = V;
 
-    fn get(&self, key: Self::Key) -> Option<Self::Value> {
-        self.inner
-            .read()
-            .expect("poisoned")
-            .get(key.as_ref())
-            .map(|v| bincode::deserialize(v).unwrap())
+    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+        if let Some(value) = self.inner.read().expect("poisoned").get(key.as_ref()) {
+            Ok(Some(bincode::deserialize(value).map_err(|_| Codec)?))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
-        self.inner
-            .write()
-            .expect("poisoned")
-            .insert(key.into(), bincode::serialize(&value).unwrap())
-            .map(|res| bincode::deserialize(&res).unwrap())
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
+        let value = bincode::serialize(&value).unwrap();
+        let result = self.inner.write().expect("poisoned").insert(key.into(), value);
+        if let Some(previous) = result {
+            Ok(Some(bincode::deserialize(&previous).map_err(|_| Error::Codec)?))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
-        self.inner
+    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+        Ok(self
+            .inner
             .write()
             .expect("poisoned")
             .remove(key.as_ref())
-            .map(|res| bincode::deserialize(&res).unwrap())
+            .map(|res| bincode::deserialize(&res).unwrap()))
     }
 
-    fn exists(&self, key: Self::Key) -> bool {
-        self.inner.read().expect("poisoned").contains_key(key.as_ref())
+    fn exists(&self, key: Self::Key) -> Result<bool> {
+        Ok(self.inner.read().expect("poisoned").contains_key(key.as_ref()))
     }
 }
 
@@ -69,7 +75,7 @@ where
     type Key = K;
     type Value = V;
 
-    fn batch_write<I>(&mut self, entries: I)
+    fn batch_write<I>(&mut self, entries: I) -> Result<()>
     where
         I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>,
     {
@@ -83,6 +89,7 @@ where
                 }
             }
         }
+        Ok(())
     }
 }
 

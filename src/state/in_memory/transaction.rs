@@ -1,5 +1,7 @@
-use crate::state::in_memory::memory_store::MemoryStore;
-use crate::state::{BatchOperations, KeyValueStore, Transaction, TransactionResult, Transactional, WriteOperation};
+use crate::state::{
+    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result, Transaction, TransactionError,
+    TransactionResult, Transactional, WriteOperation,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -26,7 +28,7 @@ where
         }
     }
 
-    fn commit(&mut self) {
+    fn commit(&mut self) -> crate::state::Result<()> {
         self.data_source.batch_write(self.changes.drain().map(|t| t.1))
     }
 }
@@ -40,7 +42,7 @@ where
     type Key = K;
     type Value = V;
 
-    fn get(&self, key: Self::Key) -> Option<Self::Value> {
+    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes.contains_key(key.as_ref()) {
             self.view_layer.get(key)
@@ -50,13 +52,13 @@ where
         }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
         self.changes
             .insert(key.clone().into(), WriteOperation::Insert(key.clone(), value.clone()));
         self.view_layer.put(key, value)
     }
 
-    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
+    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
         let contained_key = self.changes.contains_key(key.as_ref());
         self.changes
             .insert(key.clone().into(), WriteOperation::Remove(key.clone()));
@@ -68,7 +70,7 @@ where
         }
     }
 
-    fn exists(&self, key: Self::Key) -> bool {
+    fn exists(&self, key: Self::Key) -> Result<bool> {
         if self.changes.contains_key(key.as_ref()) {
             self.view_layer.exists(key)
         } else {
@@ -90,7 +92,7 @@ where
         let mut view = MemoryTransactionView::new(self.clone());
         let result = f(&mut view);
         if let Ok(_) = result {
-            view.commit();
+            view.commit().map_err(|_| TransactionError::Aborted)?;
         }
         result
     }
@@ -106,9 +108,9 @@ mod tests {
         // setup
         let store = MemoryStore::<String, String>::new();
         let mut view = MemoryTransactionView::new(store);
-        view.put("test".to_string(), "value".to_string());
+        view.put("test".to_string(), "value".to_string()).unwrap();
         // test
-        let ret = view.get("test".to_string());
+        let ret = view.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -117,10 +119,10 @@ mod tests {
     fn get_returns_from_data_store_when_key_not_in_view() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.get("test".to_string());
+        let ret = view.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -129,12 +131,12 @@ mod tests {
     fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
-        view.delete("test".to_string());
+        view.delete("test".to_string()).unwrap();
         // test
-        let ret = view.get("test".to_string());
-        let original = store.get("test".to_string());
+        let ret = view.get("test".to_string()).unwrap();
+        let original = store.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, None);
         // also ensure the original value is still intact and we aren't just passing
@@ -147,9 +149,9 @@ mod tests {
         // setup
         let store = MemoryStore::<String, String>::new();
         let mut view = MemoryTransactionView::new(store);
-        view.put("test".to_string(), "value".to_string());
+        let _ = view.put("test".to_string(), "value".to_string());
         // test
-        let ret = view.put("test".to_string(), "value2".to_string());
+        let ret = view.put("test".to_string(), "value2".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -159,10 +161,10 @@ mod tests {
         // setup
         let store = MemoryStore::<String, String>::new();
         let mut view = MemoryTransactionView::new(store);
-        view.put("test".to_string(), "value".to_string());
+        view.put("test".to_string(), "value".to_string()).unwrap();
         // test
-        let ret = view.delete("test".to_string());
-        let get = view.get("test".to_string());
+        let ret = view.delete("test".to_string()).unwrap();
+        let get = view.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()));
         assert_eq!(get, None)
@@ -172,11 +174,11 @@ mod tests {
     fn delete_returns_datastore_value_when_not_in_view() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
-        let ret = view.delete("test".to_string());
-        let get = view.get("test".to_string());
+        let ret = view.delete("test".to_string()).unwrap();
+        let get = view.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()));
         assert_eq!(get, None)
@@ -186,12 +188,12 @@ mod tests {
     fn delete_does_not_return_datastore_value_when_deleted_twice() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
-        let ret1 = view.delete("test".to_string());
-        let ret2 = view.delete("test".to_string());
-        let get = view.get("test".to_string());
+        let ret1 = view.delete("test".to_string()).unwrap();
+        let ret2 = view.delete("test".to_string()).unwrap();
+        let get = view.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret1, Some("value".to_string()));
         assert_eq!(ret2, None);
@@ -203,9 +205,9 @@ mod tests {
         // setup
         let store = MemoryStore::<String, String>::new();
         let mut view = MemoryTransactionView::new(store);
-        view.put("test".to_string(), "value".to_string());
+        view.put("test".to_string(), "value".to_string()).unwrap();
         // test
-        let ret = view.exists("test".to_string());
+        let ret = view.exists("test".to_string()).unwrap();
         // verify
         assert!(ret)
     }
@@ -214,10 +216,10 @@ mod tests {
     fn exists_checks_data_store_when_not_in_view() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.exists("test".to_string());
+        let ret = view.exists("test".to_string()).unwrap();
         // verify
         assert!(ret)
     }
@@ -226,12 +228,12 @@ mod tests {
     fn exists_doesnt_check_data_store_after_intentional_removal_from_view() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
-        view.delete("test".to_string());
+        view.delete("test".to_string()).unwrap();
         // test
-        let ret = view.exists("test".to_string());
-        let original = store.exists("test".to_string());
+        let ret = view.exists("test".to_string()).unwrap();
+        let original = store.exists("test".to_string()).unwrap();
         // verify
         assert!(!ret);
         // also ensure the original value is still intact and we aren't just passing
@@ -244,10 +246,10 @@ mod tests {
         // setup
         let store = MemoryStore::<String, String>::new();
         let mut view = MemoryTransactionView::new(store.clone());
-        view.put("test".to_string(), "value".to_string());
+        view.put("test".to_string(), "value".to_string()).unwrap();
         // test
-        view.commit();
-        let ret = store.get("test".to_string());
+        view.commit().unwrap();
+        let ret = store.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -256,12 +258,12 @@ mod tests {
     fn commit_applies_deletes() {
         // setup
         let mut store = MemoryStore::<String, String>::new();
-        store.put("test".to_string(), "value".to_string());
+        store.put("test".to_string(), "value".to_string()).unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
         // test
-        view.delete("test".to_string());
-        view.commit();
-        let ret = store.get("test".to_string());
+        view.delete("test".to_string()).unwrap();
+        view.commit().unwrap();
+        let ret = store.get("test".to_string()).unwrap();
         // verify
         assert_eq!(ret, None)
     }
@@ -272,12 +274,12 @@ mod tests {
 
         store
             .transaction(|store| {
-                store.put("k1".to_string(), "v1".to_string());
+                store.put("k1".to_string(), "v1".to_string()).unwrap();
                 Ok(())
             })
             .unwrap();
 
-        assert_eq!(store.get("k1".to_string()).unwrap(), "v1")
+        assert_eq!(store.get("k1".to_string()).unwrap().unwrap(), "v1")
     }
 
     #[test]
@@ -285,11 +287,11 @@ mod tests {
         let mut store = MemoryStore::<String, String>::new();
 
         let _result = store.transaction(|store| {
-            store.put("k1".to_string(), "v1".to_string());
+            store.put("k1".to_string(), "v1".to_string()).unwrap();
             Err(TransactionError::Aborted)?;
             Ok(())
         });
 
-        assert_eq!(store.get("k1".to_string()), None)
+        assert_eq!(store.get("k1".to_string()).unwrap(), None)
     }
 }

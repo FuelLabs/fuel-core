@@ -1,14 +1,22 @@
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
+pub type Result<T> = core::result::Result<T, Error>;
+
 pub trait KeyValueStore {
     type Key: AsRef<[u8]> + Debug + Clone;
     type Value: Debug + DeserializeOwned + Clone;
 
-    fn get(&self, key: Self::Key) -> Option<Self::Value>;
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value>;
-    fn delete(&mut self, key: Self::Key) -> Option<Self::Value>;
-    fn exists(&self, key: Self::Key) -> bool;
+    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>>;
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>>;
+    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>>;
+    fn exists(&self, key: Self::Key) -> Result<bool>;
+}
+
+#[derive(Clone, Debug)]
+pub enum Error {
+    Unknown,
+    Codec,
 }
 
 /// Used to indicate if a type may be transacted upon
@@ -20,7 +28,7 @@ pub trait BatchOperations {
     type Key: AsRef<[u8]> + Debug + Clone;
     type Value: Debug + DeserializeOwned + Clone;
 
-    fn batch_write<I>(&mut self, entries: I)
+    fn batch_write<I>(&mut self, entries: I) -> Result<()>
     where
         I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>;
 }
@@ -42,7 +50,7 @@ where
         F: FnOnce(&mut View) -> TransactionResult<R> + Copy;
 }
 
-pub type TransactionResult<T> = Result<T, TransactionError>;
+pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {
