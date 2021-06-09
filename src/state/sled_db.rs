@@ -1,8 +1,11 @@
-use crate::state::{KeyValueStore, Transaction, TransactionResult};
+use crate::state::Error::Codec;
+use crate::state::{KeyValueStore, Result, Transaction, TransactionResult};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sled::transaction::{ConflictableTransactionError, TransactionError, TransactionalTree};
-use sled::Tree;
+use sled::transaction::{
+    ConflictableTransactionError, TransactionError, TransactionalTree, UnabortableTransactionError,
+};
+use sled::{Error, Tree};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
@@ -30,26 +33,37 @@ where
     type Key = K;
     type Value = V;
 
-    fn get(&self, key: Self::Key) -> Option<Self::Value> {
-        self.tree.get(key).unwrap().map(|v| bincode::deserialize(&v).unwrap())
+    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+        if let Some(value) = self.tree.get(key)? {
+            Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
-        self.tree
-            .insert(key, bincode::serialize(&value).unwrap())
-            .unwrap()
-            .map(|v| bincode::deserialize(&v).unwrap())
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
+        let value = bincode::serialize(&value).map_err(|_| Codec)?;
+        if let Some(previous_value) = self.tree.insert(key, value)? {
+            Ok(Some(
+                bincode::deserialize(&previous_value).map_err(|_| Codec)?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
-        self.tree
-            .remove(key)
-            .unwrap()
-            .map(|v| bincode::deserialize(&v).unwrap())
+    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+        if let Some(previous_value) = self.tree.remove(key)? {
+            Ok(Some(
+                bincode::deserialize(&previous_value).map_err(|_| Codec)?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn exists(&self, key: Self::Key) -> bool {
-        self.tree.contains_key(key).unwrap()
+    fn exists(&self, key: Self::Key) -> Result<bool> {
+        Ok(self.tree.contains_key(key)?)
     }
 }
 
@@ -91,28 +105,45 @@ where
     type Key = K;
     type Value = V;
 
-    fn get(&self, key: Self::Key) -> Option<Self::Value> {
-        self.inner.get(key).unwrap().map(|v| bincode::deserialize(&v).unwrap())
+    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+        if let Some(value) = self.inner.get(key)? {
+            Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Option<Self::Value> {
+    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
         let key_vec: Vec<u8> = key.into();
-        self.inner
-            .insert(key_vec, bincode::serialize(&value).unwrap())
-            .unwrap()
-            .map(|v| bincode::deserialize(&v).unwrap())
+        let value = bincode::serialize(&value).map_err(|_| Codec)?;
+        if let Some(previous_value) = self.inner.insert(key_vec, value)? {
+            Ok(Some(
+                bincode::deserialize(previous_value.as_ref()).map_err(|_| Codec)?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Option<Self::Value> {
+    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
         let key_vec: Vec<u8> = key.into();
-        self.inner
-            .remove(key_vec)
-            .unwrap()
-            .map(|v| bincode::deserialize(&v).unwrap())
+        if let Some(previous_value) = self.inner.remove(key_vec)? {
+            Ok(Some(
+                bincode::deserialize(&previous_value).map_err(|_| Codec)?,
+            ))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn exists(&self, key: Self::Key) -> bool {
-        self.inner.get(key).unwrap().is_some()
+    fn exists(&self, key: Self::Key) -> Result<bool> {
+        Ok(self.inner.get(key)?.is_some())
+    }
+}
+
+impl From<sled::Error> for crate::state::Error {
+    fn from(e: Error) -> Self {
+        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -128,8 +159,16 @@ impl From<TransactionError> for crate::state::TransactionError {
 impl From<crate::state::TransactionError> for ConflictableTransactionError {
     fn from(e: crate::state::TransactionError) -> Self {
         match e {
-            _ => ConflictableTransactionError::Abort(sled::Error::Unsupported("reverted".to_string())),
+            _ => ConflictableTransactionError::Abort(sled::Error::Unsupported(
+                "reverted".to_string(),
+            )),
         }
+    }
+}
+
+impl From<UnabortableTransactionError> for crate::state::Error {
+    fn from(e: UnabortableTransactionError) -> Self {
+        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -154,7 +193,10 @@ mod tests {
             // convert from sled tree to our storage interface
             let sled_store: SledStore<String, String> = tree.into();
 
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), "value".to_string());
+            assert_eq!(
+                sled_store.get("test".to_string()).unwrap().unwrap(),
+                "value".to_string()
+            );
         }
 
         #[test]
@@ -166,11 +208,16 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             // test
-            let result = sled_store.put("test".to_string(), "value".to_string());
+            let result = sled_store
+                .put("test".to_string(), "value".to_string())
+                .unwrap();
 
             // verify
             assert_eq!(result, None);
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), "value".to_string())
+            assert_eq!(
+                sled_store.get("test".to_string()).unwrap().unwrap(),
+                "value".to_string()
+            )
         }
 
         #[test]
@@ -182,13 +229,20 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             // test
-            let ret1 = sled_store.put("test".to_string(), "value".to_string());
-            let ret2 = sled_store.put("test".to_string(), "other_value".to_string());
+            let ret1 = sled_store
+                .put("test".to_string(), "value".to_string())
+                .unwrap();
+            let ret2 = sled_store
+                .put("test".to_string(), "other_value".to_string())
+                .unwrap();
 
             // verify
             assert_eq!(ret1, None);
             assert_eq!(ret2, Some("value".to_string()));
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), "other_value".to_string())
+            assert_eq!(
+                sled_store.get("test".to_string()).unwrap().unwrap(),
+                "other_value".to_string()
+            )
         }
 
         #[test]
@@ -201,14 +255,14 @@ mod tests {
             tree.insert("test".to_string(), v.clone()).unwrap();
             let mut sled_store: SledStore<String, String> = tree.into();
             // test
-            let value = sled_store.delete("test".to_string());
+            let value = sled_store.delete("test".to_string()).unwrap();
 
             // verify value was returned
             assert_eq!(value, Some("value".to_string()));
             // verify value is no longer available
-            assert_eq!(sled_store.get("test".to_string()), None);
+            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
             // verify key no longer exists
-            assert!(!sled_store.exists("test".to_string()))
+            assert!(!sled_store.exists("test".to_string()).unwrap())
         }
 
         #[test]
@@ -224,10 +278,17 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             let result = sled_store
-                .transaction(|view| Ok(view.put("test".to_string(), "other_value".to_string())))
+                .transaction(|view| {
+                    Ok(view
+                        .put("test".to_string(), "other_value".to_string())
+                        .unwrap())
+                })
                 .unwrap();
 
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), "other_value".to_string());
+            assert_eq!(
+                sled_store.get("test".to_string()).unwrap().unwrap(),
+                "other_value".to_string()
+            );
             assert_eq!(result, Some("value".to_string()));
         }
 
@@ -240,12 +301,12 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             let result = sled_store.transaction(|view| {
-                let result = view.put("test".to_string(), "value".to_string());
+                let result = view.put("test".to_string(), "value".to_string()).unwrap();
                 Err(Aborted)?;
                 Ok(result)
             });
 
-            assert_eq!(sled_store.get("test".to_string()), None);
+            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
             assert!(matches!(result, TransactionResult::Err(Aborted)));
         }
     }
@@ -267,7 +328,9 @@ mod tests {
             // convert from sled tree to our storage interface
             let mut sled_store: SledStore<String, String> = tree.into();
 
-            let result = sled_store.transaction(|view| Ok(view.get("test".to_string()))).unwrap();
+            let result = sled_store
+                .transaction(|view| Ok(view.get("test".to_string()).unwrap()))
+                .unwrap();
 
             assert_eq!(result, Some("value".to_string()));
         }
@@ -281,11 +344,14 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             let result = sled_store
-                .transaction(|view| Ok(view.put("test".to_string(), "value".to_string())))
+                .transaction(|view| Ok(view.put("test".to_string(), "value".to_string()).unwrap()))
                 .unwrap();
 
             assert_eq!(result, None);
-            assert_eq!(sled_store.get("test".to_string()), Some("value".to_string()));
+            assert_eq!(
+                sled_store.get("test".to_string()).unwrap(),
+                Some("value".to_string())
+            );
         }
 
         #[test]
@@ -301,11 +367,11 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             let result = sled_store
-                .transaction(|view| Ok(view.delete("test".to_string())))
+                .transaction(|view| Ok(view.delete("test".to_string()).unwrap()))
                 .unwrap();
 
             assert_eq!(result, Some("value".to_string()));
-            assert_eq!(sled_store.get("test".to_string()), None);
+            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
         }
 
         #[test]
@@ -321,7 +387,7 @@ mod tests {
             let mut sled_store: SledStore<String, String> = tree.into();
 
             let result = sled_store
-                .transaction(|view| Ok(view.exists("test".to_string())))
+                .transaction(|view| Ok(view.exists("test".to_string()).unwrap()))
                 .unwrap();
 
             assert!(result);

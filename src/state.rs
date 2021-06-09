@@ -13,14 +13,17 @@ pub trait KeyValueStore {
     fn exists(&self, key: Self::Key) -> Result<bool>;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Error {
     Unknown,
     Codec,
+    DatabaseError(Box<dyn std::error::Error>),
 }
 
 /// Used to indicate if a type may be transacted upon
-pub trait Transactional<K, V>: KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V> {
+pub trait Transactional<K, V>:
+    KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V>
+{
     type View: KeyValueStore<Key = K, Value = V>;
 }
 
