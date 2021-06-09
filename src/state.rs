@@ -1,39 +1,47 @@
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
+use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
-pub trait KeyValueStore {
-    type Key: AsRef<[u8]> + Debug + Clone;
-    type Value: Debug + DeserializeOwned + Clone;
-
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>>;
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>>;
-    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>>;
-    fn exists(&self, key: Self::Key) -> Result<bool>;
+pub trait KeyValueStore<K, V>
+where
+    K: AsRef<[u8]> + Debug + Clone,
+    V: Debug + DeserializeOwned + Clone,
+{
+    fn get(&self, key: K) -> Result<Option<V>>;
+    fn put(&mut self, key: K, value: V) -> Result<Option<V>>;
+    fn delete(&mut self, key: K) -> Result<Option<V>>;
+    fn exists(&self, key: K) -> Result<bool>;
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum Error {
+    #[error("unknown data store error")]
     Unknown,
+    #[error("error performing binary serialization")]
     Codec,
+    #[error("error occurred in the underlying datastore `{0}`")]
     DatabaseError(Box<dyn std::error::Error>),
 }
 
 /// Used to indicate if a type may be transacted upon
-pub trait Transactional<K, V>:
-    KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V>
+pub trait Transactional<K, V>: KeyValueStore<K, V> + BatchOperations<K, V>
+where
+    K: AsRef<[u8]> + Debug + Clone,
+    V: Debug + DeserializeOwned + Clone,
 {
-    type View: KeyValueStore<Key = K, Value = V>;
+    type View: KeyValueStore<K, V>;
 }
 
-pub trait BatchOperations {
-    type Key: AsRef<[u8]> + Debug + Clone;
-    type Value: Debug + DeserializeOwned + Clone;
-
+pub trait BatchOperations<K, V>
+where
+    K: AsRef<[u8]> + Debug + Clone,
+    V: Debug + DeserializeOwned + Clone,
+{
     fn batch_write<I>(&mut self, entries: I) -> Result<()>
     where
-        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>;
+        I: Iterator<Item = WriteOperation<K, V>>;
 }
 
 #[derive(Debug)]
@@ -42,11 +50,11 @@ pub enum WriteOperation<K, V> {
     Remove(K),
 }
 
-pub trait Transaction<K, V, View>: KeyValueStore<Key = K, Value = V>
+pub trait Transaction<K, V, View>: KeyValueStore<K, V>
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + DeserializeOwned + Clone,
-    View: KeyValueStore<Key = K, Value = V>,
+    View: KeyValueStore<K, V>,
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where

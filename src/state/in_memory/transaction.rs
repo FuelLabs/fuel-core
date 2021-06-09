@@ -1,6 +1,6 @@
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result, Transaction, TransactionError,
-    TransactionResult, Transactional, WriteOperation,
+    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result, Transaction,
+    TransactionError, TransactionResult, Transactional, WriteOperation,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -16,7 +16,7 @@ pub struct MemoryTransactionView<K, V, S> {
 
 impl<K, V, S> MemoryTransactionView<K, V, S>
 where
-    S: KeyValueStore<Key = K, Value = V> + BatchOperations<Key = K, Value = V>,
+    S: KeyValueStore<K, V> + BatchOperations<K, V>,
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
@@ -29,20 +29,18 @@ where
     }
 
     fn commit(&mut self) -> crate::state::Result<()> {
-        self.data_source.batch_write(self.changes.drain().map(|t| t.1))
+        self.data_source
+            .batch_write(self.changes.drain().map(|t| t.1))
     }
 }
 
-impl<K, V, S> KeyValueStore for MemoryTransactionView<K, V, S>
+impl<K, V, S> KeyValueStore<K, V> for MemoryTransactionView<K, V, S>
 where
-    S: KeyValueStore<Key = K, Value = V>,
+    S: KeyValueStore<K, V>,
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    type Key = K;
-    type Value = V;
-
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn get(&self, key: K) -> Result<Option<V>> {
         // try to fetch data from View layer if any changes to the key
         if self.changes.contains_key(key.as_ref()) {
             self.view_layer.get(key)
@@ -52,13 +50,15 @@ where
         }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
-        self.changes
-            .insert(key.clone().into(), WriteOperation::Insert(key.clone(), value.clone()));
+    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
+        self.changes.insert(
+            key.clone().into(),
+            WriteOperation::Insert(key.clone(), value.clone()),
+        );
         self.view_layer.put(key, value)
     }
 
-    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn delete(&mut self, key: K) -> Result<Option<V>> {
         let contained_key = self.changes.contains_key(key.as_ref());
         self.changes
             .insert(key.clone().into(), WriteOperation::Remove(key.clone()));
@@ -70,7 +70,7 @@ where
         }
     }
 
-    fn exists(&self, key: Self::Key) -> Result<bool> {
+    fn exists(&self, key: K) -> Result<bool> {
         if self.changes.contains_key(key.as_ref()) {
             self.view_layer.exists(key)
         } else {

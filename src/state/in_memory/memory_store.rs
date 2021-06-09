@@ -1,7 +1,7 @@
 use crate::state::Error::Codec;
 use crate::state::{
-    in_memory::transaction::MemoryTransactionView, BatchOperations, Error, KeyValueStore, Result, Transactional,
-    WriteOperation,
+    in_memory::transaction::MemoryTransactionView, BatchOperations, Error, KeyValueStore, Result,
+    Transactional, WriteOperation,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -27,15 +27,12 @@ impl<K, V> MemoryStore<K, V> {
     }
 }
 
-impl<K, V> KeyValueStore for MemoryStore<K, V>
+impl<K, V> KeyValueStore<K, V> for MemoryStore<K, V>
 where
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    type Key = K;
-    type Value = V;
-
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn get(&self, key: K) -> Result<Option<V>> {
         if let Some(value) = self.inner.read().expect("poisoned").get(key.as_ref()) {
             Ok(Some(bincode::deserialize(value).map_err(|_| Codec)?))
         } else {
@@ -43,17 +40,23 @@ where
         }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
+    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
         let value = bincode::serialize(&value).unwrap();
-        let result = self.inner.write().expect("poisoned").insert(key.into(), value);
+        let result = self
+            .inner
+            .write()
+            .expect("poisoned")
+            .insert(key.into(), value);
         if let Some(previous) = result {
-            Ok(Some(bincode::deserialize(&previous).map_err(|_| Error::Codec)?))
+            Ok(Some(
+                bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
+            ))
         } else {
             Ok(None)
         }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn delete(&mut self, key: K) -> Result<Option<V>> {
         Ok(self
             .inner
             .write()
@@ -62,22 +65,23 @@ where
             .map(|res| bincode::deserialize(&res).unwrap()))
     }
 
-    fn exists(&self, key: Self::Key) -> Result<bool> {
-        Ok(self.inner.read().expect("poisoned").contains_key(key.as_ref()))
+    fn exists(&self, key: K) -> Result<bool> {
+        Ok(self
+            .inner
+            .read()
+            .expect("poisoned")
+            .contains_key(key.as_ref()))
     }
 }
 
-impl<K, V> BatchOperations for MemoryStore<K, V>
+impl<K, V> BatchOperations<K, V> for MemoryStore<K, V>
 where
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    type Key = K;
-    type Value = V;
-
     fn batch_write<I>(&mut self, entries: I) -> Result<()>
     where
-        I: Iterator<Item = WriteOperation<Self::Key, Self::Value>>,
+        I: Iterator<Item = WriteOperation<K, V>>,
     {
         for entry in entries {
             match entry {

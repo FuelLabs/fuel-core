@@ -25,15 +25,12 @@ impl<K, V> From<Tree> for SledStore<K, V> {
     }
 }
 
-impl<K, V> KeyValueStore for SledStore<K, V>
+impl<K, V> KeyValueStore<K, V> for SledStore<K, V>
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + Serialize + DeserializeOwned + Clone,
 {
-    type Key = K;
-    type Value = V;
-
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn get(&self, key: K) -> Result<Option<V>> {
         if let Some(value) = self.tree.get(key)? {
             Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
         } else {
@@ -41,7 +38,7 @@ where
         }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
+    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
         let value = bincode::serialize(&value).map_err(|_| Codec)?;
         if let Some(previous_value) = self.tree.insert(key, value)? {
             Ok(Some(
@@ -52,7 +49,7 @@ where
         }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn delete(&mut self, key: K) -> Result<Option<V>> {
         if let Some(previous_value) = self.tree.remove(key)? {
             Ok(Some(
                 bincode::deserialize(&previous_value).map_err(|_| Codec)?,
@@ -62,7 +59,7 @@ where
         }
     }
 
-    fn exists(&self, key: Self::Key) -> Result<bool> {
+    fn exists(&self, key: K) -> Result<bool> {
         Ok(self.tree.contains_key(key)?)
     }
 }
@@ -97,15 +94,12 @@ struct NewTransactionalTree<K, V> {
     _value: PhantomData<V>,
 }
 
-impl<K, V> KeyValueStore for NewTransactionalTree<K, V>
+impl<K, V> KeyValueStore<K, V> for NewTransactionalTree<K, V>
 where
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Debug + Serialize + DeserializeOwned + Clone,
 {
-    type Key = K;
-    type Value = V;
-
-    fn get(&self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn get(&self, key: K) -> Result<Option<V>> {
         if let Some(value) = self.inner.get(key)? {
             Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
         } else {
@@ -113,7 +107,7 @@ where
         }
     }
 
-    fn put(&mut self, key: Self::Key, value: Self::Value) -> Result<Option<Self::Value>> {
+    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
         let key_vec: Vec<u8> = key.into();
         let value = bincode::serialize(&value).map_err(|_| Codec)?;
         if let Some(previous_value) = self.inner.insert(key_vec, value)? {
@@ -125,7 +119,7 @@ where
         }
     }
 
-    fn delete(&mut self, key: Self::Key) -> Result<Option<Self::Value>> {
+    fn delete(&mut self, key: K) -> Result<Option<V>> {
         let key_vec: Vec<u8> = key.into();
         if let Some(previous_value) = self.inner.remove(key_vec)? {
             Ok(Some(
@@ -136,7 +130,7 @@ where
         }
     }
 
-    fn exists(&self, key: Self::Key) -> Result<bool> {
+    fn exists(&self, key: K) -> Result<bool> {
         Ok(self.inner.get(key)?.is_some())
     }
 }
