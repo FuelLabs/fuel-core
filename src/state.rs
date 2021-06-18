@@ -17,24 +17,13 @@ where
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("unknown data store error")]
-    Unknown,
     #[error("error performing binary serialization")]
     Codec,
     #[error("error occurred in the underlying datastore `{0}`")]
     DatabaseError(Box<dyn std::error::Error>),
 }
 
-/// Used to indicate if a type may be transacted upon
-pub trait Transactional<K, V>: KeyValueStore<K, V> + BatchOperations<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Debug + DeserializeOwned + Clone,
-{
-    type View: KeyValueStore<K, V>;
-}
-
-pub trait BatchOperations<K, V>
+pub trait BatchOperations<K, V>: KeyValueStore<K, V>
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + DeserializeOwned + Clone,
@@ -71,3 +60,5 @@ pub enum TransactionError {
 pub mod in_memory;
 #[cfg(feature = "sled-db")]
 pub mod sled_db;
+
+pub mod store {}

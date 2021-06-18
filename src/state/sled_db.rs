@@ -1,14 +1,15 @@
 use crate::state::Error::Codec;
-use crate::state::{KeyValueStore, Result, Transaction, TransactionResult};
+use crate::state::{BatchOperations, KeyValueStore, Result, WriteOperation};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use sled::transaction::{
-    ConflictableTransactionError, TransactionError, TransactionalTree, UnabortableTransactionError,
+    ConflictableTransactionError, TransactionError, UnabortableTransactionError,
 };
 use sled::{Error, Tree};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+#[derive(Clone, Debug)]
 pub struct SledStore<K, V> {
     tree: Tree,
     _key: PhantomData<K>,
@@ -64,74 +65,30 @@ where
     }
 }
 
-impl<K, V> Transaction<K, V, NewTransactionalTree<K, V>> for SledStore<K, V>
+impl<K, V> BatchOperations<K, V> for SledStore<K, V>
 where
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
-    V: Debug + Serialize + DeserializeOwned + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
+    fn batch_write<I>(&mut self, entries: I) -> Result<()>
     where
-        F: FnOnce(&mut NewTransactionalTree<K, V>) -> TransactionResult<R> + Copy,
+        I: Iterator<Item = WriteOperation<K, V>>,
     {
         self.tree
-            .transaction(|tree| {
-                let tree = tree.clone();
-                let mut new_tree = NewTransactionalTree {
-                    inner: tree,
-                    _key: PhantomData,
-                    _value: PhantomData,
-                };
-                let result = f(&mut new_tree)?;
-                Ok(result)
+            .transaction(|transaction| {
+                for entry in entries {
+                    match entry {
+                        WriteOperation::Insert(key, value) => {
+                            let _ = self.put(key, value);
+                        }
+                        WriteOperation::Remove(key) => {
+                            let _ = self.delete(key);
+                        }
+                    }
+                }
+                Ok(())
             })
             .map_err(Into::into)
-    }
-}
-
-struct NewTransactionalTree<K, V> {
-    inner: TransactionalTree,
-    _key: PhantomData<K>,
-    _value: PhantomData<V>,
-}
-
-impl<K, V> KeyValueStore<K, V> for NewTransactionalTree<K, V>
-where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
-    V: Debug + Serialize + DeserializeOwned + Clone,
-{
-    fn get(&self, key: K) -> Result<Option<V>> {
-        if let Some(value) = self.inner.get(key)? {
-            Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
-        let key_vec: Vec<u8> = key.into();
-        let value = bincode::serialize(&value).map_err(|_| Codec)?;
-        if let Some(previous_value) = self.inner.insert(key_vec, value)? {
-            Ok(Some(
-                bincode::deserialize(previous_value.as_ref()).map_err(|_| Codec)?,
-            ))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn delete(&mut self, key: K) -> Result<Option<V>> {
-        let key_vec: Vec<u8> = key.into();
-        if let Some(previous_value) = self.inner.remove(key_vec)? {
-            Ok(Some(
-                bincode::deserialize(&previous_value).map_err(|_| Codec)?,
-            ))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn exists(&self, key: K) -> Result<bool> {
-        Ok(self.inner.get(key)?.is_some())
     }
 }
 
@@ -141,12 +98,9 @@ impl From<sled::Error> for crate::state::Error {
     }
 }
 
-impl From<TransactionError> for crate::state::TransactionError {
+impl From<TransactionError> for crate::state::Error {
     fn from(e: TransactionError) -> Self {
-        match e {
-            TransactionError::Abort(_) => crate::state::TransactionError::Aborted,
-            TransactionError::Storage(_) => crate::state::TransactionError::Aborted,
-        }
+        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -301,13 +255,14 @@ mod tests {
             });
 
             assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
-            assert!(matches!(result, TransactionResult::Err(Aborted)));
+            assert!(matches!(result, Error::Da(Aborted)));
         }
     }
 
     mod new_transactional_tree {
 
         use super::*;
+        use crate::state::Transaction;
         use sled::Config;
 
         #[test]

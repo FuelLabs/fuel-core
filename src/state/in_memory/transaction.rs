@@ -1,6 +1,6 @@
 use crate::state::{
     in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result, Transaction,
-    TransactionError, TransactionResult, Transactional, WriteOperation,
+    TransactionError, TransactionResult, WriteOperation,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -79,11 +79,35 @@ where
     }
 }
 
+impl<K, V, S> BatchOperations<K, V> for MemoryTransactionView<K, V, S>
+where
+    S: KeyValueStore<K, V>,
+    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
+{
+    fn batch_write<I>(&mut self, entries: I) -> Result<()>
+    where
+        I: Iterator<Item = WriteOperation<K, V>>,
+    {
+        for entry in entries {
+            match entry {
+                WriteOperation::Insert(key, value) => {
+                    let _ = self.put(key, value);
+                }
+                WriteOperation::Remove(key) => {
+                    let _ = self.delete(key);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<K, V, T> Transaction<K, V, MemoryTransactionView<K, V, T>> for T
 where
     K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
     V: Into<Vec<u8>> + Serialize + DeserializeOwned + Debug + Clone,
-    T: Transactional<K, V, View = MemoryTransactionView<K, V, T>> + Clone,
+    T: KeyValueStore<K, V> + BatchOperations<K, V> + Clone,
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where

@@ -1,8 +1,5 @@
 use crate::state::Error::Codec;
-use crate::state::{
-    in_memory::transaction::MemoryTransactionView, BatchOperations, Error, KeyValueStore, Result,
-    Transactional, WriteOperation,
-};
+use crate::state::{BatchOperations, Error, KeyValueStore, Result, WriteOperation};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -95,13 +92,4 @@ where
         }
         Ok(())
     }
-}
-
-/// Configure memory store to use the MemoryTransactionView
-impl<K, V> Transactional<K, V> for MemoryStore<K, V>
-where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
-{
-    type View = MemoryTransactionView<K, V, Self>;
 }
