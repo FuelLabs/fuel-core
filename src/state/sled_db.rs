@@ -74,21 +74,18 @@ where
     where
         I: Iterator<Item = WriteOperation<K, V>>,
     {
-        self.tree
-            .transaction(|transaction| {
-                for entry in entries {
-                    match entry {
-                        WriteOperation::Insert(key, value) => {
-                            let _ = self.put(key, value);
-                        }
-                        WriteOperation::Remove(key) => {
-                            let _ = self.delete(key);
-                        }
-                    }
+        let mut batch = sled::Batch::default();
+        for entry in entries {
+            match entry {
+                WriteOperation::Insert(key, value) => {
+                    batch.insert(key.into(), bincode::serialize(&value).map_err(|_| Codec)?);
                 }
-                Ok(())
-            })
-            .map_err(Into::into)
+                WriteOperation::Remove(key) => {
+                    batch.remove(key.into());
+                }
+            }
+        }
+        self.tree.apply_batch(batch).map_err(Into::into)
     }
 }
 
@@ -111,12 +108,6 @@ impl From<crate::state::TransactionError> for ConflictableTransactionError {
                 "reverted".to_string(),
             )),
         }
-    }
-}
-
-impl From<UnabortableTransactionError> for crate::state::Error {
-    fn from(e: UnabortableTransactionError) -> Self {
-        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -227,9 +218,10 @@ mod tests {
 
             let result = sled_store
                 .transaction(|view| {
-                    Ok(view
+                    let val = view
                         .put("test".to_string(), "other_value".to_string())
-                        .unwrap())
+                        .unwrap();
+                    Ok(val)
                 })
                 .unwrap();
 
@@ -255,7 +247,10 @@ mod tests {
             });
 
             assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
-            assert!(matches!(result, Error::Da(Aborted)));
+            assert!(matches!(
+                result,
+                Err(crate::state::TransactionError::Aborted)
+            ));
         }
     }
 

@@ -51,11 +51,17 @@ where
     }
 
     fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
+        let contained_key = self.changes.contains_key(key.as_ref());
         self.changes.insert(
             key.clone().into(),
             WriteOperation::Insert(key.clone(), value.clone()),
         );
-        self.view_layer.put(key, value)
+        let res = self.view_layer.put(key.clone(), value);
+        if contained_key {
+            res
+        } else {
+            self.data_source.get(key)
+        }
     }
 
     fn delete(&mut self, key: K) -> Result<Option<V>> {
