@@ -20,5 +20,6 @@ async-graphql = {version="2.8", features=["uuid", "tracing"]}
 uuid = "0.8"
 futures = "0.3"
 hex = "0.4"
+serde_json = {version="1.0", features=["raw_value"]}
 
-fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git"}
+fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git", branch="vlopes11/data-color-refactor", features=["serde-types"]}

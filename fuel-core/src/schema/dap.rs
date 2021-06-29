@@ -114,21 +114,6 @@ pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {
     schema.execute(req.into_inner()).await.into()
 }
 
-#[derive(Clone)]
-pub struct DebugBroker {
-    session: ID,
-    sent: bool,
-}
-
-impl DebugBroker {
-    pub fn new(session: ID) -> Self {
-        Self {
-            session,
-            sent: false,
-        }
-    }
-}
-
 #[Object]
 impl QueryRoot {
     async fn register(

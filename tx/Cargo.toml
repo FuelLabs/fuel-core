@@ -1,6 +1,6 @@
 [package]
-name = "dap"
-description = "DAP client and schema specification."
+name = "tx"
+description = "Tx client and schema specification."
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
 edition = "2018"
@@ -22,5 +22,3 @@ fuel-core = {path="../fuel-core"}
 [build-dependencies]
 async-graphql = "2.8"
 fuel-core = {path="../fuel-core"}
-serde_json = {version="1.0", features=["raw_value"]}
-schemafy_lib = "0.5"
