@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 use tracing_subscriber::filter::EnvFilter;
 
-use std::{io, net};
+use std::{env, io, net};
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -14,7 +14,11 @@ pub struct Opt {
 
 impl Opt {
     pub fn exec(self) -> io::Result<net::SocketAddr> {
-        let filter = EnvFilter::from_default_env();
+        let filter = match env::var_os("RUST_LOG") {
+            Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
+            None => EnvFilter::new("info"),
+        };
+
         tracing_subscriber::fmt::Subscriber::builder()
             .with_writer(std::io::stderr)
             .with_env_filter(filter)
