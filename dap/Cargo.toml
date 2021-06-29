@@ -1,0 +1,26 @@
+[package]
+name = "dap"
+description = "DAP client and schema specification."
+version = "0.1.0"
+authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
+edition = "2018"
+repository = "https://github.com/FuelLabs/fuel-core"
+
+[dependencies]
+hex = "0.4"
+surf = "2.2"
+serde = {version="1.0", features=["derive"]}
+serde_json = {version="1.0", features=["raw_value"]}
+cynic = {version="0.14", features = ["surf"]}
+fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git"}
+
+[dev-dependencies]
+actix-rt = "1.1"
+actix-web = "3.3"
+fuel-core = {path="../fuel-core"}
+
+[build-dependencies]
+async-graphql = "2.8"
+fuel-core = {path="../fuel-core"}
+serde_json = {version="1.0", features=["raw_value"]}
+schemafy_lib = "0.5"

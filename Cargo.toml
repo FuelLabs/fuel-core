@@ -1,11 +1,5 @@
-[package]
-name = "fuel-core"
-description = "Fuel client."
-version = "0.1.0"
-authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
-edition = "2018"
-repository = "https://github.com/FuelLabs/fuel-core"
-keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
-categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
-
-[dependencies]
+[workspace]
+members = [
+    "fuel-core",
+    "dap"
+]

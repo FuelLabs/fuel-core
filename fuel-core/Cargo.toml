@@ -1,0 +1,24 @@
+[package]
+name = "fuel-core"
+description = "Fuel client."
+version = "0.1.0"
+authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
+edition = "2018"
+repository = "https://github.com/FuelLabs/fuel-core"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
+
+[dependencies]
+tracing = "0.1"
+env_logger = "0.8"
+structopt = "0.3"
+tracing-subscriber = {version="0.2", features=["env-filter"]}
+
+actix-web = "3.3"
+async-graphql-actix-web = "2.8"
+async-graphql = {version="2.8", features=["uuid", "tracing"]}
+uuid = "0.8"
+futures = "0.3"
+hex = "0.4"
+
+fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git"}
