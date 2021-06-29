@@ -10,9 +10,9 @@ categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 
 [dependencies]
 tracing = "0.1"
-clap = "2.33"
+env_logger = "0.8"
 structopt = "0.3"
-tracing-subscriber = "0.2"
+tracing-subscriber = {version="0.2", features=["env-filter"]}
 
 actix-web = "3.3"
 async-graphql-actix-web = "2.8"
