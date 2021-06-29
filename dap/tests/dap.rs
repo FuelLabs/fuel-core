@@ -8,7 +8,33 @@ use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
 
 #[actix_rt::test]
-async fn client() {
+async fn start_session() {
+    let srv = test::start(|| App::new().configure(service::configure));
+    let client = DapClient::from(srv.addr());
+
+    let session = client.start_session().await.unwrap();
+    let session_p = client.start_session().await.unwrap();
+
+    let id = session.as_str();
+    let id_p = session_p.as_str();
+
+    assert_ne!(id, id_p);
+}
+
+#[actix_rt::test]
+async fn end_session() {
+    let srv = test::start(|| App::new().configure(service::configure));
+    let client = DapClient::from(srv.addr());
+
+    let session = client.start_session().await.unwrap();
+    let id = session.as_str();
+
+    assert!(client.end_session(id).await.unwrap());
+    assert!(!client.end_session(id).await.unwrap());
+}
+
+#[actix_rt::test]
+async fn reset() {
     let srv = test::start(|| App::new().configure(service::configure));
     let client = DapClient::from(srv.addr());
 
