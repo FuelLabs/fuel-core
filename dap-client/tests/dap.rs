@@ -1,4 +1,4 @@
-use fuel_core_dap_client::client::DapClient;
+use dap_client::client::DapClient;
 
 use actix_web::{test, App};
 use fuel_core::service;

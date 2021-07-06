@@ -1,4 +1,4 @@
-use fuel_core_tx_client::client::TxClient;
+use tx_client::client::TxClient;
 
 use actix_web::{test, App};
 use fuel_core::service;

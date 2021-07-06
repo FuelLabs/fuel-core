@@ -14,7 +14,7 @@ fn main() {
         .map(|p| {
             p.parent()
                 .expect("Failed to uproot")
-                .join("dap/assets/debugAdapterProtocol.json")
+                .join("dap-client/assets/debugAdapterProtocol.json")
                 .to_path_buf()
         })
         .expect("Failed to fetch JSON schema");
