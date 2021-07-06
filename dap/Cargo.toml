@@ -1,5 +1,5 @@
 [package]
-name = "dap"
+name = "fuel-core-dap-client"
 description = "DAP client and schema specification."
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
@@ -12,7 +12,7 @@ surf = "2.2"
 serde = {version="1.0", features=["derive"]}
 serde_json = {version="1.0", features=["raw_value"]}
 cynic = {version="0.14", features = ["surf"]}
-fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git", branch="vlopes11/data-color-refactor"}
+fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git"}
 
 [dev-dependencies]
 actix-rt = "1.1"
