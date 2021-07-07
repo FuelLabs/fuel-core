@@ -1,20 +1,6 @@
-[package]
-name = "fuel-core"
-description = "Fuel client."
-version = "0.1.0"
-authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
-edition = "2018"
-repository = "https://github.com/FuelLabs/fuel-core"
-license = "Apache-2.0"
-keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
-categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
-
-[features]
-sled-db = ["sled"]
-
-[dependencies]
-serde = "1.0"
-bincode = "1.3"
-sled = { version = "0.34", optional = true }
-thiserror = { version = "1.0" }
-
+[workspace]
+members = [
+    "fuel-core",
+    "dap-client",
+    "tx-client"
+]
