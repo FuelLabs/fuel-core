@@ -1,18 +1,29 @@
+use crate::state::in_memory::transaction::MemoryTransactionView;
 use serde::de::DeserializeOwned;
+use serde::Serialize;
 use std::fmt::Debug;
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
+
+#[derive(Clone, Debug, Default)]
+pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>>(pub(crate) (K1, K2));
+
+impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
+    fn as_ref(&self) -> &[u8] {
+        todo!()
+    }
+}
 
 pub trait KeyValueStore<K, V>
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + DeserializeOwned + Clone,
 {
-    fn get(&self, key: K) -> Result<Option<V>>;
+    fn get(&self, key: &K) -> Result<Option<V>>;
     fn put(&mut self, key: K, value: V) -> Result<Option<V>>;
-    fn delete(&mut self, key: K) -> Result<Option<V>>;
-    fn exists(&self, key: K) -> Result<bool>;
+    fn delete(&mut self, key: &K) -> Result<Option<V>>;
+    fn exists(&self, key: &K) -> Result<bool>;
 }
 
 #[derive(Error, Debug)]
@@ -51,6 +62,14 @@ where
 }
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
+
+pub trait TransactionalStorage<K, V>:
+    KeyValueStore<K, V> + Transaction<K, V, MemoryTransactionView<K, V, Self>> + Sized
+where
+    K: AsRef<[u8]> + Debug + Clone,
+    V: Serialize + DeserializeOwned + Debug + Clone,
+{
+}
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {

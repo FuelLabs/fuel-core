@@ -26,10 +26,10 @@ impl<K, V> MemoryStore<K, V> {
 
 impl<K, V> KeyValueStore<K, V> for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    fn get(&self, key: K) -> Result<Option<V>> {
+    fn get(&self, key: &K) -> Result<Option<V>> {
         if let Some(value) = self.inner.read().expect("poisoned").get(key.as_ref()) {
             Ok(Some(bincode::deserialize(value).map_err(|_| Codec)?))
         } else {
@@ -43,7 +43,7 @@ where
             .inner
             .write()
             .expect("poisoned")
-            .insert(key.into(), value);
+            .insert(key.as_ref().to_vec(), value);
         if let Some(previous) = result {
             Ok(Some(
                 bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
@@ -53,7 +53,7 @@ where
         }
     }
 
-    fn delete(&mut self, key: K) -> Result<Option<V>> {
+    fn delete(&mut self, key: &K) -> Result<Option<V>> {
         Ok(self
             .inner
             .write()
@@ -62,7 +62,7 @@ where
             .map(|res| bincode::deserialize(&res).unwrap()))
     }
 
-    fn exists(&self, key: K) -> Result<bool> {
+    fn exists(&self, key: &K) -> Result<bool> {
         Ok(self
             .inner
             .read()
@@ -73,7 +73,7 @@ where
 
 impl<K, V> BatchOperations<K, V> for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
     fn batch_write<I>(&mut self, entries: I) -> Result<()>
@@ -86,7 +86,7 @@ where
                     let _ = self.put(key, value);
                 }
                 WriteOperation::Remove(key) => {
-                    let _ = self.delete(key);
+                    let _ = self.delete(&key);
                 }
             }
         }

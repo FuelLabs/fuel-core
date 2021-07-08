@@ -12,6 +12,10 @@ categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 sled-db = ["sled"]
 
 [dependencies]
+# first party deps
+fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git", features=["serde-types"]}
+
+# third party deps
 actix-web = "3.3"
 async-graphql-actix-web = "2.8"
 async-graphql = {version="2.8", features=["uuid", "tracing"]}
@@ -28,6 +32,4 @@ tracing-subscriber = {version="0.2", features=["env-filter"]}
 thiserror = { version = "1.0" }
 uuid = "0.8"
 
-# First party deps
-fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git", features=["serde-types"]}
 
