@@ -11,9 +11,9 @@ async fn transact() {
     let srv = test::start(|| App::new().configure(service::configure));
     let client = TxClient::from(srv.addr());
 
-    let gas_price = 10;
+    let gas_price = 0;
     let gas_limit = 1_000_000;
-    let maturity = 100;
+    let maturity = 0;
 
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
@@ -41,22 +41,18 @@ async fn transact() {
     let log = client.transact(&tx).await.unwrap();
     assert_eq!(3, log.len());
 
-    match log[0] {
+    assert!(matches!(log[0],
         LogEvent::Register {
             register, value, ..
-        } if register == 0x10 && value == 0xca => (),
-        _ => panic!("Unexpected log!"),
-    }
+        } if register == 0x10 && value == 0xca));
 
-    match log[1] {
+    assert!(matches!(log[1],
         LogEvent::Register {
             register, value, ..
-        } if register == 0x11 && value == 0xba => (),
-        _ => panic!("Unexpected log!"),
-    }
+        } if register == 0x11 && value == 0xba));
 
-    match log[2] {
-        LogEvent::Return { register, value } if register == REG_ONE && value == 1 => (),
-        _ => panic!("Unexpected log!"),
-    }
+    assert!(matches!(log[2],
+        LogEvent::Return {
+            register, value, ..
+        } if register == REG_ONE && value == 1));
 }

@@ -17,7 +17,9 @@ pub type TXSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 #[Object]
 impl QueryRoot {
     async fn version(&self, _ctx: &Context<'_>) -> async_graphql::Result<String> {
-        Ok("v1.0".to_owned())
+        const VERSION: &'static str = env!("CARGO_PKG_VERSION");
+
+        Ok(VERSION.to_owned())
     }
 }
 

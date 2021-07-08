@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "fuel-core",
     "dap-client",
+    "fuel-core",
     "tx-client"
 ]
