@@ -15,7 +15,6 @@ async-graphql-actix-web = "2.8"
 env_logger = "0.8"
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 futures = "0.3"
-hex = "0.4"
 serde_json = { version = "1.0", features = ["raw_value"] }
 structopt = "0.3"
 tracing = "0.1"

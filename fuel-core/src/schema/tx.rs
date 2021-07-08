@@ -26,8 +26,7 @@ impl QueryRoot {
 #[Object]
 impl MutationRoot {
     async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
-        let tx = hex::decode(tx)?;
-        let tx = Transaction::from_bytes(tx.as_slice())?;
+        let tx: Transaction = serde_json::from_str(tx.as_str())?;
 
         let storage = ctx.data_unchecked::<TxStorage>().lock().await;
         let mut vm = Interpreter::with_storage(storage);
