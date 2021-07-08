@@ -1,24 +1,22 @@
 [package]
 name = "fuel-core"
-description = "Fuel client."
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
-edition = "2018"
-repository = "https://github.com/FuelLabs/fuel-core"
-keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
+edition = "2018"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Fuel client."
 
 [dependencies]
-tracing = "0.1"
-env_logger = "0.8"
-structopt = "0.3"
-tracing-subscriber = {version="0.2", features=["env-filter"]}
-
 actix-web = "3.3"
+async-graphql = { version = "2.8", features = ["tracing", "uuid"] }
 async-graphql-actix-web = "2.8"
-async-graphql = {version="2.8", features=["uuid", "tracing"]}
-uuid = "0.8"
+env_logger = "0.8"
+fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 futures = "0.3"
-hex = "0.4"
-
-fuel-vm = {git="ssh://git@github.com/FuelLabs/fuel-vm.git"}
+serde_json = { version = "1.0", features = ["raw_value"] }
+structopt = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.2", features = ["env-filter"] }
+uuid = "0.8"

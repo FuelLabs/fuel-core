@@ -71,7 +71,7 @@ impl DapClient {
     }
 
     pub async fn execute(&self, id: &str, op: &Opcode) -> io::Result<bool> {
-        let op = hex::encode(&op.to_bytes());
+        let op = serde_json::to_string(op)?;
         let query = schema::Execute::build(&schema::ExecuteArgs { id: id.into(), op });
 
         self.query(query).await.map(|r| r.execute)
@@ -95,6 +95,6 @@ impl DapClient {
 
         let memory = self.query(query).await?.memory;
 
-        hex::decode(memory).map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+        Ok(serde_json::from_str(memory.as_str())?)
     }
 }

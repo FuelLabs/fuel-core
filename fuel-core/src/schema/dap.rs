@@ -114,21 +114,6 @@ pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {
     schema.execute(req.into_inner()).await.into()
 }
 
-#[derive(Clone)]
-pub struct DebugBroker {
-    session: ID,
-    sent: bool,
-}
-
-impl DebugBroker {
-    pub fn new(session: ID) -> Self {
-        Self {
-            session,
-            sent: false,
-        }
-    }
-}
-
 #[Object]
 impl QueryRoot {
     async fn register(
@@ -155,8 +140,8 @@ impl QueryRoot {
             .lock()
             .await
             .memory(&id, start, size)
-            .map(hex::encode)
             .ok_or(async_graphql::Error::new("Invalid memory range"))
+            .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
 }
 
@@ -198,8 +183,7 @@ impl MutationRoot {
     async fn execute(&self, ctx: &Context<'_>, id: ID, op: String) -> async_graphql::Result<bool> {
         trace!("Execute encoded op {}", op);
 
-        let op = hex::decode(op)?;
-        let op = Opcode::from_bytes(op.as_slice())?;
+        let op: Opcode = serde_json::from_str(op.as_str())?;
 
         trace!("Op decoded to {:?}", op);
 
