@@ -52,8 +52,7 @@ impl TxClient {
     }
 
     pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<LogEvent>> {
-        let tx = tx.clone().to_bytes();
-        let tx = hex::encode(tx.as_slice());
+        let tx = serde_json::to_string(tx)?;
         let query = schema::Run::build(&TxArg { tx });
 
         let result = self.query(query).await.map(|r| r.run)?;
