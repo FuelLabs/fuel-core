@@ -62,7 +62,7 @@ The transaction executor will have in-memory storage with its lifetime bound to 
 * Service endpoint: `/tx`
 * Schema (available after building): `tx-client/assets/tx.sdl`
 
-The service expects a mutation defined as `run` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in JSON format, as specified in `doc/tx-schema.json`.
+The service expects a mutation defined as `run` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in JSON format, as specified in `docs/tx-schema.json`.
 
 ##### cURL example
 
