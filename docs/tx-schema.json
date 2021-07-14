@@ -1,0 +1,493 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Transaction",
+  "anyOf": [
+    {
+      "type": "object",
+      "required": [
+        "Script"
+      ],
+      "properties": {
+        "Script": {
+          "type": "object",
+          "required": [
+            "gas_limit",
+            "gas_price",
+            "inputs",
+            "maturity",
+            "outputs",
+            "script",
+            "script_data",
+            "witnesses"
+          ],
+          "properties": {
+            "gas_limit": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "gas_price": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Input"
+              }
+            },
+            "maturity": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "outputs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Output"
+              }
+            },
+            "script": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            },
+            "script_data": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "format": "uint8",
+                "minimum": 0.0
+              }
+            },
+            "witnesses": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Witness"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": [
+        "Create"
+      ],
+      "properties": {
+        "Create": {
+          "type": "object",
+          "required": [
+            "bytecode_witness_index",
+            "gas_limit",
+            "gas_price",
+            "inputs",
+            "maturity",
+            "outputs",
+            "salt",
+            "static_contracts",
+            "witnesses"
+          ],
+          "properties": {
+            "bytecode_witness_index": {
+              "type": "integer",
+              "format": "uint8",
+              "minimum": 0.0
+            },
+            "gas_limit": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "gas_price": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "inputs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Input"
+              }
+            },
+            "maturity": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            },
+            "outputs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Output"
+              }
+            },
+            "salt": {
+              "$ref": "#/definitions/Salt"
+            },
+            "static_contracts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ContractId"
+              }
+            },
+            "witnesses": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Witness"
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  ],
+  "definitions": {
+    "Address": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 32,
+      "minItems": 32
+    },
+    "Bytes32": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 32,
+      "minItems": 32
+    },
+    "Color": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 32,
+      "minItems": 32
+    },
+    "ContractId": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 32,
+      "minItems": 32
+    },
+    "Input": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "Coin"
+          ],
+          "properties": {
+            "Coin": {
+              "type": "object",
+              "required": [
+                "amount",
+                "color",
+                "maturity",
+                "owner",
+                "predicate",
+                "predicate_data",
+                "utxo_id",
+                "witness_index"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "color": {
+                  "$ref": "#/definitions/Color"
+                },
+                "maturity": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "owner": {
+                  "$ref": "#/definitions/Address"
+                },
+                "predicate": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "minimum": 0.0
+                  }
+                },
+                "predicate_data": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "uint8",
+                    "minimum": 0.0
+                  }
+                },
+                "utxo_id": {
+                  "$ref": "#/definitions/Bytes32"
+                },
+                "witness_index": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Contract"
+          ],
+          "properties": {
+            "Contract": {
+              "type": "object",
+              "required": [
+                "balance_root",
+                "contract_id",
+                "state_root",
+                "utxo_id"
+              ],
+              "properties": {
+                "balance_root": {
+                  "$ref": "#/definitions/Bytes32"
+                },
+                "contract_id": {
+                  "$ref": "#/definitions/ContractId"
+                },
+                "state_root": {
+                  "$ref": "#/definitions/Bytes32"
+                },
+                "utxo_id": {
+                  "$ref": "#/definitions/Bytes32"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Output": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "Coin"
+          ],
+          "properties": {
+            "Coin": {
+              "type": "object",
+              "required": [
+                "amount",
+                "color",
+                "to"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "color": {
+                  "$ref": "#/definitions/Color"
+                },
+                "to": {
+                  "$ref": "#/definitions/Address"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Contract"
+          ],
+          "properties": {
+            "Contract": {
+              "type": "object",
+              "required": [
+                "balance_root",
+                "input_index",
+                "state_root"
+              ],
+              "properties": {
+                "balance_root": {
+                  "$ref": "#/definitions/Bytes32"
+                },
+                "input_index": {
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                },
+                "state_root": {
+                  "$ref": "#/definitions/Bytes32"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Withdrawal"
+          ],
+          "properties": {
+            "Withdrawal": {
+              "type": "object",
+              "required": [
+                "amount",
+                "color",
+                "to"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "color": {
+                  "$ref": "#/definitions/Color"
+                },
+                "to": {
+                  "$ref": "#/definitions/Address"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Change"
+          ],
+          "properties": {
+            "Change": {
+              "type": "object",
+              "required": [
+                "amount",
+                "color",
+                "to"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "color": {
+                  "$ref": "#/definitions/Color"
+                },
+                "to": {
+                  "$ref": "#/definitions/Address"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "Variable"
+          ],
+          "properties": {
+            "Variable": {
+              "type": "object",
+              "required": [
+                "amount",
+                "color",
+                "to"
+              ],
+              "properties": {
+                "amount": {
+                  "type": "integer",
+                  "format": "uint64",
+                  "minimum": 0.0
+                },
+                "color": {
+                  "$ref": "#/definitions/Color"
+                },
+                "to": {
+                  "$ref": "#/definitions/Address"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "ContractCreated"
+          ],
+          "properties": {
+            "ContractCreated": {
+              "type": "object",
+              "required": [
+                "contract_id"
+              ],
+              "properties": {
+                "contract_id": {
+                  "$ref": "#/definitions/ContractId"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Salt": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "format": "uint8",
+        "minimum": 0.0
+      },
+      "maxItems": 32,
+      "minItems": 32
+    },
+    "Witness": {
+      "type": "object",
+      "required": [
+        "data"
+      ],
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint8",
+            "minimum": 0.0
+          }
+        }
+      }
+    }
+  }
+}
