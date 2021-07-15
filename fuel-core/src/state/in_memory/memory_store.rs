@@ -7,7 +7,7 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::sync::{Arc, RwLock};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct MemoryStore<K, V> {
     inner: Arc<RwLock<HashMap<Vec<u8>, Vec<u8>>>>,
     _key_marker: PhantomData<K>,

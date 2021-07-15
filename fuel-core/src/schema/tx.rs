@@ -6,8 +6,6 @@ use futures::lock::Mutex;
 
 use std::sync;
 
-use crate::database::{Config, Database};
-use crate::service::FuelServiceConfig;
 use fuel_vm::prelude::*;
 
 pub type TxStorage = sync::Arc<Mutex<MemoryStorage>>;
@@ -27,14 +25,10 @@ impl QueryRoot {
 
 #[Object]
 impl MutationRoot {
-    async fn run<T: 'static + Config>(
-        &self,
-        ctx: &Context<'_>,
-        tx: String,
-    ) -> async_graphql::Result<String> {
+    async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
         let tx: Transaction = serde_json::from_str(tx.as_str())?;
 
-        let storage = ctx.data_unchecked::<Database<T>>().clone();
+        let storage = ctx.data_unchecked::<TxStorage>().lock().await;
         let mut vm = Interpreter::with_storage(storage);
 
         vm.init(tx)?;
@@ -44,14 +38,12 @@ impl MutationRoot {
     }
 }
 
-pub fn stateful_schema<T: 'static + Config>(service: &FuelServiceConfig<T>) -> TXSchema {
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(service.database.clone())
-        .finish()
-}
-
 pub fn schema() -> TXSchema {
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish()
+    let storage = TxStorage::default();
+
+    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .data(storage)
+        .finish()
 }
 
 pub async fn service(schema: web::Data<TXSchema>, req: Request) -> Response {

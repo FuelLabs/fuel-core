@@ -6,13 +6,11 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
 
-#[derive(Clone, Debug, Default)]
 pub struct MemoryTransactionView<K, V, S> {
     view_layer: MemoryStore<K, V>,
     // use hashmap to collapse changes (e.g. insert then remove the same key)
-    changes: Arc<RwLock<HashMap<Vec<u8>, WriteOperation<K, V>>>>,
+    changes: HashMap<Vec<u8>, WriteOperation<K, V>>,
     data_source: S,
 }
 
@@ -32,7 +30,7 @@ where
 
     fn commit(&mut self) -> crate::state::Result<()> {
         self.data_source
-            .batch_write(self.changes.write().unwrap().drain().map(|t| t.1))
+            .batch_write(self.changes.drain().map(|t| t.1))
     }
 }
 
@@ -44,7 +42,7 @@ where
 {
     fn get(&self, key: &K) -> Result<Option<V>> {
         // try to fetch data from View layer if any changes to the key
-        if self.changes.read().unwrap().contains_key(key.as_ref()) {
+        if self.changes.contains_key(key.as_ref()) {
             self.view_layer.get(key)
         } else {
             // fall-through to original data source
@@ -53,9 +51,8 @@ where
     }
 
     fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
-        let mut changes = self.changes.write().unwrap();
-        let contained_key = changes.contains_key(key.as_ref());
-        changes.insert(
+        let contained_key = self.changes.contains_key(key.as_ref());
+        self.changes.insert(
             key.as_ref().to_vec(),
             WriteOperation::Insert(key.clone(), value.clone()),
         );
@@ -68,9 +65,9 @@ where
     }
 
     fn delete(&mut self, key: &K) -> Result<Option<V>> {
-        let mut changes = self.changes.write().unwrap();
-        let contained_key = changes.contains_key(key.as_ref());
-        changes.insert(key.as_ref().to_vec(), WriteOperation::Remove(key.clone()));
+        let contained_key = self.changes.contains_key(key.as_ref());
+        self.changes
+            .insert(key.as_ref().to_vec(), WriteOperation::Remove(key.clone()));
         let res = self.view_layer.delete(key);
         if contained_key {
             res
@@ -80,7 +77,7 @@ where
     }
 
     fn exists(&self, key: &K) -> Result<bool> {
-        if self.changes.read().unwrap().contains_key(key.as_ref()) {
+        if self.changes.contains_key(key.as_ref()) {
             self.view_layer.exists(key)
         } else {
             self.data_source.exists(key)
@@ -115,12 +112,12 @@ where
 impl<K, V, T> Transaction<K, V, MemoryTransactionView<K, V, T>> for T
 where
     K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
+    V: Into<Vec<u8>> + Serialize + DeserializeOwned + Debug + Clone,
     T: KeyValueStore<K, V> + BatchOperations<K, V> + Clone,
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut MemoryTransactionView<K, V, T>) -> TransactionResult<R> + std::marker::Copy,
+        F: FnOnce(&mut MemoryTransactionView<K, V, T>) -> TransactionResult<R>,
     {
         let mut view = MemoryTransactionView::new(self.clone());
         let result = f(&mut view);

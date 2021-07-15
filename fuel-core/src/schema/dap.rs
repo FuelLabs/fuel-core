@@ -10,8 +10,6 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::{io, sync};
 
-use crate::database::Config;
-use crate::service::FuelServiceConfig;
 use fuel_vm::prelude::*;
 
 #[derive(Debug, Clone, Default)]
@@ -104,14 +102,12 @@ pub struct MutationRoot;
 
 pub type DAPSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
-pub fn stateful_schema<T: 'static + Config>(service: &FuelServiceConfig<T>) -> DAPSchema {
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(service.database.clone())
-        .finish()
-}
-
 pub fn schema() -> DAPSchema {
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription).finish()
+    let storage = GraphStorage::default();
+
+    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
+        .data(storage)
+        .finish()
 }
 
 pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {

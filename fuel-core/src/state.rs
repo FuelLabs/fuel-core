@@ -1,5 +1,6 @@
+use crate::state::in_memory::transaction::MemoryTransactionView;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt::Debug;
 use thiserror::Error;
 
@@ -43,7 +44,7 @@ where
         I: Iterator<Item = WriteOperation<K, V>>;
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub enum WriteOperation<K, V> {
     Insert(K, V),
     Remove(K),
@@ -62,7 +63,8 @@ where
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactionalStorage<K, V>: KeyValueStore<K, V> + BatchOperations<K, V> + Sized
+pub trait TransactionalStorage<K, V>:
+    KeyValueStore<K, V> + Transaction<K, V, MemoryTransactionView<K, V, Self>> + Sized
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
