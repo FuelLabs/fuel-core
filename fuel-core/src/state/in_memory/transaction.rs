@@ -1,26 +1,28 @@
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result, Transaction,
-    TransactionError, TransactionResult, WriteOperation,
+    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result,
+    TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::sync::{Arc, RwLock};
 
-pub struct MemoryTransactionView<K, V, S> {
+pub type DataSource<K, V> = Arc<RwLock<dyn TransactableStorage<K, V>>>;
+
+pub struct MemoryTransactionView<K, V> {
     view_layer: MemoryStore<K, V>,
     // use hashmap to collapse changes (e.g. insert then remove the same key)
     changes: HashMap<Vec<u8>, WriteOperation<K, V>>,
-    data_source: S,
+    data_source: DataSource<K, V>,
 }
 
-impl<K, V, S> MemoryTransactionView<K, V, S>
+impl<K, V> MemoryTransactionView<K, V>
 where
-    S: KeyValueStore<K, V> + BatchOperations<K, V>,
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    pub fn new(source: S) -> Self {
+    pub fn new(source: DataSource<K, V>) -> Self {
         Self {
             view_layer: MemoryStore::<K, V>::new(),
             changes: Default::default(),
@@ -28,15 +30,16 @@ where
         }
     }
 
-    fn commit(&mut self) -> crate::state::Result<()> {
+    pub fn commit(&mut self) -> crate::state::Result<()> {
         self.data_source
-            .batch_write(self.changes.drain().map(|t| t.1))
+            .write()
+            .expect("lock poisoned")
+            .batch_write(&mut self.changes.drain().map(|t| t.1))
     }
 }
 
-impl<K, V, S> KeyValueStore<K, V> for MemoryTransactionView<K, V, S>
+impl<K, V> KeyValueStore<K, V> for MemoryTransactionView<K, V>
 where
-    S: KeyValueStore<K, V>,
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
@@ -46,7 +49,7 @@ where
             self.view_layer.get(key)
         } else {
             // fall-through to original data source
-            self.data_source.get(key)
+            self.data_source.read().expect("lock poisoned").get(key)
         }
     }
 
@@ -60,7 +63,7 @@ where
         if contained_key {
             res
         } else {
-            self.data_source.get(&key)
+            self.data_source.read().expect("lock poisoned").get(&key)
         }
     }
 
@@ -72,7 +75,7 @@ where
         if contained_key {
             res
         } else {
-            self.data_source.get(key)
+            self.data_source.read().expect("lock poisoned").get(key)
         }
     }
 
@@ -80,44 +83,27 @@ where
         if self.changes.contains_key(key.as_ref()) {
             self.view_layer.exists(key)
         } else {
-            self.data_source.exists(key)
+            self.data_source.read().expect("lock poisoned").exists(key)
         }
     }
 }
 
-impl<K, V, S> BatchOperations<K, V> for MemoryTransactionView<K, V, S>
+impl<K, V> BatchOperations<K, V> for MemoryTransactionView<K, V>
 where
-    S: KeyValueStore<K, V>,
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,
 {
-    fn batch_write<I>(&mut self, entries: I) -> Result<()>
-    where
-        I: Iterator<Item = WriteOperation<K, V>>,
-    {
-        for entry in entries {
-            match entry {
-                WriteOperation::Insert(key, value) => {
-                    let _ = self.put(key, value);
-                }
-                WriteOperation::Remove(key) => {
-                    let _ = self.delete(&key);
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
-impl<K, V, T> Transaction<K, V, MemoryTransactionView<K, V, T>> for T
+impl<K, V, T> Transaction<K, V> for Arc<RwLock<T>>
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Into<Vec<u8>> + Serialize + DeserializeOwned + Debug + Clone,
-    T: KeyValueStore<K, V> + BatchOperations<K, V> + Clone,
+    T: TransactableStorage<K, V> + 'static,
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut MemoryTransactionView<K, V, T>) -> TransactionResult<R>,
+        F: FnOnce(&mut MemoryTransactionView<K, V>) -> TransactionResult<R>,
     {
         let mut view = MemoryTransactionView::new(self.clone());
         let result = f(&mut view);
@@ -136,7 +122,7 @@ mod tests {
     #[test]
     fn get_returns_from_view() {
         // setup
-        let store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
         view.put(key.clone(), "value".to_string()).unwrap();
@@ -149,9 +135,13 @@ mod tests {
     #[test]
     fn get_returns_from_data_store_when_key_not_in_view() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let view = MemoryTransactionView::new(store);
         // test
         let ret = view.get(&key).unwrap();
@@ -162,14 +152,18 @@ mod tests {
     #[test]
     fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
         view.delete(&key).unwrap();
         // test
         let ret = view.get(&key).unwrap();
-        let original = store.get(&key).unwrap();
+        let original = store.read().unwrap().get(&key).unwrap();
         // verify
         assert_eq!(ret, None);
         // also ensure the original value is still intact and we aren't just passing
@@ -180,7 +174,7 @@ mod tests {
     #[test]
     fn can_insert_value_into_view() {
         // setup
-        let store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let _ = view.put("test".to_string(), "value".to_string());
         // test
@@ -192,7 +186,7 @@ mod tests {
     #[test]
     fn delete_value_from_view_returns_value() {
         // setup
-        let store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
         view.put(key.clone(), "value".to_string()).unwrap();
@@ -207,9 +201,13 @@ mod tests {
     #[test]
     fn delete_returns_datastore_value_when_not_in_view() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
         let ret = view.delete(&key).unwrap();
@@ -222,9 +220,13 @@ mod tests {
     #[test]
     fn delete_does_not_return_datastore_value_when_deleted_twice() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
         let ret1 = view.delete(&key).unwrap();
@@ -239,7 +241,7 @@ mod tests {
     #[test]
     fn exists_checks_view_values() {
         // setup
-        let store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
         view.put(key.clone(), "value".to_string()).unwrap();
@@ -252,9 +254,13 @@ mod tests {
     #[test]
     fn exists_checks_data_store_when_not_in_view() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let view = MemoryTransactionView::new(store);
         // test
         let ret = view.exists(&key).unwrap();
@@ -265,14 +271,18 @@ mod tests {
     #[test]
     fn exists_doesnt_check_data_store_after_intentional_removal_from_view() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
         view.delete(&key).unwrap();
         // test
         let ret = view.exists(&key).unwrap();
-        let original = store.exists(&key).unwrap();
+        let original = store.read().unwrap().exists(&key).unwrap();
         // verify
         assert!(!ret);
         // also ensure the original value is still intact and we aren't just passing
@@ -283,13 +293,13 @@ mod tests {
     #[test]
     fn commit_applies_puts() {
         // setup
-        let store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store.clone());
         let key = "test".to_string();
         view.put(key.clone(), "value".to_string()).unwrap();
         // test
         view.commit().unwrap();
-        let ret = store.get(&key).unwrap();
+        let ret = store.read().unwrap().get(&key).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -297,21 +307,25 @@ mod tests {
     #[test]
     fn commit_applies_deletes() {
         // setup
-        let mut store = MemoryStore::<String, String>::new();
+        let store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
         let key = "test".to_string();
-        store.put(key.clone(), "value".to_string()).unwrap();
+        store
+            .write()
+            .unwrap()
+            .put(key.clone(), "value".to_string())
+            .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
         // test
         view.delete(&key).unwrap();
         view.commit().unwrap();
-        let ret = store.get(&key).unwrap();
+        let ret = store.read().unwrap().get(&key).unwrap();
         // verify
         assert_eq!(ret, None)
     }
 
     #[test]
     fn transaction_commit_is_applied_if_successful() {
-        let mut store = MemoryStore::<String, String>::new();
+        let mut store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
 
         let key = "k1".to_string();
         store
@@ -321,12 +335,12 @@ mod tests {
             })
             .unwrap();
 
-        assert_eq!(store.get(&key).unwrap().unwrap(), "v1")
+        assert_eq!(store.read().unwrap().get(&key).unwrap().unwrap(), "v1");
     }
 
     #[test]
     fn transaction_commit_is_not_applied_if_aborted() {
-        let mut store = MemoryStore::<String, String>::new();
+        let mut store = Arc::new(RwLock::new(MemoryStore::<String, String>::new()));
 
         let _result = store.transaction(|store| {
             store.put("k1".to_string(), "v1".to_string()).unwrap();
@@ -334,6 +348,6 @@ mod tests {
             Ok(())
         });
 
-        assert_eq!(store.get(&"k1".to_string()).unwrap(), None)
+        assert_eq!(store.read().unwrap().get(&"k1".to_string()).unwrap(), None);
     }
 }

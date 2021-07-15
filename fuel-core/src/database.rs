@@ -1,12 +1,12 @@
-use crate::state::{Error, KeyValueStore, MultiKey, TransactionalStorage};
+use crate::state::{Error, KeyValueStore, MultiKey, TransactableStorage};
 use fuel_vm::data::DataError;
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
 
 // used for static DI of database dependencies
 pub trait Config {
-    type Contracts: TransactionalStorage<ContractId, Contract>;
-    type Balances: TransactionalStorage<MultiKey<ContractId, Color>, Word>;
-    type Storage: TransactionalStorage<MultiKey<ContractId, Bytes32>, Bytes32>;
+    type Contracts: TransactableStorage<ContractId, Contract>;
+    type Balances: TransactableStorage<MultiKey<ContractId, Color>, Word>;
+    type Storage: TransactableStorage<MultiKey<ContractId, Bytes32>, Bytes32>;
 }
 
 #[derive(Debug, Default, Clone)]
