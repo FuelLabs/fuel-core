@@ -6,9 +6,10 @@ use futures::lock::Mutex;
 
 use std::sync;
 
+use crate::database::Database;
 use fuel_vm::prelude::*;
 
-pub type TxStorage = sync::Arc<Mutex<MemoryStorage>>;
+pub type TxStorage = sync::Arc<Mutex<Database>>;
 pub struct MutationRoot;
 pub struct QueryRoot;
 

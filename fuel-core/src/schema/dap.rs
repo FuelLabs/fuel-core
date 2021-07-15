@@ -10,6 +10,7 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::{io, sync};
 
+use crate::database::Database;
 use fuel_vm::prelude::*;
 
 #[derive(Debug, Clone, Default)]
@@ -96,7 +97,7 @@ where
     }
 }
 
-pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage<MemoryStorage>>>;
+pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage<Database>>>;
 pub struct QueryRoot;
 pub struct MutationRoot;
 
@@ -154,7 +155,7 @@ impl MutationRoot {
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], MemoryStorage::default())?;
+            .init(&[], Database::default())?;
 
         debug!("Session {:?} initialized", id);
 

@@ -2,11 +2,11 @@ use crate::state::in_memory::transaction::MemoryTransactionView;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
-pub type DataSource<K, V> = Arc<RwLock<dyn TransactableStorage<K, V>>>;
+pub type DataSource<K, V> = Arc<Mutex<dyn TransactableStorage<K, V>>>;
 
 #[derive(Clone, Debug, Default)]
 pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>>(pub(crate) (K1, K2));
@@ -78,7 +78,8 @@ where
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage<K, V>: KeyValueStore<K, V> + BatchOperations<K, V> + Debug
+pub trait TransactableStorage<K, V>:
+    KeyValueStore<K, V> + BatchOperations<K, V> + Debug + Send
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,

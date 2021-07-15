@@ -25,8 +25,8 @@ impl<K, V> MemoryStore<K, V> {
 
 impl<K, V> KeyValueStore<K, V> for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
     fn get(&self, key: &K) -> Result<Option<V>> {
         if let Some(value) = self.inner.get(key.as_ref()) {
@@ -62,14 +62,14 @@ where
 
 impl<K, V> BatchOperations<K, V> for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
 }
 
 impl<K, V> TransactableStorage<K, V> for MemoryStore<K, V>
 where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
 }
