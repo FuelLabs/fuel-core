@@ -2,6 +2,7 @@ use crate::state::in_memory::transaction::MemoryTransactionView;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
+use std::marker::PhantomData;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
@@ -9,11 +10,31 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource<K, V> = Arc<Mutex<dyn TransactableStorage<K, V>>>;
 
 #[derive(Clone, Debug, Default)]
-pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>>(pub(crate) (K1, K2));
+pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>> {
+    _marker_1: PhantomData<K1>,
+    _marker_2: PhantomData<K2>,
+    inner: Vec<u8>,
+}
+
+impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
+    pub fn new(key: (K1, K2)) -> Self {
+        Self {
+            _marker_1: Default::default(),
+            _marker_2: Default::default(),
+            inner: key
+                .0
+                .as_ref()
+                .iter()
+                .chain(key.1.as_ref().iter())
+                .copied()
+                .collect(),
+        }
+    }
+}
 
 impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
     fn as_ref(&self) -> &[u8] {
-        todo!()
+        self.inner.as_slice()
     }
 }
 
