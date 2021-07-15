@@ -78,7 +78,7 @@ where
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage<K, V>: KeyValueStore<K, V> + BatchOperations<K, V>
+pub trait TransactableStorage<K, V>: KeyValueStore<K, V> + BatchOperations<K, V> + Debug
 where
     K: AsRef<[u8]> + Debug + Clone,
     V: Serialize + DeserializeOwned + Debug + Clone,

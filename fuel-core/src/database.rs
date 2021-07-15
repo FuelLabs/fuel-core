@@ -1,16 +1,27 @@
+use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::{DataSource, Error, KeyValueStore, MultiKey, TransactableStorage};
-use fuel_vm::data::DataError;
+use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
 use std::sync::{Arc, RwLock};
 
-#[derive(Debug, Default, Clone)]
-pub struct Database<T: Config> {
+#[derive(Debug)]
+pub struct Database {
     contracts: DataSource<ContractId, Contract>,
     balances: DataSource<MultiKey<ContractId, Color>, Word>,
     storage: DataSource<MultiKey<ContractId, Bytes32>, Bytes32>,
 }
 
-impl<T: Config> Storage<ContractId, Contract> for Database<T> {
+impl Default for Database {
+    fn default() -> Self {
+        Self {
+            contracts: Arc::new(RwLock::new(MemoryStore::default())),
+            balances: Arc::new(RwLock::new(MemoryStore::default())),
+            storage: Arc::new(RwLock::new(MemoryStore::default())),
+        }
+    }
+}
+
+impl Storage<ContractId, Contract> for Database {
     fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
         self.contracts
             .write()
@@ -44,7 +55,7 @@ impl<T: Config> Storage<ContractId, Contract> for Database<T> {
     }
 }
 
-impl<T: Config> Storage<(ContractId, Color), Word> for Database<T> {
+impl Storage<(ContractId, Color), Word> for Database {
     fn insert(&mut self, key: (ContractId, Color), value: u64) -> Result<Option<u64>, DataError> {
         let key = MultiKey(key);
         self.balances
@@ -82,7 +93,7 @@ impl<T: Config> Storage<(ContractId, Color), Word> for Database<T> {
     }
 }
 
-impl<T: Config> Storage<(ContractId, Bytes32), Bytes32> for Database<T> {
+impl Storage<(ContractId, Bytes32), Bytes32> for Database {
     fn insert(
         &mut self,
         key: (ContractId, Bytes32),
@@ -124,8 +135,17 @@ impl<T: Config> Storage<(ContractId, Bytes32), Bytes32> for Database<T> {
     }
 }
 
+impl InterpreterStorage for Database {}
+
 impl From<crate::state::Error> for DataError {
     fn from(_: Error) -> Self {
         panic!("DataError is a ZeroVariant enum and cannot be instantiated")
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TODO: verify simple crud for each data type using in-memory impl
 }
