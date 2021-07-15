@@ -1,5 +1,5 @@
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, KeyValueStore, Result,
+    in_memory::memory_store::MemoryStore, BatchOperations, DataSource, KeyValueStore, Result,
     TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
 use serde::de::DeserializeOwned;
@@ -7,8 +7,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, RwLock};
-
-pub type DataSource<K, V> = Arc<RwLock<dyn TransactableStorage<K, V>>>;
 
 pub struct MemoryTransactionView<K, V> {
     view_layer: MemoryStore<K, V>,

@@ -2,9 +2,11 @@ use crate::state::in_memory::transaction::MemoryTransactionView;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::fmt::Debug;
+use std::sync::{Arc, RwLock};
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
+pub type DataSource<K, V> = Arc<RwLock<dyn TransactableStorage<K, V>>>;
 
 #[derive(Clone, Debug, Default)]
 pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>>(pub(crate) (K1, K2));
