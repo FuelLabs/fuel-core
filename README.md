@@ -34,7 +34,7 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --ip <ip>         [default: 0.0.0.0]
+        --ip <ip>         [default: 127.0.0.1]
         --port <port>     [default: 4000]
 ```
 
