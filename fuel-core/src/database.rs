@@ -11,6 +11,10 @@ pub struct Database {
     storage: DataSource<MultiKey<ContractId, Bytes32>, Bytes32>,
 }
 
+impl Database {
+    pub fn transaction(&self) {}
+}
+
 impl Default for Database {
     fn default() -> Self {
         Self {

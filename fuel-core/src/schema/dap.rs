@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::{io, sync};
 
 use crate::database::Database;
+use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
 
 #[derive(Debug, Clone, Default)]
@@ -150,6 +151,8 @@ impl QueryRoot {
 impl MutationRoot {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
+
+        let db = ctx.data_unchecked::<SharedDatabase>();
 
         let id = ctx
             .data_unchecked::<GraphStorage>()
