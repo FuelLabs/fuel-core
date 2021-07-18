@@ -7,6 +7,7 @@ use futures::lock::Mutex;
 use std::sync;
 
 use crate::database::Database;
+use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
 
 pub type TxStorage = sync::Arc<Mutex<Database>>;
@@ -29,22 +30,26 @@ impl MutationRoot {
     async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
         let tx: Transaction = serde_json::from_str(tx.as_str())?;
 
-        let storage = ctx.data_unchecked::<TxStorage>().lock().await;
-        let mut vm = Interpreter::with_storage(storage);
+        let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
+        let mut vm = Interpreter::with_storage(transaction.clone());
 
         vm.init(tx)?;
         vm.run()?;
+
+        transaction.commit();
 
         Ok(serde_json::to_string(vm.log())?)
     }
 }
 
-pub fn schema() -> TXSchema {
-    let storage = TxStorage::default();
-
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(storage)
-        .finish()
+pub fn schema(state: Option<SharedDatabase>) -> TXSchema {
+    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
+    if let Some(database) = state {
+        schema.data(database)
+    } else {
+        schema
+    }
+    .finish()
 }
 
 pub async fn service(schema: web::Data<TXSchema>, req: Request) -> Response {

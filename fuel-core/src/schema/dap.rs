@@ -79,7 +79,7 @@ impl ConcreteStorage {
             .and_then(|tx| tx.first())
             .cloned()
             .unwrap_or_default();
-
+        // TODO: how to reset DatabaseTransaction?
         self.vm
             .get_mut(id)
             .map(|vm| vm.init(tx))
