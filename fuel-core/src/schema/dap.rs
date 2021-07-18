@@ -10,24 +10,18 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::{io, sync};
 
-use crate::database::Database;
+use crate::database::{Database, DatabaseTransaction};
 use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
 
 #[derive(Debug, Clone, Default)]
-// TODO replace for dyn dispatch
-pub struct ConcreteStorage<S>
-where
-    S: InterpreterStorage,
-{
-    vm: HashMap<ID, Interpreter<S>>,
+pub struct ConcreteStorage {
+    vm: HashMap<ID, Interpreter<DatabaseTransaction>>,
     tx: HashMap<ID, Vec<Transaction>>,
+    db: HashMap<ID, DatabaseTransaction>,
 }
 
-impl<S> ConcreteStorage<S>
-where
-    S: InterpreterStorage,
-{
+impl ConcreteStorage {
     pub fn register(&self, id: &ID, register: RegisterId) -> Option<Word> {
         self.vm
             .get(id)
@@ -43,7 +37,11 @@ where
         self.vm.get(id).map(|vm| &vm.memory()[start..end])
     }
 
-    pub fn init(&mut self, txs: &[Transaction], storage: S) -> Result<ID, ExecuteError> {
+    pub fn init(
+        &mut self,
+        txs: &[Transaction],
+        storage: DatabaseTransaction,
+    ) -> Result<ID, ExecuteError> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
@@ -55,16 +53,23 @@ where
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage);
+        let mut vm = Interpreter::with_storage(storage.clone());
         vm.init(tx)?;
         self.vm.insert(id.clone(), vm);
+        self.db.insert(id.clone(), storage);
 
         Ok(id)
     }
 
     pub fn kill(&mut self, id: &ID) -> bool {
         self.tx.remove(id);
-        self.vm.remove(id).is_some()
+        self.vm.remove(id);
+        if let Some(db) = self.db.remove(id) {
+            db.commit();
+            true
+        } else {
+            false
+        }
     }
 
     pub fn reset(&mut self, id: &ID) -> Result<(), ExecuteError> {
@@ -81,7 +86,7 @@ where
             .transpose()?
             .ok_or(ExecuteError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
-                "The VM isntance was not found",
+                "The VM instance was not found",
             )))
     }
 
@@ -98,18 +103,22 @@ where
     }
 }
 
-pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage<Database>>>;
+pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage>>;
 pub struct QueryRoot;
 pub struct MutationRoot;
 
 pub type DAPSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
-pub fn schema() -> DAPSchema {
+pub fn schema(state: Option<SharedDatabase>) -> DAPSchema {
     let storage = GraphStorage::default();
 
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(storage)
-        .finish()
+    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
+    if let Some(database) = state {
+        schema.data(storage).data(database)
+    } else {
+        schema
+    }
+    .finish()
 }
 
 pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {
@@ -158,7 +167,7 @@ impl MutationRoot {
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], Database::default())?;
+            .init(&[], db.0.transaction())?;
 
         debug!("Session {:?} initialized", id);
 

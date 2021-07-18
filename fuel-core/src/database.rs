@@ -1,8 +1,14 @@
 use crate::state::in_memory::memory_store::MemoryStore;
-use crate::state::{DataSource, Error, MultiKey};
+use crate::state::in_memory::transaction::MemoryTransactionView;
+use crate::state::{DataSource, Error, KeyValueStore, MultiKey};
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
+use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
+
+pub trait DatabaseTrait: InterpreterStorage + Debug {
+    fn transaction(&self) -> DatabaseTransaction;
+}
 
 #[derive(Debug)]
 pub struct Database {
@@ -11,8 +17,18 @@ pub struct Database {
     storage: DataSource<MultiKey<ContractId, Bytes32>, Bytes32>,
 }
 
-impl Database {
-    pub fn transaction(&self) {}
+impl DatabaseTrait for Database {
+    fn transaction(&self) -> DatabaseTransaction {
+        DatabaseTransaction {
+            contracts: Arc::new(Mutex::new(MemoryTransactionView::new(
+                self.contracts.clone(),
+            ))),
+            balances: Arc::new(Mutex::new(MemoryTransactionView::new(
+                self.balances.clone(),
+            ))),
+            storage: Arc::new(Mutex::new(MemoryTransactionView::new(self.storage.clone()))),
+        }
+    }
 }
 
 impl Default for Database {
@@ -140,6 +156,167 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
 }
 
 impl InterpreterStorage for Database {}
+
+#[derive(Clone, Debug)]
+pub struct DatabaseTransaction {
+    contracts: Arc<Mutex<MemoryTransactionView<ContractId, Contract>>>,
+    balances: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Color>, Word>>>,
+    storage: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Bytes32>, Bytes32>>>,
+}
+
+impl Default for DatabaseTransaction {
+    fn default() -> Self {
+        Database::default().transaction()
+    }
+}
+
+impl DatabaseTransaction {
+    pub fn commit(mut self) {
+        self.contracts
+            .lock()
+            .expect("lock poisoned")
+            .commit()
+            .expect("todo: error handling");
+        self.balances
+            .lock()
+            .expect("lock poisoned")
+            .commit()
+            .expect("todo: error handling");
+        self.storage
+            .lock()
+            .expect("lock poisoned")
+            .commit()
+            .expect("todo: error handling");
+    }
+}
+
+impl Storage<ContractId, Contract> for DatabaseTransaction {
+    fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
+        self.contracts
+            .lock()
+            .expect("lock poisoned")
+            .put(key, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
+        self.contracts
+            .lock()
+            .expect("lock poisoned")
+            .delete(key)
+            .map_err(Into::into)
+    }
+
+    fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
+        self.contracts
+            .lock()
+            .expect("lock poisoned")
+            .get(key)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
+        self.contracts
+            .lock()
+            .expect("lock poisoned")
+            .exists(key)
+            .map_err(Into::into)
+    }
+}
+
+impl Storage<(ContractId, Color), Word> for DatabaseTransaction {
+    fn insert(&mut self, key: (ContractId, Color), value: Word) -> Result<Option<Word>, DataError> {
+        self.balances
+            .lock()
+            .expect("lock poisoned")
+            .put(MultiKey::new(key), value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
+        let key = MultiKey::new(*key);
+        self.balances
+            .lock()
+            .expect("lock poisoned")
+            .delete(&key)
+            .map_err(Into::into)
+    }
+
+    fn get(&self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
+        let key = MultiKey::new(*key);
+        self.balances
+            .lock()
+            .expect("lock poisoned")
+            .get(&key)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &(ContractId, Color)) -> Result<bool, DataError> {
+        let key = MultiKey::new(*key);
+        self.balances
+            .lock()
+            .expect("lock poisoned")
+            .exists(&key)
+            .map_err(Into::into)
+    }
+}
+
+impl Storage<(ContractId, Bytes32), Bytes32> for DatabaseTransaction {
+    fn insert(
+        &mut self,
+        key: (ContractId, Bytes32),
+        value: Bytes32,
+    ) -> Result<Option<Bytes32>, DataError> {
+        self.storage
+            .lock()
+            .expect("lock poisoned")
+            .put(MultiKey::new(key), value)
+            .map_err(Into::into)
+    }
+
+    fn remove(&mut self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
+        let key = MultiKey::new(*key);
+        self.storage
+            .lock()
+            .expect("lock poisoned")
+            .delete(&key)
+            .map_err(Into::into)
+    }
+
+    fn get(&self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
+        let key = MultiKey::new(*key);
+        self.storage
+            .lock()
+            .expect("lock poisoned")
+            .get(&key)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &(ContractId, Bytes32)) -> Result<bool, DataError> {
+        let key = MultiKey::new(*key);
+        self.storage
+            .lock()
+            .expect("lock poisoned")
+            .exists(&key)
+            .map_err(Into::into)
+    }
+}
+
+impl DatabaseTrait for DatabaseTransaction {
+    fn transaction(&self) -> DatabaseTransaction {
+        DatabaseTransaction {
+            contracts: Arc::new(Mutex::new(MemoryTransactionView::new(
+                self.contracts.clone(),
+            ))),
+            balances: Arc::new(Mutex::new(MemoryTransactionView::new(
+                self.balances.clone(),
+            ))),
+            storage: Arc::new(Mutex::new(MemoryTransactionView::new(self.storage.clone()))),
+        }
+    }
+}
+
+impl InterpreterStorage for DatabaseTransaction {}
 
 impl From<crate::state::Error> for DataError {
     fn from(_: Error) -> Self {

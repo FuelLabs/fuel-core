@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug)]
 pub struct MemoryTransactionView<K, V> {
     view_layer: MemoryStore<K, V>,
     // use hashmap to collapse changes (e.g. insert then remove the same key)
@@ -110,6 +111,13 @@ where
         }
         result
     }
+}
+
+impl<K, V> TransactableStorage<K, V> for MemoryTransactionView<K, V>
+where
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
+{
 }
 
 #[cfg(test)]

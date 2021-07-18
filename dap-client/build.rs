@@ -51,7 +51,7 @@ fn main() {
 
     File::create(&assets)
         .and_then(|mut f| {
-            f.write_all(dap::schema().sdl().as_bytes())?;
+            f.write_all(dap::schema(None).sdl().as_bytes())?;
             f.sync_all()
         })
         .expect("Failed to write SDL schema to temporary file");
