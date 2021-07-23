@@ -10,7 +10,7 @@ pub trait DatabaseTrait: InterpreterStorage + Debug {
     fn transaction(&self) -> DatabaseTransaction;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Database {
     contracts: DataSource<ContractId, Contract>,
     balances: DataSource<MultiKey<ContractId, Color>, Word>,
@@ -19,15 +19,7 @@ pub struct Database {
 
 impl DatabaseTrait for Database {
     fn transaction(&self) -> DatabaseTransaction {
-        DatabaseTransaction {
-            contracts: Arc::new(Mutex::new(MemoryTransactionView::new(
-                self.contracts.clone(),
-            ))),
-            balances: Arc::new(Mutex::new(MemoryTransactionView::new(
-                self.balances.clone(),
-            ))),
-            storage: Arc::new(Mutex::new(MemoryTransactionView::new(self.storage.clone()))),
-        }
+        self.into()
     }
 }
 
@@ -162,6 +154,7 @@ pub struct DatabaseTransaction {
     contracts: Arc<Mutex<MemoryTransactionView<ContractId, Contract>>>,
     balances: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Color>, Word>>>,
     storage: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Bytes32>, Bytes32>>>,
+    database: Database,
 }
 
 impl Default for DatabaseTransaction {
@@ -192,72 +185,37 @@ impl DatabaseTransaction {
 
 impl Storage<ContractId, Contract> for DatabaseTransaction {
     fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .put(key, value)
-            .map_err(Into::into)
+        self.database.insert(key, value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .delete(key)
-            .map_err(Into::into)
+        self.database.remove(key)
     }
 
     fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .get(key)
-            .map_err(Into::into)
+        self.database.get(key)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .exists(key)
-            .map_err(Into::into)
+        self.database.contains_key(key)
     }
 }
 
 impl Storage<(ContractId, Color), Word> for DatabaseTransaction {
     fn insert(&mut self, key: (ContractId, Color), value: Word) -> Result<Option<Word>, DataError> {
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .put(MultiKey::new(key), value)
-            .map_err(Into::into)
+        self.database.insert(key, value)
     }
 
     fn remove(&mut self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
-        let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .delete(&key)
-            .map_err(Into::into)
+        self.database.remove(key)
     }
 
     fn get(&self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
-        let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .get(&key)
-            .map_err(Into::into)
+        self.database.get(key)
     }
 
     fn contains_key(&self, key: &(ContractId, Color)) -> Result<bool, DataError> {
-        let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .exists(&key)
-            .map_err(Into::into)
+        self.database.contains_key(key)
     }
 }
 
@@ -267,52 +225,50 @@ impl Storage<(ContractId, Bytes32), Bytes32> for DatabaseTransaction {
         key: (ContractId, Bytes32),
         value: Bytes32,
     ) -> Result<Option<Bytes32>, DataError> {
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .put(MultiKey::new(key), value)
-            .map_err(Into::into)
+        self.database.insert(key, value)
     }
 
     fn remove(&mut self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
-        let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .delete(&key)
-            .map_err(Into::into)
+        self.database.remove(key)
     }
 
     fn get(&self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
-        let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .get(&key)
-            .map_err(Into::into)
+        self.database.get(key)
     }
 
     fn contains_key(&self, key: &(ContractId, Bytes32)) -> Result<bool, DataError> {
-        let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .exists(&key)
-            .map_err(Into::into)
+        self.database.contains_key(key)
+    }
+}
+
+impl From<&Database> for DatabaseTransaction {
+    fn from(source: &Database) -> Self {
+        let contracts = Arc::new(Mutex::new(MemoryTransactionView::new(
+            source.contracts.clone(),
+        )));
+        let balances = Arc::new(Mutex::new(MemoryTransactionView::new(
+            source.balances.clone(),
+        )));
+        let storage = Arc::new(Mutex::new(MemoryTransactionView::new(
+            source.storage.clone(),
+        )));
+
+        Self {
+            contracts: contracts.clone(),
+            balances: balances.clone(),
+            storage: storage.clone(),
+            database: Database {
+                contracts,
+                balances,
+                storage,
+            },
+        }
     }
 }
 
 impl DatabaseTrait for DatabaseTransaction {
     fn transaction(&self) -> DatabaseTransaction {
-        DatabaseTransaction {
-            contracts: Arc::new(Mutex::new(MemoryTransactionView::new(
-                self.contracts.clone(),
-            ))),
-            balances: Arc::new(Mutex::new(MemoryTransactionView::new(
-                self.balances.clone(),
-            ))),
-            storage: Arc::new(Mutex::new(MemoryTransactionView::new(self.storage.clone()))),
-        }
+        (&self.database).into()
     }
 }
 
