@@ -151,9 +151,11 @@ impl InterpreterStorage for Database {}
 
 #[derive(Clone, Debug)]
 pub struct DatabaseTransaction {
+    // The primary datastores
     contracts: Arc<Mutex<MemoryTransactionView<ContractId, Contract>>>,
     balances: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Color>, Word>>>,
     storage: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Bytes32>, Bytes32>>>,
+    // The inner db impl using these stores
     database: Database,
 }
 
