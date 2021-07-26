@@ -2,8 +2,7 @@ use crate::schema::{dap, tx};
 
 use crate::database::{Database, DatabaseTrait};
 use actix_web::{guard, web};
-use fuel_vm::data::InterpreterStorage;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct SharedDatabase(pub Arc<dyn DatabaseTrait + Send + Sync>);

@@ -1,6 +1,6 @@
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use crate::state::{DataSource, Error, KeyValueStore, MultiKey};
+use crate::state::{DataSource, Error, MultiKey};
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
 use std::fmt::Debug;
@@ -166,7 +166,7 @@ impl Default for DatabaseTransaction {
 }
 
 impl DatabaseTransaction {
-    pub fn commit(mut self) {
+    pub fn commit(self) {
         self.contracts
             .lock()
             .expect("lock poisoned")

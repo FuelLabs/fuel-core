@@ -10,7 +10,7 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::{io, sync};
 
-use crate::database::{Database, DatabaseTransaction};
+use crate::database::DatabaseTransaction;
 use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
 
