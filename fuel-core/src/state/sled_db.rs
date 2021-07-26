@@ -1,10 +1,8 @@
 use crate::state::Error::Codec;
-use crate::state::{BatchOperations, KeyValueStore, Result, WriteOperation};
+use crate::state::{BatchOperations, KeyValueStore, Result, TransactableStorage, WriteOperation};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use sled::transaction::{
-    ConflictableTransactionError, TransactionError, UnabortableTransactionError,
-};
+use sled::transaction::{ConflictableTransactionError, TransactionError};
 use sled::{Error, Tree};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -31,7 +29,7 @@ where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + Serialize + DeserializeOwned + Clone,
 {
-    fn get(&self, key: K) -> Result<Option<V>> {
+    fn get(&self, key: &K) -> Result<Option<V>> {
         if let Some(value) = self.tree.get(key)? {
             Ok(Some(bincode::deserialize(&value).map_err(|_| Codec)?))
         } else {
@@ -50,7 +48,7 @@ where
         }
     }
 
-    fn delete(&mut self, key: K) -> Result<Option<V>> {
+    fn delete(&mut self, key: &K) -> Result<Option<V>> {
         if let Some(previous_value) = self.tree.remove(key)? {
             Ok(Some(
                 bincode::deserialize(&previous_value).map_err(|_| Codec)?,
@@ -60,33 +58,40 @@ where
         }
     }
 
-    fn exists(&self, key: K) -> Result<bool> {
+    fn exists(&self, key: &K) -> Result<bool> {
         Ok(self.tree.contains_key(key)?)
     }
 }
 
 impl<K, V> BatchOperations<K, V> for SledStore<K, V>
 where
-    K: AsRef<[u8]> + Into<Vec<u8>> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
-    fn batch_write<I>(&mut self, entries: I) -> Result<()>
-    where
-        I: Iterator<Item = WriteOperation<K, V>>,
-    {
+    fn batch_write(
+        &mut self,
+        entries: &mut dyn Iterator<Item = WriteOperation<K, V>>,
+    ) -> Result<()> {
         let mut batch = sled::Batch::default();
         for entry in entries {
             match entry {
                 WriteOperation::Insert(key, value) => {
-                    batch.insert(key.into(), bincode::serialize(&value).map_err(|_| Codec)?);
+                    batch.insert(key.as_ref(), bincode::serialize(&value).map_err(|_| Codec)?);
                 }
                 WriteOperation::Remove(key) => {
-                    batch.remove(key.into());
+                    batch.remove(key.as_ref());
                 }
             }
         }
         self.tree.apply_batch(batch).map_err(Into::into)
     }
+}
+
+impl<K, V> TransactableStorage<K, V> for SledStore<K, V>
+where
+    K: AsRef<[u8]> + Debug + Clone + Send,
+    V: Serialize + DeserializeOwned + Debug + Clone + Send,
+{
 }
 
 impl From<sled::Error> for crate::state::Error {
@@ -120,6 +125,7 @@ mod tests {
         use crate::state::Transaction;
         use crate::state::TransactionError::Aborted;
         use sled::Config;
+        use std::sync::{Arc, Mutex};
 
         #[test]
         fn can_get_from_sled_store() {
@@ -133,7 +139,7 @@ mod tests {
             let sled_store: SledStore<String, String> = tree.into();
 
             assert_eq!(
-                sled_store.get("test".to_string()).unwrap().unwrap(),
+                sled_store.get(&"test".to_string()).unwrap().unwrap(),
                 "value".to_string()
             );
         }
@@ -154,7 +160,7 @@ mod tests {
             // verify
             assert_eq!(result, None);
             assert_eq!(
-                sled_store.get("test".to_string()).unwrap().unwrap(),
+                sled_store.get(&"test".to_string()).unwrap().unwrap(),
                 "value".to_string()
             )
         }
@@ -179,7 +185,7 @@ mod tests {
             assert_eq!(ret1, None);
             assert_eq!(ret2, Some("value".to_string()));
             assert_eq!(
-                sled_store.get("test".to_string()).unwrap().unwrap(),
+                sled_store.get(&"test".to_string()).unwrap().unwrap(),
                 "other_value".to_string()
             )
         }
@@ -194,14 +200,14 @@ mod tests {
             tree.insert("test".to_string(), v.clone()).unwrap();
             let mut sled_store: SledStore<String, String> = tree.into();
             // test
-            let value = sled_store.delete("test".to_string()).unwrap();
+            let value = sled_store.delete(&"test".to_string()).unwrap();
 
             // verify value was returned
             assert_eq!(value, Some("value".to_string()));
             // verify value is no longer available
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
+            assert_eq!(sled_store.get(&"test".to_string()).unwrap(), None);
             // verify key no longer exists
-            assert!(!sled_store.exists("test".to_string()).unwrap())
+            assert!(!sled_store.exists(&"test".to_string()).unwrap())
         }
 
         #[test]
@@ -214,7 +220,8 @@ mod tests {
             let v = bincode::serialize("value").unwrap();
             tree.insert("test".to_string(), v.clone()).unwrap();
             // convert from sled tree to our storage interface
-            let mut sled_store: SledStore<String, String> = tree.into();
+            let mut sled_store: Arc<Mutex<SledStore<String, String>>> =
+                Arc::new(Mutex::new(tree.into()));
 
             let result = sled_store
                 .transaction(|view| {
@@ -226,7 +233,12 @@ mod tests {
                 .unwrap();
 
             assert_eq!(
-                sled_store.get("test".to_string()).unwrap().unwrap(),
+                sled_store
+                    .lock()
+                    .unwrap()
+                    .get(&"test".to_string())
+                    .unwrap()
+                    .unwrap(),
                 "other_value".to_string()
             );
             assert_eq!(result, Some("value".to_string()));
@@ -238,7 +250,8 @@ mod tests {
             let config = Config::new().temporary(true);
             let db = config.open().unwrap();
             let tree = db.open_tree(b"test_tree").unwrap();
-            let mut sled_store: SledStore<String, String> = tree.into();
+            let mut sled_store: Arc<Mutex<SledStore<String, String>>> =
+                Arc::new(Mutex::new(tree.into()));
 
             let result = sled_store.transaction(|view| {
                 let result = view.put("test".to_string(), "value".to_string()).unwrap();
@@ -246,95 +259,14 @@ mod tests {
                 Ok(result)
             });
 
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
+            assert_eq!(
+                sled_store.lock().unwrap().get(&"test".to_string()).unwrap(),
+                None
+            );
             assert!(matches!(
                 result,
                 Err(crate::state::TransactionError::Aborted)
             ));
-        }
-    }
-
-    mod new_transactional_tree {
-
-        use super::*;
-        use crate::state::Transaction;
-        use sled::Config;
-
-        #[test]
-        fn can_get_from_tree() {
-            // setup
-            let config = Config::new().temporary(true);
-            let db = config.open().unwrap();
-            let tree = db.open_tree(b"test_tree").unwrap();
-
-            let v = bincode::serialize("value").unwrap();
-            tree.insert("test".to_string(), v.clone()).unwrap();
-            // convert from sled tree to our storage interface
-            let mut sled_store: SledStore<String, String> = tree.into();
-
-            let result = sled_store
-                .transaction(|view| Ok(view.get("test".to_string()).unwrap()))
-                .unwrap();
-
-            assert_eq!(result, Some("value".to_string()));
-        }
-
-        #[test]
-        fn can_insert_into_tree() {
-            // setup
-            let config = Config::new().temporary(true);
-            let db = config.open().unwrap();
-            let tree = db.open_tree(b"test_tree").unwrap();
-            let mut sled_store: SledStore<String, String> = tree.into();
-
-            let result = sled_store
-                .transaction(|view| Ok(view.put("test".to_string(), "value".to_string()).unwrap()))
-                .unwrap();
-
-            assert_eq!(result, None);
-            assert_eq!(
-                sled_store.get("test".to_string()).unwrap(),
-                Some("value".to_string())
-            );
-        }
-
-        #[test]
-        fn can_remove_from_tree() {
-            // setup
-            let config = Config::new().temporary(true);
-            let db = config.open().unwrap();
-            let tree = db.open_tree(b"test_tree").unwrap();
-
-            let v = bincode::serialize("value").unwrap();
-            tree.insert("test".to_string(), v.clone()).unwrap();
-            // convert from sled tree to our storage interface
-            let mut sled_store: SledStore<String, String> = tree.into();
-
-            let result = sled_store
-                .transaction(|view| Ok(view.delete("test".to_string()).unwrap()))
-                .unwrap();
-
-            assert_eq!(result, Some("value".to_string()));
-            assert_eq!(sled_store.get("test".to_string()).unwrap(), None);
-        }
-
-        #[test]
-        fn check_key_existence_from_tree() {
-            // setup
-            let config = Config::new().temporary(true);
-            let db = config.open().unwrap();
-            let tree = db.open_tree(b"test_tree").unwrap();
-
-            let v = bincode::serialize("value").unwrap();
-            tree.insert("test".to_string(), v.clone()).unwrap();
-            // convert from sled tree to our storage interface
-            let mut sled_store: SledStore<String, String> = tree.into();
-
-            let result = sled_store
-                .transaction(|view| Ok(view.exists("test".to_string()).unwrap()))
-                .unwrap();
-
-            assert!(result);
         }
     }
 }

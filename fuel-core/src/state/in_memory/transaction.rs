@@ -106,7 +106,7 @@ where
     {
         let mut view = MemoryTransactionView::new(self.clone());
         let result = f(&mut view);
-        if let Ok(_) = result {
+        if result.is_ok() {
             view.commit().map_err(|_| TransactionError::Aborted)?;
         }
         result

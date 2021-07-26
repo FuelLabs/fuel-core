@@ -13,6 +13,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.data(dap::schema(Some(database.clone())))
         .service(web::resource("/dap").guard(guard::Post()).to(dap::service));
 
-    cfg.data(tx::schema(Some(database.clone())))
+    cfg.data(tx::schema(Some(database)))
         .service(web::resource("/tx").guard(guard::Post()).to(tx::service));
 }
