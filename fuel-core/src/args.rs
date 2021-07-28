@@ -5,7 +5,7 @@ use std::{env, io, net};
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
-    #[structopt(long = "ip", default_value = "0.0.0.0", parse(try_from_str))]
+    #[structopt(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
 
     #[structopt(long = "port", default_value = "4000")]
