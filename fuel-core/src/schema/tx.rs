@@ -1,14 +1,13 @@
+use crate::database::{Database, DatabaseTransaction};
+use crate::service::SharedDatabase;
 use actix_web::web;
 use async_graphql::types::EmptySubscription;
 use async_graphql::{Context, Object, Schema};
 use async_graphql_actix_web::{Request, Response};
-use futures::lock::Mutex;
-
-use std::sync;
-
-use crate::database::Database;
-use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
+use futures::lock::Mutex;
+use std::sync;
+use tokio::task;
 
 pub type TxStorage = sync::Arc<Mutex<Database>>;
 pub struct MutationRoot;
@@ -28,15 +27,20 @@ impl QueryRoot {
 #[Object]
 impl MutationRoot {
     async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
-        let tx: Transaction = serde_json::from_str(tx.as_str())?;
-
         let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
-        let mut vm = Interpreter::with_storage(transaction.clone());
 
-        vm.init(tx)?;
-        vm.run()?;
+        let vm = task::spawn_blocking(
+            move || -> async_graphql::Result<Interpreter<DatabaseTransaction>> {
+                let tx: Transaction = serde_json::from_str(tx.as_str())?;
+                let mut vm = Interpreter::with_storage(transaction.clone());
+                vm.init(tx).map_err(|e| Box::new(e))?;
+                vm.run().map_err(|e| Box::new(e))?;
 
-        transaction.commit();
+                transaction.commit().map_err(|e| Box::new(e))?;
+                Ok(vm)
+            },
+        )
+        .await??;
 
         Ok(serde_json::to_string(vm.log())?)
     }

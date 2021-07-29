@@ -166,22 +166,11 @@ impl Default for DatabaseTransaction {
 }
 
 impl DatabaseTransaction {
-    pub fn commit(self) {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .commit()
-            .expect("todo: error handling");
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .commit()
-            .expect("todo: error handling");
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .commit()
-            .expect("todo: error handling");
+    pub fn commit(self) -> crate::state::Result<()> {
+        // TODO: should commit be fallible if this api is meant to be atomic?
+        self.contracts.lock().expect("lock poisoned").commit()?;
+        self.balances.lock().expect("lock poisoned").commit()?;
+        self.storage.lock().expect("lock poisoned").commit()
     }
 }
 
