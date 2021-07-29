@@ -64,30 +64,27 @@ impl ConcreteStorage {
     pub fn kill(&mut self, id: &ID) -> bool {
         self.tx.remove(id);
         self.vm.remove(id);
-        if let Some(db) = self.db.remove(id) {
-            db.commit();
-            true
-        } else {
-            false
-        }
+        self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID) -> Result<(), ExecuteError> {
+    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> Result<(), ExecuteError> {
         let tx = self
             .tx
             .get(id)
             .and_then(|tx| tx.first())
             .cloned()
             .unwrap_or_default();
-        // TODO: how to reset DatabaseTransaction?
+
+        let mut vm = Interpreter::with_storage(storage.clone());
+        vm.init(tx)?;
         self.vm
-            .get_mut(id)
-            .map(|vm| vm.init(tx))
-            .transpose()?
+            .insert(id.clone(), vm)
             .ok_or(ExecuteError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
                 "The VM instance was not found",
-            )))
+            )))?;
+        self.db.insert(id.clone(), storage);
+        Ok(())
     }
 
     pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), ExecuteError> {
@@ -183,10 +180,12 @@ impl MutationRoot {
     }
 
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+        let db = ctx.data_unchecked::<SharedDatabase>();
+
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .reset(&id)?;
+            .reset(&id, db.0.transaction())?;
 
         debug!("Session {:?} was reset", id);
 
