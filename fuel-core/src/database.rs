@@ -267,7 +267,7 @@ impl InterpreterStorage for DatabaseTransaction {}
 
 impl From<crate::state::Error> for DataError {
     fn from(_: Error) -> Self {
-        panic!("DataError is a ZeroVariant enum and cannot be instantiated")
+        todo!("DataError is a ZeroVariant enum and cannot be instantiated yet")
     }
 }
 
