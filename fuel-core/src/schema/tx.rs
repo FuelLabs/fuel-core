@@ -9,6 +9,7 @@ use futures::lock::Mutex;
 use std::sync;
 use tokio::task;
 
+// TODO: https://github.com/FuelLabs/fuel-core/issues/29
 pub type TxStorage = sync::Arc<Mutex<Database>>;
 pub struct MutationRoot;
 pub struct QueryRoot;
@@ -46,6 +47,7 @@ impl MutationRoot {
     }
 }
 
+// TODO: https://github.com/FuelLabs/fuel-core/issues/29
 pub fn schema(state: Option<SharedDatabase>) -> TXSchema {
     let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
     if let Some(database) = state {

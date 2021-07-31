@@ -106,6 +106,7 @@ pub struct MutationRoot;
 
 pub type DAPSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
+// https://github.com/FuelLabs/fuel-core/issues/29
 pub fn schema(state: Option<SharedDatabase>) -> DAPSchema {
     let storage = GraphStorage::default();
 
