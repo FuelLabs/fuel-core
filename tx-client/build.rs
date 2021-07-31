@@ -11,7 +11,7 @@ fn main() {
     let assets = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map(|f| {
-            let f = f.as_path().join("assets/tx.sdl").to_path_buf();
+            let f = f.as_path().join("assets/tx.sdl");
 
             let dir = f.parent().expect("Failed to read assets dir");
             fs::create_dir_all(dir).expect("Failed to create assets dir");

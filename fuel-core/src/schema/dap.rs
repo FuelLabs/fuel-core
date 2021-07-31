@@ -77,12 +77,12 @@ impl ConcreteStorage {
 
         let mut vm = Interpreter::with_storage(storage.clone());
         vm.init(tx)?;
-        self.vm
-            .insert(id.clone(), vm)
-            .ok_or(ExecuteError::Io(io::Error::new(
+        self.vm.insert(id.clone(), vm).ok_or_else(|| {
+            ExecuteError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
                 "The VM instance was not found",
-            )))?;
+            ))
+        })?;
         self.db.insert(id.clone(), storage);
         Ok(())
     }
@@ -93,10 +93,12 @@ impl ConcreteStorage {
             .map(|vm| vm.execute(op))
             .transpose()?
             .map(|_| ())
-            .ok_or(ExecuteError::Io(io::Error::new(
-                io::ErrorKind::NotFound,
-                "The VM isntance was not found",
-            )))
+            .ok_or_else(|| {
+                ExecuteError::Io(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "The VM isntance was not found",
+                ))
+            })
     }
 }
 
@@ -135,7 +137,7 @@ impl QueryRoot {
             .lock()
             .await
             .register(&id, register)
-            .ok_or(async_graphql::Error::new("Invalid register identifier"))
+            .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
     }
 
     async fn memory(
@@ -149,7 +151,7 @@ impl QueryRoot {
             .lock()
             .await
             .memory(&id, start, size)
-            .ok_or(async_graphql::Error::new("Invalid memory range"))
+            .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
 }

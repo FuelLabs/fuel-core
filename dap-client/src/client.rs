@@ -47,7 +47,7 @@ impl DapClient {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
             .data
-            .ok_or(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
