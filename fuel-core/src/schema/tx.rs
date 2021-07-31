@@ -9,8 +9,6 @@ use futures::lock::Mutex;
 use std::sync;
 use tokio::task;
 
-// TODO: https://github.com/FuelLabs/fuel-core/issues/29
-pub type TxStorage = sync::Arc<Mutex<Database>>;
 pub struct MutationRoot;
 pub struct QueryRoot;
 
