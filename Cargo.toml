@@ -2,7 +2,10 @@
 members = [
     "dap-client",
     "fuel-core",
-    "tx-client"
+    "tx-client",
+    "indexer-lib",
+    "index-runner",
+    "examples/simple-wasm"
 ]
 
 [profile.release]
