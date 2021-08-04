@@ -54,7 +54,7 @@ impl ConcreteStorage {
             });
 
         let mut vm = Interpreter::with_storage(storage.clone());
-        vm.init(tx)?;
+        vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
 
@@ -76,7 +76,7 @@ impl ConcreteStorage {
             .unwrap_or_default();
 
         let mut vm = Interpreter::with_storage(storage.clone());
-        vm.init(tx)?;
+        vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             ExecuteError::Io(io::Error::new(
                 io::ErrorKind::NotFound,

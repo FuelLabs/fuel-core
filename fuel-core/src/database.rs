@@ -1,3 +1,4 @@
+use crate::database::columns::{BALANCES, CONTRACTS, STATE};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
 use crate::state::{DataSource, Error, MultiKey};
@@ -5,6 +6,12 @@ use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
+
+pub(crate) mod columns {
+    pub const CONTRACTS: u32 = 1;
+    pub const BALANCES: u32 = 2;
+    pub const STATE: u32 = 3;
+}
 
 pub trait DatabaseTrait: InterpreterStorage + Debug {
     fn transaction(&self) -> DatabaseTransaction;
@@ -38,7 +45,7 @@ impl Storage<ContractId, Contract> for Database {
         self.contracts
             .lock()
             .expect("lock poisoned")
-            .put(key, value)
+            .put(key, CONTRACTS, value)
             .map_err(Into::into)
     }
 
@@ -46,7 +53,7 @@ impl Storage<ContractId, Contract> for Database {
         self.contracts
             .lock()
             .expect("lock poisoned")
-            .delete(key)
+            .delete(key, CONTRACTS)
             .map_err(Into::into)
     }
 
@@ -54,7 +61,7 @@ impl Storage<ContractId, Contract> for Database {
         self.contracts
             .lock()
             .expect("lock poisoned")
-            .get(key)
+            .get(key, CONTRACTS)
             .map_err(Into::into)
     }
 
@@ -62,7 +69,7 @@ impl Storage<ContractId, Contract> for Database {
         self.contracts
             .lock()
             .expect("lock poisoned")
-            .exists(key)
+            .exists(key, CONTRACTS)
             .map_err(Into::into)
     }
 }
@@ -73,7 +80,7 @@ impl Storage<(ContractId, Color), Word> for Database {
         self.balances
             .lock()
             .expect("lock poisoned")
-            .put(key, value)
+            .put(key, BALANCES, value)
             .map_err(Into::into)
     }
 
@@ -82,7 +89,7 @@ impl Storage<(ContractId, Color), Word> for Database {
         self.balances
             .lock()
             .expect("lock poisoned")
-            .delete(&key)
+            .delete(&key, BALANCES)
             .map_err(Into::into)
     }
 
@@ -91,7 +98,7 @@ impl Storage<(ContractId, Color), Word> for Database {
         self.balances
             .lock()
             .expect("lock poisoned")
-            .get(&key)
+            .get(&key, BALANCES)
             .map_err(Into::into)
     }
 
@@ -100,7 +107,7 @@ impl Storage<(ContractId, Color), Word> for Database {
         self.balances
             .lock()
             .expect("lock poisoned")
-            .exists(&key)
+            .exists(&key, BALANCES)
             .map_err(Into::into)
     }
 }
@@ -115,7 +122,7 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         self.storage
             .lock()
             .expect("lock poisoned")
-            .put(key, value)
+            .put(key, STATE, value)
             .map_err(Into::into)
     }
 
@@ -124,7 +131,7 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         self.storage
             .lock()
             .expect("lock poisoned")
-            .delete(&key)
+            .delete(&key, STATE)
             .map_err(Into::into)
     }
 
@@ -133,7 +140,7 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         self.storage
             .lock()
             .expect("lock poisoned")
-            .get(&key)
+            .get(&key, STATE)
             .map_err(Into::into)
     }
 
@@ -142,7 +149,7 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         self.storage
             .lock()
             .expect("lock poisoned")
-            .exists(&key)
+            .exists(&key, STATE)
             .map_err(Into::into)
     }
 }
@@ -292,7 +299,7 @@ mod tests {
             contracts
                 .lock()
                 .unwrap()
-                .put(contract_id, contract.clone())
+                .put(contract_id, CONTRACTS, contract.clone())
                 .unwrap();
 
             assert_eq!(
@@ -320,7 +327,7 @@ mod tests {
                 contracts
                     .lock()
                     .unwrap()
-                    .get(&contract_id)
+                    .get(&contract_id, CONTRACTS)
                     .unwrap()
                     .unwrap(),
                 contract
@@ -340,12 +347,16 @@ mod tests {
             contracts
                 .lock()
                 .unwrap()
-                .put(contract_id, contract.clone())
+                .put(contract_id, CONTRACTS, contract.clone())
                 .unwrap();
 
             Storage::<ContractId, Contract>::remove(&mut database, &contract_id).unwrap();
 
-            assert!(!contracts.lock().unwrap().exists(&contract_id).unwrap());
+            assert!(!contracts
+                .lock()
+                .unwrap()
+                .exists(&contract_id, CONTRACTS)
+                .unwrap());
         }
 
         #[test]
@@ -361,7 +372,7 @@ mod tests {
             contracts
                 .lock()
                 .unwrap()
-                .put(contract_id, contract.clone())
+                .put(contract_id, CONTRACTS, contract.clone())
                 .unwrap();
 
             assert!(
@@ -388,7 +399,7 @@ mod tests {
             balances
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(balance_id), balance.clone())
+                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
                 .unwrap();
 
             assert_eq!(
@@ -421,7 +432,7 @@ mod tests {
                 balances
                     .lock()
                     .unwrap()
-                    .get(&MultiKey::new(balance_id))
+                    .get(&MultiKey::new(balance_id), BALANCES)
                     .unwrap()
                     .unwrap(),
                 balance
@@ -442,7 +453,7 @@ mod tests {
             balances
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(balance_id), balance.clone())
+                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
                 .unwrap();
 
             Storage::<(ContractId, Color), Word>::remove(&mut database, &balance_id).unwrap();
@@ -450,7 +461,7 @@ mod tests {
             assert!(!balances
                 .lock()
                 .unwrap()
-                .exists(&MultiKey::new(balance_id))
+                .exists(&MultiKey::new(balance_id), BALANCES)
                 .unwrap());
         }
 
@@ -468,7 +479,7 @@ mod tests {
             balances
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(balance_id), balance.clone())
+                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
                 .unwrap();
 
             assert!(
@@ -495,7 +506,7 @@ mod tests {
             storage
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(storage_id), stored_value.clone())
+                .put(MultiKey::new(storage_id), STATE, stored_value.clone())
                 .unwrap();
 
             assert_eq!(
@@ -528,7 +539,7 @@ mod tests {
                 storage
                     .lock()
                     .unwrap()
-                    .get(&MultiKey::new(storage_id))
+                    .get(&MultiKey::new(storage_id), STATE)
                     .unwrap()
                     .unwrap(),
                 stored_value
@@ -549,7 +560,7 @@ mod tests {
             storage
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(storage_id), stored_value.clone())
+                .put(MultiKey::new(storage_id), STATE, stored_value.clone())
                 .unwrap();
 
             Storage::<(ContractId, Bytes32), Bytes32>::remove(&mut database, &storage_id).unwrap();
@@ -557,7 +568,7 @@ mod tests {
             assert!(!storage
                 .lock()
                 .unwrap()
-                .exists(&MultiKey::new(storage_id))
+                .exists(&MultiKey::new(storage_id), STATE)
                 .unwrap());
         }
 
@@ -575,7 +586,11 @@ mod tests {
             storage
                 .lock()
                 .unwrap()
-                .put(MultiKey::new(storage_id.clone()), stored_value.clone())
+                .put(
+                    MultiKey::new(storage_id.clone()),
+                    STATE,
+                    stored_value.clone(),
+                )
                 .unwrap();
 
             assert!(Storage::<(ContractId, Bytes32), Bytes32>::contains_key(

@@ -1,6 +1,7 @@
+use crate::state::in_memory::column_key;
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, DataSource, KeyValueStore, Result,
-    TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
+    in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, KeyValueStore,
+    Result, TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -42,47 +43,62 @@ where
     K: AsRef<[u8]> + Debug + Clone + Send,
     V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
-    fn get(&self, key: &K) -> Result<Option<V>> {
+    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>> {
         // try to fetch data from View layer if any changes to the key
-        if self.changes.contains_key(key.as_ref()) {
-            self.view_layer.get(key)
+        if self.changes.contains_key(&column_key(&key, column)) {
+            self.view_layer.get(key, column)
         } else {
             // fall-through to original data source
-            self.data_source.lock().expect("lock poisoned").get(key)
+            self.data_source
+                .lock()
+                .expect("lock poisoned")
+                .get(key, column)
         }
     }
 
-    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
-        let contained_key = self.changes.contains_key(key.as_ref());
+    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>> {
+        let k = column_key(&key, column);
+        let contained_key = self.changes.contains_key(&k);
         self.changes.insert(
-            key.as_ref().to_vec(),
-            WriteOperation::Insert(key.clone(), value.clone()),
+            k,
+            WriteOperation::Insert(key.clone(), column, value.clone()),
         );
-        let res = self.view_layer.put(key.clone(), value);
+        let res = self.view_layer.put(key.clone(), column, value);
         if contained_key {
             res
         } else {
-            self.data_source.lock().expect("lock poisoned").get(&key)
+            self.data_source
+                .lock()
+                .expect("lock poisoned")
+                .get(&key, column)
         }
     }
 
-    fn delete(&mut self, key: &K) -> Result<Option<V>> {
-        let contained_key = self.changes.contains_key(key.as_ref());
+    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>> {
+        let k = column_key(&key.clone(), column);
+        let contained_key = self.changes.contains_key(&k);
         self.changes
-            .insert(key.as_ref().to_vec(), WriteOperation::Remove(key.clone()));
-        let res = self.view_layer.delete(key);
+            .insert(k, WriteOperation::Remove(key.clone(), column));
+        let res = self.view_layer.delete(key, column);
         if contained_key {
             res
         } else {
-            self.data_source.lock().expect("lock poisoned").get(key)
+            self.data_source
+                .lock()
+                .expect("lock poisoned")
+                .get(key, column)
         }
     }
 
-    fn exists(&self, key: &K) -> Result<bool> {
-        if self.changes.contains_key(key.as_ref()) {
-            self.view_layer.exists(key)
+    fn exists(&self, key: &K, column: ColumnId) -> Result<bool> {
+        let k = column_key(&key.clone(), column);
+        if self.changes.contains_key(&k) {
+            self.view_layer.exists(key, column)
         } else {
-            self.data_source.lock().expect("lock poisoned").exists(key)
+            self.data_source
+                .lock()
+                .expect("lock poisoned")
+                .exists(key, column)
         }
     }
 }
@@ -131,9 +147,9 @@ mod tests {
         let store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
-        view.put(key.clone(), "value".to_string()).unwrap();
+        view.put(key.clone(), 0, "value".to_string()).unwrap();
         // test
-        let ret = view.get(&key).unwrap();
+        let ret = view.get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -146,11 +162,11 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.get(&key).unwrap();
+        let ret = view.get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -163,13 +179,13 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
-        view.delete(&key).unwrap();
+        view.delete(&key, 0).unwrap();
         // test
-        let ret = view.get(&key).unwrap();
-        let original = store.lock().unwrap().get(&key).unwrap();
+        let ret = view.get(&key, 0).unwrap();
+        let original = store.lock().unwrap().get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, None);
         // also ensure the original value is still intact and we aren't just passing
@@ -182,9 +198,11 @@ mod tests {
         // setup
         let store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
-        let _ = view.put("test".to_string(), "value".to_string());
+        let _ = view.put("test".to_string(), 0, "value".to_string());
         // test
-        let ret = view.put("test".to_string(), "value2".to_string()).unwrap();
+        let ret = view
+            .put("test".to_string(), 0, "value2".to_string())
+            .unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -195,10 +213,10 @@ mod tests {
         let store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
-        view.put(key.clone(), "value".to_string()).unwrap();
+        view.put(key.clone(), 0, "value".to_string()).unwrap();
         // test
-        let ret = view.delete(&key).unwrap();
-        let get = view.get(&key).unwrap();
+        let ret = view.delete(&key, 0).unwrap();
+        let get = view.get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()));
         assert_eq!(get, None)
@@ -212,12 +230,12 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
-        let ret = view.delete(&key).unwrap();
-        let get = view.get(&key).unwrap();
+        let ret = view.delete(&key, 0).unwrap();
+        let get = view.get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()));
         assert_eq!(get, None)
@@ -231,13 +249,13 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let mut view = MemoryTransactionView::new(store);
         // test
-        let ret1 = view.delete(&key).unwrap();
-        let ret2 = view.delete(&key).unwrap();
-        let get = view.get(&key).unwrap();
+        let ret1 = view.delete(&key, 0).unwrap();
+        let ret2 = view.delete(&key, 0).unwrap();
+        let get = view.get(&key, 0).unwrap();
         // verify
         assert_eq!(ret1, Some("value".to_string()));
         assert_eq!(ret2, None);
@@ -250,9 +268,9 @@ mod tests {
         let store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store);
         let key = "test".to_string();
-        view.put(key.clone(), "value".to_string()).unwrap();
+        view.put(key.clone(), 0, "value".to_string()).unwrap();
         // test
-        let ret = view.exists(&key).unwrap();
+        let ret = view.exists(&key, 0).unwrap();
         // verify
         assert!(ret)
     }
@@ -265,11 +283,11 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.exists(&key).unwrap();
+        let ret = view.exists(&key, 0).unwrap();
         // verify
         assert!(ret)
     }
@@ -282,13 +300,13 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
-        view.delete(&key).unwrap();
+        view.delete(&key, 0).unwrap();
         // test
-        let ret = view.exists(&key).unwrap();
-        let original = store.lock().unwrap().exists(&key).unwrap();
+        let ret = view.exists(&key, 0).unwrap();
+        let original = store.lock().unwrap().exists(&key, 0).unwrap();
         // verify
         assert!(!ret);
         // also ensure the original value is still intact and we aren't just passing
@@ -302,10 +320,10 @@ mod tests {
         let store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
         let mut view = MemoryTransactionView::new(store.clone());
         let key = "test".to_string();
-        view.put(key.clone(), "value".to_string()).unwrap();
+        view.put(key.clone(), 0, "value".to_string()).unwrap();
         // test
         view.commit().unwrap();
-        let ret = store.lock().unwrap().get(&key).unwrap();
+        let ret = store.lock().unwrap().get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, Some("value".to_string()))
     }
@@ -318,13 +336,13 @@ mod tests {
         store
             .lock()
             .unwrap()
-            .put(key.clone(), "value".to_string())
+            .put(key.clone(), 0, "value".to_string())
             .unwrap();
         let mut view = MemoryTransactionView::new(store.clone());
         // test
-        view.delete(&key).unwrap();
+        view.delete(&key, 0).unwrap();
         view.commit().unwrap();
-        let ret = store.lock().unwrap().get(&key).unwrap();
+        let ret = store.lock().unwrap().get(&key, 0).unwrap();
         // verify
         assert_eq!(ret, None)
     }
@@ -336,12 +354,12 @@ mod tests {
         let key = "k1".to_string();
         store
             .transaction(|store| {
-                store.put("k1".to_string(), "v1".to_string()).unwrap();
+                store.put("k1".to_string(), 0, "v1".to_string()).unwrap();
                 Ok(())
             })
             .unwrap();
 
-        assert_eq!(store.lock().unwrap().get(&key).unwrap().unwrap(), "v1");
+        assert_eq!(store.lock().unwrap().get(&key, 0).unwrap().unwrap(), "v1");
     }
 
     #[test]
@@ -349,11 +367,14 @@ mod tests {
         let mut store = Arc::new(Mutex::new(MemoryStore::<String, String>::new()));
 
         let _result = store.transaction(|store| {
-            store.put("k1".to_string(), "v1".to_string()).unwrap();
+            store.put("k1".to_string(), 0, "v1".to_string()).unwrap();
             Err(TransactionError::Aborted)?;
             Ok(())
         });
 
-        assert_eq!(store.lock().unwrap().get(&"k1".to_string()).unwrap(), None);
+        assert_eq!(
+            store.lock().unwrap().get(&"k1".to_string(), 0).unwrap(),
+            None
+        );
     }
 }

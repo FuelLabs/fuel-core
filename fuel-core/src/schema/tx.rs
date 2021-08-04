@@ -30,9 +30,7 @@ impl MutationRoot {
             move || -> async_graphql::Result<Interpreter<DatabaseTransaction>> {
                 let tx: Transaction = serde_json::from_str(tx.as_str())?;
                 let mut vm = Interpreter::with_storage(transaction.clone());
-                vm.init(tx).map_err(Box::new)?;
-                vm.run().map_err(Box::new)?;
-
+                vm.transact(tx).map_err(Box::new)?;
                 transaction.commit().map_err(Box::new)?;
                 Ok(vm)
             },

@@ -1,5 +1,6 @@
+use crate::state::in_memory::column_key;
 use crate::state::Error::Codec;
-use crate::state::{BatchOperations, Error, KeyValueStore, Result, TransactableStorage};
+use crate::state::{BatchOperations, ColumnId, Error, KeyValueStore, Result, TransactableStorage};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -28,17 +29,17 @@ where
     K: AsRef<[u8]> + Debug + Clone + Send,
     V: Serialize + DeserializeOwned + Debug + Clone + Send,
 {
-    fn get(&self, key: &K) -> Result<Option<V>> {
-        if let Some(value) = self.inner.get(key.as_ref()) {
+    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>> {
+        if let Some(value) = self.inner.get(&column_key(key, column)) {
             Ok(Some(bincode::deserialize(value).map_err(|_| Codec)?))
         } else {
             Ok(None)
         }
     }
 
-    fn put(&mut self, key: K, value: V) -> Result<Option<V>> {
+    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>> {
         let value = bincode::serialize(&value).unwrap();
-        let result = self.inner.insert(key.as_ref().to_vec(), value);
+        let result = self.inner.insert(column_key(&key, column), value);
         if let Some(previous) = result {
             Ok(Some(
                 bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
@@ -48,15 +49,15 @@ where
         }
     }
 
-    fn delete(&mut self, key: &K) -> Result<Option<V>> {
+    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>> {
         Ok(self
             .inner
-            .remove(key.as_ref())
+            .remove(&column_key(key, column))
             .map(|res| bincode::deserialize(&res).unwrap()))
     }
 
-    fn exists(&self, key: &K) -> Result<bool> {
-        Ok(self.inner.contains_key(key.as_ref()))
+    fn exists(&self, key: &K, column: ColumnId) -> Result<bool> {
+        Ok(self.inner.contains_key(&column_key(key, column)))
     }
 }
 

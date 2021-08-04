@@ -8,6 +8,7 @@ use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource<K, V> = Arc<Mutex<dyn TransactableStorage<K, V>>>;
+pub type ColumnId = u32;
 
 #[derive(Clone, Debug, Default)]
 pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>> {
@@ -43,10 +44,10 @@ where
     K: AsRef<[u8]> + Debug + Clone,
     V: Debug + DeserializeOwned + Clone,
 {
-    fn get(&self, key: &K) -> Result<Option<V>>;
-    fn put(&mut self, key: K, value: V) -> Result<Option<V>>;
-    fn delete(&mut self, key: &K) -> Result<Option<V>>;
-    fn exists(&self, key: &K) -> Result<bool>;
+    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>>;
+    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>>;
+    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>>;
+    fn exists(&self, key: &K, column: ColumnId) -> Result<bool>;
 }
 
 #[derive(Error, Debug)]
@@ -69,11 +70,11 @@ where
         for entry in entries {
             match entry {
                 // TODO: error handling
-                WriteOperation::Insert(key, value) => {
-                    let _ = self.put(key, value);
+                WriteOperation::Insert(key, column, value) => {
+                    let _ = self.put(key, column, value);
                 }
-                WriteOperation::Remove(key) => {
-                    let _ = self.delete(&key);
+                WriteOperation::Remove(key, column) => {
+                    let _ = self.delete(&key, column);
                 }
             }
         }
@@ -83,8 +84,8 @@ where
 
 #[derive(Debug)]
 pub enum WriteOperation<K, V> {
-    Insert(K, V),
-    Remove(K),
+    Insert(K, ColumnId, V),
+    Remove(K, ColumnId),
 }
 
 pub trait Transaction<K, V>
