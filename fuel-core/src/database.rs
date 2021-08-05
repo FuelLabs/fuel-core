@@ -1,11 +1,12 @@
 use crate::database::columns::{BALANCES, CONTRACTS, STATE};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use crate::state::{DataSource, Error, MultiKey};
+use crate::state::{ColumnId, DataSource, Error, MultiKey};
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
+use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub(crate) mod columns {
     pub const CONTRACTS: u32 = 1;
@@ -19,9 +20,51 @@ pub trait DatabaseTrait: InterpreterStorage + Debug {
 
 #[derive(Clone, Debug)]
 pub struct Database {
-    contracts: DataSource<ContractId, Contract>,
-    balances: DataSource<MultiKey<ContractId, Color>, Word>,
-    storage: DataSource<MultiKey<ContractId, Bytes32>, Bytes32>,
+    data: DataSource,
+}
+
+impl Database {
+    fn insert<K: Into<Vec<u8>>, V: Serialize + DeserializeOwned>(
+        &mut self,
+        key: K,
+        column: ColumnId,
+        value: V,
+    ) -> Result<Option<V>, Error> {
+        let result = self.data.put(
+            key.into(),
+            column,
+            bincode::serialize(&value).map_err(|_| Error::Codec)?,
+        )?;
+        if let Some(previous) = result {
+            Ok(Some(
+                bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
+            ))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn remove<V: DeserializeOwned>(
+        &mut self,
+        key: &[u8],
+        column: ColumnId,
+    ) -> Result<Option<V>, Error> {
+        self.data
+            .delete(key, column)?
+            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
+            .transpose()
+    }
+
+    fn get<V: DeserializeOwned>(&self, key: &[u8], column: ColumnId) -> Result<Option<V>, Error> {
+        self.data
+            .get(key, column)?
+            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
+            .transpose()
+    }
+
+    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool, Error> {
+        self.data.exists(key, column)
+    }
 }
 
 impl DatabaseTrait for Database {
@@ -33,82 +76,50 @@ impl DatabaseTrait for Database {
 impl Default for Database {
     fn default() -> Self {
         Self {
-            contracts: Arc::new(Mutex::new(MemoryStore::default())),
-            balances: Arc::new(Mutex::new(MemoryStore::default())),
-            storage: Arc::new(Mutex::new(MemoryStore::default())),
+            data: Arc::new(MemoryStore::default()),
         }
     }
 }
 
 impl Storage<ContractId, Contract> for Database {
     fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .put(key, CONTRACTS, value)
+        self.insert(key.as_ref(), CONTRACTS, value)
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .delete(key, CONTRACTS)
-            .map_err(Into::into)
+        self.remove(key.as_ref(), CONTRACTS).map_err(Into::into)
     }
 
     fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .get(key, CONTRACTS)
-            .map_err(Into::into)
+        self.get(key.as_ref(), CONTRACTS).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        self.contracts
-            .lock()
-            .expect("lock poisoned")
-            .exists(key, CONTRACTS)
-            .map_err(Into::into)
+        self.exists(key.as_ref(), CONTRACTS).map_err(Into::into)
     }
 }
 
 impl Storage<(ContractId, Color), Word> for Database {
     fn insert(&mut self, key: (ContractId, Color), value: u64) -> Result<Option<u64>, DataError> {
         let key = MultiKey::new(key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .put(key, BALANCES, value)
+        self.insert(key.as_ref().to_vec(), BALANCES, value)
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &(ContractId, Color)) -> Result<Option<u64>, DataError> {
         let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .delete(&key, BALANCES)
-            .map_err(Into::into)
+        self.remove(key.as_ref(), BALANCES).map_err(Into::into)
     }
 
     fn get(&self, key: &(ContractId, Color)) -> Result<Option<u64>, DataError> {
         let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .get(&key, BALANCES)
-            .map_err(Into::into)
+        self.get(key.as_ref(), BALANCES).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &(ContractId, Color)) -> Result<bool, DataError> {
         let key = MultiKey::new(*key);
-        self.balances
-            .lock()
-            .expect("lock poisoned")
-            .exists(&key, BALANCES)
-            .map_err(Into::into)
+        self.exists(key.as_ref(), BALANCES).map_err(Into::into)
     }
 }
 
@@ -119,38 +130,23 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         value: Bytes32,
     ) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new(key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .put(key, STATE, value)
+        self.insert(key.as_ref().to_vec(), STATE, value)
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .delete(&key, STATE)
-            .map_err(Into::into)
+        self.remove(key.as_ref(), STATE).map_err(Into::into)
     }
 
     fn get(&self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .get(&key, STATE)
-            .map_err(Into::into)
+        self.get(key.as_ref(), STATE).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &(ContractId, Bytes32)) -> Result<bool, DataError> {
         let key = MultiKey::new(*key);
-        self.storage
-            .lock()
-            .expect("lock poisoned")
-            .exists(&key, STATE)
-            .map_err(Into::into)
+        self.exists(key.as_ref(), STATE).map_err(Into::into)
     }
 }
 
@@ -159,9 +155,7 @@ impl InterpreterStorage for Database {}
 #[derive(Clone, Debug)]
 pub struct DatabaseTransaction {
     // The primary datastores
-    contracts: Arc<Mutex<MemoryTransactionView<ContractId, Contract>>>,
-    balances: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Color>, Word>>>,
-    storage: Arc<Mutex<MemoryTransactionView<MultiKey<ContractId, Bytes32>, Bytes32>>>,
+    changes: Arc<MemoryTransactionView>,
     // The inner db impl using these stores
     database: Database,
 }
@@ -175,45 +169,43 @@ impl Default for DatabaseTransaction {
 impl DatabaseTransaction {
     pub fn commit(self) -> crate::state::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
-        self.contracts.lock().expect("lock poisoned").commit()?;
-        self.balances.lock().expect("lock poisoned").commit()?;
-        self.storage.lock().expect("lock poisoned").commit()
+        self.changes.commit()
     }
 }
 
 impl Storage<ContractId, Contract> for DatabaseTransaction {
     fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
-        self.database.insert(key, value)
+        Storage::<ContractId, Contract>::insert(&mut self.database, key, value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.database.remove(key)
+        Storage::<ContractId, Contract>::remove(&mut self.database, key)
     }
 
     fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.database.get(key)
+        Storage::<ContractId, Contract>::get(&self.database, key)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        self.database.contains_key(key)
+        Storage::<ContractId, Contract>::contains_key(&self.database, key)
     }
 }
 
 impl Storage<(ContractId, Color), Word> for DatabaseTransaction {
     fn insert(&mut self, key: (ContractId, Color), value: Word) -> Result<Option<Word>, DataError> {
-        self.database.insert(key, value)
+        Storage::<(ContractId, Color), Word>::insert(&mut self.database, key, value)
     }
 
     fn remove(&mut self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
-        self.database.remove(key)
+        Storage::<(ContractId, Color), Word>::remove(&mut self.database, key)
     }
 
     fn get(&self, key: &(ContractId, Color)) -> Result<Option<Word>, DataError> {
-        self.database.get(key)
+        Storage::<(ContractId, Color), Word>::get(&self.database, key)
     }
 
     fn contains_key(&self, key: &(ContractId, Color)) -> Result<bool, DataError> {
-        self.database.contains_key(key)
+        Storage::<(ContractId, Color), Word>::contains_key(&self.database, key)
     }
 }
 
@@ -223,43 +215,28 @@ impl Storage<(ContractId, Bytes32), Bytes32> for DatabaseTransaction {
         key: (ContractId, Bytes32),
         value: Bytes32,
     ) -> Result<Option<Bytes32>, DataError> {
-        self.database.insert(key, value)
+        Storage::<(ContractId, Bytes32), Bytes32>::insert(&mut self.database, key, value)
     }
 
     fn remove(&mut self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
-        self.database.remove(key)
+        Storage::<(ContractId, Bytes32), Bytes32>::remove(&mut self.database, key)
     }
 
     fn get(&self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
-        self.database.get(key)
+        Storage::<(ContractId, Bytes32), Bytes32>::get(&self.database, key)
     }
 
     fn contains_key(&self, key: &(ContractId, Bytes32)) -> Result<bool, DataError> {
-        self.database.contains_key(key)
+        Storage::<(ContractId, Bytes32), Bytes32>::contains_key(&self.database, key)
     }
 }
 
 impl From<&Database> for DatabaseTransaction {
     fn from(source: &Database) -> Self {
-        let contracts = Arc::new(Mutex::new(MemoryTransactionView::new(
-            source.contracts.clone(),
-        )));
-        let balances = Arc::new(Mutex::new(MemoryTransactionView::new(
-            source.balances.clone(),
-        )));
-        let storage = Arc::new(Mutex::new(MemoryTransactionView::new(
-            source.storage.clone(),
-        )));
-
+        let data = Arc::new(MemoryTransactionView::new(source.data.clone()));
         Self {
-            contracts: contracts.clone(),
-            balances: balances.clone(),
-            storage: storage.clone(),
-            database: Database {
-                contracts,
-                balances,
-                storage,
-            },
+            changes: data.clone(),
+            database: Database { data },
         }
     }
 }

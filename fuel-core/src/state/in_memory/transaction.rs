@@ -3,63 +3,59 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, KeyValueStore,
     Result, TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
-pub struct MemoryTransactionView<K, V> {
-    view_layer: MemoryStore<K, V>,
+pub struct MemoryTransactionView {
+    view_layer: MemoryStore,
     // use hashmap to collapse changes (e.g. insert then remove the same key)
-    changes: HashMap<Vec<u8>, WriteOperation<K, V>>,
-    data_source: DataSource<K, V>,
+    changes: Arc<Mutex<HashMap<Vec<u8>, WriteOperation>>>,
+    data_source: DataSource,
 }
 
-impl<K, V> MemoryTransactionView<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
-{
-    pub fn new(source: DataSource<K, V>) -> Self {
+impl MemoryTransactionView {
+    pub fn new(source: DataSource) -> Self {
         Self {
-            view_layer: MemoryStore::<K, V>::new(),
+            view_layer: MemoryStore::new(),
             changes: Default::default(),
             data_source: source,
         }
     }
 
-    pub fn commit(&mut self) -> crate::state::Result<()> {
-        self.data_source
-            .lock()
-            .expect("lock poisoned")
-            .batch_write(&mut self.changes.drain().map(|t| t.1))
+    pub fn commit(&self) -> crate::state::Result<()> {
+        self.data_source.batch_write(
+            &mut self
+                .changes
+                .lock()
+                .expect("poisoned lock")
+                .drain()
+                .map(|t| t.1),
+        )
     }
 }
 
-impl<K, V> KeyValueStore<K, V> for MemoryTransactionView<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>> {
+impl KeyValueStore for MemoryTransactionView {
+    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
         // try to fetch data from View layer if any changes to the key
-        if self.changes.contains_key(&column_key(&key, column)) {
+        if self
+            .changes
+            .lock()
+            .expect("poisoned lock")
+            .contains_key(&column_key(&key, column))
+        {
             self.view_layer.get(key, column)
         } else {
             // fall-through to original data source
-            self.data_source
-                .lock()
-                .expect("lock poisoned")
-                .get(key, column)
+            self.data_source.get(key, column)
         }
     }
 
-    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>> {
+    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         let k = column_key(&key, column);
-        let contained_key = self.changes.contains_key(&k);
-        self.changes.insert(
+        let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
+        self.changes.lock().expect("poisoned lock").insert(
             k,
             WriteOperation::Insert(key.clone(), column, value.clone()),
         );
@@ -67,58 +63,44 @@ where
         if contained_key {
             res
         } else {
-            self.data_source
-                .lock()
-                .expect("lock poisoned")
-                .get(&key, column)
+            self.data_source.get(&key, column)
         }
     }
 
-    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>> {
+    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
         let k = column_key(&key.clone(), column);
-        let contained_key = self.changes.contains_key(&k);
+        let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes
-            .insert(k, WriteOperation::Remove(key.clone(), column));
+            .lock()
+            .expect("poisoned lock")
+            .insert(k.clone(), WriteOperation::Remove(k, column));
         let res = self.view_layer.delete(key, column);
         if contained_key {
             res
         } else {
-            self.data_source
-                .lock()
-                .expect("lock poisoned")
-                .get(key, column)
+            self.data_source.get(key, column)
         }
     }
 
-    fn exists(&self, key: &K, column: ColumnId) -> Result<bool> {
+    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool> {
         let k = column_key(&key.clone(), column);
-        if self.changes.contains_key(&k) {
+        if self.changes.lock().expect("poisoned lock").contains_key(&k) {
             self.view_layer.exists(key, column)
         } else {
-            self.data_source
-                .lock()
-                .expect("lock poisoned")
-                .exists(key, column)
+            self.data_source.exists(key, column)
         }
     }
 }
 
-impl<K, V> BatchOperations<K, V> for MemoryTransactionView<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-}
+impl BatchOperations for MemoryTransactionView {}
 
-impl<K, V, T> Transaction<K, V> for Arc<Mutex<T>>
+impl<T> Transaction for Arc<T>
 where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Into<Vec<u8>> + Serialize + DeserializeOwned + Debug + Clone + Send,
-    T: TransactableStorage<K, V> + 'static,
+    T: TransactableStorage + 'static,
 {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut MemoryTransactionView<K, V>) -> TransactionResult<R>,
+        F: FnOnce(&mut MemoryTransactionView) -> TransactionResult<R>,
     {
         let mut view = MemoryTransactionView::new(self.clone());
         let result = f(&mut view);
@@ -129,12 +111,7 @@ where
     }
 }
 
-impl<K, V> TransactableStorage<K, V> for MemoryTransactionView<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-}
+impl TransactableStorage for MemoryTransactionView {}
 
 #[cfg(test)]
 mod tests {

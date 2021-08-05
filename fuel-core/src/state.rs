@@ -1,13 +1,11 @@
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use serde::de::DeserializeOwned;
-use serde::Serialize;
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use thiserror::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
-pub type DataSource<K, V> = Arc<Mutex<dyn TransactableStorage<K, V>>>;
+pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
 
 #[derive(Clone, Debug, Default)]
@@ -39,15 +37,17 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
     }
 }
 
-pub trait KeyValueStore<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Debug + DeserializeOwned + Clone,
-{
-    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>>;
-    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>>;
-    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>>;
-    fn exists(&self, key: &K, column: ColumnId) -> Result<bool>;
+impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> Into<Vec<u8>> for MultiKey<K1, K2> {
+    fn into(self) -> Vec<u8> {
+        self.inner
+    }
+}
+
+pub trait KeyValueStore {
+    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
+    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
+    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
 }
 
 #[derive(Error, Debug)]
@@ -58,15 +58,8 @@ pub enum Error {
     DatabaseError(Box<dyn std::error::Error + Send>),
 }
 
-pub trait BatchOperations<K, V>: KeyValueStore<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Debug + DeserializeOwned + Clone,
-{
-    fn batch_write(
-        &mut self,
-        entries: &mut dyn Iterator<Item = WriteOperation<K, V>>,
-    ) -> Result<()> {
+pub trait BatchOperations: KeyValueStore {
+    fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<()> {
         for entry in entries {
             match entry {
                 // TODO: error handling
@@ -83,30 +76,20 @@ where
 }
 
 #[derive(Debug)]
-pub enum WriteOperation<K, V> {
-    Insert(K, ColumnId, V),
-    Remove(K, ColumnId),
+pub enum WriteOperation {
+    Insert(Vec<u8>, ColumnId, Vec<u8>),
+    Remove(Vec<u8>, ColumnId),
 }
 
-pub trait Transaction<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Debug + DeserializeOwned + Clone,
-{
+pub trait Transaction {
     fn transaction<F, R>(&mut self, f: F) -> TransactionResult<R>
     where
-        F: FnOnce(&mut MemoryTransactionView<K, V>) -> TransactionResult<R> + Copy;
+        F: FnOnce(&mut MemoryTransactionView) -> TransactionResult<R> + Copy;
 }
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage<K, V>:
-    KeyValueStore<K, V> + BatchOperations<K, V> + Debug + Send
-where
-    K: AsRef<[u8]> + Debug + Clone,
-    V: Serialize + DeserializeOwned + Debug + Clone,
-{
-}
+pub trait TransactableStorage: KeyValueStore + BatchOperations + Debug + Send + Sync {}
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {

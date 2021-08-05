@@ -1,76 +1,57 @@
 use crate::state::in_memory::column_key;
-use crate::state::Error::Codec;
-use crate::state::{BatchOperations, ColumnId, Error, KeyValueStore, Result, TransactableStorage};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use crate::state::{BatchOperations, ColumnId, KeyValueStore, Result, TransactableStorage};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::marker::PhantomData;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default, Debug)]
-pub struct MemoryStore<K, V> {
-    inner: HashMap<Vec<u8>, Vec<u8>>,
-    _key_marker: PhantomData<K>,
-    _value_marker: PhantomData<V>,
+pub struct MemoryStore {
+    inner: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>>,
 }
 
-impl<K, V> MemoryStore<K, V> {
+impl MemoryStore {
     pub fn new() -> Self {
         Self {
-            inner: HashMap::<Vec<u8>, Vec<u8>>::new(),
-            _key_marker: PhantomData,
-            _value_marker: PhantomData,
+            inner: Arc::new(Mutex::new(HashMap::<Vec<u8>, Vec<u8>>::new())),
         }
     }
 }
 
-impl<K, V> KeyValueStore<K, V> for MemoryStore<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-    fn get(&self, key: &K, column: ColumnId) -> Result<Option<V>> {
-        if let Some(value) = self.inner.get(&column_key(key, column)) {
-            Ok(Some(bincode::deserialize(value).map_err(|_| Codec)?))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn put(&mut self, key: K, column: ColumnId, value: V) -> Result<Option<V>> {
-        let value = bincode::serialize(&value).unwrap();
-        let result = self.inner.insert(column_key(&key, column), value);
-        if let Some(previous) = result {
-            Ok(Some(
-                bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
-            ))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn delete(&mut self, key: &K, column: ColumnId) -> Result<Option<V>> {
+impl KeyValueStore for MemoryStore {
+    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
         Ok(self
             .inner
-            .remove(&column_key(key, column))
-            .map(|res| bincode::deserialize(&res).unwrap()))
+            .lock()
+            .expect("poisoned")
+            .get(&column_key(key, column))
+            .cloned())
     }
 
-    fn exists(&self, key: &K, column: ColumnId) -> Result<bool> {
-        Ok(self.inner.contains_key(&column_key(key, column)))
+    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .insert(column_key(&key, column), value))
+    }
+
+    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .remove(&column_key(key, column)))
+    }
+
+    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool> {
+        Ok(self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .contains_key(&column_key(key, column)))
     }
 }
 
-impl<K, V> BatchOperations<K, V> for MemoryStore<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-}
+impl BatchOperations for MemoryStore {}
 
-impl<K, V> TransactableStorage<K, V> for MemoryStore<K, V>
-where
-    K: AsRef<[u8]> + Debug + Clone + Send,
-    V: Serialize + DeserializeOwned + Debug + Clone + Send,
-{
-}
+impl TransactableStorage for MemoryStore {}
