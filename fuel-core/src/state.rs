@@ -29,10 +29,6 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
                 .collect(),
         }
     }
-
-    pub fn into_vec(self) -> Vec<u8> {
-        self.inner
-    }
 }
 
 impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
@@ -41,9 +37,9 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
     }
 }
 
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> Into<Vec<u8>> for MultiKey<K1, K2> {
-    fn into(self) -> Vec<u8> {
-        self.inner
+impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
+    fn from(key: MultiKey<K1, K2>) -> Vec<u8> {
+        key.inner
     }
 }
 

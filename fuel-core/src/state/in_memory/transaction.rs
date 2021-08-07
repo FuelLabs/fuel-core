@@ -43,7 +43,7 @@ impl KeyValueStore for MemoryTransactionView {
             .changes
             .lock()
             .expect("poisoned lock")
-            .contains_key(&column_key(&key, column))
+            .contains_key(&column_key(key, column))
         {
             self.view_layer.get(key, column)
         } else {
@@ -68,7 +68,7 @@ impl KeyValueStore for MemoryTransactionView {
     }
 
     fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
-        let k = column_key(&key.clone(), column);
+        let k = column_key(key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes
             .lock()
@@ -83,7 +83,7 @@ impl KeyValueStore for MemoryTransactionView {
     }
 
     fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool> {
-        let k = column_key(&key.clone(), column);
+        let k = column_key(key, column);
         if self.changes.lock().expect("poisoned lock").contains_key(&k) {
             self.view_layer.exists(key, column)
         } else {
