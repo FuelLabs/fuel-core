@@ -2,17 +2,17 @@ use crate::state::in_memory::column_key;
 use crate::state::{BatchOperations, ColumnId, KeyValueStore, Result, TransactableStorage};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
-    inner: Arc<Mutex<HashMap<Vec<u8>, Vec<u8>>>>,
+    inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl MemoryStore {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(Mutex::new(HashMap::<Vec<u8>, Vec<u8>>::new())),
+            inner: Mutex::new(HashMap::<Vec<u8>, Vec<u8>>::new()),
         }
     }
 }

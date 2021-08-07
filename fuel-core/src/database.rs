@@ -25,7 +25,7 @@ pub struct Database {
 
 impl Database {
     fn insert<K: Into<Vec<u8>>, V: Serialize + DeserializeOwned>(
-        &mut self,
+        &self,
         key: K,
         column: ColumnId,
         value: V,
@@ -45,7 +45,7 @@ impl Database {
     }
 
     fn remove<V: DeserializeOwned>(
-        &mut self,
+        &self,
         key: &[u8],
         column: ColumnId,
     ) -> Result<Option<V>, Error> {
@@ -83,12 +83,11 @@ impl Default for Database {
 
 impl Storage<ContractId, Contract> for Database {
     fn insert(&mut self, key: ContractId, value: Contract) -> Result<Option<Contract>, DataError> {
-        self.insert(key.as_ref(), CONTRACTS, value)
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref(), CONTRACTS, value).map_err(Into::into)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.remove(key.as_ref(), CONTRACTS).map_err(Into::into)
+        Database::remove(self, key.as_ref(), CONTRACTS).map_err(Into::into)
     }
 
     fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
@@ -103,13 +102,12 @@ impl Storage<ContractId, Contract> for Database {
 impl Storage<(ContractId, Color), Word> for Database {
     fn insert(&mut self, key: (ContractId, Color), value: u64) -> Result<Option<u64>, DataError> {
         let key = MultiKey::new(key);
-        self.insert(key.as_ref().to_vec(), BALANCES, value)
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), BALANCES, value).map_err(Into::into)
     }
 
     fn remove(&mut self, key: &(ContractId, Color)) -> Result<Option<u64>, DataError> {
         let key = MultiKey::new(*key);
-        self.remove(key.as_ref(), BALANCES).map_err(Into::into)
+        Database::remove(self, key.as_ref(), BALANCES).map_err(Into::into)
     }
 
     fn get(&self, key: &(ContractId, Color)) -> Result<Option<u64>, DataError> {
@@ -130,13 +128,12 @@ impl Storage<(ContractId, Bytes32), Bytes32> for Database {
         value: Bytes32,
     ) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new(key);
-        self.insert(key.as_ref().to_vec(), STATE, value)
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), STATE, value).map_err(Into::into)
     }
 
     fn remove(&mut self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new(*key);
-        self.remove(key.as_ref(), STATE).map_err(Into::into)
+        Database::remove(self, key.as_ref(), STATE).map_err(Into::into)
     }
 
     fn get(&self, key: &(ContractId, Bytes32)) -> Result<Option<Bytes32>, DataError> {
@@ -261,22 +258,16 @@ mod tests {
 
     mod contracts {
         use super::*;
-        use crate::state::KeyValueStore;
 
         #[test]
         fn get() {
             let contract_id: ContractId = ContractId::from([1u8; 32]);
             let contract: Contract = Contract::from(vec![32u8]);
 
-            let contracts = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                contracts: contracts.clone(),
-                ..Default::default()
-            };
-            contracts
-                .lock()
-                .unwrap()
-                .put(contract_id, CONTRACTS, contract.clone())
+            let mut database = Database::default();
+
+            database
+                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
                 .unwrap();
 
             assert_eq!(
@@ -292,23 +283,15 @@ mod tests {
             let contract_id: ContractId = ContractId::from([1u8; 32]);
             let contract: Contract = Contract::from(vec![32u8]);
 
-            let contracts = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                contracts: contracts.clone(),
-                ..Default::default()
-            };
+            let mut database = Database::default();
             Storage::<ContractId, Contract>::insert(&mut database, contract_id, contract.clone())
                 .unwrap();
 
-            assert_eq!(
-                contracts
-                    .lock()
-                    .unwrap()
-                    .get(&contract_id, CONTRACTS)
-                    .unwrap()
-                    .unwrap(),
-                contract
-            );
+            let returned: Contract = database
+                .get(contract_id.as_ref(), CONTRACTS)
+                .unwrap()
+                .unwrap();
+            assert_eq!(returned, contract);
         }
 
         #[test]
@@ -316,24 +299,14 @@ mod tests {
             let contract_id: ContractId = ContractId::from([1u8; 32]);
             let contract: Contract = Contract::from(vec![32u8]);
 
-            let contracts = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                contracts: contracts.clone(),
-                ..Default::default()
-            };
-            contracts
-                .lock()
-                .unwrap()
-                .put(contract_id, CONTRACTS, contract.clone())
+            let mut database = Database::default();
+            database
+                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
                 .unwrap();
 
             Storage::<ContractId, Contract>::remove(&mut database, &contract_id).unwrap();
 
-            assert!(!contracts
-                .lock()
-                .unwrap()
-                .exists(&contract_id, CONTRACTS)
-                .unwrap());
+            assert!(!database.exists(contract_id.as_ref(), CONTRACTS).unwrap());
         }
 
         #[test]
@@ -341,15 +314,9 @@ mod tests {
             let contract_id: ContractId = ContractId::from([1u8; 32]);
             let contract: Contract = Contract::from(vec![32u8]);
 
-            let contracts = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                contracts: contracts.clone(),
-                ..Default::default()
-            };
-            contracts
-                .lock()
-                .unwrap()
-                .put(contract_id, CONTRACTS, contract.clone())
+            let database = Database::default();
+            database
+                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
                 .unwrap();
 
             assert!(
@@ -360,7 +327,6 @@ mod tests {
 
     mod balances {
         use super::*;
-        use crate::state::KeyValueStore;
 
         #[test]
         fn get() {
@@ -368,16 +334,9 @@ mod tests {
                 (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
             let balance: Word = 100;
 
-            let balances = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                balances: balances.clone(),
-                ..Default::default()
-            };
-            balances
-                .lock()
-                .unwrap()
-                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
-                .unwrap();
+            let database = Database::default();
+            let key: Vec<u8> = MultiKey::new(balance_id).into();
+            let _: Option<Word> = database.insert(key, BALANCES, balance.clone()).unwrap();
 
             assert_eq!(
                 Storage::<(ContractId, Color), Word>::get(&database, &balance_id)
@@ -393,11 +352,7 @@ mod tests {
                 (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
             let balance: Word = 100;
 
-            let balances = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                balances: balances.clone(),
-                ..Default::default()
-            };
+            let mut database = Database::default();
             Storage::<(ContractId, Color), Word>::insert(
                 &mut database,
                 balance_id,
@@ -405,15 +360,11 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(
-                balances
-                    .lock()
-                    .unwrap()
-                    .get(&MultiKey::new(balance_id), BALANCES)
-                    .unwrap()
-                    .unwrap(),
-                balance
-            );
+            let returned: Word = database
+                .get(MultiKey::new(balance_id).as_ref(), BALANCES)
+                .unwrap()
+                .unwrap();
+            assert_eq!(returned, balance);
         }
 
         #[test]
@@ -422,23 +373,15 @@ mod tests {
                 (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
             let balance: Word = 100;
 
-            let balances = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                balances: balances.clone(),
-                ..Default::default()
-            };
-            balances
-                .lock()
-                .unwrap()
-                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
+            let mut database = Database::default();
+            database
+                .insert(MultiKey::new(balance_id), BALANCES, balance.clone())
                 .unwrap();
 
             Storage::<(ContractId, Color), Word>::remove(&mut database, &balance_id).unwrap();
 
-            assert!(!balances
-                .lock()
-                .unwrap()
-                .exists(&MultiKey::new(balance_id), BALANCES)
+            assert!(!database
+                .exists(MultiKey::new(balance_id).as_ref(), BALANCES)
                 .unwrap());
         }
 
@@ -448,15 +391,13 @@ mod tests {
                 (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
             let balance: Word = 100;
 
-            let balances = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                balances: balances.clone(),
-                ..Default::default()
-            };
-            balances
-                .lock()
-                .unwrap()
-                .put(MultiKey::new(balance_id), BALANCES, balance.clone())
+            let database = Database::default();
+            database
+                .insert(
+                    MultiKey::new(balance_id).into_vec(),
+                    BALANCES,
+                    balance.clone(),
+                )
                 .unwrap();
 
             assert!(
@@ -467,7 +408,6 @@ mod tests {
 
     mod storage {
         use super::*;
-        use crate::state::KeyValueStore;
 
         #[test]
         fn get() {
@@ -475,15 +415,9 @@ mod tests {
                 (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
             let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
 
-            let storage = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                storage: storage.clone(),
-                ..Default::default()
-            };
-            storage
-                .lock()
-                .unwrap()
-                .put(MultiKey::new(storage_id), STATE, stored_value.clone())
+            let database = Database::default();
+            database
+                .insert(MultiKey::new(storage_id), STATE, stored_value.clone())
                 .unwrap();
 
             assert_eq!(
@@ -500,11 +434,7 @@ mod tests {
                 (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
             let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
 
-            let storage = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                storage: storage.clone(),
-                ..Default::default()
-            };
+            let mut database = Database::default();
             Storage::<(ContractId, Bytes32), Bytes32>::insert(
                 &mut database,
                 storage_id,
@@ -512,15 +442,11 @@ mod tests {
             )
             .unwrap();
 
-            assert_eq!(
-                storage
-                    .lock()
-                    .unwrap()
-                    .get(&MultiKey::new(storage_id), STATE)
-                    .unwrap()
-                    .unwrap(),
-                stored_value
-            );
+            let returned: Bytes32 = database
+                .get(MultiKey::new(storage_id).as_ref(), STATE)
+                .unwrap()
+                .unwrap();
+            assert_eq!(returned, stored_value);
         }
 
         #[test]
@@ -529,23 +455,15 @@ mod tests {
                 (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
             let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
 
-            let storage = Arc::new(Mutex::new(MemoryStore::default()));
-            let mut database = Database {
-                storage: storage.clone(),
-                ..Default::default()
-            };
-            storage
-                .lock()
-                .unwrap()
-                .put(MultiKey::new(storage_id), STATE, stored_value.clone())
+            let mut database = Database::default();
+            database
+                .insert(MultiKey::new(storage_id), STATE, stored_value.clone())
                 .unwrap();
 
             Storage::<(ContractId, Bytes32), Bytes32>::remove(&mut database, &storage_id).unwrap();
 
-            assert!(!storage
-                .lock()
-                .unwrap()
-                .exists(&MultiKey::new(storage_id), STATE)
+            assert!(!database
+                .exists(MultiKey::new(storage_id).as_ref(), STATE)
                 .unwrap());
         }
 
@@ -555,15 +473,9 @@ mod tests {
                 (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
             let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
 
-            let storage = Arc::new(Mutex::new(MemoryStore::default()));
-            let database = Database {
-                storage: storage.clone(),
-                ..Default::default()
-            };
-            storage
-                .lock()
-                .unwrap()
-                .put(
+            let database = Database::default();
+            database
+                .insert(
                     MultiKey::new(storage_id.clone()),
                     STATE,
                     stored_value.clone(),

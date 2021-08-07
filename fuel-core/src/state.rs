@@ -29,6 +29,10 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
                 .collect(),
         }
     }
+
+    pub fn into_vec(self) -> Vec<u8> {
+        self.inner
+    }
 }
 
 impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
