@@ -1,17 +1,22 @@
-use crate::database::columns::{BALANCES, CONTRACTS, STATE};
+use crate::database::columns::{BALANCES, COLUMN_NUM, CONTRACTS, STATE};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
+use crate::state::rocks_db::RocksDb;
 use crate::state::{ColumnId, DataSource, Error, MultiKey};
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Bytes32, Color, Contract, ContractId, Storage, Word};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+use std::path::Path;
 use std::sync::Arc;
 
 pub(crate) mod columns {
-    pub const CONTRACTS: u32 = 1;
-    pub const BALANCES: u32 = 2;
-    pub const STATE: u32 = 3;
+    pub const CONTRACTS: u32 = 0;
+    pub const BALANCES: u32 = 1;
+    pub const STATE: u32 = 2;
+
+    // Number of columns
+    pub const COLUMN_NUM: u32 = 3;
 }
 
 pub trait DatabaseTrait: InterpreterStorage + Debug {
@@ -24,6 +29,12 @@ pub struct Database {
 }
 
 impl Database {
+    pub(crate) fn open(path: &Path) -> Result<Self, Error> {
+        let db = RocksDb::open(path, COLUMN_NUM)?;
+
+        Ok(Database { data: Arc::new(db) })
+    }
+
     fn insert<K: Into<Vec<u8>>, V: Serialize + DeserializeOwned>(
         &self,
         key: K,
@@ -73,6 +84,7 @@ impl DatabaseTrait for Database {
     }
 }
 
+/// Construct an in-memory database
 impl Default for Database {
     fn default() -> Self {
         Self {
@@ -264,7 +276,7 @@ mod tests {
             let contract_id: ContractId = ContractId::from([1u8; 32]);
             let contract: Contract = Contract::from(vec![32u8]);
 
-            let mut database = Database::default();
+            let database = Database::default();
 
             database
                 .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
@@ -394,7 +406,7 @@ mod tests {
             let database = Database::default();
             database
                 .insert(
-                    MultiKey::new(balance_id).into_vec(),
+                    MultiKey::new(balance_id).as_ref().to_vec(),
                     BALANCES,
                     balance.clone(),
                 )

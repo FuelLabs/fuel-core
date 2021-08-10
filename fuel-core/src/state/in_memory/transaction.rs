@@ -150,7 +150,7 @@ mod tests {
         let store = Arc::new(MemoryStore::new());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let mut view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store.clone());
         view.delete(&key, 0).unwrap();
         // test
         let ret = view.get(&key, 0).unwrap();
@@ -166,7 +166,7 @@ mod tests {
     fn can_insert_value_into_view() {
         // setup
         let store = Arc::new(MemoryStore::new());
-        let mut view = MemoryTransactionView::new(store);
+        let view = MemoryTransactionView::new(store);
         let _ = view.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]);
         // test
         let ret = view.put(vec![0xA, 0xB, 0xC], 0, vec![2, 4, 6]).unwrap();
@@ -178,7 +178,7 @@ mod tests {
     fn delete_value_from_view_returns_value() {
         // setup
         let store = Arc::new(MemoryStore::new());
-        let mut view = MemoryTransactionView::new(store);
+        let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         // test
@@ -195,7 +195,7 @@ mod tests {
         let store = Arc::new(MemoryStore::new());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let mut view = MemoryTransactionView::new(store);
+        let view = MemoryTransactionView::new(store);
         // test
         let ret = view.delete(&key, 0).unwrap();
         let get = view.get(&key, 0).unwrap();
@@ -210,7 +210,7 @@ mod tests {
         let store = Arc::new(MemoryStore::new());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let mut view = MemoryTransactionView::new(store);
+        let view = MemoryTransactionView::new(store);
         // test
         let ret1 = view.delete(&key, 0).unwrap();
         let ret2 = view.delete(&key, 0).unwrap();
@@ -225,7 +225,7 @@ mod tests {
     fn exists_checks_view_values() {
         // setup
         let store = Arc::new(MemoryStore::new());
-        let mut view = MemoryTransactionView::new(store);
+        let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         // test
@@ -253,7 +253,7 @@ mod tests {
         let store = Arc::new(MemoryStore::new());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let mut view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store.clone());
         view.delete(&key, 0).unwrap();
         // test
         let ret = view.exists(&key, 0).unwrap();

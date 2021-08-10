@@ -9,7 +9,7 @@ use fuel_vm::prelude::*;
 
 #[actix_rt::test]
 async fn start_session() {
-    let srv = test::start(|| App::new().configure(service::configure));
+    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
     let client = DapClient::from(srv.addr());
 
     let session = client.start_session().await.unwrap();
@@ -23,7 +23,7 @@ async fn start_session() {
 
 #[actix_rt::test]
 async fn end_session() {
-    let srv = test::start(|| App::new().configure(service::configure));
+    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
     let client = DapClient::from(srv.addr());
 
     let session = client.start_session().await.unwrap();
@@ -35,7 +35,7 @@ async fn end_session() {
 
 #[actix_rt::test]
 async fn reset() {
-    let srv = test::start(|| App::new().configure(service::configure));
+    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
     let client = DapClient::from(srv.addr());
 
     let session = client.start_session().await.unwrap();

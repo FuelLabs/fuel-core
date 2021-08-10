@@ -10,12 +10,12 @@ mod args;
 
 #[actix_web::main]
 async fn main() -> io::Result<()> {
-    let addr = args::Opt::from_args().exec()?;
+    let config = args::Opt::from_args().exec()?;
+    let addr = config.addr;
 
     trace!("Initializing in TRACE mode");
     info!("Binding GraphQL provider to {}", addr);
-
-    HttpServer::new(|| App::new().configure(service::configure))
+    HttpServer::new(move || App::new().configure(service::configure(config.clone())))
         .bind(addr)?
         .run()
         .await?;

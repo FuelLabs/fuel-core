@@ -1,7 +1,8 @@
+use fuel_core::service::Config;
+use std::path::PathBuf;
+use std::{env, io, net};
 use structopt::StructOpt;
 use tracing_subscriber::filter::EnvFilter;
-
-use std::{env, io, net};
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -10,10 +11,13 @@ pub struct Opt {
 
     #[structopt(long = "port", default_value = "4000")]
     pub port: u16,
+
+    #[structopt(name = "DB_PATH", long = "db-path", parse(from_os_str))]
+    pub database_path: Option<PathBuf>,
 }
 
 impl Opt {
-    pub fn exec(self) -> io::Result<net::SocketAddr> {
+    pub fn exec(self) -> io::Result<Config> {
         let filter = match env::var_os("RUST_LOG") {
             Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
             None => EnvFilter::new("info"),
@@ -24,10 +28,17 @@ impl Opt {
             .with_env_filter(filter)
             .init();
 
-        let Opt { ip, port } = self;
+        let Opt {
+            ip,
+            port,
+            database_path,
+        } = self;
 
         let addr = net::SocketAddr::new(ip, port);
 
-        Ok(addr)
+        Ok(Config {
+            addr,
+            database_path,
+        })
     }
 }
