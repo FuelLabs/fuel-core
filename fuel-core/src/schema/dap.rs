@@ -203,12 +203,7 @@ impl MutationRoot {
         trace!("Op decoded to {:?}", op);
 
         let storage = ctx.data_unchecked::<GraphStorage>().clone();
-        // use spawn_blocking since execution may access db resources etc
-        let result = tokio::task::spawn_blocking(move || async move {
-            storage.lock().await.exec(&id, op).is_ok()
-        })
-        .await?
-        .await;
+        let result = storage.lock().await.exec(&id, op).is_ok();
 
         debug!("Op {:?} executed with result {}", op, result);
 
