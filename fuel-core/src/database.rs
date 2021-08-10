@@ -29,7 +29,7 @@ pub struct Database {
 }
 
 impl Database {
-    pub(crate) fn open(path: &Path) -> Result<Self, Error> {
+    pub fn open(path: &Path) -> Result<Self, Error> {
         let db = RocksDb::open(path, COLUMN_NUM)?;
 
         Ok(Database { data: Arc::new(db) })

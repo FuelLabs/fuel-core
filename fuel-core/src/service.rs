@@ -12,31 +12,21 @@ pub struct Config {
     pub database_path: Option<PathBuf>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            addr: net::SocketAddr::new("127.0.0.1".parse().unwrap(), 0),
-            database_path: None,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct SharedDatabase(pub Arc<dyn DatabaseTrait + Send + Sync>);
 
-pub fn configure(config: Config) -> impl Fn(&mut web::ServiceConfig) {
-    let inner_database = if let Some(path) = config.database_path {
-        Database::open(&path).expect("unable to open database")
-    } else {
-        Database::default()
-    };
+impl Default for SharedDatabase {
+    fn default() -> Self {
+        SharedDatabase(Arc::new(Database::default()))
+    }
+}
 
-    let database = SharedDatabase(Arc::new(inner_database));
+pub fn configure(db: SharedDatabase) -> impl Fn(&mut web::ServiceConfig) {
     move |cfg: &mut web::ServiceConfig| {
-        cfg.data(dap::schema(Some(database.clone())))
+        cfg.data(dap::schema(Some(db.clone())))
             .service(web::resource("/dap").guard(guard::Post()).to(dap::service));
 
-        cfg.data(tx::schema(Some(database.clone())))
+        cfg.data(tx::schema(Some(db.clone())))
             .service(web::resource("/tx").guard(guard::Post()).to(tx::service));
     }
 }
