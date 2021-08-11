@@ -34,8 +34,9 @@ FLAGS:
     -V, --version    Prints version information
 
 OPTIONS:
-        --ip <ip>         [default: 127.0.0.1]
-        --port <port>     [default: 4000]
+        --ip <ip>              [default: 127.0.0.1]
+        --port <port>          [default: 4000]
+        --db-path <file path>  [default: None]
 ```
 
 #### Example
