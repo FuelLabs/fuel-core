@@ -30,6 +30,6 @@ thiserror = { version = "1.0" }
 uuid = "0.8"
 
 [features]
-default = ["rocksdb", "actix-web"]
+default = ["rocksdb", "actix-web", "async-graphql-actix-web"]
 sled-db = ["sled"]
 
