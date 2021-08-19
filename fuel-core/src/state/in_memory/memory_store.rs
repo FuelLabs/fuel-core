@@ -1,4 +1,4 @@
-use crate::state::in_memory::column_key;
+use crate::state::in_memory::{column_key, is_column};
 use crate::state::{BatchOperations, ColumnId, KeyValueStore, Result, TransactableStorage};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -49,6 +49,19 @@ impl KeyValueStore for MemoryStore {
             .lock()
             .expect("poisoned")
             .contains_key(&column_key(key, column)))
+    }
+
+    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+        // clone entire set so we can drop the lock
+        let copy: Vec<(Vec<u8>, Vec<u8>)> = self
+            .inner
+            .lock()
+            .expect("poisoned")
+            .iter()
+            .filter(|(key, _)| is_column(key, column))
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
+        Box::new(copy.into_iter())
     }
 }
 

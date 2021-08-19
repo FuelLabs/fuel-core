@@ -48,6 +48,7 @@ pub trait KeyValueStore {
     fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
+    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
 }
 
 #[derive(Error, Debug)]

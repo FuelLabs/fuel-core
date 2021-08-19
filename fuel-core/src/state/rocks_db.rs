@@ -2,7 +2,8 @@ use crate::state::{
     BatchOperations, ColumnId, Error, KeyValueStore, TransactableStorage, WriteOperation,
 };
 use rocksdb::{
-    BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, Options, WriteBatch,
+    BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
+    Options, WriteBatch,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -85,6 +86,14 @@ impl KeyValueStore for RocksDb {
 
     fn exists(&self, key: &[u8], column: ColumnId) -> crate::state::Result<bool> {
         Ok(self.db.key_may_exist_cf(&self.cf(column), key))
+    }
+
+    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+        Box::new(
+            self.db
+                .iterator_cf(&self.cf(column), IteratorMode::Start)
+                .map(|(key, value)| (key.to_vec(), value.to_vec())),
+        )
     }
 }
 

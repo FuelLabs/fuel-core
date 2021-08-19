@@ -3,6 +3,7 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, KeyValueStore,
     Result, TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -89,6 +90,26 @@ impl KeyValueStore for MemoryTransactionView {
         } else {
             self.data_source.exists(key, column)
         }
+    }
+
+    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+        // iterate over inmemory + db while also filtering deleted entries
+        let changes = self.changes.clone();
+        Box::new(
+            self.view_layer
+                .iter_all(column)
+                .chain(self.data_source.iter_all(column))
+                .unique_by(|(key, _)| key.clone())
+                .filter(move |(key, _)| {
+                    if let Some(WriteOperation::Remove(_, _)) =
+                        changes.lock().expect("poisoned").get(key.as_slice())
+                    {
+                        false
+                    } else {
+                        true
+                    }
+                }),
+        )
     }
 }
 
