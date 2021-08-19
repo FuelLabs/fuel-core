@@ -5,11 +5,22 @@ use actix_web::{guard, web};
 use std::net;
 use std::path::PathBuf;
 use std::sync::Arc;
+use strum_macros::Display;
+use strum_macros::EnumString;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: net::SocketAddr,
-    pub database_path: Option<PathBuf>,
+    pub database_path: PathBuf,
+    pub database_type: DbType,
+}
+
+#[derive(Clone, Debug, PartialEq, EnumString, Display)]
+pub enum DbType {
+    InMemory,
+    RocksDb,
+    #[cfg(feature = "sled-db")]
+    Sled,
 }
 
 #[derive(Clone, Debug)]

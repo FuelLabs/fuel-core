@@ -1,8 +1,13 @@
-use fuel_core::service::Config;
+use fuel_core::service::{Config, DbType};
 use std::path::PathBuf;
+use std::string::ToString;
 use std::{env, io, net};
 use structopt::StructOpt;
 use tracing_subscriber::filter::EnvFilter;
+
+lazy_static::lazy_static! {
+    pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
+}
 
 #[derive(StructOpt, Debug)]
 pub struct Opt {
@@ -12,8 +17,16 @@ pub struct Opt {
     #[structopt(long = "port", default_value = "4000")]
     pub port: u16,
 
-    #[structopt(name = "DB_PATH", long = "db-path", parse(from_os_str))]
-    pub database_path: Option<PathBuf>,
+    #[structopt(
+        name = "DB_PATH",
+        long = "db-path",
+        parse(from_os_str),
+        default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
+    )]
+    pub database_path: PathBuf,
+
+    #[structopt(long = "db-type", default_value = "RocksDb")]
+    pub database_type: DbType,
 }
 
 impl Opt {
@@ -32,6 +45,7 @@ impl Opt {
             ip,
             port,
             database_path,
+            database_type,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -39,6 +53,7 @@ impl Opt {
         Ok(Config {
             addr,
             database_path,
+            database_type,
         })
     }
 }

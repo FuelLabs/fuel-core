@@ -1,9 +1,7 @@
+use actix_web::{App, HttpServer};
 use fuel_core::database::Database;
 use fuel_core::service;
-use fuel_core::service::SharedDatabase;
-
-use actix_web::{App, HttpServer};
-
+use fuel_core::service::{DbType, SharedDatabase};
 use std::io;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -16,10 +14,9 @@ async fn main() -> io::Result<()> {
     let config = args::Opt::from_args().exec()?;
     let addr = config.addr;
 
-    let inner_database = if let Some(path) = config.database_path {
-        Database::open(&path).expect("unable to open database")
-    } else {
-        Database::default()
+    let inner_database = match config.database_type {
+        DbType::RocksDb => Database::open(&config.database_path).expect("unable to open database"),
+        DbType::InMemory => Database::default(),
     };
 
     let database = SharedDatabase(Arc::new(inner_database));
