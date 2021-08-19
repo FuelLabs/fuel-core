@@ -52,12 +52,10 @@ impl TxClient {
                 io::ErrorKind::Other,
                 format!("{:?}", errors),
             ))
+        } else if let Some(data) = response.data {
+            Ok(data)
         } else {
-            if let Some(data) = response.data {
-                Ok(data)
-            } else {
-                Err(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
-            }
+            Err(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
         }
     }
 

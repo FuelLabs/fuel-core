@@ -76,7 +76,7 @@ impl KeyValueStore for RocksDb {
     }
 
     fn delete(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
-        let prev = self.get(&key, column)?;
+        let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
             .map_err(|e| Error::DatabaseError(Box::new(e)))
