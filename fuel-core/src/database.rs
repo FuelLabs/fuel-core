@@ -183,7 +183,7 @@ impl MerkleStorage<ContractId, Color, Word> for Database {
     }
 
     fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
-        let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(self, BALANCES).try_collect()?;
+        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(self, BALANCES).try_collect()?;
 
         let root = items
             .iter()
@@ -191,7 +191,7 @@ impl MerkleStorage<ContractId, Color, Word> for Database {
                 (&key[..parent.len()] == parent.as_ref()).then(|| (key, value))
             })
             .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value);
+            .map(|(_, value)| value.to_be_bytes());
 
         Ok(crypto::ephemeral_merkle_root(root))
     }
@@ -410,8 +410,8 @@ impl InterpreterStorage for DatabaseTransaction {
 }
 
 impl From<crate::state::Error> for DataError {
-    fn from(_: Error) -> Self {
-        todo!("DataError is a ZeroVariant enum and cannot be instantiated yet")
+    fn from(e: Error) -> Self {
+        panic!("No valid DataError variants to construct {:?}", e)
     }
 }
 
@@ -484,6 +484,107 @@ mod tests {
 
             assert!(
                 Storage::<ContractId, Contract>::contains_key(&database, &contract_id).unwrap()
+            );
+        }
+    }
+
+    mod contract_code_root {
+        use super::*;
+        use rand::rngs::StdRng;
+        use rand::{Rng, SeedableRng};
+
+        #[test]
+        fn get() {
+            let rng = &mut StdRng::seed_from_u64(2322u64);
+            let contract_id: ContractId = ContractId::from([1u8; 32]);
+            let contract: Contract = Contract::from(vec![32u8]);
+            let root = contract.root();
+            let salt: Salt = rng.gen();
+
+            let database = Database::default();
+            database
+                .insert(
+                    contract_id.as_ref().to_vec(),
+                    CONTRACTS_CODE_ROOT,
+                    (salt, root).clone(),
+                )
+                .unwrap();
+
+            assert_eq!(
+                Storage::<ContractId, (Salt, Bytes32)>::get(&database, &contract_id)
+                    .unwrap()
+                    .unwrap(),
+                (salt, root)
+            );
+        }
+
+        #[test]
+        fn put() {
+            let rng = &mut StdRng::seed_from_u64(2322u64);
+            let contract_id: ContractId = ContractId::from([1u8; 32]);
+            let contract: Contract = Contract::from(vec![32u8]);
+            let root = contract.root();
+            let salt: Salt = rng.gen();
+
+            let mut database = Database::default();
+            Storage::<ContractId, (Salt, Bytes32)>::insert(
+                &mut database,
+                &contract_id,
+                &(salt, root),
+            )
+            .unwrap();
+
+            let returned: (Salt, Bytes32) = database
+                .get(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
+                .unwrap()
+                .unwrap();
+            assert_eq!(returned, (salt, root));
+        }
+
+        #[test]
+        fn remove() {
+            let rng = &mut StdRng::seed_from_u64(2322u64);
+            let contract_id: ContractId = ContractId::from([1u8; 32]);
+            let contract: Contract = Contract::from(vec![32u8]);
+            let root = contract.root();
+            let salt: Salt = rng.gen();
+
+            let mut database = Database::default();
+            database
+                .insert(
+                    contract_id.as_ref().to_vec(),
+                    CONTRACTS_CODE_ROOT,
+                    (salt, root).clone(),
+                )
+                .unwrap();
+
+            Storage::<ContractId, (Salt, Bytes32)>::remove(&mut database, &contract_id).unwrap();
+
+            assert!(!database
+                .exists(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
+                .unwrap());
+        }
+
+        #[test]
+        fn exists() {
+            let rng = &mut StdRng::seed_from_u64(2322u64);
+            let contract_id: ContractId = ContractId::from([1u8; 32]);
+            let contract: Contract = Contract::from(vec![32u8]);
+            let root = contract.root();
+            let salt: Salt = rng.gen();
+
+            let database = Database::default();
+            database
+                .insert(
+                    contract_id.as_ref().to_vec(),
+                    CONTRACTS_CODE_ROOT,
+                    (salt, root),
+                )
+                .unwrap();
+
+            assert!(
+                Storage::<ContractId, (Salt, Bytes32)>::contains_key(&database, &contract_id)
+                    .unwrap()
             );
         }
     }
@@ -579,6 +680,26 @@ mod tests {
                 &balance_id.1
             )
             .unwrap());
+        }
+
+        #[test]
+        fn root() {
+            let balance_id: (ContractId, Color) =
+                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
+            let balance: Word = 100;
+
+            let mut database = Database::default();
+
+            MerkleStorage::<ContractId, Color, Word>::insert(
+                &mut database,
+                &balance_id.0,
+                &balance_id.1,
+                &balance,
+            )
+            .unwrap();
+
+            let root = MerkleStorage::<ContractId, Color, Word>::root(&mut database, &balance_id.0);
+            assert!(root.is_ok())
         }
     }
 
@@ -682,6 +803,27 @@ mod tests {
                 &storage_id.1
             )
             .unwrap());
+        }
+
+        #[test]
+        fn root() {
+            let storage_id: (ContractId, Bytes32) =
+                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
+            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+
+            let mut database = Database::default();
+
+            MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
+                &mut database,
+                &storage_id.0,
+                &storage_id.1,
+                &stored_value,
+            )
+            .unwrap();
+
+            let root =
+                MerkleStorage::<ContractId, Bytes32, Bytes32>::root(&mut database, &storage_id.0);
+            assert!(root.is_ok())
         }
     }
 }
