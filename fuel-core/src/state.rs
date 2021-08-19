@@ -98,7 +98,5 @@ pub enum TransactionError {
 
 pub mod in_memory;
 pub mod rocks_db;
-#[cfg(feature = "sled-db")]
-pub mod sled_db;
 
 pub mod store {}

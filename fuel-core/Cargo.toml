@@ -26,7 +26,6 @@ serde = "1.0"
 structopt = "0.3"
 strum = "0.21"
 strum_macros = "0.21"
-sled = { version = "0.34", optional = true }
 tokio = { version = "0.2", features = ["blocking"] }
 tracing = "0.1"
 tracing-subscriber = { version="0.2", features= ["env-filter"] }
@@ -35,5 +34,4 @@ uuid = "0.8"
 
 [features]
 default = ["rocksdb", "actix-web", "async-graphql-actix-web"]
-sled-db = ["sled"]
 

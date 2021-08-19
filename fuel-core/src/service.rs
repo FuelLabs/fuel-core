@@ -19,8 +19,6 @@ pub struct Config {
 pub enum DbType {
     InMemory,
     RocksDb,
-    #[cfg(feature = "sled-db")]
-    Sled,
 }
 
 #[derive(Clone, Debug)]
