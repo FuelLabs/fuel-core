@@ -1,6 +1,6 @@
-use crate::database::columns::{BALANCES, CONTRACTS, CONTRACTS_CODE_ROOT, CONTRACTS_STATE};
 #[cfg(feature = "default")]
-use crate::database::COLUMN_NUM;
+use crate::database::columns::COLUMN_NUM;
+use crate::database::columns::{BALANCES, CONTRACTS, CONTRACTS_CODE_ROOT, CONTRACTS_STATE};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
 #[cfg(feature = "default")]
