@@ -9,8 +9,8 @@ repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client."
 
 [dependencies]
-actix-web = { version = "3.3", optional = true }
-async-graphql-actix-web = { version = "2.8", optional = true }
+actix-web = { version = "3.3" }
+async-graphql-actix-web = { version = "2.8" }
 async-graphql = { version="2.8", features=["uuid", "tracing"] }
 bincode = "1.3"
 dirs = "3.0.2"
@@ -34,4 +34,4 @@ thiserror = { version = "1.0" }
 uuid = "0.8"
 
 [features]
-default = ["rocksdb", "actix-web", "async-graphql-actix-web"]
+default = ["rocksdb"]

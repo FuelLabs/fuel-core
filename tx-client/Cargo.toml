@@ -21,3 +21,6 @@ fuel-core = { path = "../fuel-core" }
 [build-dependencies]
 async-graphql = "2.8"
 fuel-core = { path = "../fuel-core", default-features = false }
+
+[features]
+default = ["fuel-core/default"]

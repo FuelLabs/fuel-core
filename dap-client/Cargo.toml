@@ -16,10 +16,13 @@ surf = "2.2"
 [dev-dependencies]
 actix-rt = "1.1"
 actix-web = "3.3"
-fuel-core = { path = "../fuel-core", default-features = false }
+fuel-core = { path = "../fuel-core" }
 
 [build-dependencies]
 async-graphql = "2.8"
-fuel-core = { path = "../fuel-core" }
+fuel-core = { path = "../fuel-core", default-features = false }
 schemafy_lib = "0.5"
 serde_json = { version = "1.0", features = ["raw_value"] }
+
+[features]
+default = ["fuel-core/default"]

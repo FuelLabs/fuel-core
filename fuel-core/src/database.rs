@@ -1,8 +1,9 @@
-use crate::database::columns::{
-    BALANCES, COLUMN_NUM, CONTRACTS, CONTRACTS_CODE_ROOT, CONTRACTS_STATE,
-};
+#[cfg(feature = "default")]
+use crate::database::columns::COLUMN_NUM;
+use crate::database::columns::{BALANCES, CONTRACTS, CONTRACTS_CODE_ROOT, CONTRACTS_STATE};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
+#[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{ColumnId, DataSource, Error, MultiKey};
 use fuel_vm::crypto;
@@ -11,6 +12,7 @@ use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Stor
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+#[cfg(feature = "default")]
 use std::path::Path;
 use std::sync::Arc;
 
@@ -21,6 +23,7 @@ pub(crate) mod columns {
     pub const BALANCES: u32 = 3;
 
     // Number of columns
+    #[cfg(feature = "default")]
     pub const COLUMN_NUM: u32 = 4;
 }
 
@@ -34,6 +37,7 @@ pub struct Database {
 }
 
 impl Database {
+    #[cfg(feature = "default")]
     pub fn open(path: &Path) -> Result<Self, Error> {
         let db = RocksDb::open(path, COLUMN_NUM)?;
 
