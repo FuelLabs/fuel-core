@@ -8,7 +8,7 @@ use fuel_vm::prelude::*;
 
 #[actix_rt::test]
 async fn transact() {
-    let srv = test::start(|| App::new().configure(service::configure));
+    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
     let client = TxClient::from(srv.addr());
 
     let gas_price = 0;

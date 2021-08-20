@@ -10,22 +10,18 @@ use uuid::Uuid;
 use std::collections::HashMap;
 use std::{io, sync};
 
+use crate::database::DatabaseTransaction;
+use crate::service::SharedDatabase;
 use fuel_vm::prelude::*;
 
 #[derive(Debug, Clone, Default)]
-// TODO replace for dyn dispatch
-pub struct ConcreteStorage<S>
-where
-    S: InterpreterStorage,
-{
-    vm: HashMap<ID, Interpreter<S>>,
+pub struct ConcreteStorage {
+    vm: HashMap<ID, Interpreter<DatabaseTransaction>>,
     tx: HashMap<ID, Vec<Transaction>>,
+    db: HashMap<ID, DatabaseTransaction>,
 }
 
-impl<S> ConcreteStorage<S>
-where
-    S: InterpreterStorage,
-{
+impl ConcreteStorage {
     pub fn register(&self, id: &ID, register: RegisterId) -> Option<Word> {
         self.vm
             .get(id)
@@ -41,7 +37,11 @@ where
         self.vm.get(id).map(|vm| &vm.memory()[start..end])
     }
 
-    pub fn init(&mut self, txs: &[Transaction], storage: S) -> Result<ID, ExecuteError> {
+    pub fn init(
+        &mut self,
+        txs: &[Transaction],
+        storage: DatabaseTransaction,
+    ) -> Result<ID, ExecuteError> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
@@ -53,19 +53,21 @@ where
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage);
-        vm.init(tx)?;
+        let mut vm = Interpreter::with_storage(storage.clone());
+        vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
+        self.db.insert(id.clone(), storage);
 
         Ok(id)
     }
 
     pub fn kill(&mut self, id: &ID) -> bool {
         self.tx.remove(id);
-        self.vm.remove(id).is_some()
+        self.vm.remove(id);
+        self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID) -> Result<(), ExecuteError> {
+    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> Result<(), ExecuteError> {
         let tx = self
             .tx
             .get(id)
@@ -73,14 +75,16 @@ where
             .cloned()
             .unwrap_or_default();
 
-        self.vm
-            .get_mut(id)
-            .map(|vm| vm.init(tx))
-            .transpose()?
-            .ok_or(ExecuteError::Io(io::Error::new(
+        let mut vm = Interpreter::with_storage(storage.clone());
+        vm.transact(tx)?;
+        self.vm.insert(id.clone(), vm).ok_or_else(|| {
+            ExecuteError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
-                "The VM isntance was not found",
-            )))
+                "The VM instance was not found",
+            ))
+        })?;
+        self.db.insert(id.clone(), storage);
+        Ok(())
     }
 
     pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), ExecuteError> {
@@ -89,25 +93,32 @@ where
             .map(|vm| vm.execute(op))
             .transpose()?
             .map(|_| ())
-            .ok_or(ExecuteError::Io(io::Error::new(
-                io::ErrorKind::NotFound,
-                "The VM isntance was not found",
-            )))
+            .ok_or_else(|| {
+                ExecuteError::Io(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "The VM isntance was not found",
+                ))
+            })
     }
 }
 
-pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage<MemoryStorage>>>;
+pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage>>;
 pub struct QueryRoot;
 pub struct MutationRoot;
 
 pub type DAPSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
 
-pub fn schema() -> DAPSchema {
+// https://github.com/FuelLabs/fuel-core/issues/29
+pub fn schema(state: Option<SharedDatabase>) -> DAPSchema {
     let storage = GraphStorage::default();
 
-    Schema::build(QueryRoot, MutationRoot, EmptySubscription)
-        .data(storage)
-        .finish()
+    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
+    if let Some(database) = state {
+        schema.data(storage).data(database)
+    } else {
+        schema
+    }
+    .finish()
 }
 
 pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {
@@ -126,7 +137,7 @@ impl QueryRoot {
             .lock()
             .await
             .register(&id, register)
-            .ok_or(async_graphql::Error::new("Invalid register identifier"))
+            .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
     }
 
     async fn memory(
@@ -140,7 +151,7 @@ impl QueryRoot {
             .lock()
             .await
             .memory(&id, start, size)
-            .ok_or(async_graphql::Error::new("Invalid memory range"))
+            .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
 }
@@ -150,11 +161,13 @@ impl MutationRoot {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
 
+        let db = ctx.data_unchecked::<SharedDatabase>();
+
         let id = ctx
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], MemoryStorage::default())?;
+            .init(&[], db.0.transaction())?;
 
         debug!("Session {:?} initialized", id);
 
@@ -170,10 +183,12 @@ impl MutationRoot {
     }
 
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
+        let db = ctx.data_unchecked::<SharedDatabase>();
+
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .reset(&id)?;
+            .reset(&id, db.0.transaction())?;
 
         debug!("Session {:?} was reset", id);
 
@@ -187,12 +202,8 @@ impl MutationRoot {
 
         trace!("Op decoded to {:?}", op);
 
-        let result = ctx
-            .data_unchecked::<GraphStorage>()
-            .lock()
-            .await
-            .exec(&id, op)
-            .is_ok();
+        let storage = ctx.data_unchecked::<GraphStorage>().clone();
+        let result = storage.lock().await.exec(&id, op).is_ok();
 
         debug!("Op {:?} executed with result {}", op, result);
 

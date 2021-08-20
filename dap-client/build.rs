@@ -15,7 +15,6 @@ fn main() {
             p.parent()
                 .expect("Failed to uproot")
                 .join("dap-client/assets/debugAdapterProtocol.json")
-                .to_path_buf()
         })
         .expect("Failed to fetch JSON schema");
 
@@ -46,12 +45,12 @@ fn main() {
 
     let assets = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
-        .map(|f| f.as_path().join("assets/debug.sdl").to_path_buf())
+        .map(|f| f.as_path().join("assets/debug.sdl"))
         .expect("Failed to fetch assets path");
 
     File::create(&assets)
         .and_then(|mut f| {
-            f.write_all(dap::schema().sdl().as_bytes())?;
+            f.write_all(dap::schema(None).sdl().as_bytes())?;
             f.sync_all()
         })
         .expect("Failed to write SDL schema to temporary file");

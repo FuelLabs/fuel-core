@@ -43,12 +43,20 @@ impl TxClient {
     }
 
     async fn query<'a, R: 'a>(&self, q: Operation<'a, R>) -> io::Result<R> {
-        surf::post(&self.url)
+        let response = surf::post(&self.url)
             .run_graphql(q)
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .data
-            .ok_or(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        if let Some(errors) = response.errors {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("{:?}", errors),
+            ))
+        } else if let Some(data) = response.data {
+            Ok(data)
+        } else {
+            Err(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
+        }
     }
 
     pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<LogEvent>> {

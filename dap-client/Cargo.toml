@@ -8,7 +8,7 @@ description = "DAP client and schema specification."
 
 [dependencies]
 cynic = { version = "0.14", features = ["surf"] }
-fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git" }
+fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 surf = "2.2"
@@ -16,7 +16,7 @@ surf = "2.2"
 [dev-dependencies]
 actix-rt = "1.1"
 actix-web = "3.3"
-fuel-core = { path = "../fuel-core" }
+fuel-core = { path = "../fuel-core", default-features = false }
 
 [build-dependencies]
 async-graphql = "2.8"
