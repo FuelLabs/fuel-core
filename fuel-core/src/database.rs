@@ -3,6 +3,7 @@ use crate::database::columns::{
 };
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
+#[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{ColumnId, DataSource, Error, MultiKey};
 use fuel_vm::crypto;
@@ -34,6 +35,7 @@ pub struct Database {
 }
 
 impl Database {
+    #[cfg(feature = "default")]
     pub fn open(path: &Path) -> Result<Self, Error> {
         let db = RocksDb::open(path, COLUMN_NUM)?;
 
