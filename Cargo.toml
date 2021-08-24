@@ -1,8 +1,7 @@
 [workspace]
 members = [
     "fuel-core",
-    "dap-client",
-    "tx-client"
+    "fuel-client",
 ]
 
 [profile.release]

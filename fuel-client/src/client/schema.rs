@@ -1,9 +1,25 @@
 mod schema {
-    cynic::use_schema!("./assets/debug.sdl");
+    cynic::use_schema!("./assets/schema.sdl");
+}
+
+#[derive(cynic::FragmentArguments)]
+pub struct TxArg {
+    pub tx: String,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/debug.sdl", graphql_type = "MutationRoot")]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "TxArg"
+)]
+pub struct Run {
+    #[arguments(tx = &args.tx)]
+    pub run: String,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Mutation")]
 pub struct StartSession {
     pub start_session: cynic::Id,
 }
@@ -15,8 +31,8 @@ pub struct IdArg {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/debug.sdl",
-    graphql_type = "MutationRoot",
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
     argument_struct = "IdArg"
 )]
 pub struct EndSession {
@@ -26,8 +42,8 @@ pub struct EndSession {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/debug.sdl",
-    graphql_type = "MutationRoot",
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
     argument_struct = "IdArg"
 )]
 pub struct Reset {
@@ -43,8 +59,8 @@ pub struct ExecuteArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/debug.sdl",
-    graphql_type = "MutationRoot",
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
     argument_struct = "ExecuteArgs"
 )]
 pub struct Execute {
@@ -60,8 +76,8 @@ pub struct RegisterArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/debug.sdl",
-    graphql_type = "QueryRoot",
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
     argument_struct = "RegisterArgs"
 )]
 pub struct Register {
@@ -78,8 +94,8 @@ pub struct MemoryArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/debug.sdl",
-    graphql_type = "QueryRoot",
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
     argument_struct = "MemoryArgs"
 )]
 pub struct Memory {

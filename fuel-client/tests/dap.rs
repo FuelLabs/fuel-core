@@ -1,16 +1,13 @@
-use dap_client::client::DapClient;
-
-use actix_web::{test, App};
-use fuel_core::service;
-use std::convert::TryInto;
-
+use fuel_client::client::FuelClient;
+use fuel_core::service::{configure, run_in_background};
 use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
+use std::convert::TryInto;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn start_session() {
-    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
-    let client = DapClient::from(srv.addr());
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
 
     let session = client.start_session().await.unwrap();
     let session_p = client.start_session().await.unwrap();
@@ -21,10 +18,10 @@ async fn start_session() {
     assert_ne!(id, id_p);
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn end_session() {
-    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
-    let client = DapClient::from(srv.addr());
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
 
     let session = client.start_session().await.unwrap();
     let id = session.as_str();
@@ -33,10 +30,10 @@ async fn end_session() {
     assert!(!client.end_session(id).await.unwrap());
 }
 
-#[actix_rt::test]
+#[tokio::test]
 async fn reset() {
-    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
-    let client = DapClient::from(srv.addr());
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
 
     let session = client.start_session().await.unwrap();
     let id = session.as_str();

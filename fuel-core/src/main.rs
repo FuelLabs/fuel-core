@@ -1,7 +1,6 @@
-use actix_web::{App, HttpServer};
+use axum::prelude::*;
 use fuel_core::database::Database;
-use fuel_core::service;
-use fuel_core::service::{DbType, SharedDatabase};
+use fuel_core::service::{configure, DbType, SharedDatabase};
 use std::io;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -9,7 +8,7 @@ use tracing::{info, trace};
 
 mod args;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() -> io::Result<()> {
     let config = args::Opt::from_args().exec()?;
     let addr = config.addr;
@@ -26,10 +25,12 @@ async fn main() -> io::Result<()> {
 
     trace!("Initializing in TRACE mode");
     info!("Binding GraphQL provider to {}", addr);
-    HttpServer::new(move || App::new().configure(service::configure(database.clone())))
-        .bind(addr)?
-        .run()
-        .await?;
+    let app = configure(database);
+
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
 
     info!("Graceful shutdown");
 
