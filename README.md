@@ -60,8 +60,8 @@ The client functionality is available through service endpoints that expect Grap
 
 The transaction executor will have in-memory storage with its lifetime bound to the GraphQL process - meaning that if the service restarts, then the storage state is reset.
 
-* Service endpoint: `/tx`
-* Schema (available after building): `tx-client/assets/tx.sdl`
+* Service endpoint: `/graphql`
+* Schema (available after building): `fuel-client/assets/schema.sdl`
 
 The service expects a mutation defined as `run` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in JSON format, as specified in `docs/tx-schema.json`.
 
@@ -86,5 +86,5 @@ $ curl -X POST \
       "tx":"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[17,64,0,202,17,68,0,186,89,65,16,0,52,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[]}}"
    }
 }' \
-http://127.0.0.1:4000/tx
+http://127.0.0.1:4000/graphql
 ```

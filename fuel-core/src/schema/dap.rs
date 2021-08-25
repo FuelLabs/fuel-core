@@ -1,18 +1,12 @@
-use actix_web::web;
-use async_graphql::types::EmptySubscription;
-use async_graphql::{Context, Object, Schema, ID};
-use async_graphql_actix_web::{Request, Response};
+use crate::database::{DatabaseTransaction, SharedDatabase};
+use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_vm::consts;
+use fuel_vm::prelude::*;
 use futures::lock::Mutex;
-use tracing::{debug, trace};
-use uuid::Uuid;
-
 use std::collections::HashMap;
 use std::{io, sync};
-
-use crate::database::DatabaseTransaction;
-use crate::service::SharedDatabase;
-use fuel_vm::prelude::*;
+use tracing::{debug, trace};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
@@ -103,30 +97,18 @@ impl ConcreteStorage {
 }
 
 pub type GraphStorage = sync::Arc<Mutex<ConcreteStorage>>;
-pub struct QueryRoot;
-pub struct MutationRoot;
 
-pub type DAPSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+#[derive(Default)]
+pub struct DapQuery;
+#[derive(Default)]
+pub struct DapMutation;
 
-// https://github.com/FuelLabs/fuel-core/issues/29
-pub fn schema(state: Option<SharedDatabase>) -> DAPSchema {
-    let storage = GraphStorage::default();
-
-    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
-    if let Some(database) = state {
-        schema.data(storage).data(database)
-    } else {
-        schema
-    }
-    .finish()
-}
-
-pub async fn service(schema: web::Data<DAPSchema>, req: Request) -> Response {
-    schema.execute(req.into_inner()).await.into()
+pub fn init<Q, M, S>(schema: SchemaBuilder<Q, M, S>) -> SchemaBuilder<Q, M, S> {
+    schema.data(GraphStorage::default())
 }
 
 #[Object]
-impl QueryRoot {
+impl DapQuery {
     async fn register(
         &self,
         ctx: &Context<'_>,
@@ -157,7 +139,7 @@ impl QueryRoot {
 }
 
 #[Object]
-impl MutationRoot {
+impl DapMutation {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
 

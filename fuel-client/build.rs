@@ -1,4 +1,4 @@
-use fuel_core::schema::dap;
+use fuel_core::schema::build_schema;
 use schemafy_lib::{Expander, Schema};
 
 use std::env;
@@ -7,14 +7,14 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../fuel-core/src/schema/dap.rs");
+    println!("cargo:rerun-if-changed=../fuel-core/src/schema");
 
     let path = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
         .map(|p| {
             p.parent()
                 .expect("Failed to uproot")
-                .join("dap-client/assets/debugAdapterProtocol.json")
+                .join("fuel-client/assets/debugAdapterProtocol.json")
         })
         .expect("Failed to fetch JSON schema");
 
@@ -45,12 +45,19 @@ fn main() {
 
     let assets = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
-        .map(|f| f.as_path().join("assets/debug.sdl"))
+        .map(|f| {
+            let f = f.as_path().join("assets/schema.sdl");
+
+            let dir = f.parent().expect("Failed to read assets dir");
+            fs::create_dir_all(dir).expect("Failed to create assets dir");
+
+            f
+        })
         .expect("Failed to fetch assets path");
 
     File::create(&assets)
         .and_then(|mut f| {
-            f.write_all(dap::schema(None).sdl().as_bytes())?;
+            f.write_all(build_schema().finish().sdl().as_bytes())?;
             f.sync_all()
         })
         .expect("Failed to write SDL schema to temporary file");

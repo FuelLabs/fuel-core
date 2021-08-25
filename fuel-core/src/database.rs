@@ -27,8 +27,17 @@ pub(crate) mod columns {
     pub const COLUMN_NUM: u32 = 4;
 }
 
-pub trait DatabaseTrait: InterpreterStorage + Debug {
+pub trait DatabaseTrait: InterpreterStorage + Debug + Send + Sync {
     fn transaction(&self) -> DatabaseTransaction;
+}
+
+#[derive(Clone, Debug)]
+pub struct SharedDatabase(pub Arc<dyn DatabaseTrait>);
+
+impl Default for SharedDatabase {
+    fn default() -> Self {
+        SharedDatabase(Arc::new(Database::default()))
+    }
 }
 
 #[derive(Clone, Debug)]

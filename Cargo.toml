@@ -1,8 +1,9 @@
 [workspace]
+# Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
+resolver = "2"
 members = [
     "fuel-core",
-    "dap-client",
-    "tx-client"
+    "fuel-client",
 ]
 
 [profile.release]

@@ -8,16 +8,24 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client."
 
+[[bin]]
+name = "main"
+path = "src/main.rs"
+required-features = ["default"]
+
 [dependencies]
-actix-web = { version = "3.3" }
-async-graphql-actix-web = { version = "2.8" }
-async-graphql = { version="2.8", features=["uuid", "tracing"] }
+# These git depenedencies are temporary until async-graphql can publish the axum integration to crates.io:
+# https://github.com/async-graphql/async-graphql/issues/608#issuecomment-905304688
+async-graphql-axum = { git = "https://github.com/async-graphql/async-graphql", rev = "1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae", optional = true }
+async-graphql = { git = "https://github.com/async-graphql/async-graphql", rev = "1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae" }
+axum = { git = "https://github.com/tokio-rs/axum.git", rev = "0d2db387a88bde5145f0ba746d82cd308738ff91", features = ["headers"] , optional = true }
 bincode = "1.3"
 dirs = "3.0.2"
 env_logger = "0.8"
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 futures = "0.3"
 hex = "0.4"
+hyper = "0.14"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 rand = "0.8.4"
@@ -27,11 +35,11 @@ serde = "1.0"
 structopt = "0.3"
 strum = "0.21"
 strum_macros = "0.21"
-tokio = { version = "0.2", features = ["blocking"] }
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version="0.2", features= ["env-filter"] }
 thiserror = { version = "1.0" }
-uuid = "0.8"
+uuid = { version = "0.8", features = ["v4"] }
 
 [features]
-default = ["rocksdb"]
+default = ["rocksdb", "axum", "async-graphql-axum"]

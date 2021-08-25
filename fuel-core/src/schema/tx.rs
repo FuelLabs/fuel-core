@@ -1,19 +1,16 @@
-use crate::database::DatabaseTransaction;
-use crate::service::SharedDatabase;
-use actix_web::web;
-use async_graphql::types::EmptySubscription;
-use async_graphql::{Context, Object, Schema};
-use async_graphql_actix_web::{Request, Response};
+use crate::database::{DatabaseTransaction, SharedDatabase};
+use async_graphql::{Context, Object};
 use fuel_vm::prelude::*;
 use tokio::task;
 
-pub struct MutationRoot;
-pub struct QueryRoot;
+#[derive(Default)]
+pub struct TxQuery;
 
-pub type TXSchema = Schema<QueryRoot, MutationRoot, EmptySubscription>;
+#[derive(Default)]
+pub struct TxMutation;
 
 #[Object]
-impl QueryRoot {
+impl TxQuery {
     async fn version(&self, _ctx: &Context<'_>) -> async_graphql::Result<String> {
         const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -22,7 +19,7 @@ impl QueryRoot {
 }
 
 #[Object]
-impl MutationRoot {
+impl TxMutation {
     async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
         let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
 
@@ -39,19 +36,4 @@ impl MutationRoot {
 
         Ok(serde_json::to_string(vm.log())?)
     }
-}
-
-// TODO: https://github.com/FuelLabs/fuel-core/issues/29
-pub fn schema(state: Option<SharedDatabase>) -> TXSchema {
-    let schema = Schema::build(QueryRoot, MutationRoot, EmptySubscription);
-    if let Some(database) = state {
-        schema.data(database)
-    } else {
-        schema
-    }
-    .finish()
-}
-
-pub async fn service(schema: web::Data<TXSchema>, req: Request) -> Response {
-    schema.execute(req.into_inner()).await.into()
 }

@@ -1,15 +1,12 @@
-use tx_client::client::TxClient;
-
-use actix_web::{test, App};
-use fuel_core::service;
-
+use fuel_client::client::FuelClient;
+use fuel_core::service::{configure, run_in_background};
 use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn transact() {
-    let srv = test::start(|| App::new().configure(service::configure(Default::default())));
-    let client = TxClient::from(srv.addr());
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
 
     let gas_price = 0;
     let gas_limit = 1_000_000;

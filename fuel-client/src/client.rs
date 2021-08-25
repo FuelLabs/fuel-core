@@ -10,11 +10,11 @@ mod schema;
 use schema::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DapClient {
+pub struct FuelClient {
     url: surf::Url,
 }
 
-impl FromStr for DapClient {
+impl FromStr for FuelClient {
     type Err = net::AddrParseError;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
@@ -22,12 +22,12 @@ impl FromStr for DapClient {
     }
 }
 
-impl<S> From<S> for DapClient
+impl<S> From<S> for FuelClient
 where
     S: Into<net::SocketAddr>,
 {
     fn from(socket: S) -> Self {
-        let url = format!("http://{}/dap", socket.into())
+        let url = format!("http://{}/graphql", socket.into())
             .as_str()
             .parse()
             .unwrap();
@@ -36,18 +36,42 @@ where
     }
 }
 
-impl DapClient {
+impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> Result<Self, net::AddrParseError> {
         Self::from_str(url.as_ref())
     }
 
     async fn query<'a, R: 'a>(&self, q: Operation<'a, R>) -> io::Result<R> {
-        surf::post(&self.url)
+        let response = surf::post(&self.url)
             .run_graphql(q)
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            .data
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        match (response.data, response.errors) {
+            (Some(d), _) => Ok(d),
+            (_, Some(e)) => {
+                let e = e.into_iter().map(|e| format!("{}", e.message)).fold(
+                    String::from("Response errors"),
+                    |mut s, e| {
+                        s.push_str("; ");
+                        s.push_str(e.as_str());
+                        s
+                    },
+                );
+                Err(io::Error::new(io::ErrorKind::Other, e))
+            }
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
+        }
+    }
+
+    pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<LogEvent>> {
+        let tx = serde_json::to_string(tx)?;
+        let query = schema::Run::build(&TxArg { tx });
+
+        let result = self.query(query).await.map(|r| r.run)?;
+        let result = serde_json::from_str(result.as_str())?;
+
+        Ok(result)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
