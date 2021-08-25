@@ -1,5 +1,4 @@
-use crate::database::DatabaseTransaction;
-use crate::service::SharedDatabase;
+use crate::database::{DatabaseTransaction, SharedDatabase};
 use async_graphql::{Context, Object};
 use fuel_vm::prelude::*;
 use tokio::task;

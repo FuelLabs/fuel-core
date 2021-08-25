@@ -1,6 +1,10 @@
-use axum::prelude::*;
-use fuel_core::database::Database;
-use fuel_core::service::{configure, DbType, SharedDatabase};
+pub mod database;
+pub mod schema;
+pub mod service;
+pub mod state;
+
+use crate::database::{Database, SharedDatabase};
+use service::{configure, DbType};
 use std::io;
 use std::sync::Arc;
 use structopt::StructOpt;

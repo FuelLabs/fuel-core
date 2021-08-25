@@ -1,15 +1,16 @@
-use crate::database::{Database, DatabaseTrait};
-use crate::schema::{build_schema, dap, CoreSchema};
-use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use crate::{
+    database::SharedDatabase,
+    schema::{build_schema, dap, CoreSchema},
+};
+use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
+use axum::response::IntoResponse;
+use axum::routing::BoxRoute;
 use axum::{
-    body::Body,
-    prelude::{response::IntoResponse, RoutingDsl, *},
-    routing::BoxRoute,
-    AddExtensionLayer,
+    extract::Extension, handler::get, handler::post, response::Html, AddExtensionLayer, Json,
+    Router,
 };
 use std::net::{SocketAddr, TcpListener};
-use std::{net, path::PathBuf, sync::Arc};
+use std::{net, path::PathBuf};
 use strum_macros::Display;
 use strum_macros::EnumString;
 
@@ -26,38 +27,27 @@ pub enum DbType {
     RocksDb,
 }
 
-#[derive(Clone, Debug)]
-pub struct SharedDatabase(pub Arc<dyn DatabaseTrait + Send + Sync>);
-
-impl Default for SharedDatabase {
-    fn default() -> Self {
-        SharedDatabase(Arc::new(Database::default()))
-    }
-}
-
 async fn graphql_playground() -> impl IntoResponse {
-    response::Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
 }
 
-async fn graphql_handler(
-    schema: extract::Extension<CoreSchema>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
+async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> Json<Response> {
+    schema.execute(req.0).await.into()
 }
 
-pub fn configure(db: SharedDatabase) -> BoxRoute<Body> {
+pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
     let schema = build_schema().data(db);
     let schema = dap::init(schema).finish();
 
-    route("/playground", get(graphql_playground))
+    Router::new()
+        .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler))
         .layer(AddExtensionLayer::new(schema))
         .boxed()
 }
 
 /// Run a `BoxRoute` service in the background and get a URI for it.
-pub async fn run_in_background(svc: BoxRoute<Body>) -> SocketAddr {
+pub async fn run_in_background(svc: Router<BoxRoute>) -> SocketAddr {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Could not bind ephemeral socket");
     let addr = listener.local_addr().unwrap();
     println!("Listening on {}", addr);

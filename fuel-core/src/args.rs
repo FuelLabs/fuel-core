@@ -1,4 +1,4 @@
-use fuel_core::service::{Config, DbType};
+use crate::service::{Config, DbType};
 use std::path::PathBuf;
 use std::string::ToString;
 use std::{env, io, net};

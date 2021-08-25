@@ -32,6 +32,15 @@ pub trait DatabaseTrait: InterpreterStorage + Debug {
 }
 
 #[derive(Clone, Debug)]
+pub struct SharedDatabase(pub Arc<dyn DatabaseTrait + Send + Sync>);
+
+impl Default for SharedDatabase {
+    fn default() -> Self {
+        SharedDatabase(Arc::new(Database::default()))
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
 }
