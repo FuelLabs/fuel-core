@@ -30,13 +30,14 @@ async fn main() -> io::Result<()> {
     trace!("Initializing in TRACE mode");
     info!("Binding GraphQL provider to {}", addr);
     let app = configure(database);
-
-    axum::Server::bind(&addr)
+    if let Err(err) = axum::Server::bind(&addr)
         .serve(app.into_make_service())
         .await
-        .unwrap();
-
-    info!("Graceful shutdown");
+    {
+        eprintln!("server error: {}", err);
+    } else {
+        info!("Graceful shutdown");
+    }
 
     Ok(())
 }

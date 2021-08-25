@@ -46,15 +46,21 @@ impl FuelClient {
             .run_graphql(q)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        if let Some(errors) = response.errors {
-            Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("{:?}", errors),
-            ))
-        } else if let Some(data) = response.data {
-            Ok(data)
-        } else {
-            Err(io::Error::new(io::ErrorKind::NotFound, "Invalid response"))
+
+        match (response.data, response.errors) {
+            (Some(d), _) => Ok(d),
+            (_, Some(e)) => {
+                let e = e.into_iter().map(|e| format!("{}", e.message)).fold(
+                    String::from("Response errors"),
+                    |mut s, e| {
+                        s.push_str("; ");
+                        s.push_str(e.as_str());
+                        s
+                    },
+                );
+                Err(io::Error::new(io::ErrorKind::Other, e))
+            }
+            _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
 
