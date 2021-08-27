@@ -8,3 +8,4 @@ edition = "2018"
 clap = "2.33.3"
 fuel-core = { path = "../fuel-core" }
 rand = "0.8.4"
+serde_yaml = "0.8.19"

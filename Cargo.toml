@@ -1,9 +1,10 @@
 [workspace]
+# Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
+resolver = "2"
 members = [
-    "dap-client",
     "fuel-core",
-    "tx-client",
-    "indexer-lib",
+    "fuel-client",
+    "fuel-indexer",
     "index-runner",
     "examples/simple-wasm"
 ]

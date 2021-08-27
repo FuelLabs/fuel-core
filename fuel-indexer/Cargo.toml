@@ -1,5 +1,5 @@
 [package]
-name = "simple-wasm"
+name = "fuel-indexer"
 version = "0.1.0"
 edition = "2018"
 
@@ -11,9 +11,12 @@ panic = 'abort'
 [profile.release]
 panic = 'abort'
 
-
 [lib]
-crate-type = ['cdylib']
+crate-type = ['cdylib', 'rlib']
 
 [dependencies]
-fuel-indexer = { path = "../../fuel-indexer" }
+fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features = false }
+
+[features]
+default = ["fuel-tx/serde-types-minimal"]
+use-std = ["fuel-tx/serde-types"]
