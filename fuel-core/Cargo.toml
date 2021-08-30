@@ -19,6 +19,8 @@ axum = {version = "0.2.3", optional = true }
 bincode = "1.3"
 dirs = "3.0.2"
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
+fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
+fuel-asm = { git = "ssh://git@github.com/FuelLabs/fuel-asm.git", features = ["serde-types"] }
 futures = "0.3"
 hyper = "0.14"
 itertools = "0.10.1"
