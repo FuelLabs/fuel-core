@@ -34,6 +34,6 @@ impl TxMutation {
         )
         .await??;
 
-        Ok(serde_json::to_string(vm.log())?)
+        Ok(serde_json::to_string(vm.receipts())?)
     }
 }
