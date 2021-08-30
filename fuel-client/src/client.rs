@@ -64,7 +64,7 @@ impl FuelClient {
         }
     }
 
-    pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<LogEvent>> {
+    pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
         let tx = serde_json::to_string(tx)?;
         let query = schema::Run::build(&TxArg { tx });
 
