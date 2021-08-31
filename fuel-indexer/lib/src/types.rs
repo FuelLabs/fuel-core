@@ -1,8 +1,6 @@
-use core::convert::{TryInto, TryFrom};
+use core::convert::{TryFrom, TryInto};
 
-pub use fuel_tx::{
-    Address, Bytes32, Color, ContractId, Salt,
-};
+pub use fuel_tx::{Address, Bytes32, Color, ContractId, Salt};
 use serde::{Deserialize, Serialize};
 use serde_scale;
 
@@ -31,17 +29,15 @@ pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
     serde_scale::to_vec(obj).expect("Serialize failed")
 }
 
-
 pub fn deserialize<'a, T: Deserialize<'a>>(vec: &'a Vec<u8>) -> T {
     serde_scale::from_slice(&vec).expect("Deserialize failed")
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum ColumnType {
     ID = 0,
     Address = 1,
-    Bytes32 = 2
+    Bytes32 = 2,
 }
 
 impl From<ColumnType> for u32 {
@@ -65,7 +61,6 @@ impl From<u32> for ColumnType {
     }
 }
 
-
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum FtColumn {
     ID(u64),
@@ -77,19 +72,16 @@ impl FtColumn {
     pub fn new(ty: ColumnType, size: usize, bytes: &[u8]) -> FtColumn {
         match ty {
             ColumnType::ID => {
-                let ident = u64::from_le_bytes(bytes[..size]
-                    .try_into()
-                    .expect("Invalid slice length"));
+                let ident =
+                    u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::ID(ident)
             }
             ColumnType::Address => {
-                let address = Address::try_from(&bytes[..size])
-                    .expect("Invalid slice length");
+                let address = Address::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Address(address)
             }
             ColumnType::Bytes32 => {
-                let bytes = Bytes32::try_from(&bytes[..size])
-                    .expect("Invalid slice length");
+                let bytes = Bytes32::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Bytes32(bytes)
             }
         }
@@ -103,8 +95,10 @@ impl FtColumn {
             }
             FtColumn::Address(value) => {
                 // TODO: should make fuel-tx a no-std feature flag and a LowerHex implementation
-                format!("'0x{}'",
-                    (*value).iter()
+                format!(
+                    "'0x{}'",
+                    (*value)
+                        .iter()
                         .map(|byte| format!("{:02x}", byte))
                         .collect::<Vec<String>>()
                         .join("")
@@ -112,8 +106,10 @@ impl FtColumn {
             }
             FtColumn::Bytes32(value) => {
                 // TODO: should make fuel-tx a no-std feature flag and a LowerHex implementation
-                format!("'0x{}'",
-                    (*value).iter()
+                format!(
+                    "'0x{}'",
+                    (*value)
+                        .iter()
                         .map(|byte| format!("{:02x}", byte))
                         .collect::<Vec<String>>()
                         .join("")

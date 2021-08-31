@@ -1,26 +1,18 @@
 use core::ops::Deref;
-use diesel::{
-    prelude::PgConnection,
-    RunQueryDsl,
-    sql_query,
-    sql_types::Binary,
-};
+use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
 
-use fuel_indexer::types as ft;
 use crate::runtime::ffi;
-use crate::runtime::IndexerResult;
 use crate::runtime::schema::{ColumnInfo, EntityData, RowCount};
-
+use crate::runtime::IndexerResult;
+use fuel_indexer::types as ft;
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
-
 #[derive(Clone)]
 pub struct DbPool(PgConnectionPool);
-
 
 impl Deref for DbPool {
     type Target = PgConnectionPool;
@@ -30,45 +22,42 @@ impl Deref for DbPool {
     }
 }
 
-
 impl std::fmt::Debug for DbPool {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(fmt, "DBPool(...)")
     }
 }
 
-
 /// Responsible for laying down graph schemas, processes schema upgrades.
 pub struct SchemaManager {
-    pool: DbPool
+    pool: DbPool,
 }
-
 
 impl SchemaManager {
     pub fn new(db_conn: String) -> IndexerResult<SchemaManager> {
         let manager = ConnectionManager::<PgConnection>::new(db_conn);
         let pool = DbPool(r2d2::Pool::builder().build(manager)?);
 
-        Ok(SchemaManager {
-            pool,
-        })
+        Ok(SchemaManager { pool })
     }
 
     pub fn schema_exists(&self, name: &str) -> IndexerResult<bool> {
-        let connection  = self.pool.get()?;
+        let connection = self.pool.get()?;
 
         // NOTE: do we want versioning and schema upgrades?
         let count: Vec<RowCount> = sql_query(format!(
             "select count(*)
             from graph_registry.type_ids
-            where schema_name = '{}'", name)
-        ).get_results(&*connection)?;
+            where schema_name = '{}'",
+            name
+        ))
+        .get_results(&*connection)?;
 
         Ok(count[0].count > 0)
     }
 
     pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<()> {
-        let connection  = self.pool.get()?;
+        let connection = self.pool.get()?;
 
         if !self.schema_exists(name)? {
             // TODO: need a diesel schema for metadata. For now,
@@ -81,7 +70,6 @@ impl SchemaManager {
     }
 }
 
-
 /// Database for an executor instance, with schema info.
 #[derive(Clone, Debug)]
 pub struct Database {
@@ -90,7 +78,6 @@ pub struct Database {
     pub schema: HashMap<String, Vec<String>>,
     pub tables: HashMap<u64, String>,
 }
-
 
 impl Database {
     pub fn new(db_conn: String) -> IndexerResult<Database> {
@@ -106,7 +93,8 @@ impl Database {
     }
 
     fn upsert_query(&self, table: &String, inserts: Vec<String>) -> String {
-        format!("INSERT INTO {}.{}
+        format!(
+            "INSERT INTO {}.{}
                 ({})
              VALUES
                 ({}, $1)
@@ -114,7 +102,8 @@ impl Database {
             self.namespace,
             table,
             self.schema[table].join(", "),
-            inserts.join(", "))
+            inserts.join(", ")
+        )
     }
 
     fn get_query(&self, table: &str, object_id: u64) -> String {
@@ -128,18 +117,13 @@ impl Database {
         let connection = self.pool.get().expect("connection pool failed");
 
         let table = &self.tables[&type_id];
-        let inserts: Vec<_> = columns.iter().map(|col| {
-            col.query_fragment()
-        }).collect();
+        let inserts: Vec<_> = columns.iter().map(|col| col.query_fragment()).collect();
 
         let query_text = self.upsert_query(table, inserts);
 
-        let query = sql_query(&query_text)
-            .bind::<Binary, _>(bytes);
+        let query = sql_query(&query_text).bind::<Binary, _>(bytes);
 
-        query
-            .execute(&*connection)
-            .expect("Query failed");
+        query.execute(&*connection).expect("Query failed");
     }
 
     pub fn get_object(&self, type_id: u64, object_id: u64) -> Option<Vec<u8>> {
@@ -154,7 +138,7 @@ impl Database {
         row.pop().map(|e| e.object)
     }
 
-    pub fn load_schema(&mut self, instance: &Instance) -> IndexerResult<()>{
+    pub fn load_schema(&mut self, instance: &Instance) -> IndexerResult<()> {
         let connection = self.pool.get()?;
         self.namespace = ffi::get_namespace(instance)?;
         // TODO: create diesel schema for this....
@@ -165,10 +149,11 @@ impl Database {
             join graph_registry.columns co
             on ti.id = co.type_id
             where schema_name = '{}'
-            order by type_id,column_position", self.namespace);
+            order by type_id,column_position",
+            self.namespace
+        );
 
-        let results: Vec<ColumnInfo> = sql_query(&schema_query)
-            .get_results(&*connection)?;
+        let results: Vec<ColumnInfo> = sql_query(&schema_query).get_results(&*connection)?;
 
         for column in results {
             let table = &column.table_name;
@@ -177,9 +162,7 @@ impl Database {
                 self.tables.insert(column.type_id as u64, table.to_string());
             }
 
-            let columns = self.schema
-                .entry(table.to_string())
-                .or_insert(vec![]);
+            let columns = self.schema.entry(table.to_string()).or_insert(vec![]);
 
             columns.push(column.column_name);
         }

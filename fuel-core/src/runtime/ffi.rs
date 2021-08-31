@@ -1,17 +1,10 @@
+use fuel_indexer::types as ft;
+use serde_scale;
 use thiserror::Error;
 use wasmer::{
-    Exports,
-    ExportError,
-    Function,
-    HostEnvInitError,
-    Instance,
-    Memory,
-    RuntimeError,
-    Store,
+    ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
     WasmPtr,
 };
-use serde_scale;
-use fuel_indexer::types as ft;
 
 use crate::runtime::IndexEnv;
 
@@ -29,38 +22,29 @@ pub enum FFIError {
     NoneError(String),
 }
 
-
 macro_rules! declare_export {
     ($name:ident, $ffi_env:ident, $store:ident, $env:ident) => {
         let f = Function::new_native_with_env($store, $env.clone(), $name);
         $ffi_env.insert(format!("ff_{}", stringify!($name)), f);
-    }
+    };
 }
-
 
 pub(crate) fn get_namespace(instance: &Instance) -> Result<String, FFIError> {
     let exports = &instance.exports;
     let memory = exports.get_memory("memory")?;
 
-    let ns_ptr = exports
-        .get_function("get_namespace_ptr")?
-        .call(&[])?[0].i32()
-        .ok_or_else(
-            || FFIError::NoneError("get_namespace".to_string())
-        )? as u32;
+    let ns_ptr = exports.get_function("get_namespace_ptr")?.call(&[])?[0]
+        .i32()
+        .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
 
-    let ns_len = exports
-        .get_function("get_namespace_len")?
-        .call(&[])?[0].i32()
-        .ok_or_else(
-            || FFIError::NoneError("get_namespace".to_string())
-        )? as u32;
+    let ns_len = exports.get_function("get_namespace_len")?.call(&[])?[0]
+        .i32()
+        .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
 
     let namespace = get_string(&memory, ns_ptr, ns_len)?;
 
     Ok(namespace)
 }
-
 
 fn get_string(mem: &Memory, ptr: u32, len: u32) -> Result<String, FFIError> {
     let result = WasmPtr::<u8, wasmer::Array>::new(ptr)
@@ -69,24 +53,23 @@ fn get_string(mem: &Memory, ptr: u32, len: u32) -> Result<String, FFIError> {
     Ok(result)
 }
 
-
 fn get_object_id(mem: &Memory, ptr: u32) -> u64 {
     WasmPtr::<u64>::new(ptr).deref(mem).unwrap().get()
 }
-
 
 fn get_object(env: &IndexEnv, type_id: u64, ptr: u32, len_ptr: u32) -> u32 {
     let mem = env.memory_ref().expect("Memory uninitialized");
 
     let id = get_object_id(&mem, ptr);
 
-    let bytes = env.db.lock()
+    let bytes = env
+        .db
+        .lock()
         .expect("Lock acquire failed")
         .get_object(type_id, id);
 
     if let Some(bytes) = bytes {
-        let alloc_fn = env.alloc_ref()
-            .expect("Alloc export is missing");
+        let alloc_fn = env.alloc_ref().expect("Alloc export is missing");
 
         let size = bytes.len() as u32;
         let result = alloc_fn.call(size).expect("Alloc failed");
@@ -104,7 +87,6 @@ fn get_object(env: &IndexEnv, type_id: u64, ptr: u32, len_ptr: u32) -> u32 {
     }
 }
 
-
 fn put_object(env: &IndexEnv, type_id: u64, ptr: u32, len: u32) {
     let mem = env.memory_ref().expect("Memory uninitialized");
 
@@ -115,12 +97,13 @@ fn put_object(env: &IndexEnv, type_id: u64, ptr: u32, len: u32) {
         bytes.extend_from_slice(&mem.data_unchecked()[range]);
     }
 
-    let columns: Vec<ft::FtColumn> = serde_scale::from_slice(&bytes)
-        .expect("Scale serde error");
+    let columns: Vec<ft::FtColumn> = serde_scale::from_slice(&bytes).expect("Scale serde error");
 
-    env.db.lock().expect("Acquire lock failed").put_object(type_id, columns, bytes);
+    env.db
+        .lock()
+        .expect("Acquire lock failed")
+        .put_object(type_id, columns, bytes);
 }
-
 
 pub fn get_exports(env: &IndexEnv, store: &Store) -> Exports {
     let mut exports = Exports::new();

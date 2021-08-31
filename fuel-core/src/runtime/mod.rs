@@ -1,24 +1,18 @@
 use diesel::result::Error as DieselError;
 use thiserror::Error;
-use wasmer::{
-    ExportError,
-    HostEnvInitError,
-    InstantiationError,
-    RuntimeError,
-};
+use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
 
-mod ffi;
 mod database;
+pub mod executor;
+mod ffi;
 mod manifest;
 mod schema;
-pub mod executor;
 
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};
 pub use manifest::Manifest;
 
 pub type IndexerResult<T> = core::result::Result<T, IndexerError>;
-
 
 #[derive(Error, Debug)]
 pub enum IndexerError {
@@ -43,5 +37,3 @@ pub enum IndexerError {
     #[error("Unknown error")]
     Unknown,
 }
-
-

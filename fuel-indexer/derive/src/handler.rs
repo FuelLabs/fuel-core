@@ -1,27 +1,17 @@
-use syn::{
-    bracketed,
-    parse_macro_input,
-    parse_quote,
-    Attribute,
-    Block,
-    FnArg,
-    LitStr,
-    PatType,
-    ItemFn,
-    Token,
-    token,
-    Result
-};
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-
+use syn::parse::{Parse, ParseStream};
+use syn::punctuated::Punctuated;
+use syn::{
+    bracketed, parse_macro_input, parse_quote, token, Attribute, Block, FnArg, ItemFn, LitStr,
+    PatType, Result, Token,
+};
 
 pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     let mut item_fn = parse_macro_input!(item as ItemFn);
 
-    let has_nomangle = item_fn.attrs
+    let has_nomangle = item_fn
+        .attrs
         .iter()
         .find(|attr| {
             let path = attr.path.get_ident();
@@ -42,11 +32,11 @@ pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStre
 
     let mut final_sig: Punctuated<FnArg, Token![,]> = parse_quote! {};
 
-    for (idx,item) in item_fn.sig.inputs.iter().enumerate() {
+    for (idx, item) in item_fn.sig.inputs.iter().enumerate() {
         match item {
             FnArg::Typed(PatType { pat, ty, .. }) => {
-                let ptr = format_ident!{"ptr{}", idx};
-                let len = format_ident!{"len{}", idx};
+                let ptr = format_ident! {"ptr{}", idx};
+                let len = format_ident! {"len{}", idx};
 
                 final_sig = parse_quote! { #final_sig #ptr: *mut u8, #len: usize, };
 
@@ -67,7 +57,7 @@ pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStre
     std::mem::swap(&mut block, &mut item_fn.block);
     item_fn.block.stmts.extend(block.stmts);
 
-    let output = quote!{
+    let output = quote! {
         #item_fn
     };
 

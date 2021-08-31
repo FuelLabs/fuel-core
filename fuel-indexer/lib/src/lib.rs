@@ -1,17 +1,14 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-
 pub mod types;
-use types::{serialize, deserialize};
-
+use types::{deserialize, serialize};
 
 extern "C" {
     // TODO: error codes? or just panic and let the runtime handle it?
     fn ff_get_object(type_id: u64, ptr: *const u8, len: *mut u8) -> *mut u8;
     fn ff_put_object(type_id: u64, ptr: *const u8, len: u32);
 }
-
 
 pub trait Entity: Sized + PartialEq + Eq {
     const TYPE_ID: u64;
@@ -25,11 +22,7 @@ pub trait Entity: Sized + PartialEq + Eq {
             let buf = id.to_le_bytes();
             let mut buflen = (buf.len() as u32).to_le_bytes();
 
-            let ptr = ff_get_object(
-                Self::TYPE_ID,
-                buf.as_ptr(),
-                buflen.as_mut_ptr()
-            );
+            let ptr = ff_get_object(Self::TYPE_ID, buf.as_ptr(), buflen.as_mut_ptr());
 
             if !ptr.is_null() {
                 let len = u32::from_le_bytes(buflen) as usize;
@@ -50,7 +43,6 @@ pub trait Entity: Sized + PartialEq + Eq {
         }
     }
 }
-
 
 #[no_mangle]
 fn alloc_fn(size: u32) -> *const u8 {
