@@ -40,6 +40,7 @@ impl IndexEnv {
 }
 
 
+/// Responsible for loading a single indexer module, triggering events.
 #[derive(Debug)]
 pub struct IndexExecutor {
     instance: Instance,

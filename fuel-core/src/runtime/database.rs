@@ -38,6 +38,7 @@ impl std::fmt::Debug for DbPool {
 }
 
 
+/// Responsible for laying down graph schemas, processes schema upgrades.
 pub struct SchemaManager {
     pool: DbPool
 }
@@ -81,6 +82,7 @@ impl SchemaManager {
 }
 
 
+/// Database for an executor instance, with schema info.
 #[derive(Clone, Debug)]
 pub struct Database {
     pub pool: DbPool,
@@ -126,7 +128,6 @@ impl Database {
         let connection = self.pool.get().expect("connection pool failed");
 
         let table = &self.tables[&type_id];
-        // TODO: think through this... is there a betteare diesel way??
         let inserts: Vec<_> = columns.iter().map(|col| {
             col.query_fragment()
         }).collect();
