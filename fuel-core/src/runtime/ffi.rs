@@ -10,6 +10,7 @@ use wasmer::{
     Store,
     WasmPtr,
 };
+use serde_scale;
 use fuel_indexer::types as ft;
 
 use crate::runtime::IndexEnv;
@@ -74,53 +75,50 @@ fn get_object_id(mem: &Memory, ptr: u32) -> u64 {
 }
 
 
-fn get_column_info(mem: &Memory, ptr: u32) -> (u32, u32) {
-    let offset = core::mem::size_of::<u32>() as u32;
-    (WasmPtr::<u32>::new(ptr).deref(mem).unwrap().get(),
-    WasmPtr::<u32>::new(ptr + offset).deref(mem).unwrap().get())
-
-}
-
-
-fn put_object(env: &IndexEnv, type_id: u32, ptr: u32, len: u32) {
-    let meta_size = core::mem::size_of::<u32>()*2;
-
+fn get_object(env: &IndexEnv, type_id: u64, ptr: u32, len_ptr: u32) -> u32 {
     let mem = env.memory_ref().expect("Memory uninitialized");
-    let mut columns = vec![];
-    let mut offset = 0u32;
 
-    unsafe {
-        while offset < len {
-            let (column_type, size) = get_column_info(&mem, ptr + offset);
-            offset += meta_size as u32;
+    let id = get_object_id(&mem, ptr);
 
-            let pos = ptr + offset;
-            let range = pos as usize..pos as usize + size as usize;
+    let bytes = env.db.lock()
+        .expect("Lock acquire failed")
+        .get_object(type_id, id);
 
-            let col = ft::Column::new(
-                column_type.into(),
-                size as usize,
-                &mem.data_unchecked()[range]
-            );
-            columns.push(col);
-            offset += size;
+    if let Some(bytes) = bytes {
+        let alloc_fn = env.alloc_ref()
+            .expect("Alloc export is missing");
+
+        let size = bytes.len() as u32;
+        let result = alloc_fn.call(size).expect("Alloc failed");
+        let range = result as usize..result as usize + size as usize;
+
+        WasmPtr::<u32>::new(len_ptr).deref(mem).unwrap().set(size);
+
+        unsafe {
+            mem.data_unchecked_mut()[range].copy_from_slice(&bytes);
         }
-    }
 
-    env.db.lock().expect("Acquire lock failed").put_object(type_id, columns);
-}
-
-
-fn get_object(env: &IndexEnv, type_id: u32, ptr: u32) -> u32 {
-    let mem = env.memory_ref().expect("Memory uninitialized");
-
-    unsafe {
-        let id = get_object_id(&mem, ptr);
-        let columns = env.db.lock()
-            .expect("Lock acquire failed")
-            .get_object(type_id, id);
+        result
+    } else {
         0
     }
+}
+
+
+fn put_object(env: &IndexEnv, type_id: u64, ptr: u32, len: u32) {
+    let mem = env.memory_ref().expect("Memory uninitialized");
+
+    let mut bytes = Vec::with_capacity(len as usize);
+    let range = ptr as usize..ptr as usize + len as usize;
+
+    unsafe {
+        bytes.extend_from_slice(&mem.data_unchecked()[range]);
+    }
+
+    let columns: Vec<ft::FtColumn> = serde_scale::from_slice(&bytes)
+        .expect("Scale serde error");
+
+    env.db.lock().expect("Acquire lock failed").put_object(type_id, columns, bytes);
 }
 
 

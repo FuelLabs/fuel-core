@@ -1,3 +1,4 @@
 **/target
 **/*.sdl
+**/*.swp
 Cargo.lock

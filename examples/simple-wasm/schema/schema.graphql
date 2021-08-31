@@ -1,0 +1,15 @@
+schema {
+    query: Thing1
+}
+
+type Thing1 {
+    ident: ID!
+    account: Address!
+}
+
+
+type Thing2 {
+    ident: ID!
+    account: Address! @foreign_key(key: "Thing1:account") @index
+    hash: Bytes32! @index
+}

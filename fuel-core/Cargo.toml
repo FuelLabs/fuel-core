@@ -22,9 +22,9 @@ axum = { git = "https://github.com/tokio-rs/axum.git", rev = "0d2db387a88bde5145
 bincode = "1.3"
 dirs = "3.0.2"
 actix-web = "3.3"
-diesel = { version = "1.4.7", features = ["postgres"] }
+diesel = { version = "1.4.7", features = ["postgres", "serde_json"] }
 env_logger = "0.8"
-fuel-indexer = { path = "../fuel-indexer", features = ["use-std"] }
+fuel-indexer = { path = "../fuel-indexer/lib", features = ["use-std"] }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 futures = "0.3"
@@ -38,6 +38,7 @@ r2d2 = "0.8.9"
 r2d2-diesel = "1.0.0"
 serde = { version = "1.0.128", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
+serde-scale = "0.2.2"
 structopt = "0.3"
 strum = "0.21"
 strum_macros = "0.21"
@@ -47,9 +48,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 wasmer = "2.0.0"
-wasmer-wasi = "2.0.0"
 wasmer-engine-universal = "2.0.0"
-wasmer-compiler-cranelift = "2.0.0"
+wasmer-compiler-llvm = "2.0.0"
 
 [features]
 default = ["rocksdb", "axum", "async-graphql-axum"]

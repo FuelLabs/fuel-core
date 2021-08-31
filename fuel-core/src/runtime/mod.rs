@@ -6,10 +6,6 @@ use wasmer::{
     InstantiationError,
     RuntimeError,
 };
-use wasmer_wasi::{
-    WasiError,
-    WasiStateCreationError
-};
 
 mod ffi;
 mod database;
@@ -28,10 +24,6 @@ pub type IndexerResult<T> = core::result::Result<T, IndexerError>;
 pub enum IndexerError {
     #[error("Compiler error: {0:#?}")]
     CompileError(#[from] wasmer::CompileError),
-    #[error("Error setting up wasi state {0:#?}")]
-    WasiStateError(#[from] WasiStateCreationError),
-    #[error("Module creation error: {0:#?}")]
-    WasiError(#[from] WasiError),
     #[error("Error instantiating wasm interpreter: {0:#?}")]
     InstantiationError(#[from] InstantiationError),
     #[error("Error finding exported symbol: {0:#?}")]

@@ -7,5 +7,7 @@ edition = "2018"
 [dependencies]
 clap = "2.33.3"
 fuel-core = { path = "../fuel-core" }
+fuel-indexer = { path = "../fuel-indexer/lib" }
 rand = "0.8.4"
+serde_json = "1.0.67"
 serde_yaml = "0.8.19"

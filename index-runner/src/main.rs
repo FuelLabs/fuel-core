@@ -2,6 +2,8 @@ use clap::{Arg, App};
 use std::fs;
 use std::io::Read;
 use fuel_core::runtime::{IndexExecutor, Manifest, SchemaManager};
+use fuel_indexer::types::*;
+use serde_json;
 
 fn main() {
     let matches = App::new("Standalone index runner")
@@ -47,15 +49,30 @@ fn main() {
     f.read_to_string(&mut sql).expect("Failed reading manifest");
     schema_manager.new_schema(&manifest.namespace, &sql).expect("Could not create new schema");
 
+    let test_events = manifest.test_events.clone();
+
     let instance = IndexExecutor::new(
         "postgres://postgres:my-secret@127.0.0.1:5432".to_string(),
         manifest,
         wasm_bytes,
     ).expect("Error creating IndexExecutor");
-    instance
-        .trigger_event("an_event_name")
-        .expect("Indexing failed");
-    instance
-        .trigger_event("another_event_name")
-        .expect("Indexing failed");
+
+    for event in test_events {
+        if event.trigger == "an_event_name" {
+            let evt: SomeEvent = serde_json::from_str(&event.payload)
+                .expect("Bad payload value");
+            instance
+                .trigger_event("an_event_name", serialize(&evt))
+                .expect("Indexing failed");
+        } else if event.trigger == "another_event_name" {
+            let evt: AnotherEvent = serde_json::from_str(&event.payload)
+                .expect("Bad payload value");
+            instance
+                .trigger_event("another_event_name", serialize(&evt))
+                .expect("Indexing failed");
+        } else {
+            println!("NO handler for {}", event.trigger);
+        }
+        println!("done!");
+    }
 }

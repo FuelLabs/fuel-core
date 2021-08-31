@@ -16,4 +16,5 @@ panic = 'abort'
 crate-type = ['cdylib']
 
 [dependencies]
-fuel-indexer = { path = "../../fuel-indexer" }
+fuel-indexer = { path = "../../fuel-indexer/lib" }
+fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
