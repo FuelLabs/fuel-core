@@ -11,8 +11,6 @@ enum IndexType {
     Brin,
 }
 
-directive @index(type: IndexType) on FIELD_DEFINITION | ENUM_VALUE
-
-directive @foreign_key(
-    key: String
+directive @indexed(
+    type: IndexType = Btree
 ) on FIELD_DEFINITION | ENUM_VALUE

@@ -1,14 +1,11 @@
 #![no_std]
-extern crate alloc;
-use alloc::{vec, vec::Vec};
-
-use fuel_indexer::types::*;
 use fuel_indexer_derive::{handler, graphql_schema};
+
 
 graphql_schema!("test_namespace", "schema/schema.graphql");
 
 
-#[handler(filters = [])]
+#[handler]
 fn function_one(event: SomeEvent) {
     let SomeEvent { id, account } = event;
 
@@ -20,7 +17,7 @@ fn function_one(event: SomeEvent) {
 }
 
 
-#[handler(filters = [])]
+#[handler]
 fn function_two(event: AnotherEvent) {
     let AnotherEvent { id, hash, .. } = event;
 

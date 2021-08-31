@@ -28,12 +28,12 @@ pub struct AnotherEvent {
 pub type ID = u64;
 
 pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
-    serde_scale::to_vec(obj).expect("Danggit")
+    serde_scale::to_vec(obj).expect("Serialize failed")
 }
 
 
 pub fn deserialize<'a, T: Deserialize<'a>>(vec: &'a Vec<u8>) -> T {
-    serde_scale::from_slice(&vec).expect("Darnitt")
+    serde_scale::from_slice(&vec).expect("Deserialize failed")
 }
 
 

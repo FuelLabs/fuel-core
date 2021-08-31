@@ -12,9 +12,10 @@ use std::io::Read;
 use std::fs::File;
 
 
+/// Define some primitive types and directives
 const BASE_SCHEMA: &'static str = include_str!("base.graphql");
 
-
+/// Arguments to this proc macro are (<namespace>, <gaphql_file>)
 struct GraphSchema {
     namespace: LitStr,
     path: LitStr,
@@ -46,7 +47,7 @@ fn process_type<'a>(typ: &Type<'a, String>, nullable: bool) -> proc_macro2::Toke
                 quote! { #id }
             }
         }
-        Type::ListType(t) => panic!("Got a list type, we don't handle this yet..."),
+        Type::ListType(_t) => panic!("Got a list type, we don't handle this yet..."),
         Type::NonNullType(t) => {
             process_type(t, false)
         }
@@ -156,7 +157,7 @@ fn process_definition<'a>(definition: &Definition<'a, String>) -> proc_macro2::T
         Definition::TypeDefinition(def) => {
             process_type_def(def)
         }
-        Definition::SchemaDefinition(def) => {
+        Definition::SchemaDefinition(_def) => {
             println!("WARNING: schema definition not handled");
             quote! {}
         }
@@ -262,7 +263,10 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
     let namespace = const_item("NAMESPACE", &schema.namespace.value());
 
     let mut output = quote! {
+        extern crate alloc;
+        use alloc::{vec, vec::Vec};
         use fuel_indexer::Entity;
+        use fuel_indexer::types::*;
         #namespace
     };
 
