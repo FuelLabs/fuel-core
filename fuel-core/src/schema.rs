@@ -1,10 +1,11 @@
 pub mod dap;
 pub mod tx;
+pub mod health;
 
 use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
 
 #[derive(MergedObject, Default)]
-pub struct Query(dap::DapQuery, tx::TxQuery);
+pub struct Query(dap::DapQuery, tx::TxQuery, health::HealthQuery);
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(dap::DapMutation, tx::TxMutation);
