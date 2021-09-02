@@ -9,7 +9,7 @@ repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client."
 
 [[bin]]
-name = "main"
+name = "fuel-core"
 path = "src/main.rs"
 required-features = ["default"]
 
