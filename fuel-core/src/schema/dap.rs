@@ -1,4 +1,4 @@
-use crate::database::{DatabaseTransaction, SharedDatabase};
+use crate::database::{transactional::DatabaseTransaction, SharedDatabase};
 use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_vm::consts;
 use fuel_vm::prelude::*;
