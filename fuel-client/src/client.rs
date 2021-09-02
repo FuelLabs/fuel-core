@@ -66,7 +66,7 @@ impl FuelClient {
 
     pub async fn health(&self) -> io::Result<bool> {
         let query = schema::Health::build(());
-        self.query(query).await.map(|r|r.health)
+        self.query(query).await.map(|r| r.health)
     }
 
     pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {

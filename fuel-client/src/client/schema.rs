@@ -3,12 +3,9 @@ mod schema {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct Health {
-    pub health: bool
+    pub health: bool,
 }
 
 #[derive(cynic::FragmentArguments)]

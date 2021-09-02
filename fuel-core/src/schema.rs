@@ -1,6 +1,6 @@
 pub mod dap;
-pub mod tx;
 pub mod health;
+pub mod tx;
 
 use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
 
