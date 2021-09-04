@@ -1,3 +1,5 @@
+use crate::database::columns::DB_VERSION_COLUMN;
+use crate::database::VERSION;
 use crate::state::{
     BatchOperations, ColumnId, Error, KeyValueStore, TransactableStorage, WriteOperation,
 };
@@ -5,10 +7,13 @@ use rocksdb::{
     BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
     Options, WriteBatch,
 };
+use std::convert::TryFrom;
 use std::path::Path;
 use std::sync::Arc;
 
 type DB = DBWithThreadMode<MultiThreaded>;
+
+const VERSION_KEY: &'static [u8] = b"version";
 
 #[derive(Debug)]
 pub struct RocksDb {
@@ -41,8 +46,31 @@ impl RocksDb {
             ok => ok,
         }
         .map_err(|e| Error::DatabaseError(Box::new(e)))?;
+        let rocks_db = RocksDb { db };
+        rocks_db.validate_or_set_db_version()?;
+        Ok(rocks_db)
+    }
 
-        Ok(RocksDb { db })
+    fn validate_or_set_db_version(&self) -> Result<(), Error> {
+        let data = self.get(VERSION_KEY, DB_VERSION_COLUMN)?;
+        match data {
+            None => {
+                self.put(
+                    VERSION_KEY.to_vec(),
+                    DB_VERSION_COLUMN,
+                    VERSION.to_be_bytes().to_vec(),
+                )?;
+            }
+            Some(v) => {
+                let b =
+                    <[u8; 4]>::try_from(v.as_slice()).map_err(|_| Error::InvalidDatabaseVersion)?;
+                let version = u32::from_be_bytes(b);
+                if version != VERSION {
+                    return Err(Error::InvalidDatabaseVersion);
+                }
+            }
+        };
+        Ok(())
     }
 
     fn cf(&self, column: ColumnId) -> Arc<BoundColumnFamily> {

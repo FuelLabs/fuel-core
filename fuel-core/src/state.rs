@@ -53,6 +53,8 @@ pub trait KeyValueStore {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Invalid database version")]
+    InvalidDatabaseVersion,
     #[error("error performing binary serialization")]
     Codec,
     #[error("error occurred in the underlying datastore `{0}`")]
@@ -100,5 +102,3 @@ pub enum TransactionError {
 pub mod in_memory;
 #[cfg(feature = "default")]
 pub mod rocks_db;
-
-pub mod store {}

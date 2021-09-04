@@ -26,6 +26,8 @@ pub mod state;
 pub mod transaction;
 pub mod transactional;
 
+// Crude way to invalidate incompatible databases,
+// can be used to perform migrations in the future.
 pub const VERSION: u32 = 0;
 
 pub(crate) mod columns {
