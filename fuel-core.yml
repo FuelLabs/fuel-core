@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: fuel-core-k8
+  name: fuel-core-k8
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fuel-core-k8
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: fuel-core-k8
+    spec:
+      containers:
+      - image: fuel-core
+        name: fuel-core
+        resources: {}
+        imagePullPolicy: Never
+        livenessProbe:
+          httpGet:
+            path: /health
+          initialDelaySeconds: 3
+          periodSeconds: 3
