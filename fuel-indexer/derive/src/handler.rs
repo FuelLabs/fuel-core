@@ -1,10 +1,9 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::{
-    bracketed, parse_macro_input, parse_quote, token, Attribute, Block, FnArg, ItemFn, LitStr,
-    PatType, Result, Token,
+    parse_macro_input, parse_quote, Attribute, Block, FnArg, ItemFn,
+    PatType, Token,
 };
 
 pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStream {

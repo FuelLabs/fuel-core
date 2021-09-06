@@ -1,0 +1,18 @@
+[package]
+name = "fuel-indexer-schema"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+diesel = { version = "1.4.7", optional=true, features = ["postgres", "serde_json"] }
+fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features = false }
+serde = { version = "1.0.128", default-features = false, features = ["derive"] }
+serde-scale = "0.2.2"
+sha2 = "0.9.6"
+
+[features]
+default = ["fuel-tx/serde-types-minimal"]
+db-models = ["use-std"]
+use-std = ["fuel-tx/serde-types", "diesel"]

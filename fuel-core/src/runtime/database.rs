@@ -1,13 +1,17 @@
 use core::ops::Deref;
-use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
+use diesel::{connection::Connection, prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
 
+use crate::runtime::postgres::SchemaBuilder;
 use crate::runtime::ffi;
-use crate::runtime::schema::{ColumnInfo, EntityData, RowCount};
 use crate::runtime::IndexerResult;
-use fuel_indexer::types as ft;
+use fuel_indexer_schema::{
+    FtColumn,
+    schema_version,
+    models::{ColumnInfo, EntityData, TypeIds}
+};
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
@@ -34,37 +38,32 @@ pub struct SchemaManager {
 }
 
 impl SchemaManager {
-    pub fn new(db_conn: String) -> IndexerResult<SchemaManager> {
+    pub fn new(db_conn: impl Into<String>) -> IndexerResult<SchemaManager> {
         let manager = ConnectionManager::<PgConnection>::new(db_conn);
         let pool = DbPool(r2d2::Pool::builder().build(manager)?);
 
         Ok(SchemaManager { pool })
     }
 
-    pub fn schema_exists(&self, name: &str) -> IndexerResult<bool> {
-        let connection = self.pool.get()?;
-
-        // NOTE: do we want versioning and schema upgrades?
-        let count: Vec<RowCount> = sql_query(format!(
-            "select count(*)
-            from graph_registry.type_ids
-            where schema_name = '{}'",
-            name
-        ))
-        .get_results(&*connection)?;
-
-        Ok(count[0].count > 0)
-    }
-
     pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<()> {
         let connection = self.pool.get()?;
 
-        if !self.schema_exists(name)? {
-            // TODO: need a diesel schema for metadata. For now,
-            //       just placing it all in a file in the manifest.
-            for query in schema.split(';') {
-                sql_query(query).execute(&*connection)?;
-            }
+        // TODO: Not doing much with version, but might be useful if we
+        //       do graph schema upgrades
+        let version = schema_version(&schema);
+
+        if !TypeIds::schema_exists(&*connection, name, &version)? {
+            let db_schema = SchemaBuilder::new(name, &version).build(schema);
+
+            connection.transaction::<(), diesel::result::Error, _>(|| {
+                for query in db_schema.statements.iter() {
+                    sql_query(query).execute(&*connection)?;
+                }
+
+                db_schema.commit_metadata(&*connection)?;
+
+                Ok(())
+            })?;
         }
         Ok(())
     }
@@ -75,18 +74,20 @@ impl SchemaManager {
 pub struct Database {
     pub pool: DbPool,
     pub namespace: String,
+    pub version: String,
     pub schema: HashMap<String, Vec<String>>,
     pub tables: HashMap<u64, String>,
 }
 
 impl Database {
-    pub fn new(db_conn: String) -> IndexerResult<Database> {
+    pub fn new(db_conn: impl Into<String>) -> IndexerResult<Database> {
         let manager = ConnectionManager::<PgConnection>::new(db_conn);
         let pool = DbPool(r2d2::Pool::builder().build(manager)?);
 
         Ok(Database {
             pool,
             namespace: Default::default(),
+            version: Default::default(),
             schema: Default::default(),
             tables: Default::default(),
         })
@@ -113,7 +114,7 @@ impl Database {
         )
     }
 
-    pub fn put_object(&mut self, type_id: u64, columns: Vec<ft::FtColumn>, bytes: Vec<u8>) {
+    pub fn put_object(&mut self, type_id: u64, columns: Vec<FtColumn>, bytes: Vec<u8>) {
         let connection = self.pool.get().expect("connection pool failed");
 
         let table = &self.tables[&type_id];
@@ -141,19 +142,9 @@ impl Database {
     pub fn load_schema(&mut self, instance: &Instance) -> IndexerResult<()> {
         let connection = self.pool.get()?;
         self.namespace = ffi::get_namespace(instance)?;
-        // TODO: create diesel schema for this....
-        let schema_query = format!(
-            "select
-                type_id,table_name,column_position,column_name,column_type
-            from graph_registry.type_ids ti
-            join graph_registry.columns co
-            on ti.id = co.type_id
-            where schema_name = '{}'
-            order by type_id,column_position",
-            self.namespace
-        );
+        self.version = ffi::get_version(instance)?;
 
-        let results: Vec<ColumnInfo> = sql_query(&schema_query).get_results(&*connection)?;
+        let results = ColumnInfo::get_schema(&*connection, &self.namespace, &self.version)?;
 
         for column in results {
             let table = &column.table_name;

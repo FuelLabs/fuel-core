@@ -1,63 +1,48 @@
-use clap::{App, Arg};
 use fuel_core::runtime::{IndexExecutor, Manifest, SchemaManager};
 use fuel_indexer::types::*;
 use serde_json;
 use std::fs;
 use std::io::Read;
+use structopt::StructOpt;
+
+#[derive(StructOpt)]
+struct Options {
+    #[structopt(short, long)]
+    wasm: String,
+    #[structopt(short, long)]
+    manifest: String,
+}
 
 fn main() {
-    let matches = App::new("Standalone index runner")
-        .version("0.1")
-        .about("Runs a wasm index standalone from server")
-        .arg(
-            Arg::with_name("wasm")
-                .short("w")
-                .long("wasm")
-                .value_name("WASM_FILE")
-                .help("Specify a wasm file (wat or wasm)")
-                .required(true)
-                .takes_value(true),
-        )
-        .arg(
-            Arg::with_name("manifest")
-                .short("m")
-                .long("manifest")
-                .value_name("MANIFEST_FILE")
-                .help("Specify a manifest yaml file.")
-                .required(true)
-                .takes_value(true),
-        )
-        .get_matches();
+    let database = dotenv::var("DATABASE_URL").expect("No database provided");
 
-    let filename = matches.value_of("wasm").unwrap();
-    let mut f = fs::File::open(filename).expect("Could not open wasm file");
+    let args = Options::from_args();
+    let mut f = fs::File::open(&args.wasm).expect("Could not open wasm file");
 
     let mut wasm_bytes = Vec::new();
     f.read_to_end(&mut wasm_bytes).expect("Failed to read wasm");
 
-    let manifest_file = matches.value_of("manifest").unwrap();
-    let mut f = fs::File::open(manifest_file).expect("Could not open manifest file");
+    let mut f = fs::File::open(&args.manifest).expect("Could not open manifest file");
 
     let mut yaml = String::new();
     f.read_to_string(&mut yaml)
         .expect("Failed to read manifest file.");
     let manifest: Manifest = serde_yaml::from_str(&yaml).expect("Bad manifest file.");
 
-    let schema_manager =
-        SchemaManager::new("postgres://postgres:my-secret@127.0.0.1:5432".to_string())
-            .expect("Schema manager failed");
+    let schema_manager = SchemaManager::new(database.clone()).expect("Schema manager failed");
 
-    let mut sql = String::new();
-    let mut f = fs::File::open(&manifest.postgres_schema).expect("Failed reading manifest");
-    f.read_to_string(&mut sql).expect("Failed reading manifest");
+    let mut schema = String::new();
+    let mut f = fs::File::open(&manifest.graphql_schema).expect("Could not open graphql schema");
+    f.read_to_string(&mut schema).expect("Could not read graphql schema");
+
     schema_manager
-        .new_schema(&manifest.namespace, &sql)
+        .new_schema(&manifest.namespace, &schema)
         .expect("Could not create new schema");
 
     let test_events = manifest.test_events.clone();
 
     let instance = IndexExecutor::new(
-        "postgres://postgres:my-secret@127.0.0.1:5432".to_string(),
+        database,
         manifest,
         wasm_bytes,
     )

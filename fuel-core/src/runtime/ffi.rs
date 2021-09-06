@@ -1,10 +1,10 @@
-use fuel_indexer::types as ft;
 use serde_scale;
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
     WasmPtr,
 };
+use fuel_indexer_schema::FtColumn;
 
 use crate::runtime::IndexEnv;
 
@@ -33,15 +33,32 @@ pub(crate) fn get_namespace(instance: &Instance) -> Result<String, FFIError> {
     let exports = &instance.exports;
     let memory = exports.get_memory("memory")?;
 
-    let ns_ptr = exports.get_function("get_namespace_ptr")?.call(&[])?[0]
+    let ptr = exports.get_function("get_namespace_ptr")?.call(&[])?[0]
         .i32()
         .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
 
-    let ns_len = exports.get_function("get_namespace_len")?.call(&[])?[0]
+    let len = exports.get_function("get_namespace_len")?.call(&[])?[0]
         .i32()
         .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
 
-    let namespace = get_string(&memory, ns_ptr, ns_len)?;
+    let namespace = get_string(&memory, ptr, len)?;
+
+    Ok(namespace)
+}
+
+pub(crate) fn get_version(instance: &Instance) -> Result<String, FFIError> {
+    let exports = &instance.exports;
+    let memory = exports.get_memory("memory")?;
+
+    let ptr = exports.get_function("get_version_ptr")?.call(&[])?[0]
+        .i32()
+        .ok_or_else(|| FFIError::NoneError("get_version".to_string()))? as u32;
+
+    let len = exports.get_function("get_version_len")?.call(&[])?[0]
+        .i32()
+        .ok_or_else(|| FFIError::NoneError("get_version".to_string()))? as u32;
+
+    let namespace = get_string(&memory, ptr, len)?;
 
     Ok(namespace)
 }
@@ -97,7 +114,7 @@ fn put_object(env: &IndexEnv, type_id: u64, ptr: u32, len: u32) {
         bytes.extend_from_slice(&mem.data_unchecked()[range]);
     }
 
-    let columns: Vec<ft::FtColumn> = serde_scale::from_slice(&bytes).expect("Scale serde error");
+    let columns: Vec<FtColumn> = serde_scale::from_slice(&bytes).expect("Scale serde error");
 
     env.db
         .lock()

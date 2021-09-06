@@ -10,6 +10,7 @@ proc-macro = true
 
 [dependencies]
 graphql-parser = "0.3.0"
+fuel-indexer-schema = { path = "../schema", features = ["use-std"] }
 proc-macro2 = "1.0.28"
 quote = "1.0.9"
 syn = { version = "1.0.75", features = ["full"] }

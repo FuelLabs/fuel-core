@@ -15,11 +15,4 @@ panic = 'abort'
 crate-type = ['cdylib', 'rlib']
 
 [dependencies]
-fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features = false }
-serde = { version = "1.0.128", default-features = false, features = ["derive"] }
-serde-scale = "0.2.2"
-
-
-[features]
-default = ["fuel-tx/serde-types-minimal"]
-use-std = ["fuel-tx/serde-types"]
+fuel-indexer-schema = { path = "../schema" }

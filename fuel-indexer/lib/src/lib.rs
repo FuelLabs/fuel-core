@@ -1,8 +1,11 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-pub mod types;
-use types::{deserialize, serialize};
+use fuel_indexer_schema::{FtColumn, deserialize, serialize};
+
+pub mod types {
+    pub use fuel_indexer_schema::*;
+}
 
 extern "C" {
     // TODO: error codes? or just panic and let the runtime handle it?
@@ -13,9 +16,9 @@ extern "C" {
 pub trait Entity: Sized + PartialEq + Eq {
     const TYPE_ID: u64;
 
-    fn from_row(vec: Vec<types::FtColumn>) -> Self;
+    fn from_row(vec: Vec<FtColumn>) -> Self;
 
-    fn to_row(&self) -> Vec<types::FtColumn>;
+    fn to_row(&self) -> Vec<FtColumn>;
 
     fn load(id: u64) -> Option<Self> {
         unsafe {

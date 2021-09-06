@@ -6,7 +6,7 @@ mod database;
 pub mod executor;
 mod ffi;
 mod manifest;
-mod schema;
+mod postgres;
 
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};

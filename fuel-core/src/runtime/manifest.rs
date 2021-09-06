@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 pub struct Manifest {
     pub namespace: String,
     pub graphql_schema: String,
-    pub postgres_schema: String,
     pub wasm_module: String,
     pub handlers: Vec<Handler>,
     pub test_events: Vec<Event>,

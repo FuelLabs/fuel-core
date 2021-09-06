@@ -2,12 +2,13 @@ use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Document, Field, Type, TypeDefinition};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::collections::HashSet;
 use std::fs::File;
-use std::hash::{Hash, Hasher};
 use std::io::Read;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, LitStr, Result, Token};
+use fuel_indexer_schema::{schema_version, type_id};
+
 
 /// Define some primitive types and directives
 const BASE_SCHEMA: &'static str = include_str!("base.graphql");
@@ -75,17 +76,12 @@ fn process_field<'a>(
     (typ, ident, extractor)
 }
 
-fn calculate_hash<T: Hash>(t: &T) -> u64 {
-    let mut s = DefaultHasher::new();
-    t.hash(&mut s);
-    s.finish()
-}
 
 fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenStream {
     match typ {
         TypeDefinition::Object(obj) => {
             let name = &obj.name;
-            let type_id = calculate_hash(name);
+            let type_id = type_id(name);
             // TODO: ignore directives for now, could do some useful things with them though.
             let mut block = quote! {};
             let mut row_extractors = quote! {};
@@ -252,6 +248,7 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
     types.extend(primitives);
 
     let namespace = const_item("NAMESPACE", &schema.namespace.value());
+    let version = const_item("VERSION", &schema_version(&text));
 
     let mut output = quote! {
         extern crate alloc;
@@ -259,6 +256,7 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
         use fuel_indexer::Entity;
         use fuel_indexer::types::*;
         #namespace
+        #version
     };
 
     for definition in ast.definitions.iter() {
