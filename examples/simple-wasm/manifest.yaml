@@ -1,7 +1,6 @@
 ---
 namespace: test_namespace
 graphql_schema: schema.graphql
-postgres_schema: postgres.sql
 wasm_module: simple_wasm.wasm
 handlers:
   - event: an_event_name
