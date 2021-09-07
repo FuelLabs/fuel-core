@@ -1,13 +1,12 @@
 use diesel::prelude::PgConnection;
 use diesel::result::QueryResult;
+use fuel_indexer_schema::{
+    models::{NewColumn, TypeIds},
+    sql_types::ColumnType,
+    type_id,
+};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, Type, TypeDefinition};
-use fuel_indexer_schema::{
-    type_id,
-    sql_types::ColumnType,
-    models::{NewColumn, TypeIds},
-};
-
 
 #[derive(Default)]
 pub struct SchemaBuilder {
@@ -17,7 +16,6 @@ pub struct SchemaBuilder {
     namespace: String,
     version: String,
 }
-
 
 impl SchemaBuilder {
     pub fn new(namespace: &str, version: &str) -> SchemaBuilder {
@@ -46,16 +44,23 @@ impl SchemaBuilder {
             }
         }
 
-        let SchemaBuilder { statements, type_ids, columns, .. } = self;
+        let SchemaBuilder {
+            statements,
+            type_ids,
+            columns,
+            ..
+        } = self;
 
-        Schema { statements, type_ids, columns }
+        Schema {
+            statements,
+            type_ids,
+            columns,
+        }
     }
 
     fn process_type<'a>(&self, field_type: &Type<'a, String>) -> (ColumnType, bool) {
         match field_type {
-            Type::NamedType(t) => {
-               (ColumnType::from(t.as_str()), true)
-            }
+            Type::NamedType(t) => (ColumnType::from(t.as_str()), true),
             Type::ListType(t) => panic!("List types not supported yet."),
             Type::NonNullType(t) => {
                 let (typ, _) = self.process_type(t);
@@ -67,7 +72,7 @@ impl SchemaBuilder {
     fn generate_columns<'a>(&mut self, type_id: i64, fields: &Vec<Field<'a, String>>) -> String {
         let mut fragments = vec![];
 
-        for (pos,f) in fields.iter().enumerate() {
+        for (pos, f) in fields.iter().enumerate() {
             // will ignore field arguments and field directives for now, but possibly useful...
             let (typ, nullable) = self.process_type(&f.field_type);
 
@@ -96,8 +101,7 @@ impl SchemaBuilder {
 
         fragments.join(",\n")
     }
-    
-    
+
     fn generate_table_sql<'a>(&mut self, typ: &TypeDefinition<'a, String>) {
         match typ {
             TypeDefinition::Object(o) => {
@@ -107,9 +111,7 @@ impl SchemaBuilder {
 
                 let create = format!(
                     "CREATE TABLE IF NOT EXISTS\n {}.{} (\n {}\n)",
-                    self.namespace,
-                    table_name,
-                    columns,
+                    self.namespace, table_name, columns,
                 );
 
                 self.statements.push(create);
@@ -125,17 +127,17 @@ impl SchemaBuilder {
     }
 }
 
-
 pub struct Schema {
     pub statements: Vec<String>,
     pub type_ids: Vec<TypeIds>,
     pub columns: Vec<NewColumn>,
 }
 
-
 impl Schema {
     pub fn commit_metadata(self, conn: &PgConnection) -> QueryResult<()> {
-        let Schema { type_ids, columns, .. } = self;
+        let Schema {
+            type_ids, columns, ..
+        } = self;
 
         for type_id in type_ids {
             type_id.insert(conn)?;

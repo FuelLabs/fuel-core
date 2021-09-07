@@ -1,3 +1,4 @@
+use fuel_indexer_schema::{schema_version, type_id};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Document, Field, Type, TypeDefinition};
 use proc_macro::TokenStream;
@@ -7,8 +8,6 @@ use std::fs::File;
 use std::io::Read;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, LitStr, Result, Token};
-use fuel_indexer_schema::{schema_version, type_id};
-
 
 /// Define some primitive types and directives
 const BASE_SCHEMA: &'static str = include_str!("base.graphql");
@@ -75,7 +74,6 @@ fn process_field<'a>(
 
     (typ, ident, extractor)
 }
-
 
 fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenStream {
     match typ {

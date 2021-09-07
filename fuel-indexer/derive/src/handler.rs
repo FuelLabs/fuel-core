@@ -1,10 +1,7 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
-use syn::{
-    parse_macro_input, parse_quote, Attribute, Block, FnArg, ItemFn,
-    PatType, Token,
-};
+use syn::{parse_macro_input, parse_quote, Attribute, Block, FnArg, ItemFn, PatType, Token};
 
 pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     let mut item_fn = parse_macro_input!(item as ItemFn);

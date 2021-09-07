@@ -15,4 +15,4 @@ sha2 = "0.9.6"
 [features]
 default = ["fuel-tx/serde-types-minimal"]
 db-models = ["use-std"]
-use-std = ["fuel-tx/serde-types", "diesel"]
+use-std = ["fuel-tx/default", "fuel-tx/serde-types", "diesel"]

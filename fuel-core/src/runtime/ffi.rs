@@ -1,10 +1,10 @@
+use fuel_indexer_schema::FtColumn;
 use serde_scale;
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
     WasmPtr,
 };
-use fuel_indexer_schema::FtColumn;
 
 use crate::runtime::IndexEnv;
 

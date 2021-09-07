@@ -1,16 +1,17 @@
 use core::ops::Deref;
-use diesel::{connection::Connection, prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
+use diesel::{
+    connection::Connection, prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl,
+};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
 
-use crate::runtime::postgres::SchemaBuilder;
 use crate::runtime::ffi;
+use crate::runtime::postgres::SchemaBuilder;
 use crate::runtime::IndexerResult;
 use fuel_indexer_schema::{
-    FtColumn,
-    schema_version,
-    models::{ColumnInfo, EntityData, TypeIds}
+    models::{ColumnInfo, EntityData, TypeIds},
+    schema_version, FtColumn,
 };
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;

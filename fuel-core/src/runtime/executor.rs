@@ -104,6 +104,9 @@ impl IndexExecutor {
                 let range = wasm_mem as usize..wasm_mem as usize + bytes.len();
 
                 unsafe {
+                    // Safety: the alloc call for wasm_mem has succeeded for bytes.len()
+                    //         so we have this block of memory for copying. The fun.call() below
+                    //         will release it.
                     memory.data_unchecked_mut()[range].copy_from_slice(&bytes);
                 }
 

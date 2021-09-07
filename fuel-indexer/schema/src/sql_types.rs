@@ -2,13 +2,12 @@
 use diesel::{
     backend::Backend,
     deserialize::{self, FromSql},
-    serialize::{self, IsNull, Output, ToSql},
     pg::Pg,
+    serialize::{self, IsNull, Output, ToSql},
 };
 
 #[cfg(feature = "db-models")]
 use std::io::Write;
-
 
 #[cfg(feature = "db-models")]
 #[derive(SqlType)]
@@ -48,10 +47,9 @@ impl<DB: Backend> ToSql<Columntypename, DB> for ColumnType {
     }
 }
 
-
 #[cfg(feature = "db-models")]
 impl FromSql<Columntypename, Pg> for ColumnType {
-   fn from_sql(bytes: Option<&<Pg as Backend>::RawValue>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: Option<&<Pg as Backend>::RawValue>) -> deserialize::Result<Self> {
         match not_none!(bytes) {
             b"ID" => Ok(ColumnType::ID),
             b"Address" => Ok(ColumnType::Address),
@@ -66,7 +64,6 @@ impl FromSql<Columntypename, Pg> for ColumnType {
         }
     }
 }
-
 
 impl From<ColumnType> for i32 {
     fn from(typ: ColumnType) -> i32 {
@@ -83,7 +80,6 @@ impl From<ColumnType> for i32 {
         }
     }
 }
-
 
 impl From<i32> for ColumnType {
     fn from(num: i32) -> ColumnType {
@@ -102,7 +98,6 @@ impl From<i32> for ColumnType {
     }
 }
 
-
 impl From<&str> for ColumnType {
     fn from(name: &str) -> ColumnType {
         match name {
@@ -119,5 +114,3 @@ impl From<&str> for ColumnType {
         }
     }
 }
-
-

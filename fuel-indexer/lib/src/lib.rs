@@ -1,7 +1,7 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use fuel_indexer_schema::{FtColumn, deserialize, serialize};
+use fuel_indexer_schema::{deserialize, serialize, FtColumn};
 
 pub mod types {
     pub use fuel_indexer_schema::*;

@@ -33,7 +33,8 @@ fn main() {
 
     let mut schema = String::new();
     let mut f = fs::File::open(&manifest.graphql_schema).expect("Could not open graphql schema");
-    f.read_to_string(&mut schema).expect("Could not read graphql schema");
+    f.read_to_string(&mut schema)
+        .expect("Could not read graphql schema");
 
     schema_manager
         .new_schema(&manifest.namespace, &schema)
@@ -41,12 +42,8 @@ fn main() {
 
     let test_events = manifest.test_events.clone();
 
-    let instance = IndexExecutor::new(
-        database,
-        manifest,
-        wasm_bytes,
-    )
-    .expect("Error creating IndexExecutor");
+    let instance =
+        IndexExecutor::new(database, manifest, wasm_bytes).expect("Error creating IndexExecutor");
 
     for event in test_events {
         if event.trigger == "an_event_name" {

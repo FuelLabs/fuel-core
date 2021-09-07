@@ -1,13 +1,9 @@
-use diesel::{
-    sql_types::*,
-    result::QueryResult,
-};
-use diesel::prelude::*;
 use crate::schema::graph_registry as gr;
-use gr::{type_ids, columns};
-use crate::ColumnType;
 use crate::sql_types::Columntypename;
-
+use crate::ColumnType;
+use diesel::prelude::*;
+use diesel::{result::QueryResult, sql_types::*};
+use gr::{columns, type_ids};
 
 #[derive(Insertable, Queryable, QueryableByName)]
 #[table_name = "type_ids"]
@@ -18,7 +14,6 @@ pub struct TypeIds {
     pub schema_name: String,
     pub table_name: String,
 }
-
 
 impl TypeIds {
     pub fn insert(&self, conn: &PgConnection) -> QueryResult<usize> {
@@ -32,10 +27,7 @@ impl TypeIds {
         use gr::type_ids::dsl::*;
 
         let result: i64 = type_ids
-            .filter(
-                schema_name.eq(name)
-                    .and(schema_version.eq(version))
-            )
+            .filter(schema_name.eq(name).and(schema_version.eq(version)))
             .count()
             .get_result(conn)?;
 
@@ -52,7 +44,6 @@ pub struct NewColumn {
     pub column_type: ColumnType,
     pub nullable: bool,
 }
-
 
 impl NewColumn {
     pub fn insert(&self, conn: &PgConnection) -> QueryResult<usize> {
@@ -85,7 +76,6 @@ impl NewColumn {
     }
 }
 
-
 #[derive(Queryable, QueryableByName)]
 #[table_name = "columns"]
 #[allow(unused)]
@@ -112,34 +102,31 @@ pub struct ColumnInfo {
     pub column_type: ColumnType,
 }
 
-
 impl ColumnInfo {
-    pub fn get_schema(conn: &PgConnection, name: &str, version: &str) -> QueryResult<Vec<ColumnInfo>> {
-        use gr::type_ids::dsl as td;
+    pub fn get_schema(
+        conn: &PgConnection,
+        name: &str,
+        version: &str,
+    ) -> QueryResult<Vec<ColumnInfo>> {
         use gr::columns::dsl as cd;
+        use gr::type_ids::dsl as td;
 
         let result = td::type_ids
-            .inner_join(
-                cd::columns.on(cd::type_id.eq(td::id))
-            )
+            .inner_join(cd::columns.on(cd::type_id.eq(td::id)))
             .select((
                 cd::type_id,
                 td::table_name,
                 cd::column_position,
                 cd::column_name,
-                cd::column_type
+                cd::column_type,
             ))
-            .filter(
-                td::schema_name.eq(name)
-                    .and(td::schema_version.eq(version)
-            ))
+            .filter(td::schema_name.eq(name).and(td::schema_version.eq(version)))
             .order((cd::type_id, cd::column_position))
             .load::<_>(conn)?;
 
         Ok(result)
     }
 }
-
 
 #[derive(Debug, QueryableByName)]
 pub struct EntityData {

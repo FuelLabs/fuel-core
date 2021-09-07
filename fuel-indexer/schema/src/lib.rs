@@ -7,8 +7,9 @@ use alloc::vec::Vec;
 
 use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
-use serde_scale;
+// serde_scale for now, can look at other options if necessary.
 use crate::sql_types::ColumnType;
+use serde_scale;
 
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
@@ -21,7 +22,7 @@ pub mod schema;
 #[cfg(feature = "db-models")]
 pub mod models;
 
-pub use fuel_tx::{Address, Bytes4, Bytes8, Bytes32, Color, ContractId, Salt};
+pub use fuel_tx::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt};
 
 /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////
@@ -41,7 +42,6 @@ pub struct AnotherEvent {
 /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////
-
 
 pub type ID = u64;
 
@@ -106,7 +106,8 @@ impl FtColumn {
                 FtColumn::Color(color)
             }
             ColumnType::ContractId => {
-                let contract_id = ContractId::try_from(&bytes[..size]).expect("Invalid slice length");
+                let contract_id =
+                    ContractId::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::ContractId(contract_id)
             }
             ColumnType::Salt => {
