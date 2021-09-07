@@ -9,6 +9,7 @@ use axum::{
     extract::Extension, handler::get, handler::post, response::Html, AddExtensionLayer, Json,
     Router,
 };
+use serde_json::json;
 use std::net::{SocketAddr, TcpListener};
 use std::{net, path::PathBuf};
 use strum_macros::Display;
@@ -31,6 +32,10 @@ async fn graphql_playground() -> impl IntoResponse {
     Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
 }
 
+async fn health() -> Json<serde_json::Value> {
+    Json(json!({ "up": true }))
+}
+
 async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> Json<Response> {
     schema.execute(req.0).await.into()
 }
@@ -42,6 +47,7 @@ pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
     Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler))
+        .route("/health", get(health))
         .layer(AddExtensionLayer::new(schema))
         .boxed()
 }

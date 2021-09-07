@@ -2,6 +2,12 @@ mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
+pub struct Health {
+    pub health: bool,
+}
+
 #[derive(cynic::FragmentArguments)]
 pub struct TxArg {
     pub tx: String,
