@@ -97,9 +97,9 @@ impl Executor {
                     db,
                 )?,
                 Output::Contract {
-                    balance_root,
-                    input_index,
-                    state_root,
+                    balance_root: _,
+                    input_index: _,
+                    state_root: _,
                 } => {}
                 Output::Withdrawal { .. } => {}
                 Output::Change { to, color, amount } => Executor::insert_coin(

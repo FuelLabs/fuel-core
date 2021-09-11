@@ -1,5 +1,4 @@
 use crate::database::{transactional::DatabaseTransaction, SharedDatabase};
-
 use crate::tx_pool::TxPool;
 use async_graphql::{Context, Object};
 use fuel_vm::prelude::*;

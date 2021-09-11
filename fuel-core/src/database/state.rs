@@ -1,15 +1,10 @@
 use crate::database::columns::CONTRACTS_STATE;
 use crate::database::Database;
-use crate::state::in_memory::memory_store::MemoryStore;
-use crate::state::in_memory::transaction::MemoryTransactionView;
-use crate::state::{ColumnId, DataSource, Error, MultiKey};
+use crate::state::MultiKey;
 use fuel_vm::crypto;
-use fuel_vm::data::{DataError, InterpreterStorage, MerkleStorage};
+use fuel_vm::data::{DataError, MerkleStorage};
 use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Word};
 use itertools::Itertools;
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::sync::Arc;
 
 impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
     fn insert(

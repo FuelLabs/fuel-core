@@ -2,14 +2,11 @@
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::state::in_memory::memory_store::MemoryStore;
-use crate::state::in_memory::transaction::MemoryTransactionView;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{ColumnId, DataSource, Error, MultiKey};
-use fuel_vm::crypto;
+use crate::state::{ColumnId, DataSource, Error};
 use fuel_vm::data::{DataError, InterpreterStorage};
-use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Word};
-use itertools::Itertools;
+use fuel_vm::prelude::{Address, Bytes32};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 #[cfg(feature = "default")]
