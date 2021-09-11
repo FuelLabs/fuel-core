@@ -1,7 +1,6 @@
 #[cfg(feature = "default")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::coin::{Coin, CoinId};
 use crate::state::in_memory::memory_store::MemoryStore;
 use crate::state::in_memory::transaction::MemoryTransactionView;
 #[cfg(feature = "default")]
@@ -19,9 +18,11 @@ use std::sync::Arc;
 use thiserror::Error;
 
 pub mod balances;
+pub mod block;
 pub mod code_root;
 pub mod coin;
 pub mod contracts;
+mod receipts;
 pub mod state;
 pub mod transaction;
 pub mod transactional;

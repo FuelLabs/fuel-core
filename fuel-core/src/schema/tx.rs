@@ -1,6 +1,9 @@
 use crate::database::{transactional::DatabaseTransaction, SharedDatabase};
-use async_graphql::{Context, Object};
+
+use crate::tx_pool::TxPool;
+use async_graphql::{Context, Object, SchemaBuilder};
 use fuel_vm::prelude::*;
+use std::sync::Arc;
 use tokio::task;
 
 #[derive(Default)]
@@ -20,6 +23,7 @@ impl TxQuery {
 
 #[Object]
 impl TxMutation {
+    /// blocks on transaction submission until processed in a block
     async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
         let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
 
@@ -35,5 +39,15 @@ impl TxMutation {
         .await??;
 
         Ok(serde_json::to_string(vm.receipts())?)
+    }
+
+    /// Submits transaction to the pool
+    async fn submit(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
+        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+        let tx: Transaction = serde_json::from_str(tx.as_str())?;
+        let id = tx.id().clone();
+        tx_pool.submit_tx(tx).await?;
+
+        Ok(hex::encode(id))
     }
 }

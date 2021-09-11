@@ -1,29 +1,34 @@
 use super::Hash;
 use crate::model::fuel_block::BlockHeight;
 use fuel_asm::Word;
+use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color};
 use fuel_vm::data::{Key, Value};
 use serde::{Deserialize, Serialize};
 use std::ops::Deref;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub struct CoinId(pub [u8; 32]);
-
-impl From<CoinId> for Vec<u8> {
-    fn from(id: CoinId) -> Self {
-        id.0.to_vec()
-    }
+pub struct TxoPointer {
+    pub block_height: u32,
+    pub tx_index: u32,
+    pub output_index: u8,
 }
 
-impl From<Bytes32> for CoinId {
-    fn from(b32: Bytes32) -> Self {
-        Self(b32.deref().clone())
+impl From<TxoPointer> for Bytes32 {
+    fn from(pointer: TxoPointer) -> Self {
+        [
+            &pointer.block_height.to_be_bytes()[..],
+            &pointer.tx_index.to_be_bytes()[..],
+            &pointer.output_index.to_be_bytes()[..],
+        ]
+        .iter()
+        .collect::<Hasher>()
+        .digest()
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Coin {
-    pub id: CoinId,
     pub owner: Address,
     pub amount: Word,
     pub color: Color,
@@ -37,5 +42,3 @@ pub enum CoinStatus {
     Unspent,
     Spent,
 }
-
-impl Value for Coin {}
