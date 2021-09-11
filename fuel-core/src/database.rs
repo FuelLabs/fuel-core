@@ -17,12 +17,12 @@ use thiserror::Error;
 pub mod balances;
 pub mod block;
 pub mod code_root;
-pub mod coin;
 pub mod contracts;
 mod receipts;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
+pub mod txo;
 
 // Crude way to invalidate incompatible databases,
 // can be used to perform migrations in the future.
@@ -34,7 +34,7 @@ pub(crate) mod columns {
     pub const CONTRACTS_CODE_ROOT: u32 = 2;
     pub const CONTRACTS_STATE: u32 = 3;
     pub const BALANCES: u32 = 4;
-    pub const COIN: u32 = 5;
+    pub const TXO: u32 = 5;
     pub const TRANSACTIONS: u32 = 6;
     pub const RECEIPTS: u32 = 7;
     pub const BLOCKS: u32 = 8;
