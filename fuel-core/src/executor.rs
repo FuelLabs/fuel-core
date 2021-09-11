@@ -1,4 +1,3 @@
-use crate::database::transactional::DatabaseTransaction;
 use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
 use crate::model::coin::{Coin, CoinStatus, TxoPointer};
 use crate::model::fuel_block::FuelBlock;
@@ -11,7 +10,7 @@ use std::error::Error as StdError;
 use thiserror::Error;
 
 pub struct Executor {
-    database: SharedDatabase,
+    pub(crate) database: SharedDatabase,
 }
 
 impl Executor {

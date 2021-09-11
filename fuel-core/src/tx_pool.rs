@@ -2,14 +2,10 @@ use crate::database::{KvStore, KvStoreError, SharedDatabase};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
 use crate::model::Hash;
-use async_graphql::futures_util::FutureExt;
 use fuel_tx::Bytes32;
 use fuel_vm::prelude::Transaction;
-use futures::prelude::stream::{self, BoxStream};
-use futures::StreamExt;
-use itertools::Itertools;
 use std::convert::TryInto;
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 
 pub enum TransactionStatus {
@@ -40,7 +36,10 @@ pub struct TxPool {
 }
 
 impl TxPool {
-    pub fn new(executor: Executor, database: SharedDatabase) -> Self {
+    pub fn new(database: SharedDatabase) -> Self {
+        let executor = Executor {
+            database: database.clone(),
+        };
         TxPool {
             executor,
             db: database,

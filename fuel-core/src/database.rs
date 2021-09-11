@@ -7,8 +7,8 @@ use crate::state::in_memory::transaction::MemoryTransactionView;
 use crate::state::rocks_db::RocksDb;
 use crate::state::{ColumnId, DataSource, Error, MultiKey};
 use fuel_vm::crypto;
-use fuel_vm::data::{DataError, InterpreterStorage, MerkleStorage};
-use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Storage, Word};
+use fuel_vm::data::{DataError, InterpreterStorage};
+use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Word};
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
@@ -38,6 +38,9 @@ pub(crate) mod columns {
     pub const CONTRACTS_STATE: u32 = 3;
     pub const BALANCES: u32 = 4;
     pub const COIN: u32 = 5;
+    pub const TRANSACTIONS: u32 = 6;
+    pub const RECEIPTS: u32 = 7;
+    pub const BLOCKS: u32 = 8;
 
     // Number of columns
     #[cfg(feature = "default")]

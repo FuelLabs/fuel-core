@@ -1,4 +1,4 @@
-use crate::database::{Database, KvStore, KvStoreError};
+use crate::database::{columns::TRANSACTIONS, Database, KvStore, KvStoreError};
 use fuel_tx::{Bytes32, Transaction};
 
 impl KvStore<Bytes32, Transaction> for Database {
@@ -7,18 +7,18 @@ impl KvStore<Bytes32, Transaction> for Database {
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        todo!()
+        Database::insert(&self, key.as_ref(), TRANSACTIONS, value.clone()).map_err(Into::into)
     }
 
     fn remove(&self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
-        todo!()
+        Database::remove(&self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
     }
 
     fn get(&self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
-        todo!()
+        Database::get(&self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        todo!()
+        Database::exists(&self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
     }
 }

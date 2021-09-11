@@ -1,11 +1,8 @@
-use super::Hash;
 use crate::model::fuel_block::BlockHeight;
 use fuel_asm::Word;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color};
-use fuel_vm::data::{Key, Value};
 use serde::{Deserialize, Serialize};
-use std::ops::Deref;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct TxoPointer {

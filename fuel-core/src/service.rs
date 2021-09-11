@@ -1,3 +1,4 @@
+use crate::tx_pool::TxPool;
 use crate::{
     database::SharedDatabase,
     schema::{build_schema, dap, CoreSchema},
@@ -41,7 +42,8 @@ async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> J
 }
 
 pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
-    let schema = build_schema().data(db);
+    let tx_pool = TxPool::new(db.clone());
+    let schema = build_schema().data(db).data(tx_pool);
     let schema = dap::init(schema).finish();
 
     Router::new()

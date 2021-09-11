@@ -1,6 +1,5 @@
 use super::Hash;
-use fuel_tx::{Bytes32, Transaction};
-use fuel_vm::prelude::Word;
+use fuel_tx::Bytes32;
 use serde::{Deserialize, Serialize};
 
 pub type BlockHeight = u32;

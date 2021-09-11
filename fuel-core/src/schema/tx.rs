@@ -1,7 +1,7 @@
 use crate::database::{transactional::DatabaseTransaction, SharedDatabase};
 
 use crate::tx_pool::TxPool;
-use async_graphql::{Context, Object, SchemaBuilder};
+use async_graphql::{Context, Object};
 use fuel_vm::prelude::*;
 use std::sync::Arc;
 use tokio::task;

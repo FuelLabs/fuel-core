@@ -1,5 +1,3 @@
-use fuel_vm::data::Key;
-
 pub mod coin;
 pub mod contract;
 pub mod fuel_block;

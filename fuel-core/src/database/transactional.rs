@@ -14,8 +14,6 @@ use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut};
-#[cfg(feature = "default")]
-use std::path::Path;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
