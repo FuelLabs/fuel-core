@@ -1,6 +1,6 @@
 use crate::database::{columns::BLOCKS, Database, KvStore, KvStoreError};
 use crate::model::fuel_block::FuelBlock;
-use fuel_tx::{Bytes32};
+use fuel_tx::Bytes32;
 
 impl KvStore<Bytes32, FuelBlock> for Database {
     fn insert(&self, key: &Bytes32, value: &FuelBlock) -> Result<Option<FuelBlock>, KvStoreError> {
