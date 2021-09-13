@@ -81,9 +81,9 @@ $ curl -X POST \
 -H "Content-Type: application/json" \
 -d '
 {
-   "query":"mutation Mutation($tx: String!) { run(tx: $tx)}",
+   "query":"mutation Mutation($tx: String!) { submit(tx: $tx)}",
    "variables":{
-      "tx":"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[17,64,0,202,17,68,0,186,89,65,16,0,52,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[]}}"
+      "tx":"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[17,64,0,202,17,68,0,186,89,65,16,0,52,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[],\"receipts_root\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}"
    }
 }' \
 http://127.0.0.1:4000/graphql

@@ -171,6 +171,8 @@ pub trait KvStore<K, V> {
 pub enum KvStoreError {
     #[error("generic error occurred")]
     Error(Box<dyn std::error::Error + Send>),
+    #[error("resource not found")]
+    NotFound,
 }
 
 impl From<bincode::Error> for KvStoreError {

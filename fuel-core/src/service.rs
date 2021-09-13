@@ -12,6 +12,7 @@ use axum::{
 };
 use serde_json::json;
 use std::net::{SocketAddr, TcpListener};
+use std::sync::Arc;
 use std::{net, path::PathBuf};
 use strum_macros::Display;
 use strum_macros::EnumString;
@@ -42,7 +43,7 @@ async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> J
 }
 
 pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
-    let tx_pool = TxPool::new(db.clone());
+    let tx_pool = Arc::new(TxPool::new(db.clone()));
     let schema = build_schema().data(db).data(tx_pool);
     let schema = dap::init(schema).finish();
 
