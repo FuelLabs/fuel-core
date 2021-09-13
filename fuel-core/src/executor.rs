@@ -1,6 +1,6 @@
 use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
+use crate::model::coin::{Coin, CoinStatus, TxoPointer};
 use crate::model::fuel_block::FuelBlock;
-use crate::model::txo::{TransactionOutput, TxoPointer, TxoStatus};
 use crate::model::Hash;
 use fuel_asm::Word;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
@@ -49,7 +49,7 @@ impl Executor {
         Ok(())
     }
 
-    fn _verify_input_state(
+    fn verify_input_state(
         &self,
         transaction: Transaction,
         block: FuelBlock,
@@ -57,18 +57,18 @@ impl Executor {
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = KvStore::<Bytes32, TransactionOutput>::get(
+                    if let Some(coin) = KvStore::<Bytes32, Coin>::get(
                         AsRef::<Database>::as_ref(self.database.0.as_ref()),
                         &utxo_id.clone().into(),
                     )? {
-                        if coin.status == TxoStatus::Spent {
-                            return Err(TransactionValidityError::TxoAlreadySpent);
+                        if coin.status == CoinStatus::Spent {
+                            return Err(TransactionValidityError::CoinAlreadySpent);
                         }
                         if block.fuel_height < coin.block_created + coin.maturity {
-                            return Err(TransactionValidityError::TxoHasNotMatured);
+                            return Err(TransactionValidityError::CoinHasNotMatured);
                         }
                     } else {
-                        return Err(TransactionValidityError::TxoDoesntExist);
+                        return Err(TransactionValidityError::CoinDoesntExist);
                     }
                 }
                 Input::Contract { .. } => {}
@@ -132,18 +132,16 @@ impl Executor {
             tx_index,
             output_index: out_index,
         };
-        let coin = TransactionOutput {
+        let coin = Coin {
             owner: to.clone(),
             amount: *amount,
             color: *color,
             maturity: 0,
-            status: TxoStatus::Unspent,
+            status: CoinStatus::Unspent,
             block_created: fuel_height,
         };
 
-        if let Some(_) =
-            KvStore::<Bytes32, TransactionOutput>::insert(db, &txo_pointer.into(), &coin)?
-        {
+        if let Some(_) = KvStore::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)? {
             return Err(Error::OutputAlreadyExists);
         }
         Ok(())
@@ -166,11 +164,11 @@ impl Executor {
 #[derive(Debug, Error)]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]
-    TxoAlreadySpent,
+    CoinAlreadySpent,
     #[error("Coin has not yet reached maturity")]
-    TxoHasNotMatured,
+    CoinHasNotMatured,
     #[error("The specified coin doesn't exist")]
-    TxoDoesntExist,
+    CoinDoesntExist,
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn std::error::Error>),
 }
@@ -187,6 +185,8 @@ pub enum Error {
     OutputAlreadyExists,
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError>),
+    #[error("a block production error occurred")]
+    BlockExecutionError(Box<dyn StdError>),
     #[error("missing transaction data for tx {transaction_id:?} in block {block_id:?}")]
     MissingTransactionData {
         block_id: Hash,

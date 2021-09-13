@@ -25,17 +25,17 @@ impl From<TxoPointer> for Bytes32 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransactionOutput {
+pub struct Coin {
     pub owner: Address,
     pub amount: Word,
     pub color: Color,
     pub maturity: BlockHeight,
-    pub status: TxoStatus,
+    pub status: CoinStatus,
     pub block_created: BlockHeight,
 }
 
 #[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
-pub enum TxoStatus {
+pub enum CoinStatus {
     Unspent,
     Spent,
 }
