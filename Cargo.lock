@@ -148,39 +148,13 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "2.9.12"
-source = "git+https://github.com/async-graphql/async-graphql?rev=1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae#1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae"
-dependencies = [
- "async-graphql-derive 2.9.12",
- "async-graphql-parser 2.9.12",
- "async-graphql-value 2.9.12",
- "async-stream",
- "async-trait",
- "bytes 1.1.0",
- "fnv",
- "futures-util",
- "http",
- "indexmap",
- "multer",
- "once_cell",
- "pin-project-lite",
- "regex",
- "serde",
- "serde_json",
- "static_assertions",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "async-graphql"
 version = "2.9.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8640d9d3f3d2ee7df7d64f1ce752877bfbcccfd146a4291a7eca69bcc89ffc17"
 dependencies = [
- "async-graphql-derive 2.9.15",
- "async-graphql-parser 2.9.15",
- "async-graphql-value 2.9.15",
+ "async-graphql-derive",
+ "async-graphql-parser",
+ "async-graphql-value",
  "async-stream",
  "async-trait",
  "bytes 1.1.0",
@@ -201,65 +175,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-graphql-axum"
-version = "2.9.15"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef65a9c08127bbe230cc87065a4005853585fd2c9bf90c14e1218c301c70f3d2"
-dependencies = [
- "async-graphql 2.9.15",
- "async-trait",
- "axum",
- "bytes 1.1.0",
- "futures-util",
- "headers",
- "http",
- "http-body",
- "serde_json",
- "serde_urlencoded",
- "tokio-util",
-]
-
-[[package]]
-name = "async-graphql-derive"
-version = "2.9.12"
-source = "git+https://github.com/async-graphql/async-graphql?rev=1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae#1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae"
-dependencies = [
- "Inflector",
- "async-graphql-parser 2.9.12",
- "darling",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
- "thiserror",
-]
-
-[[package]]
 name = "async-graphql-derive"
 version = "2.9.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b146a2869ab23a711721ae7e1d6f08013298f2f7814f5a21431134feed18f31"
 dependencies = [
  "Inflector",
- "async-graphql-parser 2.9.15",
+ "async-graphql-parser",
  "darling",
  "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn",
  "thiserror",
-]
-
-[[package]]
-name = "async-graphql-parser"
-version = "2.9.12"
-source = "git+https://github.com/async-graphql/async-graphql?rev=1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae#1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae"
-dependencies = [
- "async-graphql-value 2.9.12",
- "pest",
- "pest_derive",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -268,19 +196,9 @@ version = "2.9.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50c9faa27abf0cc9969874a48ff6e439d46cbc6e19d36a73b1b88702ce06b7af"
 dependencies = [
- "async-graphql-value 2.9.15",
+ "async-graphql-value",
  "pest",
  "pest_derive",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "async-graphql-value"
-version = "2.9.12"
-source = "git+https://github.com/async-graphql/async-graphql?rev=1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae#1c3eda4ac1efffb3e4869b6bef5c3230c83b82ae"
-dependencies = [
- "bytes 1.1.0",
  "serde",
  "serde_json",
 ]
@@ -428,11 +346,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6eb8eeaec8dea1b26a8f6f2b7a5aff11465292023a91a3b045bf3fe2830a1944"
 dependencies = [
  "async-trait",
- "base64",
  "bitflags",
  "bytes 1.1.0",
  "futures-util",
- "headers",
  "http",
  "http-body",
  "hyper",
@@ -441,10 +357,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sha-1 0.9.8",
  "sync_wrapper",
  "tokio",
- "tokio-tungstenite",
  "tokio-util",
  "tower",
  "tower-http",
@@ -712,7 +626,7 @@ dependencies = [
  "percent-encoding",
  "rand 0.8.4",
  "sha2",
- "time 0.2.27",
+ "time",
  "version_check",
 ]
 
@@ -946,19 +860,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "env_logger"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b2cf0344971ee6c64c31be0d530793fba457d322dfec2810c453d0ef228f9c3"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
 name = "event-listener"
 version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1018,7 +919,6 @@ dependencies = [
 name = "fuel-client"
 version = "0.1.0"
 dependencies = [
- "async-graphql 2.9.12",
  "cynic",
  "fuel-core",
  "fuel-vm",
@@ -1033,15 +933,12 @@ dependencies = [
 name = "fuel-core"
 version = "0.1.0"
 dependencies = [
- "async-graphql 2.9.15",
- "async-graphql-axum",
+ "async-graphql",
  "axum",
  "bincode",
  "dirs",
- "env_logger",
  "fuel-vm",
  "futures",
- "hex",
  "hyper",
  "itertools",
  "lazy_static",
@@ -1287,31 +1184,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 
 [[package]]
-name = "headers"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0b7591fb62902706ae8e7aaff416b1b0fa2c0fd0878b46dc13baa3712d8a855"
-dependencies = [
- "base64",
- "bitflags",
- "bytes 1.1.0",
- "headers-core",
- "http",
- "mime",
- "sha-1 0.9.8",
- "time 0.1.43",
-]
-
-[[package]]
-name = "headers-core"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
-dependencies = [
- "http",
-]
-
-[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1328,12 +1200,6 @@ checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "hex"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hkdf"
@@ -1425,12 +1291,6 @@ name = "httpdate"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6456b8a6c8f33fee7d958fcd1b60d55b11940a79e63ae87013e6d22e26034440"
-
-[[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "hyper"
@@ -1888,7 +1748,7 @@ checksum = "54be6e404f5317079812fc8f9f5279de376d8856929e21c184ecf6bbd692a11d"
 dependencies = [
  "maplit",
  "pest",
- "sha-1 0.8.2",
+ "sha-1",
 ]
 
 [[package]]
@@ -2337,19 +2197,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sha-1"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99cd6713db3cf16b6c84e06321e049a9b9f699826e16096d23bbcc44d15d51a6"
-dependencies = [
- "block-buffer 0.9.0",
- "cfg-if",
- "cpufeatures",
- "digest 0.9.0",
- "opaque-debug 0.3.0",
-]
-
-[[package]]
 name = "sha1"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2628,15 +2475,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "termcolor"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dfed899f0eb03f32ee8c6a0aabdb8a7949659e3466561fc0adf54e26d88c5f4"
-dependencies = [
- "winapi-util",
-]
-
-[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2672,16 +2510,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8018d24e04c95ac8790716a5987d0fec4f8b27249ffa0f7d33f1369bdfb88cbd"
 dependencies = [
  "once_cell",
-]
-
-[[package]]
-name = "time"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -2744,9 +2572,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4efe6fc2395938c8155973d7be49fe8d03a843726e285e100a8a383cc0154ce"
 dependencies = [
  "autocfg",
- "bytes 1.1.0",
  "libc",
- "memchr",
  "mio",
  "num_cpus",
  "pin-project-lite",
@@ -2766,19 +2592,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tokio-tungstenite"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "511de3f85caf1c98983545490c3d09685fa8eb634e57eec22bb4db271f46cbd8"
-dependencies = [
- "futures-util",
- "log",
- "pin-project",
- "tokio",
- "tungstenite",
-]
-
-[[package]]
 name = "tokio-util"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2786,7 +2599,6 @@ checksum = "08d3725d3efa29485e87311c5b699de63cde14b00ed4d256b8318aa30ca452cd"
 dependencies = [
  "bytes 1.1.0",
  "futures-core",
- "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite",
@@ -2939,25 +2751,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
-name = "tungstenite"
-version = "0.14.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0b2d8558abd2e276b0a8df5c05a2ec762609344191e5fd23e292c910e9165b5"
-dependencies = [
- "base64",
- "byteorder",
- "bytes 1.1.0",
- "http",
- "httparse",
- "log",
- "rand 0.8.4",
- "sha-1 0.9.8",
- "thiserror",
- "url",
- "utf-8",
-]
-
-[[package]]
 name = "twoway"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3058,12 +2851,6 @@ dependencies = [
  "percent-encoding",
  "serde",
 ]
-
-[[package]]
-name = "utf-8"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
 
 [[package]]
 name = "uuid"
@@ -3236,15 +3023,6 @@ name = "winapi-i686-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
-
-[[package]]
-name = "winapi-util"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
-dependencies = [
- "winapi",
-]
 
 [[package]]
 name = "winapi-x86_64-pc-windows-gnu"
