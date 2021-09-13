@@ -14,17 +14,12 @@ path = "src/main.rs"
 required-features = ["default"]
 
 [dependencies]
-# These git depenedencies are temporary until async-graphql can publish the axum integration to crates.io:
-# https://github.com/async-graphql/async-graphql/issues/608#issuecomment-905304688
-async-graphql-axum = { version = "2.9.13", optional = true }
 async-graphql = "2.9.13"
 axum = {version = "0.2.3", optional = true }
 bincode = "1.3"
 dirs = "3.0.2"
-env_logger = "0.9"
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 futures = "0.3"
-hex = "0.4"
 hyper = "0.14"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
@@ -42,4 +37,4 @@ thiserror = { version = "1.0" }
 uuid = { version = "0.8", features = ["v4"] }
 
 [features]
-default = ["rocksdb", "axum", "async-graphql-axum"]
+default = ["rocksdb", "axum"]
