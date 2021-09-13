@@ -35,6 +35,7 @@ jobs:
         toolchain: stable
         override: true
 
+    # Build caching action
     - uses: Swatinem/rust-cache@v1
 
     - name: Install rustfmt

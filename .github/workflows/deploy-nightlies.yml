@@ -38,6 +38,9 @@ jobs:
         override: true
         target: x86_64-apple-darwin
 
+    # Build caching action
+    - uses: Swatinem/rust-cache@v1
+
     - name: Build x86_64-apple-darwin
       uses: actions-rs/cargo@v1
       with:
@@ -74,6 +77,9 @@ jobs:
         toolchain: stable
         override: true
         target: x86_64-unknown-linux-gnu
+
+    # Build caching action
+    - uses: Swatinem/rust-cache@v1
 
     - name: Build x86_64-unknown-linux-gnu
       uses: actions-rs/cargo@v1
