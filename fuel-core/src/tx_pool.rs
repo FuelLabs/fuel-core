@@ -6,7 +6,6 @@ use fuel_tx::Bytes32;
 use fuel_vm::prelude::Transaction;
 use std::convert::TryInto;
 use std::error::Error as StdError;
-use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 
 pub enum TransactionStatus {

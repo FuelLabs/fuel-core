@@ -1,7 +1,7 @@
 use crate::database::columns::CONTRACTS_CODE_ROOT;
 use crate::database::Database;
-use fuel_vm::data::{DataError, MerkleStorage};
-use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Storage, Word};
+use fuel_vm::data::DataError;
+use fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
     fn insert(

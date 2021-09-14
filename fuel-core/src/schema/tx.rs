@@ -1,75 +1,73 @@
 use crate::database::{transactional::DatabaseTransaction, KvStore, KvStoreError, SharedDatabase};
+use crate::schema::HexString256;
 use crate::tx_pool::TxPool;
 use async_graphql::connection::{Connection, EmptyFields};
-use async_graphql::{Context, Object, SimpleObject};
+use async_graphql::{Context, Object};
 use fuel_tx::{Bytes32, ContractId, Input, Output, Transaction as FuelTx, Witness};
 use fuel_vm::prelude::{Color, Interpreter, Word};
+use std::ops::Deref;
 use std::sync::Arc;
 use tokio::task;
-//
-// pub struct Transaction(Bytes32);
-//
-// #[Object]
-// impl Transaction {
-//     async fn id(&self) -> Bytes32 {
-//         self.0
-//     }
-//
-//     async fn input_colors(&self, ctx: &Context<'_>) -> Result<Vec<Color>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.input_colors().collect())
-//     }
-//
-//     async fn input_contracts(&self, ctx: &Context<'_>) -> Result<Vec<ContractId>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.input_contracts().collect())
-//     }
-//
-//     async fn gas_price(&self, ctx: &Context<'_>) -> Result<Word, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.gas_price())
-//     }
-//
-//     async fn gas_limit(&self, ctx: &Context<'_>) -> Result<Word, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.gas_limit())
-//     }
-//
-//     async fn maturity(&self, ctx: &Context<'_>) -> Result<Word, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.maturity())
-//     }
-//
-//     async fn is_script(&self, ctx: &Context<'_>) -> Result<bool, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.is_script())
-//     }
-//
-//     async fn inputs(&self, ctx: &Context<'_>) -> Result<Vec<Input>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.inputs().to_vec())
-//     }
-//
-//     async fn outputs(&self, ctx: &Context<'_>) -> Result<Vec<Output>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.outputs().to_vec())
-//     }
-//
-//     async fn witnesses(&self, ctx: &Context<'_>) -> Result<Vec<Witness>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.witnesses().to_vec())
-//     }
-//
-//     async fn receipts_root(&self, ctx: &Context<'_>) -> Result<Option<Bytes32>, KvStoreError> {
-//         let tx = get_tx(ctx, self.0)?;
-//         Ok(tx.receipts_root().cloned())
-//     }
-// }
-//
-// fn get_tx(ctx: &Context<'_>, id: Bytes32) -> Result<FuelTx, KvStoreError> {
-//     let db = ctx.data_unchecked::<SharedDatabase>();
-//     KvStore::<Bytes32, FuelTx>::get(&*db.0.as_ref().as_ref(), &id)?.ok_or(KvStoreError::NotFound)
-// }
+
+pub struct Transaction(FuelTx);
+
+#[Object]
+impl Transaction {
+    async fn id(&self) -> HexString256 {
+        HexString256(*self.0.id().deref())
+    }
+
+    async fn input_colors(&self) -> Vec<HexString256> {
+        self.0
+            .input_colors()
+            .map(|c| HexString256(*c.deref()))
+            .collect()
+    }
+
+    async fn input_contracts(&self) -> Vec<HexString256> {
+        self.0
+            .input_contracts()
+            .map(|v| HexString256(*v.deref()))
+            .collect()
+    }
+
+    async fn gas_price(&self) -> Word {
+        self.0.gas_price()
+    }
+
+    async fn gas_limit(&self) -> Word {
+        self.0.gas_limit()
+    }
+
+    async fn maturity(&self) -> Word {
+        self.0.maturity()
+    }
+
+    async fn is_script(&self) -> bool {
+        self.0.is_script()
+    }
+
+    // TODO: Need to figure out how to represent input as graphql object
+    // async fn inputs(&self) -> Vec<Input> {
+    //     self.0.inputs().to_vec()
+    // }
+
+    // TODO: Need to figure out how to represent output as graphql object
+    // async fn outputs(&self, ctx: &Context<'_>) -> Vec<Output> {
+    //     self.0.outputs().to_vec()
+    // }
+
+    async fn witnesses(&self) -> Vec<String> {
+        self.0.witnesses().iter().map(|w| hex::encode(w)).collect()
+    }
+
+    async fn receipts_root(&self) -> Option<HexString256> {
+        self.0
+            .receipts_root()
+            .cloned()
+            .map(|b| HexString256(*b.deref()))
+    }
+}
 
 #[derive(Default)]
 pub struct TxQuery;
@@ -81,6 +79,17 @@ impl TxQuery {
 
         Ok(VERSION.to_owned())
     }
+
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "id of the transaction")] id: HexString256,
+    ) -> async_graphql::Result<Option<Transaction>> {
+        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let key = id.0.into();
+        Ok(KvStore::<Bytes32, FuelTx>::get(db, &key)?.map(|tx| Transaction(tx)))
+    }
+
     //
     // async fn transactions(
     //     &self,
