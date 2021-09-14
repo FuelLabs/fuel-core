@@ -57,6 +57,12 @@ impl Default for SharedDatabase {
     }
 }
 
+impl AsRef<Database> for SharedDatabase {
+    fn as_ref(&self) -> &Database {
+        self.0.as_ref().as_ref()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,

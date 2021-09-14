@@ -16,6 +16,8 @@ pub struct Executor {
 impl Executor {
     pub async fn execute(&self, block: FuelBlock) -> Result<(), Error> {
         let block_tx = self.database.0.transaction();
+        KvStore::<Bytes32, FuelBlock>::insert(block_tx.as_ref(), &Bytes32::new(block.id), &block)?;
+        block_tx.as_ref().update_block_height(block.fuel_height)?;
 
         for (tx_index, tx_id) in block.transactions.iter().enumerate() {
             let sub_tx = block_tx.transaction();

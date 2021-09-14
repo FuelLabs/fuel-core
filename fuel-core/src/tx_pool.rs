@@ -5,6 +5,7 @@ use crate::model::Hash;
 use fuel_tx::Bytes32;
 use fuel_vm::prelude::Transaction;
 use std::convert::TryInto;
+use std::error::Error as StdError;
 use std::sync::atomic::{AtomicU32, Ordering};
 use thiserror::Error;
 
@@ -19,12 +20,18 @@ pub enum Error {
     #[error("unable to process transaction")]
     InvalidTransaction { reason: String },
     #[error("unexpected database error {0:?}")]
-    DatabaseError(KvStoreError),
+    DatabaseError(Box<dyn StdError>),
 }
 
 impl From<KvStoreError> for Error {
     fn from(e: KvStoreError) -> Self {
-        Error::DatabaseError(e)
+        Error::DatabaseError(Box::new(e))
+    }
+}
+
+impl From<crate::state::Error> for Error {
+    fn from(e: crate::state::Error) -> Self {
+        Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -32,7 +39,6 @@ impl From<KvStoreError> for Error {
 pub struct TxPool {
     executor: Executor,
     db: SharedDatabase,
-    block: AtomicU32,
 }
 
 impl TxPool {
@@ -43,7 +49,6 @@ impl TxPool {
         TxPool {
             executor,
             db: database,
-            block: AtomicU32::new(0),
         }
     }
 
@@ -56,7 +61,12 @@ impl TxPool {
         tx_updates.push(TransactionStatus::Submitted);
 
         // setup and execute block
-        let block_height = &self.block.fetch_add(1, Ordering::SeqCst) + 1;
+        let block_height = self
+            .db
+            .as_ref()
+            .get_block_height()?
+            .unwrap_or(Default::default())
+            + 1;
         let mut block_id = [0u8; 28].to_vec();
         block_id.extend_from_slice(&block_height.to_be_bytes());
         let block_id: Hash = block_id
