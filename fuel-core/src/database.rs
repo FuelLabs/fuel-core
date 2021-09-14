@@ -41,7 +41,7 @@ pub(crate) mod columns {
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 6;
+    pub const COLUMN_NUM: u32 = 9;
 }
 
 pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {

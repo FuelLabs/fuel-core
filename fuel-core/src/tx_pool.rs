@@ -56,8 +56,9 @@ impl TxPool {
         tx_updates.push(TransactionStatus::Submitted);
 
         // setup and execute block
-        let mut block_id = [0u8; 24].to_vec();
-        block_id.extend_from_slice(&self.block.load(Ordering::SeqCst).to_be_bytes());
+        let block_height = &self.block.fetch_add(1, Ordering::SeqCst) + 1;
+        let mut block_id = [0u8; 28].to_vec();
+        block_id.extend_from_slice(&block_height.to_be_bytes());
         let block_id: Hash = block_id
             .try_into()
             .expect("block id is constructed to the exact length");
@@ -66,7 +67,7 @@ impl TxPool {
             .executor
             .execute(FuelBlock {
                 id: block_id.clone(),
-                fuel_height: self.block.fetch_add(1, Ordering::SeqCst),
+                fuel_height: block_height,
                 transactions: vec![tx_id.clone()],
             })
             .await
