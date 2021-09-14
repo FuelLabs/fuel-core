@@ -15,6 +15,7 @@ ENV PORT="${PORT}"
 
 RUN apt-get update
 RUN apt-get install -y \
+    clang \
     curl \
     libclang-dev \
     libssl-dev
