@@ -1,6 +1,5 @@
 use crate::database::{columns, Database, KvStore, KvStoreError};
 use crate::model::coin::Coin;
-use crate::state::KeyValueStore;
 use fuel_tx::Bytes32;
 
 impl KvStore<Bytes32, Coin> for Database {

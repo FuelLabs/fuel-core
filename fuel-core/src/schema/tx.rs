@@ -1,10 +1,10 @@
-use crate::database::{transactional::DatabaseTransaction, KvStore, KvStoreError, SharedDatabase};
-use crate::schema::HexString256;
+use crate::database::{transactional::DatabaseTransaction, KvStore, SharedDatabase};
+use crate::schema::scalars::HexString256;
 use crate::tx_pool::TxPool;
 use async_graphql::connection::{Connection, EmptyFields};
 use async_graphql::{Context, Object};
-use fuel_tx::{Bytes32, ContractId, Input, Output, Transaction as FuelTx, Witness};
-use fuel_vm::prelude::{Color, Interpreter, Word};
+use fuel_tx::{Bytes32, Transaction as FuelTx};
+use fuel_vm::prelude::{Interpreter, Word};
 use std::ops::Deref;
 use std::sync::Arc;
 use tokio::task;
@@ -47,10 +47,9 @@ impl Transaction {
         self.0.is_script()
     }
 
-    // TODO: Need to figure out how to represent input as graphql object
-    // async fn inputs(&self) -> Vec<Input> {
-    //     self.0.inputs().to_vec()
-    // }
+    async fn inputs(&self) -> Vec<crate::schema::types::Input> {
+        self.0.inputs().iter().map(Into::into).collect()
+    }
 
     // TODO: Need to figure out how to represent output as graphql object
     // async fn outputs(&self, ctx: &Context<'_>) -> Vec<Output> {

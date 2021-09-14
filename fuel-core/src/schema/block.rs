@@ -1,6 +1,6 @@
 use crate::database::{KvStore, SharedDatabase};
 use crate::model::fuel_block::FuelBlock;
-use crate::schema::HexString256;
+use crate::schema::scalars::HexString256;
 use async_graphql::{Context, Object};
 use fuel_tx::Bytes32;
 use std::convert::TryInto;
