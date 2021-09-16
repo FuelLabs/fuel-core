@@ -4,69 +4,12 @@ use crate::tx_pool::TxPool;
 use async_graphql::connection::{Connection, EmptyFields};
 use async_graphql::{Context, Object};
 use fuel_tx::{Bytes32, Transaction as FuelTx};
-use fuel_vm::prelude::{Interpreter, Word};
-use std::ops::Deref;
+use fuel_vm::prelude::Interpreter;
 use std::sync::Arc;
 use tokio::task;
+use types::Transaction;
 
-pub struct Transaction(FuelTx);
-
-#[Object]
-impl Transaction {
-    async fn id(&self) -> HexString256 {
-        HexString256(*self.0.id().deref())
-    }
-
-    async fn input_colors(&self) -> Vec<HexString256> {
-        self.0
-            .input_colors()
-            .map(|c| HexString256(*c.deref()))
-            .collect()
-    }
-
-    async fn input_contracts(&self) -> Vec<HexString256> {
-        self.0
-            .input_contracts()
-            .map(|v| HexString256(*v.deref()))
-            .collect()
-    }
-
-    async fn gas_price(&self) -> Word {
-        self.0.gas_price()
-    }
-
-    async fn gas_limit(&self) -> Word {
-        self.0.gas_limit()
-    }
-
-    async fn maturity(&self) -> Word {
-        self.0.maturity()
-    }
-
-    async fn is_script(&self) -> bool {
-        self.0.is_script()
-    }
-
-    async fn inputs(&self) -> Vec<crate::schema::types::Input> {
-        self.0.inputs().iter().map(Into::into).collect()
-    }
-
-    // TODO: Need to figure out how to represent output as graphql object
-    // async fn outputs(&self, ctx: &Context<'_>) -> Vec<Output> {
-    //     self.0.outputs().to_vec()
-    // }
-
-    async fn witnesses(&self) -> Vec<String> {
-        self.0.witnesses().iter().map(|w| hex::encode(w)).collect()
-    }
-
-    async fn receipts_root(&self) -> Option<HexString256> {
-        self.0
-            .receipts_root()
-            .cloned()
-            .map(|b| HexString256(*b.deref()))
-    }
-}
+pub mod types;
 
 #[derive(Default)]
 pub struct TxQuery;

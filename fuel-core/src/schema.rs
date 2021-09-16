@@ -4,7 +4,6 @@ pub mod dap;
 pub mod health;
 pub mod scalars;
 pub mod tx;
-pub mod types;
 
 #[derive(MergedObject, Default)]
 pub struct Query(
