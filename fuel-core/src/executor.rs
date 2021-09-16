@@ -1,7 +1,6 @@
 use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
 use crate::model::coin::{Coin, CoinStatus, TxoPointer};
 use crate::model::fuel_block::FuelBlock;
-use crate::model::Hash;
 use fuel_asm::Word;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
 use fuel_vm::interpreter::ExecuteError;
@@ -14,17 +13,21 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub async fn execute(&self, block: FuelBlock) -> Result<(), Error> {
+    pub async fn execute(&self, block: &FuelBlock) -> Result<(), Error> {
         let block_tx = self.database.0.transaction();
-        KvStore::<Bytes32, FuelBlock>::insert(block_tx.as_ref(), &Bytes32::new(block.id), &block)?;
-        block_tx.as_ref().update_block_height(block.fuel_height)?;
+        let block_id = block.id();
+        KvStore::<Bytes32, FuelBlock>::insert(block_tx.as_ref(), &block_id, &block)?;
+
+        block_tx
+            .as_ref()
+            .update_block_height(block.fuel_height, block_id)?;
 
         for (tx_index, tx_id) in block.transactions.iter().enumerate() {
             let sub_tx = block_tx.transaction();
             let db = sub_tx.as_ref();
             let tx = KvStore::<Bytes32, Transaction>::get(db, &tx_id)?.ok_or(
                 Error::MissingTransactionData {
-                    block_id: block.id.clone(),
+                    block_id: block_id.clone(),
                     transaction_id: tx_id.clone(),
                 },
             )?;
@@ -191,7 +194,7 @@ pub enum Error {
     BlockExecutionError(Box<dyn StdError>),
     #[error("missing transaction data for tx {transaction_id:?} in block {block_id:?}")]
     MissingTransactionData {
-        block_id: Hash,
+        block_id: Bytes32,
         transaction_id: Bytes32,
     },
     #[error("VM execution error: {0:?}")]

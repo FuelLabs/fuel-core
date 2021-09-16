@@ -28,7 +28,17 @@ impl Database {
         self.get(BLOCK_HEIGHT_KEY, BLOCKS)
     }
 
-    pub fn update_block_height(&self, height: BlockHeight) -> Result<Option<BlockHeight>, Error> {
-        self.insert(BLOCK_HEIGHT_KEY, BLOCKS, height)
+    pub fn update_block_height(
+        &self,
+        height: BlockHeight,
+        id: Bytes32,
+    ) -> Result<Option<BlockHeight>, Error> {
+        let prev_height = self.insert(BLOCK_HEIGHT_KEY, BLOCKS, height)?;
+        self.insert(format!("BLOCK_HEIGHT_{}_ID", height), BLOCKS, id)?;
+        Ok(prev_height)
+    }
+
+    pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
+        self.get(format!("BLOCK_HEIGHT_{}_ID", height).as_ref(), BLOCKS)
     }
 }

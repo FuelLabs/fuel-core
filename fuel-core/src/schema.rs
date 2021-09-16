@@ -1,5 +1,6 @@
 use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
 pub mod block;
+pub mod chain;
 pub mod dap;
 pub mod health;
 pub mod scalars;
@@ -9,6 +10,7 @@ pub mod tx;
 pub struct Query(
     dap::DapQuery,
     block::BlockQuery,
+    chain::ChainQuery,
     tx::TxQuery,
     health::HealthQuery,
 );
