@@ -233,6 +233,53 @@ impl ContractCreated {
     }
 }
 
+impl From<&fuel_tx::Output> for Output {
+    fn from(output: &fuel_tx::Output) -> Self {
+        match output {
+            fuel_tx::Output::Coin { to, amount, color } => Output::Coin(CoinOutput {
+                to: *to,
+                amount: *amount,
+                color: *color,
+            }),
+            fuel_tx::Output::Contract {
+                input_index,
+                balance_root,
+                state_root,
+            } => Output::Contract(ContractOutput {
+                input_index: *input_index,
+                balance_root: *balance_root,
+                state_root: *state_root,
+            }),
+            fuel_tx::Output::Withdrawal { to, amount, color } => {
+                Output::Withdrawal(WithdrawalOutput(CoinOutput {
+                    to: *to,
+                    amount: *amount,
+                    color: *color,
+                }))
+            }
+            fuel_tx::Output::Change { to, amount, color } => {
+                Output::Change(ChangeOutput(CoinOutput {
+                    to: *to,
+                    amount: *amount,
+                    color: *color,
+                }))
+            }
+            fuel_tx::Output::Variable { to, amount, color } => {
+                Output::Variable(VariableOutput(CoinOutput {
+                    to: *to,
+                    amount: *amount,
+                    color: *color,
+                }))
+            }
+            fuel_tx::Output::ContractCreated { contract_id } => {
+                Output::ContractCreated(ContractCreated {
+                    contract_id: *contract_id,
+                })
+            }
+        }
+    }
+}
+
 pub struct Transaction(pub(crate) FuelTx);
 
 #[Object]
@@ -276,7 +323,7 @@ impl Transaction {
     }
 
     async fn outputs(&self) -> Vec<Output> {
-        self.0.outputs().iter().map(Into::into()).to_vec()
+        self.0.outputs().iter().map(Into::into).collect()
     }
 
     async fn witnesses(&self) -> Vec<String> {
