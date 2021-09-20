@@ -32,8 +32,11 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
-        toolchain: nightly
+        toolchain: stable
         override: true
+
+    # Build caching action
+    - uses: Swatinem/rust-cache@v1
 
     - name: Install rustfmt
       run: rustup component add rustfmt
