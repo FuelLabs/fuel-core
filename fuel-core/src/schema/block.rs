@@ -1,5 +1,5 @@
 use crate::database::{KvStore, SharedDatabase};
-use crate::model::fuel_block::{BlockHeight, FuelBlock};
+use crate::model::fuel_block::FuelBlock;
 use crate::schema::scalars::HexString256;
 use crate::schema::tx::types::Transaction;
 use async_graphql::{Context, Object};

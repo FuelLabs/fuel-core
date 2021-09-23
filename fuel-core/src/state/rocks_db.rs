@@ -1,11 +1,12 @@
 use crate::database::columns::DB_VERSION_COLUMN;
 use crate::database::VERSION;
 use crate::state::{
-    BatchOperations, ColumnId, Error, KeyValueStore, TransactableStorage, WriteOperation,
+    BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
+    WriteOperation,
 };
 use rocksdb::{
     BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
-    Options, WriteBatch,
+    Options, ReadOptions, WriteBatch,
 };
 use std::convert::TryFrom;
 use std::path::Path;
@@ -116,12 +117,49 @@ impl KeyValueStore for RocksDb {
         Ok(self.db.key_may_exist_cf(&self.cf(column), key))
     }
 
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
-        Box::new(
-            self.db
-                .iterator_cf(&self.cf(column), IteratorMode::Start)
-                .map(|(key, value)| (key.to_vec(), value.to_vec())),
-        )
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+        let iter_mode = start.map_or_else(
+            || {
+                prefix.map_or_else(
+                    || {
+                        // if no start or prefix just start iterating over entire keyspace
+                        match direction {
+                            IterDirection::Forward => IteratorMode::Start,
+                            // end always iterates in reverse
+                            IterDirection::Reverse => IteratorMode::End,
+                        }
+                    },
+                    // start iterating in a certain direction within the keyspace
+                    |prefix| IteratorMode::From(prefix, direction.into()),
+                )
+            },
+            // start iterating in a certain direction from the start key
+            |k| IteratorMode::From(k, direction.into()),
+        );
+
+        let mut opts = ReadOptions::default();
+        if prefix.is_some() {
+            opts.set_prefix_same_as_start(true);
+        }
+
+        let iter = self
+            .db
+            .iterator_cf_opt(&self.cf(column), opts, iter_mode)
+            .map(|(key, value)| (key.to_vec(), value.to_vec()));
+
+        if let Some(prefix) = prefix {
+            let prefix = prefix.to_vec();
+            // end iterating when we've gone outside the prefix
+            Box::new(iter.take_while(move |(key, _)| key.starts_with(prefix.as_slice())))
+        } else {
+            Box::new(iter)
+        }
     }
 }
 
@@ -147,6 +185,15 @@ impl BatchOperations for RocksDb {
 }
 
 impl TransactableStorage for RocksDb {}
+
+impl From<IterDirection> for rocksdb::Direction {
+    fn from(d: IterDirection) -> Self {
+        match d {
+            IterDirection::Forward => rocksdb::Direction::Forward,
+            IterDirection::Reverse => rocksdb::Direction::Reverse,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

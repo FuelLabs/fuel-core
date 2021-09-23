@@ -4,7 +4,7 @@ use crate::database::transactional::DatabaseTransaction;
 use crate::state::in_memory::memory_store::MemoryStore;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{ColumnId, DataSource, Error};
+use crate::state::{ColumnId, DataSource, Error, IterDirection};
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Address, Bytes32};
 use serde::{de::DeserializeOwned, Serialize};
@@ -28,7 +28,7 @@ pub mod transactional;
 // can be used to perform migrations in the future.
 pub const VERSION: u32 = 0;
 
-pub(crate) mod columns {
+pub mod columns {
     pub const DB_VERSION_COLUMN: u32 = 0;
     pub const CONTRACTS: u32 = 1;
     pub const CONTRACTS_CODE_ROOT: u32 = 2;
@@ -118,16 +118,24 @@ impl Database {
         self.data.exists(key, column)
     }
 
-    fn iter_all<K, V>(&self, column: ColumnId) -> impl Iterator<Item = Result<(K, V), Error>> + '_
+    fn iter_all<K, V>(
+        &self,
+        column: ColumnId,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<(K, V), Error>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
     {
-        self.data.iter_all(column).map(|(key, value)| {
-            let key = K::from(key);
-            let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
-            Ok((key, value))
-        })
+        self.data
+            .iter_all(column, prefix, start, direction.unwrap_or_default())
+            .map(|(key, value)| {
+                let key = K::from(key);
+                let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                Ok((key, value))
+            })
     }
 }
 

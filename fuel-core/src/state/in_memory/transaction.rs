@@ -1,7 +1,8 @@
 use crate::state::in_memory::column_key;
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, KeyValueStore,
-    Result, TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
+    in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, IterDirection,
+    KeyValueStore, Result, TransactableStorage, Transaction, TransactionError, TransactionResult,
+    WriteOperation,
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -92,13 +93,19 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // iterate over inmemory + db while also filtering deleted entries
         let changes = self.changes.clone();
         Box::new(
             self.view_layer
-                .iter_all(column)
-                .chain(self.data_source.iter_all(column))
+                .iter_all(column, prefix.clone(), start.clone(), direction)
+                .chain(self.data_source.iter_all(column, prefix, start, direction))
                 .unique_by(|(key, _)| key.clone())
                 .filter(move |(key, _)| {
                     if let Some(WriteOperation::Remove(_, _)) =
@@ -108,7 +115,8 @@ impl KeyValueStore for MemoryTransactionView {
                     } else {
                         true
                     }
-                }),
+                }), // TODO: lexicographical ordering in a way that's reversible AND
+                    // doesn't consume the entire iterator
         )
     }
 }

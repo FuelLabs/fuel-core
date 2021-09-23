@@ -1,5 +1,5 @@
 use crate::database::{columns::TRANSACTIONS, Database, KvStore, KvStoreError};
-use crate::state::Error;
+use crate::state::{Error, IterDirection};
 use fuel_tx::{Bytes32, Transaction};
 
 impl KvStore<Bytes32, Transaction> for Database {
@@ -25,8 +25,13 @@ impl KvStore<Bytes32, Transaction> for Database {
 }
 
 impl Database {
-    pub fn all_transactions(&self) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
-        self.iter_all::<Vec<u8>, Transaction>(TRANSACTIONS)
+    pub fn all_transactions(
+        &self,
+        start: Option<&Bytes32>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
+        let start = start.map(|b| b.as_ref());
+        self.iter_all::<Vec<u8>, Transaction>(TRANSACTIONS, None, start, direction)
             .map(|res| res.map(|(_, tx)| tx))
     }
 }

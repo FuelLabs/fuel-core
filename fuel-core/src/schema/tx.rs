@@ -1,5 +1,6 @@
 use crate::database::{transactional::DatabaseTransaction, KvStore, SharedDatabase};
 use crate::schema::scalars::HexString256;
+use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
 use async_graphql::connection::{query, Connection, Edge, EmptyFields};
 use async_graphql::{Context, Object};
@@ -40,49 +41,68 @@ impl TxQuery {
         before: Option<String>,
         first: Option<i32>,
         last: Option<i32>,
-    ) -> async_graphql::Result<Connection<usize, Transaction, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<HexString256, Transaction, EmptyFields, EmptyFields>>
+    {
         let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
-        let txs: Vec<fuel_tx::Transaction> = db.all_transactions().try_collect()?;
 
         query(
-            after,
-            before,
+            after.map(|s| s.to_string()),
+            before.map(|s| s.to_string()),
             first,
             last,
-            |after, before, first, last| async move {
-                let mut start = 0usize;
-                let mut end = txs.len();
-
-                if let Some(after) = after {
-                    if after >= txs.len() {
-                        return Ok(Connection::new(false, false));
-                    }
-                    start = after + 1;
-                }
-
-                if let Some(before) = before {
-                    if before == 0 || before < start || before > txs.len() {
-                        return Ok(Connection::new(false, false));
-                    }
-                    end = before;
-                }
-
-                let mut slice = &txs[start..end];
-
-                if let Some(first) = first {
-                    slice = &slice[..first.min(slice.len())];
-                    end -= first.min(slice.len());
+            |after: Option<HexString256>, before: Option<HexString256>, first, last| async move {
+                let (records_to_fetch, direction) = if let Some(first) = first {
+                    (first, IterDirection::Forward)
                 } else if let Some(last) = last {
-                    slice = &slice[slice.len() - last.min(slice.len())..];
-                    start = end - last.min(slice.len());
+                    (last, IterDirection::Reverse)
+                } else {
+                    (0, IterDirection::Forward)
+                };
+
+                let after = after.map(|s| Bytes32::from(s));
+                let before = before.map(|s| Bytes32::from(s));
+
+                let start;
+                let end;
+
+                if direction == IterDirection::Forward {
+                    start = after;
+                    end = before;
+                } else {
+                    start = before;
+                    end = after;
                 }
 
-                let mut connection = Connection::new(start > 0, end < txs.len());
+                let mut txs = db.all_transactions(start.as_ref(), Some(direction));
+                let mut started = None;
+                if start.is_some() {
+                    // skip initial result
+                    started = txs.next();
+                }
+
+                // take desired amount of results
+                let txs = txs
+                    .take_while(|r| {
+                        // take until we've reached the end
+                        if let (Ok(t), Some(end)) = (r, end) {
+                            if t.id() == end {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .take(records_to_fetch);
+                let mut txs: Vec<fuel_tx::Transaction> = txs.try_collect()?;
+                if direction == IterDirection::Reverse {
+                    txs.reverse();
+                }
+
+                let mut connection =
+                    Connection::new(started.is_some(), records_to_fetch <= txs.len());
                 connection.append(
-                    slice
-                        .iter()
+                    txs.iter()
                         .enumerate()
-                        .map(|(idx, item)| Edge::new(start + idx, item.clone())),
+                        .map(|(idx, item)| Edge::new(HexString256::from(item.id()), item.clone())),
                 );
                 Ok(connection)
             },

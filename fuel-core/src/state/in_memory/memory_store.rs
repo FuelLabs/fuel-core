@@ -1,7 +1,11 @@
 use crate::state::in_memory::{column_key, is_column};
-use crate::state::{BatchOperations, ColumnId, KeyValueStore, Result, TransactableStorage};
+use crate::state::{
+    BatchOperations, ColumnId, IterDirection, KeyValueStore, Result, TransactableStorage,
+};
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::mem::size_of;
 use std::sync::Mutex;
 
 #[derive(Default, Debug)]
@@ -51,17 +55,46 @@ impl KeyValueStore for MemoryStore {
             .contains_key(&column_key(key, column)))
     }
 
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<&[u8]>,
+        start: Option<&[u8]>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // clone entire set so we can drop the lock
-        let copy: Vec<(Vec<u8>, Vec<u8>)> = self
+        let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
             .inner
             .lock()
             .expect("poisoned")
             .iter()
             .filter(|(key, _)| is_column(key, column))
-            .map(|(key, value)| (key.clone(), value.clone()))
+            // strip column
+            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            // filter prefix
+            .filter(|(key, value)| {
+                if let Some(prefix) = prefix {
+                    key.starts_with(prefix)
+                } else {
+                    true
+                }
+            })
+            .sorted()
             .collect();
-        Box::new(copy.into_iter())
+
+        if direction == IterDirection::Reverse {
+            copy.reverse();
+        }
+
+        if let Some(start) = start {
+            let start = start.to_vec();
+            Box::new(
+                copy.into_iter()
+                    .skip_while(move |(key, value)| key.as_slice() != start.as_slice()),
+            )
+        } else {
+            Box::new(copy.into_iter())
+        }
     }
 }
 

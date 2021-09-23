@@ -1,6 +1,6 @@
 use crate::database::columns::CONTRACTS_STATE;
 use crate::database::Database;
-use crate::state::MultiKey;
+use crate::state::{IterDirection, MultiKey};
 use fuel_vm::crypto;
 use fuel_vm::data::{DataError, MerkleStorage};
 use fuel_vm::prelude::{Bytes32, ContractId};
@@ -35,8 +35,14 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
     }
 
     fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
-        let items: Vec<_> =
-            Database::iter_all::<Vec<u8>, Bytes32>(self, CONTRACTS_STATE).try_collect()?;
+        let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
+            self,
+            CONTRACTS_STATE,
+            Some(parent.as_ref()),
+            None,
+            Some(IterDirection::Forward),
+        )
+        .try_collect()?;
 
         let root = items
             .iter()
