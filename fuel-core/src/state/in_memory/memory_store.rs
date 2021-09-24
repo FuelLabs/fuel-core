@@ -72,7 +72,7 @@ impl KeyValueStore for MemoryStore {
             // strip column
             .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
             // filter prefix
-            .filter(|(key, value)| {
+            .filter(|(key, _)| {
                 if let Some(prefix) = prefix {
                     key.starts_with(prefix)
                 } else {
@@ -90,7 +90,7 @@ impl KeyValueStore for MemoryStore {
             let start = start.to_vec();
             Box::new(
                 copy.into_iter()
-                    .skip_while(move |(key, value)| key.as_slice() != start.as_slice()),
+                    .skip_while(move |(key, _)| key.as_slice() != start.as_slice()),
             )
         } else {
             Box::new(copy.into_iter())

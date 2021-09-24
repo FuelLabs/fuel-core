@@ -1,12 +1,13 @@
+use crate::database::columns::BLOCK_IDS;
 use crate::database::{columns::BLOCKS, Database, KvStore, KvStoreError};
 use crate::model::fuel_block::{BlockHeight, FuelBlock};
-use crate::state::Error;
+use crate::state::{Error, IterDirection};
 use fuel_tx::Bytes32;
-
-const BLOCK_HEIGHT_KEY: &'static [u8] = b"BLOCK_HEIGHT";
+use std::convert::{TryFrom, TryInto};
 
 impl KvStore<Bytes32, FuelBlock> for Database {
     fn insert(&self, key: &Bytes32, value: &FuelBlock) -> Result<Option<FuelBlock>, KvStoreError> {
+        Database::insert(&self, value.fuel_height, BLOCK_IDS, *key)?;
         Database::insert(&self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
     }
 
@@ -25,20 +26,42 @@ impl KvStore<Bytes32, FuelBlock> for Database {
 
 impl Database {
     pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        self.get(BLOCK_HEIGHT_KEY, BLOCKS)
-    }
+        let id: Option<(Vec<u8>, Bytes32)> = self
+            .iter_all(BLOCK_IDS, None, None, Some(IterDirection::Reverse))
+            .next()
+            .transpose()?;
 
-    pub fn update_block_height(
-        &self,
-        height: BlockHeight,
-        id: Bytes32,
-    ) -> Result<Option<BlockHeight>, Error> {
-        let prev_height = self.insert(BLOCK_HEIGHT_KEY, BLOCKS, height)?;
-        self.insert(format!("BLOCK_HEIGHT_{}_ID", height), BLOCKS, id)?;
-        Ok(prev_height)
+        // safety: we know that all block heights are stored with the correct amount of bytes
+        Ok(id.map(|(height, _)| {
+            let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
+            u32::from_be_bytes(bytes).into()
+        }))
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
-        self.get(format!("BLOCK_HEIGHT_{}_ID", height).as_ref(), BLOCKS)
+        Database::get(&self, &height.to_bytes()[..], BLOCK_IDS)
+    }
+
+    pub fn all_block_ids(
+        &self,
+        start: Option<BlockHeight>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), Error>> + '_ {
+        let start = start.map(|b| b.to_bytes());
+        self.iter_all::<Vec<u8>, Bytes32>(
+            BLOCK_IDS,
+            None,
+            start.as_ref().map(|b| &b[..]),
+            direction,
+        )
+        .map(|res| {
+            let (height, id) = res?;
+            Ok((
+                height
+                    .try_into()
+                    .expect("block height always has correct number of bytes"),
+                id,
+            ))
+        })
     }
 }

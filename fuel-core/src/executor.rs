@@ -1,6 +1,6 @@
 use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
 use crate::model::coin::{Coin, CoinStatus, TxoPointer};
-use crate::model::fuel_block::FuelBlock;
+use crate::model::fuel_block::{BlockHeight, FuelBlock};
 use fuel_asm::Word;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
 use fuel_vm::interpreter::ExecuteError;
@@ -17,10 +17,6 @@ impl Executor {
         let block_tx = self.database.0.transaction();
         let block_id = block.id();
         KvStore::<Bytes32, FuelBlock>::insert(block_tx.as_ref(), &block_id, &block)?;
-
-        block_tx
-            .as_ref()
-            .update_block_height(block.fuel_height, block_id)?;
 
         for (tx_index, tx_id) in block.transactions.iter().enumerate() {
             let sub_tx = block_tx.transaction();
@@ -85,7 +81,7 @@ impl Executor {
 
     fn persist_outputs(
         &self,
-        block_height: u32,
+        block_height: BlockHeight,
         tx_index: u32,
         tx: &Transaction,
         db: &Database,
@@ -93,7 +89,7 @@ impl Executor {
         for (out_idx, output) in tx.outputs().iter().enumerate() {
             match output {
                 Output::Coin { amount, color, to } => Executor::insert_coin(
-                    block_height,
+                    block_height.into(),
                     tx_index,
                     out_idx as u8,
                     amount,
@@ -108,7 +104,7 @@ impl Executor {
                 } => {}
                 Output::Withdrawal { .. } => {}
                 Output::Change { to, color, amount } => Executor::insert_coin(
-                    block_height,
+                    block_height.into(),
                     tx_index,
                     out_idx as u8,
                     amount,
@@ -141,9 +137,9 @@ impl Executor {
             owner: to.clone(),
             amount: *amount,
             color: *color,
-            maturity: 0,
+            maturity: 0u32.into(),
             status: CoinStatus::Unspent,
-            block_created: fuel_height,
+            block_created: fuel_height.into(),
         };
 
         if let Some(_) = KvStore::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)? {

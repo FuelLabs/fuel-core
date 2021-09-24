@@ -38,10 +38,12 @@ pub mod columns {
     pub const TRANSACTIONS: u32 = 6;
     pub const RECEIPTS: u32 = 7;
     pub const BLOCKS: u32 = 8;
+    // maps block id -> block hash
+    pub const BLOCK_IDS: u32 = 9;
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 9;
+    pub const COLUMN_NUM: u32 = 10;
 }
 
 pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {
@@ -198,6 +200,12 @@ impl From<bincode::Error> for KvStoreError {
 impl From<crate::state::Error> for KvStoreError {
     fn from(e: Error) -> Self {
         KvStoreError::Error(Box::new(e))
+    }
+}
+
+impl From<KvStoreError> for crate::state::Error {
+    fn from(e: KvStoreError) -> Self {
+        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 

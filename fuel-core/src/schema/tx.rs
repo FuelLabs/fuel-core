@@ -101,8 +101,7 @@ impl TxQuery {
                     Connection::new(started.is_some(), records_to_fetch <= txs.len());
                 connection.append(
                     txs.iter()
-                        .enumerate()
-                        .map(|(idx, item)| Edge::new(HexString256::from(item.id()), item.clone())),
+                        .map(|item| Edge::new(HexString256::from(item.id()), item.clone())),
                 );
                 Ok(connection)
             },

@@ -64,7 +64,7 @@ impl TxPool {
             .as_ref()
             .get_block_height()?
             .unwrap_or(Default::default())
-            + 1;
+            + 1u32.into();
         let block = FuelBlock {
             fuel_height: block_height,
             transactions: vec![tx_id.clone()],
