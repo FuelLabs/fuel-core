@@ -1,6 +1,9 @@
+use crate::database::columns::TRANSACTION_STATUS;
 use crate::database::{columns::TRANSACTIONS, Database, KvStore, KvStoreError};
 use crate::state::{Error, IterDirection};
+use crate::tx_pool::TransactionStatus;
 use fuel_tx::{Bytes32, Transaction};
+use std::ops::Deref;
 
 impl KvStore<Bytes32, Transaction> for Database {
     fn insert(
@@ -33,5 +36,17 @@ impl Database {
         let start = start.map(|b| b.as_ref());
         self.iter_all::<Vec<u8>, Transaction>(TRANSACTIONS, None, start, direction)
             .map(|res| res.map(|(_, tx)| tx))
+    }
+
+    pub fn update_tx_status(
+        &self,
+        tx_id: &Bytes32,
+        status: TransactionStatus,
+    ) -> Result<Option<TransactionStatus>, Error> {
+        Database::insert(&self, tx_id.to_vec(), TRANSACTION_STATUS, status)
+    }
+
+    pub fn get_tx_status(&self, tx_id: &Bytes32) -> Result<Option<TransactionStatus>, Error> {
+        Database::get(&self, &tx_id.deref()[..], TRANSACTION_STATUS)
     }
 }

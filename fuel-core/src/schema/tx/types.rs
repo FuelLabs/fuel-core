@@ -1,7 +1,11 @@
+use crate::database::SharedDatabase;
 use crate::schema::scalars::{HexString, HexString256};
-use async_graphql::{Object, Union};
+use crate::tx_pool::TransactionStatus;
+use async_graphql::{Context, Object, Union};
+use chrono::{DateTime, Utc};
 use fuel_asm::Word;
-use fuel_tx::{Address, Bytes32, Color, ContractId, Transaction as FuelTx};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
+use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
 
 #[derive(Union)]
@@ -280,6 +284,72 @@ impl From<&fuel_tx::Output> for Output {
     }
 }
 
+#[derive(Union)]
+pub enum Status {
+    Submitted(SubmittedStatus),
+    Success(SuccessStatus),
+    Failed(FailureStatus),
+}
+
+pub struct SubmittedStatus(DateTime<Utc>);
+
+#[Object]
+impl SubmittedStatus {
+    async fn time(&self) -> DateTime<Utc> {
+        self.0
+    }
+}
+
+pub struct SuccessStatus {
+    block_id: Bytes32,
+    result: ProgramState,
+}
+
+#[Object]
+impl SuccessStatus {
+    async fn block_id(&self) -> HexString256 {
+        HexString256(*self.block_id.deref())
+    }
+
+    async fn program_state(&self) -> HexString {
+        match self.result {
+            ProgramState::Return(word) => HexString(word.to_be_bytes().to_vec()),
+            ProgramState::ReturnData(data) => HexString(data.deref().to_vec()),
+            _ => HexString(vec![]),
+        }
+    }
+}
+
+pub struct FailureStatus {
+    block_id: Bytes32,
+    reason: String,
+}
+
+#[Object]
+impl FailureStatus {
+    async fn block_id(&self) -> HexString256 {
+        HexString256(*self.block_id.deref())
+    }
+
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
+impl From<TransactionStatus> for Status {
+    fn from(s: TransactionStatus) -> Self {
+        match s {
+            TransactionStatus::Submitted { time } => Status::Submitted(SubmittedStatus(time)),
+            TransactionStatus::Success { block_id, result } => {
+                Status::Success(SuccessStatus { block_id, result })
+            }
+            TransactionStatus::Failed { block_id, reason } => {
+                Status::Failed(FailureStatus { block_id, reason })
+            }
+        }
+    }
+}
+
 pub struct Transaction(pub(crate) FuelTx);
 
 #[Object]
@@ -335,5 +405,11 @@ impl Transaction {
             .receipts_root()
             .cloned()
             .map(|b| HexString256(*b.deref()))
+    }
+
+    async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Status>> {
+        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let status = db.get_tx_status(&self.0.id())?;
+        Ok(status.map(Into::into))
     }
 }

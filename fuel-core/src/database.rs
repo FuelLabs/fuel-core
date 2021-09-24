@@ -36,14 +36,16 @@ pub mod columns {
     pub const BALANCES: u32 = 4;
     pub const COIN: u32 = 5;
     pub const TRANSACTIONS: u32 = 6;
-    pub const RECEIPTS: u32 = 7;
-    pub const BLOCKS: u32 = 8;
+    // tx id -> current status
+    pub const TRANSACTION_STATUS: u32 = 7;
+    pub const RECEIPTS: u32 = 8;
+    pub const BLOCKS: u32 = 9;
     // maps block id -> block hash
-    pub const BLOCK_IDS: u32 = 9;
+    pub const BLOCK_IDS: u32 = 10;
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 10;
+    pub const COLUMN_NUM: u32 = 11;
 }
 
 pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {

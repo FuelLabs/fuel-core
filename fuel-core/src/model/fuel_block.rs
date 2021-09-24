@@ -1,7 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
 use fuel_tx::crypto::Hasher;
-use fuel_tx::Bytes32;
+use fuel_tx::{Address, Bytes32};
 use serde::{Deserialize, Serialize};
 use std::array::TryFromSliceError;
 use std::convert::{TryFrom, TryInto};
@@ -59,6 +59,7 @@ pub struct FuelBlock {
     pub fuel_height: BlockHeight,
     pub transactions: Vec<Bytes32>,
     pub time: DateTime<Utc>,
+    pub producer: Address,
 }
 
 impl Default for FuelBlock {
@@ -67,6 +68,7 @@ impl Default for FuelBlock {
             fuel_height: 0u32.into(),
             transactions: vec![],
             time: Utc.timestamp(0, 0),
+            producer: Default::default(),
         }
     }
 }

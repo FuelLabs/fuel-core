@@ -1,16 +1,26 @@
 use crate::database::{KvStore, KvStoreError, SharedDatabase};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use fuel_tx::Bytes32;
-use fuel_vm::prelude::Transaction;
+use fuel_vm::prelude::{ProgramState, Transaction};
+use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
 use thiserror::Error;
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TransactionStatus {
-    Submitted,
-    InBlock { block_id: Bytes32 },
-    Failed { reason: String },
+    Submitted {
+        time: DateTime<Utc>,
+    },
+    Success {
+        block_id: Bytes32,
+        result: ProgramState,
+    },
+    Failed {
+        block_id: Bytes32,
+        reason: String,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -19,6 +29,8 @@ pub enum Error {
     InvalidTransaction { reason: String },
     #[error("unexpected database error {0:?}")]
     DatabaseError(Box<dyn StdError>),
+    #[error("unexpected block execution error {0:?}")]
+    ExecutionError(crate::executor::Error),
 }
 
 impl From<KvStoreError> for Error {
@@ -53,10 +65,11 @@ impl TxPool {
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let tx_id = tx.id();
         // persist transaction to database
-        KvStore::<Bytes32, Transaction>::insert(self.db.0.as_ref().as_ref(), &tx_id, &tx)?;
-
-        let mut tx_updates: Vec<TransactionStatus> = vec![];
-        tx_updates.push(TransactionStatus::Submitted);
+        KvStore::<Bytes32, Transaction>::insert(self.db.as_ref(), &tx_id, &tx)?;
+        // set status to submitted
+        self.db
+            .as_ref()
+            .update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
         // setup and execute block
         let block_height = self
@@ -69,17 +82,13 @@ impl TxPool {
             fuel_height: block_height,
             transactions: vec![tx_id.clone()],
             time: Utc::now(),
+            producer: Default::default(),
         };
-        let evt = self.executor.execute(&block).await.map_or_else(
-            |e| TransactionStatus::Failed {
-                reason: format!("{:?}", e),
-            },
-            |_| TransactionStatus::InBlock {
-                block_id: block.id(),
-            },
-        );
-        tx_updates.push(evt);
-        // TODO: push tx updates to channel for subscribers
+        // immediately execute block
+        self.executor
+            .execute(&block)
+            .await
+            .map_err(|e| Error::ExecutionError(e))?;
         Ok(tx_id)
     }
 }

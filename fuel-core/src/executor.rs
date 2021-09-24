@@ -1,6 +1,7 @@
 use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
 use crate::model::coin::{Coin, CoinStatus, TxoPointer};
 use crate::model::fuel_block::{BlockHeight, FuelBlock};
+use crate::tx_pool::TransactionStatus;
 use fuel_asm::Word;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
 use fuel_vm::interpreter::ExecuteError;
@@ -23,7 +24,7 @@ impl Executor {
             let db = sub_tx.as_ref();
             let tx = KvStore::<Bytes32, Transaction>::get(db, &tx_id)?.ok_or(
                 Error::MissingTransactionData {
-                    block_id: block_id.clone(),
+                    block_id,
                     transaction_id: tx_id.clone(),
                 },
             )?;
@@ -32,17 +33,36 @@ impl Executor {
             let mut vm = Interpreter::with_storage(db.clone());
             let execution_result = vm.transact(tx);
 
-            if let Ok(executed_tx) = execution_result {
-                // persist any outputs
-                self.persist_outputs(block.fuel_height, tx_index as u32, executed_tx.tx(), db)?;
+            match execution_result {
+                Ok(result) => {
+                    // persist any outputs
+                    self.persist_outputs(block.fuel_height, tx_index as u32, result.tx(), db)?;
 
-                // persist receipts
-                self.persist_receipts(tx_id, vm.receipts(), db)?;
+                    // persist receipts
+                    self.persist_receipts(tx_id, result.receipts(), db)?;
 
-                // only commit state changes if execution was a success
-                sub_tx.commit()?;
-            } else {
-                // how do we want to log failed transactions?
+                    // persist tx status
+                    db.update_tx_status(
+                        tx_id,
+                        TransactionStatus::Success {
+                            block_id,
+                            result: result.state().clone(),
+                        },
+                    )?;
+
+                    // only commit state changes if execution was a success
+                    sub_tx.commit()?;
+                }
+                // save error status on block_tx since the sub_tx changes are dropped
+                Err(e) => {
+                    block_tx.update_tx_status(
+                        tx_id,
+                        TransactionStatus::Failed {
+                            block_id,
+                            reason: e.to_string(),
+                        },
+                    )?;
+                }
             }
         }
 
