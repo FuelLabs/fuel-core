@@ -1,6 +1,6 @@
 use async_graphql::connection::CursorType;
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
-use fuel_tx::Bytes32;
+use fuel_tx::{Address, Bytes32, Color, ContractId};
 use std::convert::TryInto;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -83,6 +83,24 @@ impl From<HexString256> for Bytes32 {
 impl From<Bytes32> for HexString256 {
     fn from(b: Bytes32) -> Self {
         HexString256(*b.deref())
+    }
+}
+
+impl From<ContractId> for HexString256 {
+    fn from(c: ContractId) -> Self {
+        HexString256(*c.deref())
+    }
+}
+
+impl From<Color> for HexString256 {
+    fn from(c: Color) -> Self {
+        HexString256(*c.deref())
+    }
+}
+
+impl From<Address> for HexString256 {
+    fn from(a: Address) -> Self {
+        HexString256(*a.deref())
     }
 }
 

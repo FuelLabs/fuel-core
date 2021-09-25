@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::task;
 use types::Transaction;
 
+pub mod receipt;
 pub mod types;
 
 #[derive(Default)]

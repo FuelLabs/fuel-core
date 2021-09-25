@@ -1,4 +1,4 @@
-use crate::database::SharedDatabase;
+use crate::database::{KvStore, SharedDatabase};
 use crate::schema::scalars::{HexString, HexString256};
 use crate::tx_pool::TransactionStatus;
 use async_graphql::{Context, Object, Union};
@@ -315,7 +315,6 @@ impl SuccessStatus {
         match self.result {
             ProgramState::Return(word) => HexString(word.to_be_bytes().to_vec()),
             ProgramState::ReturnData(data) => HexString(data.deref().to_vec()),
-            _ => HexString(vec![]),
         }
     }
 }
@@ -411,5 +410,14 @@ impl Transaction {
         let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
         let status = db.get_tx_status(&self.0.id())?;
         Ok(status.map(Into::into))
+    }
+
+    async fn receipts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Vec<super::receipt::Receipt>>> {
+        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let receipts = KvStore::<Bytes32, Vec<Receipt>>::get(db, &self.0.id())?;
+        Ok(receipts.map(|receipts| receipts.into_iter().map(super::receipt::Receipt).collect()))
     }
 }
