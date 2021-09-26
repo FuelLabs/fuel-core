@@ -2,6 +2,6 @@
 # see diesel.rs/guides/configuring-diesel-cli
 
 [print_schema]
-file = "src/schema.rs"
+file = "src/db/schema.rs"
 schema = "graph_registry"
 import_types = ["diesel::sql_types::*", "crate::sql_types::*"]

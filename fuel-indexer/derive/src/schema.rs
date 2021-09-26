@@ -1,6 +1,6 @@
-use fuel_indexer_schema::{schema_version, type_id};
+use fuel_indexer_schema::{BASE_SCHEMA, schema_version, type_id};
 use graphql_parser::parse_schema;
-use graphql_parser::schema::{Definition, Document, Field, Type, TypeDefinition};
+use graphql_parser::schema::{Definition, Document, Field, SchemaDefinition, Type, TypeDefinition};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use std::collections::HashSet;
@@ -9,8 +9,6 @@ use std::io::Read;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, LitStr, Result, Token};
 
-/// Define some primitive types and directives
-const BASE_SCHEMA: &'static str = include_str!("base.graphql");
 
 /// Arguments to this proc macro are (<namespace>, <gaphql_file>)
 struct GraphSchema {
@@ -28,9 +26,14 @@ impl Parse for GraphSchema {
     }
 }
 
-fn process_type<'a>(typ: &Type<'a, String>, nullable: bool) -> proc_macro2::TokenStream {
+fn process_type<'a>(types: &HashSet<String>, typ: &Type<'a, String>, nullable: bool) -> proc_macro2::TokenStream {
     match typ {
         Type::NamedType(t) => {
+
+            if !types.contains(t) {
+                panic!("Type {} is undefined.", t);
+            }
+
             let id = format_ident! {"{}", t };
 
             if nullable {
@@ -40,11 +43,12 @@ fn process_type<'a>(typ: &Type<'a, String>, nullable: bool) -> proc_macro2::Toke
             }
         }
         Type::ListType(_t) => panic!("Got a list type, we don't handle this yet..."),
-        Type::NonNullType(t) => process_type(t, false),
+        Type::NonNullType(t) => process_type(types, t, false),
     }
 }
 
 fn process_field<'a>(
+    types: &HashSet<String>,
     field: &Field<'a, String>,
 ) -> (
     proc_macro2::TokenStream,
@@ -60,7 +64,7 @@ fn process_field<'a>(
         directives,
         ..
     } = field;
-    let typ = process_type(field_type, true);
+    let typ = process_type(types, field_type, true);
     let ident = format_ident! {"{}", name};
 
     let extractor = quote! {
@@ -75,9 +79,12 @@ fn process_field<'a>(
     (typ, ident, extractor)
 }
 
-fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenStream {
+fn process_type_def<'a>(query_root: &String, types: &HashSet<String>, typ: &TypeDefinition<'a, String>) -> Option<proc_macro2::TokenStream> {
     match typ {
         TypeDefinition::Object(obj) => {
+            if obj.name == *query_root {
+                return None;
+            }
             let name = &obj.name;
             let type_id = type_id(name);
             // TODO: ignore directives for now, could do some useful things with them though.
@@ -87,7 +94,7 @@ fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenS
             let mut flattened = quote! {};
 
             for field in &obj.fields {
-                let (type_name, field_name, ext) = process_field(field);
+                let (type_name, field_name, ext) = process_field(types, field);
 
                 block = quote! {
                     #block
@@ -110,12 +117,9 @@ fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenS
                     FtColumn::#type_name(self.#field_name),
                 };
             }
-            // NOTE: gotta do a few things: need a type_id that's unique,
-            //       need an identifier column, default is id, but maybe
-            //       user can override?
             let strct = format_ident! {"{}", name};
 
-            quote! {
+            Some(quote! {
                 #[derive(Debug, PartialEq, Eq)]
                 pub struct #strct {
                     #block
@@ -137,18 +141,17 @@ fn process_type_def<'a>(typ: &TypeDefinition<'a, String>) -> proc_macro2::TokenS
                         ]
                     }
                 }
-            }
+            })
         }
         obj => panic!("Unexpected type: {:?}", obj),
     }
 }
 
-fn process_definition<'a>(definition: &Definition<'a, String>) -> proc_macro2::TokenStream {
+fn process_definition<'a>(query_root: &String, types: &HashSet<String>, definition: &Definition<'a, String>) -> Option<proc_macro2::TokenStream> {
     match definition {
-        Definition::TypeDefinition(def) => process_type_def(def),
+        Definition::TypeDefinition(def) => process_type_def(query_root, types, def),
         Definition::SchemaDefinition(_def) => {
-            println!("WARNING: schema definition not handled");
-            quote! {}
+            None
         }
         def => {
             panic!("Unhandled definition type: {:?}", def);
@@ -165,6 +168,37 @@ fn type_name<'a>(typ: &TypeDefinition<'a, String>) -> String {
         TypeDefinition::Enum(obj) => obj.name.clone(),
         TypeDefinition::InputObject(obj) => obj.name.clone(),
     }
+}
+
+fn get_query_root<'a>(types: &HashSet<String>, ast: &Document<'a, String>) -> String {
+    let schema = ast
+        .definitions
+        .iter()
+        .find_map(|def| {
+            if let Definition::SchemaDefinition(d) = def {
+                Some(d)
+            } else {
+                None
+            }
+        });
+
+    if schema.is_none() {
+        panic!("Schema definition not found!");
+    }
+
+    let SchemaDefinition { query, .. } = schema.unwrap();
+
+    if query.is_none() {
+        panic!("Schema definition must specify a query root!");
+    }
+
+    let name = query.as_ref().unwrap().into();
+
+    if !types.contains(&name) {
+        panic!("Query root not defined!");
+    }
+
+    name
 }
 
 fn get_schema_types<'a>(ast: &Document<'a, String>) -> (HashSet<String>, HashSet<String>) {
@@ -236,7 +270,7 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
         Ok(ast) => ast,
         Err(e) => panic!("Error parsing graphql schema {:?}", e),
     };
-    let (primitives, directives) = get_schema_types(&base_ast);
+    let (primitives, _) = get_schema_types(&base_ast);
 
     let ast = match parse_schema::<String>(&text) {
         Ok(ast) => ast,
@@ -257,12 +291,15 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
         #version
     };
 
+    let query_root = get_query_root(&types, &ast);
+
     for definition in ast.definitions.iter() {
-        let def = process_definition(definition);
-        output = quote! {
-            #output
-            #def
-        };
+        if let Some(def) = process_definition(&query_root, &types, definition) {
+            output = quote! {
+                #output
+                #def
+            };
+        }
     }
 
     TokenStream::from(output)

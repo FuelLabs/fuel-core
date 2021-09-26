@@ -14,13 +14,13 @@ use serde_scale;
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "use-std")]
+pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
+
 pub mod sql_types;
 
 #[cfg(feature = "db-models")]
-pub mod schema;
-
-#[cfg(feature = "db-models")]
-pub mod models;
+pub mod db;
 
 pub use fuel_tx::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt};
 

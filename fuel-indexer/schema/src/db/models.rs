@@ -1,4 +1,4 @@
-use crate::schema::graph_registry as gr;
+use crate::db::schema::graph_registry as gr;
 use crate::sql_types::Columntypename;
 use crate::ColumnType;
 use diesel::prelude::*;
@@ -12,6 +12,7 @@ pub struct TypeIds {
     pub id: i64,
     pub schema_version: String,
     pub schema_name: String,
+    pub graphql_name: String,
     pub table_name: String,
 }
 

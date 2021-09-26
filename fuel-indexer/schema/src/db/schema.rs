@@ -21,6 +21,7 @@ pub mod graph_registry {
             id -> Int8,
             schema_version -> Varchar,
             schema_name -> Varchar,
+            graphql_name -> Varchar,
             table_name -> Varchar,
         }
     }

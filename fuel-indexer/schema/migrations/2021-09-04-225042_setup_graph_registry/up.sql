@@ -9,6 +9,7 @@ create table graph_registry.type_ids (
     id bigint primary key,
     schema_version varchar(512) not null,
     schema_name varchar(32) not null,
+    graphql_name varchar(32) not null,
     table_name varchar(32) not null
 );
 

@@ -8,11 +8,13 @@ edition = "2018"
 [dependencies]
 diesel = { version = "1.4.7", optional=true, features = ["postgres", "serde_json"] }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features = false }
+graphql-parser = "0.3.0"
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }
+thiserror = { version  = "1.0.26", optional=true }
 serde-scale = "0.2.2"
 sha2 = "0.9.6"
 
 [features]
 default = ["fuel-tx/serde-types-minimal"]
-db-models = ["use-std"]
+db-models = ["use-std", "thiserror"]
 use-std = ["fuel-tx/default", "fuel-tx/serde-types", "diesel"]

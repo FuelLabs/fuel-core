@@ -7,10 +7,10 @@ use std::collections::HashMap;
 use wasmer::Instance;
 
 use crate::runtime::ffi;
-use crate::runtime::postgres::SchemaBuilder;
 use crate::runtime::IndexerResult;
 use fuel_indexer_schema::{
-    models::{ColumnInfo, EntityData, TypeIds},
+    db::tables::SchemaBuilder,
+    db::models::{ColumnInfo, EntityData, TypeIds},
     schema_version, FtColumn,
 };
 
@@ -45,6 +45,10 @@ impl SchemaManager {
 
         Ok(SchemaManager { pool })
     }
+
+    //pub fn load_schema(&self, name: &str, schema: &str) -> IndexerResult<DbSchema> {
+    //    unimplemented!();
+    //}
 
     pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<()> {
         let connection = self.pool.get()?;

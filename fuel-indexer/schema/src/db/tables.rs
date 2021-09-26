@@ -1,10 +1,10 @@
-use diesel::prelude::PgConnection;
-use diesel::result::QueryResult;
-use fuel_indexer_schema::{
-    models::{NewColumn, TypeIds},
+use crate::{
+    db::models::{NewColumn, TypeIds},
     sql_types::ColumnType,
     type_id,
 };
+use diesel::prelude::PgConnection;
+use diesel::result::QueryResult;
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, Type, TypeDefinition};
 
@@ -119,6 +119,7 @@ impl SchemaBuilder {
                     id: type_id as i64,
                     schema_version: self.version.to_string(),
                     schema_name: self.namespace.to_string(),
+                    graphql_name: o.name.to_string(),
                     table_name,
                 });
             }
@@ -134,7 +135,7 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub fn commit_metadata(self, conn: &PgConnection) -> QueryResult<()> {
+    pub fn commit_metadata(&self, conn: &PgConnection) -> QueryResult<()> {
         let Schema {
             type_ids, columns, ..
         } = self;
