@@ -989,6 +989,8 @@ dependencies = [
  "strum_macros",
  "thiserror",
  "tokio",
+ "tower-http",
+ "tower-layer",
  "tracing",
  "tracing-subscriber",
  "uuid",

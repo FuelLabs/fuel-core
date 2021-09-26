@@ -4,6 +4,11 @@ use crate::{
     schema::{build_schema, dap, CoreSchema},
 };
 use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
+use axum::body::Body;
+use axum::http::header::{
+    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+};
+use axum::http::HeaderValue;
 use axum::response::IntoResponse;
 use axum::routing::BoxRoute;
 use axum::{
@@ -16,6 +21,7 @@ use std::sync::Arc;
 use std::{net, path::PathBuf};
 use strum_macros::Display;
 use strum_macros::EnumString;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -42,6 +48,10 @@ async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> J
     schema.execute(req.0).await.into()
 }
 
+async fn ok() -> Result<(), ()> {
+    Ok(())
+}
+
 pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
     let tx_pool = Arc::new(TxPool::new(db.clone()));
     let schema = build_schema().data(db).data(tx_pool);
@@ -49,9 +59,21 @@ pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
 
     Router::new()
         .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler))
+        .route("/graphql", post(graphql_handler).options(ok))
         .route("/health", get(health))
         .layer(AddExtensionLayer::new(schema))
+        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+            ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_static("*"),
+        ))
+        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+            ACCESS_CONTROL_ALLOW_METHODS,
+            HeaderValue::from_static("*"),
+        ))
+        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+            ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_static("*"),
+        ))
         .boxed()
 }
 
