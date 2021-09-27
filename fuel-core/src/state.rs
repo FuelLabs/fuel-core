@@ -51,8 +51,8 @@ pub trait KeyValueStore {
     fn iter_all(
         &self,
         column: ColumnId,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
 }

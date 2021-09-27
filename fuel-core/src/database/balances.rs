@@ -36,7 +36,7 @@ impl MerkleStorage<ContractId, Color, Word> for Database {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
             BALANCES,
-            Some(parent.as_ref()),
+            Some(parent.as_ref().to_vec()),
             None,
             Some(IterDirection::Forward),
         )

@@ -12,7 +12,14 @@ impl KvStore<Bytes32, FuelBlock> for Database {
     }
 
     fn remove(&self, key: &Bytes32) -> Result<Option<FuelBlock>, KvStoreError> {
-        Database::remove(&self, key.as_ref(), BLOCKS).map_err(Into::into)
+        let block: Option<FuelBlock> =
+            Database::remove(&self, key.as_ref(), BLOCKS).map_err(|e| KvStoreError::from(e))?;
+        if let Some(block) = &block {
+            let _: Option<Bytes32> =
+                Database::remove(&self, &block.fuel_height.to_bytes(), BLOCK_IDS)
+                    .map_err(|e| KvStoreError::from(e))?;
+        }
+        Ok(block)
     }
 
     fn get(&self, key: &Bytes32) -> Result<Option<FuelBlock>, KvStoreError> {
@@ -47,21 +54,16 @@ impl Database {
         start: Option<BlockHeight>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), Error>> + '_ {
-        let start = start.map(|b| b.to_bytes());
-        self.iter_all::<Vec<u8>, Bytes32>(
-            BLOCK_IDS,
-            None,
-            start.as_ref().map(|b| &b[..]),
-            direction,
-        )
-        .map(|res| {
-            let (height, id) = res?;
-            Ok((
-                height
-                    .try_into()
-                    .expect("block height always has correct number of bytes"),
-                id,
-            ))
-        })
+        let start = start.map(|b| b.to_bytes().to_vec());
+        self.iter_all::<Vec<u8>, Bytes32>(BLOCK_IDS, None, start, direction)
+            .map(|res| {
+                let (height, id) = res?;
+                Ok((
+                    height
+                        .try_into()
+                        .expect("block height always has correct number of bytes"),
+                    id,
+                ))
+            })
     }
 }

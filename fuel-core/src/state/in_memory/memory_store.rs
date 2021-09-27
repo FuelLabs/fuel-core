@@ -58,8 +58,8 @@ impl KeyValueStore for MemoryStore {
     fn iter_all(
         &self,
         column: ColumnId,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // clone entire set so we can drop the lock
@@ -73,8 +73,8 @@ impl KeyValueStore for MemoryStore {
             .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
             // filter prefix
             .filter(|(key, _)| {
-                if let Some(prefix) = prefix {
-                    key.starts_with(prefix)
+                if let Some(prefix) = &prefix {
+                    key.starts_with(prefix.as_slice())
                 } else {
                     true
                 }

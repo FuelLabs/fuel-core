@@ -1,11 +1,14 @@
-use crate::database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase};
-use crate::model::coin::{Coin, CoinStatus, TxoPointer};
-use crate::model::fuel_block::{BlockHeight, FuelBlock};
-use crate::tx_pool::TransactionStatus;
+use crate::{
+    database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase},
+    model::{
+        coin::{Coin, CoinStatus, TxoPointer},
+        fuel_block::{BlockHeight, FuelBlock},
+    },
+    tx_pool::TransactionStatus,
+};
 use fuel_asm::Word;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
-use fuel_vm::interpreter::ExecuteError;
-use fuel_vm::prelude::Interpreter;
+use fuel_vm::{interpreter::ExecuteError, prelude::Interpreter};
 use std::error::Error as StdError;
 use thiserror::Error;
 
@@ -70,7 +73,8 @@ impl Executor {
         Ok(())
     }
 
-    fn verify_input_state(
+    // Waiting until accounts and genesis block setup is working
+    fn _verify_input_state(
         &self,
         transaction: Transaction,
         block: FuelBlock,

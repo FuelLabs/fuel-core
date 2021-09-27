@@ -38,7 +38,7 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             CONTRACTS_STATE,
-            Some(parent.as_ref()),
+            Some(parent.as_ref().to_vec()),
             None,
             Some(IterDirection::Forward),
         )

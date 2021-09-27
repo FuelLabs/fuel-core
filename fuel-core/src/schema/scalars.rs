@@ -80,6 +80,12 @@ impl From<HexString256> for Bytes32 {
     }
 }
 
+impl From<HexString256> for Address {
+    fn from(a: HexString256) -> Self {
+        Address::new(a.0)
+    }
+}
+
 impl From<Bytes32> for HexString256 {
     fn from(b: Bytes32) -> Self {
         HexString256(*b.deref())

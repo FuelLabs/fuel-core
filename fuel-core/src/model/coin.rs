@@ -1,4 +1,5 @@
 use crate::model::fuel_block::BlockHeight;
+use async_graphql::Enum;
 use fuel_asm::Word;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color};
@@ -34,7 +35,7 @@ pub struct Coin {
     pub block_created: BlockHeight,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize, Enum)]
 pub enum CoinStatus {
     Unspent,
     Spent,

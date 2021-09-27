@@ -33,7 +33,7 @@ impl Database {
         start: Option<&Bytes32>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
-        let start = start.map(|b| b.as_ref());
+        let start = start.map(|b| b.as_ref().to_vec());
         self.iter_all::<Vec<u8>, Transaction>(TRANSACTIONS, None, start, direction)
             .map(|res| res.map(|(_, tx)| tx))
     }

@@ -1,12 +1,12 @@
 use crate::database::columns::DB_VERSION_COLUMN;
-use crate::database::VERSION;
+use crate::database::{columns, VERSION};
 use crate::state::{
     BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
     WriteOperation,
 };
 use rocksdb::{
     BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
-    Options, ReadOptions, WriteBatch,
+    Options, ReadOptions, SliceTransform, WriteBatch,
 };
 use std::convert::TryFrom;
 use std::path::Path;
@@ -23,12 +23,12 @@ pub struct RocksDb {
 
 impl RocksDb {
     pub fn open<P: AsRef<Path>>(path: P, cols: u32) -> Result<RocksDb, Error> {
-        let mut opts = Options::default();
-        opts.create_if_missing(true);
         let cf_descriptors: Vec<_> = (0..cols)
-            .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), opts.clone()))
+            .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), Self::cf_opts(i)))
             .collect();
 
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
                 // setup cfs
@@ -83,6 +83,18 @@ impl RocksDb {
     fn col_name(column: ColumnId) -> String {
         format!("column-{}", column)
     }
+
+    fn cf_opts(column: ColumnId) -> Options {
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+
+        if column == columns::OWNED_COINS {
+            // prefix is address length
+            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
+        }
+
+        opts
+    }
 }
 
 impl KeyValueStore for RocksDb {
@@ -120,13 +132,13 @@ impl KeyValueStore for RocksDb {
     fn iter_all(
         &self,
         column: ColumnId,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
         direction: IterDirection,
     ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
-        let iter_mode = start.map_or_else(
+        let iter_mode = start.as_ref().map_or_else(
             || {
-                prefix.map_or_else(
+                prefix.as_ref().map_or_else(
                     || {
                         // if no start or prefix just start iterating over entire keyspace
                         match direction {
@@ -136,11 +148,11 @@ impl KeyValueStore for RocksDb {
                         }
                     },
                     // start iterating in a certain direction within the keyspace
-                    |prefix| IteratorMode::From(prefix, direction.into()),
+                    |prefix| IteratorMode::From(&prefix, direction.into()),
                 )
             },
             // start iterating in a certain direction from the start key
-            |k| IteratorMode::From(k, direction.into()),
+            |k| IteratorMode::From(&k, direction.into()),
         );
 
         let mut opts = ReadOptions::default();

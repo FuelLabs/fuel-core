@@ -35,17 +35,19 @@ pub mod columns {
     pub const CONTRACTS_STATE: u32 = 3;
     pub const BALANCES: u32 = 4;
     pub const COIN: u32 = 5;
-    pub const TRANSACTIONS: u32 = 6;
+    // (owner, coin id) => true
+    pub const OWNED_COINS: u32 = 6;
+    pub const TRANSACTIONS: u32 = 7;
     // tx id -> current status
-    pub const TRANSACTION_STATUS: u32 = 7;
-    pub const RECEIPTS: u32 = 8;
-    pub const BLOCKS: u32 = 9;
+    pub const TRANSACTION_STATUS: u32 = 8;
+    pub const RECEIPTS: u32 = 9;
+    pub const BLOCKS: u32 = 10;
     // maps block id -> block hash
-    pub const BLOCK_IDS: u32 = 10;
+    pub const BLOCK_IDS: u32 = 11;
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 11;
+    pub const COLUMN_NUM: u32 = 12;
 }
 
 pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {
@@ -125,8 +127,8 @@ impl Database {
     fn iter_all<K, V>(
         &self,
         column: ColumnId,
-        prefix: Option<&[u8]>,
-        start: Option<&[u8]>,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(K, V), Error>> + '_
     where
