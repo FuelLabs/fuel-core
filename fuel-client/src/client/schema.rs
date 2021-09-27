@@ -2,6 +2,13 @@ mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 
+use cynic::impl_scalar;
+
+type DateTime = chrono::DateTime<chrono::Utc>;
+impl_scalar!(DateTime, schema::DateTime);
+
+pub mod tx;
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
 pub struct Health {
@@ -108,3 +115,9 @@ pub struct Memory {
     #[arguments(id = &args.id, start = &args.start, size = &args.size)]
     pub memory: String,
 }
+
+#[derive(cynic::Scalar, Debug, Clone)]
+pub struct HexString256(pub String);
+
+#[derive(cynic::Scalar, Debug, Clone)]
+pub struct HexString(pub String);

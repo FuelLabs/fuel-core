@@ -952,6 +952,7 @@ dependencies = [
 name = "fuel-client"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "cynic",
  "fuel-core",
  "fuel-vm",

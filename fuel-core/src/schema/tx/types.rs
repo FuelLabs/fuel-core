@@ -395,8 +395,12 @@ impl Transaction {
         self.0.outputs().iter().map(Into::into).collect()
     }
 
-    async fn witnesses(&self) -> Vec<String> {
-        self.0.witnesses().iter().map(|w| hex::encode(w)).collect()
+    async fn witnesses(&self) -> Vec<HexString> {
+        self.0
+            .witnesses()
+            .iter()
+            .map(|w| HexString(w.clone().into_inner()))
+            .collect()
     }
 
     async fn receipts_root(&self) -> Option<HexString256> {

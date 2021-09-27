@@ -7,6 +7,7 @@ use std::{io, net};
 
 mod schema;
 
+use crate::client::schema::tx::TxIdArgs;
 use schema::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -125,5 +126,15 @@ impl FuelClient {
         let memory = self.query(query).await?.memory;
 
         Ok(serde_json::from_str(memory.as_str())?)
+    }
+
+    pub async fn transaction(&self, id: &str) -> io::Result<Option<schema::tx::Transaction>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs {
+            id: HexString256(id.to_string()),
+        });
+
+        let transaction = self.query(query).await?.transaction;
+
+        Ok(transaction)
     }
 }

@@ -1,6 +1,6 @@
-use crate::database::{columns, KvStore, KvStoreError, SharedDatabase};
+use crate::database::{KvStore, KvStoreError, SharedDatabase};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
-use crate::schema::scalars::{HexString, HexString256};
+use crate::schema::scalars::HexString256;
 use crate::state::IterDirection;
 use async_graphql::connection::{query, Connection, Edge, EmptyFields};
 use async_graphql::{Context, Object};
