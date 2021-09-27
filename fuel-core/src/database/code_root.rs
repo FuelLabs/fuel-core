@@ -29,6 +29,7 @@ impl Storage<ContractId, (Salt, Bytes32)> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_vm::interpreter::Contract;
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
