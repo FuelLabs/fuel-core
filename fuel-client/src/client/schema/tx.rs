@@ -1,5 +1,4 @@
 use crate::client::schema::{schema, HexString, HexString256};
-use fuel_vm::prelude::Word;
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
