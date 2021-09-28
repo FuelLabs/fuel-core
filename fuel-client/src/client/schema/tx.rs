@@ -105,15 +105,39 @@ pub struct InputContract {
 pub enum Output {
     CoinOutput(CoinOutput),
     ContractOutput(ContractOutput),
-    WithdrawalOutput(CoinOutput),
-    ChangeOutput(CoinOutput),
-    VariableOutput(CoinOutput),
+    WithdrawalOutput(WithdrawalOutput),
+    ChangeOutput(ChangeOutput),
+    VariableOutput(VariableOutput),
     ContractCreated(ContractCreated),
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinOutput {
+    pub to: HexString256,
+    pub amount: i32,
+    pub color: HexString256,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct WithdrawalOutput {
+    pub to: HexString256,
+    pub amount: i32,
+    pub color: HexString256,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ChangeOutput {
+    pub to: HexString256,
+    pub amount: i32,
+    pub color: HexString256,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct VariableOutput {
     pub to: HexString256,
     pub amount: i32,
     pub color: HexString256,
@@ -159,4 +183,18 @@ pub struct SuccessStatus {
 pub struct FailureStatus {
     pub block_id: HexString256,
     pub reason: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transaction_by_id_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = TransactionQuery::build(TxIdArgs {
+            id: HexString256("".to_string()),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
 }
