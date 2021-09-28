@@ -4,7 +4,7 @@ Fuel client implementation.
 
 ## Testing
 
-The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by Actix testing runtime and will emulate a server/client structure.
+The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by Tower and will emulate a server/client structure.
 
 To run the suite:
 `$ cargo test`
@@ -44,8 +44,6 @@ OPTIONS:
 ```
 $ ./target/release/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
-Jul 12 23:28:47.238  INFO actix_server::builder: Starting 8 workers
-Jul 12 23:28:47.239  INFO actix_server::builder: Starting "actix-web-service-127.0.0.1:4000" service on 127.0.0.1:4000
 ```
 
 #### Log level
