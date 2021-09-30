@@ -7,6 +7,7 @@ use std::{io, net};
 
 mod schema;
 
+use crate::client::schema::coin::{Coin, CoinByIdArgs};
 use schema::{
     block::{BlockByIdArgs, BlockConnection},
     tx::TxIdArgs,
@@ -168,5 +169,13 @@ impl FuelClient {
         let blocks = self.query(query).await?.blocks;
 
         Ok(blocks)
+    }
+
+    pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
+        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
+            id: HexString256(id.to_string()),
+        });
+        let coin = self.query(query).await?.coin;
+        Ok(coin)
     }
 }
