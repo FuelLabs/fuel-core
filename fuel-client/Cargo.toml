@@ -23,6 +23,7 @@ surf = "2.2"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 fuel-core = { path = "../fuel-core" }
 insta = "1.8.0"
+itertools = "0.10.1"
 
 [build-dependencies]
 fuel-core = { path = "../fuel-core", default-features = false }

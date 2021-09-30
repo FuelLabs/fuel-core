@@ -982,6 +982,7 @@ dependencies = [
  "fuel-core",
  "fuel-vm",
  "insta",
+ "itertools",
  "schemafy_lib",
  "serde",
  "serde_json",

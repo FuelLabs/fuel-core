@@ -7,9 +7,11 @@ use std::{io, net};
 
 mod schema;
 
-use crate::client::schema::block::BlockByIdArgs;
-use crate::client::schema::tx::TxIdArgs;
-use schema::*;
+use schema::{
+    block::{BlockByIdArgs, BlockConnection},
+    tx::TxIdArgs,
+    *,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -147,5 +149,24 @@ impl FuelClient {
         let block = self.query(query).await?.block;
 
         Ok(block)
+    }
+
+    pub async fn blocks(
+        &self,
+        first: Option<i32>,
+        last: Option<i32>,
+        before: Option<String>,
+        after: Option<String>,
+    ) -> io::Result<BlockConnection> {
+        let query = schema::block::BlocksQuery::build(&ConnectionArgs {
+            after,
+            before,
+            first,
+            last,
+        });
+
+        let blocks = self.query(query).await?.blocks;
+
+        Ok(blocks)
     }
 }
