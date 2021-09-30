@@ -8,6 +8,7 @@ type DateTime = chrono::DateTime<chrono::Utc>;
 impl_scalar!(DateTime, schema::DateTime);
 
 pub mod block;
+pub mod chain;
 pub mod tx;
 
 #[derive(cynic::QueryFragment, Debug)]

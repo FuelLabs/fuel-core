@@ -1,0 +1,114 @@
+---
+source: fuel-client/src/client/schema/chain.rs
+expression: operation.query
+
+---
+query Query {
+  chain {
+    baseChainHeight
+    name
+    peerCount
+    latestBlock {
+      height
+      id
+      time
+      producer
+      transactions {
+        gasLimit
+        gasPrice
+        id
+        inputColors
+        inputContracts
+        inputs {
+          __typename
+          ... on InputCoin {
+            utxoId
+            owner
+            amount
+            color
+            witnessIndex
+            maturity
+            predicate
+            predicateData
+          }
+          ... on InputContract {
+            utxoId
+            balanceRoot
+            stateRoot
+            contractId
+          }
+        }
+        isScript
+        outputs {
+          __typename
+          ... on CoinOutput {
+            to
+            amount
+            color
+          }
+          ... on ContractOutput {
+            inputIndex
+            balanceRoot
+            stateRoot
+          }
+          ... on WithdrawalOutput {
+            to
+            amount
+            color
+          }
+          ... on ChangeOutput {
+            to
+            amount
+            color
+          }
+          ... on VariableOutput {
+            to
+            amount
+            color
+          }
+          ... on ContractCreated {
+            contractId
+          }
+        }
+        maturity
+        receiptsRoot
+        status {
+          __typename
+          ... on SubmittedStatus {
+            time
+          }
+          ... on SuccessStatus {
+            blockId
+            programState
+          }
+          ... on FailureStatus {
+            blockId
+            reason
+          }
+        }
+        witnesses
+        receipts {
+          a
+          b
+          amount
+          color
+          digest
+          id
+          is
+          pc
+          ptr
+          ra
+          rb
+          rc
+          rd
+          reason
+          receiptType
+          to
+          toAddress
+          val
+        }
+      }
+    }
+  }
+}
+
