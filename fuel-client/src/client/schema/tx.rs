@@ -16,6 +16,48 @@ pub struct TransactionQuery {
     pub transaction: Option<Transaction>,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct ConnectionArgs {
+    pub after: Option<String>,
+    pub before: Option<String>,
+    pub first: Option<i32>,
+    pub last: Option<i32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "ConnectionArgs"
+)]
+pub struct TransactionsQuery {
+    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    pub transactions: TransactionConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct TransactionConnection {
+    pub edges: Option<Vec<Option<TransactionEdge>>>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct TransactionEdge {
+    pub cursor: String,
+    pub node: Transaction,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PageInfo {
+    pub end_cursor: Option<String>,
+    pub has_next_page: bool,
+    pub has_previous_page: bool,
+    pub start_cursor: Option<String>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
@@ -194,6 +236,18 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = TransactionQuery::build(TxIdArgs {
             id: HexString256("".to_string()),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn transactions_connection_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = TransactionsQuery::build(ConnectionArgs {
+            after: None,
+            before: None,
+            first: None,
+            last: None,
         });
         insta::assert_snapshot!(operation.query)
     }
