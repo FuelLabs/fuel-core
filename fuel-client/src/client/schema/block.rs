@@ -1,5 +1,5 @@
 use crate::client::schema::tx::Transaction;
-use crate::client::schema::{schema, DateTime, HexString, HexString256};
+use crate::client::schema::{schema, ConnectionArgs, DateTime, HexString256, PageInfo};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
@@ -15,6 +15,31 @@ pub struct BlockByIdArgs {
 pub struct BlockByIdQuery {
     #[arguments(id = &args.id)]
     pub block: Option<Block>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "ConnectionArgs"
+)]
+pub struct BlocksQuery {
+    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    pub blocks: BlockConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct BlockConnection {
+    pub edges: Option<Vec<Option<BlockEdge>>>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct BlockEdge {
+    pub cursor: String,
+    pub node: Block,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -36,6 +61,18 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
             id: HexString256("".to_string()),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn blocks_connection_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = BlocksQuery::build(ConnectionArgs {
+            after: None,
+            before: None,
+            first: None,
+            last: None,
         });
         insta::assert_snapshot!(operation.query)
     }

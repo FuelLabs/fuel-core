@@ -1,4 +1,4 @@
-use crate::client::schema::{schema, HexString, HexString256};
+use crate::client::schema::{schema, ConnectionArgs, HexString, HexString256, PageInfo};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -14,14 +14,6 @@ pub struct TxIdArgs {
 pub struct TransactionQuery {
     #[arguments(id = &args.id)]
     pub transaction: Option<Transaction>,
-}
-
-#[derive(cynic::FragmentArguments, Debug)]
-pub struct ConnectionArgs {
-    pub after: Option<String>,
-    pub before: Option<String>,
-    pub first: Option<i32>,
-    pub last: Option<i32>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -47,15 +39,6 @@ pub struct TransactionConnection {
 pub struct TransactionEdge {
     pub cursor: String,
     pub node: Transaction,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct PageInfo {
-    pub end_cursor: Option<String>,
-    pub has_next_page: bool,
-    pub has_previous_page: bool,
-    pub start_cursor: Option<String>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
