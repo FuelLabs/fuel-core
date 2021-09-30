@@ -7,7 +7,7 @@ use std::{io, net};
 
 mod schema;
 
-use crate::client::schema::coin::{Coin, CoinByIdArgs};
+use crate::client::schema::coin::{Coin, CoinByIdArgs, CoinConnection, CoinsByOwnerConnectionArgs};
 use schema::{
     block::{BlockByIdArgs, BlockConnection},
     tx::TxIdArgs,
@@ -177,5 +177,25 @@ impl FuelClient {
         });
         let coin = self.query(query).await?.coin;
         Ok(coin)
+    }
+
+    pub async fn coins_by_owner(
+        &self,
+        owner: &str,
+        first: Option<i32>,
+        last: Option<i32>,
+        before: Option<String>,
+        after: Option<String>,
+    ) -> io::Result<CoinConnection> {
+        let query = schema::coin::CoinsQuery::build(&CoinsByOwnerConnectionArgs {
+            owner: HexString256(owner.to_string()),
+            after,
+            before,
+            first,
+            last,
+        });
+
+        let coins = self.query(query).await?.coins_by_owner;
+        Ok(coins)
     }
 }
