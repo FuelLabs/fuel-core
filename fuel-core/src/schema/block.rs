@@ -24,24 +24,26 @@ impl Block {
         self.0.fuel_height.into()
     }
 
-    async fn transactions(&self, ctx: &Context<'_>) -> Vec<Transaction> {
+    async fn transactions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Transaction>> {
         let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
         self.0
             .transactions
             .iter()
             .map(|tx_id| {
-                Transaction(
+                Ok(Transaction(
                     KvStore::<Bytes32, fuel_tx::Transaction>::get(db, tx_id)
-                        // TODO: error handling
-                        .unwrap()
-                        .unwrap(),
-                )
+                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?,
+                ))
             })
             .collect()
     }
 
     async fn time(&self) -> DateTime<Utc> {
         self.0.time
+    }
+
+    async fn producer(&self) -> HexString256 {
+        self.0.producer.into()
     }
 }
 
