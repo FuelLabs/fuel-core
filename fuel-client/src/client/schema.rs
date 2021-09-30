@@ -9,6 +9,7 @@ impl_scalar!(DateTime, schema::DateTime);
 
 pub mod block;
 pub mod chain;
+pub mod coin;
 pub mod tx;
 
 #[derive(cynic::QueryFragment, Debug)]

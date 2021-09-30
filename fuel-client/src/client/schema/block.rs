@@ -1,5 +1,6 @@
-use crate::client::schema::tx::Transaction;
-use crate::client::schema::{schema, ConnectionArgs, DateTime, HexString256, PageInfo};
+use crate::client::schema::{
+    schema, tx::Transaction, ConnectionArgs, DateTime, HexString256, PageInfo,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
