@@ -1,4 +1,4 @@
-use crate::client::schema::{schema, HexString256};
+use crate::client::schema::{schema, HexString256, PageInfo};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
@@ -14,6 +14,40 @@ pub struct CoinByIdArgs {
 pub struct CoinByIdQuery {
     #[arguments(id = &args.id)]
     pub coin: Option<Coin>,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct CoinsByOwnerConnectionArgs {
+    pub owner: HexString256,
+    pub after: Option<String>,
+    pub before: Option<String>,
+    pub first: Option<i32>,
+    pub last: Option<i32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "CoinsByOwnerConnectionArgs"
+)]
+pub struct CoinsQuery {
+    #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    pub coins_by_owner: CoinConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct CoinConnection {
+    pub edges: Option<Vec<Option<CoinEdge>>>,
+    pub page_info: PageInfo,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct CoinEdge {
+    pub cursor: String,
+    pub node: Coin,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -44,6 +78,19 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = CoinByIdQuery::build(CoinByIdArgs {
             id: HexString256("".to_string()),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn coins_connection_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = CoinsQuery::build(CoinsByOwnerConnectionArgs {
+            owner: HexString256(Default::default()),
+            after: None,
+            before: None,
+            first: None,
+            last: None,
         });
         insta::assert_snapshot!(operation.query)
     }
