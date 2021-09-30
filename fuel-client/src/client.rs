@@ -7,6 +7,7 @@ use std::{io, net};
 
 mod schema;
 
+use crate::client::schema::block::BlockByIdArgs;
 use crate::client::schema::tx::TxIdArgs;
 use schema::*;
 
@@ -136,5 +137,15 @@ impl FuelClient {
         let transaction = self.query(query).await?.transaction;
 
         Ok(transaction)
+    }
+
+    pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
+        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs {
+            id: HexString256(id.to_string()),
+        });
+
+        let block = self.query(query).await?.block;
+
+        Ok(block)
     }
 }

@@ -78,6 +78,7 @@ impl FuelBlock {
         let mut hasher = Hasher::from_iter(&self.transactions);
         hasher.input(&self.fuel_height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
+        hasher.input(self.producer.as_ref());
         hasher.digest()
     }
 }
