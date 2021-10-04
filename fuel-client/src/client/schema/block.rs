@@ -61,7 +61,7 @@ mod tests {
     fn block_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
-            id: HexString256("".to_string()),
+            id: HexString256::default(),
         });
         insta::assert_snapshot!(operation.query)
     }

@@ -92,6 +92,7 @@ query Query {
           b
           amount
           color
+          gas
           digest
           id
           is
@@ -106,6 +107,7 @@ query Query {
           to
           toAddress
           val
+          len
         }
       }
     }

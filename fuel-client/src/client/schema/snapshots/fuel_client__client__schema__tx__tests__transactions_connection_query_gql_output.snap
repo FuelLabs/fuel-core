@@ -86,6 +86,7 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
           b
           amount
           color
+          gas
           digest
           id
           is
@@ -100,6 +101,7 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
           to
           toAddress
           val
+          len
         }
       }
     }

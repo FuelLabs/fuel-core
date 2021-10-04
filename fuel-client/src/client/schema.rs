@@ -114,7 +114,7 @@ pub struct Memory {
     pub memory: String,
 }
 
-#[derive(cynic::Scalar, Debug, Clone)]
+#[derive(cynic::Scalar, Debug, Clone, Default)]
 pub struct HexString256(pub Bytes256);
 
 impl FromStr for HexString256 {
@@ -126,7 +126,7 @@ impl FromStr for HexString256 {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Bytes256(pub [u8; 32]);
 
 impl Serialize for Bytes256 {

@@ -83,6 +83,7 @@ query Query($_0: HexString256!) {
       b
       amount
       color
+      gas
       digest
       id
       is
@@ -97,6 +98,7 @@ query Query($_0: HexString256!) {
       to
       toAddress
       val
+      len
     }
   }
 }

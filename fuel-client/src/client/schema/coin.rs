@@ -77,7 +77,7 @@ mod tests {
     fn coin_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = CoinByIdQuery::build(CoinByIdArgs {
-            id: HexString256("".to_string()),
+            id: HexString256::default(),
         });
         insta::assert_snapshot!(operation.query)
     }
@@ -86,7 +86,7 @@ mod tests {
     fn coins_connection_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = CoinsQuery::build(CoinsByOwnerConnectionArgs {
-            owner: HexString256(Default::default()),
+            owner: HexString256::default(),
             after: None,
             before: None,
             first: None,
