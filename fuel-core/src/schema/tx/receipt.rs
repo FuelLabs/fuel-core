@@ -91,6 +91,9 @@ impl Receipt {
     async fn rd(&self) -> Option<Word> {
         self.0.rd()
     }
+    async fn len(&self) -> Option<Word> {
+        self.0.len()
+    }
     async fn receipt_type(&self) -> ReceiptType {
         self.0.into()
     }

@@ -1,13 +1,14 @@
 use cynic::http::SurfExt;
 use cynic::{MutationBuilder, Operation, QueryBuilder};
-
 use fuel_vm::prelude::*;
+use std::convert::TryInto;
 use std::str::{self, FromStr};
 use std::{io, net};
 
 mod schema;
 
 use crate::client::schema::coin::{Coin, CoinByIdArgs, CoinConnection, CoinsByOwnerConnectionArgs};
+use crate::client::schema::tx::TxArg;
 use schema::{
     block::{BlockByIdArgs, BlockConnection},
     tx::TxIdArgs,
@@ -74,14 +75,15 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
-    pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
+    pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
         let tx = serde_json::to_string(tx)?;
-        let query = schema::Run::build(&TxArg { tx });
+        let query = schema::tx::DryRun::build(&TxArg { tx });
 
-        let result = self.query(query).await.map(|r| r.run)?;
-        let result = serde_json::from_str(result.as_str())?;
-
-        Ok(result)
+        let receipts = self.query(query).await.map(|r| r.dry_run)?;
+        receipts
+            .into_iter()
+            .map(|receipt| receipt.try_into().map_err(Into::into))
+            .collect()
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -133,9 +135,7 @@ impl FuelClient {
     }
 
     pub async fn transaction(&self, id: &str) -> io::Result<Option<schema::tx::Transaction>> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs {
-            id: HexString256(id.to_string()),
-        });
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;
 
@@ -143,9 +143,7 @@ impl FuelClient {
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
-        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs {
-            id: HexString256(id.to_string()),
-        });
+        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
 
         let block = self.query(query).await?.block;
 
@@ -172,9 +170,7 @@ impl FuelClient {
     }
 
     pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
-        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
-            id: HexString256(id.to_string()),
-        });
+        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs { id: id.parse()? });
         let coin = self.query(query).await?.coin;
         Ok(coin)
     }
@@ -188,7 +184,7 @@ impl FuelClient {
         after: Option<String>,
     ) -> io::Result<CoinConnection> {
         let query = schema::coin::CoinsQuery::build(&CoinsByOwnerConnectionArgs {
-            owner: HexString256(owner.to_string()),
+            owner: owner.parse()?,
             after,
             before,
             first,

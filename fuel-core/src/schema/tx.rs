@@ -117,8 +117,12 @@ pub struct TxMutation;
 
 #[Object]
 impl TxMutation {
-    /// blocks on transaction submission until processed in a block
-    async fn run(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
+    /// dry-run the transaction using a fork of current state, no changes are committed.
+    async fn dry_run(
+        &self,
+        ctx: &Context<'_>,
+        tx: String,
+    ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
 
         let vm = task::spawn_blocking(
@@ -126,22 +130,24 @@ impl TxMutation {
                 let tx: FuelTx = serde_json::from_str(tx.as_str())?;
                 let mut vm = Interpreter::with_storage(transaction.clone());
                 vm.transact(tx).map_err(Box::new)?;
-                transaction.commit().map_err(Box::new)?;
                 Ok(vm)
             },
         )
         .await??;
-
-        Ok(serde_json::to_string(vm.receipts())?)
+        Ok(vm
+            .receipts()
+            .iter()
+            .map(|receipt| receipt::Receipt(receipt.clone()))
+            .collect())
     }
 
     /// Submits transaction to the pool
-    async fn submit(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<String> {
+    async fn submit(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<HexString256> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
         let tx: FuelTx = serde_json::from_str(tx.as_str())?;
         let id = tx.id().clone();
         tx_pool.submit_tx(tx).await?;
 
-        Ok(hex::encode(id))
+        Ok(id.into())
     }
 }

@@ -37,7 +37,7 @@ async fn transact() {
         vec![],
     );
 
-    let log = client.transact(&tx).await.unwrap();
+    let log = client.dry_run(&tx).await.unwrap();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
