@@ -192,7 +192,41 @@ impl From<HexString256> for Address {
 }
 
 #[derive(cynic::Scalar, Debug, Clone)]
-pub struct HexString(pub Vec<u8>);
+pub struct HexString(pub Bytes);
+
+#[derive(Debug, Clone)]
+pub struct Bytes(pub Vec<u8>);
+
+impl FromStr for Bytes {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // trim leading 0x
+        let value = s.strip_prefix("0x").ok_or(HexStringPrefixError)?;
+        // decode value into bytes
+        Ok(Bytes(hex::decode(value)?))
+    }
+}
+
+impl Serialize for Bytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex = format!("0x{}", hex::encode(&self.0));
+        serializer.serialize_str(hex.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Bytes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Self::from_str(s.as_str()).map_err(D::Error::custom)
+    }
+}
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ConnectionArgs {
