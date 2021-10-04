@@ -136,8 +136,7 @@ impl TxMutation {
     async fn submit(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<HexString256> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
         let tx: FuelTx = serde_json::from_str(tx.as_str())?;
-        let id = tx.id().clone();
-        tx_pool.submit_tx(tx).await?;
+        let id = tx_pool.submit_tx(tx).await?;
 
         Ok(id.into())
     }
