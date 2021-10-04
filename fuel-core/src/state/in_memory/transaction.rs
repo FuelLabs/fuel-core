@@ -107,6 +107,7 @@ impl KeyValueStore for MemoryTransactionView {
                 .iter_all(column, prefix.clone(), start.clone(), direction)
                 .chain(self.data_source.iter_all(column, prefix, start, direction))
                 .unique_by(|(key, _)| key.clone())
+                // remove keys which have been deleted over the course of this transaction
                 .filter(move |(key, _)| {
                     if let Some(WriteOperation::Remove(_, _)) =
                         changes.lock().expect("poisoned").get(key.as_slice())
@@ -115,8 +116,16 @@ impl KeyValueStore for MemoryTransactionView {
                     } else {
                         true
                     }
-                }), // TODO: lexicographical ordering in a way that's reversible AND
-                    // doesn't consume the entire iterator
+                })
+                // perform lexicographic sorting between db and virtual key-sets
+                //  reverse ordering if iterator is in reverse mode
+                .sorted_by(|a, b| {
+                    let mut ord = Ord::cmp(&a.0, &b.0);
+                    if direction == IterDirection::Reverse {
+                        ord = ord.reverse()
+                    }
+                    ord
+                }),
         )
     }
 }
