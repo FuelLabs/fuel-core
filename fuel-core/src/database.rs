@@ -1,6 +1,7 @@
 #[cfg(feature = "default")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
+use crate::model::fuel_block::FuelBlock;
 use crate::state::in_memory::memory_store::MemoryStore;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
@@ -168,15 +169,20 @@ impl Default for Database {
 
 impl InterpreterStorage for Database {
     fn block_height(&self) -> Result<u32, DataError> {
-        Ok(Default::default())
+        let height = self.get_block_height()?.unwrap_or_default();
+        Ok(height.into())
     }
 
-    fn block_hash(&self, _block_height: u32) -> Result<Bytes32, DataError> {
-        Ok(Default::default())
+    fn block_hash(&self, block_height: u32) -> Result<Bytes32, DataError> {
+        let hash = self.get_block_id(block_height.into())?.unwrap_or_default();
+        Ok(hash)
     }
 
     fn coinbase(&self) -> Result<Address, DataError> {
-        Ok(Default::default())
+        let height = self.get_block_height()?.unwrap_or_default();
+        let id = self.block_hash(height.into())?;
+        let block = KvStore::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
+        Ok(block.producer)
     }
 }
 
@@ -215,6 +221,12 @@ impl From<KvStoreError> for crate::state::Error {
 
 impl From<crate::state::Error> for DataError {
     fn from(e: Error) -> Self {
+        panic!("No valid DataError variants to construct {:?}", e)
+    }
+}
+
+impl From<KvStoreError> for DataError {
+    fn from(e: KvStoreError) -> Self {
         panic!("No valid DataError variants to construct {:?}", e)
     }
 }
