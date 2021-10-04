@@ -144,8 +144,8 @@ impl<'de> Deserialize<'de> for Bytes256 {
     where
         D: Deserializer<'de>,
     {
-        let s: &str = Deserialize::deserialize(deserializer)?;
-        Self::from_str(s).map_err(D::Error::custom)
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Self::from_str(s.as_str()).map_err(D::Error::custom)
     }
 }
 
