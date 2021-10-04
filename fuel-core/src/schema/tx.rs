@@ -1,14 +1,12 @@
-use crate::database::{transactional::DatabaseTransaction, KvStore, SharedDatabase};
+use crate::database::{KvStore, SharedDatabase};
 use crate::schema::scalars::HexString256;
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
 use async_graphql::connection::{query, Connection, Edge, EmptyFields};
 use async_graphql::{Context, Object};
 use fuel_tx::{Bytes32, Transaction as FuelTx};
-use fuel_vm::prelude::Interpreter;
 use itertools::Itertools;
 use std::sync::Arc;
-use tokio::task;
 use types::Transaction;
 
 pub mod receipt;
@@ -124,20 +122,13 @@ impl TxMutation {
         tx: String,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
-
-        let vm = task::spawn_blocking(
-            move || -> async_graphql::Result<Interpreter<DatabaseTransaction>> {
-                let tx: FuelTx = serde_json::from_str(tx.as_str())?;
-                let mut vm = Interpreter::with_storage(transaction.clone());
-                vm.transact(tx).map_err(Box::new)?;
-                Ok(vm)
-            },
-        )
-        .await??;
-        Ok(vm
-            .receipts()
-            .iter()
-            .map(|receipt| receipt::Receipt(receipt.clone()))
+        let tx: FuelTx = serde_json::from_str(tx.as_str())?;
+        // make virtual txpool from transactional view
+        let tx_pool = TxPool::new(SharedDatabase(Arc::new(transaction)));
+        let receipts = tx_pool.run_tx(tx).await?;
+        Ok(receipts
+            .into_iter()
+            .map(|receipt| receipt::Receipt(receipt))
             .collect())
     }
 

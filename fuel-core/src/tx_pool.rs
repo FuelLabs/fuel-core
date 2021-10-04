@@ -2,7 +2,7 @@ use crate::database::{KvStore, KvStoreError, SharedDatabase};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
 use chrono::{DateTime, Utc};
-use fuel_tx::Bytes32;
+use fuel_tx::{Bytes32, Receipt};
 use fuel_vm::prelude::{ProgramState, Transaction};
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
@@ -90,5 +90,13 @@ impl TxPool {
             .await
             .map_err(|e| Error::ExecutionError(e))?;
         Ok(tx_id)
+    }
+
+    pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
+        let id = self.submit_tx(tx).await?;
+        // note: we'll need to await tx completion once it's not instantaneous
+        let receipts =
+            KvStore::<Bytes32, Vec<Receipt>>::get(self.db.as_ref(), &id)?.unwrap_or_default();
+        Ok(receipts)
     }
 }
