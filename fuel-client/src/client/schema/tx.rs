@@ -2,6 +2,8 @@ use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, ConversionError::MissingField, HexString,
     HexString256, PageInfo,
 };
+use cynic::impl_scalar;
+use fuel_tx::Witness;
 use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -45,6 +47,9 @@ pub struct TransactionEdge {
     pub node: Transaction,
 }
 
+type Metadata = fuel_tx::Metadata;
+impl_scalar!(Metadata, schema::Json);
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
@@ -61,6 +66,59 @@ pub struct Transaction {
     pub status: Option<Status>,
     pub witnesses: Vec<HexString>,
     pub receipts: Option<Vec<Receipt>>,
+    pub script: Option<HexString>,
+    pub script_data: Option<HexString>,
+    pub metadata: Option<Metadata>,
+}
+
+impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
+    type Error = ConversionError;
+
+    fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
+        Ok(match tx.is_script {
+            true => Self::Script {
+                gas_price: tx.gas_price.try_into()?,
+                gas_limit: tx.gas_limit.try_into()?,
+                maturity: tx.maturity.try_into()?,
+                receipts_root: tx
+                    .receipts_root
+                    .ok_or(ConversionError::MissingField("receipts_root".to_string()))?
+                    .into(),
+                script: tx
+                    .script
+                    .ok_or(ConversionError::MissingField("script".to_string()))?
+                    .into(),
+                script_data: tx
+                    .script_data
+                    .ok_or(ConversionError::MissingField("script_data".to_string()))?
+                    .into(),
+                inputs: tx
+                    .inputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                outputs: tx
+                    .outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                witnesses: tx.witnesses.into_iter().map(Into::into).collect(),
+                metadata: tx.metadata,
+            },
+            false => Self::Create {
+                gas_price: 0,
+                gas_limit: 0,
+                maturity: 0,
+                bytecode_witness_index: 0,
+                salt: Default::default(),
+                static_contracts: vec![],
+                inputs: vec![],
+                outputs: vec![],
+                witnesses: vec![],
+                metadata: None,
+            },
+        })
+    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -246,6 +304,13 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
     }
 }
 
+impl From<HexString> for Witness {
+    fn from(s: HexString) -> Self {
+        let v = <Vec<u8>>::from(s);
+        Self::from(v)
+    }
+}
+
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Input {
@@ -273,6 +338,31 @@ pub struct InputContract {
     pub balance_root: HexString256,
     pub state_root: HexString256,
     pub contract_id: HexString256,
+}
+
+impl TryFrom<Input> for fuel_tx::Input {
+    type Error = ConversionError;
+
+    fn try_from(input: Input) -> Result<fuel_tx::Input, Self::Error> {
+        Ok(match input {
+            Input::InputCoin(coin) => fuel_tx::Input::Coin {
+                utxo_id: coin.utxo_id.into(),
+                owner: coin.owner.into(),
+                amount: coin.amount.try_into()?,
+                color: coin.color.into(),
+                witness_index: coin.witness_index.try_into()?,
+                maturity: coin.maturity.try_into()?,
+                predicate: coin.predicate.into(),
+                predicate_data: coin.predicate_data.into(),
+            },
+            Input::InputContract(contract) => fuel_tx::Input::Contract {
+                utxo_id: contract.utxo_id.into(),
+                balance_root: contract.balance_root.into(),
+                state_root: contract.state_root.into(),
+                contract_id: contract.contract_id.into(),
+            },
+        })
+    }
 }
 
 #[derive(cynic::InlineFragments, Debug)]
@@ -330,6 +420,43 @@ pub struct ContractOutput {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
     contract_id: HexString256,
+}
+
+impl TryFrom<Output> for fuel_tx::Output {
+    type Error = ConversionError;
+
+    fn try_from(value: Output) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Output::CoinOutput(coin) => Self::Coin {
+                to: coin.to.into(),
+                amount: coin.amount.try_into()?,
+                color: coin.color.into(),
+            },
+            Output::ContractOutput(contract) => Self::Contract {
+                input_index: contract.input_index.try_into()?,
+                balance_root: contract.balance_root.into(),
+                state_root: contract.state_root.into(),
+            },
+            Output::WithdrawalOutput(withdrawal) => Self::Withdrawal {
+                to: withdrawal.to.into(),
+                amount: withdrawal.amount.try_into()?,
+                color: withdrawal.color.into(),
+            },
+            Output::ChangeOutput(change) => Self::Change {
+                to: change.to.into(),
+                amount: change.amount.try_into()?,
+                color: change.color.into(),
+            },
+            Output::VariableOutput(variable) => Self::Variable {
+                to: variable.to.into(),
+                amount: variable.amount.try_into()?,
+                color: variable.color.into(),
+            },
+            Output::ContractCreated(contract) => Self::ContractCreated {
+                contract_id: contract.contract_id.into(),
+            },
+        })
+    }
 }
 
 #[derive(cynic::InlineFragments, Debug)]

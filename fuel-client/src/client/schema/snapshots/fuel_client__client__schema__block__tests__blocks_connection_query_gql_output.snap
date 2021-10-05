@@ -108,6 +108,9 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
             val
             len
           }
+          script
+          scriptData
+          metadata
         }
       }
     }

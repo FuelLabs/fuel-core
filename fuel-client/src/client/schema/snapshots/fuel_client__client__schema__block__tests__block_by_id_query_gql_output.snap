@@ -105,6 +105,9 @@ query Query($_0: HexString256!) {
         val
         len
       }
+      script
+      scriptData
+      metadata
     }
   }
 }

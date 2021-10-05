@@ -980,6 +980,7 @@ dependencies = [
  "chrono",
  "cynic",
  "fuel-core",
+ "fuel-tx",
  "fuel-vm",
  "hex",
  "insta",

@@ -1,10 +1,10 @@
 use crate::database::{KvStore, SharedDatabase};
 use crate::schema::scalars::{HexString, HexString256};
 use crate::tx_pool::TransactionStatus;
-use async_graphql::{Context, Object, Union};
+use async_graphql::{Context, Json, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
-use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Metadata, Receipt, Transaction as FuelTx};
 use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
 
@@ -423,5 +423,23 @@ impl Transaction {
         let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
         let receipts = KvStore::<Bytes32, Vec<Receipt>>::get(db, &self.0.id())?;
         Ok(receipts.map(|receipts| receipts.into_iter().map(super::receipt::Receipt).collect()))
+    }
+
+    async fn script(&self) -> Option<HexString> {
+        match &self.0 {
+            FuelTx::Script { script, .. } => Some(HexString(script.clone())),
+            FuelTx::Create { .. } => None,
+        }
+    }
+
+    async fn script_data(&self) -> Option<HexString> {
+        match &self.0 {
+            FuelTx::Script { script_data, .. } => Some(HexString(script_data.clone())),
+            FuelTx::Create { .. } => None,
+        }
+    }
+
+    async fn metadata(&self) -> Option<Json<Metadata>> {
+        self.0.metadata().map(|m| Json(m.clone()))
     }
 }

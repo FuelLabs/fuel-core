@@ -194,6 +194,12 @@ impl From<HexString256> for Address {
 #[derive(cynic::Scalar, Debug, Clone)]
 pub struct HexString(pub Bytes);
 
+impl From<HexString> for Vec<u8> {
+    fn from(s: HexString) -> Self {
+        s.0 .0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Bytes(pub Vec<u8>);
 

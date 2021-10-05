@@ -109,6 +109,9 @@ query Query {
           val
           len
         }
+        script
+        scriptData
+        metadata
       }
     }
   }
