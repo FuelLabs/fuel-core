@@ -79,10 +79,12 @@ query Query {
           }
           ... on SuccessStatus {
             blockId
+            time
             programState
           }
           ... on FailureStatus {
             blockId
+            time
             reason
           }
         }

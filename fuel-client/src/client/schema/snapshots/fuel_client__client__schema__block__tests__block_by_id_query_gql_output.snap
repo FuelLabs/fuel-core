@@ -75,10 +75,12 @@ query Query($_0: HexString256) {
         }
         ... on SuccessStatus {
           blockId
+          time
           programState
         }
         ... on FailureStatus {
           blockId
+          time
           reason
         }
       }

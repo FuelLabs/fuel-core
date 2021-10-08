@@ -15,10 +15,12 @@ pub enum TransactionStatus {
     },
     Success {
         block_id: Bytes32,
+        time: DateTime<Utc>,
         result: ProgramState,
     },
     Failed {
         block_id: Bytes32,
+        time: DateTime<Utc>,
         reason: String,
     },
 }

@@ -73,10 +73,12 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
           }
           ... on SuccessStatus {
             blockId
+            time
             programState
           }
           ... on FailureStatus {
             blockId
+            time
             reason
           }
         }

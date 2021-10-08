@@ -49,6 +49,7 @@ impl Executor {
                         tx_id,
                         TransactionStatus::Success {
                             block_id,
+                            time: block.time,
                             result: result.state().clone(),
                         },
                     )?;
@@ -62,6 +63,7 @@ impl Executor {
                         tx_id,
                         TransactionStatus::Failed {
                             block_id,
+                            time: block.time,
                             reason: e.to_string(),
                         },
                     )?;

@@ -303,6 +303,7 @@ impl SubmittedStatus {
 
 pub struct SuccessStatus {
     block_id: Bytes32,
+    time: DateTime<Utc>,
     result: ProgramState,
 }
 
@@ -310,6 +311,10 @@ pub struct SuccessStatus {
 impl SuccessStatus {
     async fn block_id(&self) -> HexString256 {
         HexString256(*self.block_id.deref())
+    }
+
+    async fn time(&self) -> DateTime<Utc> {
+        self.time
     }
 
     async fn program_state(&self) -> HexString {
@@ -322,6 +327,7 @@ impl SuccessStatus {
 
 pub struct FailureStatus {
     block_id: Bytes32,
+    time: DateTime<Utc>,
     reason: String,
 }
 
@@ -329,6 +335,10 @@ pub struct FailureStatus {
 impl FailureStatus {
     async fn block_id(&self) -> HexString256 {
         HexString256(*self.block_id.deref())
+    }
+
+    async fn time(&self) -> DateTime<Utc> {
+        self.time
     }
 
     async fn reason(&self) -> String {
@@ -340,12 +350,24 @@ impl From<TransactionStatus> for Status {
     fn from(s: TransactionStatus) -> Self {
         match s {
             TransactionStatus::Submitted { time } => Status::Submitted(SubmittedStatus(time)),
-            TransactionStatus::Success { block_id, result } => {
-                Status::Success(SuccessStatus { block_id, result })
-            }
-            TransactionStatus::Failed { block_id, reason } => {
-                Status::Failed(FailureStatus { block_id, reason })
-            }
+            TransactionStatus::Success {
+                block_id,
+                result,
+                time,
+            } => Status::Success(SuccessStatus {
+                block_id,
+                result,
+                time,
+            }),
+            TransactionStatus::Failed {
+                block_id,
+                reason,
+                time,
+            } => Status::Failed(FailureStatus {
+                block_id,
+                reason,
+                time,
+            }),
         }
     }
 }

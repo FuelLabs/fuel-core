@@ -347,6 +347,7 @@ pub struct SubmittedStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block_id: HexString256,
+    pub time: super::DateTime,
     pub program_state: HexString,
 }
 
@@ -354,6 +355,7 @@ pub struct SuccessStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_id: HexString256,
+    pub time: super::DateTime,
     pub reason: String,
 }
 
