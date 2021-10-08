@@ -114,6 +114,7 @@ query Query {
         metadata
         salt
         staticContracts
+        bytecodeWitnessIndex
       }
     }
   }

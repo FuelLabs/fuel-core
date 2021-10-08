@@ -71,6 +71,7 @@ pub struct Transaction {
     pub metadata: Option<Metadata>,
     pub salt: Option<HexString256>,
     pub static_contracts: Option<Vec<HexString256>>,
+    pub bytecode_witness_index: Option<i32>,
 }
 
 impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
@@ -111,7 +112,12 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 gas_price: tx.gas_price.try_into()?,
                 gas_limit: tx.gas_limit.try_into()?,
                 maturity: tx.maturity.try_into()?,
-                bytecode_witness_index: 0,
+                bytecode_witness_index: tx
+                    .bytecode_witness_index
+                    .ok_or(ConversionError::MissingField(
+                        "bytecode_witness_index".to_string(),
+                    ))?
+                    .try_into()?,
                 salt: tx
                     .salt
                     .ok_or(ConversionError::MissingField("salt".to_string()))?
@@ -135,7 +141,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
                 witnesses: tx.witnesses.into_iter().map(Into::into).collect(),
-                metadata: None,
+                metadata: tx.metadata,
             },
         })
     }

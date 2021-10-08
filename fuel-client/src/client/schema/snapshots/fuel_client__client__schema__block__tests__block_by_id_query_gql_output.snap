@@ -110,6 +110,7 @@ query Query($_0: HexString256!) {
       metadata
       salt
       staticContracts
+      bytecodeWitnessIndex
     }
   }
 }
