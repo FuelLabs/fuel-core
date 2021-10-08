@@ -134,7 +134,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
-                witnesses: vec![],
+                witnesses: tx.witnesses.into_iter().map(Into::into).collect(),
                 metadata: None,
             },
         })
