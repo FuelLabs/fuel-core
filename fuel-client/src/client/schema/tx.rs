@@ -2,7 +2,6 @@ use crate::client::schema::tx::receipt::Receipt;
 use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
-use cynic::impl_scalar;
 use fuel_tx::bytes::Deserializable;
 use fuel_tx::Witness;
 use std::convert::{TryFrom, TryInto};

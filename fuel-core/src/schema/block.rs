@@ -55,10 +55,30 @@ impl BlockQuery {
     async fn block(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "id of the block")] id: HexString256,
+        #[graphql(desc = "id of the block")] id: Option<HexString256>,
+        #[graphql(desc = "height of the block")] height: Option<u32>,
     ) -> async_graphql::Result<Option<Block>> {
-        let id: Bytes32 = id.0.try_into()?;
         let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let id = match (id, height) {
+            (Some(_), Some(_)) => {
+                return Err(async_graphql::Error::new(
+                    "Can't provide both an id and a height",
+                ))
+            }
+            (Some(id), None) => id.into(),
+            (None, Some(height)) => {
+                if height == 0 {
+                    return Err(async_graphql::Error::new(
+                        "Genesis block isn't implemented yet",
+                    ));
+                } else {
+                    db.get_block_id(height.try_into()?)?
+                        .ok_or("block height non-existent")?
+                }
+            }
+            (None, None) => return Err(async_graphql::Error::new("missing either id or height")),
+        };
+
         let block = KvStore::<Bytes32, FuelBlock>::get(db, &id)?.map(|b| Block(b));
         Ok(block)
     }
