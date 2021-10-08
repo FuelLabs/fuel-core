@@ -112,6 +112,7 @@ query Query {
         script
         scriptData
         metadata
+        salt
       }
     }
   }

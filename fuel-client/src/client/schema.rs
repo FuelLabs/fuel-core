@@ -5,6 +5,7 @@ mod schema {
 use crate::client::schema::ConversionError::{HexString256LengthError, HexStringPrefixError};
 use cynic::impl_scalar;
 use cynic::serde::{Deserializer, Serialize, Serializer};
+use fuel_tx::Salt;
 use fuel_vm::prelude::{Address, Bytes32, Color, ContractId};
 use hex::FromHexError;
 use serde::de::Error;
@@ -188,6 +189,12 @@ impl From<HexString256> for Bytes32 {
 impl From<HexString256> for Address {
     fn from(s: HexString256) -> Self {
         Address::new(s.0 .0)
+    }
+}
+
+impl From<HexString256> for Salt {
+    fn from(s: HexString256) -> Self {
+        Salt::new(s.0 .0)
     }
 }
 

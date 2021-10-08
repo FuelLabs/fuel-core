@@ -442,4 +442,21 @@ impl Transaction {
     async fn metadata(&self) -> Option<Json<Metadata>> {
         self.0.metadata().map(|m| Json(m.clone()))
     }
+
+    async fn bytecode_witness_index(&self) -> Option<u8> {
+        match self.0 {
+            FuelTx::Script { .. } => None,
+            FuelTx::Create {
+                bytecode_witness_index,
+                ..
+            } => Some(bytecode_witness_index),
+        }
+    }
+
+    async fn salt(&self) -> Option<HexString256> {
+        match self.0 {
+            FuelTx::Script { .. } => None,
+            FuelTx::Create { salt, .. } => Some(salt.into()),
+        }
+    }
 }

@@ -69,6 +69,7 @@ pub struct Transaction {
     pub script: Option<HexString>,
     pub script_data: Option<HexString>,
     pub metadata: Option<Metadata>,
+    pub salt: Option<HexString256>,
 }
 
 impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
@@ -106,14 +107,25 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 metadata: tx.metadata,
             },
             false => Self::Create {
-                gas_price: 0,
-                gas_limit: 0,
-                maturity: 0,
+                gas_price: tx.gas_price.try_into()?,
+                gas_limit: tx.gas_limit.try_into()?,
+                maturity: tx.maturity.try_into()?,
                 bytecode_witness_index: 0,
-                salt: Default::default(),
+                salt: tx
+                    .salt
+                    .ok_or(ConversionError::MissingField("salt".to_string()))?
+                    .into(),
                 static_contracts: vec![],
-                inputs: vec![],
-                outputs: vec![],
+                inputs: tx
+                    .inputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                outputs: tx
+                    .outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
                 witnesses: vec![],
                 metadata: None,
             },
