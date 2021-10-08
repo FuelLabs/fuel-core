@@ -4,6 +4,7 @@ use crate::tx_pool::TransactionStatus;
 use async_graphql::{Context, Json, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
+use fuel_tx::bytes::SerializableVec;
 use fuel_tx::{Address, Bytes32, Color, ContractId, Metadata, Receipt, Transaction as FuelTx};
 use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
@@ -467,5 +468,10 @@ impl Transaction {
                 static_contracts, ..
             } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
         }
+    }
+
+    /// Return the transaction bytes using canonical encoding
+    async fn raw_payload(&self) -> HexString {
+        HexString(self.0.clone().to_bytes())
     }
 }
