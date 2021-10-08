@@ -270,6 +270,8 @@ pub enum ConversionError {
     HexDecodingError(FromHexError),
     #[error("failed integer conversion")]
     IntegerConversionError,
+    #[error("failed to deserialize transaction from bytes {0}")]
+    TransactionFromBytesError(std::io::Error),
 }
 
 impl From<FromHexError> for ConversionError {

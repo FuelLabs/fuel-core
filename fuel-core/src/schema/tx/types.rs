@@ -1,11 +1,11 @@
 use crate::database::{KvStore, SharedDatabase};
 use crate::schema::scalars::{HexString, HexString256};
 use crate::tx_pool::TransactionStatus;
-use async_graphql::{Context, Json, Object, Union};
+use async_graphql::{Context, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
 use fuel_tx::bytes::SerializableVec;
-use fuel_tx::{Address, Bytes32, Color, ContractId, Metadata, Receipt, Transaction as FuelTx};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
 use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
 
@@ -438,10 +438,6 @@ impl Transaction {
             FuelTx::Script { script_data, .. } => Some(HexString(script_data.clone())),
             FuelTx::Create { .. } => None,
         }
-    }
-
-    async fn metadata(&self) -> Option<Json<Metadata>> {
-        self.0.metadata().map(|m| Json(m.clone()))
     }
 
     async fn bytecode_witness_index(&self) -> Option<u8> {

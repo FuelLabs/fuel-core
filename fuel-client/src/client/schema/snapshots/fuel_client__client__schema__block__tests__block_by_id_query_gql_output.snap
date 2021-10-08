@@ -107,7 +107,6 @@ query Query($_0: HexString256!) {
       }
       script
       scriptData
-      metadata
       salt
       staticContracts
       bytecodeWitnessIndex

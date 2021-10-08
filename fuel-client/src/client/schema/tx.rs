@@ -3,6 +3,7 @@ use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
 use cynic::impl_scalar;
+use fuel_tx::bytes::Deserializable;
 use fuel_tx::Witness;
 use std::convert::{TryFrom, TryInto};
 
@@ -13,6 +14,7 @@ pub struct TxIdArgs {
     pub id: HexString256,
 }
 
+/// Retrieves the transaction in transparent form
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -22,6 +24,18 @@ pub struct TxIdArgs {
 pub struct TransactionQuery {
     #[arguments(id = &args.id)]
     pub transaction: Option<Transaction>,
+}
+
+/// Retrieves the transaction in its opaque form
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "TxIdArgs"
+)]
+pub struct OpaqueTransactionQuery {
+    #[arguments(id = &args.id)]
+    pub transaction: Option<OpaqueTransaction>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -49,9 +63,6 @@ pub struct TransactionEdge {
     pub node: Transaction,
 }
 
-type Metadata = fuel_tx::Metadata;
-impl_scalar!(Metadata, schema::Json);
-
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
@@ -70,7 +81,6 @@ pub struct Transaction {
     pub receipts: Option<Vec<Receipt>>,
     pub script: Option<HexString>,
     pub script_data: Option<HexString>,
-    pub metadata: Option<Metadata>,
     pub salt: Option<HexString256>,
     pub static_contracts: Option<Vec<HexString256>>,
     pub bytecode_witness_index: Option<i32>,
@@ -108,7 +118,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
                 witnesses: tx.witnesses.into_iter().map(Into::into).collect(),
-                metadata: tx.metadata,
+                metadata: None,
             },
             false => Self::Create {
                 gas_price: tx.gas_price.try_into()?,
@@ -143,9 +153,25 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
                 witnesses: tx.witnesses.into_iter().map(Into::into).collect(),
-                metadata: tx.metadata,
+                metadata: None,
             },
         })
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
+pub struct OpaqueTransaction {
+    pub raw_payload: HexString,
+}
+
+impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
+    type Error = ConversionError;
+
+    fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
+        let bytes = value.raw_payload.0 .0;
+        fuel_tx::Transaction::from_bytes(bytes.as_slice())
+            .map_err(|e| ConversionError::TransactionFromBytesError(e))
     }
 }
 
@@ -358,6 +384,15 @@ mod tests {
     fn transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = TransactionQuery::build(TxIdArgs {
+            id: HexString256::default(),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn opaque_transaction_by_id_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = OpaqueTransactionQuery::build(TxIdArgs {
             id: HexString256::default(),
         });
         insta::assert_snapshot!(operation.query)
