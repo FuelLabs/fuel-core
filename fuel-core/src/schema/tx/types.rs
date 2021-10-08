@@ -459,4 +459,13 @@ impl Transaction {
             FuelTx::Create { salt, .. } => Some(salt.into()),
         }
     }
+
+    async fn static_contracts(&self) -> Option<Vec<HexString256>> {
+        match &self.0 {
+            FuelTx::Script { .. } => None,
+            FuelTx::Create {
+                static_contracts, ..
+            } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
+        }
+    }
 }

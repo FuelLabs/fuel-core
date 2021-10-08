@@ -70,6 +70,7 @@ pub struct Transaction {
     pub script_data: Option<HexString>,
     pub metadata: Option<Metadata>,
     pub salt: Option<HexString256>,
+    pub static_contracts: Option<Vec<HexString256>>,
 }
 
 impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
@@ -115,7 +116,14 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .salt
                     .ok_or(ConversionError::MissingField("salt".to_string()))?
                     .into(),
-                static_contracts: vec![],
+                static_contracts: tx
+                    .static_contracts
+                    .ok_or(ConversionError::MissingField(
+                        "static_contracts".to_string(),
+                    ))?
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
                 inputs: tx
                     .inputs
                     .into_iter()

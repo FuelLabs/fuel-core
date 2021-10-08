@@ -109,6 +109,7 @@ query Query($_0: HexString256!) {
       scriptData
       metadata
       salt
+      staticContracts
     }
   }
 }
