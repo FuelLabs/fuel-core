@@ -1,15 +1,12 @@
-use tx_client::client::TxClient;
-
-use actix_web::{test, App};
-use fuel_core::service;
-
+use fuel_client::client::FuelClient;
+use fuel_core::service::{configure, run_in_background};
 use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
 
-#[actix_rt::test]
+#[tokio::test]
 async fn transact() {
-    let srv = test::start(|| App::new().configure(service::configure));
-    let client = TxClient::from(srv.addr());
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
@@ -39,20 +36,15 @@ async fn transact() {
     );
 
     let log = client.transact(&tx).await.unwrap();
-    assert_eq!(3, log.len());
+    assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
-        LogEvent::Register {
-            register, value, ..
-        } if register == 0x10 && value == 0xca));
+        Receipt::Log {
+            ra, rb, ..
+        } if ra == 0xca && rb == 0xba));
 
     assert!(matches!(log[1],
-        LogEvent::Register {
-            register, value, ..
-        } if register == 0x11 && value == 0xba));
-
-    assert!(matches!(log[2],
-        LogEvent::Return {
-            register, value, ..
-        } if register == REG_ONE && value == 1));
+        Receipt::Return {
+            val, ..
+        } if val == 1));
 }
