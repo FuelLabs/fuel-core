@@ -9,8 +9,8 @@ use wasmer::Instance;
 use crate::runtime::ffi;
 use crate::runtime::IndexerResult;
 use fuel_indexer_schema::{
-    db::tables::SchemaBuilder,
     db::models::{ColumnInfo, EntityData, TypeIds},
+    db::tables::SchemaBuilder,
     schema_version, FtColumn,
 };
 

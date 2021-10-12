@@ -1,4 +1,4 @@
-use fuel_indexer_schema::{BASE_SCHEMA, schema_version, type_id};
+use fuel_indexer_schema::{schema_version, type_id, BASE_SCHEMA};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Document, Field, SchemaDefinition, Type, TypeDefinition};
 use proc_macro::TokenStream;
@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::Read;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, LitStr, Result, Token};
-
 
 /// Arguments to this proc macro are (<namespace>, <gaphql_file>)
 struct GraphSchema {
@@ -26,10 +25,13 @@ impl Parse for GraphSchema {
     }
 }
 
-fn process_type<'a>(types: &HashSet<String>, typ: &Type<'a, String>, nullable: bool) -> proc_macro2::TokenStream {
+fn process_type<'a>(
+    types: &HashSet<String>,
+    typ: &Type<'a, String>,
+    nullable: bool,
+) -> proc_macro2::TokenStream {
     match typ {
         Type::NamedType(t) => {
-
             if !types.contains(t) {
                 panic!("Type {} is undefined.", t);
             }
@@ -79,7 +81,11 @@ fn process_field<'a>(
     (typ, ident, extractor)
 }
 
-fn process_type_def<'a>(query_root: &String, types: &HashSet<String>, typ: &TypeDefinition<'a, String>) -> Option<proc_macro2::TokenStream> {
+fn process_type_def<'a>(
+    query_root: &String,
+    types: &HashSet<String>,
+    typ: &TypeDefinition<'a, String>,
+) -> Option<proc_macro2::TokenStream> {
     match typ {
         TypeDefinition::Object(obj) => {
             if obj.name == *query_root {
@@ -147,12 +153,14 @@ fn process_type_def<'a>(query_root: &String, types: &HashSet<String>, typ: &Type
     }
 }
 
-fn process_definition<'a>(query_root: &String, types: &HashSet<String>, definition: &Definition<'a, String>) -> Option<proc_macro2::TokenStream> {
+fn process_definition<'a>(
+    query_root: &String,
+    types: &HashSet<String>,
+    definition: &Definition<'a, String>,
+) -> Option<proc_macro2::TokenStream> {
     match definition {
         Definition::TypeDefinition(def) => process_type_def(query_root, types, def),
-        Definition::SchemaDefinition(_def) => {
-            None
-        }
+        Definition::SchemaDefinition(_def) => None,
         def => {
             panic!("Unhandled definition type: {:?}", def);
         }
@@ -171,16 +179,13 @@ fn type_name<'a>(typ: &TypeDefinition<'a, String>) -> String {
 }
 
 fn get_query_root<'a>(types: &HashSet<String>, ast: &Document<'a, String>) -> String {
-    let schema = ast
-        .definitions
-        .iter()
-        .find_map(|def| {
-            if let Definition::SchemaDefinition(d) = def {
-                Some(d)
-            } else {
-                None
-            }
-        });
+    let schema = ast.definitions.iter().find_map(|def| {
+        if let Definition::SchemaDefinition(d) = def {
+            Some(d)
+        } else {
+            None
+        }
+    });
 
     if schema.is_none() {
         panic!("Schema definition not found!");

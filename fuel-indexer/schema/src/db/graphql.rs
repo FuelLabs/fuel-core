@@ -1,7 +1,7 @@
 use graphql_parser::query as gql;
+use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
-use itertools::Itertools;
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
@@ -75,10 +75,7 @@ pub struct Filter {
 
 impl Filter {
     pub fn new(name: String, value: String) -> Filter {
-        Filter {
-            name,
-            value,
-        }
+        Filter { name, value }
     }
 
     pub fn as_sql(&self) -> String {
@@ -113,18 +110,17 @@ impl Selections {
                         ..
                     } = field;
 
-                    let subfield_type = schema.field_type(field_type, name).ok_or_else(||
-                        GraphqlError::UnrecognizedField(
-                            field_type.into(),
-                            name.to_string(),
-                        )
-                    )?;
-
+                    let subfield_type = schema.field_type(field_type, name).ok_or_else(|| {
+                        GraphqlError::UnrecognizedField(field_type.into(), name.to_string())
+                    })?;
 
                     let mut filters = vec![];
                     for (arg, value) in arguments {
                         if schema.field_type(subfield_type, arg).is_none() {
-                            return Err(GraphqlError::UnrecognizedArgument(subfield_type.into(), arg.to_string()));
+                            return Err(GraphqlError::UnrecognizedArgument(
+                                subfield_type.into(),
+                                arg.to_string(),
+                            ));
                         }
 
                         let val = match value {
@@ -133,7 +129,9 @@ impl Selections {
                             gql::Value::String(val) => format!("{}", val),
                             gql::Value::Boolean(val) => format!("{}", val),
                             gql::Value::Null => String::from("NULL"),
-                            o => return Err(GraphqlError::UnsupportedValueType(format!("{:#?}", o))),
+                            o => {
+                                return Err(GraphqlError::UnsupportedValueType(format!("{:#?}", o)))
+                            }
                         };
 
                         filters.push(Filter::new(arg.to_string(), val));
@@ -190,7 +188,11 @@ impl Selections {
                     let field_type = schema.field_type(cond, name).unwrap();
                     let _ = sub_selection.resolve_fragments(schema, field_type, fragments)?;
 
-                    selections.push(Selection::Field(name.to_string(), filters.to_vec(), sub_selection.clone()));
+                    selections.push(Selection::Field(
+                        name.to_string(),
+                        filters.to_vec(),
+                        sub_selection.clone(),
+                    ));
                 }
             }
         }
@@ -250,11 +252,19 @@ pub struct Operation {
 
 impl Operation {
     pub fn new(namespace: String, name: String, selections: Selections) -> Operation {
-        Operation { namespace, name, selections }
+        Operation {
+            namespace,
+            name,
+            selections,
+        }
     }
 
     pub fn as_sql(&self) -> Vec<String> {
-        let Operation { namespace, selections, .. } = self;
+        let Operation {
+            namespace,
+            selections,
+            ..
+        } = self;
         let mut queries = Vec::new();
 
         // TODO: nested queries, joins, etc....
@@ -274,7 +284,12 @@ impl Operation {
 
                 let column_text = columns.join(", ");
 
-                let mut query = format!("SELECT {} FROM {}.{}", column_text, namespace, name.to_lowercase());
+                let mut query = format!(
+                    "SELECT {} FROM {}.{}",
+                    column_text,
+                    namespace,
+                    name.to_lowercase()
+                );
 
                 if filters.len() > 0 {
                     let filter_text: String = filters.iter().map(Filter::as_sql).join(" AND ");
@@ -333,7 +348,11 @@ impl<'a> GraphqlQueryBuilder<'a> {
             gql::OperationDefinition::SelectionSet(set) => {
                 let selections = Selections::new(&self.schema, &self.schema.query, set)?;
 
-                Ok(Operation::new(self.schema.namespace.clone(), "Unnamed".into(), selections))
+                Ok(Operation::new(
+                    self.schema.namespace.clone(),
+                    "Unnamed".into(),
+                    selections,
+                ))
             }
             gql::OperationDefinition::Query(q) => {
                 // TODO: directives and variable definitions....
@@ -348,7 +367,11 @@ impl<'a> GraphqlQueryBuilder<'a> {
                     Selections::new(&self.schema, &self.schema.query, selection_set)?;
                 selections.resolve_fragments(&self.schema, &self.schema.query, fragments)?;
 
-                Ok(Operation::new(self.schema.namespace.clone(), name, selections))
+                Ok(Operation::new(
+                    self.schema.namespace.clone(),
+                    name,
+                    selections,
+                ))
             }
             gql::OperationDefinition::Mutation(_) => {
                 Err(GraphqlError::OperationNotSupported("Mutation".into()))
@@ -512,11 +535,14 @@ mod tests {
         let q = q.expect("It's ok");
         let sql = q.as_sql();
 
-        assert_eq!(vec![
-            "SELECT account, hash FROM test_namespace.thing2 WHERE id = 1234".to_string(),
-            "SELECT account, hash, id FROM test_namespace.thing2 WHERE id = 84848".to_string(),
-            "SELECT account FROM test_namespace.thing1 WHERE id = 4321".to_string(),
-        ], sql);
+        assert_eq!(
+            vec![
+                "SELECT account, hash FROM test_namespace.thing2 WHERE id = 1234".to_string(),
+                "SELECT account, hash, id FROM test_namespace.thing2 WHERE id = 84848".to_string(),
+                "SELECT account FROM test_namespace.thing1 WHERE id = 4321".to_string(),
+            ],
+            sql
+        );
 
         ///WITH bleh ("col1", "col2") AS (
         ///    VALUES (1, 'a'), (2, 'b'), (3, 'c')
@@ -525,7 +551,6 @@ mod tests {
         ///     SELECT account, hash, (select array(select row_to_json(_) from bleh as _)) as f
         ///     FROM test_namespace.thing2 WHERE id = 78888
         /// ) as _;
-
         let bad_query = r#"
             fragment frag1 on BadType{
                 account

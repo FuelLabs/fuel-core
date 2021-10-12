@@ -6,7 +6,7 @@ use crate::{
 use diesel::prelude::PgConnection;
 use diesel::result::QueryResult;
 use graphql_parser::parse_schema;
-use graphql_parser::schema::{SchemaDefinition, Definition, Field, Type, TypeDefinition};
+use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefinition};
 
 #[derive(Default)]
 pub struct SchemaBuilder {
@@ -35,14 +35,18 @@ impl SchemaBuilder {
             Err(e) => panic!("Error parsing graphql schema {:?}", e),
         };
 
-        let root = ast.definitions.iter().filter_map(|s| {
-            if let Definition::SchemaDefinition(def) = s {
-                let SchemaDefinition { query, .. } = def;
-                query.as_ref()
-            } else {
-                None
-            }
-        }).next();
+        let root = ast
+            .definitions
+            .iter()
+            .filter_map(|s| {
+                if let Definition::SchemaDefinition(def) = s {
+                    let SchemaDefinition { query, .. } = def;
+                    query.as_ref()
+                } else {
+                    None
+                }
+            })
+            .next();
 
         if root.is_none() {
             panic!("TODO: this needs to be error type");
