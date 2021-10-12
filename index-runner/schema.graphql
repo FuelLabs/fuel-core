@@ -1,5 +1,10 @@
 schema {
-    query: Thing1
+    query: QueryRoot
+}
+
+type QueryRoot {
+    thing1: Thing1
+    thing2: Thing2
 }
 
 type Thing1 {

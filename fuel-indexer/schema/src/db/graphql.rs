@@ -1,6 +1,7 @@
 use graphql_parser::query as gql;
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
+use itertools::Itertools;
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
@@ -12,10 +13,14 @@ pub enum GraphqlError {
     UnrecognizedType(String),
     #[error("Unrecognized Field in {0:?}: {1:?}")]
     UnrecognizedField(String, String),
+    #[error("Unrecognized Argument in {0:?}: {1:?}")]
+    UnrecognizedArgument(String, String),
     #[error("Operation not supported: {0:?}")]
     OperationNotSupported(String),
     #[error("Fragment for {0:?} can't be used within {1:?}.")]
     InvalidFragmentSelection(Fragment, String),
+    #[error("Unsupported Value Type: {0:?}")]
+    UnsupportedValueType(String),
     #[error("Failed to resolve query fragments.")]
     FragmentResolverFailed,
     #[error("Selection not supported.")]
@@ -23,19 +28,21 @@ pub enum GraphqlError {
 }
 
 pub struct Schema {
+    namespace: String,
     query: String,
     types: HashSet<String>,
     fields: HashMap<String, HashMap<String, String>>,
 }
 
 impl Schema {
-    // TODO: sanity check schema
     pub fn new(
+        namespace: String,
         query: String,
         types: HashSet<String>,
         fields: HashMap<String, HashMap<String, String>>,
     ) -> Schema {
         Schema {
+            namespace,
             query,
             types,
             fields,
@@ -44,13 +51,6 @@ impl Schema {
 
     pub fn check_type(&self, type_name: &str) -> bool {
         self.types.contains(type_name)
-    }
-
-    pub fn check_field(&self, cond: &str, name: &str) -> bool {
-        match self.fields.get(cond) {
-            Some(fieldset) => fieldset.contains_key(name),
-            _ => false,
-        }
     }
 
     pub fn field_type(&self, cond: &str, name: &str) -> Option<&String> {
@@ -63,8 +63,27 @@ impl Schema {
 
 #[derive(Clone, Debug)]
 pub enum Selection {
-    Field(String, Selections),
+    Field(String, Vec<Filter>, Selections),
     Fragment(String),
+}
+
+#[derive(Clone, Debug)]
+pub struct Filter {
+    name: String,
+    value: String,
+}
+
+impl Filter {
+    pub fn new(name: String, value: String) -> Filter {
+        Filter {
+            name,
+            value,
+        }
+    }
+
+    pub fn as_sql(&self) -> String {
+        format!("{} = {}", self.name, self.value)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -86,24 +105,42 @@ impl Selections {
         for item in &set.items {
             match item {
                 gql::Selection::Field(field) => {
-                    // TODO: arguments, directives and sub-selections for nested types...
+                    // TODO: directives and sub-selections for nested types...
                     let gql::Field {
                         name,
                         selection_set,
+                        arguments,
                         ..
                     } = field;
 
-                    if !schema.check_field(field_type, name) {
-                        return Err(GraphqlError::UnrecognizedField(
+                    let subfield_type = schema.field_type(field_type, name).ok_or_else(||
+                        GraphqlError::UnrecognizedField(
                             field_type.into(),
                             name.to_string(),
-                        ));
+                        )
+                    )?;
+
+
+                    let mut filters = vec![];
+                    for (arg, value) in arguments {
+                        if schema.field_type(subfield_type, arg).is_none() {
+                            return Err(GraphqlError::UnrecognizedArgument(subfield_type.into(), arg.to_string()));
+                        }
+
+                        let val = match value {
+                            gql::Value::Int(val) => format!("{}", val.as_i64().unwrap()),
+                            gql::Value::Float(val) => format!("{}", val),
+                            gql::Value::String(val) => format!("{}", val),
+                            gql::Value::Boolean(val) => format!("{}", val),
+                            gql::Value::Null => String::from("NULL"),
+                            o => return Err(GraphqlError::UnsupportedValueType(format!("{:#?}", o))),
+                        };
+
+                        filters.push(Filter::new(arg.to_string(), val));
                     }
 
-                    let subfield_type = schema.field_type(field_type, name).unwrap();
                     let sub_selections = Selections::new(schema, subfield_type, selection_set)?;
-
-                    selections.push(Selection::Field(name.to_string(), sub_selections));
+                    selections.push(Selection::Field(name.to_string(), filters, sub_selections));
                 }
                 gql::Selection::FragmentSpread(frag) => {
                     let gql::FragmentSpread { fragment_name, .. } = frag;
@@ -149,11 +186,11 @@ impl Selections {
                         selections.push(Selection::Fragment(name.to_string()));
                     }
                 }
-                Selection::Field(name, sub_selection) => {
+                Selection::Field(name, filters, sub_selection) => {
                     let field_type = schema.field_type(cond, name).unwrap();
                     let _ = sub_selection.resolve_fragments(schema, field_type, fragments)?;
 
-                    selections.push(Selection::Field(name.to_string(), sub_selection.clone()));
+                    selections.push(Selection::Field(name.to_string(), filters.to_vec(), sub_selection.clone()));
                 }
             }
         }
@@ -206,22 +243,23 @@ impl Fragment {
 
 #[derive(Debug)]
 pub struct Operation {
+    namespace: String,
     name: String,
     selections: Selections,
 }
 
 impl Operation {
-    pub fn new(name: String, selections: Selections) -> Operation {
-        Operation { name, selections }
+    pub fn new(namespace: String, name: String, selections: Selections) -> Operation {
+        Operation { namespace, name, selections }
     }
 
     pub fn as_sql(&self) -> Vec<String> {
-        let Operation { selections, .. } = self;
+        let Operation { namespace, selections, .. } = self;
         let mut queries = Vec::new();
 
         // TODO: nested queries, joins, etc....
         for selection in selections.get_selections() {
-            if let Selection::Field(name, selections) = selection {
+            if let Selection::Field(name, filters, selections) = selection {
                 let columns: Vec<_> = selections
                     .get_selections()
                     .into_iter()
@@ -236,7 +274,13 @@ impl Operation {
 
                 let column_text = columns.join(", ");
 
-                let query = format!("SELECT {} FROM {}", column_text, name.to_lowercase());
+                let mut query = format!("SELECT {} FROM {}.{}", column_text, namespace, name.to_lowercase());
+
+                if filters.len() > 0 {
+                    let filter_text: String = filters.iter().map(Filter::as_sql).join(" AND ");
+                    query.push_str(format!(" WHERE {}", filter_text).as_str());
+                }
+
                 queries.push(query)
             }
         }
@@ -289,7 +333,7 @@ impl<'a> GraphqlQueryBuilder<'a> {
             gql::OperationDefinition::SelectionSet(set) => {
                 let selections = Selections::new(&self.schema, &self.schema.query, set)?;
 
-                Ok(Operation::new("Unnamed".into(), selections))
+                Ok(Operation::new(self.schema.namespace.clone(), "Unnamed".into(), selections))
             }
             gql::OperationDefinition::Query(q) => {
                 // TODO: directives and variable definitions....
@@ -304,7 +348,7 @@ impl<'a> GraphqlQueryBuilder<'a> {
                     Selections::new(&self.schema, &self.schema.query, selection_set)?;
                 selections.resolve_fragments(&self.schema, &self.schema.query, fragments)?;
 
-                Ok(Operation::new(name, selections))
+                Ok(Operation::new(self.schema.namespace.clone(), name, selections))
             }
             gql::OperationDefinition::Mutation(_) => {
                 Err(GraphqlError::OperationNotSupported("Mutation".into()))
@@ -425,7 +469,7 @@ mod tests {
             ("Thing1".to_string(), f2),
             ("Thing2".to_string(), f3),
         ]);
-        Schema::new("Query".into(), types, fields)
+        Schema::new("test_namespace".to_string(), "Query".into(), types, fields)
     }
 
     #[test]
@@ -466,10 +510,21 @@ mod tests {
         let q = query.expect("It's ok here").build();
         assert!(q.is_ok());
         let q = q.expect("It's ok");
-        println!("TJDEBUG {:#?}", q);
         let sql = q.as_sql();
-        println!("TJDEBUG {:#?}", sql);
-        assert_eq!(1, 2);
+
+        assert_eq!(vec![
+            "SELECT account, hash FROM test_namespace.thing2 WHERE id = 1234".to_string(),
+            "SELECT account, hash, id FROM test_namespace.thing2 WHERE id = 84848".to_string(),
+            "SELECT account FROM test_namespace.thing1 WHERE id = 4321".to_string(),
+        ], sql);
+
+        ///WITH bleh ("col1", "col2") AS (
+        ///    VALUES (1, 'a'), (2, 'b'), (3, 'c')
+        ///)
+        ///SELECT row_to_json(_) from (
+        ///     SELECT account, hash, (select array(select row_to_json(_) from bleh as _)) as f
+        ///     FROM test_namespace.thing2 WHERE id = 78888
+        /// ) as _;
 
         let bad_query = r#"
             fragment frag1 on BadType{

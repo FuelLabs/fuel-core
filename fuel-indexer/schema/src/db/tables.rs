@@ -6,7 +6,7 @@ use crate::{
 use diesel::prelude::PgConnection;
 use diesel::result::QueryResult;
 use graphql_parser::parse_schema;
-use graphql_parser::schema::{Definition, Field, Type, TypeDefinition};
+use graphql_parser::schema::{SchemaDefinition, Definition, Field, Type, TypeDefinition};
 
 #[derive(Default)]
 pub struct SchemaBuilder {
@@ -35,10 +35,25 @@ impl SchemaBuilder {
             Err(e) => panic!("Error parsing graphql schema {:?}", e),
         };
 
+        let root = ast.definitions.iter().filter_map(|s| {
+            if let Definition::SchemaDefinition(def) = s {
+                let SchemaDefinition { query, .. } = def;
+                query.as_ref()
+            } else {
+                None
+            }
+        }).next();
+
+        if root.is_none() {
+            panic!("TODO: this needs to be error type");
+        }
+
+        let root = root.cloned().unwrap();
+
         for def in ast.definitions.iter() {
             match def {
                 Definition::TypeDefinition(typ) => {
-                    self.generate_table_sql(typ);
+                    self.generate_table_sql(&root, typ);
                 }
                 _ => (), // Schema definitions, directives and type extensions will be skipped for now.
             }
@@ -52,6 +67,7 @@ impl SchemaBuilder {
         } = self;
 
         Schema {
+            root,
             statements,
             type_ids,
             columns,
@@ -102,9 +118,13 @@ impl SchemaBuilder {
         fragments.join(",\n")
     }
 
-    fn generate_table_sql<'a>(&mut self, typ: &TypeDefinition<'a, String>) {
+    fn generate_table_sql<'a>(&mut self, root: &String, typ: &TypeDefinition<'a, String>) {
         match typ {
             TypeDefinition::Object(o) => {
+                if &o.name == root {
+                    return;
+                }
+
                 let type_id = type_id(&o.name);
                 let columns = self.generate_columns(type_id as i64, &o.fields);
                 let table_name = o.name.to_lowercase();
@@ -129,6 +149,7 @@ impl SchemaBuilder {
 }
 
 pub struct Schema {
+    pub root: String,
     pub statements: Vec<String>,
     pub type_ids: Vec<TypeIds>,
     pub columns: Vec<NewColumn>,

@@ -110,7 +110,7 @@ impl From<&str> for ColumnType {
             "ContractId" => ColumnType::ContractId,
             "Salt" => ColumnType::Salt,
             "Blob`" => ColumnType::Blob,
-            _ => panic!("Invalid column type!"),
+            _ => panic!("Invalid column type! {}", name),
         }
     }
 }
