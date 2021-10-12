@@ -5,7 +5,7 @@ metadata:
 spec:
   storageClassName: db-storage
   capacity:
-    storage: 3Gi
+    storage: 1Gi
   accessModes:
     - ReadWriteMany
   hostPath:
