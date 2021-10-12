@@ -1,29 +1,71 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: db-volume
+spec:
+  storageClassName: db-storage
+  capacity:
+    storage: 3Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/db/"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: db-volume-pv-claim
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: db-storage
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
-  labels:
-    app: fuel-core-k8
   name: fuel-core-k8
+  labels:
+    app: fuel-core
 spec:
-  replicas: 3
   selector:
     matchLabels:
-      app: fuel-core-k8
-  strategy: {}
+      app: fuel-core
+  replicas: 1
   template:
     metadata:
-      creationTimestamp: null
       labels:
-        app: fuel-core-k8
+        app: fuel-core
     spec:
       containers:
-      - image: fuel-core
-        name: fuel-core
-        resources: {}
-        imagePullPolicy: Never
-        livenessProbe:
-          httpGet:
-            path: /health
-          initialDelaySeconds: 3
-          periodSeconds: 3
+        - name: fuel-core
+          image: fuel-core
+          resources: {}
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 4000
+          volumeMounts:
+            - name: db-volume
+              mountPath: /mnt/db/
+      volumes:
+        - name: db-volume
+          persistentVolumeClaim:
+            claimName: db-volume-pv-claim
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: fuel-core
+  name: fuel-core-k8-lb
+spec:
+  ports:
+    - port: 4000
+      targetPort: 4000
+      protocol: TCP
+      name: http
+  selector:
+    app: fuel-core
+  type: LoadBalancer

@@ -1,31 +1,50 @@
 # Stage 1: Build
 FROM rust:1.53 as builder
+
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
-COPY ./ ./build
+
+# hadolint ignore=DL3008
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    clang \
+    libclang-dev \
+    libssl-dev \
+    && mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /build/
+
+COPY . .
+
 RUN --mount=type=ssh cargo build --release
 
 # Stage 2: Run
 FROM ubuntu:18.04 as run
 
-# Supports a default, e.g. ARG PORT=4000
+ARG IP=0.0.0.0
 ARG PORT=4000
-ENV PORT="${PORT}"
+ARG DB_PATH=./mnt/db/
 
-RUN apt-get update
-RUN apt-get install -y \
-    clang \
+ENV IP="${IP}"
+ENV PORT="${PORT}"
+ENV DB_PATH="${DB_PATH}"
+
+# hadolint ignore=DL3008
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     curl \
-    libclang-dev \
-    libssl-dev
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
 
 COPY --from=builder /build/target/release/fuel-core .
 COPY --from=builder /build/target/release/fuel-core.d .
 
-# CMD ./fuel-core --ip 0.0.0.0 --port 4000
-ENTRYPOINT ./fuel-core --ip 0.0.0.0 --port $PORT
+# https://stackoverflow.com/a/44671685
+# https://stackoverflow.com/a/40454758
+# hadolint ignore=DL3025
+CMD exec ./fuel-core --ip ${IP} --port ${PORT} --db-path ${DB_PATH}
 
-EXPOSE $PORT
+EXPOSE ${PORT}
