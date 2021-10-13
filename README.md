@@ -54,17 +54,19 @@ The service relies on the environment variable `RUST_LOG`. For more information,
 
 ## Docker & Kubernetes
 ```
-# Build Docker Image
-ssh-add ~/.ssh/id_ed25519 && docker build --ssh default -t fuel-core .
+# Create Docker Image
+ssh-add ~/.ssh/id_ed25519 && docker build --ssh default -t fuel-core . -f deployment/Dockerfile
 
-# Create Kubernetes Deployment
-kubectl create deployment fuel-core-k8 --image fuel-core
+ssh-add ~/.ssh/id_rsa && docker build --ssh default -t fuel-core . -f deployment/Dockerfile
 
-# Scale Kubernetes Deployment
-kubectl scale deployment fuel-core-k8 --replicas=3
+# Delete Docker Image
+docker image rm fuel-core
 
-# Expose Port
-kubectl expose deployments/fuel-core-k8 --port=4000 --name=fuel-core-k8-lb --type=LoadBalancer
+# Create Kubernetes Volume, Deployment & Service
+kubectl create -f deployment/fuel-core.yml
+
+# Delete Kubernetes Volume, Deployment & Service
+kubectl delete -f deployment/fuel-core.yml
 ```
 
 ## GraphQL service
