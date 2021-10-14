@@ -55,9 +55,9 @@ The service relies on the environment variable `RUST_LOG`. For more information,
 ## Docker & Kubernetes
 ```
 # Create Docker Image
-ssh-add ~/.ssh/id_ed25519 && docker build --ssh default -t fuel-core . -f deployment/Dockerfile
+ssh-add ~/.ssh/id_ed25519 && DOCKER_BUILDKIT=1 docker build --ssh default -t fuel-core . -f deployment/Dockerfile
 
-ssh-add ~/.ssh/id_rsa && docker build --ssh default -t fuel-core . -f deployment/Dockerfile
+ssh-add ~/.ssh/id_rsa && DOCKER_BUILDKIT=1 docker build --ssh default -t fuel-core . -f deployment/Dockerfile
 
 # Delete Docker Image
 docker image rm fuel-core
