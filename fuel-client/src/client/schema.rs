@@ -1,4 +1,4 @@
-mod schema {
+pub mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 

@@ -1,5 +1,5 @@
 use crate::client::schema::{
-    schema, tx::Transaction, ConnectionArgs, DateTime, HexString256, PageInfo,
+    schema, tx::OpaqueTransaction, ConnectionArgs, DateTime, HexString256, PageInfo,
 };
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -50,7 +50,7 @@ pub struct Block {
     pub id: HexString256,
     pub time: DateTime,
     pub producer: HexString256,
-    pub transactions: Vec<Transaction>,
+    pub transactions: Vec<OpaqueTransaction>,
 }
 
 #[cfg(test)]

@@ -4,6 +4,9 @@ use fuel_core::schema::scalars::HexString256;
 use fuel_core::service::{configure, run_in_background};
 use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
+pub use schema::*;
+
+pub mod schema;
 
 #[tokio::test]
 async fn transact() {
@@ -26,7 +29,7 @@ async fn transact() {
         .flatten()
         .collect();
 
-    let tx = Transaction::script(
+    let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
         maturity,
@@ -54,10 +57,10 @@ async fn transact() {
 #[tokio::test]
 async fn get_transaction_by_id() {
     // setup test data in the node
-    let transaction = Transaction::default();
+    let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
     let db = SharedDatabase::default();
-    KvStore::<Bytes32, Transaction>::insert(db.as_ref(), &id, &transaction).unwrap();
+    KvStore::<Bytes32, fuel_tx::Transaction>::insert(db.as_ref(), &id, &transaction).unwrap();
 
     // setup server & client
     let srv = run_in_background(configure(db)).await;

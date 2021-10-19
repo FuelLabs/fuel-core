@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use std::str::{self, FromStr};
 use std::{io, net};
 
-mod schema;
+pub mod schema;
 
 use crate::client::schema::coin::{Coin, CoinByIdArgs, CoinConnection, CoinsByOwnerConnectionArgs};
 use crate::client::schema::tx::TxArg;
@@ -134,12 +134,12 @@ impl FuelClient {
         Ok(serde_json::from_str(memory.as_str())?)
     }
 
-    pub async fn transaction(&self, id: &str) -> io::Result<Option<schema::tx::Transaction>> {
+    pub async fn transaction(&self, id: &str) -> io::Result<Option<fuel_tx::Transaction>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;
 
-        Ok(transaction)
+        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
