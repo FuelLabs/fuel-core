@@ -52,6 +52,23 @@ Jul 12 23:28:47.239  INFO actix_server::builder: Starting "actix-web-service-127
 
 The service relies on the environment variable `RUST_LOG`. For more information, check the [env_logger](https://docs.rs/env_logger) crate.
 
+## Docker & Kubernetes
+```
+# Create Docker Image
+ssh-add ~/.ssh/id_ed25519 && DOCKER_BUILDKIT=1 docker build --ssh default -t fuel-core . -f deployment/Dockerfile
+
+ssh-add ~/.ssh/id_rsa && DOCKER_BUILDKIT=1 docker build --ssh default -t fuel-core . -f deployment/Dockerfile
+
+# Delete Docker Image
+docker image rm fuel-core
+
+# Create Kubernetes Volume, Deployment & Service
+kubectl create -f deployment/fuel-core.yml
+
+# Delete Kubernetes Volume, Deployment & Service
+kubectl delete -f deployment/fuel-core.yml
+```
+
 ## GraphQL service
 
 The client functionality is available through service endpoints that expect GraphQL queries.
