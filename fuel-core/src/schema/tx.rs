@@ -141,3 +141,8 @@ impl TxMutation {
         Ok(id.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}

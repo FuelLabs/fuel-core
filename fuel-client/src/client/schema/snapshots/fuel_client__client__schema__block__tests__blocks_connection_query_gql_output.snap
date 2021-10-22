@@ -14,6 +14,9 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
         producer
         transactions {
           rawPayload
+          receipts {
+            rawPayload
+          }
         }
       }
     }

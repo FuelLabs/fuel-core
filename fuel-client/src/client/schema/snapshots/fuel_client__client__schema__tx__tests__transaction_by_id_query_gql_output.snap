@@ -6,6 +6,9 @@ expression: operation.query
 query Query($_0: HexString256!) {
   transaction(id: $_0) {
     rawPayload
+    receipts {
+      rawPayload
+    }
   }
 }
 

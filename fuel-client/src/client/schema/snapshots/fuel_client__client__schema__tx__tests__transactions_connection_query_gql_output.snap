@@ -9,6 +9,9 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
       cursor
       node {
         rawPayload
+        receipts {
+          rawPayload
+        }
       }
     }
     pageInfo {

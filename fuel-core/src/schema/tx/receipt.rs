@@ -1,8 +1,8 @@
-use crate::schema::scalars::HexString256;
+use crate::schema::scalars::{HexString, HexString256};
 use async_graphql::{Enum, Object};
 use derive_more::Display;
 use fuel_asm::Word;
-use fuel_tx::Receipt as TxReceipt;
+use fuel_tx::{Receipt as TxReceipt, bytes::SerializableVec};
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
 pub enum ReceiptType {
@@ -96,5 +96,8 @@ impl Receipt {
     }
     async fn receipt_type(&self) -> ReceiptType {
         self.0.into()
+    }
+    async fn raw_payload(&self) -> HexString {
+        HexString(self.0.clone().to_bytes())
     }
 }

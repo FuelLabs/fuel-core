@@ -4,9 +4,6 @@ use fuel_core::schema::scalars::HexString256;
 use fuel_core::service::{configure, run_in_background};
 use fuel_vm::consts::*;
 use fuel_vm::prelude::*;
-pub use schema::*;
-
-pub mod schema;
 
 #[tokio::test]
 async fn transact() {

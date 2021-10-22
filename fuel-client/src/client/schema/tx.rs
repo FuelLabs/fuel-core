@@ -1,18 +1,15 @@
-use crate::client::schema::tx::receipt::Receipt;
 use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
 use fuel_tx::bytes::Deserializable;
 use std::convert::TryFrom;
 
-pub mod receipt;
-
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
     pub id: HexString256,
 }
 
-/// Retrieves the transaction in transparent form
+/// Retrieves the transaction in opaque form
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -23,7 +20,6 @@ pub struct TransactionQuery {
     #[arguments(id = &args.id)]
     pub transaction: Option<OpaqueTransaction>,
 }
-
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
@@ -54,6 +50,7 @@ pub struct TransactionEdge {
 #[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
+    pub receipts: Option<Vec<OpaqueReceipt>>,
 }
 
 impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
@@ -63,6 +60,22 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
         let bytes = value.raw_payload.0 .0;
         fuel_tx::Transaction::from_bytes(bytes.as_slice())
             .map_err(|e| ConversionError::TransactionFromBytesError(e))
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(graphql_type = "Receipt", schema_path = "./assets/schema.sdl")]
+pub struct OpaqueReceipt {
+    pub raw_payload: HexString,
+}
+
+impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
+    type Error = ConversionError;
+
+    fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
+        let bytes = value.raw_payload.0 .0;
+        fuel_tx::Receipt::from_bytes(bytes.as_slice())
+            .map_err(|e| ConversionError::ReceiptFromBytesError(e))
     }
 }
 
@@ -111,17 +124,20 @@ pub struct TxArg {
 )]
 pub struct DryRun {
     #[arguments(tx = &args.tx)]
-    pub dry_run: Vec<Receipt>,
+    pub dry_run: Vec<OpaqueReceipt>,
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
+    pub mod transparent_receipt;
+    pub mod transparent_tx;
+
     #[test]
-    fn transaction_by_id_query_gql_output() {
+    fn transparent_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = TransactionQuery::build(TxIdArgs {
+        let operation = transparent_tx::TransactionQuery::build(TxIdArgs {
             id: HexString256::default(),
         });
         insta::assert_snapshot!(operation.query)

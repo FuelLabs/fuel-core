@@ -11,6 +11,9 @@ query Query($_0: HexString256) {
     producer
     transactions {
       rawPayload
+      receipts {
+        rawPayload
+      }
     }
   }
 }

@@ -15,6 +15,9 @@ query Query {
       producer
       transactions {
         rawPayload
+        receipts {
+          rawPayload
+        }
       }
     }
   }
