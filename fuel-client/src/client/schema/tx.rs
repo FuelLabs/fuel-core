@@ -127,6 +127,17 @@ pub struct DryRun {
     pub dry_run: Vec<OpaqueReceipt>,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "TxArg"
+)]
+pub struct Submit {
+    #[arguments(tx = &args.tx)]
+    pub submit: HexString256,
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;

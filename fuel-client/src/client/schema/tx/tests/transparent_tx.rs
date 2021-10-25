@@ -1,8 +1,11 @@
-use crate::client::schema::tx::tests::transparent_receipt::Receipt;
-use crate::client::schema::tx::Status;
-use crate::client::schema::{schema, ConversionError, HexString, HexString256, PageInfo};
-use crate::client::tx::ConnectionArgs;
-use crate::client::tx::TxIdArgs;
+use crate::client::{
+    schema::{
+        schema,
+        tx::{tests::transparent_receipt::Receipt, Status},
+        ConversionError, HexString, HexString256, PageInfo,
+    },
+    tx::{ConnectionArgs, TxIdArgs},
+};
 use core::convert::{TryFrom, TryInto};
 
 /// Retrieves the transaction in opaque form

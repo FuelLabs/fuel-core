@@ -86,6 +86,14 @@ impl FuelClient {
             .collect()
     }
 
+    pub async fn submit(&self, tx: &Transaction) -> io::Result<HexString256> {
+        let tx = serde_json::to_string(tx)?;
+        let query = schema::tx::Submit::build(&TxArg { tx });
+
+        let id = self.query(query).await.map(|r| r.submit)?;
+        Ok(id)
+    }
+
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(&());
 
@@ -141,6 +149,16 @@ impl FuelClient {
 
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
+    //
+    // pub async fn receipts(&self, id: &HexString256) -> io::Result<Option<Vec<fuel_tx::Receipt>>> {
+    //     let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.clone() });
+    //
+    //     let tx = self.query(query).await?.transaction.ok_or(|| );
+    //
+    //     let receipts = tx.map(|tx| tx.receipts.into_iter().map(|r| r.try_into()).collect());
+    //
+    //     Ok(receipts.transpose()?)
+    // }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
         let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
@@ -193,5 +211,19 @@ impl FuelClient {
 
         let coins = self.query(query).await?.coins_by_owner;
         Ok(coins)
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl FuelClient {
+    pub async fn transparent_transaction(
+        &self,
+        id: &str,
+    ) -> io::Result<Option<fuel_tx::Transaction>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let transaction = self.query(query).await?.transaction;
+
+        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 }

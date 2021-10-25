@@ -70,3 +70,34 @@ async fn get_transaction_by_id() {
         .unwrap();
     assert!(transaction.is_some());
 }
+
+#[tokio::test]
+async fn get_transparent_transaction_by_id() {
+    // setup test data in the node
+    let transaction = fuel_tx::Transaction::default();
+    let id = transaction.id();
+
+    // setup server & client
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
+
+    // submit tx
+    let result = client.submit(&transaction).await;
+    assert!(result.is_ok());
+
+    let opaque_tx = client
+        .transaction(&HexString256::from(id.clone()).to_string())
+        .await
+        .unwrap()
+        .expect("expected some result");
+
+    // run test
+    let transparent_transaction = client
+        .transparent_transaction(&HexString256::from(id).to_string())
+        .await
+        .unwrap()
+        .expect("expected some value");
+
+    // verify transaction round-trips via transparent graphql
+    assert_eq!(opaque_tx, transparent_transaction);
+}
