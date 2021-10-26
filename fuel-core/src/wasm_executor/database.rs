@@ -198,6 +198,7 @@ impl Database {
 mod tests {
     use super::*;
     use crate::wasm_executor::IndexEnv;
+    use fuel_tx::Address;
     use wasmer::{imports, Instance, Module, Store, WasmerEnv};
     use wasmer_compiler_llvm::LLVM;
     use wasmer_engine_universal::Universal;
@@ -205,6 +206,7 @@ mod tests {
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
+    const THING1_TYPE: u64 = 0x89F35D3CD458C71E;
     const TEST_COLUMNS: [(&'static str, i32, &'static str); 7] = [
         ("thing1", 0, "id"),
         ("thing1", 1, "account"),
@@ -267,5 +269,18 @@ mod tests {
         for column in TEST_COLUMNS.iter() {
             assert!(db.schema.contains_key(column.0));
         }
+
+        let object_id = 4;
+        let columns = vec![FtColumn::ID(object_id), FtColumn::Address(Address::from([0x04; 32]))];
+        let bytes = vec![0u8, 1u8, 2u8, 3u8];
+        db.put_object(THING1_TYPE, columns, bytes.clone());
+
+        let obj = db.get_object(THING1_TYPE, object_id);
+        assert!(obj.is_some());
+        let obj = obj.unwrap();
+
+        assert_eq!(obj, bytes);
+
+        assert_eq!(db.get_object(THING1_TYPE, 90), None);
     }
 }
