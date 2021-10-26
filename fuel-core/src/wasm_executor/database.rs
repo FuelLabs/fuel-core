@@ -16,8 +16,41 @@ use fuel_indexer_schema::{
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
+//#[cfg(test)]
+//mod test_helpers {
+//    use diesel::{connection::Connection, prelude::PgConnection};
+//
+//    #[derive(Debug)]
+//    pub struct TestTransaction;
+//
+//    impl r2d2::CustomizeConnection<PgConnection, r2d2_diesel::Error> for TestTransaction {
+//        fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), r2d2_diesel::Error> {
+//            conn.begin_test_transaction().unwrap();
+//            Ok(())
+//        }
+//    }
+//}
+
 #[derive(Clone)]
 pub struct DbPool(PgConnectionPool);
+
+impl DbPool {
+    //    #[cfg(not(test))]
+    pub fn new(db_conn: impl Into<String>) -> IndexerResult<DbPool> {
+        let manager = ConnectionManager::<PgConnection>::new(db_conn);
+        Ok(DbPool(r2d2::Pool::builder().build(manager)?))
+    }
+
+    //#[cfg(test)]
+    //pub fn new(db_conn: impl Into<String>) -> IndexerResult<DbPool> {
+    //    let manager = ConnectionManager::<PgConnection>::new(db_conn);
+    //    let pool = r2d2::Pool::builder()
+    //        .connection_customizer(Box::new(test_helpers::TestTransaction))
+    //        .max_size(1)
+    //        .build(manager)?;
+    //    Ok(DbPool(pool))
+    //}
+}
 
 impl Deref for DbPool {
     type Target = PgConnectionPool;
@@ -40,15 +73,10 @@ pub struct SchemaManager {
 
 impl SchemaManager {
     pub fn new(db_conn: impl Into<String>) -> IndexerResult<SchemaManager> {
-        let manager = ConnectionManager::<PgConnection>::new(db_conn);
-        let pool = DbPool(r2d2::Pool::builder().build(manager)?);
+        let pool = DbPool::new(db_conn)?;
 
         Ok(SchemaManager { pool })
     }
-
-    //pub fn load_schema(&self, name: &str, schema: &str) -> IndexerResult<DbSchema> {
-    //    unimplemented!();
-    //}
 
     pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<()> {
         let connection = self.pool.get()?;
@@ -86,8 +114,7 @@ pub struct Database {
 
 impl Database {
     pub fn new(db_conn: impl Into<String>) -> IndexerResult<Database> {
-        let manager = ConnectionManager::<PgConnection>::new(db_conn);
-        let pool = DbPool(r2d2::Pool::builder().build(manager)?);
+        let pool = DbPool::new(db_conn)?;
 
         Ok(Database {
             pool,
@@ -164,5 +191,81 @@ impl Database {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::wasm_executor::IndexEnv;
+    use wasmer::{imports, Instance, Module, Store, WasmerEnv};
+    use wasmer_compiler_llvm::LLVM;
+    use wasmer_engine_universal::Universal;
+
+    const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+    const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
+    const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
+    const TEST_COLUMNS: [(&'static str, i32, &'static str); 7] = [
+        ("thing1", 0, "id"),
+        ("thing1", 1, "account"),
+        ("thing1", 2, "object"),
+        ("thing2", 0, "id"),
+        ("thing2", 1, "account"),
+        ("thing2", 2, "hash"),
+        ("thing2", 3, "object"),
+    ];
+
+    fn wasm_instance() -> IndexerResult<Instance> {
+        let compiler = LLVM::default();
+        let store = Store::new(&Universal::new(compiler).engine());
+        let module = Module::new(&store, WASM_BYTES)?;
+
+        let mut import_object = imports! {};
+
+        let mut env = IndexEnv::new(DATABASE_URL.to_string())?;
+        let exports = ffi::get_exports(&env, &store);
+        import_object.register("env", exports);
+
+        let instance = Instance::new(&module, &import_object)?;
+        env.init_with_instance(&instance)?;
+        Ok(instance)
+    }
+
+    #[test]
+    #[ignore] // need a database set up to run this
+    fn test_schema_manager() {
+        let manager = SchemaManager::new(DATABASE_URL).expect("Could not create SchemaManager");
+
+        let result = manager.new_schema("test_namespace", GRAPHQL_SCHEMA);
+        assert!(result.is_ok());
+
+        let result = manager.new_schema("test_namespace", GRAPHQL_SCHEMA);
+        assert!(result.is_ok());
+
+        let pool = DbPool::new(DATABASE_URL).expect("Connection pool error");
+
+        let version = schema_version(GRAPHQL_SCHEMA);
+        let conn = pool.get().unwrap();
+        let results = ColumnInfo::get_schema(&conn, "test_namespace", &version)
+            .expect("Metadata query failed");
+
+        for (index, result) in results.into_iter().enumerate() {
+            assert_eq!(result.table_name, TEST_COLUMNS[index].0);
+            assert_eq!(result.column_position, TEST_COLUMNS[index].1);
+            assert_eq!(result.column_name, TEST_COLUMNS[index].2);
+        }
+
+        let instance = wasm_instance().expect("Error creating WASM module");
+
+        let mut db = Database::new(DATABASE_URL).expect("Failed to create database object.");
+
+        db.load_schema(&instance).expect("Could not load db schema");
+
+        assert_eq!(db.namespace, "test_namespace");
+        assert_eq!(db.version, version);
+
+        for column in TEST_COLUMNS.iter() {
+            assert!(db.schema.contains_key(column.0));
+        }
     }
 }
