@@ -9,7 +9,7 @@
   1. IndexExecutor: load WASM, execute event triggers
 1. ffi.rs - functions callable from WASM, loading data structures to/from WASM
 1. manifest.rs - the yaml format for a graphql instance
-  1. namespace: The unique namespace this graphql schema lives in. This will correspond to the SQL database schema as well.\
+  1. namespace: The unique namespace this graphql schema lives in. This will correspond to the SQL database schema as well.
   1. graphql_schema: file path for the graphql schema.
   1. wasm_module: file path for the indexer WASM.
   1. handlers: list of mappings from event -> event_handler_name.

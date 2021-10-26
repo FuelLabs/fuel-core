@@ -1,6 +1,6 @@
-use crate::runtime::database::Database;
-use crate::runtime::ffi;
-use crate::runtime::{IndexerError, IndexerResult, Manifest};
+use crate::wasm_executor::database::Database;
+use crate::wasm_executor::ffi;
+use crate::wasm_executor::{IndexerError, IndexerResult, Manifest};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};

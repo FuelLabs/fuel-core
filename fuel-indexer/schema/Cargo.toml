@@ -11,9 +11,9 @@ fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features 
 graphql-parser = "0.3.0"
 itertools = { version = "0.10.1", optional=true }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }
-thiserror = { version  = "1.0.26", optional=true }
 serde-scale = "0.2.2"
 sha2 = "0.9.6"
+thiserror = { version  = "1.0.26", optional=true }
 
 [features]
 default = ["fuel-tx/serde-types-minimal"]

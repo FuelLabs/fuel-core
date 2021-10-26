@@ -1,4 +1,4 @@
-use fuel_core::runtime::{IndexExecutor, Manifest, SchemaManager};
+use fuel_core::wasm_executor::{IndexExecutor, Manifest, SchemaManager};
 use fuel_indexer::types::*;
 use serde_json;
 use std::fs;

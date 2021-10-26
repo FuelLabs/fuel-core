@@ -6,8 +6,8 @@ use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
 
-use crate::runtime::ffi;
-use crate::runtime::IndexerResult;
+use crate::wasm_executor::ffi;
+use crate::wasm_executor::IndexerResult;
 use fuel_indexer_schema::{
     db::models::{ColumnInfo, EntityData, TypeIds},
     db::tables::SchemaBuilder,
