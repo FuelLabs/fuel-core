@@ -1,12 +1,9 @@
-use crate::state::in_memory::{column_key, is_column};
 use crate::state::{
+    in_memory::{column_key, is_column},
     BatchOperations, ColumnId, IterDirection, KeyValueStore, Result, TransactableStorage,
 };
 use itertools::Itertools;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::mem::size_of;
-use std::sync::Mutex;
+use std::{collections::HashMap, fmt::Debug, mem::size_of, sync::Mutex};
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {

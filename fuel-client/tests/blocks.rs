@@ -1,9 +1,12 @@
 use chrono::{TimeZone, Utc};
 use fuel_client::client::FuelClient;
-use fuel_core::database::{KvStore, SharedDatabase};
-use fuel_core::model::fuel_block::FuelBlock;
-use fuel_core::schema::scalars::HexString256;
-use fuel_core::service::{configure, run_in_background};
+use fuel_core::database::Database;
+use fuel_core::{
+    model::fuel_block::FuelBlock,
+    schema::scalars::HexString256,
+    service::{configure, run_in_background},
+};
+use fuel_storage::Storage;
 use fuel_vm::prelude::Bytes32;
 use itertools::{rev, Itertools};
 
@@ -12,8 +15,8 @@ async fn block() {
     // setup test data in the node
     let block = FuelBlock::default();
     let id = block.id();
-    let db = SharedDatabase::default();
-    KvStore::<Bytes32, FuelBlock>::insert(db.as_ref(), &id, &block).unwrap();
+    let mut db = Database::default();
+    Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
 
     // setup server & client
     let srv = run_in_background(configure(db)).await;
@@ -40,10 +43,10 @@ async fn block_connection_first_5() {
         .collect_vec();
 
     // setup test data in the node
-    let db = SharedDatabase::default();
+    let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        KvStore::<Bytes32, FuelBlock>::insert(db.as_ref(), &id, &block).unwrap();
+        Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
     }
 
     // setup server & client
@@ -78,10 +81,10 @@ async fn block_connection_last_5() {
         .collect_vec();
 
     // setup test data in the node
-    let db = SharedDatabase::default();
+    let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        KvStore::<Bytes32, FuelBlock>::insert(db.as_ref(), &id, &block).unwrap();
+        Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
     }
 
     // setup server & client

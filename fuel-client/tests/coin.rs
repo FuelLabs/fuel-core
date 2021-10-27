@@ -1,8 +1,11 @@
 use fuel_client::client::FuelClient;
-use fuel_core::database::{KvStore, SharedDatabase};
-use fuel_core::model::coin::{Coin, CoinStatus, TxoPointer};
-use fuel_core::schema::scalars::HexString256;
-use fuel_core::service::{configure, run_in_background};
+use fuel_core::{
+    database::Database,
+    model::coin::{Coin, CoinStatus, TxoPointer},
+    schema::scalars::HexString256,
+    service::{configure, run_in_background},
+};
+use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
@@ -24,8 +27,8 @@ async fn coin() {
     };
 
     let id: Bytes32 = txo_pointer.into();
-    let db = SharedDatabase::default();
-    KvStore::<Bytes32, Coin>::insert(db.as_ref(), &id, &coin).unwrap();
+    let mut db = Database::default();
+    Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
 
     // setup server & client
     let srv = run_in_background(configure(db)).await;
@@ -64,9 +67,9 @@ async fn first_5_coins() {
         })
         .collect();
 
-    let db = SharedDatabase::default();
+    let mut db = Database::default();
     for (id, coin) in coins {
-        KvStore::<Bytes32, Coin>::insert(db.as_ref(), &id, &coin).unwrap();
+        Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
     }
 
     // setup server & client

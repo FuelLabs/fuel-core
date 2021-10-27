@@ -1,14 +1,20 @@
-use crate::database::{KvStore, KvStoreError, SharedDatabase};
-use crate::model::fuel_block::{BlockHeight, FuelBlock};
-use crate::schema::scalars::HexString256;
-use crate::schema::tx::types::Transaction;
-use crate::state::IterDirection;
-use async_graphql::connection::Edge;
-use async_graphql::connection::{query, Connection, EmptyFields};
-use async_graphql::{Context, Object};
+use crate::database::Database;
+use crate::{
+    database::KvStoreError,
+    model::fuel_block::{BlockHeight, FuelBlock},
+    schema::scalars::HexString256,
+    schema::tx::types::Transaction,
+    state::IterDirection,
+};
+use async_graphql::{
+    connection::{query, Connection, Edge, EmptyFields},
+    Context, Object,
+};
 use chrono::{DateTime, Utc};
+use fuel_storage::Storage;
 use fuel_tx::Bytes32;
 use itertools::Itertools;
+use std::borrow::Cow;
 use std::convert::TryInto;
 use std::ops::Deref;
 
@@ -25,14 +31,15 @@ impl Block {
     }
 
     async fn transactions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Transaction>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>().clone();
         self.0
             .transactions
             .iter()
             .map(|tx_id| {
                 Ok(Transaction(
-                    KvStore::<Bytes32, fuel_tx::Transaction>::get(db, tx_id)
-                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?,
+                    Storage::<Bytes32, fuel_tx::Transaction>::get(&db, tx_id)
+                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?
+                        .into_owned(),
                 ))
             })
             .collect()
@@ -58,7 +65,7 @@ impl BlockQuery {
         #[graphql(desc = "id of the block")] id: Option<HexString256>,
         #[graphql(desc = "height of the block")] height: Option<u32>,
     ) -> async_graphql::Result<Option<Block>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>();
         let id = match (id, height) {
             (Some(_), Some(_)) => {
                 return Err(async_graphql::Error::new(
@@ -79,7 +86,7 @@ impl BlockQuery {
             (None, None) => return Err(async_graphql::Error::new("missing either id or height")),
         };
 
-        let block = KvStore::<Bytes32, FuelBlock>::get(db, &id)?.map(|b| Block(b));
+        let block = Storage::<Bytes32, FuelBlock>::get(db, &id)?.map(|b| Block(b.into_owned()));
         Ok(block)
     }
 
@@ -91,7 +98,7 @@ impl BlockQuery {
         first: Option<i32>,
         last: Option<i32>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>().clone();
 
         query(
             after,
@@ -142,10 +149,10 @@ impl BlockQuery {
                 }
 
                 // TODO: do a batch get instead
-                let blocks: Vec<FuelBlock> = blocks
+                let blocks: Vec<Cow<FuelBlock>> = blocks
                     .iter()
                     .map(|(_, id)| {
-                        KvStore::<Bytes32, FuelBlock>::get(db, id)
+                        Storage::<Bytes32, FuelBlock>::get(&db, id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
                     })
@@ -155,8 +162,8 @@ impl BlockQuery {
                     Connection::new(started.is_some(), records_to_fetch <= blocks.len());
                 connection.append(
                     blocks
-                        .iter()
-                        .map(|item| Edge::new(item.fuel_height.to_usize(), item.clone())),
+                        .into_iter()
+                        .map(|item| Edge::new(item.fuel_height.to_usize(), item.into_owned())),
                 );
                 Ok(connection)
             },

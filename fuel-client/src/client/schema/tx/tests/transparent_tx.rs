@@ -1,7 +1,7 @@
 use crate::client::{
     schema::{
         schema,
-        tx::{tests::transparent_receipt::Receipt, Status},
+        tx::{tests::transparent_receipt::Receipt, TransactionStatus},
         ConversionError, HexString, HexString256, PageInfo,
     },
     tx::{ConnectionArgs, TxIdArgs},
@@ -58,7 +58,7 @@ pub struct Transaction {
     pub outputs: Vec<Output>,
     pub maturity: i32,
     pub receipts_root: Option<HexString256>,
-    pub status: Option<Status>,
+    pub status: Option<TransactionStatus>,
     pub witnesses: Vec<HexString>,
     pub receipts: Option<Vec<Receipt>>,
     pub script: Option<HexString>,

@@ -1,9 +1,12 @@
-use crate::database::columns::CONTRACTS_STATE;
-use crate::database::Database;
-use crate::state::{IterDirection, MultiKey};
-use fuel_vm::crypto;
-use fuel_vm::data::{DataError, MerkleStorage};
-use fuel_vm::prelude::{Bytes32, ContractId};
+use crate::{
+    database::{columns::CONTRACTS_STATE, Database},
+    state::{IterDirection, MultiKey},
+};
+use fuel_vm::{
+    crypto,
+    data::{DataError, MerkleStorage},
+    prelude::{Bytes32, ContractId},
+};
 use itertools::Itertools;
 
 impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
@@ -14,8 +17,7 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
         value: &Bytes32,
     ) -> Result<Option<Bytes32>, DataError> {
         let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, value.clone())
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, *value).map_err(Into::into)
     }
 
     fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {

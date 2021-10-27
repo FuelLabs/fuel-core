@@ -1,11 +1,13 @@
-use crate::database::{KvStore, SharedDatabase};
+use crate::database::Database;
 use crate::schema::scalars::{HexString, HexString256};
-use crate::tx_pool::TransactionStatus;
+use crate::tx_pool::TransactionStatus as TxStatus;
 use async_graphql::{Context, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
-use fuel_tx::bytes::SerializableVec;
-use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
+use fuel_storage::Storage;
+use fuel_tx::{
+    bytes::SerializableVec, Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx,
+};
 use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
 
@@ -286,7 +288,7 @@ impl From<&fuel_tx::Output> for Output {
 }
 
 #[derive(Union)]
-pub enum Status {
+pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
     Failed(FailureStatus),
@@ -346,24 +348,24 @@ impl FailureStatus {
     }
 }
 
-impl From<TransactionStatus> for Status {
-    fn from(s: TransactionStatus) -> Self {
+impl From<TxStatus> for TransactionStatus {
+    fn from(s: TxStatus) -> Self {
         match s {
-            TransactionStatus::Submitted { time } => Status::Submitted(SubmittedStatus(time)),
-            TransactionStatus::Success {
+            TxStatus::Submitted { time } => TransactionStatus::Submitted(SubmittedStatus(time)),
+            TxStatus::Success {
                 block_id,
                 result,
                 time,
-            } => Status::Success(SuccessStatus {
+            } => TransactionStatus::Success(SuccessStatus {
                 block_id,
                 result,
                 time,
             }),
-            TransactionStatus::Failed {
+            TxStatus::Failed {
                 block_id,
                 reason,
                 time,
-            } => Status::Failed(FailureStatus {
+            } => TransactionStatus::Failed(FailureStatus {
                 block_id,
                 reason,
                 time,
@@ -433,8 +435,8 @@ impl Transaction {
             .map(|b| HexString256(*b.deref()))
     }
 
-    async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Status>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+    async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
+        let db = ctx.data_unchecked::<Database>();
         let status = db.get_tx_status(&self.0.id())?;
         Ok(status.map(Into::into))
     }
@@ -443,9 +445,15 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<super::receipt::Receipt>>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
-        let receipts = KvStore::<Bytes32, Vec<Receipt>>::get(db, &self.0.id())?;
-        Ok(receipts.map(|receipts| receipts.into_iter().map(super::receipt::Receipt).collect()))
+        let db = ctx.data_unchecked::<Database>();
+        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &self.0.id())?;
+        Ok(receipts.map(|receipts| {
+            receipts
+                .into_owned()
+                .into_iter()
+                .map(super::receipt::Receipt)
+                .collect()
+        }))
     }
 
     async fn script(&self) -> Option<HexString> {

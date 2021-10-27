@@ -1,20 +1,19 @@
-use crate::database::columns::DB_VERSION_COLUMN;
-use crate::database::{columns, VERSION};
-use crate::state::{
-    BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
-    WriteOperation,
+use crate::{
+    database::{columns, columns::DB_VERSION_COLUMN, VERSION},
+    state::{
+        BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
+        WriteOperation,
+    },
 };
 use rocksdb::{
     BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
     Options, ReadOptions, SliceTransform, WriteBatch,
 };
-use std::convert::TryFrom;
-use std::path::Path;
-use std::sync::Arc;
+use std::{convert::TryFrom, path::Path, sync::Arc};
 
 type DB = DBWithThreadMode<MultiThreaded>;
 
-const VERSION_KEY: &'static [u8] = b"version";
+const VERSION_KEY: &[u8] = b"version";
 
 #[derive(Debug)]
 pub struct RocksDb {
@@ -148,11 +147,11 @@ impl KeyValueStore for RocksDb {
                         }
                     },
                     // start iterating in a certain direction within the keyspace
-                    |prefix| IteratorMode::From(&prefix, direction.into()),
+                    |prefix| IteratorMode::From(prefix, direction.into()),
                 )
             },
             // start iterating in a certain direction from the start key
-            |k| IteratorMode::From(&k, direction.into()),
+            |k| IteratorMode::From(k, direction.into()),
         );
 
         let mut opts = ReadOptions::default();

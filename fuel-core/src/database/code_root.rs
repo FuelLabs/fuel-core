@@ -1,7 +1,8 @@
-use crate::database::columns::CONTRACTS_CODE_ROOT;
-use crate::database::Database;
-use fuel_vm::data::DataError;
-use fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
+use crate::database::{columns::CONTRACTS_CODE_ROOT, Database};
+use fuel_vm::{
+    data::DataError,
+    prelude::{Bytes32, ContractId, Salt, Storage},
+};
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
     fn insert(
@@ -9,20 +10,19 @@ impl Storage<ContractId, (Salt, Bytes32)> for Database {
         key: &ContractId,
         value: &(Salt, Bytes32),
     ) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::insert(&self, key.as_ref(), CONTRACTS_CODE_ROOT, value.clone())
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, *value).map_err(Into::into)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::remove(&self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
     }
 
     fn get(&self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::get(&self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+        Database::get(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        Database::exists(&self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+        Database::exists(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
     }
 }
 

@@ -1,33 +1,40 @@
-use crate::database::columns::BLOCK_IDS;
-use crate::database::{columns::BLOCKS, Database, KvStore, KvStoreError};
-use crate::model::fuel_block::{BlockHeight, FuelBlock};
-use crate::state::{Error, IterDirection};
+use crate::{
+    database::{columns::BLOCKS, columns::BLOCK_IDS, Database, KvStoreError},
+    model::fuel_block::{BlockHeight, FuelBlock},
+    state::{Error, IterDirection},
+};
+use fuel_storage::Storage;
 use fuel_tx::Bytes32;
+use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 
-impl KvStore<Bytes32, FuelBlock> for Database {
-    fn insert(&self, key: &Bytes32, value: &FuelBlock) -> Result<Option<FuelBlock>, KvStoreError> {
-        Database::insert(&self, value.fuel_height, BLOCK_IDS, *key)?;
-        Database::insert(&self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
+impl Storage<Bytes32, FuelBlock> for Database {
+    type Error = KvStoreError;
+
+    fn insert(
+        &mut self,
+        key: &Bytes32,
+        value: &FuelBlock,
+    ) -> Result<Option<FuelBlock>, KvStoreError> {
+        Database::insert(self, value.fuel_height, BLOCK_IDS, *key)?;
+        Database::insert(self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
     }
 
-    fn remove(&self, key: &Bytes32) -> Result<Option<FuelBlock>, KvStoreError> {
-        let block: Option<FuelBlock> =
-            Database::remove(&self, key.as_ref(), BLOCKS).map_err(|e| KvStoreError::from(e))?;
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlock>, KvStoreError> {
+        let block: Option<FuelBlock> = Database::remove(self, key.as_ref(), BLOCKS)?;
         if let Some(block) = &block {
             let _: Option<Bytes32> =
-                Database::remove(&self, &block.fuel_height.to_bytes(), BLOCK_IDS)
-                    .map_err(|e| KvStoreError::from(e))?;
+                Database::remove(self, &block.fuel_height.to_bytes(), BLOCK_IDS)?;
         }
         Ok(block)
     }
 
-    fn get(&self, key: &Bytes32) -> Result<Option<FuelBlock>, KvStoreError> {
-        Database::get(&self, key.as_ref(), BLOCKS).map_err(Into::into)
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlock>>, KvStoreError> {
+        Database::get(self, key.as_ref(), BLOCKS).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(&self, key.as_ref(), BLOCKS).map_err(Into::into)
+        Database::exists(self, key.as_ref(), BLOCKS).map_err(Into::into)
     }
 }
 
@@ -46,7 +53,7 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
-        Database::get(&self, &height.to_bytes()[..], BLOCK_IDS)
+        Database::get(self, &height.to_bytes()[..], BLOCK_IDS)
     }
 
     pub fn all_block_ids(

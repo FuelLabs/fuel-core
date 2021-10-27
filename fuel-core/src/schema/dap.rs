@@ -1,10 +1,9 @@
-use crate::database::{transactional::DatabaseTransaction, SharedDatabase};
+use crate::database::transactional::DatabaseTransaction;
+use crate::database::{Database, DatabaseTrait};
 use async_graphql::{Context, Object, SchemaBuilder, ID};
-use fuel_vm::consts;
-use fuel_vm::prelude::*;
+use fuel_vm::{consts, prelude::*};
 use futures::lock::Mutex;
-use std::collections::HashMap;
-use std::{io, sync};
+use std::{collections::HashMap, io, sync};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
@@ -143,13 +142,13 @@ impl DapMutation {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
 
-        let db = ctx.data_unchecked::<SharedDatabase>();
+        let db = ctx.data_unchecked::<Database>();
 
         let id = ctx
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], db.0.transaction())?;
+            .init(&[], db.transaction())?;
 
         debug!("Session {:?} initialized", id);
 
@@ -165,12 +164,12 @@ impl DapMutation {
     }
 
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
-        let db = ctx.data_unchecked::<SharedDatabase>();
+        let db = ctx.data_unchecked::<Database>();
 
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .reset(&id, db.0.transaction())?;
+            .reset(&id, db.transaction())?;
 
         debug!("Session {:?} was reset", id);
 

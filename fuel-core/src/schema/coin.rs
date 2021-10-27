@@ -1,10 +1,13 @@
-use crate::database::{KvStore, KvStoreError, SharedDatabase};
+use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::HexString256;
 use crate::state::IterDirection;
-use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-use async_graphql::{Context, Object};
+use async_graphql::{
+    connection::{query, Connection, Edge, EmptyFields},
+    Context, Object,
+};
 use fuel_asm::Word;
+use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32};
 use itertools::Itertools;
 use std::convert::TryInto;
@@ -34,7 +37,7 @@ impl Coin {
     }
 
     async fn status(&self) -> CoinStatus {
-        self.1.status.into()
+        self.1.status
     }
 
     async fn block_created(&self) -> u32 {
@@ -53,8 +56,9 @@ impl CoinQuery {
         #[graphql(desc = "id of the coin")] id: HexString256,
     ) -> async_graphql::Result<Option<Coin>> {
         let id: Bytes32 = id.0.try_into()?;
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
-        let block = KvStore::<Bytes32, CoinModel>::get(db, &id)?.map(|coin| Coin(id, coin));
+        let db = ctx.data_unchecked::<Database>().clone();
+        let block =
+            Storage::<Bytes32, CoinModel>::get(&db, &id)?.map(|coin| Coin(id, coin.into_owned()));
         Ok(block)
     }
 
@@ -67,7 +71,7 @@ impl CoinQuery {
         last: Option<i32>,
         #[graphql(desc = "address of the owner")] owner: HexString256,
     ) -> async_graphql::Result<Connection<HexString256, Coin, EmptyFields, EmptyFields>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>();
 
         query(
             after,
@@ -83,8 +87,8 @@ impl CoinQuery {
                     (0, IterDirection::Forward)
                 };
 
-                let after = after.map(|s| Bytes32::from(s));
-                let before = before.map(|s| Bytes32::from(s));
+                let after = after.map(Bytes32::from);
+                let before = before.map(Bytes32::from);
 
                 let start;
                 let end;
@@ -127,10 +131,10 @@ impl CoinQuery {
                 let coins: Vec<Coin> = coins
                     .into_iter()
                     .map(|id| {
-                        KvStore::<Bytes32, CoinModel>::get(db, &id)
+                        Storage::<Bytes32, CoinModel>::get(db, &id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
-                            .map(|coin| Coin(id, coin))
+                            .map(|coin| Coin(id, coin.into_owned()))
                     })
                     .try_collect()?;
 

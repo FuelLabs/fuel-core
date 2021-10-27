@@ -1,8 +1,7 @@
-use crate::state::in_memory::column_key;
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, IterDirection,
-    KeyValueStore, Result, TransactableStorage, Transaction, TransactionError, TransactionResult,
-    WriteOperation,
+    in_memory::column_key, in_memory::memory_store::MemoryStore, BatchOperations, ColumnId,
+    DataSource, IterDirection, KeyValueStore, Result, TransactableStorage, Transaction,
+    TransactionError, TransactionResult, WriteOperation,
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -109,13 +108,10 @@ impl KeyValueStore for MemoryTransactionView {
                 .unique_by(|(key, _)| key.clone())
                 // remove keys which have been deleted over the course of this transaction
                 .filter(move |(key, _)| {
-                    if let Some(WriteOperation::Remove(_, _)) =
-                        changes.lock().expect("poisoned").get(key.as_slice())
-                    {
-                        false
-                    } else {
-                        true
-                    }
+                    !matches!(
+                        changes.lock().expect("poisoned").get(key.as_slice()),
+                        Some(WriteOperation::Remove(_, _))
+                    )
                 })
                 // perform lexicographic sorting between db and virtual key-sets
                 //  reverse ordering if iterator is in reverse mode

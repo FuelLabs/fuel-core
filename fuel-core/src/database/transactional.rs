@@ -1,8 +1,10 @@
 use crate::database::{Database, DatabaseTrait};
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use std::fmt::Debug;
-use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 #[derive(Clone, Debug)]
 pub struct DatabaseTransaction {

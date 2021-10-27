@@ -2,7 +2,7 @@ use crate::schema::scalars::{HexString, HexString256};
 use async_graphql::{Enum, Object};
 use derive_more::Display;
 use fuel_asm::Word;
-use fuel_tx::{Receipt as TxReceipt, bytes::SerializableVec};
+use fuel_tx::{bytes::SerializableVec, Receipt as TxReceipt};
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
 pub enum ReceiptType {

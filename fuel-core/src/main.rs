@@ -1,7 +1,6 @@
-use crate::database::{Database, SharedDatabase};
+use crate::database::Database;
 use service::{configure, DbType};
 use std::io;
-use std::sync::Arc;
 use structopt::StructOpt;
 use tracing::{info, trace};
 
@@ -19,15 +18,13 @@ async fn main() -> io::Result<()> {
     let config = args::Opt::from_args().exec()?;
     let addr = config.addr;
 
-    let inner_database = match config.database_type {
+    let database = match config.database_type {
         #[cfg(feature = "default")]
         DbType::RocksDb => Database::open(&config.database_path).expect("unable to open database"),
         DbType::InMemory => Database::default(),
         #[cfg(not(feature = "default"))]
         _ => Database::default(),
     };
-
-    let database = SharedDatabase(Arc::new(inner_database));
 
     trace!("Initializing in TRACE mode");
     info!("Binding GraphQL provider to {}", addr);

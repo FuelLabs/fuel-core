@@ -1,10 +1,13 @@
-use async_graphql::connection::CursorType;
-use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
+use async_graphql::{
+    connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
+};
 use fuel_tx::{Address, Bytes32, Color, ContractId, Salt};
-use std::convert::TryInto;
-use std::fmt::{Display, Formatter};
-use std::ops::Deref;
-use std::str::FromStr;
+use std::{
+    convert::TryInto,
+    fmt::{Display, Formatter},
+    ops::Deref,
+    str::FromStr,
+};
 
 #[derive(Clone, Debug)]
 pub struct HexString(pub(crate) Vec<u8>);
@@ -16,7 +19,7 @@ impl ScalarType for HexString {
             // trim leading 0x
             let value = value
                 .strip_prefix("0x")
-                .ok_or(InputValueError::custom("expected 0x prefix"))?;
+                .ok_or_else(|| InputValueError::custom("expected 0x prefix"))?;
             // decode into bytes
             let bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
             Ok(HexString(bytes))

@@ -59,7 +59,7 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
         fuel_tx::Transaction::from_bytes(bytes.as_slice())
-            .map_err(|e| ConversionError::TransactionFromBytesError(e))
+            .map_err(ConversionError::TransactionFromBytesError)
     }
 }
 
@@ -79,9 +79,10 @@ impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub enum Status {
+pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
     FailureStatus(FailureStatus),

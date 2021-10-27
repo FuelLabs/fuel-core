@@ -47,21 +47,30 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
         Ok(match schema.receipt_type {
             ReceiptType::Call => fuel_vm::prelude::Receipt::Call {
                 id: schema.id.into(),
-                to: schema.to.ok_or(MissingField("to".to_string()))?.into(),
+                to: schema
+                    .to
+                    .ok_or_else(|| MissingField("to".to_string()))?
+                    .into(),
                 amount: schema
                     .amount
-                    .ok_or(MissingField("amount".to_string()))?
+                    .ok_or_else(|| MissingField("amount".to_string()))?
                     .try_into()?,
                 color: schema
                     .color
-                    .ok_or(MissingField("color".to_string()))?
+                    .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),
                 gas: schema
                     .gas
-                    .ok_or(MissingField("gas".to_string()))?
+                    .ok_or_else(|| MissingField("gas".to_string()))?
                     .try_into()?,
-                a: schema.a.ok_or(MissingField("a".to_string()))?.try_into()?,
-                b: schema.b.ok_or(MissingField("b".to_string()))?.try_into()?,
+                a: schema
+                    .a
+                    .ok_or_else(|| MissingField("a".to_string()))?
+                    .try_into()?,
+                b: schema
+                    .b
+                    .ok_or_else(|| MissingField("b".to_string()))?
+                    .try_into()?,
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
             },
@@ -69,7 +78,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 val: schema
                     .val
-                    .ok_or(MissingField("val".to_string()))?
+                    .ok_or_else(|| MissingField("val".to_string()))?
                     .try_into()?,
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
@@ -78,11 +87,11 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 ptr: schema
                     .ptr
-                    .ok_or(MissingField("ptr".to_string()))?
+                    .ok_or_else(|| MissingField("ptr".to_string()))?
                     .try_into()?,
                 len: schema
                     .len
-                    .ok_or(MissingField("len".to_string()))?
+                    .ok_or_else(|| MissingField("len".to_string()))?
                     .try_into()?,
                 digest: Default::default(),
                 pc: schema.pc.try_into()?,
@@ -92,7 +101,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 reason: schema
                     .reason
-                    .ok_or(MissingField("reason".to_string()))?
+                    .ok_or_else(|| MissingField("reason".to_string()))?
                     .try_into()?,
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
@@ -101,7 +110,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 ra: schema
                     .ra
-                    .ok_or(MissingField("ra".to_string()))?
+                    .ok_or_else(|| MissingField("ra".to_string()))?
                     .try_into()?,
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
@@ -110,19 +119,19 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 ra: schema
                     .ra
-                    .ok_or(MissingField("ra".to_string()))?
+                    .ok_or_else(|| MissingField("ra".to_string()))?
                     .try_into()?,
                 rb: schema
                     .rb
-                    .ok_or(MissingField("rb".to_string()))?
+                    .ok_or_else(|| MissingField("rb".to_string()))?
                     .try_into()?,
                 rc: schema
                     .rc
-                    .ok_or(MissingField("rc".to_string()))?
+                    .ok_or_else(|| MissingField("rc".to_string()))?
                     .try_into()?,
                 rd: schema
                     .rd
-                    .ok_or(MissingField("rd".to_string()))?
+                    .ok_or_else(|| MissingField("rd".to_string()))?
                     .try_into()?,
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
@@ -131,51 +140,57 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 id: schema.id.into(),
                 ra: schema
                     .ra
-                    .ok_or(MissingField("ra".to_string()))?
+                    .ok_or_else(|| MissingField("ra".to_string()))?
                     .try_into()?,
                 rb: schema
                     .rb
-                    .ok_or(MissingField("rb".to_string()))?
+                    .ok_or_else(|| MissingField("rb".to_string()))?
                     .try_into()?,
                 ptr: schema
                     .ptr
-                    .ok_or(MissingField("ptr".to_string()))?
+                    .ok_or_else(|| MissingField("ptr".to_string()))?
                     .try_into()?,
                 len: schema
                     .len
-                    .ok_or(MissingField("len".to_string()))?
+                    .ok_or_else(|| MissingField("len".to_string()))?
                     .try_into()?,
                 digest: schema
                     .digest
-                    .ok_or(MissingField("digest".to_string()))?
+                    .ok_or_else(|| MissingField("digest".to_string()))?
                     .into(),
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
             },
             ReceiptType::Transfer => fuel_vm::prelude::Receipt::Transfer {
                 id: schema.id.into(),
-                to: schema.to.ok_or(MissingField("to".to_string()))?.into(),
+                to: schema
+                    .to
+                    .ok_or_else(|| MissingField("to".to_string()))?
+                    .into(),
                 amount: schema
                     .amount
-                    .ok_or(MissingField("amount".to_string()))?
+                    .ok_or_else(|| MissingField("amount".to_string()))?
                     .try_into()?,
                 color: schema
                     .color
-                    .ok_or(MissingField("color".to_string()))?
+                    .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,
             },
             ReceiptType::TransferOut => fuel_vm::prelude::Receipt::TransferOut {
                 id: schema.id.into(),
-                to: schema.to.ok_or(MissingField("to".to_string()))?.into(),
+                to: schema
+                    .to
+                    .ok_or_else(|| MissingField("to".to_string()))?
+                    .into(),
                 amount: schema
                     .amount
-                    .ok_or(MissingField("amount".to_string()))?
+                    .ok_or_else(|| MissingField("amount".to_string()))?
                     .try_into()?,
                 color: schema
                     .color
-                    .ok_or(MissingField("color".to_string()))?
+                    .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),
                 pc: schema.pc.try_into()?,
                 is: schema.is.try_into()?,

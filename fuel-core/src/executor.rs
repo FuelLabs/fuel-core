@@ -1,5 +1,5 @@
 use crate::{
-    database::{Database, DatabaseTrait, KvStore, KvStoreError, SharedDatabase},
+    database::{Database, DatabaseTrait, KvStoreError},
     model::{
         coin::{Coin, CoinStatus, TxoPointer},
         fuel_block::{BlockHeight, FuelBlock},
@@ -7,30 +7,32 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
+use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
 use fuel_vm::{interpreter::ExecuteError, prelude::Interpreter};
 use std::error::Error as StdError;
+use std::ops::DerefMut;
 use thiserror::Error;
 
 pub struct Executor {
-    pub(crate) database: SharedDatabase,
+    pub(crate) database: Database,
 }
 
 impl Executor {
     pub async fn execute(&self, block: &FuelBlock) -> Result<(), Error> {
-        let block_tx = self.database.0.transaction();
+        let mut block_tx = self.database.transaction();
         let block_id = block.id();
-        KvStore::<Bytes32, FuelBlock>::insert(block_tx.as_ref(), &block_id, &block)?;
+        Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
 
         for (tx_index, tx_id) in block.transactions.iter().enumerate() {
-            let sub_tx = block_tx.transaction();
-            let db = sub_tx.as_ref();
-            let tx = KvStore::<Bytes32, Transaction>::get(db, &tx_id)?.ok_or(
-                Error::MissingTransactionData {
+            let mut sub_tx = block_tx.transaction();
+            let db = sub_tx.deref_mut();
+            let tx = Storage::<Bytes32, Transaction>::get(db, tx_id)?
+                .ok_or(Error::MissingTransactionData {
                     block_id,
-                    transaction_id: tx_id.clone(),
-                },
-            )?;
+                    transaction_id: *tx_id,
+                })?
+                .into_owned();
 
             // execute vm
             let mut vm = Interpreter::with_storage(db.clone());
@@ -50,7 +52,7 @@ impl Executor {
                         TransactionStatus::Success {
                             block_id,
                             time: block.time,
-                            result: result.state().clone(),
+                            result: *result.state(),
                         },
                     )?;
 
@@ -81,13 +83,11 @@ impl Executor {
         transaction: Transaction,
         block: FuelBlock,
     ) -> Result<(), TransactionValidityError> {
+        let db = &self.database;
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = KvStore::<Bytes32, Coin>::get(
-                        AsRef::<Database>::as_ref(self.database.0.as_ref()),
-                        &utxo_id.clone().into(),
-                    )? {
+                    if let Some(coin) = Storage::<Bytes32, Coin>::get(db, &utxo_id.clone())? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
@@ -110,7 +110,7 @@ impl Executor {
         block_height: BlockHeight,
         tx_index: u32,
         tx: &Transaction,
-        db: &Database,
+        db: &mut Database,
     ) -> Result<(), Error> {
         for (out_idx, output) in tx.outputs().iter().enumerate() {
             match output {
@@ -152,7 +152,7 @@ impl Executor {
         amount: &Word,
         color: &Color,
         to: &Address,
-        db: &Database,
+        db: &mut Database,
     ) -> Result<(), Error> {
         let txo_pointer = TxoPointer {
             block_height: fuel_height,
@@ -160,7 +160,7 @@ impl Executor {
             output_index: out_index,
         };
         let coin = Coin {
-            owner: to.clone(),
+            owner: *to,
             amount: *amount,
             color: *color,
             maturity: 0u32.into(),
@@ -168,7 +168,7 @@ impl Executor {
             block_created: fuel_height.into(),
         };
 
-        if let Some(_) = KvStore::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)? {
+        if Storage::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)?.is_some() {
             return Err(Error::OutputAlreadyExists);
         }
         Ok(())
@@ -178,10 +178,9 @@ impl Executor {
         &self,
         tx_id: &Bytes32,
         receipts: &[Receipt],
-        db: &Database,
+        db: &mut Database,
     ) -> Result<(), Error> {
-        if let Some(_) = KvStore::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?
-        {
+        if Storage::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?.is_some() {
             return Err(Error::OutputAlreadyExists);
         }
         Ok(())
@@ -190,10 +189,13 @@ impl Executor {
 
 #[derive(Debug, Error)]
 pub enum TransactionValidityError {
+    #[allow(dead_code)]
     #[error("Coin input was already spent")]
     CoinAlreadySpent,
+    #[allow(dead_code)]
     #[error("Coin has not yet reached maturity")]
     CoinHasNotMatured,
+    #[allow(dead_code)]
     #[error("The specified coin doesn't exist")]
     CoinDoesntExist,
     #[error("Datastore error occurred")]
@@ -212,15 +214,13 @@ pub enum Error {
     OutputAlreadyExists,
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError>),
-    #[error("a block production error occurred")]
-    BlockExecutionError(Box<dyn StdError>),
     #[error("missing transaction data for tx {transaction_id:?} in block {block_id:?}")]
     MissingTransactionData {
         block_id: Bytes32,
         transaction_id: Bytes32,
     },
     #[error("VM execution error: {0:?}")]
-    VmExecutionError(fuel_vm::interpreter::ExecuteError),
+    VmExecution(fuel_vm::interpreter::ExecuteError),
 }
 
 impl From<crate::database::KvStoreError> for Error {
@@ -231,7 +231,7 @@ impl From<crate::database::KvStoreError> for Error {
 
 impl From<fuel_vm::interpreter::ExecuteError> for Error {
     fn from(e: ExecuteError) -> Self {
-        Error::VmExecutionError(e)
+        Error::VmExecution(e)
     }
 }
 

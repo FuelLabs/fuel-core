@@ -2,10 +2,12 @@
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::model::fuel_block::FuelBlock;
-use crate::state::in_memory::memory_store::MemoryStore;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{ColumnId, DataSource, Error, IterDirection};
+use crate::state::{
+    in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
+};
+use fuel_storage::Storage;
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Address, Bytes32};
 use serde::{de::DeserializeOwned, Serialize};
@@ -53,21 +55,6 @@ pub mod columns {
 
 pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {
     fn transaction(&self) -> DatabaseTransaction;
-}
-
-#[derive(Clone, Debug)]
-pub struct SharedDatabase(pub Arc<dyn DatabaseTrait>);
-
-impl Default for SharedDatabase {
-    fn default() -> Self {
-        SharedDatabase(Arc::new(Database::default()))
-    }
-}
-
-impl AsRef<Database> for SharedDatabase {
-    fn as_ref(&self) -> &Database {
-        self.0.as_ref().as_ref()
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -148,7 +135,7 @@ impl Database {
 
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
-        &self
+        self
     }
 }
 
@@ -181,16 +168,9 @@ impl InterpreterStorage for Database {
     fn coinbase(&self) -> Result<Address, DataError> {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
-        let block = KvStore::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
+        let block = Storage::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
         Ok(block.producer)
     }
-}
-
-pub trait KvStore<K, V> {
-    fn insert(&self, key: &K, value: &V) -> Result<Option<V>, KvStoreError>;
-    fn remove(&self, key: &K) -> Result<Option<V>, KvStoreError>;
-    fn get(&self, key: &K) -> Result<Option<V>, KvStoreError>;
-    fn contains_key(&self, key: &K) -> Result<bool, KvStoreError>;
 }
 
 #[derive(Debug, Error)]

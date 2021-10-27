@@ -1,7 +1,8 @@
-use crate::database::columns::CONTRACTS;
-use crate::database::Database;
-use fuel_vm::data::DataError;
-use fuel_vm::prelude::{Contract, ContractId, Storage};
+use crate::database::{columns::CONTRACTS, Database};
+use fuel_vm::{
+    data::DataError,
+    prelude::{Contract, ContractId, Storage},
+};
 
 impl Storage<ContractId, Contract> for Database {
     fn insert(

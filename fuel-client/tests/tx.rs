@@ -1,9 +1,11 @@
 use fuel_client::client::FuelClient;
-use fuel_core::database::{KvStore, SharedDatabase};
-use fuel_core::schema::scalars::HexString256;
-use fuel_core::service::{configure, run_in_background};
-use fuel_vm::consts::*;
-use fuel_vm::prelude::*;
+use fuel_core::database::Database;
+use fuel_core::{
+    schema::scalars::HexString256,
+    service::{configure, run_in_background},
+};
+use fuel_storage::Storage;
+use fuel_vm::{consts::*, prelude::*};
 
 #[tokio::test]
 async fn transact() {
@@ -56,8 +58,8 @@ async fn get_transaction_by_id() {
     // setup test data in the node
     let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
-    let db = SharedDatabase::default();
-    KvStore::<Bytes32, fuel_tx::Transaction>::insert(db.as_ref(), &id, &transaction).unwrap();
+    let mut db = Database::default();
+    Storage::<Bytes32, fuel_tx::Transaction>::insert(&mut db, &id, &transaction).unwrap();
 
     // setup server & client
     let srv = run_in_background(configure(db)).await;

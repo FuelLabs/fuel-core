@@ -1,8 +1,7 @@
 use crate::model::fuel_block::BlockHeight;
 use async_graphql::Enum;
 use fuel_asm::Word;
-use fuel_tx::crypto::Hasher;
-use fuel_tx::{Address, Bytes32, Color};
+use fuel_tx::{crypto::Hasher, Address, Bytes32, Color};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

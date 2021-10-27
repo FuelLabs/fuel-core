@@ -1,26 +1,30 @@
+use crate::database::Database;
+use crate::schema::{build_schema, dap, CoreSchema};
 use crate::tx_pool::TxPool;
-use crate::{
-    database::SharedDatabase,
-    schema::{build_schema, dap, CoreSchema},
-};
 use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
-use axum::body::Body;
-use axum::http::header::{
-    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-};
-use axum::http::HeaderValue;
-use axum::response::IntoResponse;
-use axum::routing::BoxRoute;
 use axum::{
-    extract::Extension, handler::get, handler::post, response::Html, AddExtensionLayer, Json,
-    Router,
+    body::Body,
+    extract::Extension,
+    handler::{get, post},
+    http::{
+        header::{
+            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+        },
+        HeaderValue,
+    },
+    response::Html,
+    response::IntoResponse,
+    routing::BoxRoute,
+    AddExtensionLayer, Json, Router,
 };
 use serde_json::json;
-use std::net::{SocketAddr, TcpListener};
-use std::sync::Arc;
-use std::{net, path::PathBuf};
-use strum_macros::Display;
-use strum_macros::EnumString;
+use std::{
+    net,
+    net::{SocketAddr, TcpListener},
+    path::PathBuf,
+    sync::Arc,
+};
+use strum_macros::{Display, EnumString};
 use tower_http::set_header::SetResponseHeaderLayer;
 
 #[derive(Clone, Debug)]
@@ -52,7 +56,7 @@ async fn ok() -> Result<(), ()> {
     Ok(())
 }
 
-pub fn configure(db: SharedDatabase) -> Router<BoxRoute> {
+pub fn configure(db: Database) -> Router<BoxRoute> {
     let tx_pool = Arc::new(TxPool::new(db.clone()));
     let schema = build_schema().data(db).data(tx_pool);
     let schema = dap::init(schema).finish();

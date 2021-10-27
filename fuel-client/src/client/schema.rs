@@ -269,7 +269,7 @@ pub enum ConversionError {
     #[error("hex parsing error {0}")]
     HexDecodingError(FromHexError),
     #[error("failed integer conversion")]
-    IntegerConversionError,
+    IntegerConversion,
     #[error("failed to deserialize transaction from bytes {0}")]
     TransactionFromBytesError(std::io::Error),
     #[error("failed to deserialize receipt from bytes {0}")]
@@ -290,6 +290,6 @@ impl From<ConversionError> for std::io::Error {
 
 impl From<TryFromIntError> for ConversionError {
     fn from(_: TryFromIntError) -> Self {
-        ConversionError::IntegerConversionError
+        ConversionError::IntegerConversion
     }
 }

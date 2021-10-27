@@ -1,11 +1,12 @@
 use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
-use fuel_tx::crypto::Hasher;
-use fuel_tx::{Address, Bytes32};
+use fuel_tx::{crypto::Hasher, Address, Bytes32};
 use serde::{Deserialize, Serialize};
-use std::array::TryFromSliceError;
-use std::convert::{TryFrom, TryInto};
-use std::iter::FromIterator;
+use std::{
+    array::TryFromSliceError,
+    convert::{TryFrom, TryInto},
+    iter::FromIterator,
+};
 
 #[derive(
     Copy,
@@ -23,9 +24,9 @@ use std::iter::FromIterator;
 )]
 pub struct BlockHeight(u32);
 
-impl Into<Vec<u8>> for BlockHeight {
-    fn into(self) -> Vec<u8> {
-        self.0.to_be_bytes().to_vec()
+impl From<BlockHeight> for Vec<u8> {
+    fn from(height: BlockHeight) -> Self {
+        height.0.to_be_bytes().to_vec()
     }
 }
 

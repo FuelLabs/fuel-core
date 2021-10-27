@@ -1,8 +1,14 @@
-use crate::database::columns::OWNED_COINS;
-use crate::database::{columns, Database, KvStore, KvStoreError};
-use crate::model::coin::Coin;
-use crate::state::{Error, IterDirection};
+use crate::{
+    database::{
+        columns::{self, OWNED_COINS},
+        Database, KvStoreError,
+    },
+    model::coin::Coin,
+    state::{Error, IterDirection},
+};
+use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32};
+use std::borrow::Cow;
 
 fn owner_coin_id_key(owner: &Address, coin_id: &Bytes32) -> Vec<u8> {
     owner
@@ -13,37 +19,36 @@ fn owner_coin_id_key(owner: &Address, coin_id: &Bytes32) -> Vec<u8> {
         .collect()
 }
 
-impl KvStore<Bytes32, Coin> for Database {
-    fn insert(&self, key: &Bytes32, value: &Coin) -> Result<Option<Coin>, KvStoreError> {
+impl Storage<Bytes32, Coin> for Database {
+    type Error = KvStoreError;
+
+    fn insert(&mut self, key: &Bytes32, value: &Coin) -> Result<Option<Coin>, KvStoreError> {
         let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
         // insert primary record
-        let insert = Database::insert(&self, key.as_ref().to_vec(), columns::COIN, value.clone())
-            .map_err(|e| KvStoreError::from(e))?;
+        let insert = Database::insert(self, key.as_ref().to_vec(), columns::COIN, value.clone())?;
         // insert secondary index by owner
-        Database::insert(&self, coin_by_owner, columns::OWNED_COINS, true)?;
+        Database::insert(self, coin_by_owner, columns::OWNED_COINS, true)?;
         Ok(insert)
     }
 
-    fn remove(&self, key: &Bytes32) -> Result<Option<Coin>, KvStoreError> {
-        let coin: Option<Coin> = Database::remove(&self, key.as_ref(), columns::COIN)
-            .map_err(|e| KvStoreError::from(e))?;
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<Coin>, KvStoreError> {
+        let coin: Option<Coin> = Database::remove(self, key.as_ref(), columns::COIN)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {
             let key = owner_coin_id_key(&coin.owner, key);
-            let _: Option<bool> = Database::remove(&self, key.as_slice(), columns::OWNED_COINS)
-                .map_err(|e| KvStoreError::from(e))?;
+            let _: Option<bool> = Database::remove(self, key.as_slice(), columns::OWNED_COINS)?;
         }
 
         Ok(coin)
     }
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Coin>, KvStoreError> {
-        Database::get(&self, key.as_ref(), columns::COIN).map_err(Into::into)
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Coin>>, KvStoreError> {
+        Database::get(self, key.as_ref(), columns::COIN).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(&self, key.as_ref(), columns::COIN).map_err(Into::into)
+        Database::exists(self, key.as_ref(), columns::COIN).map_err(Into::into)
     }
 }
 

@@ -1,7 +1,5 @@
 use crate::service::{Config, DbType};
-use std::path::PathBuf;
-use std::string::ToString;
-use std::{env, io, net};
+use std::{env, io, net, path::PathBuf, string::ToString};
 use structopt::StructOpt;
 use tracing_subscriber::filter::EnvFilter;
 

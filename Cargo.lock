@@ -981,6 +981,7 @@ dependencies = [
  "cynic",
  "fuel-client",
  "fuel-core",
+ "fuel-storage",
  "fuel-tx",
  "fuel-vm",
  "hex",
@@ -1005,6 +1006,7 @@ dependencies = [
  "derive_more",
  "dirs",
  "fuel-asm",
+ "fuel-storage",
  "fuel-tx",
  "fuel-vm",
  "futures",
@@ -1027,6 +1029,11 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
 ]
+
+[[package]]
+name = "fuel-storage"
+version = "0.1.0"
+source = "git+ssh://git@github.com/FuelLabs/fuel-storage.git#fa46eddcba6c3f1788ed4335ebf455f1024cfd04"
 
 [[package]]
 name = "fuel-tx"

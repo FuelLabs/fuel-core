@@ -1,9 +1,12 @@
-use crate::database::columns::BALANCES;
-use crate::database::Database;
-use crate::state::{IterDirection, MultiKey};
-use fuel_vm::crypto;
-use fuel_vm::data::{DataError, MerkleStorage};
-use fuel_vm::prelude::{Bytes32, Color, ContractId, Word};
+use crate::{
+    database::{columns::BALANCES, Database},
+    state::{IterDirection, MultiKey},
+};
+use fuel_vm::{
+    crypto,
+    data::{DataError, MerkleStorage},
+    prelude::{Bytes32, Color, ContractId, Word},
+};
 use itertools::Itertools;
 
 impl MerkleStorage<ContractId, Color, Word> for Database {

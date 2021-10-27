@@ -1,9 +1,10 @@
-use cynic::http::SurfExt;
-use cynic::{MutationBuilder, Operation, QueryBuilder};
+use cynic::{http::SurfExt, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
-use std::convert::TryInto;
-use std::str::{self, FromStr};
-use std::{io, net};
+use std::{
+    convert::TryInto,
+    io, net,
+    str::{self, FromStr},
+};
 
 pub mod schema;
 
@@ -56,7 +57,7 @@ impl FuelClient {
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
             (_, Some(e)) => {
-                let e = e.into_iter().map(|e| format!("{}", e.message)).fold(
+                let e = e.into_iter().map(|e| e.message).fold(
                     String::from("Response errors"),
                     |mut s, e| {
                         s.push_str("; ");

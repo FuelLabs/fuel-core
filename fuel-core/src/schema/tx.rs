@@ -1,11 +1,15 @@
-use crate::database::{KvStore, SharedDatabase};
+use crate::database::{Database, DatabaseTrait};
 use crate::schema::scalars::HexString256;
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
-use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-use async_graphql::{Context, Object};
+use async_graphql::{
+    connection::{query, Connection, Edge, EmptyFields},
+    Context, Object,
+};
+use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Transaction as FuelTx};
 use itertools::Itertools;
+use std::ops::Deref;
 use std::sync::Arc;
 use types::Transaction;
 
@@ -28,9 +32,9 @@ impl TxQuery {
         ctx: &Context<'_>,
         #[graphql(desc = "id of the transaction")] id: HexString256,
     ) -> async_graphql::Result<Option<Transaction>> {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>();
         let key = id.0.into();
-        Ok(KvStore::<Bytes32, FuelTx>::get(db, &key)?.map(|tx| Transaction(tx)))
+        Ok(Storage::<Bytes32, FuelTx>::get(db, &key)?.map(|tx| Transaction(tx.into_owned())))
     }
 
     async fn transactions(
@@ -42,11 +46,11 @@ impl TxQuery {
         last: Option<i32>,
     ) -> async_graphql::Result<Connection<HexString256, Transaction, EmptyFields, EmptyFields>>
     {
-        let db = ctx.data_unchecked::<SharedDatabase>().as_ref();
+        let db = ctx.data_unchecked::<Database>();
 
         query(
-            after.map(|s| s.to_string()),
-            before.map(|s| s.to_string()),
+            after,
+            before,
             first,
             last,
             |after: Option<HexString256>, before: Option<HexString256>, first, last| async move {
@@ -58,8 +62,8 @@ impl TxQuery {
                     (0, IterDirection::Forward)
                 };
 
-                let after = after.map(|s| Bytes32::from(s));
-                let before = before.map(|s| Bytes32::from(s));
+                let after = after.map(Bytes32::from);
+                let before = before.map(Bytes32::from);
 
                 let start;
                 let end;
@@ -121,15 +125,12 @@ impl TxMutation {
         ctx: &Context<'_>,
         tx: String,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let transaction = ctx.data_unchecked::<SharedDatabase>().0.transaction();
+        let transaction = ctx.data_unchecked::<Database>().transaction();
         let tx: FuelTx = serde_json::from_str(tx.as_str())?;
         // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(SharedDatabase(Arc::new(transaction)));
+        let tx_pool = TxPool::new(transaction.deref().clone());
         let receipts = tx_pool.run_tx(tx).await?;
-        Ok(receipts
-            .into_iter()
-            .map(|receipt| receipt::Receipt(receipt))
-            .collect())
+        Ok(receipts.into_iter().map(receipt::Receipt).collect())
     }
 
     /// Submits transaction to the pool
@@ -140,9 +141,4 @@ impl TxMutation {
 
         Ok(id.into())
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
 }
