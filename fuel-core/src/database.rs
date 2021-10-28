@@ -8,10 +8,8 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use fuel_storage::Storage;
-use fuel_vm::data::{DataError, InterpreterStorage};
-use fuel_vm::prelude::{Address, Bytes32};
+use fuel_vm::prelude::{Address, Bytes32, InterpreterError, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
-use std::borrow::Cow;
 use std::fmt::Debug;
 #[cfg(feature = "default")]
 use std::path::Path;
@@ -52,10 +50,6 @@ pub mod columns {
     // Number of columns
     #[cfg(feature = "default")]
     pub const COLUMN_NUM: u32 = 12;
-}
-
-pub trait DatabaseTrait: InterpreterStorage<DataError = Error> + Debug + Send + Sync {
-    fn transaction(&self) -> DatabaseTransaction;
 }
 
 #[derive(Clone, Debug)]
@@ -132,17 +126,15 @@ impl Database {
                 Ok((key, value))
             })
     }
+
+    pub fn transaction(&self) -> DatabaseTransaction {
+        self.into()
+    }
 }
 
 impl AsRef<Database> for Database {
     fn as_ref(&self) -> &Database {
         self
-    }
-}
-
-impl DatabaseTrait for Database {
-    fn transaction(&self) -> DatabaseTransaction {
-        self.into()
     }
 }
 
@@ -156,17 +148,19 @@ impl Default for Database {
 }
 
 impl InterpreterStorage for Database {
-    fn block_height(&self) -> Result<u32, DataError> {
+    type DataError = Error;
+
+    fn block_height(&self) -> Result<u32, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         Ok(height.into())
     }
 
-    fn block_hash(&self, block_height: u32) -> Result<Bytes32, DataError> {
+    fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
         let hash = self.get_block_id(block_height.into())?.unwrap_or_default();
         Ok(hash)
     }
 
-    fn coinbase(&self) -> Result<Address, DataError> {
+    fn coinbase(&self) -> Result<Address, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
         let block = Storage::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
@@ -177,7 +171,7 @@ impl InterpreterStorage for Database {
 #[derive(Debug, Error)]
 pub enum KvStoreError {
     #[error("generic error occurred")]
-    Error(Box<dyn std::error::Error + Send>),
+    Error(Box<dyn std::error::Error + Send + Sync>),
     #[error("resource not found")]
     NotFound,
 }

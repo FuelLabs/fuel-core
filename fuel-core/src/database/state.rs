@@ -1,42 +1,45 @@
 use crate::{
     database::{columns::CONTRACTS_STATE, Database},
-    state::{IterDirection, MultiKey},
+    state::{Error, IterDirection, MultiKey},
 };
+use fuel_vm::prelude::MerkleRoot;
 use fuel_vm::{
     crypto,
-    data::{DataError, MerkleStorage},
-    prelude::{Bytes32, ContractId},
+    prelude::{Bytes32, ContractId, MerkleStorage},
 };
 use itertools::Itertools;
+use std::borrow::Cow;
 
 impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Bytes32,
         value: &Bytes32,
-    ) -> Result<Option<Bytes32>, DataError> {
+    ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
         Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, *value).map_err(Into::into)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
         Database::remove(self, key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
     }
 
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
         let key = MultiKey::new((parent, key));
         self.get(key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
         let key = MultiKey::new((parent, key));
         self.exists(key.as_ref(), CONTRACTS_STATE)
             .map_err(Into::into)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
             CONTRACTS_STATE,
@@ -54,7 +57,7 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
             .sorted_by_key(|t| t.0)
             .map(|(_, value)| value);
 
-        Ok(crypto::ephemeral_merkle_root(root))
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
@@ -84,7 +87,8 @@ mod tests {
                 &storage_id.1
             )
             .unwrap()
-            .unwrap(),
+            .unwrap()
+            .into_owned(),
             stored_value
         );
     }

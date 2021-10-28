@@ -1,5 +1,5 @@
 use crate::database::transactional::DatabaseTransaction;
-use crate::database::{Database, DatabaseTrait};
+use crate::database::Database;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_vm::{consts, prelude::*};
 use futures::lock::Mutex;
@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<DatabaseTransaction>>,
+    vm: HashMap<ID, Interpreter<Database>>,
     tx: HashMap<ID, Vec<Transaction>>,
     db: HashMap<ID, DatabaseTransaction>,
 }
@@ -46,7 +46,7 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage.clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -68,7 +68,7 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let mut vm = Interpreter::with_storage(storage.clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(

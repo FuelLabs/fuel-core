@@ -1,4 +1,4 @@
-use crate::database::{Database, DatabaseTrait};
+use crate::database::Database;
 use crate::state::in_memory::transaction::MemoryTransactionView;
 use std::{
     fmt::Debug,
@@ -26,6 +26,12 @@ impl DerefMut for DatabaseTransaction {
     }
 }
 
+impl AsMut<Database> for DatabaseTransaction {
+    fn as_mut(&mut self) -> &mut Database {
+        self.deref_mut()
+    }
+}
+
 impl Deref for DatabaseTransaction {
     type Target = Database;
 
@@ -41,6 +47,7 @@ impl Default for DatabaseTransaction {
 }
 
 impl DatabaseTransaction {
+    /// Commit all the changes in this transaction to the data source
     pub fn commit(self) -> crate::state::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
@@ -54,11 +61,5 @@ impl From<&Database> for DatabaseTransaction {
             changes: data.clone(),
             database: Database { data },
         }
-    }
-}
-
-impl DatabaseTrait for DatabaseTransaction {
-    fn transaction(&self) -> DatabaseTransaction {
-        (&self.database).into()
     }
 }

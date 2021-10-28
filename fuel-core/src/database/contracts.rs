@@ -1,28 +1,27 @@
-use crate::database::{columns::CONTRACTS, Database};
-use fuel_vm::{
-    data::DataError,
-    prelude::{Contract, ContractId, Storage},
+use crate::{
+    database::{columns::CONTRACTS, Database},
+    state::Error,
 };
+use fuel_vm::prelude::{Contract, ContractId, Storage};
+use std::borrow::Cow;
 
 impl Storage<ContractId, Contract> for Database {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &Contract,
-    ) -> Result<Option<Contract>, DataError> {
-        Database::insert(self, key.as_ref(), CONTRACTS, value.clone()).map_err(Into::into)
+    type Error = Error;
+
+    fn insert(&mut self, key: &ContractId, value: &Contract) -> Result<Option<Contract>, Error> {
+        Database::insert(self, key.as_ref(), CONTRACTS, value.clone())
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        Database::remove(self, key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
+        Database::remove(self, key.as_ref(), CONTRACTS)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.get(key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
+        self.get(key.as_ref(), CONTRACTS)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        self.exists(key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+        self.exists(key.as_ref(), CONTRACTS)
     }
 }
 
@@ -44,7 +43,8 @@ mod tests {
         assert_eq!(
             Storage::<ContractId, Contract>::get(&database, &contract_id)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .into_owned(),
             contract
         );
     }

@@ -1,5 +1,5 @@
 use crate::{
-    database::{Database, DatabaseTrait, KvStoreError},
+    database::{Database, KvStoreError},
     model::{
         coin::{Coin, CoinStatus, TxoPointer},
         fuel_block::{BlockHeight, FuelBlock},
@@ -9,7 +9,7 @@ use crate::{
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
-use fuel_vm::{interpreter::ExecuteError, prelude::Interpreter};
+use fuel_vm::prelude::{Interpreter, InterpreterError};
 use std::error::Error as StdError;
 use std::ops::DerefMut;
 use thiserror::Error;
@@ -220,7 +220,7 @@ pub enum Error {
         transaction_id: Bytes32,
     },
     #[error("VM execution error: {0:?}")]
-    VmExecution(fuel_vm::interpreter::ExecuteError),
+    VmExecution(fuel_vm::prelude::InterpreterError),
 }
 
 impl From<crate::database::KvStoreError> for Error {
@@ -229,8 +229,8 @@ impl From<crate::database::KvStoreError> for Error {
     }
 }
 
-impl From<fuel_vm::interpreter::ExecuteError> for Error {
-    fn from(e: ExecuteError) -> Self {
+impl From<InterpreterError> for Error {
+    fn from(e: InterpreterError) -> Self {
         Error::VmExecution(e)
     }
 }

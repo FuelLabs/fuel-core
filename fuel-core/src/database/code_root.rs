@@ -1,35 +1,38 @@
-use crate::database::{columns::CONTRACTS_CODE_ROOT, Database};
-use fuel_vm::{
-    data::DataError,
-    prelude::{Bytes32, ContractId, Salt, Storage},
+use crate::{
+    database::{columns::CONTRACTS_CODE_ROOT, Database},
+    state::Error,
 };
+use fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
+use std::borrow::Cow;
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         key: &ContractId,
         value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, *value).map_err(Into::into)
+    ) -> Result<Option<(Salt, Bytes32)>, Error> {
+        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, *value)
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
+        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::get(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
+        Database::get(self, key.as_ref(), CONTRACTS_CODE_ROOT)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        Database::exists(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+        Database::exists(self, key.as_ref(), CONTRACTS_CODE_ROOT)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_vm::interpreter::Contract;
+    use fuel_vm::prelude::Contract;
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
@@ -53,7 +56,8 @@ mod tests {
         assert_eq!(
             Storage::<ContractId, (Salt, Bytes32)>::get(&database, &contract_id)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .into_owned(),
             (salt, root)
         );
     }

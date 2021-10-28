@@ -1,4 +1,4 @@
-use crate::database::{Database, DatabaseTrait};
+use crate::database::Database;
 use crate::schema::scalars::{HexString, HexString256};
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;

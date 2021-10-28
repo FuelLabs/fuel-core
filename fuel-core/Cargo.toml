@@ -22,6 +22,7 @@ derive_more = { version = "0.99.16" }
 dirs = "3.0.2"
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
+fuel-types = { git = "ssh://git@github.com/FuelLabs/fuel-types.git", features = ["serde-types"] }
 fuel-asm = { git = "ssh://git@github.com/FuelLabs/fuel-asm.git", features = ["serde-types"] }
 fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 futures = "0.3"

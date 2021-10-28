@@ -5,9 +5,8 @@ use async_graphql::{Context, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
 use fuel_storage::Storage;
-use fuel_tx::{
-    bytes::SerializableVec, Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx,
-};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
+use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState;
 use std::ops::Deref;
 
@@ -323,6 +322,7 @@ impl SuccessStatus {
         match self.result {
             ProgramState::Return(word) => HexString(word.to_be_bytes().to_vec()),
             ProgramState::ReturnData(data) => HexString(data.deref().to_vec()),
+            ProgramState::Revert(word) => HexString(word.to_be_bytes().to_vec()),
         }
     }
 }

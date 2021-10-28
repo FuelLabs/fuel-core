@@ -1,7 +1,7 @@
 use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
-use fuel_tx::bytes::Deserializable;
+use fuel_types::bytes::Deserializable;
 use std::convert::TryFrom;
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -75,7 +75,7 @@ impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
     fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
         fuel_tx::Receipt::from_bytes(bytes.as_slice())
-            .map_err(|e| ConversionError::ReceiptFromBytesError(e))
+            .map_err(ConversionError::ReceiptFromBytesError)
     }
 }
 

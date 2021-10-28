@@ -1,41 +1,45 @@
+use crate::state::Error;
 use crate::{
     database::{columns::BALANCES, Database},
     state::{IterDirection, MultiKey},
 };
+use fuel_storage::MerkleRoot;
 use fuel_vm::{
     crypto,
-    data::{DataError, MerkleStorage},
-    prelude::{Bytes32, Color, ContractId, Word},
+    prelude::{Color, ContractId, MerkleStorage, Word},
 };
 use itertools::Itertools;
+use std::borrow::Cow;
 
 impl MerkleStorage<ContractId, Color, Word> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Color,
         value: &Word,
-    ) -> Result<Option<Word>, DataError> {
+    ) -> Result<Option<Word>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), BALANCES, *value).map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), BALANCES, *value)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), BALANCES).map_err(Into::into)
+        Database::remove(self, key.as_ref(), BALANCES)
     }
 
-    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Cow<Word>>, Error> {
         let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), BALANCES).map_err(Into::into)
+        self.get(key.as_ref(), BALANCES)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, Error> {
         let key = MultiKey::new((parent, key));
-        self.exists(key.as_ref(), BALANCES).map_err(Into::into)
+        self.exists(key.as_ref(), BALANCES)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
             BALANCES,
@@ -53,7 +57,7 @@ impl MerkleStorage<ContractId, Color, Word> for Database {
             .sorted_by_key(|t| t.0)
             .map(|(_, value)| value.to_be_bytes());
 
-        Ok(crypto::ephemeral_merkle_root(root))
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
@@ -73,7 +77,8 @@ mod tests {
         assert_eq!(
             MerkleStorage::<ContractId, Color, Word>::get(&database, &balance_id.0, &balance_id.1)
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .into_owned(),
             balance
         );
     }
