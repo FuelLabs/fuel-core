@@ -114,7 +114,7 @@ pub struct FailureStatus {
 
 #[derive(cynic::FragmentArguments)]
 pub struct TxArg {
-    pub tx: String,
+    pub tx: HexString,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

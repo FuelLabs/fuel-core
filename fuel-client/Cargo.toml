@@ -11,6 +11,11 @@ description = "Tx client and schema specification."
 autotests = false
 autobenches = false
 
+[[bin]]
+name = "fuel-client"
+path = "src/main.rs"
+required-features = ["default"]
+
 [dependencies]
 cynic = { version = "0.14", features = ["surf"] }
 chrono = { version = "0.4.19", features = ["serde"] }

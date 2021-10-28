@@ -1,5 +1,5 @@
 use crate::database::{Database, DatabaseTrait};
-use crate::schema::scalars::HexString256;
+use crate::schema::scalars::{HexString, HexString256};
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
 use async_graphql::{
@@ -8,6 +8,7 @@ use async_graphql::{
 };
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Transaction as FuelTx};
+use fuel_vm::prelude::Deserializable;
 use itertools::Itertools;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -123,10 +124,10 @@ impl TxMutation {
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
-        tx: String,
+        tx: HexString,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let transaction = ctx.data_unchecked::<Database>().transaction();
-        let tx: FuelTx = serde_json::from_str(tx.as_str())?;
+        let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
         let tx_pool = TxPool::new(transaction.deref().clone());
         let receipts = tx_pool.run_tx(tx).await?;
@@ -134,9 +135,13 @@ impl TxMutation {
     }
 
     /// Submits transaction to the pool
-    async fn submit(&self, ctx: &Context<'_>, tx: String) -> async_graphql::Result<HexString256> {
+    async fn submit(
+        &self,
+        ctx: &Context<'_>,
+        tx: HexString,
+    ) -> async_graphql::Result<HexString256> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        let tx: FuelTx = serde_json::from_str(tx.as_str())?;
+        let tx = FuelTx::from_bytes(&tx.0)?;
         let id = tx_pool.submit_tx(tx).await?;
 
         Ok(id.into())

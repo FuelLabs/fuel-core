@@ -21,7 +21,7 @@ impl ScalarType for HexString {
                 .strip_prefix("0x")
                 .ok_or_else(|| InputValueError::custom("expected 0x prefix"))?;
             // decode into bytes
-            let bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
+            let bytes = hex::decode(value).map_err(|e| e.to_string())?;
             Ok(HexString(bytes))
         } else {
             Err(InputValueError::expected_type(value))
@@ -57,9 +57,9 @@ impl FromStr for HexString256 {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // trim leading 0x
         let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
-        // decode into bytes
-        let mut bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
         // pad input to 32 bytes
+        let mut bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
+        // decode into bytes
         bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);
         // attempt conversion to fixed length array, error if too long
         let bytes: [u8; 32] = bytes

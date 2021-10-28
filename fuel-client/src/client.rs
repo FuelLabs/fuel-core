@@ -77,9 +77,10 @@ impl FuelClient {
     }
 
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
-        let tx = serde_json::to_string(tx)?;
-        let query = schema::tx::DryRun::build(&TxArg { tx });
-
+        let tx = tx.clone().to_bytes();
+        let query = schema::tx::DryRun::build(&TxArg {
+            tx: HexString(Bytes(tx)),
+        });
         let receipts = self.query(query).await.map(|r| r.dry_run)?;
         receipts
             .into_iter()
@@ -88,8 +89,10 @@ impl FuelClient {
     }
 
     pub async fn submit(&self, tx: &Transaction) -> io::Result<HexString256> {
-        let tx = serde_json::to_string(tx)?;
-        let query = schema::tx::Submit::build(&TxArg { tx });
+        let tx = tx.clone().to_bytes();
+        let query = schema::tx::Submit::build(&TxArg {
+            tx: HexString(Bytes(tx)),
+        });
 
         let id = self.query(query).await.map(|r| r.submit)?;
         Ok(id)
