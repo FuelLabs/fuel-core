@@ -435,7 +435,7 @@ impl InterpreterStorage for DatabaseTransaction {
 
 impl From<crate::state::Error> for InterpreterError {
     fn from(e: Error) -> Self {
-        panic!("No valid DataError variants to construct {:?}", e)
+        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
