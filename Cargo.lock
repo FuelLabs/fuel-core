@@ -910,8 +910,9 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#a30a54d47aa903135c63f350feb322e04fe40b5d"
+source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#27bb2a056d8762dc1579817bcf4784295c707f54"
 dependencies = [
+ "fuel-types",
  "serde",
 ]
 
@@ -937,6 +938,7 @@ dependencies = [
  "axum",
  "bincode",
  "dirs",
+ "fuel-storage",
  "fuel-vm",
  "futures",
  "hyper",
@@ -957,11 +959,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-storage"
+version = "0.1.0"
+source = "git+ssh://git@github.com/FuelLabs/fuel-storage.git#fa46eddcba6c3f1788ed4335ebf455f1024cfd04"
+
+[[package]]
 name = "fuel-tx"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-tx.git#c4e5e5808772df005e206adc74e64f14f7f68e95"
+source = "git+ssh://git@github.com/FuelLabs/fuel-tx.git#db758ee6021a4ce7efd3aa4f13278309fad91b9f"
 dependencies = [
  "fuel-asm",
+ "fuel-types",
  "itertools",
  "rand 0.8.4",
  "serde",
@@ -969,12 +977,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-types"
+version = "0.1.0"
+source = "git+ssh://git@github.com/FuelLabs/fuel-types.git#565ac6a25343e487faf10c13c42fb5168f92b087"
+dependencies = [
+ "rand 0.8.4",
+ "serde",
+]
+
+[[package]]
 name = "fuel-vm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#4f9d0dccb5b67bdc0933909716c13f1cc0ea3a69"
+source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#bf6881fd213241be884552e63c58a2c27cb1da1e"
 dependencies = [
  "fuel-asm",
+ "fuel-storage",
  "fuel-tx",
+ "fuel-types",
  "itertools",
  "secp256k1",
  "serde",

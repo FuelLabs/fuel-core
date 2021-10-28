@@ -6,11 +6,14 @@ use crate::state::in_memory::transaction::MemoryTransactionView;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{ColumnId, DataSource, Error, MultiKey};
+use fuel_storage::{MerkleRoot, MerkleStorage};
 use fuel_vm::crypto;
-use fuel_vm::data::{DataError, InterpreterStorage, MerkleStorage};
+use fuel_vm::error::InterpreterError;
 use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Storage, Word};
+use fuel_vm::storage::InterpreterStorage;
 use itertools::Itertools;
 use serde::{de::DeserializeOwned, Serialize};
+use std::borrow::Cow;
 use std::fmt::Debug;
 #[cfg(feature = "default")]
 use std::path::Path;
@@ -27,12 +30,12 @@ pub(crate) mod columns {
     pub const COLUMN_NUM: u32 = 4;
 }
 
-pub trait DatabaseTrait: InterpreterStorage + Debug + Send + Sync {
+pub trait DatabaseTrait: InterpreterStorage<DataError = Error> + Debug + Send + Sync {
     fn transaction(&self) -> DatabaseTransaction;
 }
 
 #[derive(Clone, Debug)]
-pub struct SharedDatabase(pub Arc<dyn DatabaseTrait>);
+pub struct SharedDatabase(pub Arc<Database>);
 
 impl Default for SharedDatabase {
     fn default() -> Self {
@@ -124,78 +127,78 @@ impl Default for Database {
 }
 
 impl Storage<ContractId, Contract> for Database {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &Contract,
-    ) -> Result<Option<Contract>, DataError> {
-        Database::insert(self, key.as_ref(), CONTRACTS, value.clone()).map_err(Into::into)
+    type Error = Error;
+
+    fn insert(&mut self, key: &ContractId, value: &Contract) -> Result<Option<Contract>, Error> {
+        Database::insert(self, key.as_ref(), CONTRACTS, value.clone())
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        Database::remove(self, key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
+        Database::remove(self, key.as_ref(), CONTRACTS)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
-        self.get(key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
+        self.get(key.as_ref(), CONTRACTS)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
-        self.exists(key.as_ref(), CONTRACTS).map_err(Into::into)
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+        self.exists(key.as_ref(), CONTRACTS)
     }
 }
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         key: &ContractId,
         value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, value.clone()).map_err(Into::into)
+    ) -> Result<Option<(Salt, Bytes32)>, Error> {
+        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, value.clone())
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
-        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT).map_err(Into::into)
+    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
+        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
         self.get(key.as_ref(), CONTRACTS_CODE_ROOT)
-            .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
         self.exists(key.as_ref(), CONTRACTS_CODE_ROOT)
-            .map_err(Into::into)
     }
 }
 
 impl MerkleStorage<ContractId, Color, Word> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Color,
         value: &Word,
-    ) -> Result<Option<Word>, DataError> {
+    ) -> Result<Option<Word>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), BALANCES, *value).map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), BALANCES, *value)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), BALANCES).map_err(Into::into)
+        Database::remove(self, key.as_ref(), BALANCES)
     }
 
-    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Cow<Word>>, Error> {
         let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), BALANCES).map_err(Into::into)
+        self.get(key.as_ref(), BALANCES)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, Error> {
         let key = MultiKey::new((parent, key));
-        self.exists(key.as_ref(), BALANCES).map_err(Into::into)
+        self.exists(key.as_ref(), BALANCES)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(self, BALANCES).try_collect()?;
 
         let root = items
@@ -206,39 +209,39 @@ impl MerkleStorage<ContractId, Color, Word> for Database {
             .sorted_by_key(|t| t.0)
             .map(|(_, value)| value.to_be_bytes());
 
-        Ok(crypto::ephemeral_merkle_root(root))
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
 impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Bytes32,
         value: &Bytes32,
-    ) -> Result<Option<Bytes32>, DataError> {
+    ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
         Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, value.clone())
-            .map_err(Into::into)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
+        Database::remove(self, key.as_ref(), CONTRACTS_STATE)
     }
 
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
         let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
+        self.get(key.as_ref(), CONTRACTS_STATE)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
         let key = MultiKey::new((parent, key));
         self.exists(key.as_ref(), CONTRACTS_STATE)
-            .map_err(Into::into)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> =
             Database::iter_all::<Vec<u8>, Bytes32>(self, CONTRACTS_STATE).try_collect()?;
 
@@ -250,20 +253,22 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
             .sorted_by_key(|t| t.0)
             .map(|(_, value)| value);
 
-        Ok(crypto::ephemeral_merkle_root(root))
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
 impl InterpreterStorage for Database {
-    fn block_height(&self) -> Result<u32, DataError> {
+    type DataError = Error;
+
+    fn block_height(&self) -> Result<u32, Error> {
         Ok(Default::default())
     }
 
-    fn block_hash(&self, _block_height: u32) -> Result<Bytes32, DataError> {
+    fn block_hash(&self, _block_height: u32) -> Result<Bytes32, Error> {
         Ok(Default::default())
     }
 
-    fn coinbase(&self) -> Result<Address, DataError> {
+    fn coinbase(&self) -> Result<Address, Error> {
         Ok(Default::default())
     }
 }
@@ -290,83 +295,87 @@ impl DatabaseTransaction {
 }
 
 impl Storage<ContractId, Contract> for DatabaseTransaction {
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &Contract,
-    ) -> Result<Option<Contract>, DataError> {
+    type Error = Error;
+
+    fn insert(&mut self, key: &ContractId, value: &Contract) -> Result<Option<Contract>, Error> {
         Storage::<ContractId, Contract>::insert(&mut self.database, &key, &value)
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, DataError> {
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
         Storage::<ContractId, Contract>::remove(&mut self.database, key)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<Contract>, DataError> {
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
         Storage::<ContractId, Contract>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
         Storage::<ContractId, Contract>::contains_key(&self.database, key)
     }
 }
 
 impl Storage<ContractId, (Salt, Bytes32)> for DatabaseTransaction {
+    type Error = Error;
+
     fn insert(
         &mut self,
         key: &ContractId,
         value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, DataError> {
+    ) -> Result<Option<(Salt, Bytes32)>, Error> {
         Storage::<ContractId, (Salt, Bytes32)>::insert(&mut self.database, &key, &value)
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
+    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
         Storage::<ContractId, (Salt, Bytes32)>::remove(&mut self.database, key)
     }
 
-    fn get(&self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, DataError> {
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
         Storage::<ContractId, (Salt, Bytes32)>::get(&self.database, key)
     }
 
-    fn contains_key(&self, key: &ContractId) -> Result<bool, DataError> {
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
         Storage::<ContractId, (Salt, Bytes32)>::contains_key(&self.database, key)
     }
 }
 
 impl MerkleStorage<ContractId, Color, Word> for DatabaseTransaction {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Color,
         value: &Word,
-    ) -> Result<Option<Word>, DataError> {
+    ) -> Result<Option<Word>, Error> {
         MerkleStorage::<ContractId, Color, Word>::insert(&mut self.database, parent, key, value)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, Error> {
         MerkleStorage::<ContractId, Color, Word>::remove(&mut self.database, parent, key)
     }
 
-    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Word>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Cow<Word>>, Error> {
         MerkleStorage::<ContractId, Color, Word>::get(&self.database, parent, key)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, Error> {
         MerkleStorage::<ContractId, Color, Word>::contains_key(&self.database, parent, key)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         MerkleStorage::<ContractId, Color, Word>::root(&mut self.database, parent)
     }
 }
 
 impl MerkleStorage<ContractId, Bytes32, Bytes32> for DatabaseTransaction {
+    type Error = Error;
+
     fn insert(
         &mut self,
         parent: &ContractId,
         key: &Bytes32,
         value: &Bytes32,
-    ) -> Result<Option<Bytes32>, DataError> {
+    ) -> Result<Option<Bytes32>, Error> {
         MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
             &mut self.database,
             parent,
@@ -375,19 +384,19 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for DatabaseTransaction {
         )
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
         MerkleStorage::<ContractId, Bytes32, Bytes32>::remove(&mut self.database, parent, key)
     }
 
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, DataError> {
+    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
         MerkleStorage::<ContractId, Bytes32, Bytes32>::get(&self.database, parent, key)
     }
 
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, DataError> {
+    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
         MerkleStorage::<ContractId, Bytes32, Bytes32>::contains_key(&self.database, parent, key)
     }
 
-    fn root(&mut self, parent: &ContractId) -> Result<Bytes32, DataError> {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         MerkleStorage::<ContractId, Bytes32, Bytes32>::root(&mut self.database, parent)
     }
 }
@@ -409,22 +418,24 @@ impl DatabaseTrait for DatabaseTransaction {
 }
 
 impl InterpreterStorage for DatabaseTransaction {
-    fn block_height(&self) -> Result<u32, DataError> {
+    type DataError = Error;
+
+    fn block_height(&self) -> Result<u32, Error> {
         self.database.block_height()
     }
 
-    fn block_hash(&self, block_height: u32) -> Result<Bytes32, DataError> {
+    fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
         self.database.block_hash(block_height)
     }
 
-    fn coinbase(&self) -> Result<Address, DataError> {
+    fn coinbase(&self) -> Result<Address, Error> {
         self.database.coinbase()
     }
 }
 
-impl From<crate::state::Error> for DataError {
+impl From<crate::state::Error> for InterpreterError {
     fn from(e: Error) -> Self {
-        panic!("No valid DataError variants to construct {:?}", e)
+        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
@@ -449,7 +460,8 @@ mod tests {
             assert_eq!(
                 Storage::<ContractId, Contract>::get(&database, &contract_id)
                     .unwrap()
-                    .unwrap(),
+                    .unwrap()
+                    .into_owned(),
                 contract
             );
         }
@@ -526,7 +538,8 @@ mod tests {
             assert_eq!(
                 Storage::<ContractId, (Salt, Bytes32)>::get(&database, &contract_id)
                     .unwrap()
-                    .unwrap(),
+                    .unwrap()
+                    .into_owned(),
                 (salt, root)
             );
         }
@@ -622,7 +635,8 @@ mod tests {
                     &balance_id.1
                 )
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .into_owned(),
                 balance
             );
         }
@@ -741,7 +755,8 @@ mod tests {
                     &storage_id.1
                 )
                 .unwrap()
-                .unwrap(),
+                .unwrap()
+                .into_owned(),
                 stored_value
             );
         }
