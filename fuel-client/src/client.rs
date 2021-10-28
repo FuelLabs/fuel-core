@@ -172,12 +172,23 @@ impl FuelClient {
         Ok(block)
     }
 
+    /// Retrieve multiple blocks
+    ///
+    /// # Arguments
+    ///
+    /// * `first`: Retrieve the first n blocks in order (forward pagination)
+    /// * `last`: Retrieve the last n blocks in order (backward pagination).
+    ///           Can't be used at the same time as `first`.
+    /// * `after`: Skip until block # (forward pagination)
+    /// * `before`: Skip until block # (backward pagination)
+    ///
+    /// returns: Result<BlockConnection, Error>
     pub async fn blocks(
         &self,
         first: Option<i32>,
         last: Option<i32>,
-        before: Option<String>,
         after: Option<String>,
+        before: Option<String>,
     ) -> io::Result<BlockConnection> {
         let query = schema::block::BlocksQuery::build(&ConnectionArgs {
             after,
@@ -197,6 +208,18 @@ impl FuelClient {
         Ok(coin)
     }
 
+    /// Retrieve a page of coins by their owner
+    ///
+    /// # Arguments
+    ///
+    /// * `owner`: The address of the owner to query
+    /// * `first`: Retrieve the first n coins in order (forward pagination)
+    /// * `last`: Retrieve the last n coins in order (backward pagination).
+    ///           Can't be used at the same time as `first`.
+    /// * `after`: Skip until coin id (forward pagination)
+    /// * `before`: Skip until coin id (backward pagination)
+    ///
+    /// returns: Result<CoinConnection, Error>
     pub async fn coins_by_owner(
         &self,
         owner: &str,
