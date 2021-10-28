@@ -34,7 +34,7 @@ impl ConcreteStorage {
         &mut self,
         txs: &[Transaction],
         storage: DatabaseTransaction,
-    ) -> Result<ID, ExecuteError> {
+    ) -> Result<ID, InterpreterError> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
@@ -60,7 +60,7 @@ impl ConcreteStorage {
         self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> Result<(), ExecuteError> {
+    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> Result<(), InterpreterError> {
         let tx = self
             .tx
             .get(id)
@@ -71,7 +71,7 @@ impl ConcreteStorage {
         let mut vm = Interpreter::with_storage(storage.clone());
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
-            ExecuteError::Io(io::Error::new(
+            InterpreterError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
                 "The VM instance was not found",
             ))
@@ -80,16 +80,16 @@ impl ConcreteStorage {
         Ok(())
     }
 
-    pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), ExecuteError> {
+    pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), InterpreterError> {
         self.vm
             .get_mut(id)
             .map(|vm| vm.execute(op))
             .transpose()?
             .map(|_| ())
             .ok_or_else(|| {
-                ExecuteError::Io(io::Error::new(
+                InterpreterError::Io(io::Error::new(
                     io::ErrorKind::NotFound,
-                    "The VM isntance was not found",
+                    "The VM instance was not found",
                 ))
             })
     }

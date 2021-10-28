@@ -11,6 +11,7 @@ use fuel_storage::Storage;
 use fuel_vm::data::{DataError, InterpreterStorage};
 use fuel_vm::prelude::{Address, Bytes32};
 use serde::{de::DeserializeOwned, Serialize};
+use std::borrow::Cow;
 use std::fmt::Debug;
 #[cfg(feature = "default")]
 use std::path::Path;
@@ -53,7 +54,7 @@ pub mod columns {
     pub const COLUMN_NUM: u32 = 12;
 }
 
-pub trait DatabaseTrait: InterpreterStorage + AsRef<Database> + Debug + Send + Sync {
+pub trait DatabaseTrait: InterpreterStorage<DataError = Error> + Debug + Send + Sync {
     fn transaction(&self) -> DatabaseTransaction;
 }
 
@@ -199,14 +200,14 @@ impl From<KvStoreError> for crate::state::Error {
     }
 }
 
-impl From<crate::state::Error> for DataError {
+impl From<crate::state::Error> for InterpreterError {
     fn from(e: Error) -> Self {
-        panic!("No valid DataError variants to construct {:?}", e)
+        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }
 
-impl From<KvStoreError> for DataError {
+impl From<KvStoreError> for InterpreterError {
     fn from(e: KvStoreError) -> Self {
-        panic!("No valid DataError variants to construct {:?}", e)
+        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

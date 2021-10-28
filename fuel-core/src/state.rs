@@ -76,7 +76,7 @@ pub enum Error {
     #[error("error performing binary serialization")]
     Codec,
     #[error("error occurred in the underlying datastore `{0}`")]
-    DatabaseError(Box<dyn std::error::Error + Send>),
+    DatabaseError(Box<dyn std::error::Error + Send + Sync>),
 }
 
 pub trait BatchOperations: KeyValueStore {
