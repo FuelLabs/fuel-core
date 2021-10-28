@@ -18,7 +18,8 @@ async-graphql = "2.9.13"
 axum = {version = "0.2.3", optional = true }
 bincode = "1.3"
 dirs = "3.0.2"
-fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
+fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types", "random"] }
+fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 futures = "0.3"
 hyper = "0.14"
 itertools = "0.10.1"
