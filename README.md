@@ -69,16 +69,16 @@ kubectl delete -f deployment/fuel-core.yml
 
 ## GraphQL service
 
-The client functionality is available through service endpoints that expect GraphQL queries.
+The client functionality is available through a service endpoint that expect GraphQL queries.
 
 #### Transaction executor
 
-The transaction executor will have in-memory storage with its lifetime bound to the GraphQL process - meaning that if the service restarts, then the storage state is reset.
+The transaction executor currently performs instant block production. Changes are persisted to RocksDB by default.
 
 * Service endpoint: `/graphql`
 * Schema (available after building): `fuel-client/assets/schema.sdl`
 
-The service expects a mutation defined as `run` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in JSON format, as specified in `docs/tx-schema.json`.
+The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/specs/protocol/tx_format.md).
 
 ##### cURL example
 
