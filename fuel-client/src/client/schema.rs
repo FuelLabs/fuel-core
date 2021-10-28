@@ -11,6 +11,7 @@ use hex::FromHexError;
 use serde::de::Error;
 use serde::Deserialize;
 use std::convert::TryInto;
+use std::fmt::{Display, Formatter};
 use std::io::ErrorKind;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -135,8 +136,7 @@ impl Serialize for Bytes256 {
     where
         S: Serializer,
     {
-        let hex = format!("0x{}", hex::encode(self.0));
-        serializer.serialize_str(hex.as_str())
+        serializer.serialize_str(&self.to_string())
     }
 }
 
@@ -147,6 +147,12 @@ impl<'de> Deserialize<'de> for Bytes256 {
     {
         let s: String = Deserialize::deserialize(deserializer)?;
         Self::from_str(s.as_str()).map_err(D::Error::custom)
+    }
+}
+
+impl Display for Bytes256 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{}", hex::encode(self.0))
     }
 }
 
