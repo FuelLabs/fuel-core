@@ -2,7 +2,6 @@ use fuel_client::client::FuelClient;
 use fuel_core::{
     database::Database,
     model::coin::{Coin, CoinStatus, TxoPointer},
-    schema::scalars::HexString256,
     service::{configure, run_in_background},
 };
 use fuel_storage::Storage;
@@ -35,10 +34,7 @@ async fn coin() {
     let client = FuelClient::from(srv);
 
     // run test
-    let coin = client
-        .coin(HexString256::from(id).to_string().as_str())
-        .await
-        .unwrap();
+    let coin = client.coin(format!("0x{:X}", id).as_str()).await.unwrap();
     assert!(coin.is_some());
 }
 
@@ -78,13 +74,7 @@ async fn first_5_coins() {
 
     // run test
     let coins = client
-        .coins_by_owner(
-            HexString256::from(owner).to_string().as_str(),
-            Some(5),
-            None,
-            None,
-            None,
-        )
+        .coins_by_owner(format!("0x{:X}", owner).as_str(), Some(5), None, None, None)
         .await
         .unwrap();
     assert!(coins.edges.is_some());

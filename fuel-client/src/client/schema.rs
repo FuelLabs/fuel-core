@@ -2,7 +2,7 @@ pub mod schema {
     cynic::use_schema!("./assets/schema.sdl");
 }
 
-use crate::client::schema::ConversionError::{HexString256LengthError, HexStringPrefixError};
+use crate::client::schema::ConversionError::HexStringPrefixError;
 use cynic::impl_scalar;
 use cynic::serde::{Deserializer, Serialize, Serializer};
 use fuel_tx::Salt;
@@ -10,8 +10,7 @@ use fuel_vm::prelude::{Address, Bytes32, Color, ContractId};
 use hex::FromHexError;
 use serde::de::Error;
 use serde::Deserialize;
-use std::convert::TryInto;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter, LowerHex};
 use std::io::ErrorKind;
 use std::num::TryFromIntError;
 use std::str::FromStr;
@@ -116,91 +115,85 @@ pub struct Memory {
     pub memory: String,
 }
 
-#[derive(cynic::Scalar, Debug, Clone, Default)]
-pub struct HexString256(pub Bytes256);
-
-impl FromStr for HexString256 {
-    type Err = ConversionError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = Bytes256::from_str(s)?;
-        Ok(HexString256(b))
-    }
-}
-
 #[derive(Debug, Clone, Default)]
-pub struct Bytes256(pub [u8; 32]);
+pub struct HexFormatted<T: Debug + Clone + Default>(pub T);
 
-impl Serialize for Bytes256 {
+impl<T: LowerHex + Debug + Clone + Default> Serialize for HexFormatted<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        serializer.serialize_str(format!("0x{:x}", self.0).as_str())
     }
 }
 
-impl<'de> Deserialize<'de> for Bytes256 {
+impl<'de, T: FromStr<Err = E> + Debug + Clone + Default, E: Display> Deserialize<'de>
+    for HexFormatted<T>
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
         let s: String = Deserialize::deserialize(deserializer)?;
-        Self::from_str(s.as_str()).map_err(D::Error::custom)
+        T::from_str(s.as_str()).map_err(D::Error::custom).map(Self)
     }
 }
 
-impl Display for Bytes256 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", hex::encode(self.0))
-    }
-}
-
-impl FromStr for Bytes256 {
+impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr for HexFormatted<T> {
     type Err = ConversionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // trim leading 0x
-        let value = s.strip_prefix("0x").ok_or(HexStringPrefixError)?;
-        // pad input to 32 bytes
-        let mut bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
-        // decode value into bytes
-        bytes.extend(hex::decode(value)?);
-        // attempt conversion to fixed length array, error if too long
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|e: Vec<u8>| HexString256LengthError(e.len()))?;
-        Ok(Self(bytes))
+        T::from_str(s)
+            .map_err(|e| ConversionError::HexError(format!("{}", e)))
+            .map(Self)
+    }
+}
+
+impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{:x}", self.0)
+    }
+}
+
+#[derive(cynic::Scalar, Debug, Clone, Default)]
+pub struct HexString256(pub HexFormatted<Bytes32>);
+
+impl FromStr for HexString256 {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b = HexFormatted::<Bytes32>::from_str(s)?;
+        Ok(HexString256(b))
     }
 }
 
 impl From<HexString256> for ContractId {
     fn from(s: HexString256) -> Self {
-        ContractId::new(s.0 .0)
+        ContractId::new(s.0 .0.into())
     }
 }
 
 impl From<HexString256> for Color {
     fn from(s: HexString256) -> Self {
-        Color::new(s.0 .0)
+        Color::new(s.0 .0.into())
     }
 }
 
 impl From<HexString256> for Bytes32 {
     fn from(s: HexString256) -> Self {
-        Bytes32::new(s.0 .0)
+        Bytes32::new(s.0 .0.into())
     }
 }
 
 impl From<HexString256> for Address {
     fn from(s: HexString256) -> Self {
-        Address::new(s.0 .0)
+        Address::new(s.0 .0.into())
     }
 }
 
 impl From<HexString256> for Salt {
     fn from(s: HexString256) -> Self {
-        Salt::new(s.0 .0)
+        Salt::new(s.0 .0.into())
     }
 }
 
@@ -274,6 +267,8 @@ pub enum ConversionError {
     HexString256LengthError(usize),
     #[error("hex parsing error {0}")]
     HexDecodingError(FromHexError),
+    #[error("hex parsing error {0}")]
+    HexError(String),
     #[error("failed integer conversion")]
     IntegerConversion,
     #[error("failed to deserialize transaction from bytes {0}")]
