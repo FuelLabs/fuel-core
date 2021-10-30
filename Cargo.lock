@@ -910,7 +910,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#27bb2a056d8762dc1579817bcf4784295c707f54"
+source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#7c8f4b639a394026ef7fd8bd99c9765dcafcc8c3"
 dependencies = [
  "fuel-types",
  "serde",
@@ -988,7 +988,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#bf6881fd213241be884552e63c58a2c27cb1da1e"
+source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#c022c95895fa7b35a35b7af1cb8729e6ccd75087"
 dependencies = [
  "fuel-asm",
  "fuel-storage",

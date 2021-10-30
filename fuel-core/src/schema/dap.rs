@@ -84,7 +84,7 @@ impl ConcreteStorage {
     pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), InterpreterError> {
         self.vm
             .get_mut(id)
-            .map(|vm| vm.execute(op))
+            .map(|vm| vm.instruction(op.into()))
             .transpose()?
             .map(|_| ())
             .ok_or_else(|| {
