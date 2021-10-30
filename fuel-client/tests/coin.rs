@@ -1,7 +1,7 @@
 use fuel_client::client::FuelClient;
 use fuel_core::{
     database::Database,
-    model::coin::{Coin, CoinStatus, TxoPointer},
+    model::coin::{Coin, CoinStatus, UtxoId},
     service::{configure, run_in_background},
 };
 use fuel_storage::Storage;
@@ -19,13 +19,12 @@ async fn coin() {
         block_created: Default::default(),
     };
 
-    let txo_pointer = TxoPointer {
-        block_height: 0,
-        tx_index: 0,
+    let utxo_id = UtxoId {
+        tx_id: Default::default(),
         output_index: 0,
     };
 
-    let id: Bytes32 = txo_pointer.into();
+    let id: Bytes32 = utxo_id.into();
     let mut db = Database::default();
     Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
 
@@ -54,12 +53,11 @@ async fn first_5_coins() {
                 block_created: Default::default(),
             };
 
-            let txo_pointer = TxoPointer {
-                block_height: i as u32,
-                tx_index: 0,
+            let utxo_id = UtxoId {
+                tx_id: Bytes32::from([i as u8; 32]),
                 output_index: 0,
             };
-            (txo_pointer.into(), coin)
+            (utxo_id.into(), coin)
         })
         .collect();
 

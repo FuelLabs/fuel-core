@@ -1,7 +1,7 @@
 use crate::{
     database::{Database, KvStoreError},
     model::{
-        coin::{Coin, CoinStatus, TxoPointer},
+        coin::{Coin, CoinStatus, UtxoId},
         fuel_block::{BlockHeight, FuelBlock},
     },
     tx_pool::TransactionStatus,
@@ -24,7 +24,7 @@ impl Executor {
         let block_id = block.id();
         Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
 
-        for (tx_index, tx_id) in block.transactions.iter().enumerate() {
+        for (_, tx_id) in block.transactions.iter().enumerate() {
             let mut sub_tx = block_tx.transaction();
             let db = sub_tx.deref_mut();
             let tx = Storage::<Bytes32, Transaction>::get(db, tx_id)?
@@ -41,7 +41,7 @@ impl Executor {
             match execution_result {
                 Ok(result) => {
                     // persist any outputs
-                    self.persist_outputs(block.fuel_height, tx_index as u32, result.tx(), db)?;
+                    self.persist_outputs(block.fuel_height, result.tx(), db)?;
 
                     // persist receipts
                     self.persist_receipts(tx_id, result.receipts(), db)?;
@@ -108,15 +108,15 @@ impl Executor {
     fn persist_outputs(
         &self,
         block_height: BlockHeight,
-        tx_index: u32,
         tx: &Transaction,
         db: &mut Database,
     ) -> Result<(), Error> {
+        let id = tx.id();
         for (out_idx, output) in tx.outputs().iter().enumerate() {
             match output {
                 Output::Coin { amount, color, to } => Executor::insert_coin(
                     block_height.into(),
-                    tx_index,
+                    id,
                     out_idx as u8,
                     amount,
                     color,
@@ -131,7 +131,7 @@ impl Executor {
                 Output::Withdrawal { .. } => {}
                 Output::Change { to, color, amount } => Executor::insert_coin(
                     block_height.into(),
-                    tx_index,
+                    id,
                     out_idx as u8,
                     amount,
                     color,
@@ -147,16 +147,15 @@ impl Executor {
 
     fn insert_coin(
         fuel_height: u32,
-        tx_index: u32,
+        tx_id: Bytes32,
         out_index: u8,
         amount: &Word,
         color: &Color,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let txo_pointer = TxoPointer {
-            block_height: fuel_height,
-            tx_index,
+        let txo_pointer = UtxoId {
+            tx_id,
             output_index: out_index,
         };
         let coin = Coin {
