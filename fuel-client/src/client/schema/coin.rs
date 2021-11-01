@@ -18,10 +18,16 @@ pub struct CoinByIdQuery {
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinsByOwnerConnectionArgs {
+    /// Select coins based on the `owner` field
     pub owner: HexString256,
+    /// Skip until coin id (forward pagination)
     pub after: Option<String>,
+    /// Skip until coin id (backward pagination)
     pub before: Option<String>,
+    /// Retrieve the first n coins in order (forward pagination)
     pub first: Option<i32>,
+    /// Retrieve the last n coins in order (backward pagination).
+    /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
 }
 

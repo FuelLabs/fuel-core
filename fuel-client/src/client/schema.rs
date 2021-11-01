@@ -240,11 +240,17 @@ impl<'de> Deserialize<'de> for Bytes {
     }
 }
 
+/// Generic graphql pagination query args
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ConnectionArgs {
+    /// Skip until cursor (forward pagination)
     pub after: Option<String>,
+    /// Skip until cursor (backward pagination)
     pub before: Option<String>,
+    /// Retrieve the first n items in order (forward pagination)
     pub first: Option<i32>,
+    /// Retrieve the last n items in order (backward pagination).
+    /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
 }
 
