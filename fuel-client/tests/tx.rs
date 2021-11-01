@@ -96,6 +96,25 @@ async fn submit() {
 }
 
 #[tokio::test]
+async fn receipts() {
+    let transaction = fuel_tx::Transaction::default();
+    let id = transaction.id();
+    // setup server & client
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
+    // submit tx
+    let result = client.submit(&transaction).await;
+    assert!(result.is_ok());
+
+    // run test
+    let receipts = client
+        .receipts(&HexString256::from(id).to_string())
+        .await
+        .unwrap();
+    assert!(!receipts.is_empty());
+}
+
+#[tokio::test]
 async fn get_transaction_by_id() {
     // setup test data in the node
     let transaction = fuel_tx::Transaction::default();
@@ -117,7 +136,6 @@ async fn get_transaction_by_id() {
 
 #[tokio::test]
 async fn get_transparent_transaction_by_id() {
-    // setup test data in the node
     let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
 

@@ -10,9 +10,14 @@ enum Command {
 
 #[derive(StructOpt)]
 enum TransactionCommands {
+    /// Submit a JSON encoded transaction for inclusion in a block
     Submit { tx: String },
+    /// Submit a JSON encoded transaction for a dry-run execution
     DryRun { tx: String },
+    /// Get the transactions associated with a particular transaction id
     Get { id: String },
+    /// Get the receipts for a particular transaction id
+    Receipts { id: String },
 }
 
 #[derive(StructOpt)]
@@ -46,6 +51,10 @@ impl CliArgs {
                 TransactionCommands::Get { id } => {
                     let tx = client.transaction(id.as_str()).await.unwrap();
                     println!("{:?}", json!(tx).to_string())
+                }
+                TransactionCommands::Receipts { id } => {
+                    let receipts = client.receipts(id.as_str()).await.unwrap();
+                    println!("{:?}", json!(receipts).to_string())
                 }
             },
         }

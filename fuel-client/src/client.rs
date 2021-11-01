@@ -15,7 +15,9 @@ use schema::{
     Bytes, HexString, HexString256, IdArg, MemoryArgs, RegisterArgs,
 };
 
+use crate::client::schema::ConversionError;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
+use std::io::ErrorKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -154,16 +156,23 @@ impl FuelClient {
 
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
-    //
-    // pub async fn receipts(&self, id: &HexString256) -> io::Result<Option<Vec<fuel_tx::Receipt>>> {
-    //     let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.clone() });
-    //
-    //     let tx = self.query(query).await?.transaction.ok_or(|| );
-    //
-    //     let receipts = tx.map(|tx| tx.receipts.into_iter().map(|r| r.try_into()).collect());
-    //
-    //     Ok(receipts.transpose()?)
-    // }
+
+    pub async fn receipts(&self, id: &str) -> io::Result<Vec<fuel_tx::Receipt>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+        })?;
+
+        let receipts: Result<Vec<fuel_tx::Receipt>, ConversionError> = tx
+            .receipts
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| r.try_into())
+            .collect();
+
+        Ok(receipts?)
+    }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
         let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
