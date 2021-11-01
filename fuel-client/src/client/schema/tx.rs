@@ -142,6 +142,8 @@ pub struct Submit {
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::client::schema::Bytes;
+    use fuel_types::bytes::SerializableVec;
 
     pub mod transparent_receipt;
     pub mod transparent_tx;
@@ -174,5 +176,25 @@ pub mod tests {
             last: None,
         });
         insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn dry_run_tx_gql_output() {
+        use cynic::MutationBuilder;
+        let tx = fuel_tx::Transaction::default();
+        let query = DryRun::build(TxArg {
+            tx: HexString(Bytes(tx.clone().to_bytes())),
+        });
+        insta::assert_snapshot!(query.query)
+    }
+
+    #[test]
+    fn submit_tx_gql_output() {
+        use cynic::MutationBuilder;
+        let tx = fuel_tx::Transaction::default();
+        let query = Submit::build(TxArg {
+            tx: HexString(Bytes(tx.clone().to_bytes())),
+        });
+        insta::assert_snapshot!(query.query)
     }
 }

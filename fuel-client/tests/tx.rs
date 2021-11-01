@@ -8,7 +8,7 @@ use fuel_storage::Storage;
 use fuel_vm::{consts::*, prelude::*};
 
 #[tokio::test]
-async fn transact() {
+async fn dry_run() {
     let srv = run_in_background(configure(Default::default())).await;
     let client = FuelClient::from(srv);
 
@@ -51,6 +51,48 @@ async fn transact() {
         Receipt::Return {
             val, ..
         } if val == 1));
+}
+
+#[tokio::test]
+async fn submit() {
+    let srv = run_in_background(configure(Default::default())).await;
+    let client = FuelClient::from(srv);
+
+    let gas_price = 0;
+    let gas_limit = 1_000_000;
+    let maturity = 0;
+
+    let script = vec![
+        Opcode::ADDI(0x10, REG_ZERO, 0xca),
+        Opcode::ADDI(0x11, REG_ZERO, 0xba),
+        Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
+        Opcode::RET(REG_ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .map(|op| u32::from(*op).to_be_bytes())
+        .flatten()
+        .collect();
+
+    let tx = fuel_tx::Transaction::script(
+        gas_price,
+        gas_limit,
+        maturity,
+        script,
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    );
+
+    let id = client.submit(&tx).await.unwrap();
+    // verify that the tx returned from the api matches the submitted tx
+    let ret_tx = client
+        .transaction(&id.0.to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(tx, ret_tx);
 }
 
 #[tokio::test]

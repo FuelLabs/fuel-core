@@ -11,6 +11,7 @@ enum Command {
 #[derive(StructOpt)]
 enum TransactionCommands {
     Submit { tx: String },
+    DryRun { tx: String },
     Get { id: String },
 }
 
@@ -34,6 +35,13 @@ impl CliArgs {
 
                     let result = client.submit(&tx).await;
                     println!("{}", result.unwrap().0);
+                }
+                TransactionCommands::DryRun { tx } => {
+                    let tx: Transaction =
+                        serde_json::from_str(tx).expect("invalid transaction json");
+
+                    let result = client.dry_run(&tx).await;
+                    println!("{:?}", result.unwrap());
                 }
                 TransactionCommands::Get { id } => {
                     let tx = client.transaction(id.as_str()).await.unwrap();
