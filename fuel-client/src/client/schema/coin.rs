@@ -1,4 +1,5 @@
 use crate::client::schema::{schema, HexString256, PageInfo, U64};
+use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
@@ -31,6 +32,27 @@ pub struct CoinsByOwnerConnectionArgs {
     pub last: Option<i32>,
 }
 
+impl From<(HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionArgs {
+    fn from(r: (HexString256, PaginationRequest<String>)) -> Self {
+        match r.1.direction {
+            PageDirection::Forward => CoinsByOwnerConnectionArgs {
+                owner: r.0,
+                after: r.1.cursor,
+                before: None,
+                first: Some(r.1.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => CoinsByOwnerConnectionArgs {
+                owner: r.0,
+                after: None,
+                before: r.1.cursor,
+                first: None,
+                last: Some(r.1.results as i32),
+            },
+        }
+    }
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
@@ -47,6 +69,20 @@ pub struct CoinsQuery {
 pub struct CoinConnection {
     pub edges: Option<Vec<Option<CoinEdge>>>,
     pub page_info: PageInfo,
+}
+
+impl From<CoinConnection> for PaginatedResult<Coin, String> {
+    fn from(conn: CoinConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            results: conn
+                .edges
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|e| e.map(|e| e.node))
+                .collect(),
+        }
+    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]

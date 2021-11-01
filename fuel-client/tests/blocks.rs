@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use fuel_client::client::FuelClient;
+use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::database::Database;
 use fuel_core::{
     model::fuel_block::FuelBlock,
@@ -54,16 +54,19 @@ async fn block_connection_first_5() {
     let client = FuelClient::from(srv);
 
     // run test
-    let blocks = client.blocks(Some(5), None, None, None).await.unwrap();
-    assert!(blocks.edges.is_some());
+    let blocks = client
+        .blocks(PaginationRequest {
+            cursor: None,
+            results: 5,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .unwrap();
+    assert!(!blocks.results.is_empty());
+    assert!(blocks.cursor.is_some());
     // assert "first" 5 blocks are returned in descending order (latest first)
     assert_eq!(
-        blocks
-            .edges
-            .unwrap()
-            .into_iter()
-            .map(|b| b.unwrap().node.height.0)
-            .collect_vec(),
+        blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
         rev(0..5).collect_vec()
     );
 }
@@ -92,16 +95,19 @@ async fn block_connection_last_5() {
     let client = FuelClient::from(srv);
 
     // run test
-    let blocks = client.blocks(None, Some(5), None, None).await.unwrap();
-    assert!(blocks.edges.is_some());
+    let blocks = client
+        .blocks(PaginationRequest {
+            cursor: None,
+            results: 5,
+            direction: PageDirection::Backward,
+        })
+        .await
+        .unwrap();
+    assert!(!blocks.results.is_empty());
+    assert!(blocks.cursor.is_some());
     // assert "last" 5 blocks are returned in descending order (latest first)
     assert_eq!(
-        blocks
-            .edges
-            .unwrap()
-            .into_iter()
-            .map(|b| b.unwrap().node.height.0)
-            .collect_vec(),
+        blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
         rev(5..10).collect_vec()
     );
 }

@@ -2,6 +2,7 @@ use crate::client::schema::{
     primitives::DateTime, schema, tx::OpaqueTransaction, ConnectionArgs, HexString256, PageInfo,
     U64,
 };
+use crate::client::PaginatedResult;
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
@@ -35,6 +36,20 @@ pub struct BlocksQuery {
 pub struct BlockConnection {
     pub edges: Option<Vec<Option<BlockEdge>>>,
     pub page_info: PageInfo,
+}
+
+impl From<BlockConnection> for PaginatedResult<Block, String> {
+    fn from(conn: BlockConnection) -> Self {
+        PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            results: conn
+                .edges
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|e| e.map(|e| e.node))
+                .collect(),
+        }
+    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]

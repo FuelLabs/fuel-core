@@ -1,10 +1,7 @@
-use crate::client::{
-    schema::{
-        schema,
-        tx::{tests::transparent_receipt::Receipt, TransactionStatus},
-        ConversionError, HexString, HexString256, PageInfo,
-    },
-    tx::{ConnectionArgs, TxIdArgs},
+use crate::client::schema::{
+    schema,
+    tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
+    ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
 use core::convert::{TryFrom, TryInto};
 

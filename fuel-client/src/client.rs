@@ -8,13 +8,14 @@ use std::{
 
 pub mod schema;
 
-use crate::client::schema::coin::{Coin, CoinByIdArgs, CoinConnection, CoinsByOwnerConnectionArgs};
-use crate::client::schema::tx::TxArg;
 use schema::{
-    block::{BlockByIdArgs, BlockConnection},
-    tx::TxIdArgs,
-    *,
+    block::BlockByIdArgs,
+    coin::{Coin, CoinByIdArgs},
+    tx::{TxArg, TxIdArgs},
+    Bytes, HexString, HexString256, IdArg, MemoryArgs, RegisterArgs,
 };
+
+pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -173,31 +174,13 @@ impl FuelClient {
     }
 
     /// Retrieve multiple blocks
-    ///
-    /// # Arguments
-    ///
-    /// * `first`: Retrieve the first n blocks in order (forward pagination)
-    /// * `last`: Retrieve the last n blocks in order (backward pagination).
-    ///           Can't be used at the same time as `first`.
-    /// * `after`: Skip until block # (forward pagination)
-    /// * `before`: Skip until block # (backward pagination)
-    ///
-    /// returns: Result<BlockConnection, Error>
     pub async fn blocks(
         &self,
-        first: Option<i32>,
-        last: Option<i32>,
-        after: Option<String>,
-        before: Option<String>,
-    ) -> io::Result<BlockConnection> {
-        let query = schema::block::BlocksQuery::build(&ConnectionArgs {
-            after,
-            before,
-            first,
-            last,
-        });
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::block::Block, String>> {
+        let query = schema::block::BlocksQuery::build(&request.into());
 
-        let blocks = self.query(query).await?.blocks;
+        let blocks = self.query(query).await?.blocks.into();
 
         Ok(blocks)
     }
@@ -209,34 +192,15 @@ impl FuelClient {
     }
 
     /// Retrieve a page of coins by their owner
-    ///
-    /// # Arguments
-    ///
-    /// * `owner`: The address of the owner to query
-    /// * `first`: Retrieve the first n coins in order (forward pagination)
-    /// * `last`: Retrieve the last n coins in order (backward pagination).
-    ///           Can't be used at the same time as `first`.
-    /// * `after`: Skip until coin id (forward pagination)
-    /// * `before`: Skip until coin id (backward pagination)
-    ///
-    /// returns: Result<CoinConnection, Error>
     pub async fn coins_by_owner(
         &self,
         owner: &str,
-        first: Option<i32>,
-        last: Option<i32>,
-        before: Option<String>,
-        after: Option<String>,
-    ) -> io::Result<CoinConnection> {
-        let query = schema::coin::CoinsQuery::build(&CoinsByOwnerConnectionArgs {
-            owner: owner.parse()?,
-            after,
-            before,
-            first,
-            last,
-        });
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
+        let owner: HexString256 = owner.parse()?;
+        let query = schema::coin::CoinsQuery::build(&(owner, request).into());
 
-        let coins = self.query(query).await?.coins_by_owner;
+        let coins = self.query(query).await?.coins_by_owner.into();
         Ok(coins)
     }
 }

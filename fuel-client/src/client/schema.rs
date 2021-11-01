@@ -130,6 +130,46 @@ pub struct PageInfo {
     pub start_cursor: Option<String>,
 }
 
+/// Specifies the direction of a paginated query
+pub enum PageDirection {
+    Forward,
+    Backward,
+}
+
+/// Used to parameterize paginated queries
+pub struct PaginationRequest<T> {
+    /// The cursor returned from a previous query to indicate an offset
+    pub cursor: Option<T>,
+    /// The number of results to take
+    pub results: usize,
+    /// The direction of the query (e.g. asc, desc order).
+    pub direction: PageDirection,
+}
+
+impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
+    fn from(req: PaginationRequest<T>) -> Self {
+        match req.direction {
+            PageDirection::Forward => Self {
+                after: req.cursor.map(Into::into),
+                before: None,
+                first: Some(req.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => Self {
+                after: None,
+                before: req.cursor.map(Into::into),
+                first: None,
+                last: Some(req.results as i32),
+            },
+        }
+    }
+}
+
+pub struct PaginatedResult<T, C> {
+    pub cursor: Option<C>,
+    pub results: Vec<T>,
+}
+
 #[derive(Error, Debug)]
 pub enum ConversionError {
     #[error("Field is required from the GraphQL response {0}")]

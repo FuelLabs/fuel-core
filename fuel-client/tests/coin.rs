@@ -1,4 +1,4 @@
-use fuel_client::client::FuelClient;
+use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::{
     database::Database,
     model::coin::{Coin, CoinStatus, UtxoId},
@@ -72,9 +72,16 @@ async fn first_5_coins() {
 
     // run test
     let coins = client
-        .coins_by_owner(format!("0x{:X}", owner).as_str(), Some(5), None, None, None)
+        .coins_by_owner(
+            format!("0x{:X}", owner).as_str(),
+            PaginationRequest {
+                cursor: None,
+                results: 5,
+                direction: PageDirection::Forward,
+            },
+        )
         .await
         .unwrap();
-    assert!(coins.edges.is_some());
-    assert_eq!(coins.edges.unwrap().len(), 5)
+    assert!(!coins.results.is_empty());
+    assert_eq!(coins.results.len(), 5)
 }
