@@ -1,5 +1,6 @@
 use crate::client::schema::{
-    schema, tx::OpaqueTransaction, ConnectionArgs, DateTime, HexString256, PageInfo, U64,
+    primitives::DateTime, schema, tx::OpaqueTransaction, ConnectionArgs, HexString256, PageInfo,
+    U64,
 };
 
 #[derive(cynic::FragmentArguments, Debug)]
