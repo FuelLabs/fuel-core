@@ -1,0 +1,12 @@
+version: "3"
+
+services:
+  api:
+    build: .
+    image: fuel-core
+    ports:
+      - "4000:4000"
+    volumes:
+      - db:/mnt/db
+volumes:
+  db:
