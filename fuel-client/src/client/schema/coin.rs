@@ -1,4 +1,4 @@
-use crate::client::schema::{schema, HexString256, PageInfo};
+use crate::client::schema::{schema, HexString256, PageInfo, U64};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
@@ -59,11 +59,11 @@ pub struct CoinEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
-    pub amount: i32,
-    pub block_created: i32,
+    pub amount: U64,
+    pub block_created: U64,
     pub color: HexString256,
     pub id: HexString256,
-    pub maturity: i32,
+    pub maturity: U64,
     pub owner: HexString256,
     pub status: CoinStatus,
 }

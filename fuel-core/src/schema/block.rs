@@ -1,4 +1,5 @@
 use crate::database::Database;
+use crate::schema::scalars::U64;
 use crate::{
     database::KvStoreError,
     model::fuel_block::{BlockHeight, FuelBlock},
@@ -26,7 +27,7 @@ impl Block {
         HexString256(*self.0.id().deref())
     }
 
-    async fn height(&self) -> u32 {
+    async fn height(&self) -> U64 {
         self.0.fuel_height.into()
     }
 

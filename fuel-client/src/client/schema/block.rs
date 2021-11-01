@@ -1,5 +1,5 @@
 use crate::client::schema::{
-    schema, tx::OpaqueTransaction, ConnectionArgs, DateTime, HexString256, PageInfo,
+    schema, tx::OpaqueTransaction, ConnectionArgs, DateTime, HexString256, PageInfo, U64,
 };
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -46,7 +46,7 @@ pub struct BlockEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
-    pub height: i32,
+    pub height: U64,
     pub id: HexString256,
     pub time: DateTime,
     pub producer: HexString256,

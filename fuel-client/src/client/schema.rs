@@ -83,7 +83,7 @@ pub struct Execute {
 #[derive(cynic::FragmentArguments)]
 pub struct RegisterArgs {
     pub id: cynic::Id,
-    pub register: i32,
+    pub register: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -94,14 +94,14 @@ pub struct RegisterArgs {
 )]
 pub struct Register {
     #[arguments(id = &args.id, register = &args.register)]
-    pub register: i32,
+    pub register: U64,
 }
 
 #[derive(cynic::FragmentArguments)]
 pub struct MemoryArgs {
     pub id: cynic::Id,
-    pub start: i32,
-    pub size: i32,
+    pub start: U64,
+    pub size: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -237,6 +237,36 @@ impl<'de> Deserialize<'de> for Bytes {
     {
         let s: String = Deserialize::deserialize(deserializer)?;
         Self::from_str(s.as_str()).map_err(D::Error::custom)
+    }
+}
+
+#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, PartialEq)]
+pub struct U64(pub u64);
+impl_scalar!(U64, schema::U64);
+
+impl Serialize for U64 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.0.to_string();
+        serializer.serialize_str(s.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for U64 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Ok(Self(s.parse().map_err(D::Error::custom)?))
+    }
+}
+
+impl From<usize> for U64 {
+    fn from(i: usize) -> Self {
+        U64(i as u64)
     }
 }
 

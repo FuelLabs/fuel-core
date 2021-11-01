@@ -980,6 +980,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "cynic",
+ "derive_more",
  "fuel-client",
  "fuel-core",
  "fuel-storage",

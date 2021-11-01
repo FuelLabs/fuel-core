@@ -1,3 +1,4 @@
+use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
@@ -8,6 +9,38 @@ use std::{
     ops::Deref,
     str::FromStr,
 };
+
+/// Need our own u64 type since GraphQL integers are restricted to i32.
+#[derive(Copy, Clone, Debug, derive_more::Into, derive_more::From)]
+pub struct U64(pub u64);
+
+#[Scalar(name = "U64")]
+impl ScalarType for U64 {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(value) = &value {
+            let num: u64 = value.parse().map_err(InputValueError::custom)?;
+            Ok(U64(num))
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.0.to_string())
+    }
+}
+
+impl From<BlockHeight> for U64 {
+    fn from(h: BlockHeight) -> Self {
+        U64(h.to_usize() as u64)
+    }
+}
+
+impl From<U64> for usize {
+    fn from(u: U64) -> Self {
+        u.0 as usize
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct HexString(pub(crate) Vec<u8>);

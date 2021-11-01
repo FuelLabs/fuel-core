@@ -1,12 +1,11 @@
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
-use crate::schema::scalars::HexString256;
+use crate::schema::scalars::{HexString256, U64};
 use crate::state::IterDirection;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
-use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32};
 use itertools::Itertools;
@@ -24,15 +23,15 @@ impl Coin {
         self.1.owner.into()
     }
 
-    async fn amount(&self) -> Word {
-        self.1.amount
+    async fn amount(&self) -> U64 {
+        self.1.amount.into()
     }
 
     async fn color(&self) -> HexString256 {
         self.1.color.into()
     }
 
-    async fn maturity(&self) -> u32 {
+    async fn maturity(&self) -> U64 {
         self.1.maturity.into()
     }
 
@@ -40,7 +39,7 @@ impl Coin {
         self.1.status
     }
 
-    async fn block_created(&self) -> u32 {
+    async fn block_created(&self) -> U64 {
         self.1.block_created.into()
     }
 }

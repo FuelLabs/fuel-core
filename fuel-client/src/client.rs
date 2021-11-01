@@ -128,17 +128,17 @@ impl FuelClient {
     pub async fn register(&self, id: &str, register: RegisterId) -> io::Result<Word> {
         let query = schema::Register::build(&RegisterArgs {
             id: id.into(),
-            register: register as i32,
+            register: register.into(),
         });
 
-        Ok(self.query(query).await?.register as Word)
+        Ok(self.query(query).await?.register.0 as Word)
     }
 
     pub async fn memory(&self, id: &str, start: usize, size: usize) -> io::Result<Vec<u8>> {
         let query = schema::Memory::build(&MemoryArgs {
             id: id.into(),
-            start: start as i32,
-            size: size as i32,
+            start: start.into(),
+            size: size.into(),
         });
 
         let memory = self.query(query).await?.memory;

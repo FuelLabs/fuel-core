@@ -62,7 +62,7 @@ async fn block_connection_first_5() {
             .edges
             .unwrap()
             .into_iter()
-            .map(|b| b.unwrap().node.height)
+            .map(|b| b.unwrap().node.height.0)
             .collect_vec(),
         rev(0..5).collect_vec()
     );
@@ -100,7 +100,7 @@ async fn block_connection_last_5() {
             .edges
             .unwrap()
             .into_iter()
-            .map(|b| b.unwrap().node.height)
+            .map(|b| b.unwrap().node.height.0)
             .collect_vec(),
         rev(5..10).collect_vec()
     );

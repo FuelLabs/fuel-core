@@ -1,5 +1,6 @@
 use crate::database::transactional::DatabaseTransaction;
 use crate::database::Database;
+use crate::schema::scalars::U64;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_vm::{consts, prelude::*};
 use futures::lock::Mutex;
@@ -112,26 +113,27 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        register: RegisterId,
-    ) -> async_graphql::Result<Word> {
+        register: U64,
+    ) -> async_graphql::Result<U64> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .register(&id, register)
+            .register(&id, register.into())
             .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
+            .map(|val| val.into())
     }
 
     async fn memory(
         &self,
         ctx: &Context<'_>,
         id: ID,
-        start: usize,
-        size: usize,
+        start: U64,
+        size: U64,
     ) -> async_graphql::Result<String> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .memory(&id, start, size)
+            .memory(&id, start.into(), size.into())
             .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }

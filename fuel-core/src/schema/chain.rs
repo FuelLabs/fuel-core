@@ -1,6 +1,7 @@
 use crate::database::Database;
 use crate::model::fuel_block::FuelBlock;
 use crate::schema::block::Block;
+use crate::schema::scalars::U64;
 use async_graphql::{Context, Object};
 use fuel_storage::Storage;
 use fuel_tx::Bytes32;
@@ -23,11 +24,11 @@ impl ChainInfo {
         Ok(Block(block.into_owned()))
     }
 
-    async fn base_chain_height(&self) -> u64 {
-        0
+    async fn base_chain_height(&self) -> U64 {
+        0.into()
     }
 
-    async fn peer_count(&self) -> u64 {
+    async fn peer_count(&self) -> u16 {
         0
     }
 }
