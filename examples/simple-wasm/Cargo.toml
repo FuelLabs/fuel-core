@@ -15,3 +15,5 @@ crate-type = ['cdylib']
 [dependencies]
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
+# TODO: abigen
+serde = { version = "1.0.128", default-features = false, features = ["derive"] }

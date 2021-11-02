@@ -116,3 +116,40 @@ impl IndexExecutor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+    const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
+    const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
+    const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
+    const GOOD_DATA: &'static [u8] = include_bytes!("test_data/good_event.bin");
+
+    #[test]
+    #[ignore] // need to run with db connection
+    fn test_executor() {
+        let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad yaml file.");
+        let bad_manifest: Manifest = serde_yaml::from_str(BAD_MANIFEST).expect("Bad yaml file.");
+
+        let executor = IndexExecutor::new(DATABASE_URL.to_string(), bad_manifest, WASM_BYTES);
+        match executor {
+            Err(IndexerError::MissingHandler(o)) if o == "fn_one" => (),
+            e => panic!("Expected missing handler error {:#?}", e),
+        }
+
+        let executor = IndexExecutor::new(DATABASE_URL.to_string(), manifest, WASM_BYTES);
+        assert!(executor.is_ok());
+
+        let executor = executor.unwrap();
+
+        let result = executor.trigger_event("an_event_name", b"ejfiaiddiie".to_vec());
+        match result {
+            Err(IndexerError::RuntimeError(_)) => (),
+            e => panic!("Should have been a runtime error {:#?}", e),
+        }
+
+        let result = executor.trigger_event("an_event_name", GOOD_DATA.to_vec());
+        assert!(result.is_ok());
+    }
+}

@@ -7,8 +7,7 @@ members = [
     "fuel-client",
     "fuel-indexer/derive",
     "fuel-indexer/lib",
-    "fuel-indexer/schema",
-    "index-runner"
+    "fuel-indexer/schema"
 ]
 
 [profile.release]

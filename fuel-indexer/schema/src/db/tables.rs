@@ -176,3 +176,63 @@ impl Schema {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GRAPHQL_SCHEMA: &'static str = r#"
+        schema {
+            query: QueryRoot
+        }
+        
+        type QueryRoot {
+            thing1: Thing1
+            thing2: Thing2
+        }
+        
+        type Thing1 {
+            id: ID!
+            account: Address!
+        }
+        
+        
+        type Thing2 {
+            id: ID!
+            account: Address! @indexed
+            hash: Bytes32! @indexed
+        }
+    "#;
+
+    const CREATE_SCHEMA: &'static str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
+    const CREATE_THING1: &'static str = concat!(
+        "CREATE TABLE IF NOT EXISTS\n",
+            " test_namespace.thing1 (\n",
+            " id bigint not null,\n",
+            "account varchar(64) not null,\n",
+            "object bytea not null",
+        "\n)"
+    );
+    const CREATE_THING2: &'static str = concat!(
+        "CREATE TABLE IF NOT EXISTS\n",
+            " test_namespace.thing2 (\n",
+            " id bigint not null,\n",
+            "account varchar(64) not null,\n",
+            "hash varchar(64) not null,\n",
+            "object bytea not null\n",
+        ")"
+    );
+
+
+    #[test]
+    fn test_schema_builder() {
+        let sb = SchemaBuilder::new("test_namespace", "a_version_string");
+
+        let Schema { root, statements, .. } = sb.build(GRAPHQL_SCHEMA);
+
+        assert_eq!(root, "QueryRoot");
+        assert_eq!(statements[0], CREATE_SCHEMA);
+        assert_eq!(statements[1], CREATE_THING1);
+        assert_eq!(statements[2], CREATE_THING2);
+    }
+}

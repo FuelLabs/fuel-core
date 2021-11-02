@@ -1,0 +1,14 @@
+---
+namespace: test_namespace
+graphql_schema: schema.graphql
+wasm_module: simple_wasm.wasm
+handlers:
+  - event: an_event_name
+    handler: function_one
+  - event: another_event_name
+    handler: function_two
+test_events:
+  - trigger: an_event_name
+    payload: '{"id":78888,"account":[77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,11,22,77,77,77,77,77,77,7,0]}'
+  - trigger: another_event_name
+    payload: '{"id":78888,"hash":[55,44,22,77,77,77,0,77,77,77,0,0,77,77,77,77,77,77,77,77,77,77,11,22,77,77,77,77,77,77,7,0], "sub_event": {"id": 34, "account": [77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,77,0,0,1,7,1,0,7,7,3,2,3,3,1,0]}}'

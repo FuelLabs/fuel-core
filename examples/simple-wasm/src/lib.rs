@@ -1,5 +1,7 @@
 #![no_std]
 use fuel_indexer_derive::{graphql_schema, handler};
+mod test_data;
+use test_data::*;
 
 graphql_schema!("test_namespace", "schema/schema.graphql");
 
