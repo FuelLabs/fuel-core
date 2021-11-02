@@ -544,13 +544,6 @@ mod tests {
             sql
         );
 
-        ///WITH bleh ("col1", "col2") AS (
-        ///    VALUES (1, 'a'), (2, 'b'), (3, 'c')
-        ///)
-        ///SELECT row_to_json(_) from (
-        ///     SELECT account, hash, (select array(select row_to_json(_) from bleh as _)) as f
-        ///     FROM test_namespace.thing2 WHERE id = 78888
-        /// ) as _;
         let bad_query = r#"
             fragment frag1 on BadType{
                 account

@@ -103,81 +103,57 @@ impl FtColumn {
 
     #[cfg(feature = "use-std")]
     pub fn query_fragment(&self) -> String {
-        // TODO: should make fuel-tx a no-std feature flag and a LowerHex implementation
         match self {
             FtColumn::ID(value) => {
                 format!("{}", value)
             }
             FtColumn::Address(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::Bytes4(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::Bytes8(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::Bytes32(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::Color(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::ContractId(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
             FtColumn::Salt(value) => {
-                format!(
-                    "'{}'",
-                    (*value)
-                        .iter()
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect::<Vec<String>>()
-                        .join("")
-                )
+                format!("'{:x}'", value)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg_attr(feature = "use-std", test)]
+    fn test_fragments() {
+        let id = FtColumn::ID(123456);
+        let addr = FtColumn::Address(Address::try_from([0x12; 32]).expect("Bad bytes"));
+        let bytes4 = FtColumn::Bytes4(Bytes4::try_from([0xF0; 4]).expect("Bad bytes"));
+        let bytes8 = FtColumn::Bytes8(Bytes8::try_from([0x9D; 8]).expect("Bad bytes"));
+        let bytes32 = FtColumn::Bytes32(Bytes32::try_from([0xEE; 32]).expect("Bad bytes"));
+        let color = FtColumn::Color(Color::try_from([0xA5; 32]).expect("Bad bytes"));
+        let contractid = FtColumn::ContractId(ContractId::try_from([0x78; 32]).expect("Bad bytes"));
+        let salt = FtColumn::Salt(Salt::try_from([0x31; 32]).expect("Bad bytes"));
+
+        insta::assert_yaml_snapshot!(id.query_fragment());
+        insta::assert_yaml_snapshot!(addr.query_fragment());
+        insta::assert_yaml_snapshot!(bytes4.query_fragment());
+        insta::assert_yaml_snapshot!(bytes8.query_fragment());
+        insta::assert_yaml_snapshot!(bytes32.query_fragment());
+        insta::assert_yaml_snapshot!(color.query_fragment());
+        insta::assert_yaml_snapshot!(contractid.query_fragment());
+        insta::assert_yaml_snapshot!(salt.query_fragment());
     }
 }

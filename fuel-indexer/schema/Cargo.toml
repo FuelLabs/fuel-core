@@ -15,6 +15,9 @@ serde-scale = "0.2.2"
 sha2 = "0.9.6"
 thiserror = { version  = "1.0.26", optional=true }
 
+[dev-dependencies]
+insta = "1.8.0"
+
 [features]
 default = ["fuel-tx/serde-types-minimal"]
 db-models = ["use-std", "itertools", "thiserror"]
