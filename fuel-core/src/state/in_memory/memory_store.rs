@@ -1,8 +1,9 @@
-use crate::state::in_memory::{column_key, is_column};
-use crate::state::{BatchOperations, ColumnId, KeyValueStore, Result, TransactableStorage};
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::sync::Mutex;
+use crate::state::{
+    in_memory::{column_key, is_column},
+    BatchOperations, ColumnId, IterDirection, KeyValueStore, Result, TransactableStorage,
+};
+use itertools::Itertools;
+use std::{collections::HashMap, fmt::Debug, mem::size_of, sync::Mutex};
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
@@ -51,17 +52,46 @@ impl KeyValueStore for MemoryStore {
             .contains_key(&column_key(key, column)))
     }
 
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)>> {
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // clone entire set so we can drop the lock
-        let copy: Vec<(Vec<u8>, Vec<u8>)> = self
+        let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
             .inner
             .lock()
             .expect("poisoned")
             .iter()
             .filter(|(key, _)| is_column(key, column))
-            .map(|(key, value)| (key.clone(), value.clone()))
+            // strip column
+            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            // filter prefix
+            .filter(|(key, _)| {
+                if let Some(prefix) = &prefix {
+                    key.starts_with(prefix.as_slice())
+                } else {
+                    true
+                }
+            })
+            .sorted()
             .collect();
-        Box::new(copy.into_iter())
+
+        if direction == IterDirection::Reverse {
+            copy.reverse();
+        }
+
+        if let Some(start) = start {
+            let start = start.to_vec();
+            Box::new(
+                copy.into_iter()
+                    .skip_while(move |(key, _)| key.as_slice() != start.as_slice()),
+            )
+        } else {
+            Box::new(copy.into_iter())
+        }
     }
 }
 

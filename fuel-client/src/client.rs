@@ -1,13 +1,23 @@
-use cynic::http::SurfExt;
-use cynic::{MutationBuilder, Operation, QueryBuilder};
-
+use cynic::{http::SurfExt, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
-use std::str::{self, FromStr};
-use std::{io, net};
+use std::{
+    convert::TryInto,
+    io, net,
+    str::{self, FromStr},
+};
 
-mod schema;
+pub mod schema;
 
-use schema::*;
+use schema::{
+    block::BlockByIdArgs,
+    coin::{Coin, CoinByIdArgs},
+    tx::{TxArg, TxIdArgs},
+    Bytes, HexString, HexString256, IdArg, MemoryArgs, RegisterArgs,
+};
+
+use crate::client::schema::ConversionError;
+pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
+use std::io::ErrorKind;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -50,7 +60,7 @@ impl FuelClient {
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
             (_, Some(e)) => {
-                let e = e.into_iter().map(|e| format!("{}", e.message)).fold(
+                let e = e.into_iter().map(|e| e.message).fold(
                     String::from("Response errors"),
                     |mut s, e| {
                         s.push_str("; ");
@@ -69,14 +79,26 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
-    pub async fn transact(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
-        let tx = serde_json::to_string(tx)?;
-        let query = schema::Run::build(&TxArg { tx });
+    pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
+        let tx = tx.clone().to_bytes();
+        let query = schema::tx::DryRun::build(&TxArg {
+            tx: HexString(Bytes(tx)),
+        });
+        let receipts = self.query(query).await.map(|r| r.dry_run)?;
+        receipts
+            .into_iter()
+            .map(|receipt| receipt.try_into().map_err(Into::into))
+            .collect()
+    }
 
-        let result = self.query(query).await.map(|r| r.run)?;
-        let result = serde_json::from_str(result.as_str())?;
+    pub async fn submit(&self, tx: &Transaction) -> io::Result<HexString256> {
+        let tx = tx.clone().to_bytes();
+        let query = schema::tx::Submit::build(&TxArg {
+            tx: HexString(Bytes(tx)),
+        });
 
-        Ok(result)
+        let id = self.query(query).await.map(|r| r.submit)?;
+        Ok(id)
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -109,21 +131,99 @@ impl FuelClient {
     pub async fn register(&self, id: &str, register: RegisterId) -> io::Result<Word> {
         let query = schema::Register::build(&RegisterArgs {
             id: id.into(),
-            register: register as i32,
+            register: register.into(),
         });
 
-        Ok(self.query(query).await?.register as Word)
+        Ok(self.query(query).await?.register.0 as Word)
     }
 
     pub async fn memory(&self, id: &str, start: usize, size: usize) -> io::Result<Vec<u8>> {
         let query = schema::Memory::build(&MemoryArgs {
             id: id.into(),
-            start: start as i32,
-            size: size as i32,
+            start: start.into(),
+            size: size.into(),
         });
 
         let memory = self.query(query).await?.memory;
 
         Ok(serde_json::from_str(memory.as_str())?)
+    }
+
+    pub async fn transaction(&self, id: &str) -> io::Result<Option<fuel_tx::Transaction>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let transaction = self.query(query).await?.transaction;
+
+        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
+    }
+
+    pub async fn receipts(&self, id: &str) -> io::Result<Vec<fuel_tx::Receipt>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+        })?;
+
+        let receipts: Result<Vec<fuel_tx::Receipt>, ConversionError> = tx
+            .receipts
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| r.try_into())
+            .collect();
+
+        Ok(receipts?)
+    }
+
+    pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
+        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
+
+        let block = self.query(query).await?.block;
+
+        Ok(block)
+    }
+
+    /// Retrieve multiple blocks
+    pub async fn blocks(
+        &self,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::block::Block, String>> {
+        let query = schema::block::BlocksQuery::build(&request.into());
+
+        let blocks = self.query(query).await?.blocks.into();
+
+        Ok(blocks)
+    }
+
+    pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
+        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs { id: id.parse()? });
+        let coin = self.query(query).await?.coin;
+        Ok(coin)
+    }
+
+    /// Retrieve a page of coins by their owner
+    pub async fn coins_by_owner(
+        &self,
+        owner: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
+        let owner: HexString256 = owner.parse()?;
+        let query = schema::coin::CoinsQuery::build(&(owner, request).into());
+
+        let coins = self.query(query).await?.coins_by_owner.into();
+        Ok(coins)
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl FuelClient {
+    pub async fn transparent_transaction(
+        &self,
+        id: &str,
+    ) -> io::Result<Option<fuel_tx::Transaction>> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let transaction = self.query(query).await?.transaction;
+
+        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 }

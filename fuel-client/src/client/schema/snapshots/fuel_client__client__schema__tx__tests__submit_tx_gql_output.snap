@@ -1,0 +1,9 @@
+---
+source: fuel-client/src/client/schema/tx.rs
+expression: query.query
+
+---
+mutation Mutation($_0: HexString!) {
+  submit(tx: $_0)
+}
+

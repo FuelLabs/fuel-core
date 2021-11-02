@@ -5,17 +5,39 @@ authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
 edition = "2018"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
+# Disable auto-targeting of integ tests or benchmarks
+# in order to avoid extra linking overhead associated with
+# each test module being its own binary
+autotests = false
+autobenches = false
+
+[[bin]]
+name = "fuel-client"
+path = "src/main.rs"
+required-features = ["default"]
 
 [dependencies]
 cynic = { version = "0.14", features = ["surf"] }
+chrono = { version = "0.4", features = ["serde"] }
+derive_more = { version = "0.99" }
+fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
+fuel-types = { git = "ssh://git@github.com/FuelLabs/fuel-types.git", features = ["serde-types"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
+fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
+futures = "0.3"
+hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
+structopt = "0.3"
 surf = "2.2"
+thiserror = "1.0"
 
 [dev-dependencies]
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 fuel-core = { path = "../fuel-core" }
+insta = "1.8"
+itertools = "0.10"
+fuel-client = { path = ".", features = ["test-helpers"]}
 
 [build-dependencies]
 fuel-core = { path = "../fuel-core", default-features = false }
@@ -24,3 +46,9 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
 default = ["fuel-core/default"]
+test-helpers = []
+
+[[test]]
+name = "integration_tests"
+path = "tests/lib.rs"
+harness = true

@@ -1,0 +1,20 @@
+---
+source: fuel-client/src/client/schema/block.rs
+expression: operation.query
+
+---
+query Query($_0: HexString256) {
+  block(id: $_0) {
+    height
+    id
+    time
+    producer
+    transactions {
+      rawPayload
+      receipts {
+        rawPayload
+      }
+    }
+  }
+}
+

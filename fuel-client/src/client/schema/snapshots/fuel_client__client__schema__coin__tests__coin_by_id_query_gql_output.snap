@@ -1,0 +1,17 @@
+---
+source: fuel-client/src/client/schema/coin.rs
+expression: operation.query
+
+---
+query Query($_0: HexString256!) {
+  coin(id: $_0) {
+    amount
+    blockCreated
+    color
+    id
+    maturity
+    owner
+    status
+  }
+}
+

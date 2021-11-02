@@ -1,16 +1,16 @@
-use crate::database::{DatabaseTrait, DatabaseTransaction, SharedDatabase};
+use crate::database::transactional::DatabaseTransaction;
+use crate::database::Database;
+use crate::schema::scalars::U64;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
-use fuel_vm::consts;
-use fuel_vm::prelude::*;
+use fuel_vm::{consts, prelude::*};
 use futures::lock::Mutex;
-use std::collections::HashMap;
-use std::{io, sync};
+use std::{collections::HashMap, io, sync};
 use tracing::{debug, trace};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<DatabaseTransaction>>,
+    vm: HashMap<ID, Interpreter<Database>>,
     tx: HashMap<ID, Vec<Transaction>>,
     db: HashMap<ID, DatabaseTransaction>,
 }
@@ -47,7 +47,7 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage.clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -69,7 +69,7 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let mut vm = Interpreter::with_storage(storage.clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
@@ -113,26 +113,27 @@ impl DapQuery {
         &self,
         ctx: &Context<'_>,
         id: ID,
-        register: RegisterId,
-    ) -> async_graphql::Result<Word> {
+        register: U64,
+    ) -> async_graphql::Result<U64> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .register(&id, register)
+            .register(&id, register.into())
             .ok_or_else(|| async_graphql::Error::new("Invalid register identifier"))
+            .map(|val| val.into())
     }
 
     async fn memory(
         &self,
         ctx: &Context<'_>,
         id: ID,
-        start: usize,
-        size: usize,
+        start: U64,
+        size: U64,
     ) -> async_graphql::Result<String> {
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .memory(&id, start, size)
+            .memory(&id, start.into(), size.into())
             .ok_or_else(|| async_graphql::Error::new("Invalid memory range"))
             .and_then(|mem| Ok(serde_json::to_string(mem)?))
     }
@@ -143,13 +144,13 @@ impl DapMutation {
     async fn start_session(&self, ctx: &Context<'_>) -> async_graphql::Result<ID> {
         trace!("Initializing new interpreter");
 
-        let db = ctx.data_unchecked::<SharedDatabase>();
+        let db = ctx.data_unchecked::<Database>();
 
         let id = ctx
             .data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .init(&[], db.0.transaction())?;
+            .init(&[], db.transaction())?;
 
         debug!("Session {:?} initialized", id);
 
@@ -165,12 +166,12 @@ impl DapMutation {
     }
 
     async fn reset(&self, ctx: &Context<'_>, id: ID) -> async_graphql::Result<bool> {
-        let db = ctx.data_unchecked::<SharedDatabase>();
+        let db = ctx.data_unchecked::<Database>();
 
         ctx.data_unchecked::<GraphStorage>()
             .lock()
             .await
-            .reset(&id, db.0.transaction())?;
+            .reset(&id, db.transaction())?;
 
         debug!("Session {:?} was reset", id);
 

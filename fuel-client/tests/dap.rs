@@ -1,7 +1,6 @@
 use fuel_client::client::FuelClient;
 use fuel_core::service::{configure, run_in_background};
-use fuel_vm::consts::*;
-use fuel_vm::prelude::*;
+use fuel_vm::{consts::*, prelude::*};
 use std::convert::TryInto;
 
 #[tokio::test]

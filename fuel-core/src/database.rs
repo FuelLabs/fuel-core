@@ -1,46 +1,55 @@
 #[cfg(feature = "default")]
 use crate::database::columns::COLUMN_NUM;
-use crate::database::columns::{BALANCES, CONTRACTS, CONTRACTS_CODE_ROOT, CONTRACTS_STATE};
-use crate::state::in_memory::memory_store::MemoryStore;
-use crate::state::in_memory::transaction::MemoryTransactionView;
+use crate::database::transactional::DatabaseTransaction;
+use crate::model::fuel_block::FuelBlock;
 #[cfg(feature = "default")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{ColumnId, DataSource, Error, MultiKey};
-use fuel_storage::{MerkleRoot, MerkleStorage};
-use fuel_vm::crypto;
-use fuel_vm::error::InterpreterError;
-use fuel_vm::prelude::{Address, Bytes32, Color, Contract, ContractId, Salt, Storage, Word};
-use fuel_vm::storage::InterpreterStorage;
-use itertools::Itertools;
+use crate::state::{
+    in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
+};
+use fuel_storage::Storage;
+use fuel_vm::prelude::{Address, Bytes32, InterpreterError, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
-use std::borrow::Cow;
 use std::fmt::Debug;
 #[cfg(feature = "default")]
 use std::path::Path;
 use std::sync::Arc;
+use thiserror::Error;
 
-pub(crate) mod columns {
-    pub const CONTRACTS: u32 = 0;
-    pub const CONTRACTS_CODE_ROOT: u32 = 1;
-    pub const CONTRACTS_STATE: u32 = 2;
-    pub const BALANCES: u32 = 3;
+pub mod balances;
+pub mod block;
+pub mod code_root;
+pub mod coin;
+pub mod contracts;
+mod receipts;
+pub mod state;
+pub mod transaction;
+pub mod transactional;
+
+// Crude way to invalidate incompatible databases,
+// can be used to perform migrations in the future.
+pub const VERSION: u32 = 0;
+
+pub mod columns {
+    pub const DB_VERSION_COLUMN: u32 = 0;
+    pub const CONTRACTS: u32 = 1;
+    pub const CONTRACTS_CODE_ROOT: u32 = 2;
+    pub const CONTRACTS_STATE: u32 = 3;
+    pub const BALANCES: u32 = 4;
+    pub const COIN: u32 = 5;
+    // (owner, coin id) => true
+    pub const OWNED_COINS: u32 = 6;
+    pub const TRANSACTIONS: u32 = 7;
+    // tx id -> current status
+    pub const TRANSACTION_STATUS: u32 = 8;
+    pub const RECEIPTS: u32 = 9;
+    pub const BLOCKS: u32 = 10;
+    // maps block id -> block hash
+    pub const BLOCK_IDS: u32 = 11;
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 4;
-}
-
-pub trait DatabaseTrait: InterpreterStorage<DataError = Error> + Debug + Send + Sync {
-    fn transaction(&self) -> DatabaseTransaction;
-}
-
-#[derive(Clone, Debug)]
-pub struct SharedDatabase(pub Arc<Database>);
-
-impl Default for SharedDatabase {
-    fn default() -> Self {
-        SharedDatabase(Arc::new(Database::default()))
-    }
+    pub const COLUMN_NUM: u32 = 12;
 }
 
 #[derive(Clone, Debug)]
@@ -98,22 +107,34 @@ impl Database {
         self.data.exists(key, column)
     }
 
-    fn iter_all<K, V>(&self, column: ColumnId) -> impl Iterator<Item = Result<(K, V), Error>> + '_
+    fn iter_all<K, V>(
+        &self,
+        column: ColumnId,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<(K, V), Error>> + '_
     where
         K: From<Vec<u8>>,
         V: DeserializeOwned,
     {
-        self.data.iter_all(column).map(|(key, value)| {
-            let key = K::from(key);
-            let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
-            Ok((key, value))
-        })
+        self.data
+            .iter_all(column, prefix, start, direction.unwrap_or_default())
+            .map(|(key, value)| {
+                let key = K::from(key);
+                let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                Ok((key, value))
+            })
+    }
+
+    pub fn transaction(&self) -> DatabaseTransaction {
+        self.into()
     }
 }
 
-impl DatabaseTrait for Database {
-    fn transaction(&self) -> DatabaseTransaction {
-        self.into()
+impl AsRef<Database> for Database {
+    fn as_ref(&self) -> &Database {
+        self
     }
 }
 
@@ -126,310 +147,50 @@ impl Default for Database {
     }
 }
 
-impl Storage<ContractId, Contract> for Database {
-    type Error = Error;
-
-    fn insert(&mut self, key: &ContractId, value: &Contract) -> Result<Option<Contract>, Error> {
-        Database::insert(self, key.as_ref(), CONTRACTS, value.clone())
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
-        Database::remove(self, key.as_ref(), CONTRACTS)
-    }
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
-        self.get(key.as_ref(), CONTRACTS)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        self.exists(key.as_ref(), CONTRACTS)
-    }
-}
-
-impl Storage<ContractId, (Salt, Bytes32)> for Database {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, value.clone())
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT)
-    }
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
-        self.get(key.as_ref(), CONTRACTS_CODE_ROOT)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        self.exists(key.as_ref(), CONTRACTS_CODE_ROOT)
-    }
-}
-
-impl MerkleStorage<ContractId, Color, Word> for Database {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        parent: &ContractId,
-        key: &Color,
-        value: &Word,
-    ) -> Result<Option<Word>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), BALANCES, *value)
-    }
-
-    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), BALANCES)
-    }
-
-    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Cow<Word>>, Error> {
-        let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), BALANCES)
-    }
-
-    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, Error> {
-        let key = MultiKey::new((parent, key));
-        self.exists(key.as_ref(), BALANCES)
-    }
-
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
-        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(self, BALANCES).try_collect()?;
-
-        let root = items
-            .iter()
-            .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then(|| (key, value))
-            })
-            .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value.to_be_bytes());
-
-        Ok(crypto::ephemeral_merkle_root(root).into())
-    }
-}
-
-impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        parent: &ContractId,
-        key: &Bytes32,
-        value: &Bytes32,
-    ) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, value.clone())
-    }
-
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), CONTRACTS_STATE)
-    }
-
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
-        let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), CONTRACTS_STATE)
-    }
-
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
-        let key = MultiKey::new((parent, key));
-        self.exists(key.as_ref(), CONTRACTS_STATE)
-    }
-
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
-        let items: Vec<_> =
-            Database::iter_all::<Vec<u8>, Bytes32>(self, CONTRACTS_STATE).try_collect()?;
-
-        let root = items
-            .iter()
-            .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then(|| (key, value))
-            })
-            .sorted_by_key(|t| t.0)
-            .map(|(_, value)| value);
-
-        Ok(crypto::ephemeral_merkle_root(root).into())
-    }
-}
-
 impl InterpreterStorage for Database {
     type DataError = Error;
 
     fn block_height(&self) -> Result<u32, Error> {
-        Ok(Default::default())
-    }
-
-    fn block_hash(&self, _block_height: u32) -> Result<Bytes32, Error> {
-        Ok(Default::default())
-    }
-
-    fn coinbase(&self) -> Result<Address, Error> {
-        Ok(Default::default())
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct DatabaseTransaction {
-    // The primary datastores
-    changes: Arc<MemoryTransactionView>,
-    // The inner db impl using these stores
-    database: Database,
-}
-
-impl Default for DatabaseTransaction {
-    fn default() -> Self {
-        Database::default().transaction()
-    }
-}
-
-impl DatabaseTransaction {
-    pub fn commit(self) -> crate::state::Result<()> {
-        // TODO: should commit be fallible if this api is meant to be atomic?
-        self.changes.commit()
-    }
-}
-
-impl Storage<ContractId, Contract> for DatabaseTransaction {
-    type Error = Error;
-
-    fn insert(&mut self, key: &ContractId, value: &Contract) -> Result<Option<Contract>, Error> {
-        Storage::<ContractId, Contract>::insert(&mut self.database, &key, &value)
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
-        Storage::<ContractId, Contract>::remove(&mut self.database, key)
-    }
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
-        Storage::<ContractId, Contract>::get(&self.database, key)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        Storage::<ContractId, Contract>::contains_key(&self.database, key)
-    }
-}
-
-impl Storage<ContractId, (Salt, Bytes32)> for DatabaseTransaction {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &(Salt, Bytes32),
-    ) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Storage::<ContractId, (Salt, Bytes32)>::insert(&mut self.database, &key, &value)
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Storage::<ContractId, (Salt, Bytes32)>::remove(&mut self.database, key)
-    }
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
-        Storage::<ContractId, (Salt, Bytes32)>::get(&self.database, key)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        Storage::<ContractId, (Salt, Bytes32)>::contains_key(&self.database, key)
-    }
-}
-
-impl MerkleStorage<ContractId, Color, Word> for DatabaseTransaction {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        parent: &ContractId,
-        key: &Color,
-        value: &Word,
-    ) -> Result<Option<Word>, Error> {
-        MerkleStorage::<ContractId, Color, Word>::insert(&mut self.database, parent, key, value)
-    }
-
-    fn remove(&mut self, parent: &ContractId, key: &Color) -> Result<Option<Word>, Error> {
-        MerkleStorage::<ContractId, Color, Word>::remove(&mut self.database, parent, key)
-    }
-
-    fn get(&self, parent: &ContractId, key: &Color) -> Result<Option<Cow<Word>>, Error> {
-        MerkleStorage::<ContractId, Color, Word>::get(&self.database, parent, key)
-    }
-
-    fn contains_key(&self, parent: &ContractId, key: &Color) -> Result<bool, Error> {
-        MerkleStorage::<ContractId, Color, Word>::contains_key(&self.database, parent, key)
-    }
-
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
-        MerkleStorage::<ContractId, Color, Word>::root(&mut self.database, parent)
-    }
-}
-
-impl MerkleStorage<ContractId, Bytes32, Bytes32> for DatabaseTransaction {
-    type Error = Error;
-
-    fn insert(
-        &mut self,
-        parent: &ContractId,
-        key: &Bytes32,
-        value: &Bytes32,
-    ) -> Result<Option<Bytes32>, Error> {
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-            &mut self.database,
-            parent,
-            key,
-            value,
-        )
-    }
-
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::remove(&mut self.database, parent, key)
-    }
-
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::get(&self.database, parent, key)
-    }
-
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::contains_key(&self.database, parent, key)
-    }
-
-    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::root(&mut self.database, parent)
-    }
-}
-
-impl From<&Database> for DatabaseTransaction {
-    fn from(source: &Database) -> Self {
-        let data = Arc::new(MemoryTransactionView::new(source.data.clone()));
-        Self {
-            changes: data.clone(),
-            database: Database { data },
-        }
-    }
-}
-
-impl DatabaseTrait for DatabaseTransaction {
-    fn transaction(&self) -> DatabaseTransaction {
-        (&self.database).into()
-    }
-}
-
-impl InterpreterStorage for DatabaseTransaction {
-    type DataError = Error;
-
-    fn block_height(&self) -> Result<u32, Error> {
-        self.database.block_height()
+        let height = self.get_block_height()?.unwrap_or_default();
+        Ok(height.into())
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
-        self.database.block_hash(block_height)
+        let hash = self.get_block_id(block_height.into())?.unwrap_or_default();
+        Ok(hash)
     }
 
     fn coinbase(&self) -> Result<Address, Error> {
-        self.database.coinbase()
+        let height = self.get_block_height()?.unwrap_or_default();
+        let id = self.block_hash(height.into())?;
+        let block = Storage::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
+        Ok(block.producer)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum KvStoreError {
+    #[error("generic error occurred")]
+    Error(Box<dyn std::error::Error + Send + Sync>),
+    #[error("resource not found")]
+    NotFound,
+}
+
+impl From<bincode::Error> for KvStoreError {
+    fn from(e: bincode::Error) -> Self {
+        KvStoreError::Error(Box::new(e))
+    }
+}
+
+impl From<crate::state::Error> for KvStoreError {
+    fn from(e: Error) -> Self {
+        KvStoreError::Error(Box::new(e))
+    }
+}
+
+impl From<KvStoreError> for crate::state::Error {
+    fn from(e: KvStoreError) -> Self {
+        crate::state::Error::DatabaseError(Box::new(e))
     }
 }
 
@@ -439,419 +200,8 @@ impl From<crate::state::Error> for InterpreterError {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod contracts {
-        use super::*;
-
-        #[test]
-        fn get() {
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-
-            let database = Database::default();
-
-            database
-                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
-                .unwrap();
-
-            assert_eq!(
-                Storage::<ContractId, Contract>::get(&database, &contract_id)
-                    .unwrap()
-                    .unwrap()
-                    .into_owned(),
-                contract
-            );
-        }
-
-        #[test]
-        fn put() {
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-
-            let mut database = Database::default();
-            Storage::<ContractId, Contract>::insert(&mut database, &contract_id, &contract.clone())
-                .unwrap();
-
-            let returned: Contract = database
-                .get(contract_id.as_ref(), CONTRACTS)
-                .unwrap()
-                .unwrap();
-            assert_eq!(returned, contract);
-        }
-
-        #[test]
-        fn remove() {
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-
-            let mut database = Database::default();
-            database
-                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
-                .unwrap();
-
-            Storage::<ContractId, Contract>::remove(&mut database, &contract_id).unwrap();
-
-            assert!(!database.exists(contract_id.as_ref(), CONTRACTS).unwrap());
-        }
-
-        #[test]
-        fn exists() {
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-
-            let database = Database::default();
-            database
-                .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
-                .unwrap();
-
-            assert!(
-                Storage::<ContractId, Contract>::contains_key(&database, &contract_id).unwrap()
-            );
-        }
-    }
-
-    mod contract_code_root {
-        use super::*;
-        use rand::rngs::StdRng;
-        use rand::{Rng, SeedableRng};
-
-        #[test]
-        fn get() {
-            let rng = &mut StdRng::seed_from_u64(2322u64);
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-            let root = contract.root();
-            let salt: Salt = rng.gen();
-
-            let database = Database::default();
-            database
-                .insert(
-                    contract_id.as_ref().to_vec(),
-                    CONTRACTS_CODE_ROOT,
-                    (salt, root).clone(),
-                )
-                .unwrap();
-
-            assert_eq!(
-                Storage::<ContractId, (Salt, Bytes32)>::get(&database, &contract_id)
-                    .unwrap()
-                    .unwrap()
-                    .into_owned(),
-                (salt, root)
-            );
-        }
-
-        #[test]
-        fn put() {
-            let rng = &mut StdRng::seed_from_u64(2322u64);
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-            let root = contract.root();
-            let salt: Salt = rng.gen();
-
-            let mut database = Database::default();
-            Storage::<ContractId, (Salt, Bytes32)>::insert(
-                &mut database,
-                &contract_id,
-                &(salt, root),
-            )
-            .unwrap();
-
-            let returned: (Salt, Bytes32) = database
-                .get(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
-                .unwrap()
-                .unwrap();
-            assert_eq!(returned, (salt, root));
-        }
-
-        #[test]
-        fn remove() {
-            let rng = &mut StdRng::seed_from_u64(2322u64);
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-            let root = contract.root();
-            let salt: Salt = rng.gen();
-
-            let mut database = Database::default();
-            database
-                .insert(
-                    contract_id.as_ref().to_vec(),
-                    CONTRACTS_CODE_ROOT,
-                    (salt, root).clone(),
-                )
-                .unwrap();
-
-            Storage::<ContractId, (Salt, Bytes32)>::remove(&mut database, &contract_id).unwrap();
-
-            assert!(!database
-                .exists(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
-                .unwrap());
-        }
-
-        #[test]
-        fn exists() {
-            let rng = &mut StdRng::seed_from_u64(2322u64);
-            let contract_id: ContractId = ContractId::from([1u8; 32]);
-            let contract: Contract = Contract::from(vec![32u8]);
-            let root = contract.root();
-            let salt: Salt = rng.gen();
-
-            let database = Database::default();
-            database
-                .insert(
-                    contract_id.as_ref().to_vec(),
-                    CONTRACTS_CODE_ROOT,
-                    (salt, root),
-                )
-                .unwrap();
-
-            assert!(
-                Storage::<ContractId, (Salt, Bytes32)>::contains_key(&database, &contract_id)
-                    .unwrap()
-            );
-        }
-    }
-
-    mod balances {
-        use super::*;
-
-        #[test]
-        fn get() {
-            let balance_id: (ContractId, Color) =
-                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
-            let balance: Word = 100;
-
-            let database = Database::default();
-            let key: Vec<u8> = MultiKey::new(balance_id).into();
-            let _: Option<Word> = database.insert(key, BALANCES, balance.clone()).unwrap();
-
-            assert_eq!(
-                MerkleStorage::<ContractId, Color, Word>::get(
-                    &database,
-                    &balance_id.0,
-                    &balance_id.1
-                )
-                .unwrap()
-                .unwrap()
-                .into_owned(),
-                balance
-            );
-        }
-
-        #[test]
-        fn put() {
-            let balance_id: (ContractId, Color) =
-                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
-            let balance: Word = 100;
-
-            let mut database = Database::default();
-            MerkleStorage::<ContractId, Color, Word>::insert(
-                &mut database,
-                &balance_id.0,
-                &balance_id.1,
-                &balance,
-            )
-            .unwrap();
-
-            let returned: Word = database
-                .get(MultiKey::new(balance_id).as_ref(), BALANCES)
-                .unwrap()
-                .unwrap();
-            assert_eq!(returned, balance);
-        }
-
-        #[test]
-        fn remove() {
-            let balance_id: (ContractId, Color) =
-                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
-            let balance: Word = 100;
-
-            let mut database = Database::default();
-            database
-                .insert(MultiKey::new(balance_id), BALANCES, balance.clone())
-                .unwrap();
-
-            MerkleStorage::<ContractId, Color, Word>::remove(
-                &mut database,
-                &balance_id.0,
-                &balance_id.1,
-            )
-            .unwrap();
-
-            assert!(!database
-                .exists(MultiKey::new(balance_id).as_ref(), BALANCES)
-                .unwrap());
-        }
-
-        #[test]
-        fn exists() {
-            let balance_id: (ContractId, Color) =
-                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
-            let balance: Word = 100;
-
-            let database = Database::default();
-            database
-                .insert(
-                    MultiKey::new(balance_id).as_ref().to_vec(),
-                    BALANCES,
-                    balance.clone(),
-                )
-                .unwrap();
-
-            assert!(MerkleStorage::<ContractId, Color, Word>::contains_key(
-                &database,
-                &balance_id.0,
-                &balance_id.1
-            )
-            .unwrap());
-        }
-
-        #[test]
-        fn root() {
-            let balance_id: (ContractId, Color) =
-                (ContractId::from([1u8; 32]), Color::new([1u8; 32]));
-            let balance: Word = 100;
-
-            let mut database = Database::default();
-
-            MerkleStorage::<ContractId, Color, Word>::insert(
-                &mut database,
-                &balance_id.0,
-                &balance_id.1,
-                &balance,
-            )
-            .unwrap();
-
-            let root = MerkleStorage::<ContractId, Color, Word>::root(&mut database, &balance_id.0);
-            assert!(root.is_ok())
-        }
-    }
-
-    mod storage {
-        use super::*;
-
-        #[test]
-        fn get() {
-            let storage_id: (ContractId, Bytes32) =
-                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
-            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-
-            let database = Database::default();
-            database
-                .insert(
-                    MultiKey::new(storage_id),
-                    CONTRACTS_STATE,
-                    stored_value.clone(),
-                )
-                .unwrap();
-
-            assert_eq!(
-                MerkleStorage::<ContractId, Bytes32, Bytes32>::get(
-                    &database,
-                    &storage_id.0,
-                    &storage_id.1
-                )
-                .unwrap()
-                .unwrap()
-                .into_owned(),
-                stored_value
-            );
-        }
-
-        #[test]
-        fn put() {
-            let storage_id: (ContractId, Bytes32) =
-                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
-            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-
-            let mut database = Database::default();
-            MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-                &mut database,
-                &storage_id.0,
-                &storage_id.1,
-                &stored_value,
-            )
-            .unwrap();
-
-            let returned: Bytes32 = database
-                .get(MultiKey::new(storage_id).as_ref(), CONTRACTS_STATE)
-                .unwrap()
-                .unwrap();
-            assert_eq!(returned, stored_value);
-        }
-
-        #[test]
-        fn remove() {
-            let storage_id: (ContractId, Bytes32) =
-                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
-            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-
-            let mut database = Database::default();
-            database
-                .insert(
-                    MultiKey::new(storage_id),
-                    CONTRACTS_STATE,
-                    stored_value.clone(),
-                )
-                .unwrap();
-
-            MerkleStorage::<ContractId, Bytes32, Bytes32>::remove(
-                &mut database,
-                &storage_id.0,
-                &storage_id.1,
-            )
-            .unwrap();
-
-            assert!(!database
-                .exists(MultiKey::new(storage_id).as_ref(), CONTRACTS_STATE)
-                .unwrap());
-        }
-
-        #[test]
-        fn exists() {
-            let storage_id: (ContractId, Bytes32) =
-                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
-            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-
-            let database = Database::default();
-            database
-                .insert(
-                    MultiKey::new(storage_id.clone()),
-                    CONTRACTS_STATE,
-                    stored_value.clone(),
-                )
-                .unwrap();
-
-            assert!(MerkleStorage::<ContractId, Bytes32, Bytes32>::contains_key(
-                &database,
-                &storage_id.0,
-                &storage_id.1
-            )
-            .unwrap());
-        }
-
-        #[test]
-        fn root() {
-            let storage_id: (ContractId, Bytes32) =
-                (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
-            let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
-
-            let mut database = Database::default();
-
-            MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-                &mut database,
-                &storage_id.0,
-                &storage_id.1,
-                &stored_value,
-            )
-            .unwrap();
-
-            let root =
-                MerkleStorage::<ContractId, Bytes32, Bytes32>::root(&mut database, &storage_id.0);
-            assert!(root.is_ok())
-        }
+impl From<KvStoreError> for InterpreterError {
+    fn from(e: KvStoreError) -> Self {
+        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
     }
 }

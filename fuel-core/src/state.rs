@@ -48,11 +48,31 @@ pub trait KeyValueStore {
     fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
+}
+
+#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+pub enum IterDirection {
+    Forward,
+    Reverse,
+}
+
+impl Default for IterDirection {
+    fn default() -> Self {
+        Self::Forward
+    }
 }
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Invalid database version")]
+    InvalidDatabaseVersion,
     #[error("error performing binary serialization")]
     Codec,
     #[error("error occurred in the underlying datastore `{0}`")]
@@ -100,5 +120,3 @@ pub enum TransactionError {
 pub mod in_memory;
 #[cfg(feature = "default")]
 pub mod rocks_db;
-
-pub mod store {}
