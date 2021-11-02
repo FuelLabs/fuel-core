@@ -1,4 +1,3 @@
-#![no_std]
 extern crate alloc;
 use core::convert::TryFrom;
 use fuel_indexer_derive::{graphql_schema, handler};

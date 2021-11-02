@@ -22,6 +22,7 @@ const MANIFEST: &'static str = include_str!("./test_data/manifest.yaml");
 const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/simple_wasm.wasm");
 
 #[test]
+#[ignore] // need db setup
 fn test_indexer() {
     let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad manifest file.");
 

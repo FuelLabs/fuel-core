@@ -1240,12 +1240,15 @@ dependencies = [
 name = "fuel-indexer-derive"
 version = "0.1.0"
 dependencies = [
+ "fuel-indexer",
  "fuel-indexer-schema",
  "graphql-parser",
  "proc-macro-error",
  "proc-macro2",
  "quote",
+ "serde",
  "syn",
+ "trybuild",
 ]
 
 [[package]]
@@ -3511,6 +3514,20 @@ name = "try-lock"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
+
+[[package]]
+name = "trybuild"
+version = "1.0.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "150e726dc059e6fbd4fce3288f5bb3cf70128cf63b0dde23b938a3cad810fb23"
+dependencies = [
+ "glob",
+ "lazy_static",
+ "serde",
+ "serde_json",
+ "termcolor",
+ "toml",
+]
 
 [[package]]
 name = "twoway"
