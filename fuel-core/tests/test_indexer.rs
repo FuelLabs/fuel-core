@@ -1,7 +1,7 @@
 use fuel_core::wasm_executor::{IndexExecutor, Manifest, SchemaManager};
 use fuel_indexer::types::*;
-use serde_json;
 use serde::{Deserialize, Serialize};
+use serde_json;
 
 #[derive(Serialize, Deserialize)]
 pub struct SomeEvent {
@@ -21,12 +21,12 @@ const GRAPHQL_SCHEMA: &'static str = include_str!("./test_data/schema.graphql");
 const MANIFEST: &'static str = include_str!("./test_data/manifest.yaml");
 const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/simple_wasm.wasm");
 
-
 #[test]
 fn test_indexer() {
     let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad manifest file.");
 
-    let schema_manager = SchemaManager::new(DATABASE_URL.to_string()).expect("Schema manager failed");
+    let schema_manager =
+        SchemaManager::new(DATABASE_URL.to_string()).expect("Schema manager failed");
 
     schema_manager
         .new_schema(&manifest.namespace, GRAPHQL_SCHEMA)
@@ -34,8 +34,8 @@ fn test_indexer() {
 
     let test_events = manifest.test_events.clone();
 
-    let instance =
-        IndexExecutor::new(DATABASE_URL.to_string(), manifest, WASM_BYTES).expect("Error creating IndexExecutor");
+    let instance = IndexExecutor::new(DATABASE_URL.to_string(), manifest, WASM_BYTES)
+        .expect("Error creating IndexExecutor");
 
     for event in test_events {
         if event.trigger == "an_event_name" {
