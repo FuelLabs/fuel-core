@@ -61,10 +61,7 @@ fn process_field<'a>(
     //       e.g. to annotate columns to be indexed in postgres.
 
     let Field {
-        name,
-        field_type,
-        directives,
-        ..
+        name, field_type, ..
     } = field;
     let typ = process_type(types, field_type, true);
     let ident = format_ident! {"{}", name};
@@ -265,7 +262,9 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
 
     let mut file = match File::open(current) {
         Ok(f) => f,
-        Err(e) => panic!("Could not open schema file {:?}", e),
+        Err(e) => {
+            proc_macro_error::abort_call_site!("Could not open schema file {:?}", e)
+        }
     };
 
     let mut text = String::new();
@@ -273,13 +272,17 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
 
     let base_ast = match parse_schema::<String>(BASE_SCHEMA) {
         Ok(ast) => ast,
-        Err(e) => panic!("Error parsing graphql schema {:?}", e),
+        Err(e) => {
+            proc_macro_error::abort_call_site!("Error parsing graphql schema {:?}", e)
+        }
     };
     let (primitives, _) = get_schema_types(&base_ast);
 
     let ast = match parse_schema::<String>(&text) {
         Ok(ast) => ast,
-        Err(e) => panic!("Error parsing graphql schema {:?}", e),
+        Err(e) => {
+            proc_macro_error::abort_call_site!("Error parsing graphql schema {:?}", e)
+        }
     };
     let (mut types, _) = get_schema_types(&ast);
     types.extend(primitives);

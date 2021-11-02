@@ -11,7 +11,12 @@ proc-macro = true
 [dependencies]
 graphql-parser = "0.3.0"
 fuel-indexer-schema = { path = "../schema", features = ["use-std"] }
-proc-macro-error = { version = "1.0.4", default-features = false }
+proc-macro-error = "1.0.4"
 proc-macro2 = "1.0.28"
 quote = "1.0.9"
 syn = { version = "1.0.75", features = ["full"] }
+
+[dev-dependencies]
+fuel-indexer = { path = "../lib" }
+serde = { version = "1.0.128", default-features = false, features = ["derive"] }
+trybuild = "1.0.52"

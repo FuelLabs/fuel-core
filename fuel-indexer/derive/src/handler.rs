@@ -3,7 +3,10 @@ use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{parse_macro_input, parse_quote, Attribute, Block, FnArg, ItemFn, PatType, Token};
 
-pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStream {
+    if !attrs.is_empty() {
+        proc_macro_error::abort_call_site!("handler macro does not take arguments")
+    }
     let mut item_fn = parse_macro_input!(item as ItemFn);
 
     let has_nomangle = item_fn
@@ -44,7 +47,7 @@ pub fn process_handler_attr(_attrs: TokenStream, item: TokenStream) -> TokenStre
                 block.stmts.extend(stmts);
             }
             FnArg::Receiver(_) => {
-                panic!("'self' in function signature not allowed here")
+                proc_macro_error::abort_call_site!("'self' in function signature not allowed here")
             }
         }
     }
