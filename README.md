@@ -46,9 +46,18 @@ $ ./target/release/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
+#### Troubleshooting
+
+If you encounter an error such as
+```
+thread 'main' panicked at 'unable to open database: DatabaseError(Error { message: "Invalid argument: Column families not opened: column-11, column-10, column-9, column-8, column-7, column-6, column-5, column-4, column-3, column-2, column-1, column-0" })', fuel-core/src/main.rs:23:66
+```
+Clear your local database using: `rm -rf ~/.fuel/db`
+
 #### Log level
 
 The service relies on the environment variable `RUST_LOG`. For more information, check the [env_logger](https://docs.rs/env_logger) crate.
+
 
 ## Docker & Kubernetes
 ```
