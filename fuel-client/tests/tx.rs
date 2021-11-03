@@ -8,6 +8,24 @@ use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::io;
 
+#[test]
+fn basic_script_snapshot() {
+    // Since this script is referenced in docs, snapshot the byte representation in-case opcodes
+    // are reassigned in the future
+    let script = vec![
+        Opcode::ADDI(0x10, REG_ZERO, 0xca),
+        Opcode::ADDI(0x11, REG_ZERO, 0xba),
+        Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
+        Opcode::RET(REG_ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .map(|op| u32::from(*op).to_be_bytes())
+        .flatten()
+        .collect();
+    insta::assert_snapshot!(format!("{:?}", script));
+}
+
 #[tokio::test]
 async fn dry_run() {
     let srv = run_in_background(configure(Default::default())).await;
