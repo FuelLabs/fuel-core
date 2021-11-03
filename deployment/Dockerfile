@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.53 as builder
+FROM rust:1.56 as builder
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
@@ -20,7 +20,7 @@ COPY . .
 RUN --mount=type=ssh cargo build --release
 
 # Stage 2: Run
-FROM ubuntu:18.04 as run
+FROM ubuntu:20.04 as run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
