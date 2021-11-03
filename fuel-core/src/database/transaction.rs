@@ -94,15 +94,13 @@ impl Database {
 }
 
 struct OwnedTransactionIndexKey {
-    // owner: Address,
     block_height: BlockHeight,
     tx_idx: TransactionIndex,
 }
 
 impl From<Vec<u8>> for OwnedTransactionIndexKey {
     fn from(bytes: Vec<u8>) -> Self {
-        // let mut owner_bytes: [u8; 32] = Default::default();
-        // owner_bytes.copy_from_slice(&bytes[..32]);
+        // the first 32 bytes are the owner, which is already known when querying
         let mut block_height_bytes: [u8; 4] = Default::default();
         block_height_bytes.copy_from_slice(&bytes[32..36]);
         let mut tx_idx_bytes: [u8; 4] = Default::default();
