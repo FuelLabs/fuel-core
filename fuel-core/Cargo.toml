@@ -12,6 +12,8 @@ description = "Fuel client."
 name = "fuel-core"
 path = "src/main.rs"
 required-features = ["default"]
+# doesn't perform any additional testing beyond lib
+test = false
 
 [dependencies]
 async-graphql = { version = "2.9", features = ["chrono", "chrono-tz"] }

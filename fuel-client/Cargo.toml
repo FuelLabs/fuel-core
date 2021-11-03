@@ -33,11 +33,13 @@ surf = "2.2"
 thiserror = "1.0"
 
 [dev-dependencies]
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+fuel-client = { path = ".", features = ["test-helpers"]}
 fuel-core = { path = "../fuel-core" }
+fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types", "random"] }
 insta = "1.8"
 itertools = "0.10"
-fuel-client = { path = ".", features = ["test-helpers"]}
+rand = "0.8"
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
 fuel-core = { path = "../fuel-core", default-features = false }

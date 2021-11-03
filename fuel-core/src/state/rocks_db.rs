@@ -91,6 +91,10 @@ impl RocksDb {
             // prefix is address length
             opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
         }
+        if column == columns::TRANSACTIONS_BY_OWNER_BLOCK_IDX {
+            // prefix is address length
+            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
+        }
 
         opts
     }

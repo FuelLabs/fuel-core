@@ -1,3 +1,4 @@
+use crate::database::transaction::TransactionIndex;
 use crate::{
     database::{Database, KvStoreError},
     model::{
@@ -24,30 +25,34 @@ impl Executor {
         let block_id = block.id();
         Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
 
-        for (_, tx_id) in block.transactions.iter().enumerate() {
+        for (idx, tx_id) in block.transactions.iter().enumerate() {
             let mut sub_tx = block_tx.transaction();
-            let db = sub_tx.deref_mut();
-            let tx = Storage::<Bytes32, Transaction>::get(db, tx_id)?
+            // A database view that only lives for the duration of the transaction
+            let tx_db = sub_tx.deref_mut();
+            let tx = Storage::<Bytes32, Transaction>::get(tx_db, tx_id)?
                 .ok_or(Error::MissingTransactionData {
                     block_id,
                     transaction_id: *tx_id,
                 })?
                 .into_owned();
 
+            // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
+            self.persist_owners_index(block.fuel_height, &tx, tx_id, idx, block_tx.deref_mut())?;
+
             // execute vm
-            let mut vm = Interpreter::with_storage(db.clone());
+            let mut vm = Interpreter::with_storage(tx_db.clone());
             let execution_result = vm.transact(tx);
 
             match execution_result {
                 Ok(result) => {
                     // persist any outputs
-                    self.persist_outputs(block.fuel_height, result.tx(), db)?;
+                    self.persist_outputs(block.fuel_height, result.tx(), tx_db)?;
 
                     // persist receipts
-                    self.persist_receipts(tx_id, result.receipts(), db)?;
+                    self.persist_receipts(tx_id, result.receipts(), tx_db)?;
 
                     // persist tx status
-                    db.update_tx_status(
+                    tx_db.update_tx_status(
                         tx_id,
                         TransactionStatus::Success {
                             block_id,
@@ -173,7 +178,7 @@ impl Executor {
         Ok(())
     }
 
-    pub fn persist_receipts(
+    fn persist_receipts(
         &self,
         tx_id: &Bytes32,
         receipts: &[Receipt],
@@ -182,6 +187,45 @@ impl Executor {
         if Storage::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?.is_some() {
             return Err(Error::OutputAlreadyExists);
         }
+        Ok(())
+    }
+
+    /// Index the tx id by owner for all of the inputs and outputs
+    fn persist_owners_index(
+        &self,
+        block_height: BlockHeight,
+        tx: &Transaction,
+        tx_id: &Bytes32,
+        tx_idx: usize,
+        db: &mut Database,
+    ) -> Result<(), Error> {
+        let mut owners = vec![];
+        for input in tx.inputs() {
+            if let Input::Coin { owner, .. } = input {
+                owners.push(owner);
+            }
+        }
+
+        for output in tx.outputs() {
+            match output {
+                Output::Coin { to, .. }
+                | Output::Withdrawal { to, .. }
+                | Output::Change { to, .. }
+                | Output::Variable { to, .. } => {
+                    owners.push(to);
+                }
+                Output::Contract { .. } | Output::ContractCreated { .. } => {}
+            }
+        }
+
+        // dedupe owners from inputs and outputs prior to indexing
+        owners.sort();
+        owners.dedup();
+
+        for owner in owners {
+            db.record_tx_id_owner(owner, block_height, tx_idx as TransactionIndex, tx_id)?;
+        }
+
         Ok(())
     }
 }
