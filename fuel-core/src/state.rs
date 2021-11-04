@@ -118,5 +118,5 @@ pub enum TransactionError {
 }
 
 pub mod in_memory;
-#[cfg(feature = "default")]
+#[cfg(feature = "rocksdb")]
 pub mod rocks_db;

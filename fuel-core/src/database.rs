@@ -1,8 +1,8 @@
-#[cfg(feature = "default")]
+#[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::model::fuel_block::FuelBlock;
-#[cfg(feature = "default")]
+#[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
@@ -11,7 +11,7 @@ use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterError, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
-#[cfg(feature = "default")]
+#[cfg(feature = "rocksdb")]
 use std::path::Path;
 use std::sync::Arc;
 use thiserror::Error;
@@ -49,7 +49,7 @@ pub mod columns {
     pub const BLOCK_IDS: u32 = 12;
 
     // Number of columns
-    #[cfg(feature = "default")]
+    #[cfg(feature = "rocksdb")]
     pub const COLUMN_NUM: u32 = 13;
 }
 
@@ -59,7 +59,7 @@ pub struct Database {
 }
 
 impl Database {
-    #[cfg(feature = "default")]
+    #[cfg(feature = "rocksdb")]
     pub fn open(path: &Path) -> Result<Self, Error> {
         let db = RocksDb::open(path, COLUMN_NUM)?;
 
