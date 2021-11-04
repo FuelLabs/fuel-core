@@ -157,6 +157,7 @@ impl FuelClient {
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
+    /// Returns a paginated set of transactions associated with a txo owner address.
     pub async fn transactions_by_owner(
         &self,
         owner: &str,

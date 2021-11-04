@@ -19,7 +19,7 @@ impl<T: LowerHex + Debug + Clone + Default> Serialize for HexFormatted<T> {
     where
         S: Serializer,
     {
-        serializer.serialize_str(format!("0x{:x}", self.0).as_str())
+        serializer.serialize_str(format!("{:#x}", self.0).as_str())
     }
 }
 

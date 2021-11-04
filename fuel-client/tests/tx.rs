@@ -126,7 +126,7 @@ async fn receipts() {
     assert!(result.is_ok());
 
     // run test
-    let receipts = client.receipts(&format!("0x{:x}", id)).await.unwrap();
+    let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
     assert!(!receipts.is_empty());
 }
 
@@ -143,7 +143,7 @@ async fn get_transaction_by_id() {
     let client = FuelClient::from(srv);
 
     // run test
-    let transaction = client.transaction(&format!("0x{:x}", id)).await.unwrap();
+    let transaction = client.transaction(&format!("{:#x}", id)).await.unwrap();
     assert!(transaction.is_some());
 }
 
@@ -161,14 +161,14 @@ async fn get_transparent_transaction_by_id() {
     assert!(result.is_ok());
 
     let opaque_tx = client
-        .transaction(&format!("0x{:x}", id))
+        .transaction(&format!("{:#x}", id))
         .await
         .unwrap()
         .expect("expected some result");
 
     // run test
     let transparent_transaction = client
-        .transparent_transaction(&format!("0x{:x}", id))
+        .transparent_transaction(&format!("{:#x}", id))
         .await
         .unwrap()
         .expect("expected some value");
@@ -196,7 +196,7 @@ async fn get_owned_transactions() {
         direction: PageDirection::Forward,
     };
     let alice_txs = client
-        .transactions_by_owner(&format!("0x{:x}", alice), page_request.clone())
+        .transactions_by_owner(&format!("{:#x}", alice), page_request.clone())
         .await
         .unwrap()
         .results
@@ -205,7 +205,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let bob_txs = client
-        .transactions_by_owner(&format!("0x{:x}", bob), page_request.clone())
+        .transactions_by_owner(&format!("{:#x}", bob), page_request.clone())
         .await
         .unwrap()
         .results
@@ -214,7 +214,7 @@ async fn get_owned_transactions() {
         .collect_vec();
 
     let charlie_txs = client
-        .transactions_by_owner(&format!("0x{:x}", charlie), page_request.clone())
+        .transactions_by_owner(&format!("{:#x}", charlie), page_request.clone())
         .await
         .unwrap()
         .results

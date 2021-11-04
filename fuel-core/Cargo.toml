@@ -12,7 +12,8 @@ description = "Fuel client."
 name = "fuel-core"
 path = "src/main.rs"
 required-features = ["default"]
-# doesn't perform any additional testing beyond lib
+# Prevent the test suite from running twice (lib + bin targets)
+# Bin target doesn't perform any additional testing beyond lib target.
 test = false
 
 [dependencies]
