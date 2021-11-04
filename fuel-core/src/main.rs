@@ -19,10 +19,10 @@ async fn main() -> io::Result<()> {
     let addr = config.addr;
 
     let database = match config.database_type {
-        #[cfg(feature = "default")]
+        #[cfg(feature = "rocksdb")]
         DbType::RocksDb => Database::open(&config.database_path).expect("unable to open database"),
         DbType::InMemory => Database::default(),
-        #[cfg(not(feature = "default"))]
+        #[cfg(not(feature = "rocksdb"))]
         _ => Database::default(),
     };
 
