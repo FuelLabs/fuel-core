@@ -46,9 +46,18 @@ $ ./target/release/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
+#### Troubleshooting
+
+If you encounter an error such as
+```
+thread 'main' panicked at 'unable to open database: DatabaseError(Error { message: "Invalid argument: Column families not opened: column-11, column-10, column-9, column-8, column-7, column-6, column-5, column-4, column-3, column-2, column-1, column-0" })', fuel-core/src/main.rs:23:66
+```
+Clear your local database using: `rm -rf ~/.fuel/db`
+
 #### Log level
 
 The service relies on the environment variable `RUST_LOG`. For more information, check the [env_logger](https://docs.rs/env_logger) crate.
+
 
 ## Docker & Kubernetes
 ```
@@ -93,5 +102,5 @@ RET(REG_ONE),
 
 ```
 $ cargo run --bin fuel-client -- transaction submit \
-"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[17,64,0,202,17,68,0,186,89,65,16,0,52,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[{\"Coin\":{\"to\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], \"amount\": 10, \"color\": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}],\"witnesses\":[],\"receipts_root\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}"
+"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[{\"Coin\":{\"to\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], \"amount\": 10, \"color\": [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}],\"witnesses\":[],\"receipts_root\":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}"
 ```

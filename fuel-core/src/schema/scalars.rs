@@ -1,3 +1,4 @@
+use crate::database::transaction::OwnedTransactionIndexCursor;
 use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
@@ -49,20 +50,56 @@ pub struct HexString(pub(crate) Vec<u8>);
 impl ScalarType for HexString {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
-            // trim leading 0x
-            let value = value
-                .strip_prefix("0x")
-                .ok_or_else(|| InputValueError::custom("expected 0x prefix"))?;
-            // decode into bytes
-            let bytes = hex::decode(value).map_err(|e| e.to_string())?;
-            Ok(HexString(bytes))
+            HexString::from_str(value.as_str()).map_err(Into::into)
         } else {
             Err(InputValueError::expected_type(value))
         }
     }
 
     fn to_value(&self) -> Value {
-        Value::String(format!("0x{}", hex::encode(&self.0)))
+        Value::String(self.to_string())
+    }
+}
+
+impl Display for HexString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = format!("0x{}", hex::encode(&self.0));
+        s.fmt(f)
+    }
+}
+
+impl CursorType for HexString {
+    type Error = String;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        Self::from_str(s)
+    }
+
+    fn encode_cursor(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl From<HexString> for OwnedTransactionIndexCursor {
+    fn from(string: HexString) -> Self {
+        string.0.into()
+    }
+}
+
+impl From<OwnedTransactionIndexCursor> for HexString {
+    fn from(cursor: OwnedTransactionIndexCursor) -> Self {
+        HexString(cursor.into())
+    }
+}
+
+impl FromStr for HexString {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let value = s.strip_prefix("0x").ok_or_else(|| "expected 0x prefix")?;
+        // decode into bytes
+        let bytes = hex::decode(value).map_err(|e| e.to_string())?;
+        Ok(HexString(bytes))
     }
 }
 

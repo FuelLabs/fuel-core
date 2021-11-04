@@ -131,12 +131,14 @@ pub struct PageInfo {
 }
 
 /// Specifies the direction of a paginated query
+#[derive(Clone, Debug)]
 pub enum PageDirection {
     Forward,
     Backward,
 }
 
 /// Used to parameterize paginated queries
+#[derive(Clone, Debug)]
 pub struct PaginationRequest<T> {
     /// The cursor returned from a previous query to indicate an offset
     pub cursor: Option<T>,

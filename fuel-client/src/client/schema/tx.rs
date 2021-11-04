@@ -1,8 +1,9 @@
 use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
+use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 use fuel_types::bytes::Deserializable;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -37,6 +38,24 @@ pub struct TransactionsQuery {
 pub struct TransactionConnection {
     pub edges: Option<Vec<Option<TransactionEdge>>>,
     pub page_info: PageInfo,
+}
+
+impl TryFrom<TransactionConnection> for PaginatedResult<fuel_tx::Transaction, String> {
+    type Error = ConversionError;
+
+    fn try_from(conn: TransactionConnection) -> Result<Self, Self::Error> {
+        let results: Result<Vec<fuel_tx::Transaction>, Self::Error> = conn
+            .edges
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|e| e.map(|e| e.node.try_into()))
+            .collect();
+
+        Ok(PaginatedResult {
+            cursor: conn.page_info.end_cursor,
+            results: results?,
+        })
+    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -110,6 +129,53 @@ pub struct FailureStatus {
     pub reason: String,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct TransactionsByOwnerConnectionArgs {
+    /// Select transactions based on related `owner`s
+    pub owner: HexString256,
+    /// Skip until cursor (forward pagination)
+    pub after: Option<String>,
+    /// Skip until cursor (backward pagination)
+    pub before: Option<String>,
+    /// Retrieve the first n transactions in order (forward pagination)
+    pub first: Option<i32>,
+    /// Retrieve the last n transactions in order (backward pagination).
+    /// Can't be used at the same time as `first`.
+    pub last: Option<i32>,
+}
+
+impl From<(HexString256, PaginationRequest<String>)> for TransactionsByOwnerConnectionArgs {
+    fn from(r: (HexString256, PaginationRequest<String>)) -> Self {
+        match r.1.direction {
+            PageDirection::Forward => TransactionsByOwnerConnectionArgs {
+                owner: r.0,
+                after: r.1.cursor,
+                before: None,
+                first: Some(r.1.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => TransactionsByOwnerConnectionArgs {
+                owner: r.0,
+                after: None,
+                before: r.1.cursor,
+                first: None,
+                last: Some(r.1.results as i32),
+            },
+        }
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "TransactionsByOwnerConnectionArgs"
+)]
+pub struct TransactionsByOwnerQuery {
+    #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    pub transactions_by_owner: TransactionConnection,
+}
+
 // mutations
 
 #[derive(cynic::FragmentArguments)]
@@ -170,6 +236,19 @@ pub mod tests {
     fn transactions_connection_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = TransactionsQuery::build(ConnectionArgs {
+            after: None,
+            before: None,
+            first: None,
+            last: None,
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn transactions_by_owner_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = TransactionsByOwnerQuery::build(TransactionsByOwnerConnectionArgs {
+            owner: Default::default(),
             after: None,
             before: None,
             first: None,
