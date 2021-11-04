@@ -156,7 +156,7 @@ fn owned_tx_index_key(owner: &Address, height: BlockHeight, tx_idx: TransactionI
     // generate prefix to enable sorted indexing of transactions by owner
     // owner + block_height + tx_idx
     let mut key = Vec::with_capacity(40);
-    key.extend(owner.as_slice());
+    key.extend(owner.as_ref());
     key.extend(height.to_bytes());
     key.extend(tx_idx.to_be_bytes());
     key
