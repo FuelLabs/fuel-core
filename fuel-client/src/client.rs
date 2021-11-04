@@ -157,6 +157,19 @@ impl FuelClient {
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
+    /// Returns a paginated set of transactions associated with a txo owner address.
+    pub async fn transactions_by_owner(
+        &self,
+        owner: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<Transaction, String>> {
+        let owner: HexString256 = owner.parse()?;
+        let query = schema::tx::TransactionsByOwnerQuery::build(&(owner, request).into());
+
+        let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
+        Ok(transactions)
+    }
+
     pub async fn receipts(&self, id: &str) -> io::Result<Vec<fuel_tx::Receipt>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 

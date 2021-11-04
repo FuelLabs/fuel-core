@@ -33,7 +33,7 @@ async fn coin() {
     let client = FuelClient::from(srv);
 
     // run test
-    let coin = client.coin(format!("0x{:X}", id).as_str()).await.unwrap();
+    let coin = client.coin(format!("{:#x}", id).as_str()).await.unwrap();
     assert!(coin.is_some());
 }
 
@@ -73,7 +73,7 @@ async fn first_5_coins() {
     // run test
     let coins = client
         .coins_by_owner(
-            format!("0x{:X}", owner).as_str(),
+            format!("{:#x}", owner).as_str(),
             PaginationRequest {
                 cursor: None,
                 results: 5,

@@ -42,14 +42,15 @@ pub mod columns {
     pub const TRANSACTIONS: u32 = 7;
     // tx id -> current status
     pub const TRANSACTION_STATUS: u32 = 8;
-    pub const RECEIPTS: u32 = 9;
-    pub const BLOCKS: u32 = 10;
+    pub const TRANSACTIONS_BY_OWNER_BLOCK_IDX: u32 = 9;
+    pub const RECEIPTS: u32 = 10;
+    pub const BLOCKS: u32 = 11;
     // maps block id -> block hash
-    pub const BLOCK_IDS: u32 = 11;
+    pub const BLOCK_IDS: u32 = 12;
 
     // Number of columns
     #[cfg(feature = "default")]
-    pub const COLUMN_NUM: u32 = 12;
+    pub const COLUMN_NUM: u32 = 13;
 }
 
 #[derive(Clone, Debug)]
