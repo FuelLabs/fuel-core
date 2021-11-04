@@ -233,8 +233,8 @@ mod tests {
         Ok(instance)
     }
 
+    #[cfg(feature = "postgres")]
     #[test]
-    #[ignore] // need a database set up to run this
     fn test_schema_manager() {
         let manager = SchemaManager::new(DATABASE_URL).expect("Could not create SchemaManager");
 

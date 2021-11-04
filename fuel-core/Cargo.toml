@@ -56,3 +56,4 @@ serde_yaml = "0.8.19"
 
 [features]
 default = ["rocksdb", "axum"]
+postgres = []

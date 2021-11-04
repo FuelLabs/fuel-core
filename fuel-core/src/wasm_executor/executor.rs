@@ -126,8 +126,8 @@ mod tests {
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
     const GOOD_DATA: &'static [u8] = include_bytes!("test_data/good_event.bin");
 
+    #[cfg(feature = "postgres")]
     #[test]
-    #[ignore] // need to run with db connection
     fn test_executor() {
         let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad yaml file.");
         let bad_manifest: Manifest = serde_yaml::from_str(BAD_MANIFEST).expect("Bad yaml file.");

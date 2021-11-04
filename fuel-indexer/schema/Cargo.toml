@@ -6,17 +6,17 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-diesel = { version = "1.4.7", optional=true, features = ["postgres", "serde_json"] }
+diesel = { version = "1.4", optional=true, features = ["postgres", "serde_json"] }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", default-features = false }
-graphql-parser = "0.3.0"
-itertools = { version = "0.10.1", optional=true }
-serde = { version = "1.0.128", default-features = false, features = ["derive"] }
-serde-scale = "0.2.2"
-sha2 = "0.9.6"
-thiserror = { version  = "1.0.26", optional=true }
+graphql-parser = "0.3"
+itertools = { version = "0.10", optional=true }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde-scale = "0.2"
+sha2 = "0.9"
+thiserror = { version  = "1.0", optional=true }
 
 [dev-dependencies]
-insta = "1.8.0"
+insta = "1.8"
 
 [features]
 default = ["fuel-tx/serde-types-minimal"]
