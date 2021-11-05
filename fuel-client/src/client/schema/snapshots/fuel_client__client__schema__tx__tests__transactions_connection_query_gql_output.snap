@@ -1,0 +1,25 @@
+---
+source: fuel-client/src/client/schema/tx.rs
+expression: operation.query
+
+---
+query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
+  transactions(after: $_0, before: $_1, first: $_2, last: $_3) {
+    edges {
+      cursor
+      node {
+        rawPayload
+        receipts {
+          rawPayload
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      startCursor
+    }
+  }
+}
+

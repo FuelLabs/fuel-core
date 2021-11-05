@@ -1,0 +1,31 @@
+---
+source: fuel-client/src/client/schema/block.rs
+expression: operation.query
+
+---
+query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
+  blocks(after: $_0, before: $_1, first: $_2, last: $_3) {
+    edges {
+      cursor
+      node {
+        height
+        id
+        time
+        producer
+        transactions {
+          rawPayload
+          receipts {
+            rawPayload
+          }
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      startCursor
+    }
+  }
+}
+

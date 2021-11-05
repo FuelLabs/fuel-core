@@ -1,7 +1,7 @@
-use crate::state::in_memory::column_key;
 use crate::state::{
-    in_memory::memory_store::MemoryStore, BatchOperations, ColumnId, DataSource, KeyValueStore,
-    Result, TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
+    in_memory::column_key, in_memory::memory_store::MemoryStore, BatchOperations, ColumnId,
+    DataSource, IterDirection, KeyValueStore, Result, TransactableStorage, Transaction,
+    TransactionError, TransactionResult, WriteOperation,
 };
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -92,22 +92,35 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn iter_all(&self, column: ColumnId) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+    fn iter_all(
+        &self,
+        column: ColumnId,
+        prefix: Option<Vec<u8>>,
+        start: Option<Vec<u8>>,
+        direction: IterDirection,
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // iterate over inmemory + db while also filtering deleted entries
         let changes = self.changes.clone();
         Box::new(
             self.view_layer
-                .iter_all(column)
-                .chain(self.data_source.iter_all(column))
+                .iter_all(column, prefix.clone(), start.clone(), direction)
+                .chain(self.data_source.iter_all(column, prefix, start, direction))
                 .unique_by(|(key, _)| key.clone())
+                // remove keys which have been deleted over the course of this transaction
                 .filter(move |(key, _)| {
-                    if let Some(WriteOperation::Remove(_, _)) =
-                        changes.lock().expect("poisoned").get(key.as_slice())
-                    {
-                        false
-                    } else {
-                        true
+                    !matches!(
+                        changes.lock().expect("poisoned").get(key.as_slice()),
+                        Some(WriteOperation::Remove(_, _))
+                    )
+                })
+                // perform lexicographic sorting between db and virtual key-sets
+                //  reverse ordering if iterator is in reverse mode
+                .sorted_by(|a, b| {
+                    let mut ord = Ord::cmp(&a.0, &b.0);
+                    if direction == IterDirection::Reverse {
+                        ord = ord.reverse()
                     }
+                    ord
                 }),
         )
     }

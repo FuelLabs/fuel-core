@@ -1,0 +1,25 @@
+---
+source: fuel-client/src/client/schema/chain.rs
+expression: operation.query
+
+---
+query Query {
+  chain {
+    baseChainHeight
+    name
+    peerCount
+    latestBlock {
+      height
+      id
+      time
+      producer
+      transactions {
+        rawPayload
+        receipts {
+          rawPayload
+        }
+      }
+    }
+  }
+}
+

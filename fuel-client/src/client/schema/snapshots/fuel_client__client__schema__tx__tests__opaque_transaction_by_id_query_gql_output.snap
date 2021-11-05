@@ -1,0 +1,14 @@
+---
+source: fuel-client/src/client/schema/tx.rs
+expression: operation.query
+
+---
+query Query($_0: HexString256!) {
+  transaction(id: $_0) {
+    rawPayload
+    receipts {
+      rawPayload
+    }
+  }
+}
+
