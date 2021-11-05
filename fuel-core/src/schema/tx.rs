@@ -177,7 +177,7 @@ impl TxQuery {
                     .map(|res| {
                         res.and_then(|(cursor, tx_id)| {
                             let tx = Storage::<Bytes32, FuelTx>::get(db, &tx_id)?
-                                .ok_or_else(|| KvStoreError::NotFound)?
+                                .ok_or(KvStoreError::NotFound)?
                                 .into_owned();
                             Ok((cursor, tx))
                         })

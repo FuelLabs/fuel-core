@@ -3,7 +3,7 @@ use crate::state::{
     DataSource, IterDirection, KeyValueStore, Result, TransactableStorage, Transaction,
     TransactionError, TransactionResult, WriteOperation,
 };
-use itertools::Itertools;
+use itertools::{EitherOrBoth, Itertools};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -103,24 +103,36 @@ impl KeyValueStore for MemoryTransactionView {
         let changes = self.changes.clone();
         Box::new(
             self.view_layer
+                // iter_all returns items in sorted order
                 .iter_all(column, prefix.clone(), start.clone(), direction)
-                .chain(self.data_source.iter_all(column, prefix, start, direction))
-                .unique_by(|(key, _)| key.clone())
-                // remove keys which have been deleted over the course of this transaction
+                // Merge two sorted iterators (our current view overlay + backing data source)
+                .merge_join_by(
+                    self.data_source.iter_all(column, prefix, start, direction),
+                    move |i, j| {
+                        if IterDirection::Forward == direction {
+                            i.0.cmp(&j.0)
+                        } else {
+                            j.0.cmp(&i.0)
+                        }
+                    },
+                )
+                .map(|either_both| {
+                    match either_both {
+                        // in the case of overlap, choose the left-side (our view overlay)
+                        EitherOrBoth::Both(v, _)
+                        | EitherOrBoth::Left(v)
+                        | EitherOrBoth::Right(v) => v,
+                    }
+                })
+                // filter entries which have been deleted over the course of this transaction
                 .filter(move |(key, _)| {
                     !matches!(
-                        changes.lock().expect("poisoned").get(key.as_slice()),
+                        changes
+                            .lock()
+                            .expect("poisoned")
+                            .get(&column_key(key, column)),
                         Some(WriteOperation::Remove(_, _))
                     )
-                })
-                // perform lexicographic sorting between db and virtual key-sets
-                //  reverse ordering if iterator is in reverse mode
-                .sorted_by(|a, b| {
-                    let mut ord = Ord::cmp(&a.0, &b.0);
-                    if direction == IterDirection::Reverse {
-                        ord = ord.reverse()
-                    }
-                    ord
                 }),
         )
     }
@@ -354,5 +366,94 @@ mod tests {
         });
 
         assert_eq!(store.get(&[0xA, 0xB, 0xC], 0).unwrap(), None);
+    }
+
+    #[test]
+    fn iter_all_is_sorted_across_source_and_view() {
+        // setup
+        let store = Arc::new(MemoryStore::new());
+        (0..10).step_by(2).for_each(|i| {
+            store.put(vec![i], 0, vec![1]).unwrap();
+        });
+
+        let view = MemoryTransactionView::new(store.clone());
+        // test
+        (0..10).step_by(3).for_each(|i| {
+            view.put(vec![i], 0, vec![2]).unwrap();
+        });
+
+        let ret = view
+            .iter_all(0, None, None, IterDirection::Forward)
+            .map(|(k, _)| k[0])
+            .collect_vec();
+        // verify
+        assert_eq!(ret, vec![0, 2, 3, 4, 6, 8, 9])
+    }
+
+    #[test]
+    fn iter_all_is_reversible() {
+        // setup
+        let store = Arc::new(MemoryStore::new());
+        (0..10).step_by(2).for_each(|i| {
+            store.put(vec![i], 0, vec![1]).unwrap();
+        });
+
+        let view = MemoryTransactionView::new(store.clone());
+        // test
+        (0..10).step_by(3).for_each(|i| {
+            view.put(vec![i], 0, vec![2]).unwrap();
+        });
+
+        let ret = view
+            .iter_all(0, None, None, IterDirection::Reverse)
+            .map(|(k, _)| k[0])
+            .collect_vec();
+        // verify
+        assert_eq!(ret, vec![9, 8, 6, 4, 3, 2, 0])
+    }
+
+    #[test]
+    fn iter_all_overrides_data_source_keys() {
+        // setup
+        let store = Arc::new(MemoryStore::new());
+        (0..10).step_by(2).for_each(|i| {
+            store.put(vec![i], 0, vec![0xA]).unwrap();
+        });
+
+        let view = MemoryTransactionView::new(store.clone());
+        // test
+        (0..10).step_by(2).for_each(|i| {
+            view.put(vec![i], 0, vec![0xB]).unwrap();
+        });
+
+        let ret = view
+            .iter_all(0, None, None, IterDirection::Forward)
+            // return all the values from the iterator
+            .map(|(_, v)| v[0])
+            .collect_vec();
+        // verify
+        assert_eq!(ret, vec![0xB, 0xB, 0xB, 0xB, 0xB])
+    }
+
+    #[test]
+    fn iter_all_hides_deleted_data_source_keys() {
+        // setup
+        let store = Arc::new(MemoryStore::new());
+        (0..10).step_by(2).for_each(|i| {
+            store.put(vec![i], 0, vec![0xA]).unwrap();
+        });
+
+        let view = MemoryTransactionView::new(store.clone());
+        // test
+        let _ = view.delete(&[0], 0).unwrap();
+        let _ = view.delete(&[6], 0).unwrap();
+
+        let ret = view
+            .iter_all(0, None, None, IterDirection::Forward)
+            // return all the values from the iterator
+            .map(|(k, _)| k[0])
+            .collect_vec();
+        // verify
+        assert_eq!(ret, vec![2, 4, 8])
     }
 }

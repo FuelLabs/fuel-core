@@ -84,7 +84,6 @@ impl KeyValueStore for MemoryStore {
         }
 
         if let Some(start) = start {
-            let start = start.to_vec();
             Box::new(
                 copy.into_iter()
                     .skip_while(move |(key, _)| key.as_slice() != start.as_slice()),
