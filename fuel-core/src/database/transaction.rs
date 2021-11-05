@@ -60,7 +60,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), Error>> + '_ {
         let start =
-            start.map(|cursor| owned_tx_index_key(&owner, cursor.block_height, cursor.tx_idx));
+            start.map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
         self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
             TRANSACTIONS_BY_OWNER_BLOCK_IDX,
             Some(owner.to_vec()),
@@ -78,7 +78,7 @@ impl Database {
         tx_id: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
         self.insert(
-            owned_tx_index_key(&owner, block_height, tx_idx),
+            owned_tx_index_key(owner, block_height, tx_idx),
             TRANSACTIONS_BY_OWNER_BLOCK_IDX,
             *tx_id,
         )

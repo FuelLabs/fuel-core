@@ -96,7 +96,7 @@ impl FromStr for HexString {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = s.strip_prefix("0x").ok_or_else(|| "expected 0x prefix")?;
+        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
         Ok(HexString(bytes))

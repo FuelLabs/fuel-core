@@ -109,7 +109,7 @@ impl KeyValueStore for MemoryTransactionView {
                 .merge_join_by(
                     self.data_source.iter_all(column, prefix, start, direction),
                     move |i, j| {
-                        if &IterDirection::Forward == &direction {
+                        if IterDirection::Forward == direction {
                             i.0.cmp(&j.0)
                         } else {
                             j.0.cmp(&i.0)
