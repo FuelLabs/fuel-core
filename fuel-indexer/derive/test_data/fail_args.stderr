@@ -1,0 +1,19 @@
+error: handler macro does not take arguments
+ --> test_data/fail_args.rs:4:1
+  |
+4 | #[handler(SomeArg)]
+  | ^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the attribute macro `handler` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0601]: `main` function not found in crate `$CRATE`
+  --> test_data/fail_args.rs:1:1
+   |
+1  | / #![no_std]
+2  | | use fuel_indexer_derive::handler;
+3  | |
+4  | | #[handler(SomeArg)]
+...  |
+9  | |     t1.save();
+10 | | }
+   | |_^ consider adding a `main` function to `$DIR/test_data/fail_args.rs`

@@ -1,0 +1,7 @@
+---
+source: fuel-indexer/schema/src/lib.rs
+expression: bytes32.query_fragment()
+
+---
+"'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'"
+

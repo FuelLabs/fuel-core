@@ -1,0 +1,7 @@
+---
+source: fuel-indexer/schema/src/lib.rs
+expression: contractid.query_fragment()
+
+---
+"'7878787878787878787878787878787878787878787878787878787878787878'"
+

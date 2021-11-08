@@ -1,0 +1,7 @@
+---
+source: fuel-indexer/schema/src/lib.rs
+expression: salt.query_fragment()
+
+---
+"'3131313131313131313131313131313131313131313131313131313131313131'"
+

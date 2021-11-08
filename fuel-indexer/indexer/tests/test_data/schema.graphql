@@ -1,0 +1,20 @@
+schema {
+    query: QueryRoot
+}
+
+type QueryRoot {
+    thing1: Thing1
+    thing2: Thing2
+}
+
+type Thing1 {
+    id: ID!
+    account: Address!
+}
+
+
+type Thing2 {
+    id: ID!
+    account: Address! @indexed
+    hash: Bytes32! @indexed
+}

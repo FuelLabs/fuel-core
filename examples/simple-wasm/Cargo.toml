@@ -1,0 +1,19 @@
+[package]
+name = "simple-wasm"
+version = "0.1.0"
+edition = "2018"
+
+[profile.dev]
+panic = 'abort'
+
+[profile.release]
+panic = 'abort'
+
+[lib]
+crate-type = ['cdylib']
+
+[dependencies]
+fuel-indexer = { path = "../../fuel-indexer/lib" }
+fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
+# TODO: abigen
+serde = { version = "1.0.128", default-features = false, features = ["derive"] }

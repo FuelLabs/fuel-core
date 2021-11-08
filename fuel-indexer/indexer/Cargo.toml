@@ -1,0 +1,27 @@
+[package]
+name = "fuel-wasm-executor"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+diesel = { version = "1.4", features = ["postgres", "serde_json"] }
+fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
+r2d2 = "0.8"
+r2d2-diesel = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version= "1.0", features = ["raw_value"] }
+serde-scale = "0.2"
+thiserror = "1.0.26"
+wasmer = "2.0.0"
+wasmer-engine-universal = "2.0.0"
+wasmer-compiler-llvm = "2.0.0"
+
+[dev-dependencies]
+fuel-indexer = { path = "../lib" }
+fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
+serde_yaml = "0.8.19"
+
+[features]
+postgres = []

@@ -1,0 +1,18 @@
+scalar ID
+scalar Address
+scalar Bytes4
+scalar Bytes8
+scalar Bytes32
+scalar Bytes64
+scalar Color
+scalar ContractId
+scalar Salt
+
+enum IndexType {
+    Btree,
+    Hash,
+}
+
+directive @indexed(
+    type: IndexType = Btree
+) on FIELD_DEFINITION | ENUM_VALUE

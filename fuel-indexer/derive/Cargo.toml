@@ -1,0 +1,22 @@
+[package]
+name = "fuel-indexer-derive"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+graphql-parser = "0.3"
+fuel-indexer-schema = { path = "../schema", features = ["use-std"] }
+proc-macro-error = "1.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full"] }
+
+[dev-dependencies]
+fuel-indexer = { path = "../lib" }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+trybuild = "1.0"
