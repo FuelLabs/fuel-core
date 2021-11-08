@@ -6,7 +6,7 @@ use wasmer::{
     WasmPtr,
 };
 
-use crate::wasm_executor::IndexEnv;
+use crate::IndexEnv;
 
 #[derive(Debug, Error)]
 pub enum FFIError {

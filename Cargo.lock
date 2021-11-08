@@ -1242,30 +1242,24 @@ dependencies = [
  "bincode",
  "chrono",
  "derive_more",
- "diesel",
  "dirs",
  "env_logger",
  "fuel-asm",
- "fuel-indexer",
- "fuel-indexer-schema",
  "fuel-storage",
  "fuel-tx",
  "fuel-types",
  "fuel-vm",
+ "fuel-wasm-executor",
  "futures",
  "graphql-parser",
  "hex",
  "hyper",
  "itertools",
  "lazy_static",
- "r2d2",
- "r2d2-diesel",
  "rand 0.8.4",
  "rocksdb",
  "serde",
- "serde-scale",
  "serde_json",
- "serde_yaml",
  "structopt",
  "strum",
  "strum_macros",
@@ -1276,9 +1270,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "wasmer",
- "wasmer-compiler-llvm",
- "wasmer-engine-universal",
 ]
 
 [[package]]
@@ -1359,6 +1350,26 @@ dependencies = [
  "serde",
  "sha3",
  "tracing",
+]
+
+[[package]]
+name = "fuel-wasm-executor"
+version = "0.1.0"
+dependencies = [
+ "diesel",
+ "fuel-indexer",
+ "fuel-indexer-schema",
+ "fuel-tx",
+ "r2d2",
+ "r2d2-diesel",
+ "serde",
+ "serde-scale",
+ "serde_json",
+ "serde_yaml",
+ "thiserror",
+ "wasmer",
+ "wasmer-compiler-llvm",
+ "wasmer-engine-universal",
 ]
 
 [[package]]

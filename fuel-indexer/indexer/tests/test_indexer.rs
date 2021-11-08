@@ -1,5 +1,5 @@
-use fuel_core::wasm_executor::{IndexExecutor, Manifest, SchemaManager};
 use fuel_indexer::types::*;
+use fuel_wasm_executor::{IndexExecutor, Manifest, SchemaManager};
 use serde::{Deserialize, Serialize};
 use serde_json;
 

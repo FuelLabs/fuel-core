@@ -6,8 +6,8 @@ use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
 
-use crate::wasm_executor::ffi;
-use crate::wasm_executor::IndexerResult;
+use crate::ffi;
+use crate::IndexerResult;
 use fuel_indexer_schema::{
     db::models::{ColumnInfo, EntityData, TypeIds},
     db::tables::SchemaBuilder,
@@ -194,10 +194,11 @@ impl Database {
     }
 }
 
+#[cfg(feature = "postgres")]
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wasm_executor::IndexEnv;
+    use crate::IndexEnv;
     use fuel_tx::Address;
     use wasmer::{imports, Instance, Module, Store, WasmerEnv};
     use wasmer_compiler_llvm::LLVM;
@@ -233,7 +234,6 @@ mod tests {
         Ok(instance)
     }
 
-    #[cfg(feature = "postgres")]
     #[test]
     fn test_schema_manager() {
         let manager = SchemaManager::new(DATABASE_URL).expect("Could not create SchemaManager");

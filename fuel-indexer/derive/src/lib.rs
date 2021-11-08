@@ -20,8 +20,6 @@ pub fn handler(attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_macros() {
         let t = trybuild::TestCases::new();

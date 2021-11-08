@@ -5,4 +5,3 @@ pub mod schema;
 pub mod service;
 pub mod state;
 pub mod tx_pool;
-pub mod wasm_executor;
