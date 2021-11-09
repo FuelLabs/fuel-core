@@ -11,6 +11,12 @@ To run the suite:
 
 ## Building
 
+There are several system requirements including llvm, clang and postgres. 
+Automate installation using the provided script:
+```bash
+bash ./install-deps.sh
+```
+
 For optimal performance, we recommend using native builds. The generated binary will be optimized for your CPU and may contain specific instructions supported only in your hardware.
 
 To build, run:
