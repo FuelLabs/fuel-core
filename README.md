@@ -11,10 +11,35 @@ To run the suite:
 
 ## Building
 
+##### System Requirements
+
+There are several system requirements including llvm, clang and postgres.
+
+###### MacOS
+```bash
+brew update
+brew install openssl cmake llvm libpq
+```
+
+###### Debian
+```bash
+apt update
+apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm libpq-dev
+```
+
+###### Arch
+```bash 
+pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs postgresql-libs
+export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
+export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
+```
+
+##### Build Options
+
 For optimal performance, we recommend using native builds. The generated binary will be optimized for your CPU and may contain specific instructions supported only in your hardware.
 
 To build, run:
-`$ RUSTFLAGS="-C target-cpu=native" cargo build --release`
+`$ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin fuel-core`
 
 The generated binary will be located in `./target/release/fuel-core`
 
