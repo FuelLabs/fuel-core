@@ -41,7 +41,8 @@ mod tests {
 
         for event in test_events {
             if event.trigger == "an_event_name" {
-                let evt: SomeEvent = serde_json::from_str(&event.payload).expect("Bad payload value");
+                let evt: SomeEvent =
+                    serde_json::from_str(&event.payload).expect("Bad payload value");
                 instance
                     .trigger_event("an_event_name", serialize(&evt))
                     .expect("Indexing failed");
