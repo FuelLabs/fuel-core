@@ -16,7 +16,7 @@ path = "src/main.rs"
 test = false
 
 [dependencies]
-async-graphql = { version = "2.9", features = ["chrono", "chrono-tz"] }
+async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz"] }
 axum = { version = "0.2" }
 bincode = "1.3"
 chrono = { version = "0.4", features = ["serde"] }
