@@ -81,7 +81,7 @@ impl SchemaBuilder {
     fn process_type<'a>(&self, field_type: &Type<'a, String>) -> (ColumnType, bool) {
         match field_type {
             Type::NamedType(t) => (ColumnType::from(t.as_str()), true),
-            Type::ListType(t) => panic!("List types not supported yet."),
+            Type::ListType(_) => panic!("List types not supported yet."),
             Type::NonNullType(t) => {
                 let (typ, _) = self.process_type(t);
                 (typ, false)
