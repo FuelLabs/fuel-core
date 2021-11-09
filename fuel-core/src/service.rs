@@ -1,37 +1,37 @@
+use crate::chain_conf::ChainConfig;
 use crate::database::Database;
-use crate::schema::{build_schema, dap, CoreSchema};
 use crate::tx_pool::TxPool;
-use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
-use axum::{
-    body::Body,
-    extract::Extension,
-    handler::{get, post},
-    http::{
-        header::{
-            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-        },
-        HeaderValue,
-    },
-    response::Html,
-    response::IntoResponse,
-    routing::BoxRoute,
-    AddExtensionLayer, Json, Router,
-};
-use serde_json::json;
+pub use graph_api::start_server;
+use std::io::ErrorKind;
 use std::{
-    net,
-    net::{SocketAddr, TcpListener},
+    net::{self, Ipv4Addr, SocketAddr},
+    panic,
     path::PathBuf,
     sync::Arc,
 };
 use strum_macros::{Display, EnumString};
-use tower_http::set_header::SetResponseHeaderLayer;
+use thiserror::Error;
+use tokio::task::JoinHandle;
+
+pub mod graph_api;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: net::SocketAddr,
     pub database_path: PathBuf,
     pub database_type: DbType,
+    pub chain_conf: ChainConfig,
+}
+
+impl Config {
+    pub fn local_node() -> Self {
+        Self {
+            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            database_path: Default::default(),
+            database_type: DbType::InMemory,
+            chain_conf: ChainConfig::local_testnet(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, EnumString, Display)]
@@ -40,64 +40,73 @@ pub enum DbType {
     RocksDb,
 }
 
-async fn graphql_playground() -> impl IntoResponse {
-    Html(playground_source(GraphQLPlaygroundConfig::new("/graphql")))
+pub struct FuelService {
+    tasks: Vec<JoinHandle<Result<(), Error>>>,
+    /// The address bound by the system for serving the API
+    pub bound_address: SocketAddr,
 }
 
-async fn health() -> Json<serde_json::Value> {
-    Json(json!({ "up": true }))
+impl FuelService {
+    pub async fn new_node(config: Config) -> Result<Self, std::io::Error> {
+        // initialize database
+        let database = match config.database_type {
+            #[cfg(feature = "rocksdb")]
+            DbType::RocksDb => Database::open(&config.database_path)
+                .map_err(|e| std::io::Error::new(ErrorKind::Other, e))?,
+            DbType::InMemory => Database::default(),
+            #[cfg(not(feature = "rocksdb"))]
+            _ => Database::default(),
+        };
+        // initialize state
+        Self::import_state(&config.chain_conf, &database)?;
+
+        // initialize transaction pool
+        let tx_pool = Arc::new(TxPool::new(database.clone()));
+
+        // start background tasks
+        let mut tasks = vec![];
+        let (bound_address, api_server) =
+            graph_api::start_server(config, database, tx_pool).await?;
+        tasks.push(api_server);
+
+        Ok(FuelService {
+            tasks,
+            bound_address,
+        })
+    }
+
+    fn import_state(config: &ChainConfig, database: &Database) -> Result<(), std::io::Error> {
+        Ok(())
+    }
+
+    /// Awaits for the completion of any server background tasks
+    pub async fn run(self) {
+        for task in self.tasks {
+            match task.await {
+                Err(err) => {
+                    if err.is_panic() {
+                        // Resume the panic on the main task
+                        panic::resume_unwind(err.into_panic());
+                    }
+                }
+                Ok(Err(e)) => {
+                    eprintln!("server error: {:?}", e);
+                }
+                Ok(Ok(_)) => {}
+            }
+        }
+    }
+
+    /// Shutdown background tasks
+    pub fn stop(&self) {
+        for task in &self.tasks {
+            task.abort();
+        }
+    }
 }
 
-async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> Json<Response> {
-    schema.execute(req.0).await.into()
-}
-
-async fn ok() -> Result<(), ()> {
-    Ok(())
-}
-
-pub fn configure(db: Database) -> Router<BoxRoute> {
-    let tx_pool = Arc::new(TxPool::new(db.clone()));
-    let schema = build_schema().data(db).data(tx_pool);
-    let schema = dap::init(schema).finish();
-
-    Router::new()
-        .route("/playground", get(graphql_playground))
-        .route("/graphql", post(graphql_handler).options(ok))
-        .route("/health", get(health))
-        .layer(AddExtensionLayer::new(schema))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
-            ACCESS_CONTROL_ALLOW_ORIGIN,
-            HeaderValue::from_static("*"),
-        ))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
-            ACCESS_CONTROL_ALLOW_METHODS,
-            HeaderValue::from_static("*"),
-        ))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
-            ACCESS_CONTROL_ALLOW_HEADERS,
-            HeaderValue::from_static("*"),
-        ))
-        .boxed()
-}
-
-/// Run a `BoxRoute` service in the background and get a URI for it.
-pub async fn run_in_background(svc: Router<BoxRoute>) -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("Could not bind ephemeral socket");
-    let addr = listener.local_addr().unwrap();
-    println!("Listening on {}", addr);
-
-    let (tx, rx) = tokio::sync::oneshot::channel();
-
-    tokio::spawn(async move {
-        let server = axum::Server::from_tcp(listener)
-            .unwrap()
-            .serve(svc.into_make_service());
-        tx.send(()).unwrap();
-        server.await.expect("server error");
-    });
-
-    rx.await.unwrap();
-
-    addr
+#[derive(Debug, Error)]
+pub enum Error {
+    #[error("An api server error occurred {0}")]
+    ApiServer(#[from] hyper::Error),
 }

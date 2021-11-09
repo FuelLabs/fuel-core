@@ -1,3 +1,4 @@
+pub mod chain_conf;
 pub mod database;
 pub mod executor;
 pub mod model;
