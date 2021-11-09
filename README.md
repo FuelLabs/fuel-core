@@ -27,9 +27,11 @@ apt update
 apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm libpq-dev
 ```
 
-###### Pacman
+###### Arch
 ```bash 
 pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs postgresql-libs
+export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
+export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
 ```
 
 ##### Build Options
