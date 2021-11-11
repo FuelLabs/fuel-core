@@ -40,16 +40,21 @@ impl Storage<Bytes32, FuelBlock> for Database {
 
 impl Database {
     pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        let id: Option<(Vec<u8>, Bytes32)> = self
+        let block_entry: Option<(Vec<u8>, Bytes32)> = self
             .iter_all(BLOCK_IDS, None, None, Some(IterDirection::Reverse))
             .next()
             .transpose()?;
-
-        // safety: we know that all block heights are stored with the correct amount of bytes
-        Ok(id.map(|(height, _)| {
+        // get block height from most recently indexed block
+        let mut id = block_entry.map(|(height, _)| {
+            // safety: we know that all block heights are stored with the correct amount of bytes
             let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
             u32::from_be_bytes(bytes).into()
-        }))
+        });
+        // if no blocks, check if chain was configured with a base height
+        if id.is_none() {
+            id = self.get_starting_chain_height()?;
+        }
+        Ok(id)
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {

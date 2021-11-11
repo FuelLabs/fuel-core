@@ -1,4 +1,5 @@
-use fuel_types::{Address, Bytes32, Color};
+use crate::model::fuel_block::BlockHeight;
+use fuel_types::{Address, Bytes32, Color, Salt};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -22,6 +23,7 @@ impl ChainConfig {
             initial_state: StateConfig {
                 coins: vec![],
                 contracts: vec![],
+                height: Default::default(),
             },
         }
     }
@@ -61,14 +63,24 @@ pub enum BaseChainConfig {
     },
 }
 
+// TODO: do streaming deserialization to handle large state configs
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct StateConfig {
+    /// Spendable coins
     pub coins: Vec<CoinConfig>,
+    /// Contract state
     pub contracts: Vec<ContractConfig>,
+    /// Starting block height (useful for forked networks)
+    pub height: Option<BlockHeight>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CoinConfig {
+    /// auto-generated if None
+    pub utxo_id: Option<Bytes32>,
+    /// used if coin is forked from another chain to preserve id
+    pub block_created: Option<BlockHeight>,
+    pub maturity: Option<BlockHeight>,
     pub owner: Address,
     pub amount: u64,
     pub color: Color,
@@ -76,11 +88,12 @@ pub struct CoinConfig {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ContractConfig {
-    code: Vec<u8>,
-    state: Option<ContractStateConfig>,
+    pub code: Vec<u8>,
+    pub salt: Salt,
+    pub state: Option<HashMap<Bytes32, Bytes32>>,
 }
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct ContractStateConfig {
-    state: HashMap<Bytes32, Bytes32>,
-}
+//
+// #[derive(Clone, Debug, Deserialize, Serialize)]
+// pub struct ContractStateConfig {
+//     pub state: ,
+// }

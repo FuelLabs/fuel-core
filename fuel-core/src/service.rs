@@ -1,6 +1,10 @@
 use crate::chain_conf::ChainConfig;
 use crate::database::Database;
+use crate::model::coin::{Coin, CoinStatus, UtxoId};
 use crate::tx_pool::TxPool;
+use fuel_storage::{MerkleStorage, Storage};
+use fuel_types::{Bytes32, ContractId, Salt};
+use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
 #[cfg(feature = "rocksdb")]
 use std::io::ErrorKind;
@@ -48,6 +52,7 @@ pub struct FuelService {
 }
 
 impl FuelService {
+    /// Create a fuel node instance from service config
     pub async fn new_node(config: Config) -> Result<Self, std::io::Error> {
         // initialize database
         let database = match config.database_type {
@@ -58,8 +63,6 @@ impl FuelService {
             #[cfg(not(feature = "rocksdb"))]
             _ => Database::default(),
         };
-        // initialize state
-        Self::import_state(&config.chain_conf, &database)?;
         // initialize service
         Self::init_service(database, config).await
     }
@@ -72,6 +75,8 @@ impl FuelService {
 
     /// Private inner method for initializing the fuel service
     async fn init_service(database: Database, config: Config) -> Result<Self, std::io::Error> {
+        // initialize state
+        Self::import_state(&config.chain_conf, &database)?;
         // initialize transaction pool
         let tx_pool = Arc::new(TxPool::new(database.clone()));
 
@@ -87,7 +92,75 @@ impl FuelService {
         })
     }
 
+    /// Loads state from the chain config into database
     fn import_state(config: &ChainConfig, database: &Database) -> Result<(), std::io::Error> {
+        // start a db transaction for bulk-writing
+        let mut import_tx = database.transaction();
+        let database = import_tx.as_mut();
+
+        // check if chain is initialized
+        if database.get_chain_name()?.is_none() {
+            // initialize the chain id
+            database.init_chain_name(config.chain_name.clone())?;
+            // initialize starting block height if set
+            if let Some(height) = config.initial_state.height {
+                database.init_chain_height(height)?;
+            }
+            // initialize coins
+            let mut generated_coin_idx = 0;
+            for coin in &config.initial_state.coins {
+                let utxo_id = coin.utxo_id.unwrap_or_else(|| {
+                    generated_coin_idx += 1;
+                    UtxoId {
+                        tx_id: Default::default(),
+                        output_index: generated_coin_idx,
+                    }
+                    .into()
+                });
+                let coin = Coin {
+                    owner: coin.owner,
+                    amount: coin.amount,
+                    color: coin.color,
+                    maturity: coin.maturity.unwrap_or_default(),
+                    status: CoinStatus::Unspent,
+                    block_created: coin.block_created.unwrap_or_default(),
+                };
+
+                let _ = Storage::<Bytes32, Coin>::insert(database, &utxo_id, &coin)?;
+            }
+
+            // initialize contract state
+            for contract_config in &config.initial_state.contracts {
+                let contract = Contract::from(contract_config.code.as_slice());
+                let salt = contract_config.salt;
+                let root = contract.root();
+                let contract_id = contract.id(&salt, &root);
+                // insert contract
+                let _ = Storage::<ContractId, Contract>::insert(database, &contract_id, &contract)?;
+                // insert contract root
+                let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
+                    database,
+                    &contract_id,
+                    &(salt, root),
+                )?;
+
+                // insert state related to contract
+                if let Some(contract_state) = &contract_config.state {
+                    for (key, value) in contract_state {
+                        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
+                            database,
+                            &contract_id,
+                            key,
+                            value,
+                        )?;
+                    }
+                }
+            }
+        }
+
+        // Write transaction to db
+        import_tx.commit()?;
+
         Ok(())
     }
 
@@ -121,4 +194,97 @@ impl FuelService {
 pub enum Error {
     #[error("An api server error occurred {0}")]
     ApiServer(#[from] hyper::Error),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chain_conf::{CoinConfig, StateConfig};
+    use crate::model::fuel_block::BlockHeight;
+
+    #[tokio::test]
+    async fn config_initializes_chain_name() {
+        let test_name = "test_net_123".to_string();
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                chain_name: test_name.clone(),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            test_name,
+            db.get_chain_name()
+                .unwrap()
+                .expect("Expected a chain name to be set")
+        )
+    }
+
+    #[tokio::test]
+    async fn config_initializes_block_height() {
+        let test_height = BlockHeight::from(99u32);
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: StateConfig {
+                    coins: vec![],
+                    contracts: vec![],
+                    height: Some(test_height),
+                },
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            test_height,
+            db.get_block_height()
+                .unwrap()
+                .expect("Expected a block height to be set")
+        )
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_coins() {
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: StateConfig {
+                    coins: vec![CoinConfig {
+                        utxo_id: None,
+                        block_created: None,
+                        maturity: None,
+                        owner: Default::default(),
+                        amount: 45,
+                        color: Default::default(),
+                    }],
+                    contracts: vec![],
+                    height: None,
+                },
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            test_height,
+            db.get_block_height()
+                .unwrap()
+                .expect("Expected a block height to be set")
+        )
+    }
 }
