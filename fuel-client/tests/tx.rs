@@ -1,7 +1,9 @@
 use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
-use fuel_core::database::Database;
-use fuel_core::model::coin::UtxoId;
-use fuel_core::service::{configure, run_in_background};
+use fuel_core::{
+    database::Database,
+    model::coin::UtxoId,
+    service::{Config, FuelService},
+};
 use fuel_storage::Storage;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
@@ -28,8 +30,8 @@ fn basic_script_snapshot() {
 
 #[tokio::test]
 async fn dry_run() {
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
@@ -74,8 +76,8 @@ async fn dry_run() {
 
 #[tokio::test]
 async fn submit() {
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
@@ -119,8 +121,8 @@ async fn receipts() {
     let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
     // setup server & client
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
     // submit tx
     let result = client.submit(&transaction).await;
     assert!(result.is_ok());
@@ -139,8 +141,10 @@ async fn get_transaction_by_id() {
     Storage::<Bytes32, fuel_tx::Transaction>::insert(&mut db, &id, &transaction).unwrap();
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let transaction = client.transaction(&format!("{:#x}", id)).await.unwrap();
@@ -153,8 +157,8 @@ async fn get_transparent_transaction_by_id() {
     let id = transaction.id();
 
     // setup server & client
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // submit tx
     let result = client.submit(&transaction).await;
@@ -235,8 +239,8 @@ struct TestContext {
 impl TestContext {
     async fn new(seed: u64) -> Self {
         let rng = StdRng::seed_from_u64(seed);
-        let server = run_in_background(configure(Default::default())).await;
-        let client = FuelClient::from(server);
+        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
         Self { rng, client }
     }
 

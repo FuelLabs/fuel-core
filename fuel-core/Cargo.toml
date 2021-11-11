@@ -55,3 +55,4 @@ fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serd
 
 [features]
 default = ["rocksdb"]
+test-helpers = []

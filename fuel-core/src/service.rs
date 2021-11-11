@@ -2,6 +2,7 @@ use crate::chain_conf::ChainConfig;
 use crate::database::Database;
 use crate::tx_pool::TxPool;
 pub use graph_api::start_server;
+#[cfg(feature = "rocksdb")]
 use std::io::ErrorKind;
 use std::{
     net::{self, Ipv4Addr, SocketAddr},
@@ -59,7 +60,18 @@ impl FuelService {
         };
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
+        // initialize service
+        Self::init_service(database, config).await
+    }
 
+    #[cfg(any(test, feature = "test-helpers"))]
+    /// Used to initialize a service with a pre-existing database
+    pub async fn from_database(database: Database, config: Config) -> Result<Self, std::io::Error> {
+        Self::init_service(database, config).await
+    }
+
+    /// Private inner method for initializing the fuel service
+    async fn init_service(database: Database, config: Config) -> Result<Self, std::io::Error> {
         // initialize transaction pool
         let tx_pool = Arc::new(TxPool::new(database.clone()));
 
