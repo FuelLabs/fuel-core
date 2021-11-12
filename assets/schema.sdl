@@ -1,0 +1,278 @@
+type Block {
+	id: HexString256!
+	height: U64!
+	transactions: [Transaction!]!
+	time: DateTime!
+	producer: HexString256!
+}
+type BlockConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BlockEdge]
+}
+"""
+An edge in a connection.
+"""
+type BlockEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Block!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+type ChainInfo {
+	name: String!
+	latestBlock: Block!
+	baseChainHeight: U64!
+	peerCount: Int!
+}
+type ChangeOutput {
+	to: HexString256!
+	amount: Int!
+	color: HexString256!
+}
+type Coin {
+	id: HexString256!
+	owner: HexString256!
+	amount: U64!
+	color: HexString256!
+	maturity: U64!
+	status: CoinStatus!
+	blockCreated: U64!
+}
+type CoinConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [CoinEdge]
+}
+"""
+An edge in a connection.
+"""
+type CoinEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Coin!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+type CoinOutput {
+	to: HexString256!
+	amount: Int!
+	color: HexString256!
+}
+enum CoinStatus {
+	UNSPENT
+	SPENT
+}
+type ContractCreated {
+	contractId: HexString256!
+}
+type ContractOutput {
+	inputIndex: Int!
+	balanceRoot: HexString256!
+	stateRoot: HexString256!
+}
+"""
+Implement the DateTime<Utc> scalar
+
+The input/output is a string in RFC3339 format.
+"""
+scalar DateTime
+type FailureStatus {
+	blockId: HexString256!
+	time: DateTime!
+	reason: String!
+}
+scalar HexString
+scalar HexString256
+union Input = | InputCoin | InputContract
+type InputCoin {
+	utxoId: HexString256!
+	owner: HexString256!
+	amount: Int!
+	color: HexString256!
+	witnessIndex: Int!
+	maturity: Int!
+	predicate: HexString!
+	predicateData: HexString!
+}
+type InputContract {
+	utxoId: HexString256!
+	balanceRoot: HexString256!
+	stateRoot: HexString256!
+	contractId: HexString256!
+}
+type Mutation {
+	startSession: ID!
+	endSession(id: ID!): Boolean!
+	reset(id: ID!): Boolean!
+	execute(id: ID!, op: String!): Boolean!
+	"""
+	dry-run the transaction using a fork of current state, no changes are committed.
+	"""
+	dryRun(tx: HexString!): [Receipt!]!
+	"""
+	Submits transaction to the pool
+	"""
+	submit(tx: HexString!): HexString256!
+}
+union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+type Query {
+	register(id: ID!, register: U64!): U64!
+	memory(id: ID!, start: U64!, size: U64!): String!
+	block(id: HexString256, height: Int): Block
+	blocks(after: String, before: String, first: Int, last: Int): BlockConnection!
+	chain: ChainInfo!
+	version: String!
+	transaction(id: HexString256!): Transaction
+	transactions(after: String, before: String, first: Int, last: Int): TransactionConnection!
+	transactionsByOwner(owner: HexString256!, after: String, before: String, first: Int, last: Int): TransactionConnection!
+	"""
+	Returns true when the GraphQL API is serving requests.
+	"""
+	health: Boolean!
+	coin(id: HexString256!): Coin
+	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!): CoinConnection!
+}
+type Receipt {
+	id: HexString256!
+	pc: Int!
+	is: Int!
+	to: HexString256
+	toAddress: HexString256
+	amount: Int
+	color: HexString256
+	gas: Int
+	a: Int
+	b: Int
+	val: Int
+	ptr: Int
+	digest: HexString256
+	reason: Int
+	ra: Int
+	rb: Int
+	rc: Int
+	rd: Int
+	len: Int
+	receiptType: ReceiptType!
+	rawPayload: HexString!
+}
+enum ReceiptType {
+	CALL
+	RETURN
+	RETURN_DATA
+	PANIC
+	REVERT
+	LOG
+	LOG_DATA
+	TRANSFER
+	TRANSFER_OUT
+}
+type SubmittedStatus {
+	time: DateTime!
+}
+type SuccessStatus {
+	blockId: HexString256!
+	time: DateTime!
+	programState: HexString!
+}
+type Transaction {
+	id: HexString256!
+	inputColors: [HexString256!]!
+	inputContracts: [HexString256!]!
+	gasPrice: Int!
+	gasLimit: Int!
+	maturity: Int!
+	isScript: Boolean!
+	inputs: [Input!]!
+	outputs: [Output!]!
+	witnesses: [HexString!]!
+	receiptsRoot: HexString256
+	status: TransactionStatus
+	receipts: [Receipt!]
+	script: HexString
+	scriptData: HexString
+	bytecodeWitnessIndex: Int
+	salt: HexString256
+	staticContracts: [HexString256!]
+	"""
+	Return the transaction bytes using canonical encoding
+	"""
+	rawPayload: HexString!
+}
+type TransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionEdge]
+}
+"""
+An edge in a connection.
+"""
+type TransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+union TransactionStatus = | SubmittedStatus | SuccessStatus | FailureStatus
+scalar U64
+type VariableOutput {
+	to: HexString256!
+	amount: Int!
+	color: HexString256!
+}
+type WithdrawalOutput {
+	to: HexString256!
+	amount: Int!
+	color: HexString256!
+}
+schema {
+	query: Query
+	mutation: Mutation
+}
