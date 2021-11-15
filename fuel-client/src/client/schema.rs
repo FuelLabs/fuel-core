@@ -1,5 +1,5 @@
 pub mod schema {
-    cynic::use_schema!("./assets/schema.sdl");
+    cynic::use_schema!("../assets/schema.sdl");
 }
 
 use hex::FromHexError;
@@ -17,13 +17,13 @@ pub mod primitives;
 pub mod tx;
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
+#[cynic(schema_path = "../assets/schema.sdl", graphql_type = "Query")]
 pub struct Health {
     pub health: bool,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Mutation")]
+#[cynic(schema_path = "../assets/schema.sdl", graphql_type = "Mutation")]
 pub struct StartSession {
     pub start_session: cynic::Id,
 }
@@ -35,7 +35,7 @@ pub struct IdArg {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Mutation",
     argument_struct = "IdArg"
 )]
@@ -46,7 +46,7 @@ pub struct EndSession {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Mutation",
     argument_struct = "IdArg"
 )]
@@ -63,7 +63,7 @@ pub struct ExecuteArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Mutation",
     argument_struct = "ExecuteArgs"
 )]
@@ -80,7 +80,7 @@ pub struct RegisterArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "RegisterArgs"
 )]
@@ -98,7 +98,7 @@ pub struct MemoryArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "MemoryArgs"
 )]
@@ -122,7 +122,7 @@ pub struct ConnectionArgs {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct PageInfo {
     pub end_cursor: Option<String>,
     pub has_next_page: bool,

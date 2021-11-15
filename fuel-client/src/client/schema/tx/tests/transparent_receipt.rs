@@ -2,7 +2,7 @@ use crate::client::schema::{schema, ConversionError, ConversionError::MissingFie
 use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct Receipt {
     pub a: Option<i32>,
     pub b: Option<i32>,
@@ -27,7 +27,7 @@ pub struct Receipt {
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub enum ReceiptType {
     Call,
     Return,

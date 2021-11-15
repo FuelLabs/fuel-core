@@ -8,7 +8,7 @@ use core::convert::{TryFrom, TryInto};
 /// Retrieves the transaction in opaque form
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "TxIdArgs"
 )]
@@ -19,7 +19,7 @@ pub struct TransactionQuery {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
+    schema_path = "../assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "ConnectionArgs"
 )]
@@ -29,21 +29,21 @@ pub struct TransactionsQuery {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct TransactionConnection {
     pub edges: Option<Vec<Option<TransactionEdge>>>,
     pub page_info: PageInfo,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
     pub node: Transaction,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct Transaction {
     pub gas_limit: i32,
     pub gas_price: i32,
@@ -139,14 +139,14 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
 }
 
 #[derive(cynic::InlineFragments, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub enum Input {
     InputCoin(InputCoin),
     InputContract(InputContract),
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct InputCoin {
     pub utxo_id: HexString256,
     pub owner: HexString256,
@@ -159,7 +159,7 @@ pub struct InputCoin {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct InputContract {
     pub utxo_id: HexString256,
     pub balance_root: HexString256,
@@ -193,7 +193,7 @@ impl TryFrom<Input> for fuel_tx::Input {
 }
 
 #[derive(cynic::InlineFragments, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub enum Output {
     CoinOutput(CoinOutput),
     ContractOutput(ContractOutput),
@@ -204,7 +204,7 @@ pub enum Output {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct CoinOutput {
     pub to: HexString256,
     pub amount: i32,
@@ -212,7 +212,7 @@ pub struct CoinOutput {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct WithdrawalOutput {
     pub to: HexString256,
     pub amount: i32,
@@ -220,7 +220,7 @@ pub struct WithdrawalOutput {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct ChangeOutput {
     pub to: HexString256,
     pub amount: i32,
@@ -228,7 +228,7 @@ pub struct ChangeOutput {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct VariableOutput {
     pub to: HexString256,
     pub amount: i32,
@@ -236,7 +236,7 @@ pub struct VariableOutput {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct ContractOutput {
     pub input_index: i32,
     pub balance_root: HexString256,
@@ -244,7 +244,7 @@ pub struct ContractOutput {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct ContractCreated {
     contract_id: HexString256,
 }
