@@ -5,8 +5,21 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use wasmer::{imports, Instance, LazyInit, Memory, Module, NativeFunc, Store, WasmerEnv};
-use wasmer_compiler_llvm::LLVM;
 use wasmer_engine_universal::Universal;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "llvm")] {
+        use wasmer_compiler_llvm::LLVM;
+        fn compiler() -> LLVM {
+            LLVM::default()
+        }
+    } else {
+        use wasmer_compiler_cranelift::Cranelift;
+        fn compiler() -> Cranelift {
+            Cranelift::default()
+        }
+    }
+}
 
 #[derive(WasmerEnv, Clone)]
 pub struct IndexEnv {
@@ -43,8 +56,7 @@ impl IndexExecutor {
         manifest: Manifest,
         wasm_bytes: impl AsRef<[u8]>,
     ) -> IndexerResult<IndexExecutor> {
-        let compiler = LLVM::default();
-        let store = Store::new(&Universal::new(compiler).engine());
+        let store = Store::new(&Universal::new(compiler()).engine());
         let module = Module::new(&store, &wasm_bytes)?;
 
         let mut import_object = imports! {};
