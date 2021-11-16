@@ -199,8 +199,13 @@ pub enum Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain_conf::{CoinConfig, StateConfig};
+    use crate::chain_conf::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::fuel_block::BlockHeight;
+    use fuel_asm::Opcode;
+    use fuel_types::{Address, Color};
+    use itertools::Itertools;
+    use rand::rngs::StdRng;
+    use rand::{Rng, RngCore, SeedableRng};
 
     #[tokio::test]
     async fn config_initializes_chain_name() {
@@ -255,20 +260,50 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn config_state_initializes_coins() {
+    async fn config_state_initializes_multiple_coins_with_different_owners_and_colors() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        // a coin with all options set
+        let alice: Address = rng.gen();
+        let color_alice: Color = rng.gen();
+        let alice_value = rng.gen();
+        let alice_maturity = Some(rng.next_u32().into());
+        let alice_block_created = Some(rng.next_u32().into());
+        let alice_utxo_id = Some(rng.gen());
+
+        // a coin with minimal options set
+        let bob: Address = rng.gen();
+        let color_bob: Color = rng.gen();
+        let bob_value = rng.gen();
+
         let service_config = Config {
             chain_conf: ChainConfig {
                 initial_state: StateConfig {
-                    coins: vec![CoinConfig {
-                        utxo_id: None,
-                        block_created: None,
-                        maturity: None,
-                        owner: Default::default(),
-                        amount: 45,
-                        color: Default::default(),
-                    }],
+                    coins: vec![
+                        CoinConfig {
+                            utxo_id: alice_utxo_id,
+                            block_created: alice_block_created,
+                            maturity: alice_maturity,
+                            owner: alice,
+                            amount: alice_value,
+                            color: color_alice,
+                        },
+                        CoinConfig {
+                            utxo_id: None,
+                            block_created: None,
+                            maturity: None,
+                            owner: bob,
+                            amount: bob_value,
+                            color: color_bob,
+                        },
+                    ],
                     contracts: vec![],
-                    height: None,
+                    height: alice_block_created.map(|h| {
+                        let mut h: u32 = h.into();
+                        // set starting height to something higher than alice's coin
+                        h = h.saturating_add(rng.next_u32());
+                        h.into()
+                    }),
                 },
                 ..ChainConfig::local_testnet()
             },
@@ -280,11 +315,91 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(
-            test_height,
-            db.get_block_height()
-                .unwrap()
-                .expect("Expected a block height to be set")
-        )
+        let alice_coins = get_coins(&db, alice);
+        let bob_coins = get_coins(&db, bob)
+            .into_iter()
+            .map(|(_, coin)| coin)
+            .collect_vec();
+
+        assert!(matches!(
+            alice_coins.as_slice(),
+            &[(utxo_id, Coin {
+                owner,
+                amount,
+                color,
+                block_created,
+                maturity,
+                ..
+            })] if utxo_id == alice_utxo_id.unwrap()
+            && owner == alice
+            && amount == alice_value
+            && color == color_alice
+            && block_created == alice_block_created.unwrap()
+            && maturity == alice_maturity.unwrap(),
+        ));
+        assert!(matches!(
+            bob_coins.as_slice(),
+            &[Coin {
+                owner,
+                amount,
+                color,
+                ..
+            }] if owner == bob
+            && amount == bob_value
+            && color == color_bob
+        ));
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract_state() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let test_key: Bytes32 = rng.gen();
+        let test_value: Bytes32 = rng.gen();
+        let state = vec![(test_key, test_value)];
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let root = contract.root();
+        let id = contract.id(&salt, &root);
+
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: StateConfig {
+                    contracts: vec![ContractConfig {
+                        code: contract.into(),
+                        salt,
+                        state: Some(state),
+                    }],
+                    ..ChainConfig::local_testnet().initial_state
+                },
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        let ret = MerkleStorage::<ContractId, Bytes32, Bytes32>::get(&db, &id, &test_key)
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert_eq!(test_value, ret)
+    }
+
+    fn get_coins(db: &Database, owner: Address) -> Vec<(Bytes32, Coin)> {
+        db.owned_coins(owner, None, None)
+            .map(|r| {
+                r.and_then(|coin_id| {
+                    Storage::<Bytes32, Coin>::get(db, &coin_id)
+                        .map_err(Into::into)
+                        .map(|v| (coin_id, v.unwrap().into_owned()))
+                })
+            })
+            .try_collect()
+            .unwrap()
     }
 }
