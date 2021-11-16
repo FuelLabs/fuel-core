@@ -7,3 +7,4 @@ version = "0.1.0"
 
 [dependencies]
 fuel-core = {path = "../fuel-core", default-features = false}
+structopt = "0.3"
