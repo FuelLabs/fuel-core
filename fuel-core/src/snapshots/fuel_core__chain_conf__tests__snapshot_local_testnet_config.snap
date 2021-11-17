@@ -1,0 +1,16 @@
+---
+source: fuel-core/src/chain_conf.rs
+expression: json
+
+---
+{
+  "chain_name": "local_testnet",
+  "block_production": "Instant",
+  "parent_network": {
+    "type": "LocalTest"
+  },
+  "initial_state": {
+    "coins": [],
+    "contracts": []
+  }
+}
