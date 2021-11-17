@@ -3,7 +3,7 @@ mod commands;
 use commands::build::{cargo_build_and_dump_schema, BuildCommand};
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "xtask", about = "forc-core dev builder")]
+#[structopt(name = "xtask", about = "fuel-core dev builder")]
 pub struct Opt {
     #[structopt(subcommand)]
     command: Xtask,
