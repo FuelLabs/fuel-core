@@ -1,6 +1,7 @@
-use structopt::StructOpt;
-mod commands;
 use commands::build::{cargo_build_and_dump_schema, BuildCommand};
+use structopt::StructOpt;
+
+mod commands;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "xtask", about = "fuel-core dev builder")]
