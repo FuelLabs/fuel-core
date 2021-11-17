@@ -59,10 +59,8 @@ pub enum ProductionStrategy {
 #[serde(tag = "type")]
 pub enum BaseChainConfig {
     LocalTest,
-    Ethereum {
-        /// Contract address for publishing blocks performing IVG
-        rollup_contract_address: String,
-    },
+    // TODO: determine which ethereum config values we'll need here
+    Ethereum,
 }
 
 // TODO: do streaming deserialization to handle large state configs
