@@ -7,6 +7,8 @@ use std::{io::ErrorKind, path::PathBuf, str::FromStr};
 
 pub mod serialization;
 
+pub const LOCAL_TESTNET: &'static str = "local_testnet";
+
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
@@ -18,14 +20,10 @@ pub struct ChainConfig {
 impl ChainConfig {
     pub fn local_testnet() -> Self {
         Self {
-            chain_name: "local_testnet".to_string(),
+            chain_name: LOCAL_TESTNET.to_string(),
             block_production: ProductionStrategy::Instant,
             parent_network: BaseChainConfig::LocalTest,
-            initial_state: StateConfig {
-                coins: vec![],
-                contracts: vec![],
-                height: None,
-            },
+            initial_state: StateConfig::default(),
         }
     }
 }
@@ -35,7 +33,7 @@ impl FromStr for ChainConfig {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "local_testnet" => Ok(Self::local_testnet()),
+            LOCAL_TESTNET => Ok(Self::local_testnet()),
             s => {
                 // Attempt to load chain config from path
                 let path = PathBuf::from(s.to_string());
@@ -66,7 +64,7 @@ pub enum BaseChainConfig {
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
 #[skip_serializing_none]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
     pub coins: Vec<CoinConfig>,
@@ -165,18 +163,15 @@ mod tests {
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
 
         ChainConfig {
-            chain_name: "".to_string(),
-            block_production: ProductionStrategy::Instant,
-            parent_network: BaseChainConfig::LocalTest,
             initial_state: StateConfig {
-                coins: vec![],
                 contracts: vec![ContractConfig {
                     code: contract.into(),
                     salt: Default::default(),
                     state: Some(state),
                 }],
-                height: None,
+                ..Default::default()
             },
+            ..ChainConfig::local_testnet()
         }
     }
 
@@ -190,9 +185,6 @@ mod tests {
         let color = rng.gen();
 
         ChainConfig {
-            chain_name: "".to_string(),
-            block_production: ProductionStrategy::Instant,
-            parent_network: BaseChainConfig::LocalTest,
             initial_state: StateConfig {
                 coins: vec![CoinConfig {
                     utxo_id,
@@ -202,9 +194,9 @@ mod tests {
                     amount,
                     color,
                 }],
-                contracts: vec![],
-                height: None,
+                ..Default::default()
             },
+            ..ChainConfig::local_testnet()
         }
     }
 }
