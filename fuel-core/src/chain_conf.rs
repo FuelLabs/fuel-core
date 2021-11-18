@@ -91,12 +91,13 @@ pub struct StateConfig {
     pub height: Option<BlockHeight>,
 }
 
-#[serde_as]
 #[skip_serializing_none]
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
     #[serde_as(as = "Option<HexType>")]
+    #[serde(default)]
     pub utxo_id: Option<Bytes32>,
     /// used if coin is forked from another chain to preserve id
     pub block_created: Option<BlockHeight>,
@@ -116,6 +117,7 @@ pub struct ContractConfig {
     #[serde_as(as = "HexType")]
     pub salt: Salt,
     #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
+    #[serde(default)]
     pub state: Option<Vec<(Bytes32, Bytes32)>>,
 }
 
