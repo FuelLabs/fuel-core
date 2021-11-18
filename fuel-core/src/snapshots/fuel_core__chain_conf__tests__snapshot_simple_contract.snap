@@ -10,6 +10,11 @@ expression: json
     "type": "LocalTest"
   },
   "initial_state": {
-    "height": 348700191
+    "contracts": [
+      {
+        "code": "0x24400000",
+        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
   }
 }

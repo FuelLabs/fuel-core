@@ -102,58 +102,68 @@ impl FuelService {
         if database.get_chain_name()?.is_none() {
             // initialize the chain id
             database.init_chain_name(config.chain_name.clone())?;
-            // initialize starting block height if set
-            if let Some(height) = config.initial_state.height {
-                database.init_chain_height(height)?;
-            }
-            // initialize coins
-            // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-            let mut generated_coin_idx = 0;
-            for coin in &config.initial_state.coins {
-                let utxo_id = coin.utxo_id.unwrap_or_else(|| {
-                    generated_coin_idx += 1;
-                    UtxoId {
-                        tx_id: Default::default(),
-                        output_index: generated_coin_idx,
+            if let Some(initial_state) = &config.initial_state {
+                // initialize starting block height if set
+                if let Some(height) = initial_state.height {
+                    database.init_chain_height(height)?;
+                }
+                // initialize coins
+                // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
+                let mut generated_coin_idx = 0;
+                if let Some(coins) = &initial_state.coins {
+                    for coin in coins {
+                        let utxo_id = coin.utxo_id.unwrap_or_else(|| {
+                            generated_coin_idx += 1;
+                            UtxoId {
+                                tx_id: Default::default(),
+                                output_index: generated_coin_idx,
+                            }
+                            .into()
+                        });
+                        let coin = Coin {
+                            owner: coin.owner,
+                            amount: coin.amount,
+                            color: coin.color,
+                            maturity: coin.maturity.unwrap_or_default(),
+                            status: CoinStatus::Unspent,
+                            block_created: coin.block_created.unwrap_or_default(),
+                        };
+
+                        let _ = Storage::<Bytes32, Coin>::insert(database, &utxo_id, &coin)?;
                     }
-                    .into()
-                });
-                let coin = Coin {
-                    owner: coin.owner,
-                    amount: coin.amount,
-                    color: coin.color,
-                    maturity: coin.maturity.unwrap_or_default(),
-                    status: CoinStatus::Unspent,
-                    block_created: coin.block_created.unwrap_or_default(),
-                };
+                }
 
-                let _ = Storage::<Bytes32, Coin>::insert(database, &utxo_id, &coin)?;
-            }
-
-            // initialize contract state
-            for contract_config in &config.initial_state.contracts {
-                let contract = Contract::from(contract_config.code.as_slice());
-                let salt = contract_config.salt;
-                let root = contract.root();
-                let contract_id = contract.id(&salt, &root);
-                // insert contract
-                let _ = Storage::<ContractId, Contract>::insert(database, &contract_id, &contract)?;
-                // insert contract root
-                let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
-                    database,
-                    &contract_id,
-                    &(salt, root),
-                )?;
-
-                // insert state related to contract
-                if let Some(contract_state) = &contract_config.state {
-                    for (key, value) in contract_state {
-                        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
+                // initialize contract state
+                if let Some(contracts) = &initial_state.contracts {
+                    for contract_config in contracts {
+                        let contract = Contract::from(contract_config.code.as_slice());
+                        let salt = contract_config.salt;
+                        let root = contract.root();
+                        let contract_id = contract.id(&salt, &root);
+                        // insert contract
+                        let _ = Storage::<ContractId, Contract>::insert(
                             database,
                             &contract_id,
-                            key,
-                            value,
+                            &contract,
                         )?;
+                        // insert contract root
+                        let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
+                            database,
+                            &contract_id,
+                            &(salt, root),
+                        )?;
+
+                        // insert state related to contract
+                        if let Some(contract_state) = &contract_config.state {
+                            for (key, value) in contract_state {
+                                MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
+                                    database,
+                                    &contract_id,
+                                    key,
+                                    value,
+                                )?;
+                            }
+                        }
                     }
                 }
             }
@@ -237,11 +247,10 @@ mod tests {
         let test_height = BlockHeight::from(99u32);
         let service_config = Config {
             chain_conf: ChainConfig {
-                initial_state: StateConfig {
-                    coins: vec![],
-                    contracts: vec![],
+                initial_state: Some(StateConfig {
                     height: Some(test_height),
-                },
+                    ..Default::default()
+                }),
                 ..ChainConfig::local_testnet()
             },
             ..Config::local_node()
@@ -279,8 +288,8 @@ mod tests {
 
         let service_config = Config {
             chain_conf: ChainConfig {
-                initial_state: StateConfig {
-                    coins: vec![
+                initial_state: Some(StateConfig {
+                    coins: Some(vec![
                         CoinConfig {
                             utxo_id: alice_utxo_id,
                             block_created: alice_block_created,
@@ -297,15 +306,15 @@ mod tests {
                             amount: bob_value,
                             color: color_bob,
                         },
-                    ],
-                    contracts: vec![],
+                    ]),
                     height: alice_block_created.map(|h| {
                         let mut h: u32 = h.into();
                         // set starting height to something higher than alice's coin
                         h = h.saturating_add(rng.next_u32());
                         h.into()
                     }),
-                },
+                    ..Default::default()
+                }),
                 ..ChainConfig::local_testnet()
             },
             ..Config::local_node()
@@ -365,15 +374,14 @@ mod tests {
 
         let service_config = Config {
             chain_conf: ChainConfig {
-                initial_state: StateConfig {
-                    contracts: vec![ContractConfig {
+                initial_state: Some(StateConfig {
+                    contracts: Some(vec![ContractConfig {
                         code: contract.into(),
                         salt,
                         state: Some(state),
-                    }],
-                    coins: Default::default(),
-                    height: Default::default(),
-                },
+                    }]),
+                    ..Default::default()
+                }),
                 ..ChainConfig::local_testnet()
             },
             ..Config::local_node()

@@ -10,7 +10,6 @@ expression: json
     "type": "LocalTest"
   },
   "initial_state": {
-    "coins": [],
     "contracts": [
       {
         "code": "0x24400000",

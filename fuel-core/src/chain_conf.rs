@@ -11,12 +11,13 @@ pub mod serialization;
 pub const LOCAL_TESTNET: &'static str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+#[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_production: ProductionStrategy,
     pub parent_network: BaseChainConfig,
-    pub initial_state: StateConfig,
+    pub initial_state: Option<StateConfig>,
 }
 
 impl ChainConfig {
@@ -37,10 +38,10 @@ impl ChainConfig {
             chain_name: LOCAL_TESTNET.to_string(),
             block_production: ProductionStrategy::Instant,
             parent_network: BaseChainConfig::LocalTest,
-            initial_state: StateConfig {
-                coins: initial_coins,
+            initial_state: Some(StateConfig {
+                coins: Some(initial_coins),
                 ..StateConfig::default()
-            },
+            }),
         }
     }
 }
@@ -84,9 +85,9 @@ pub enum BaseChainConfig {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
-    pub coins: Vec<CoinConfig>,
+    pub coins: Option<Vec<CoinConfig>>,
     /// Contract state
-    pub contracts: Vec<ContractConfig>,
+    pub contracts: Option<Vec<ContractConfig>>,
     /// Starting block height (useful for flattened fork networks)
     pub height: Option<BlockHeight>,
 }
@@ -109,6 +110,7 @@ pub struct CoinConfig {
     pub color: Color,
 }
 
+#[skip_serializing_none]
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ContractConfig {
@@ -148,10 +150,10 @@ mod tests {
     fn snapshot_configurable_block_height() {
         let mut rng = StdRng::seed_from_u64(2);
         let config = ChainConfig {
-            initial_state: StateConfig {
+            initial_state: Some(StateConfig {
                 height: Some(rng.next_u32().into()),
                 ..Default::default()
-            },
+            }),
             ..ChainConfig::local_testnet()
         };
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -162,10 +164,10 @@ mod tests {
     fn can_roundtrip_serialize_block_height_config() {
         let mut rng = StdRng::seed_from_u64(2);
         let config = ChainConfig {
-            initial_state: StateConfig {
+            initial_state: Some(StateConfig {
                 height: Some(rng.next_u32().into()),
                 ..Default::default()
-            },
+            }),
             ..ChainConfig::local_testnet()
         };
         let json = serde_json::to_string(&config).unwrap();
@@ -174,15 +176,30 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_simple_contract_state() {
-        let config = test_config_contract_state();
+    fn snapshot_simple_contract() {
+        let config = test_config_contract(false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
-    fn can_roundtrip_simple_contract_state() {
-        let config = test_config_contract_state();
+    fn can_roundtrip_simple_contract() {
+        let config = test_config_contract(false);
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
+    fn snapshot_simple_contract_with_state() {
+        let config = test_config_contract(true);
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_simple_contract_with_state() {
+        let config = test_config_contract(true);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
@@ -203,22 +220,26 @@ mod tests {
         assert_eq!(config, deserialized_config);
     }
 
-    fn test_config_contract_state() -> ChainConfig {
+    fn test_config_contract(state: bool) -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
-        let test_key: Bytes32 = rng.gen();
-        let test_value: Bytes32 = rng.gen();
-        let state = vec![(test_key, test_value)];
+        let state = if state {
+            let test_key: Bytes32 = rng.gen();
+            let test_value: Bytes32 = rng.gen();
+            Some(vec![(test_key, test_value)])
+        } else {
+            None
+        };
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
 
         ChainConfig {
-            initial_state: StateConfig {
-                contracts: vec![ContractConfig {
+            initial_state: Some(StateConfig {
+                contracts: Some(vec![ContractConfig {
                     code: contract.into(),
                     salt: Default::default(),
-                    state: Some(state),
-                }],
+                    state,
+                }]),
                 ..Default::default()
-            },
+            }),
             ..ChainConfig::local_testnet()
         }
     }
@@ -233,17 +254,17 @@ mod tests {
         let color = rng.gen();
 
         ChainConfig {
-            initial_state: StateConfig {
-                coins: vec![CoinConfig {
+            initial_state: Some(StateConfig {
+                coins: Some(vec![CoinConfig {
                     utxo_id,
                     block_created,
                     maturity,
                     owner,
                     amount,
                     color,
-                }],
+                }]),
                 ..Default::default()
-            },
+            }),
             ..ChainConfig::local_testnet()
         }
     }
