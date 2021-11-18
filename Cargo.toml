@@ -1,17 +1,18 @@
 [workspace]
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
-resolver = "2"
 members = [
-    "examples/simple-wasm",
-    "fuel-core",
-    "fuel-client",
-    "fuel-indexer/derive",
-    "fuel-indexer/indexer",
-    "fuel-indexer/lib",
-    "fuel-indexer/schema"
+  "examples/simple-wasm",
+  "fuel-core",
+  "fuel-client",
+  "fuel-indexer/derive",
+  "fuel-indexer/indexer",
+  "fuel-indexer/lib",
+  "fuel-indexer/schema",
+  "xtask",
 ]
+resolver = "2"
 
 [profile.release]
-lto = "fat"
 codegen-units = 1
+lto = "fat"
 panic = "abort"

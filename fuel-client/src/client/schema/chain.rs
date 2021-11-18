@@ -1,13 +1,13 @@
 use crate::client::schema::{block::Block, schema, U64};
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Query")]
+#[cynic(schema_path = "../assets/schema.sdl", graphql_type = "Query")]
 pub struct ChainQuery {
     pub chain: ChainInfo,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
+#[cynic(schema_path = "../assets/schema.sdl")]
 pub struct ChainInfo {
     pub base_chain_height: U64,
     pub name: String,

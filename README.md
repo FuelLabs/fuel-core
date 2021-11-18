@@ -9,6 +9,15 @@ The test suite follows the Rust cargo standards. The GraphQL service will be ins
 To run the suite:
 `$ cargo test`
 
+## Developing
+
+When contributing we recommend using `xtask` for building the code.
+
+Build:
+`$ cargo xtask build`
+
+This command will run `cargo build` and also dump the latest schema into `/assets/` folder.
+
 ## Building
 
 ##### System Requirements
