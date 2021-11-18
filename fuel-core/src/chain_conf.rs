@@ -1,6 +1,7 @@
 use self::serialization::HexType;
 use crate::model::fuel_block::BlockHeight;
 use fuel_types::{Address, Bytes32, Color, Salt};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
 use std::{io::ErrorKind, path::PathBuf, str::FromStr};
@@ -8,6 +9,7 @@ use std::{io::ErrorKind, path::PathBuf, str::FromStr};
 pub mod serialization;
 
 pub const LOCAL_TESTNET: &'static str = "local_testnet";
+pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct ChainConfig {
@@ -19,11 +21,26 @@ pub struct ChainConfig {
 
 impl ChainConfig {
     pub fn local_testnet() -> Self {
+        // endow 10 mock accounts with an initial balance
+        let initial_coins = (1..10)
+            .map(|idx| CoinConfig {
+                utxo_id: None,
+                block_created: None,
+                maturity: None,
+                owner: Address::new([idx; 32]),
+                amount: TESTNET_INITIAL_BALANCE,
+                color: Default::default(),
+            })
+            .collect_vec();
+
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
             block_production: ProductionStrategy::Instant,
             parent_network: BaseChainConfig::LocalTest,
-            initial_state: StateConfig::default(),
+            initial_state: StateConfig {
+                coins: initial_coins,
+                ..StateConfig::default()
+            },
         }
     }
 }
@@ -70,7 +87,7 @@ pub struct StateConfig {
     pub coins: Vec<CoinConfig>,
     /// Contract state
     pub contracts: Vec<ContractConfig>,
-    /// Starting block height (useful for forked networks)
+    /// Starting block height (useful for flattened fork networks)
     pub height: Option<BlockHeight>,
 }
 

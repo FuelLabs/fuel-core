@@ -370,7 +370,8 @@ mod tests {
                         salt,
                         state: Some(state),
                     }],
-                    ..ChainConfig::local_testnet().initial_state
+                    coins: Default::default(),
+                    height: Default::default(),
                 },
                 ..ChainConfig::local_testnet()
             },
