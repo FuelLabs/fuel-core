@@ -107,6 +107,7 @@ impl FuelService {
                 database.init_chain_height(height)?;
             }
             // initialize coins
+            // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
             let mut generated_coin_idx = 0;
             for coin in &config.initial_state.coins {
                 let utxo_id = coin.utxo_id.unwrap_or_else(|| {
