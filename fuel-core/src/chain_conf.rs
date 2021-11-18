@@ -126,6 +126,35 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_configurable_block_height() {
+        let mut rng = StdRng::seed_from_u64(2);
+        let config = ChainConfig {
+            initial_state: StateConfig {
+                height: Some(rng.next_u32().into()),
+                ..Default::default()
+            },
+            ..ChainConfig::local_testnet()
+        };
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_serialize_block_height_config() {
+        let mut rng = StdRng::seed_from_u64(2);
+        let config = ChainConfig {
+            initial_state: StateConfig {
+                height: Some(rng.next_u32().into()),
+                ..Default::default()
+            },
+            ..ChainConfig::local_testnet()
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
     fn snapshot_simple_contract_state() {
         let config = test_config_contract_state();
         let json = serde_json::to_string_pretty(&config).unwrap();

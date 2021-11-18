@@ -4,7 +4,7 @@ expression: json
 
 ---
 {
-  "chain_name": "",
+  "chain_name": "local_testnet",
   "block_production": "Instant",
   "parent_network": {
     "type": "LocalTest"
