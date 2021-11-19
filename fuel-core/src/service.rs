@@ -1,4 +1,4 @@
-use crate::chain_conf::{ChainConfig, StateConfig};
+use crate::chain_config::{ChainConfig, StateConfig};
 use crate::database::Database;
 use crate::model::coin::{Coin, CoinStatus, UtxoId};
 use crate::tx_pool::TxPool;
@@ -221,7 +221,7 @@ pub enum Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain_conf::{CoinConfig, ContractConfig, StateConfig};
+    use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::fuel_block::BlockHeight;
     use fuel_asm::Opcode;
     use fuel_types::{Address, Color};

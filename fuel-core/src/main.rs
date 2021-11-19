@@ -4,7 +4,7 @@ use structopt::StructOpt;
 use tracing::trace;
 
 mod args;
-pub(crate) mod chain_conf;
+pub(crate) mod chain_config;
 pub mod database;
 pub(crate) mod executor;
 pub mod model;

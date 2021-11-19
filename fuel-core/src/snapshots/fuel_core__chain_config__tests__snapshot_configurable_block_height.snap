@@ -1,5 +1,5 @@
 ---
-source: fuel-core/src/chain_conf.rs
+source: fuel-core/src/chain_config.rs
 expression: json
 
 ---
