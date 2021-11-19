@@ -104,7 +104,7 @@ impl FuelService {
             database.init_chain_name(config.chain_name.clone())?;
 
             if let Some(initial_state) = &config.initial_state {
-                Self::init_block_height(&database, initial_state)?;
+                Self::init_block_height(database, initial_state)?;
                 Self::init_coin_state(&mut database, initial_state)?;
                 Self::init_contract_state(&mut database, initial_state)?;
             }

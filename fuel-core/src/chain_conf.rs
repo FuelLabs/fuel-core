@@ -8,7 +8,7 @@ use std::{io::ErrorKind, path::PathBuf, str::FromStr};
 
 pub mod serialization;
 
-pub const LOCAL_TESTNET: &'static str = "local_testnet";
+pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 #[skip_serializing_none]
@@ -130,6 +130,21 @@ mod tests {
     use fuel_vm::prelude::Contract;
     use rand::prelude::StdRng;
     use rand::{Rng, RngCore, SeedableRng};
+    use std::env::temp_dir;
+    use std::fs::write;
+
+    #[test]
+    fn from_str_loads_from_file() {
+        // setup chain config in a temp file
+        let tmp_file = tmp_path();
+        let disk_config = ChainConfig::local_testnet();
+        let json = serde_json::to_string_pretty(&disk_config).unwrap();
+        write(tmp_file.clone(), json).unwrap();
+
+        // test loading config from file path string
+        let load_config: ChainConfig = tmp_file.to_string_lossy().into_owned().parse().unwrap();
+        assert_eq!(disk_config, load_config);
+    }
 
     #[test]
     fn snapshot_local_testnet_config() {
@@ -267,5 +282,11 @@ mod tests {
             }),
             ..ChainConfig::local_testnet()
         }
+    }
+
+    fn tmp_path() -> PathBuf {
+        let mut path = temp_dir();
+        path.push(rand::random::<u16>().to_string());
+        path
     }
 }

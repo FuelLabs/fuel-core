@@ -34,7 +34,7 @@ pub mod serde_hex {
     use serde::{Deserializer, Serializer};
     use std::convert::TryFrom;
 
-    pub fn serialize<'a, T, S>(target: T, ser: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<T, S>(target: T, ser: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
         T: ToHex,
@@ -51,8 +51,8 @@ pub mod serde_hex {
     {
         let raw_string: String = serde::Deserialize::deserialize(des)?;
         let stripped_prefix = raw_string.trim_start_matches("0x");
-        let bytes: Vec<u8> = FromHex::from_hex(stripped_prefix).map_err(|e| D::Error::custom(e))?;
-        let result = T::try_from(bytes.as_slice()).map_err(|e| D::Error::custom(e))?;
+        let bytes: Vec<u8> = FromHex::from_hex(stripped_prefix).map_err(D::Error::custom)?;
+        let result = T::try_from(bytes.as_slice()).map_err(D::Error::custom)?;
         Ok(result)
     }
 }
