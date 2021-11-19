@@ -1249,7 +1249,6 @@ dependencies = [
  "fuel-tx",
  "fuel-types",
  "fuel-vm",
- "fuel-wasm-executor",
  "futures",
  "graphql-parser",
  "hex",
