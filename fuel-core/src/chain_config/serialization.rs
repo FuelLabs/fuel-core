@@ -3,6 +3,28 @@ use serde::{Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
 use std::convert::TryFrom;
 
+/// Used for primitive number types which don't implement AsRef or TryFrom<&[u8]>
+pub(crate) struct HexNumber;
+
+impl SerializeAs<u64> for HexNumber {
+    fn serialize_as<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = value.to_be_bytes();
+        serde_hex::serialize(bytes, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, u64> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<u64, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Ok(u64::from_be_bytes(serde_hex::deserialize(deserializer)?))
+    }
+}
+
 pub(crate) struct HexType;
 
 impl<T: AsRef<[u8]>> SerializeAs<T> for HexType {

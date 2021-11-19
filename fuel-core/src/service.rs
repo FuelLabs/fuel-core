@@ -1,9 +1,9 @@
-use crate::chain_config::{ChainConfig, StateConfig};
+use crate::chain_config::{ChainConfig, ContractConfig, StateConfig};
 use crate::database::Database;
 use crate::model::coin::{Coin, CoinStatus, UtxoId};
 use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
-use fuel_types::{Bytes32, ContractId, Salt};
+use fuel_types::{Bytes32, Color, ContractId, Salt, Word};
 use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
 #[cfg(feature = "rocksdb")]
@@ -106,7 +106,7 @@ impl FuelService {
             if let Some(initial_state) = &config.initial_state {
                 Self::init_block_height(database, initial_state)?;
                 Self::init_coin_state(&mut database, initial_state)?;
-                Self::init_contract_state(&mut database, initial_state)?;
+                Self::init_contracts(&mut database, initial_state)?;
             }
         }
 
@@ -153,7 +153,7 @@ impl FuelService {
         Ok(())
     }
 
-    fn init_contract_state(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
+    fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // initialize contract state
         if let Some(contracts) = &state.contracts {
             for contract_config in contracts {
@@ -161,7 +161,7 @@ impl FuelService {
                 let salt = contract_config.salt;
                 let root = contract.root();
                 let contract_id = contract.id(&salt, &root);
-                // insert contract
+                // insert contract code
                 let _ = Storage::<ContractId, Contract>::insert(db, &contract_id, &contract)?;
                 // insert contract root
                 let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
@@ -169,18 +169,36 @@ impl FuelService {
                     &contract_id,
                     &(salt, root),
                 )?;
+                Self::init_contract_state(db, &contract_id, contract_config)?;
+                Self::init_contract_balance(db, &contract_id, contract_config)?;
+            }
+        }
+        Ok(())
+    }
 
-                // insert state related to contract
-                if let Some(contract_state) = &contract_config.state {
-                    for (key, value) in contract_state {
-                        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-                            db,
-                            &contract_id,
-                            key,
-                            value,
-                        )?;
-                    }
-                }
+    fn init_contract_state(
+        db: &mut Database,
+        contract_id: &ContractId,
+        contract: &ContractConfig,
+    ) -> Result<(), std::io::Error> {
+        // insert state related to contract
+        if let Some(contract_state) = &contract.state {
+            for (key, value) in contract_state {
+                MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(db, contract_id, key, value)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn init_contract_balance(
+        db: &mut Database,
+        contract_id: &ContractId,
+        contract: &ContractConfig,
+    ) -> Result<(), std::io::Error> {
+        // insert balances related to contract
+        if let Some(balances) = &contract.balances {
+            for (key, value) in balances {
+                MerkleStorage::<ContractId, Color, Word>::insert(db, contract_id, key, value)?;
             }
         }
         Ok(())
@@ -224,7 +242,7 @@ mod tests {
     use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::fuel_block::BlockHeight;
     use fuel_asm::Opcode;
-    use fuel_types::{Address, Color};
+    use fuel_types::{Address, Color, Word};
     use itertools::Itertools;
     use rand::rngs::StdRng;
     use rand::{Rng, RngCore, SeedableRng};
@@ -390,6 +408,7 @@ mod tests {
                         code: contract.into(),
                         salt,
                         state: Some(state),
+                        balances: None,
                     }]),
                     ..Default::default()
                 }),
@@ -405,10 +424,51 @@ mod tests {
 
         let ret = MerkleStorage::<ContractId, Bytes32, Bytes32>::get(&db, &id, &test_key)
             .unwrap()
-            .unwrap()
+            .expect("Expect a state entry to exist with test_key")
             .into_owned();
 
         assert_eq!(test_value, ret)
+    }
+
+    #[tokio::test]
+    async fn config_state_initializes_contract_balance() {
+        let mut rng = StdRng::seed_from_u64(10);
+
+        let test_color: Color = rng.gen();
+        let test_balance: u64 = rng.next_u64();
+        let balances = vec![(test_color, test_balance)];
+        let salt: Salt = rng.gen();
+        let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
+        let root = contract.root();
+        let id = contract.id(&salt, &root);
+
+        let service_config = Config {
+            chain_conf: ChainConfig {
+                initial_state: Some(StateConfig {
+                    contracts: Some(vec![ContractConfig {
+                        code: contract.into(),
+                        salt,
+                        state: None,
+                        balances: Some(balances),
+                    }]),
+                    ..Default::default()
+                }),
+                ..ChainConfig::local_testnet()
+            },
+            ..Config::local_node()
+        };
+
+        let db = Database::default();
+        FuelService::from_database(db.clone(), service_config)
+            .await
+            .unwrap();
+
+        let ret = MerkleStorage::<ContractId, Color, Word>::get(&db, &id, &test_color)
+            .unwrap()
+            .expect("Expected a balance to be present")
+            .into_owned();
+
+        assert_eq!(test_balance, ret)
     }
 
     fn get_coins(db: &Database, owner: Address) -> Vec<(Bytes32, Coin)> {

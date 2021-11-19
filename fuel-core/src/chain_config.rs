@@ -1,4 +1,4 @@
-use self::serialization::HexType;
+use self::serialization::{HexNumber, HexType};
 use crate::model::fuel_block::BlockHeight;
 use fuel_types::{Address, Bytes32, Color, Salt};
 use itertools::Itertools;
@@ -121,6 +121,9 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
     #[serde(default)]
     pub state: Option<Vec<(Bytes32, Bytes32)>>,
+    #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
+    #[serde(default)]
+    pub balances: Option<Vec<(Color, u64)>>,
 }
 
 #[cfg(test)]
@@ -192,29 +195,44 @@ mod tests {
 
     #[test]
     fn snapshot_simple_contract() {
-        let config = test_config_contract(false);
+        let config = test_config_contract(false, false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
     fn can_roundtrip_simple_contract() {
-        let config = test_config_contract(false);
+        let config = test_config_contract(false, false);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
     #[test]
-    fn snapshot_simple_contract_with_state() {
-        let config = test_config_contract(true);
+    fn snapshot_contract_with_state() {
+        let config = test_config_contract(true, false);
         let json = serde_json::to_string_pretty(&config).unwrap();
         insta::assert_snapshot!(json);
     }
 
     #[test]
-    fn can_roundtrip_simple_contract_with_state() {
-        let config = test_config_contract(true);
+    fn can_roundtrip_contract_with_state() {
+        let config = test_config_contract(true, false);
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
+    #[test]
+    fn snapshot_contract_with_balances() {
+        let config = test_config_contract(false, true);
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_contract_with_balances() {
+        let config = test_config_contract(false, true);
         let json = serde_json::to_string(&config).unwrap();
         let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
@@ -235,7 +253,7 @@ mod tests {
         assert_eq!(config, deserialized_config);
     }
 
-    fn test_config_contract(state: bool) -> ChainConfig {
+    fn test_config_contract(state: bool, balances: bool) -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
         let state = if state {
             let test_key: Bytes32 = rng.gen();
@@ -244,6 +262,14 @@ mod tests {
         } else {
             None
         };
+        let balances = if balances {
+            let test_color: Color = rng.gen();
+            let test_balance: u64 = rng.next_u64();
+            Some(vec![(test_color, test_balance)])
+        } else {
+            None
+        };
+
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
 
         ChainConfig {
@@ -252,6 +278,7 @@ mod tests {
                     code: contract.into(),
                     salt: Default::default(),
                     state,
+                    balances,
                 }]),
                 ..Default::default()
             }),
