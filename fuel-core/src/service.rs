@@ -1,4 +1,4 @@
-use crate::chain_conf::ChainConfig;
+use crate::chain_conf::{ChainConfig, StateConfig};
 use crate::database::Database;
 use crate::model::coin::{Coin, CoinStatus, UtxoId};
 use crate::tx_pool::TxPool;
@@ -96,82 +96,93 @@ impl FuelService {
     fn import_state(config: &ChainConfig, database: &Database) -> Result<(), std::io::Error> {
         // start a db transaction for bulk-writing
         let mut import_tx = database.transaction();
-        let database = import_tx.as_mut();
+        let mut database = import_tx.as_mut();
 
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
             // initialize the chain id
             database.init_chain_name(config.chain_name.clone())?;
+
             if let Some(initial_state) = &config.initial_state {
-                // initialize starting block height if set
-                if let Some(height) = initial_state.height {
-                    database.init_chain_height(height)?;
-                }
-                // initialize coins
-                // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-                let mut generated_coin_idx = 0;
-                if let Some(coins) = &initial_state.coins {
-                    for coin in coins {
-                        let utxo_id = coin.utxo_id.unwrap_or_else(|| {
-                            generated_coin_idx += 1;
-                            UtxoId {
-                                tx_id: Default::default(),
-                                output_index: generated_coin_idx,
-                            }
-                            .into()
-                        });
-                        let coin = Coin {
-                            owner: coin.owner,
-                            amount: coin.amount,
-                            color: coin.color,
-                            maturity: coin.maturity.unwrap_or_default(),
-                            status: CoinStatus::Unspent,
-                            block_created: coin.block_created.unwrap_or_default(),
-                        };
-
-                        let _ = Storage::<Bytes32, Coin>::insert(database, &utxo_id, &coin)?;
-                    }
-                }
-
-                // initialize contract state
-                if let Some(contracts) = &initial_state.contracts {
-                    for contract_config in contracts {
-                        let contract = Contract::from(contract_config.code.as_slice());
-                        let salt = contract_config.salt;
-                        let root = contract.root();
-                        let contract_id = contract.id(&salt, &root);
-                        // insert contract
-                        let _ = Storage::<ContractId, Contract>::insert(
-                            database,
-                            &contract_id,
-                            &contract,
-                        )?;
-                        // insert contract root
-                        let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
-                            database,
-                            &contract_id,
-                            &(salt, root),
-                        )?;
-
-                        // insert state related to contract
-                        if let Some(contract_state) = &contract_config.state {
-                            for (key, value) in contract_state {
-                                MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-                                    database,
-                                    &contract_id,
-                                    key,
-                                    value,
-                                )?;
-                            }
-                        }
-                    }
-                }
+                Self::init_block_height(&database, initial_state)?;
+                Self::init_coin_state(&mut database, initial_state)?;
+                Self::init_contract_state(&mut database, initial_state)?;
             }
         }
 
         // Write transaction to db
         import_tx.commit()?;
 
+        Ok(())
+    }
+
+    /// initialize starting block height if set
+    fn init_block_height(db: &Database, state: &StateConfig) -> Result<(), std::io::Error> {
+        if let Some(height) = state.height {
+            db.init_chain_height(height)?;
+        }
+        Ok(())
+    }
+
+    /// initialize coins
+    fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
+        // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
+        let mut generated_coin_idx = 0;
+        if let Some(coins) = &state.coins {
+            for coin in coins {
+                let utxo_id = coin.utxo_id.unwrap_or_else(|| {
+                    generated_coin_idx += 1;
+                    UtxoId {
+                        tx_id: Default::default(),
+                        output_index: generated_coin_idx,
+                    }
+                    .into()
+                });
+                let coin = Coin {
+                    owner: coin.owner,
+                    amount: coin.amount,
+                    color: coin.color,
+                    maturity: coin.maturity.unwrap_or_default(),
+                    status: CoinStatus::Unspent,
+                    block_created: coin.block_created.unwrap_or_default(),
+                };
+
+                let _ = Storage::<Bytes32, Coin>::insert(db, &utxo_id, &coin)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn init_contract_state(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
+        // initialize contract state
+        if let Some(contracts) = &state.contracts {
+            for contract_config in contracts {
+                let contract = Contract::from(contract_config.code.as_slice());
+                let salt = contract_config.salt;
+                let root = contract.root();
+                let contract_id = contract.id(&salt, &root);
+                // insert contract
+                let _ = Storage::<ContractId, Contract>::insert(db, &contract_id, &contract)?;
+                // insert contract root
+                let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
+                    db,
+                    &contract_id,
+                    &(salt, root),
+                )?;
+
+                // insert state related to contract
+                if let Some(contract_state) = &contract_config.state {
+                    for (key, value) in contract_state {
+                        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
+                            db,
+                            &contract_id,
+                            key,
+                            value,
+                        )?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
