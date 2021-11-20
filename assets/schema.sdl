@@ -193,6 +193,8 @@ type Receipt {
 	len: Int
 	receiptType: ReceiptType!
 	rawPayload: HexString!
+	status: Boolean
+	gasUsed: Int
 }
 enum ReceiptType {
 	CALL

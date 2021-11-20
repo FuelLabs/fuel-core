@@ -103,4 +103,10 @@ impl Receipt {
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
     }
+    async fn status(&self) -> Option<bool> {
+        self.0.status()
+    }
+    async fn gas_used(&self) -> Option<Word> {
+        self.0.gas_used()
+    }
 }
