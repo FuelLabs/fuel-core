@@ -28,16 +28,16 @@ fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
 fuel-types = { git = "ssh://git@github.com/FuelLabs/fuel-types.git", features = ["serde-types"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
-fuel-wasm-executor = { path = "../fuel-indexer/indexer" }
 futures = "0.3"
 graphql-parser = "0.3.0"
-hex = "0.4"
+hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
 rand = "0.8"
 rocksdb = { version = "0.17", features = ["snappy", "multi-threaded-cf"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
+serde_with = "1.11"
 serde_json = { version= "1.0", features = ["raw_value"] }
 structopt = "0.3"
 strum = "0.21"
@@ -52,6 +52,8 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types", "random"] }
+insta = "1.8"
 
 [features]
 default = ["rocksdb"]
+test-helpers = []

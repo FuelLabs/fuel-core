@@ -4,7 +4,7 @@ use fuel_core::database::Database;
 use fuel_core::{
     model::fuel_block::FuelBlock,
     schema::scalars::HexString256,
-    service::{configure, run_in_background},
+    service::{Config, FuelService},
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::Bytes32;
@@ -19,8 +19,10 @@ async fn block() {
     Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let block = client
@@ -50,8 +52,10 @@ async fn block_connection_first_5() {
     }
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let blocks = client
@@ -91,8 +95,10 @@ async fn block_connection_last_5() {
     }
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let blocks = client

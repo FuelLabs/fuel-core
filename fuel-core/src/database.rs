@@ -11,6 +11,7 @@ use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterError, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
+use std::io::ErrorKind;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use std::sync::Arc;
@@ -21,6 +22,7 @@ pub mod block;
 pub mod code_root;
 pub mod coin;
 pub mod contracts;
+pub mod metadata;
 mod receipts;
 pub mod state;
 pub mod transaction;
@@ -31,7 +33,7 @@ pub mod transactional;
 pub const VERSION: u32 = 0;
 
 pub mod columns {
-    pub const DB_VERSION_COLUMN: u32 = 0;
+    pub const METADATA: u32 = 0;
     pub const CONTRACTS: u32 = 1;
     pub const CONTRACTS_CODE_ROOT: u32 = 2;
     pub const CONTRACTS_STATE: u32 = 3;
@@ -192,6 +194,12 @@ impl From<crate::state::Error> for KvStoreError {
 impl From<KvStoreError> for crate::state::Error {
     fn from(e: KvStoreError) -> Self {
         crate::state::Error::DatabaseError(Box::new(e))
+    }
+}
+
+impl From<KvStoreError> for std::io::Error {
+    fn from(e: KvStoreError) -> Self {
+        std::io::Error::new(ErrorKind::Other, e)
     }
 }
 

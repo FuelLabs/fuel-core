@@ -2,7 +2,7 @@ use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::{
     database::Database,
     model::coin::{Coin, CoinStatus, UtxoId},
-    service::{configure, run_in_background},
+    service::{Config, FuelService},
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, Word};
@@ -29,8 +29,10 @@ async fn coin() {
     Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let coin = client.coin(format!("{:#x}", id).as_str()).await.unwrap();
@@ -67,8 +69,10 @@ async fn first_5_coins() {
     }
 
     // setup server & client
-    let srv = run_in_background(configure(db)).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     // run test
     let coins = client

@@ -1,5 +1,6 @@
 use crate::state::in_memory::transaction::MemoryTransactionView;
 use std::fmt::Debug;
+use std::io::ErrorKind;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use thiserror::Error;
@@ -71,12 +72,22 @@ impl Default for IterDirection {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Invalid database version")]
-    InvalidDatabaseVersion,
     #[error("error performing binary serialization")]
     Codec,
+    #[error("Failed to initialize chain")]
+    ChainAlreadyInitialized,
+    #[error("Chain is not yet initialized")]
+    ChainUninitialized,
+    #[error("Invalid database version")]
+    InvalidDatabaseVersion,
     #[error("error occurred in the underlying datastore `{0}`")]
     DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<Error> for std::io::Error {
+    fn from(e: Error) -> Self {
+        std::io::Error::new(ErrorKind::Other, e)
+    }
 }
 
 pub trait BatchOperations: KeyValueStore {

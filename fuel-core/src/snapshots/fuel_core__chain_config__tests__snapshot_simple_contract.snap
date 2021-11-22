@@ -1,0 +1,20 @@
+---
+source: fuel-core/src/chain_config.rs
+expression: json
+
+---
+{
+  "chain_name": "local_testnet",
+  "block_production": "Instant",
+  "parent_network": {
+    "type": "LocalTest"
+  },
+  "initial_state": {
+    "contracts": [
+      {
+        "code": "0x24400000",
+        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  }
+}

@@ -1,12 +1,12 @@
 use fuel_client::client::FuelClient;
-use fuel_core::service::{configure, run_in_background};
+use fuel_core::service::{Config, FuelService};
 use fuel_vm::{consts::*, prelude::*};
 use std::convert::TryInto;
 
 #[tokio::test]
 async fn start_session() {
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let session = client.start_session().await.unwrap();
     let session_p = client.start_session().await.unwrap();
@@ -19,8 +19,8 @@ async fn start_session() {
 
 #[tokio::test]
 async fn end_session() {
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let session = client.start_session().await.unwrap();
     let id = session.as_str();
@@ -31,8 +31,8 @@ async fn end_session() {
 
 #[tokio::test]
 async fn reset() {
-    let srv = run_in_background(configure(Default::default())).await;
-    let client = FuelClient::from(srv);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
 
     let session = client.start_session().await.unwrap();
     let id = session.as_str();
