@@ -44,6 +44,37 @@ impl From<U64> for usize {
 }
 
 #[derive(Clone, Debug)]
+pub struct SortedTxCursor {
+    pub block_height: usize,
+    pub tx_id: HexString256,
+}
+
+impl SortedTxCursor {
+    pub fn new(block_height: usize, tx_id: HexString256) -> Self {
+        Self {
+            block_height,
+            tx_id,
+        }
+    }
+}
+
+impl CursorType for SortedTxCursor {
+    type Error = String;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        let (block_height, tx_id) = s.split_once('#').expect("Incorrect format provided");
+        Ok(Self {
+            block_height: usize::from_str(block_height).expect("Failed to decode block_height"),
+            tx_id: HexString256::decode_cursor(tx_id).expect("Failed to decode tx_id"),
+        })
+    }
+
+    fn encode_cursor(&self) -> String {
+        format!("{}#{}", self.block_height, self.tx_id)
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct HexString(pub(crate) Vec<u8>);
 
 #[Scalar(name = "HexString")]
