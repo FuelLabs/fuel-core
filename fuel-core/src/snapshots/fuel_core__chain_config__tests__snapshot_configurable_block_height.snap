@@ -10,6 +10,6 @@ expression: json
     "type": "LocalTest"
   },
   "initial_state": {
-    "height": 348700191
+    "height": "0x0000000014c8be1f"
   }
 }

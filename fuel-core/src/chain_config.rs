@@ -17,6 +17,7 @@ pub struct ChainConfig {
     pub chain_name: String,
     pub block_production: ProductionStrategy,
     pub parent_network: BaseChainConfig,
+    #[serde(default)]
     pub initial_state: Option<StateConfig>,
 }
 
@@ -89,6 +90,8 @@ pub struct StateConfig {
     /// Contract state
     pub contracts: Option<Vec<ContractConfig>>,
     /// Starting block height (useful for flattened fork networks)
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
     pub height: Option<BlockHeight>,
 }
 
@@ -101,10 +104,15 @@ pub struct CoinConfig {
     #[serde(default)]
     pub utxo_id: Option<Bytes32>,
     /// used if coin is forked from another chain to preserve id
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
     pub block_created: Option<BlockHeight>,
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
     pub maturity: Option<BlockHeight>,
     #[serde_as(as = "HexType")]
     pub owner: Address,
+    #[serde_as(as = "HexNumber")]
     pub amount: u64,
     #[serde_as(as = "HexType")]
     pub color: Color,
