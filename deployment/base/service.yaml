@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: fuel-core
+  name: fuel-core-k8-lb
+spec:
+  ports:
+    - port: 4000
+      targetPort: 4000
+      protocol: TCP
+      name: http
+  selector:
+    app: fuel-core
+  type: LoadBalancer

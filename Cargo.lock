@@ -1356,6 +1356,7 @@ dependencies = [
 name = "fuel-wasm-executor"
 version = "0.1.0"
 dependencies = [
+ "cfg-if",
  "diesel",
  "fuel-indexer",
  "fuel-indexer-schema",
@@ -1368,6 +1369,7 @@ dependencies = [
  "serde_yaml",
  "thiserror",
  "wasmer",
+ "wasmer-compiler-cranelift",
  "wasmer-compiler-llvm",
  "wasmer-engine-universal",
 ]
