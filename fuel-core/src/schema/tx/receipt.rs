@@ -16,6 +16,7 @@ pub enum ReceiptType {
     LogData,
     Transfer,
     TransferOut,
+    ScriptResult,
 }
 
 impl From<TxReceipt> for ReceiptType {
@@ -30,6 +31,7 @@ impl From<TxReceipt> for ReceiptType {
             TxReceipt::LogData { .. } => ReceiptType::LogData,
             TxReceipt::Transfer { .. } => ReceiptType::Transfer,
             TxReceipt::TransferOut { .. } => ReceiptType::TransferOut,
+            TxReceipt::ScriptResult { .. } => ReceiptType::ScriptResult,
         }
     }
 }
@@ -38,13 +40,13 @@ pub struct Receipt(pub fuel_tx::Receipt);
 
 #[Object]
 impl Receipt {
-    async fn id(&self) -> HexString256 {
-        (*self.0.id()).into()
+    async fn id(&self) -> Option<HexString256> {
+        Some((*self.0.id()?).into())
     }
-    async fn pc(&self) -> Word {
+    async fn pc(&self) -> Option<Word> {
         self.0.pc()
     }
-    async fn is(&self) -> Word {
+    async fn is(&self) -> Option<Word> {
         self.0.is()
     }
     async fn to(&self) -> Option<HexString256> {
@@ -100,5 +102,11 @@ impl Receipt {
     }
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+    async fn status(&self) -> Option<bool> {
+        self.0.status()
+    }
+    async fn gas_used(&self) -> Option<Word> {
+        self.0.gas_used()
     }
 }

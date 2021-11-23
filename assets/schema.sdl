@@ -172,9 +172,9 @@ type Query {
 	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!): CoinConnection!
 }
 type Receipt {
-	id: HexString256!
-	pc: Int!
-	is: Int!
+	id: HexString256
+	pc: Int
+	is: Int
 	to: HexString256
 	toAddress: HexString256
 	amount: Int
@@ -193,6 +193,8 @@ type Receipt {
 	len: Int
 	receiptType: ReceiptType!
 	rawPayload: HexString!
+	status: Boolean
+	gasUsed: Int
 }
 enum ReceiptType {
 	CALL
@@ -204,6 +206,7 @@ enum ReceiptType {
 	LOG_DATA
 	TRANSFER
 	TRANSFER_OUT
+	SCRIPT_RESULT
 }
 type SubmittedStatus {
 	time: DateTime!
