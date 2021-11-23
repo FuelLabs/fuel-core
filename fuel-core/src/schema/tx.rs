@@ -87,11 +87,10 @@ impl TxQuery {
                 }
                 
                 let txs = all_block_ids.flat_map(|block|  
-                    block.map(|(_, tx_id)| 
-                        Storage::<Bytes32, FuelBlock>::get(db, &tx_id)
-                            .transpose()
+                    block.map(|(_, tx_id)|
+                        Storage::<Bytes32, FuelBlock>::get(db, &tx_id).transpose()
                             .ok_or(KvStoreError::NotFound)?
-                            .map(|fuel_block| fuel_block.transactions.clone())
+                            .map(|fuel_block| fuel_block.into_owned().transactions)
                     )
                 )
                 .flatten_ok()
