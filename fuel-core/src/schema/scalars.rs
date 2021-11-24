@@ -62,10 +62,12 @@ impl CursorType for SortedTxCursor {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        let (block_height, tx_id) = s.split_once('#').expect("Incorrect format provided");
+        let (block_height, tx_id) = s.split_once('#').ok_or("Incorrect format provided")?;
+
         Ok(Self {
-            block_height: usize::from_str(block_height).expect("Failed to decode block_height"),
-            tx_id: HexString256::decode_cursor(tx_id).expect("Failed to decode tx_id"),
+            block_height: usize::from_str(block_height)
+                .map_err(|_| "Failed to decode block_height")?,
+            tx_id: HexString256::decode_cursor(tx_id)?,
         })
     }
 
