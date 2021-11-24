@@ -37,15 +37,15 @@ lazy_static = "1.4"
 rand = "0.8"
 rocksdb = { version = "0.17", features = ["snappy", "multi-threaded-cf"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"
-serde_json = { version= "1.0", features = ["raw_value"] }
 structopt = "0.3"
 strum = "0.21"
 strum_macros = "0.21"
 thiserror = "1.0.26"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
-tower-layer = "0.3"
 tower-http = { version = "0.1", features = ["set-header"] }
+tower-layer = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
