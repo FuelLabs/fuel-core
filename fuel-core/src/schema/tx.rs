@@ -1,5 +1,5 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::model::fuel_block::FuelBlock;
+use crate::model::fuel_block::{BlockHeight, FuelBlock};
 use crate::schema::scalars::{HexString, HexString256, SortedTxCursor};
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
@@ -13,6 +13,7 @@ use fuel_types::{Address, Bytes32};
 use fuel_vm::prelude::Deserializable;
 use itertools::Itertools;
 use std::borrow::Cow;
+use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
 use types::Transaction;
@@ -41,7 +42,7 @@ impl TxQuery {
         Ok(Storage::<Bytes32, FuelTx>::get(db, &key)?.map(|tx| Transaction(tx.into_owned())))
     }
 
-    async fn sorted_transactions(
+    async fn transactions(
         &self,
         ctx: &Context<'_>,
         after: Option<String>,
@@ -76,8 +77,8 @@ impl TxQuery {
                     start_block_id = before.map(|before| before.block_height);
                     end_tx_id = after.map(|after| after.tx_id);
                 }
-                
-                let mut all_block_ids = 
+
+                let mut all_block_ids =
                     db.all_block_ids(start_block_id.map(Into::into), Some(direction));
                 let mut started = None;
 
@@ -85,128 +86,59 @@ impl TxQuery {
                     // skip initial result
                     started = all_block_ids.next();
                 }
-                
-                let txs = all_block_ids.flat_map(|block|  
-                    block.map(|(_, tx_id)|
-                        Storage::<Bytes32, FuelBlock>::get(db, &tx_id).transpose()
-                            .ok_or(KvStoreError::NotFound)?
-                            .map(|fuel_block| fuel_block.into_owned().transactions)
-                    )
-                )
-                .flatten_ok()
-                .skip_while(|r| {
-                    if let (Ok(tx), Some(end)) = (r, end_tx_id) {
-                        if tx == &end.into() {
-                            return false;
-                        }
-                    }
 
-                    true
-                })
-                .take(records_to_fetch);
-
-                let mut txs: Vec<Bytes32> = txs.try_collect()?;
-
-                if direction == IterDirection::Forward {
-                    txs.reverse();
-                }
-
-                let txs: Vec<Cow<fuel_tx::Transaction>> = txs
-                    .iter()
-                    .map(|tx_id| {
-                        Storage::<Bytes32, FuelTx>::get(db, tx_id)
-                            .transpose()
-                            .ok_or(KvStoreError::NotFound)?
+                let txs = all_block_ids
+                    .flat_map(|block| {
+                        block.map(|(block_height, block_id)| {
+                            Storage::<Bytes32, FuelBlock>::get(db, &block_id)
+                                .transpose()
+                                .ok_or(KvStoreError::NotFound)?
+                                .map(|fuel_block| {
+                                    fuel_block
+                                        .into_owned()
+                                        .transactions
+                                        .into_iter()
+                                        .zip(iter::repeat(block_height))
+                                })
+                        })
                     })
-                    .try_collect()?;
-                
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                connection.append(
-                    txs
-                        .into_iter()
-                        .map(|item| 
-                            Edge::new(
-                            SortedTxCursor::new(1,HexString256::from(item.id())),
-                             item.into_owned())
-                        ),
-                );
-                Ok(connection)
-            }
-        )
-        .await
-        .map(|conn| conn.map_node(Transaction))
-    }
-
-    async fn transactions(
-        &self,
-        ctx: &Context<'_>,
-        after: Option<String>,
-        before: Option<String>,
-        first: Option<i32>,
-        last: Option<i32>,
-    ) -> async_graphql::Result<Connection<HexString256, Transaction, EmptyFields, EmptyFields>>
-    {
-        let db = ctx.data_unchecked::<Database>();
-
-        query(
-            after,
-            before,
-            first,
-            last,
-            |after: Option<HexString256>, before: Option<HexString256>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
-
-                let after = after.map(Bytes32::from);
-                let before = before.map(Bytes32::from);
-
-                let start;
-                let end;
-
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
-
-                let mut txs = db.all_transactions(start.as_ref(), Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = txs.next();
-                }
-
-                // take desired amount of results
-                let txs = txs
-                    .take_while(|r| {
-                        // take until we've reached the end
-                        if let (Ok(t), Some(end)) = (r, end) {
-                            if t.id() == end {
+                    .flatten_ok()
+                    .skip_while(|h| {
+                        if let (Ok((tx, _)), Some(end)) = (h, end_tx_id) {
+                            if tx == &end.into() {
                                 return false;
                             }
-                        }
+                        };
                         true
                     })
                     .take(records_to_fetch);
-                let mut txs: Vec<fuel_tx::Transaction> = txs.try_collect()?;
-                if direction == IterDirection::Reverse {
+
+                let mut txs: Vec<(Bytes32, BlockHeight)> = txs.try_collect()?;
+
+                if direction == IterDirection::Forward {
                     txs.reverse();
                 }
 
+                let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = txs
+                    .iter()
+                    .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
+                        let tx = Storage::<Bytes32, FuelTx>::get(db, tx_id)
+                            .transpose()
+                            .ok_or(KvStoreError::NotFound)?;
+
+                        Ok((tx?, block_height))
+                    })
+                    .try_collect()?;
+
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                connection.append(
-                    txs.iter()
-                        .map(|item| Edge::new(HexString256::from(item.id()), item.clone())),
-                );
+
+                connection.append(txs.into_iter().map(|(tx, block_height)| {
+                    Edge::new(
+                        SortedTxCursor::new(block_height.to_usize(), HexString256::from(tx.id())),
+                        tx.into_owned(),
+                    )
+                }));
                 Ok(connection)
             },
         )
