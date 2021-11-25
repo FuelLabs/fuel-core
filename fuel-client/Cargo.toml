@@ -16,13 +16,13 @@ name = "fuel-client"
 path = "src/main.rs"
 
 [dependencies]
-cynic = { version = "0.14", features = ["surf"] }
 chrono = { version = "0.4", features = ["serde"] }
+cynic = { version = "0.14", features = ["surf"] }
 derive_more = { version = "0.99" }
+fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
 fuel-types = { git = "ssh://git@github.com/FuelLabs/fuel-types.git", features = ["serde-types"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
-fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 futures = "0.3"
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }

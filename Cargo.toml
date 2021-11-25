@@ -2,8 +2,8 @@
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 members = [
   "examples/simple-wasm",
-  "fuel-core",
   "fuel-client",
+  "fuel-core",
   "fuel-indexer/derive",
   "fuel-indexer/indexer",
   "fuel-indexer/lib",
