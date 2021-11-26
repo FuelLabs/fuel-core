@@ -10,7 +10,6 @@ members = [
   "fuel-indexer/schema",
   "xtask",
 ]
-resolver = "2"
 
 [profile.release]
 codegen-units = 1
