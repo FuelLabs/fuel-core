@@ -2,7 +2,7 @@
 name = "fuel-client"
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
-edition = "2018"
+edition = "2021"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
 # Disable auto-targeting of integ tests or benchmarks
