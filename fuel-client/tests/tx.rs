@@ -178,6 +178,44 @@ async fn get_transparent_transaction_by_id() {
 }
 
 #[tokio::test]
+async fn get_transactions() {
+    let alice = Address::from([0; 32]);
+    let bob = Address::from([1; 32]);
+    let charlie = Address::from([2; 32]);
+
+    let mut context = TestContext::new(100).await;
+    let tx1 = context.transfer(alice, charlie, 1).await.unwrap();
+    let tx2 = context.transfer(charlie, bob, 2).await.unwrap();
+    let tx3 = context.transfer(bob, charlie, 3).await.unwrap();
+    let tx4 = context.transfer(bob, charlie, 3).await.unwrap();
+    let tx5 = context.transfer(charlie, alice, 1).await.unwrap();
+    let tx6 = context.transfer(alice, charlie, 1).await.unwrap();
+
+    // Query for latest transactions
+    let client = context.client;
+    let page_request = PaginationRequest {
+        cursor: None,
+        results: 3,
+        direction: PageDirection::Backward,
+    };
+
+    let response = client.transactions(page_request.clone()).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[tx6.clone(), tx5.clone(), tx4.clone()]);
+
+    // Query from last given cursor
+    let page_request = PaginationRequest {
+        cursor: response.cursor,
+        results: 3,
+        direction: PageDirection::Backward,
+    };
+
+    let response = client.transactions(page_request.clone()).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[tx3.clone(), tx2.clone(), tx1.clone()]);
+}
+
+#[tokio::test]
 async fn get_owned_transactions() {
     let alice = Address::from([0; 32]);
     let bob = Address::from([1; 32]);
