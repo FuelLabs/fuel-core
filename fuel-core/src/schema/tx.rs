@@ -106,10 +106,13 @@ impl TxQuery {
                     .skip_while(|h| {
                         if let (Ok((tx, _)), Some(end)) = (h, end_tx_id) {
                             if tx == &end.into() {
-                                return false;
+                                false
+                            } else {
+                                true
                             }
-                        };
-                        true
+                        } else {
+                            false
+                        }
                     })
                     .take(records_to_fetch);
 
