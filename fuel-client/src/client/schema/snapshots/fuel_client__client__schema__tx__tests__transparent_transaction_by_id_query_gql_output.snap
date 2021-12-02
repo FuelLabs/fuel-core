@@ -101,7 +101,7 @@ query Query($_0: HexString256!) {
       toAddress
       val
       len
-      status
+      result
       gasUsed
     }
     script
