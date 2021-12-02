@@ -173,28 +173,28 @@ type Query {
 }
 type Receipt {
 	id: HexString256
-	pc: Int
-	is: Int
+	pc: U64
+	is: U64
 	to: HexString256
 	toAddress: HexString256
-	amount: Int
+	amount: U64
 	color: HexString256
-	gas: Int
-	a: Int
-	b: Int
-	val: Int
-	ptr: Int
+	gas: U64
+	a: U64
+	b: U64
+	val: U64
+	ptr: U64
 	digest: HexString256
-	reason: Int
-	ra: Int
-	rb: Int
-	rc: Int
-	rd: Int
-	len: Int
+	reason: U64
+	ra: U64
+	rb: U64
+	rc: U64
+	rd: U64
+	len: U64
 	receiptType: ReceiptType!
 	rawPayload: HexString!
-	status: Boolean
-	gasUsed: Int
+	result: U64
+	gasUsed: U64
 }
 enum ReceiptType {
 	CALL
