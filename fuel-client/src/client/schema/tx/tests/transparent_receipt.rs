@@ -285,7 +285,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 result: Word::from(
                     schema
                         .result
-                        .ok_or_else(|| MissingField("status".to_string()))?,
+                        .ok_or_else(|| MissingField("result".to_string()))?,
                 )
                 .into(),
                 gas_used: schema
