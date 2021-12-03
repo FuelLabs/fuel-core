@@ -73,11 +73,7 @@ mod tests {
 
         let database = Database::default();
         database
-            .insert(
-                MultiKey::new(storage_id),
-                CONTRACTS_STATE,
-                stored_value.clone(),
-            )
+            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
             .unwrap();
 
         assert_eq!(
@@ -123,11 +119,7 @@ mod tests {
 
         let mut database = Database::default();
         database
-            .insert(
-                MultiKey::new(storage_id),
-                CONTRACTS_STATE,
-                stored_value.clone(),
-            )
+            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
             .unwrap();
 
         MerkleStorage::<ContractId, Bytes32, Bytes32>::remove(
@@ -150,11 +142,7 @@ mod tests {
 
         let database = Database::default();
         database
-            .insert(
-                MultiKey::new(storage_id.clone()),
-                CONTRACTS_STATE,
-                stored_value.clone(),
-            )
+            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
             .unwrap();
 
         assert!(MerkleStorage::<ContractId, Bytes32, Bytes32>::contains_key(

@@ -1,5 +1,4 @@
 use fuel_indexer_schema::FtColumn;
-use serde_scale;
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
@@ -11,15 +10,15 @@ use crate::IndexEnv;
 #[derive(Debug, Error)]
 pub enum FFIError {
     #[error("Invalid memory access")]
-    MemoryBoundError,
+    MemoryBound,
     #[error("Error calling into wasm function {0:?}")]
-    RuntimeError(#[from] RuntimeError),
+    Runtime(#[from] RuntimeError),
     #[error("Error initializing host environment {0:?}")]
-    HostEnvInitError(#[from] HostEnvInitError),
+    HostEnvInit(#[from] HostEnvInitError),
     #[error("Invalid export {0:?}")]
-    ExportError(#[from] ExportError),
+    Export(#[from] ExportError),
     #[error("Expected result from call {0:?}")]
-    NoneError(String),
+    None(String),
 }
 
 macro_rules! declare_export {
@@ -35,13 +34,13 @@ pub(crate) fn get_namespace(instance: &Instance) -> Result<String, FFIError> {
 
     let ptr = exports.get_function("get_namespace_ptr")?.call(&[])?[0]
         .i32()
-        .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
+        .ok_or_else(|| FFIError::None("get_namespace".to_string()))? as u32;
 
     let len = exports.get_function("get_namespace_len")?.call(&[])?[0]
         .i32()
-        .ok_or_else(|| FFIError::NoneError("get_namespace".to_string()))? as u32;
+        .ok_or_else(|| FFIError::None("get_namespace".to_string()))? as u32;
 
-    let namespace = get_string(&memory, ptr, len)?;
+    let namespace = get_string(memory, ptr, len)?;
 
     Ok(namespace)
 }
@@ -52,13 +51,13 @@ pub(crate) fn get_version(instance: &Instance) -> Result<String, FFIError> {
 
     let ptr = exports.get_function("get_version_ptr")?.call(&[])?[0]
         .i32()
-        .ok_or_else(|| FFIError::NoneError("get_version".to_string()))? as u32;
+        .ok_or_else(|| FFIError::None("get_version".to_string()))? as u32;
 
     let len = exports.get_function("get_version_len")?.call(&[])?[0]
         .i32()
-        .ok_or_else(|| FFIError::NoneError("get_version".to_string()))? as u32;
+        .ok_or_else(|| FFIError::None("get_version".to_string()))? as u32;
 
-    let namespace = get_string(&memory, ptr, len)?;
+    let namespace = get_string(memory, ptr, len)?;
 
     Ok(namespace)
 }
@@ -66,7 +65,7 @@ pub(crate) fn get_version(instance: &Instance) -> Result<String, FFIError> {
 fn get_string(mem: &Memory, ptr: u32, len: u32) -> Result<String, FFIError> {
     let result = WasmPtr::<u8, wasmer::Array>::new(ptr)
         .get_utf8_string(mem, len)
-        .ok_or_else(|| FFIError::MemoryBoundError)?;
+        .ok_or(FFIError::MemoryBound)?;
     Ok(result)
 }
 
@@ -77,7 +76,7 @@ fn get_object_id(mem: &Memory, ptr: u32) -> u64 {
 fn get_object(env: &IndexEnv, type_id: u64, ptr: u32, len_ptr: u32) -> u32 {
     let mem = env.memory_ref().expect("Memory uninitialized");
 
-    let id = get_object_id(&mem, ptr);
+    let id = get_object_id(mem, ptr);
 
     let bytes = env
         .db

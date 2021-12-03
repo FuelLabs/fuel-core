@@ -49,7 +49,7 @@ mod tests {
             .insert(
                 contract_id.as_ref().to_vec(),
                 CONTRACTS_CODE_ROOT,
-                (salt, root).clone(),
+                (salt, root),
             )
             .unwrap();
 
@@ -94,7 +94,7 @@ mod tests {
             .insert(
                 contract_id.as_ref().to_vec(),
                 CONTRACTS_CODE_ROOT,
-                (salt, root).clone(),
+                (salt, root),
             )
             .unwrap();
 

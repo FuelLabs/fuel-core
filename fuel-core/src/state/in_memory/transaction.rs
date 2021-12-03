@@ -359,10 +359,9 @@ mod tests {
     fn transaction_commit_is_not_applied_if_aborted() {
         let mut store = Arc::new(MemoryStore::new());
 
-        let _result = store.transaction(|store| {
+        let _ = store.transaction(|store| {
             store.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]).unwrap();
-            Err(TransactionError::Aborted)?;
-            Ok(())
+            TransactionResult::<()>::Err(TransactionError::Aborted)
         });
 
         assert_eq!(store.get(&[0xA, 0xB, 0xC], 0).unwrap(), None);
@@ -376,7 +375,7 @@ mod tests {
             store.put(vec![i], 0, vec![1]).unwrap();
         });
 
-        let view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(3).for_each(|i| {
             view.put(vec![i], 0, vec![2]).unwrap();
@@ -398,7 +397,7 @@ mod tests {
             store.put(vec![i], 0, vec![1]).unwrap();
         });
 
-        let view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(3).for_each(|i| {
             view.put(vec![i], 0, vec![2]).unwrap();
@@ -420,7 +419,7 @@ mod tests {
             store.put(vec![i], 0, vec![0xA]).unwrap();
         });
 
-        let view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(2).for_each(|i| {
             view.put(vec![i], 0, vec![0xB]).unwrap();
@@ -443,7 +442,7 @@ mod tests {
             store.put(vec![i], 0, vec![0xA]).unwrap();
         });
 
-        let view = MemoryTransactionView::new(store.clone());
+        let view = MemoryTransactionView::new(store);
         // test
         let _ = view.delete(&[0], 0).unwrap();
         let _ = view.delete(&[6], 0).unwrap();

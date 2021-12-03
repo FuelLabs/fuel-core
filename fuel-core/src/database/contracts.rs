@@ -55,8 +55,7 @@ mod tests {
         let contract: Contract = Contract::from(vec![32u8]);
 
         let mut database = Database::default();
-        Storage::<ContractId, Contract>::insert(&mut database, &contract_id, &contract.clone())
-            .unwrap();
+        Storage::<ContractId, Contract>::insert(&mut database, &contract_id, &contract).unwrap();
 
         let returned: Contract = database
             .get(contract_id.as_ref(), CONTRACTS)
@@ -72,7 +71,7 @@ mod tests {
 
         let mut database = Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
+            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract)
             .unwrap();
 
         Storage::<ContractId, Contract>::remove(&mut database, &contract_id).unwrap();
@@ -87,7 +86,7 @@ mod tests {
 
         let database = Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
+            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract)
             .unwrap();
 
         assert!(Storage::<ContractId, Contract>::contains_key(&database, &contract_id).unwrap());
