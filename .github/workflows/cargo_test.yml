@@ -56,11 +56,11 @@ jobs:
         command: fmt
         args: --all --verbose -- --check
 
-    - name: Build
+    - name: Check Clippy
       uses: actions-rs/cargo@v1
       with:
-        command: build
-        args: --verbose
+        command: clippy
+        args: --verbose --all-targets
 
     - name: Run tests
       uses: actions-rs/cargo@v1

@@ -72,7 +72,7 @@ mod tests {
 
         let database = Database::default();
         let key: Vec<u8> = MultiKey::new(balance_id).into();
-        let _: Option<Word> = database.insert(key, BALANCES, balance.clone()).unwrap();
+        let _: Option<Word> = database.insert(key, BALANCES, balance).unwrap();
 
         assert_eq!(
             MerkleStorage::<ContractId, Color, Word>::get(&database, &balance_id.0, &balance_id.1)
@@ -111,7 +111,7 @@ mod tests {
 
         let mut database = Database::default();
         database
-            .insert(MultiKey::new(balance_id), BALANCES, balance.clone())
+            .insert(MultiKey::new(balance_id), BALANCES, balance)
             .unwrap();
 
         MerkleStorage::<ContractId, Color, Word>::remove(
@@ -136,7 +136,7 @@ mod tests {
             .insert(
                 MultiKey::new(balance_id).as_ref().to_vec(),
                 BALANCES,
-                balance.clone(),
+                balance,
             )
             .unwrap();
 

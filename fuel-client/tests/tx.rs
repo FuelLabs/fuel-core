@@ -226,8 +226,8 @@ async fn get_owned_transactions() {
         .map(|tx| tx.id())
         .collect_vec();
 
-    assert_eq!(&alice_txs, &[tx1.clone()]);
-    assert_eq!(&bob_txs, &[tx2.clone(), tx3.clone()]);
+    assert_eq!(&alice_txs, &[tx1]);
+    assert_eq!(&bob_txs, &[tx2, tx3]);
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
 }
 

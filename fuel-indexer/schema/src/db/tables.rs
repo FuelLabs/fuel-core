@@ -178,7 +178,7 @@ impl Schema {
 mod tests {
     use super::*;
 
-    const GRAPHQL_SCHEMA: &'static str = r#"
+    const GRAPHQL_SCHEMA: &str = r#"
         schema {
             query: QueryRoot
         }
@@ -201,8 +201,8 @@ mod tests {
         }
     "#;
 
-    const CREATE_SCHEMA: &'static str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
-    const CREATE_THING1: &'static str = concat!(
+    const CREATE_SCHEMA: &str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
+    const CREATE_THING1: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing1 (\n",
         " id bigint not null,\n",
@@ -210,7 +210,7 @@ mod tests {
         "object bytea not null",
         "\n)"
     );
-    const CREATE_THING2: &'static str = concat!(
+    const CREATE_THING2: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing2 (\n",
         " id bigint not null,\n",

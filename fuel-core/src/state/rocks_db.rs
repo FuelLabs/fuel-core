@@ -242,7 +242,7 @@ mod tests {
 
         let db = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let prev = db.put(key.clone(), 0, vec![2, 4, 6]).unwrap();
+        let prev = db.put(key, 0, vec![2, 4, 6]).unwrap();
 
         assert_eq!(prev, Some(vec![1, 2, 3]));
     }
@@ -286,7 +286,7 @@ mod tests {
         let value = vec![1, 2, 3];
 
         let db = create_db(1);
-        db.put(key.clone(), 0, value.clone()).unwrap();
+        db.put(key.clone(), 0, value).unwrap();
 
         let ops = vec![WriteOperation::Remove(key.clone(), 0)];
         db.batch_write(&mut ops.into_iter()).unwrap();

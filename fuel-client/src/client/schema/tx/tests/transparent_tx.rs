@@ -76,15 +76,15 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 maturity: tx.maturity.try_into()?,
                 receipts_root: tx
                     .receipts_root
-                    .ok_or(ConversionError::MissingField("receipts_root".to_string()))?
+                    .ok_or_else(|| ConversionError::MissingField("receipts_root".to_string()))?
                     .into(),
                 script: tx
                     .script
-                    .ok_or(ConversionError::MissingField("script".to_string()))?
+                    .ok_or_else(|| ConversionError::MissingField("script".to_string()))?
                     .into(),
                 script_data: tx
                     .script_data
-                    .ok_or(ConversionError::MissingField("script_data".to_string()))?
+                    .ok_or_else(|| ConversionError::MissingField("script_data".to_string()))?
                     .into(),
                 inputs: tx
                     .inputs
@@ -105,19 +105,17 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 maturity: tx.maturity.try_into()?,
                 bytecode_witness_index: tx
                     .bytecode_witness_index
-                    .ok_or(ConversionError::MissingField(
-                        "bytecode_witness_index".to_string(),
-                    ))?
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("bytecode_witness_index".to_string())
+                    })?
                     .try_into()?,
                 salt: tx
                     .salt
-                    .ok_or(ConversionError::MissingField("salt".to_string()))?
+                    .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
                     .into(),
                 static_contracts: tx
                     .static_contracts
-                    .ok_or(ConversionError::MissingField(
-                        "static_contracts".to_string(),
-                    ))?
+                    .ok_or_else(|| ConversionError::MissingField("static_contracts".to_string()))?
                     .into_iter()
                     .map(Into::into)
                     .collect(),
