@@ -55,11 +55,8 @@ impl SchemaBuilder {
         let root = root.cloned().unwrap();
 
         for def in ast.definitions.iter() {
-            match def {
-                Definition::TypeDefinition(typ) => {
-                    self.generate_table_sql(&root, typ);
-                }
-                _ => (), // Schema definitions, directives and type extensions will be skipped for now.
+            if let Definition::TypeDefinition(typ) = def {
+                self.generate_table_sql(&root, typ);
             }
         }
 
@@ -89,7 +86,7 @@ impl SchemaBuilder {
         }
     }
 
-    fn generate_columns<'a>(&mut self, type_id: i64, fields: &Vec<Field<'a, String>>) -> String {
+    fn generate_columns<'a>(&mut self, type_id: i64, fields: &[Field<'a, String>]) -> String {
         let mut fragments = vec![];
 
         for (pos, f) in fields.iter().enumerate() {
@@ -122,10 +119,10 @@ impl SchemaBuilder {
         fragments.join(",\n")
     }
 
-    fn generate_table_sql<'a>(&mut self, root: &String, typ: &TypeDefinition<'a, String>) {
+    fn generate_table_sql<'a>(&mut self, root: &str, typ: &TypeDefinition<'a, String>) {
         match typ {
             TypeDefinition::Object(o) => {
-                if &o.name == root {
+                if o.name == root {
                     return;
                 }
 

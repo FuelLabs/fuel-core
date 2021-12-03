@@ -1,3 +1,5 @@
+// this is the format cynic expects
+#[allow(clippy::module_inception)]
 pub mod schema {
     cynic::use_schema!("../assets/schema.sdl");
 }

@@ -36,9 +36,9 @@ impl From<u64> for BlockHeight {
     }
 }
 
-impl Into<u64> for BlockHeight {
-    fn into(self) -> u64 {
-        self.0 as u64
+impl From<BlockHeight> for u64 {
+    fn from(b: BlockHeight) -> Self {
+        b.0 as u64
     }
 }
 

@@ -45,8 +45,8 @@ impl IndexEnv {
 #[derive(Debug)]
 pub struct IndexExecutor {
     instance: Instance,
-    module: Module,
-    store: Store,
+    _module: Module,
+    _store: Store,
     events: HashMap<String, Vec<String>>,
 }
 
@@ -75,7 +75,7 @@ impl IndexExecutor {
         let mut events = HashMap::new();
 
         for handler in manifest.handlers {
-            let handlers = events.entry(handler.event).or_insert(vec![]);
+            let handlers = events.entry(handler.event).or_insert_with(Vec::new);
 
             if !instance.exports.contains(&handler.handler) {
                 return Err(IndexerError::MissingHandler(handler.handler));
@@ -86,8 +86,8 @@ impl IndexExecutor {
 
         Ok(IndexExecutor {
             instance,
-            module,
-            store,
+            _module: module,
+            _store: store,
             events,
         })
     }
@@ -105,7 +105,7 @@ impl IndexExecutor {
             .get_native_function::<u32, u32>("alloc_fn")?;
         let memory = self.instance.exports.get_memory("memory")?;
 
-        if let Some(ref handlers) = self.events.get(event_name) {
+        if let Some(handlers) = self.events.get(event_name) {
             for handler in handlers.iter() {
                 let fun = self
                     .instance

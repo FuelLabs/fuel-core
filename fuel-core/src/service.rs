@@ -96,7 +96,7 @@ impl FuelService {
     fn import_state(config: &ChainConfig, database: &Database) -> Result<(), std::io::Error> {
         // start a db transaction for bulk-writing
         let mut import_tx = database.transaction();
-        let mut database = import_tx.as_mut();
+        let database = import_tx.as_mut();
 
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
@@ -105,8 +105,8 @@ impl FuelService {
 
             if let Some(initial_state) = &config.initial_state {
                 Self::init_block_height(database, initial_state)?;
-                Self::init_coin_state(&mut database, initial_state)?;
-                Self::init_contracts(&mut database, initial_state)?;
+                Self::init_coin_state(database, initial_state)?;
+                Self::init_contracts(database, initial_state)?;
             }
         }
 

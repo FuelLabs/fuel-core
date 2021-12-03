@@ -79,7 +79,7 @@ fn process_field<'a>(
 }
 
 fn process_type_def<'a>(
-    query_root: &String,
+    query_root: &str,
     types: &HashSet<String>,
     typ: &TypeDefinition<'a, String>,
 ) -> Option<proc_macro2::TokenStream> {
@@ -151,7 +151,7 @@ fn process_type_def<'a>(
 }
 
 fn process_definition<'a>(
-    query_root: &String,
+    query_root: &str,
     types: &HashSet<String>,
     definition: &Definition<'a, String>,
 ) -> Option<proc_macro2::TokenStream> {
@@ -164,7 +164,7 @@ fn process_definition<'a>(
     }
 }
 
-fn type_name<'a>(typ: &TypeDefinition<'a, String>) -> String {
+fn type_name(typ: &TypeDefinition<String>) -> String {
     match typ {
         TypeDefinition::Scalar(obj) => obj.name.clone(),
         TypeDefinition::Object(obj) => obj.name.clone(),
@@ -203,7 +203,7 @@ fn get_query_root<'a>(types: &HashSet<String>, ast: &Document<'a, String>) -> St
     name
 }
 
-fn get_schema_types<'a>(ast: &Document<'a, String>) -> (HashSet<String>, HashSet<String>) {
+fn get_schema_types(ast: &Document<String>) -> (HashSet<String>, HashSet<String>) {
     let types: HashSet<String> = ast
         .definitions
         .iter()
