@@ -1,0 +1,24 @@
+---
+source: fuel-core/src/chain_config.rs
+expression: json
+
+---
+{
+  "chain_name": "local_testnet",
+  "block_production": "Instant",
+  "parent_network": {
+    "type": "LocalTest"
+  },
+  "initial_state": {
+    "coins": [
+      {
+        "utxo_id": "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
+        "block_created": "0x00000000359a76c9",
+        "maturity": "0x00000000e46d13fb",
+        "owner": "0xa417a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00a3f5",
+        "amount": "0x43bd0a27cb68f270",
+        "color": "0xbcb10d053242a9719dca480b4f4910fa60671f2068086498c72e30fc8b969e08"
+      }
+    ]
+  }
+}

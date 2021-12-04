@@ -85,7 +85,7 @@ impl Filter {
 
 #[derive(Clone, Debug)]
 pub struct Selections {
-    field_type: String,
+    _field_type: String,
     has_fragments: bool,
     selections: Vec<Selection>,
 }
@@ -93,7 +93,7 @@ pub struct Selections {
 impl Selections {
     pub fn new<'a>(
         schema: &Schema,
-        field_type: &String,
+        field_type: &str,
         set: &gql::SelectionSet<'a, &'a str>,
     ) -> GraphqlResult<Selections> {
         let mut selections = Vec::with_capacity(set.items.len());
@@ -126,7 +126,7 @@ impl Selections {
                         let val = match value {
                             gql::Value::Int(val) => format!("{}", val.as_i64().unwrap()),
                             gql::Value::Float(val) => format!("{}", val),
-                            gql::Value::String(val) => format!("{}", val),
+                            gql::Value::String(val) => val.to_string(),
                             gql::Value::Boolean(val) => format!("{}", val),
                             gql::Value::Null => String::from("NULL"),
                             o => {
@@ -151,7 +151,7 @@ impl Selections {
         }
 
         Ok(Selections {
-            field_type: field_type.clone(),
+            _field_type: field_type.to_string(),
             has_fragments,
             selections,
         })
@@ -160,7 +160,7 @@ impl Selections {
     pub fn resolve_fragments(
         &mut self,
         schema: &Schema,
-        cond: &String,
+        cond: &str,
         fragments: &HashMap<String, Fragment>,
     ) -> GraphqlResult<usize> {
         let mut has_fragments = false;
@@ -224,8 +224,8 @@ impl Fragment {
         Ok(Fragment { cond, selections })
     }
 
-    pub fn check_cond(&self, cond: &String) -> bool {
-        self.cond == *cond
+    pub fn check_cond(&self, cond: &str) -> bool {
+        self.cond == cond
     }
 
     pub fn has_fragments(&self) -> bool {
@@ -246,7 +246,7 @@ impl Fragment {
 #[derive(Debug)]
 pub struct Operation {
     namespace: String,
-    name: String,
+    _name: String,
     selections: Selections,
 }
 
@@ -254,7 +254,7 @@ impl Operation {
     pub fn new(namespace: String, name: String, selections: Selections) -> Operation {
         Operation {
             namespace,
-            name,
+            _name: name,
             selections,
         }
     }
@@ -291,7 +291,7 @@ impl Operation {
                     name.to_lowercase()
                 );
 
-                if filters.len() > 0 {
+                if !filters.is_empty() {
                     let filter_text: String = filters.iter().map(Filter::as_sql).join(" AND ");
                     query.push_str(format!(" WHERE {}", filter_text).as_str());
                 }
@@ -346,7 +346,7 @@ impl<'a> GraphqlQueryBuilder<'a> {
     ) -> GraphqlResult<Operation> {
         match operation {
             gql::OperationDefinition::SelectionSet(set) => {
-                let selections = Selections::new(&self.schema, &self.schema.query, set)?;
+                let selections = Selections::new(self.schema, &self.schema.query, set)?;
 
                 Ok(Operation::new(
                     self.schema.namespace.clone(),
@@ -364,8 +364,8 @@ impl<'a> GraphqlQueryBuilder<'a> {
                 let name = name.map_or_else(|| "Unnamed".into(), |o| o.into());
 
                 let mut selections =
-                    Selections::new(&self.schema, &self.schema.query, selection_set)?;
-                selections.resolve_fragments(&self.schema, &self.schema.query, fragments)?;
+                    Selections::new(self.schema, &self.schema.query, selection_set)?;
+                selections.resolve_fragments(self.schema, &self.schema.query, fragments)?;
 
                 Ok(Operation::new(
                     self.schema.namespace.clone(),
@@ -389,13 +389,10 @@ impl<'a> GraphqlQueryBuilder<'a> {
         let mut operations = vec![];
 
         for def in &self.document.definitions {
-            match def {
-                gql::Definition::Operation(operation) => {
-                    let op = self.process_operation(operation, &fragments)?;
+            if let gql::Definition::Operation(operation) = def {
+                let op = self.process_operation(operation, &fragments)?;
 
-                    operations.push(op);
-                }
-                _ => (),
+                operations.push(op);
             }
         }
 
@@ -407,30 +404,27 @@ impl<'a> GraphqlQueryBuilder<'a> {
         let mut to_resolve = Vec::new();
 
         for def in &self.document.definitions {
-            match def {
-                gql::Definition::Fragment(frag) => {
-                    let gql::FragmentDefinition {
-                        name,
-                        type_condition,
-                        selection_set,
-                        ..
-                    } = frag;
+            if let gql::Definition::Fragment(frag) = def {
+                let gql::FragmentDefinition {
+                    name,
+                    type_condition,
+                    selection_set,
+                    ..
+                } = frag;
 
-                    let gql::TypeCondition::On(cond) = type_condition;
+                let gql::TypeCondition::On(cond) = type_condition;
 
-                    if !self.schema.check_type(cond) {
-                        return Err(GraphqlError::UnrecognizedType(cond.to_string()));
-                    }
-
-                    let frag = Fragment::new(&self.schema, cond.to_string(), selection_set)?;
-
-                    if frag.has_fragments() {
-                        to_resolve.push((name.to_string(), frag));
-                    } else {
-                        fragments.insert(name.to_string(), frag);
-                    }
+                if !self.schema.check_type(cond) {
+                    return Err(GraphqlError::UnrecognizedType(cond.to_string()));
                 }
-                _ => (),
+
+                let frag = Fragment::new(self.schema, cond.to_string(), selection_set)?;
+
+                if frag.has_fragments() {
+                    to_resolve.push((name.to_string(), frag));
+                } else {
+                    fragments.insert(name.to_string(), frag);
+                }
             }
         }
 
@@ -448,9 +442,9 @@ impl<'a> GraphqlQueryBuilder<'a> {
                 }
             }
 
-            if remaining.len() > 0 && resolved == 0 {
+            if !remaining.is_empty() && resolved == 0 {
                 return Err(GraphqlError::FragmentResolverFailed);
-            } else if remaining.len() == 0 {
+            } else if remaining.is_empty() {
                 break;
             }
 

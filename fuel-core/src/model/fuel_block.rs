@@ -30,6 +30,18 @@ impl From<BlockHeight> for Vec<u8> {
     }
 }
 
+impl From<u64> for BlockHeight {
+    fn from(height: u64) -> Self {
+        Self(height as u32)
+    }
+}
+
+impl From<BlockHeight> for u64 {
+    fn from(b: BlockHeight) -> Self {
+        b.0 as u64
+    }
+}
+
 impl TryFrom<Vec<u8>> for BlockHeight {
     type Error = TryFromSliceError;
 

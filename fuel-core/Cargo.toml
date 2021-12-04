@@ -3,7 +3,7 @@ name = "fuel-core"
 version = "0.1.0"
 authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
-edition = "2018"
+edition = "2021"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client."
@@ -28,30 +28,32 @@ fuel-storage = { git = "ssh://git@github.com/FuelLabs/fuel-storage.git" }
 fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
 fuel-types = { git = "ssh://git@github.com/FuelLabs/fuel-types.git", features = ["serde-types"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types"] }
-fuel-wasm-executor = { path = "../fuel-indexer/indexer" }
 futures = "0.3"
 graphql-parser = "0.3.0"
-hex = "0.4"
+hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
 rand = "0.8"
 rocksdb = { version = "0.17", features = ["snappy", "multi-threaded-cf"], optional = true }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version= "1.0", features = ["raw_value"] }
+serde_json = { version = "1.0", features = ["raw_value"] }
+serde_with = "1.11"
 structopt = "0.3"
 strum = "0.21"
 strum_macros = "0.21"
 thiserror = "1.0.26"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
-tower-layer = "0.3"
 tower-http = { version = "0.1", features = ["set-header"] }
+tower-layer = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types", "random"] }
+insta = "1.8"
 
 [features]
 default = ["rocksdb"]
+test-helpers = []

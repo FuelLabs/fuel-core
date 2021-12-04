@@ -9,7 +9,6 @@ use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
 // serde_scale for now, can look at other options if necessary.
 use crate::sql_types::ColumnType;
-use serde_scale;
 
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
@@ -30,8 +29,8 @@ pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
     serde_scale::to_vec(obj).expect("Serialize failed")
 }
 
-pub fn deserialize<'a, T: Deserialize<'a>>(vec: &'a Vec<u8>) -> T {
-    serde_scale::from_slice(&vec).expect("Deserialize failed")
+pub fn deserialize<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> T {
+    serde_scale::from_slice(bytes).expect("Deserialize failed")
 }
 
 #[cfg(feature = "use-std")]

@@ -1,4 +1,4 @@
-use crate::schema::scalars::{HexString, HexString256};
+use crate::schema::scalars::{HexString, HexString256, U64};
 use async_graphql::{Enum, Object};
 use derive_more::Display;
 use fuel_asm::Word;
@@ -16,6 +16,7 @@ pub enum ReceiptType {
     LogData,
     Transfer,
     TransferOut,
+    ScriptResult,
 }
 
 impl From<TxReceipt> for ReceiptType {
@@ -30,6 +31,7 @@ impl From<TxReceipt> for ReceiptType {
             TxReceipt::LogData { .. } => ReceiptType::LogData,
             TxReceipt::Transfer { .. } => ReceiptType::Transfer,
             TxReceipt::TransferOut { .. } => ReceiptType::TransferOut,
+            TxReceipt::ScriptResult { .. } => ReceiptType::ScriptResult,
         }
     }
 }
@@ -38,14 +40,14 @@ pub struct Receipt(pub fuel_tx::Receipt);
 
 #[Object]
 impl Receipt {
-    async fn id(&self) -> HexString256 {
-        (*self.0.id()).into()
+    async fn id(&self) -> Option<HexString256> {
+        Some((*self.0.id()?).into())
     }
-    async fn pc(&self) -> Word {
-        self.0.pc()
+    async fn pc(&self) -> Option<U64> {
+        self.0.pc().map(Into::into)
     }
-    async fn is(&self) -> Word {
-        self.0.is()
+    async fn is(&self) -> Option<U64> {
+        self.0.is().map(Into::into)
     }
     async fn to(&self) -> Option<HexString256> {
         self.0.to().copied().map(Into::into)
@@ -53,52 +55,58 @@ impl Receipt {
     async fn to_address(&self) -> Option<HexString256> {
         self.0.to_address().copied().map(Into::into)
     }
-    async fn amount(&self) -> Option<Word> {
-        self.0.amount()
+    async fn amount(&self) -> Option<U64> {
+        self.0.amount().map(Into::into)
     }
     async fn color(&self) -> Option<HexString256> {
         self.0.color().copied().map(Into::into)
     }
-    async fn gas(&self) -> Option<Word> {
-        self.0.gas()
+    async fn gas(&self) -> Option<U64> {
+        self.0.gas().map(Into::into)
     }
-    async fn a(&self) -> Option<Word> {
-        self.0.a()
+    async fn a(&self) -> Option<U64> {
+        self.0.a().map(Into::into)
     }
-    async fn b(&self) -> Option<Word> {
-        self.0.b()
+    async fn b(&self) -> Option<U64> {
+        self.0.b().map(Into::into)
     }
-    async fn val(&self) -> Option<Word> {
-        self.0.val()
+    async fn val(&self) -> Option<U64> {
+        self.0.val().map(Into::into)
     }
-    async fn ptr(&self) -> Option<Word> {
-        self.0.ptr()
+    async fn ptr(&self) -> Option<U64> {
+        self.0.ptr().map(Into::into)
     }
     async fn digest(&self) -> Option<HexString256> {
         self.0.digest().copied().map(Into::into)
     }
-    async fn reason(&self) -> Option<Word> {
-        self.0.reason()
+    async fn reason(&self) -> Option<U64> {
+        self.0.reason().map(Into::into)
     }
-    async fn ra(&self) -> Option<Word> {
-        self.0.ra()
+    async fn ra(&self) -> Option<U64> {
+        self.0.ra().map(Into::into)
     }
-    async fn rb(&self) -> Option<Word> {
-        self.0.rb()
+    async fn rb(&self) -> Option<U64> {
+        self.0.rb().map(Into::into)
     }
-    async fn rc(&self) -> Option<Word> {
-        self.0.rc()
+    async fn rc(&self) -> Option<U64> {
+        self.0.rc().map(Into::into)
     }
-    async fn rd(&self) -> Option<Word> {
-        self.0.rd()
+    async fn rd(&self) -> Option<U64> {
+        self.0.rd().map(Into::into)
     }
-    async fn len(&self) -> Option<Word> {
-        self.0.len()
+    async fn len(&self) -> Option<U64> {
+        self.0.len().map(Into::into)
     }
     async fn receipt_type(&self) -> ReceiptType {
         self.0.into()
     }
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+    async fn result(&self) -> Option<U64> {
+        self.0.result().map(|r| Word::from(r).into())
+    }
+    async fn gas_used(&self) -> Option<U64> {
+        self.0.gas_used().map(Into::into)
     }
 }

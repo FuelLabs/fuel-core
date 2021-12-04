@@ -260,9 +260,9 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default();
         let query = DryRun::build(TxArg {
-            tx: HexString(Bytes(tx.clone().to_bytes())),
+            tx: HexString(Bytes(tx.to_bytes())),
         });
         insta::assert_snapshot!(query.query)
     }
@@ -270,9 +270,9 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let tx = fuel_tx::Transaction::default();
+        let mut tx = fuel_tx::Transaction::default();
         let query = Submit::build(TxArg {
-            tx: HexString(Bytes(tx.clone().to_bytes())),
+            tx: HexString(Bytes(tx.to_bytes())),
         });
         insta::assert_snapshot!(query.query)
     }

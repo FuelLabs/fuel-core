@@ -55,11 +55,8 @@ impl SchemaBuilder {
         let root = root.cloned().unwrap();
 
         for def in ast.definitions.iter() {
-            match def {
-                Definition::TypeDefinition(typ) => {
-                    self.generate_table_sql(&root, typ);
-                }
-                _ => (), // Schema definitions, directives and type extensions will be skipped for now.
+            if let Definition::TypeDefinition(typ) = def {
+                self.generate_table_sql(&root, typ);
             }
         }
 
@@ -89,7 +86,7 @@ impl SchemaBuilder {
         }
     }
 
-    fn generate_columns<'a>(&mut self, type_id: i64, fields: &Vec<Field<'a, String>>) -> String {
+    fn generate_columns<'a>(&mut self, type_id: i64, fields: &[Field<'a, String>]) -> String {
         let mut fragments = vec![];
 
         for (pos, f) in fields.iter().enumerate() {
@@ -122,10 +119,10 @@ impl SchemaBuilder {
         fragments.join(",\n")
     }
 
-    fn generate_table_sql<'a>(&mut self, root: &String, typ: &TypeDefinition<'a, String>) {
+    fn generate_table_sql<'a>(&mut self, root: &str, typ: &TypeDefinition<'a, String>) {
         match typ {
             TypeDefinition::Object(o) => {
-                if &o.name == root {
+                if o.name == root {
                     return;
                 }
 
@@ -181,7 +178,7 @@ impl Schema {
 mod tests {
     use super::*;
 
-    const GRAPHQL_SCHEMA: &'static str = r#"
+    const GRAPHQL_SCHEMA: &str = r#"
         schema {
             query: QueryRoot
         }
@@ -204,8 +201,8 @@ mod tests {
         }
     "#;
 
-    const CREATE_SCHEMA: &'static str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
-    const CREATE_THING1: &'static str = concat!(
+    const CREATE_SCHEMA: &str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
+    const CREATE_THING1: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing1 (\n",
         " id bigint not null,\n",
@@ -213,7 +210,7 @@ mod tests {
         "object bytea not null",
         "\n)"
     );
-    const CREATE_THING2: &'static str = concat!(
+    const CREATE_THING2: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing2 (\n",
         " id bigint not null,\n",

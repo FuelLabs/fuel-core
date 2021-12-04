@@ -1,5 +1,5 @@
 use crate::{
-    database::{columns, columns::DB_VERSION_COLUMN, VERSION},
+    database::{columns, columns::METADATA, VERSION},
     state::{
         BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
         WriteOperation,
@@ -52,12 +52,12 @@ impl RocksDb {
     }
 
     fn validate_or_set_db_version(&self) -> Result<(), Error> {
-        let data = self.get(VERSION_KEY, DB_VERSION_COLUMN)?;
+        let data = self.get(VERSION_KEY, METADATA)?;
         match data {
             None => {
                 self.put(
                     VERSION_KEY.to_vec(),
-                    DB_VERSION_COLUMN,
+                    METADATA,
                     VERSION.to_be_bytes().to_vec(),
                 )?;
             }
@@ -242,7 +242,7 @@ mod tests {
 
         let db = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let prev = db.put(key.clone(), 0, vec![2, 4, 6]).unwrap();
+        let prev = db.put(key, 0, vec![2, 4, 6]).unwrap();
 
         assert_eq!(prev, Some(vec![1, 2, 3]));
     }
@@ -286,7 +286,7 @@ mod tests {
         let value = vec![1, 2, 3];
 
         let db = create_db(1);
-        db.put(key.clone(), 0, value.clone()).unwrap();
+        db.put(key.clone(), 0, value).unwrap();
 
         let ops = vec![WriteOperation::Remove(key.clone(), 0)];
         db.batch_write(&mut ops.into_iter()).unwrap();

@@ -9,14 +9,10 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
     }
     let mut item_fn = parse_macro_input!(item as ItemFn);
 
-    let has_nomangle = item_fn
-        .attrs
-        .iter()
-        .find(|attr| {
-            let path = attr.path.get_ident();
-            path.is_some() && path.unwrap().to_string() == String::from("no_mangle")
-        })
-        .is_some();
+    let has_nomangle = item_fn.attrs.iter().any(|attr| {
+        let path = attr.path.get_ident();
+        path.is_some() && path.unwrap() == "no_mangle"
+    });
 
     if !has_nomangle {
         let no_mangle: Attribute = parse_quote! { #[no_mangle] };

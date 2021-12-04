@@ -83,7 +83,7 @@ impl SchemaManager {
 
         // TODO: Not doing much with version, but might be useful if we
         //       do graph schema upgrades
-        let version = schema_version(&schema);
+        let version = schema_version(schema);
 
         if !TypeIds::schema_exists(&*connection, name, &version)? {
             let db_schema = SchemaBuilder::new(name, &version).build(schema);
@@ -125,7 +125,7 @@ impl Database {
         })
     }
 
-    fn upsert_query(&self, table: &String, inserts: Vec<String>) -> String {
+    fn upsert_query(&self, table: &str, inserts: Vec<String>) -> String {
         format!(
             "INSERT INTO {}.{}
                 ({})
@@ -181,11 +181,14 @@ impl Database {
         for column in results {
             let table = &column.table_name;
 
-            if !self.tables.contains_key(&(column.type_id as u64)) {
-                self.tables.insert(column.type_id as u64, table.to_string());
-            }
+            self.tables
+                .entry(column.type_id as u64)
+                .or_insert_with(|| table.to_string());
 
-            let columns = self.schema.entry(table.to_string()).or_insert(vec![]);
+            let columns = self
+                .schema
+                .entry(table.to_string())
+                .or_insert_with(Vec::new);
 
             columns.push(column.column_name);
         }

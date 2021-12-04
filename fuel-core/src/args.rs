@@ -25,6 +25,10 @@ pub struct Opt {
 
     #[structopt(long = "db-type", default_value = "RocksDb")]
     pub database_type: DbType,
+
+    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
+    #[structopt(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
+    pub chain_config: String,
 }
 
 impl Opt {
@@ -44,6 +48,7 @@ impl Opt {
             port,
             database_path,
             database_type,
+            chain_config,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -52,6 +57,7 @@ impl Opt {
             addr,
             database_path,
             database_type,
+            chain_conf: chain_config.as_str().parse()?,
         })
     }
 }
