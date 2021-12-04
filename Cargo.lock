@@ -511,9 +511,9 @@ checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
 name = "bytecheck"
-version = "0.6.6"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77f403a29df55aacacdef2114efafb10c7405e6b051d829f420c33918aeef0f8"
+checksum = "314889ea31cda264cb7c3d6e6e5c9415a987ecb0e72c17c00d36fbb881d34abe"
 dependencies = [
  "bytecheck_derive",
  "ptr_meta",
@@ -521,9 +521,9 @@ dependencies = [
 
 [[package]]
 name = "bytecheck_derive"
-version = "0.6.5"
+version = "0.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3b4dff26fdc9f847dab475c9fec16f2cba82d5aa1f09981b87c44520721e10a"
+checksum = "4a2b3b92c135dae665a6f760205b89187638e83bed17ef3e44e83c712cf30600"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1211,7 +1211,7 @@ dependencies = [
 [[package]]
 name = "fuel-asm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#f153b4e36d08b5b050c168bf801064db41b734fc"
+source = "git+ssh://git@github.com/FuelLabs/fuel-asm.git#2124a95122b53e8539b15f1e45498cadbfd85445"
 dependencies = [
  "fuel-types",
  "serde",
@@ -1344,7 +1344,7 @@ source = "git+ssh://git@github.com/FuelLabs/fuel-storage.git#fa46eddcba6c3f1788e
 [[package]]
 name = "fuel-tx"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-tx.git#cae1912b9603b99cd3e81ee319308cc58bbb0a27"
+source = "git+ssh://git@github.com/FuelLabs/fuel-tx.git#95a38738d101d517194615e77e07829f92f60245"
 dependencies = [
  "fuel-asm",
  "fuel-types",
@@ -1366,7 +1366,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.1.0"
-source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#0b62361dfe3638677697bee390d265dcacab3bb5"
+source = "git+ssh://git@github.com/FuelLabs/fuel-vm.git#0aa67866558178664e3cfe0fc31d5e23b2efec7b"
 dependencies = [
  "fuel-asm",
  "fuel-merkle",
@@ -1945,9 +1945,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.108"
+version = "0.2.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8521a1b57e76b1ec69af7599e75e38e7b7fad6610f037db8c79b127201b5d119"
+checksum = "f98a04dce437184842841303488f70d0188c5f51437d2a834dc097eafa909a01"
 
 [[package]]
 name = "libloading"
@@ -2099,9 +2099,9 @@ dependencies = [
 
 [[package]]
 name = "memoffset"
-version = "0.6.4"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59accc507f1338036a0477ef61afdae33cde60840f4dfe481319ce3ad116ddf9"
+checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg",
 ]
@@ -2737,18 +2737,18 @@ dependencies = [
 
 [[package]]
 name = "rend"
-version = "0.3.4"
+version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0a97e3d54c72a2837a552c9ca99e7163ed7892f0f70cc5372a0aec9e9b7c152"
+checksum = "1033f6fe7ce48c8333e5412891b933e85d6a3a09728c4883240edf64e7a6f11a"
 dependencies = [
  "bytecheck",
 ]
 
 [[package]]
 name = "rkyv"
-version = "0.7.24"
+version = "0.7.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1460b2dd43a8416140f3fdcd8dc76cb67f01f58d0db648ec9ae71ee375942174"
+checksum = "86c74fc6ea0317f1ba207eef55f5401b3180237625211866703183977b57dd45"
 dependencies = [
  "bytecheck",
  "hashbrown",
@@ -2760,9 +2760,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv_derive"
-version = "0.7.24"
+version = "0.7.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9d4f9c7215fac8b7ef54171e14cc18875821178fe8b99fb2f85e211d8bdda40"
+checksum = "61f677bd46008257bfdf28d051a59a72b75c2714754be3f20bcb4cbd835d2723"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3661,9 +3661,9 @@ checksum = "59547bce71d9c38b83d9c0e92b6066c4253371f15005def0c30d9657f50c7642"
 
 [[package]]
 name = "trybuild"
-version = "1.0.52"
+version = "1.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "150e726dc059e6fbd4fce3288f5bb3cf70128cf63b0dde23b938a3cad810fb23"
+checksum = "9d664de8ea7e531ad4c0f5a834f20b8cb2b8e6dfe88d05796ee7887518ed67b9"
 dependencies = [
  "glob",
  "lazy_static",
