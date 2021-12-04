@@ -210,7 +210,7 @@ async fn get_transactions() {
 
     let response = client.transactions(page_request.clone()).await.unwrap();
     let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
-    assert_eq!(transactions, &[tx1.clone(), tx2.clone(), tx3.clone()]);
+    assert_eq!(transactions, &[tx1, tx2, tx3]);
 
     // Query backwards from last given cursor [3]: [1,2]
     let page_request_backwards = PaginationRequest {
@@ -228,11 +228,11 @@ async fn get_transactions() {
 
     let response = client.transactions(page_request_backwards).await.unwrap();
     let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
-    assert_eq!(transactions, &[tx1.clone(), tx2.clone()]);
+    assert_eq!(transactions, &[tx1, tx2]);
 
     let response = client.transactions(page_request_forwards).await.unwrap();
     let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
-    assert_eq!(transactions, &[tx4.clone(), tx5.clone(), tx6.clone()]);
+    assert_eq!(transactions, &[tx4, tx5, tx6]);
 }
 
 #[tokio::test]
@@ -242,7 +242,7 @@ async fn get_transactions_from_manual_blcoks() {
     let client = initialize_client(db.clone()).await;
 
     // create 10 txs
-    let txs: Vec<Transaction> = (0..10).map(|maturity| create_mock_tx(maturity)).collect();
+    let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
 
     // manually store txs in the db
     for tx in &txs {
@@ -428,9 +428,7 @@ fn get_executor_and_db() -> (Executor, Database) {
 async fn initialize_client(db: Database) -> FuelClient {
     let config = Config::local_node();
     let service = FuelService::from_database(db, config).await.unwrap();
-    let client = FuelClient::from(service.bound_address);
-
-    client
+    FuelClient::from(service.bound_address)
 }
 
 // add random maturity for unique tx
