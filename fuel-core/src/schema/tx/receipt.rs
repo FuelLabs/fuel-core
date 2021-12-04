@@ -104,7 +104,7 @@ impl Receipt {
         HexString(self.0.clone().to_bytes())
     }
     async fn result(&self) -> Option<U64> {
-        self.0.result().map(|r| Word::from(r).into())
+        self.0.result().map(|r| Word::from(*r).into())
     }
     async fn gas_used(&self) -> Option<U64> {
         self.0.gas_used().map(Into::into)
