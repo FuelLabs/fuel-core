@@ -67,24 +67,25 @@ impl TxQuery {
                     (0, IterDirection::Forward)
                 };
 
-                let start_block_id;
-                let end_tx_id;
+                let block_id;
+                let tx_id;
 
                 if direction == IterDirection::Forward {
-                    start_block_id = after.map(|after| after.block_height);
-                    end_tx_id = before.map(|before| before.tx_id);
+                    let after = after.map(|after| (after.block_height, after.tx_id));
+                    block_id = after.map(|(height, _)| height);
+                    tx_id = after.map(|(_, id)| id);
                 } else {
-                    start_block_id = before.map(|before| before.block_height);
-                    end_tx_id = after.map(|after| after.tx_id);
+                    let before = before.map(|before| (before.block_height, before.tx_id));
+                    block_id = before.map(|(height, _)| height);
+                    tx_id = before.map(|(_, id)| id);
                 }
 
-                let mut all_block_ids =
-                    db.all_block_ids(start_block_id.map(Into::into), Some(direction));
+                let all_block_ids =
+                    db.all_block_ids(block_id.map(Into::into), Some(direction));
                 let mut started = None;
 
-                if start_block_id.is_some() {
-                    // skip initial result
-                    started = all_block_ids.next();
+                if block_id.is_some() {
+                    started = Some((block_id, tx_id));
                 }
 
                 let txs = all_block_ids
@@ -94,17 +95,21 @@ impl TxQuery {
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|fuel_block| {
-                                    fuel_block
+                                    let mut txs = fuel_block
                                         .into_owned()
-                                        .transactions
-                                        .into_iter()
-                                        .zip(iter::repeat(block_height))
+                                        .transactions;
+
+                                    if direction == IterDirection::Reverse {
+                                        txs.reverse();
+                                    }
+
+                                    txs.into_iter().zip(iter::repeat(block_height))
                                 })
                         })
                     })
                     .flatten_ok()
                     .skip_while(|h| {
-                        if let (Ok((tx, _)), Some(end)) = (h, end_tx_id) {
+                        if let (Ok((tx, _)), Some(end)) = (h, tx_id) {
                             if tx == &end.into() {
                                 false
                             } else {
@@ -114,12 +119,19 @@ impl TxQuery {
                             false
                         }
                     })
+                    .filter(|value| {
+                        if let (Ok((tx, _)), Some(end)) = (value, tx_id) {
+                            tx != &end.into()
+                        } else {
+                            true
+                        }
+                    })
                     .take(records_to_fetch);
 
                 let mut txs: Vec<(Bytes32, BlockHeight)> = txs.try_collect()?;
 
-                if direction == IterDirection::Forward {
-                    txs.reverse();
+                if direction == IterDirection::Reverse {
+                    txs.reverse()
                 }
 
                 let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = txs
@@ -138,7 +150,7 @@ impl TxQuery {
 
                 connection.append(txs.into_iter().map(|(tx, block_height)| {
                     Edge::new(
-                        SortedTxCursor::new(block_height.to_usize(), HexString256::from(tx.id())),
+                        SortedTxCursor::new(*block_height, HexString256::from(tx.id())),
                         tx.into_owned(),
                     )
                 }));
