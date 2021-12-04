@@ -267,7 +267,7 @@ async fn get_transactions_from_manual_blcoks() {
         producer: Default::default(),
     };
 
-    // process block and save block height
+    // process blocks and save block height
     executor.execute(&first_test_block).await.unwrap();
     executor.execute(&second_test_block).await.unwrap();
 
@@ -297,7 +297,7 @@ async fn get_transactions_from_manual_blcoks() {
         &[txs[3].id(), txs[4].id(), txs[5].id(), txs[6].id()]
     );
 
-    // Query forwards from last given cursor [6]: [0,1,2,3,4,5]
+    // Query backwards from last given cursor [6]: [0,1,2,3,4,5]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor,
         results: 10,
