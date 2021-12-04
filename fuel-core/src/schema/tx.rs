@@ -110,11 +110,7 @@ impl TxQuery {
                     .flatten_ok()
                     .skip_while(|h| {
                         if let (Ok((tx, _)), Some(end)) = (h, tx_id) {
-                            if tx == &end.into() {
-                                false
-                            } else {
-                                true
-                            }
+                            tx != &end.into()
                         } else {
                             false
                         }
