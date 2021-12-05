@@ -115,13 +115,7 @@ impl TxQuery {
                             false
                         }
                     })
-                    .filter(|value| {
-                        if let (Ok((tx, _)), Some(end)) = (value, tx_id) {
-                            tx != &end.into()
-                        } else {
-                            true
-                        }
-                    })
+                    .skip(if tx_id.is_some() { 1 } else { 0 })
                     .take(records_to_fetch);
 
                 let mut txs: Vec<(Bytes32, BlockHeight)> = txs.try_collect()?;
