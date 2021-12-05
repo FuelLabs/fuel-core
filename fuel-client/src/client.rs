@@ -157,6 +157,16 @@ impl FuelClient {
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
+    /// returns a paginated set of transactions sorted by block height
+    pub async fn transactions(
+        &self,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<Transaction, String>> {
+        let query = schema::tx::TransactionsQuery::build(&request.into());
+        let transactions = self.query(query).await?.transactions.try_into()?;
+        Ok(transactions)
+    }
+
     /// Returns a paginated set of transactions associated with a txo owner address.
     pub async fn transactions_by_owner(
         &self,

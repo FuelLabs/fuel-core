@@ -1,7 +1,9 @@
+use chrono::Utc;
 use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::{
     database::Database,
-    model::coin::UtxoId,
+    executor::Executor,
+    model::{coin::UtxoId, fuel_block::FuelBlock},
     service::{Config, FuelService},
 };
 use fuel_storage::Storage;
@@ -182,6 +184,141 @@ async fn get_transparent_transaction_by_id() {
 }
 
 #[tokio::test]
+async fn get_transactions() {
+    let alice = Address::from([0; 32]);
+    let bob = Address::from([1; 32]);
+    let charlie = Address::from([2; 32]);
+
+    let mut context = TestContext::new(100).await;
+    let tx1 = context.transfer(alice, charlie, 1).await.unwrap();
+    let tx2 = context.transfer(charlie, bob, 2).await.unwrap();
+    let tx3 = context.transfer(bob, charlie, 3).await.unwrap();
+    let tx4 = context.transfer(bob, charlie, 3).await.unwrap();
+    let tx5 = context.transfer(charlie, alice, 1).await.unwrap();
+    let tx6 = context.transfer(alice, charlie, 1).await.unwrap();
+
+    // there are six transactions
+    // [1, 2, 3, 4, 5, 6]
+
+    // Query for first 3: [1,2,3]
+    let client = context.client;
+    let page_request = PaginationRequest {
+        cursor: None,
+        results: 3,
+        direction: PageDirection::Forward,
+    };
+
+    let response = client.transactions(page_request.clone()).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[tx1, tx2, tx3]);
+
+    // Query backwards from last given cursor [3]: [1,2]
+    let page_request_backwards = PaginationRequest {
+        cursor: response.cursor.clone(),
+        results: 3,
+        direction: PageDirection::Backward,
+    };
+
+    // Query forwards from last given cursor [3]: [4,5,6]
+    let page_request_forwards = PaginationRequest {
+        cursor: response.cursor,
+        results: 3,
+        direction: PageDirection::Forward,
+    };
+
+    let response = client.transactions(page_request_backwards).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[tx1, tx2]);
+
+    let response = client.transactions(page_request_forwards).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[tx4, tx5, tx6]);
+}
+
+#[tokio::test]
+async fn get_transactions_from_manual_blcoks() {
+    let (executor, mut db) = get_executor_and_db();
+    // get access to a client
+    let client = initialize_client(db.clone()).await;
+
+    // create 10 txs
+    let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
+
+    // manually store txs in the db
+    for tx in &txs {
+        Storage::<Bytes32, fuel_tx::Transaction>::insert(&mut db, &tx.id(), tx).unwrap();
+    }
+
+    // make 1st test block
+    let first_test_block = FuelBlock {
+        fuel_height: 1u32.into(),
+        // set the first 5 ids of the manually saved txs
+        transactions: txs.iter().take(5).map(|tx| tx.id()).collect(),
+        time: Utc::now(),
+        producer: Default::default(),
+    };
+
+    // make 2nd test block
+    let second_test_block = FuelBlock {
+        fuel_height: 2u32.into(),
+        // set the last 5 ids of the manually saved txs
+        transactions: txs.iter().skip(5).take(5).map(|tx| tx.id()).collect(),
+        time: Utc::now(),
+        producer: Default::default(),
+    };
+
+    // process blocks and save block height
+    executor.execute(&first_test_block).await.unwrap();
+    executor.execute(&second_test_block).await.unwrap();
+
+    // Query for first 3: [0,1,2]
+    let page_request_forwards = PaginationRequest {
+        cursor: None,
+        results: 3,
+        direction: PageDirection::Forward,
+    };
+    let response = client.transactions(page_request_forwards).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(transactions, &[txs[0].id(), txs[1].id(), txs[2].id()]);
+
+    // Query forwards from last given cursor [2]: [3,4,5,6]
+    let next_page_request_forwards = PaginationRequest {
+        cursor: response.cursor,
+        results: 4,
+        direction: PageDirection::Forward,
+    };
+    let response = client
+        .transactions(next_page_request_forwards)
+        .await
+        .unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(
+        transactions,
+        &[txs[3].id(), txs[4].id(), txs[5].id(), txs[6].id()]
+    );
+
+    // Query backwards from last given cursor [6]: [0,1,2,3,4,5]
+    let page_request_backwards = PaginationRequest {
+        cursor: response.cursor,
+        results: 10,
+        direction: PageDirection::Backward,
+    };
+    let response = client.transactions(page_request_backwards).await.unwrap();
+    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    assert_eq!(
+        transactions,
+        &[
+            txs[0].id(),
+            txs[1].id(),
+            txs[2].id(),
+            txs[3].id(),
+            txs[4].id(),
+            txs[5].id()
+        ]
+    );
+}
+
+#[tokio::test]
 async fn get_owned_transactions() {
     let alice = Address::from([0; 32]);
     let bob = Address::from([1; 32]);
@@ -277,4 +414,33 @@ impl TestContext {
         };
         self.client.submit(&tx).await.map(Into::into)
     }
+}
+
+fn get_executor_and_db() -> (Executor, Database) {
+    let db = Database::default();
+    let executor = Executor {
+        database: db.clone(),
+    };
+
+    (executor, db)
+}
+
+async fn initialize_client(db: Database) -> FuelClient {
+    let config = Config::local_node();
+    let service = FuelService::from_database(db, config).await.unwrap();
+    FuelClient::from(service.bound_address)
+}
+
+// add random maturity for unique tx
+fn create_mock_tx(maturity: u64) -> Transaction {
+    fuel_tx::Transaction::script(
+        0,
+        0,
+        maturity,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    )
 }

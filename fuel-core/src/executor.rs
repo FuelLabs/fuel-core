@@ -16,7 +16,7 @@ use std::ops::DerefMut;
 use thiserror::Error;
 
 pub struct Executor {
-    pub(crate) database: Database,
+    pub database: Database,
 }
 
 impl Executor {
