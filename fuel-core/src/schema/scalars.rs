@@ -77,7 +77,7 @@ impl CursorType for SortedTxCursor {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, derive_more::Into, derive_more::From)]
 pub struct HexString(pub(crate) Vec<u8>);
 
 #[Scalar(name = "HexString")]
