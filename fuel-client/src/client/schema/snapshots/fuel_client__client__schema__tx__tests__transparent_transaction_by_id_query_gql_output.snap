@@ -103,6 +103,7 @@ query Query($_0: HexString256!) {
       len
       result
       gasUsed
+      data
     }
     script
     scriptData

@@ -195,6 +195,7 @@ type Receipt {
 	rawPayload: HexString!
 	result: U64
 	gasUsed: U64
+	data: HexString
 }
 enum ReceiptType {
 	CALL
