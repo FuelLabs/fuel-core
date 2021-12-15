@@ -63,7 +63,7 @@ async fn dry_run() {
     );
 
     let log = client.dry_run(&tx).await.unwrap();
-    assert_eq!(2, log.len());
+    assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
         Receipt::Log {
