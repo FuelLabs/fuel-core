@@ -45,8 +45,8 @@ jobs:
       id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPOSITORY: ${{ secrets.REPO_NAME }}
-        IMAGE_TAG: latest
+        ECR_REPOSITORY: fuel-core
+        IMAGE_TAG: ${{ github.sha }}
       run: |
         mkdir root-config
         cp -r ~/.gitconfig  ~/.ssh root-config/
