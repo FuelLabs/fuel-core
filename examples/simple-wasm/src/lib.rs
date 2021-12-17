@@ -8,7 +8,10 @@ graphql_schema!("test_namespace", "schema/schema.graphql");
 fn function_one(event: SomeEvent) {
     let SomeEvent { id, account } = event;
 
-    let t1 = Thing1 { id, account: Address::from(account) };
+    let t1 = Thing1 {
+        id,
+        account: Address::from(account),
+    };
     t1.save();
 }
 
@@ -18,7 +21,11 @@ fn function_two(event: AnotherEvent) {
 
     let Thing1 { account, .. } = Thing1::load(id).expect("No object with that ID");
 
-    let t2 = Thing2 { id, account, hash: Bytes32::from(hash) };
+    let t2 = Thing2 {
+        id,
+        account,
+        hash: Bytes32::from(hash),
+    };
 
     t2.save();
 }

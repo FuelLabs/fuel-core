@@ -28,8 +28,5 @@ pub mod graph_registry {
 
     joinable!(columns -> type_ids (type_id));
 
-    allow_tables_to_appear_in_same_query!(
-        columns,
-        type_ids,
-    );
+    allow_tables_to_appear_in_same_query!(columns, type_ids,);
 }

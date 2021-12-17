@@ -4,15 +4,14 @@ include!("./test_data/abi_code.rs");
 
 #[cfg(feature = "postgres")]
 mod tests {
-    use crate::{SomeEvent, AnotherEvent};
-    use fuels_core::abi_encoder::ABIEncoder;
+    use crate::{AnotherEvent, SomeEvent};
     use fuel_wasm_executor::{IndexExecutor, Manifest, SchemaManager};
+    use fuels_core::abi_encoder::ABIEncoder;
 
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const GRAPHQL_SCHEMA: &'static str = include_str!("./test_data/schema.graphql");
     const MANIFEST: &'static str = include_str!("./test_data/manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/simple_wasm.wasm");
-
 
     #[test]
     fn test_indexer() {
@@ -31,18 +30,28 @@ mod tests {
         let mystruct = SomeEvent {
             id: 4,
             account: [0x43; 32],
-        }.into_token();
+        }
+        .into_token();
 
         let myotherstruct = AnotherEvent {
             id: 4,
             hash: [0x21; 32],
             bar: false,
-        }.into_token();
+        }
+        .into_token();
 
-        let struct1 = ABIEncoder::new().encode(&[mystruct]).expect("Failed encoding struct1");
-        let struct2 = ABIEncoder::new().encode(&[myotherstruct]).expect("Failed encoding struct1");
+        let struct1 = ABIEncoder::new()
+            .encode(&[mystruct])
+            .expect("Failed encoding struct1");
+        let struct2 = ABIEncoder::new()
+            .encode(&[myotherstruct])
+            .expect("Failed encoding struct1");
 
-        instance.trigger_event("an_event_name", struct1).expect("Indexing failed");
-        instance.trigger_event("another_event_name", struct2).expect("Indexing failed");
+        instance
+            .trigger_event("an_event_name", struct1)
+            .expect("Indexing failed");
+        instance
+            .trigger_event("another_event_name", struct2)
+            .expect("Indexing failed");
     }
 }

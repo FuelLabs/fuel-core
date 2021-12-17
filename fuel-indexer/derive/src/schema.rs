@@ -304,7 +304,9 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
     let query_root = get_query_root(&types, &ast);
 
     for definition in ast.definitions.iter() {
-        if let Some(def) = process_definition(&query_root, &schema.namespace.value(), &types, definition) {
+        if let Some(def) =
+            process_definition(&query_root, &schema.namespace.value(), &types, definition)
+        {
             output = quote! {
                 #output
                 #def
