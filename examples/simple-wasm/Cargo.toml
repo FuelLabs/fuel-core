@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ['cdylib']
 
 [dependencies]
+fuels-core = { path = "../../../fuels-rs/fuels-core", features=["no-std"] }
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
-# TODO: abigen
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }

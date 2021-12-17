@@ -1297,6 +1297,7 @@ version = "0.1.0"
 dependencies = [
  "fuel-indexer",
  "fuel-indexer-schema",
+ "fuels-core 0.1.0 (git+ssh://git@github.com/FuelLabs/fuels-rs.git)",
  "graphql-parser",
  "proc-macro-error",
  "proc-macro2",
@@ -1311,7 +1312,7 @@ name = "fuel-indexer-schema"
 version = "0.1.0"
 dependencies = [
  "diesel",
- "fuel-tx",
+ "fuel-types",
  "graphql-parser",
  "insta",
  "itertools",
@@ -1389,6 +1390,7 @@ dependencies = [
  "fuel-indexer",
  "fuel-indexer-schema",
  "fuel-tx",
+ "fuels-core 0.1.0 (git+ssh://git@github.com/FuelLabs/fuels-rs.git)",
  "r2d2",
  "r2d2-diesel",
  "serde",
@@ -1400,6 +1402,27 @@ dependencies = [
  "wasmer-compiler-cranelift",
  "wasmer-compiler-llvm",
  "wasmer-engine-universal",
+]
+
+[[package]]
+name = "fuels-core"
+version = "0.1.0"
+dependencies = [
+ "fuel-types",
+ "sha2",
+ "strum",
+ "strum_macros",
+]
+
+[[package]]
+name = "fuels-core"
+version = "0.1.0"
+source = "git+ssh://git@github.com/FuelLabs/fuels-rs.git#60b974b68ab458b0338a11e21b7d30f164d72510"
+dependencies = [
+ "fuel-types",
+ "sha2",
+ "strum",
+ "strum_macros",
 ]
 
 [[package]]
@@ -3112,6 +3135,7 @@ version = "0.1.0"
 dependencies = [
  "fuel-indexer",
  "fuel-indexer-derive",
+ "fuels-core 0.1.0",
  "serde",
 ]
 

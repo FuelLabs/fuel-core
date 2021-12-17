@@ -22,6 +22,9 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
     let mut block: Block = parse_quote! {
         {
             use fuel_indexer::types::{serialize, deserialize};
+            use fuels_core::abi_decoder::ABIDecoder;
+
+            let mut decoder = ABIDecoder::new();
         }
     };
 
@@ -37,7 +40,8 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
 
                 let stmts: Vec<_> = parse_quote! {
                     let vec = unsafe { Vec::from_raw_parts(#ptr, #len, #len) };
-                    let #pat: #ty = deserialize(&vec);
+                    let tokens = decoder.decode(&#ty::param_types(), &vec).expect("Type decoding failed");
+                    let #pat = #ty::new_from_tokens(&tokens);
                 };
 
                 block.stmts.extend(stmts);

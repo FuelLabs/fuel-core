@@ -80,6 +80,7 @@ fn process_field<'a>(
 
 fn process_type_def<'a>(
     query_root: &str,
+    namespace: &str,
     types: &HashSet<String>,
     typ: &TypeDefinition<'a, String>,
 ) -> Option<proc_macro2::TokenStream> {
@@ -89,7 +90,7 @@ fn process_type_def<'a>(
                 return None;
             }
             let name = &obj.name;
-            let type_id = type_id(name);
+            let type_id = type_id(namespace, name);
             // TODO: ignore directives for now, could do some useful things with them though.
             let mut block = quote! {};
             let mut row_extractors = quote! {};
@@ -152,11 +153,12 @@ fn process_type_def<'a>(
 
 fn process_definition<'a>(
     query_root: &str,
+    namespace: &str,
     types: &HashSet<String>,
     definition: &Definition<'a, String>,
 ) -> Option<proc_macro2::TokenStream> {
     match definition {
-        Definition::TypeDefinition(def) => process_type_def(query_root, types, def),
+        Definition::TypeDefinition(def) => process_type_def(query_root, namespace, types, def),
         Definition::SchemaDefinition(_def) => None,
         def => {
             panic!("Unhandled definition type: {:?}", def);
@@ -302,7 +304,7 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
     let query_root = get_query_root(&types, &ast);
 
     for definition in ast.definitions.iter() {
-        if let Some(def) = process_definition(&query_root, &types, definition) {
+        if let Some(def) = process_definition(&query_root, &schema.namespace.value(), &types, definition) {
             output = quote! {
                 #output
                 #def
