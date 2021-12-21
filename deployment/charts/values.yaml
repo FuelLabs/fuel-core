@@ -1,0 +1,23 @@
+# Default values for fuel core for environment
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+app:
+  name: fuel-core
+  replicas: 1
+  port: 4000
+  image:
+    repository: fuel-core
+    tag: latest
+    pullPolicy: Never
+  volume: 
+    pv-name: db-volume
+    mountPath: /mnt/db/
+    claim-name: db-volume-pv-claim
+    storage-class: db-storage
+    storage-size: 1Gi
+    access-modes: ReadWriteMany
+    claim-policy: Retain
+
+service:
+  port: 4000

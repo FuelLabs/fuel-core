@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fuel-core.name" . }}-k8
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fuel-core.name" . }}
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.app.replicas }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fuel-core.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Values.app.name }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          resources: {}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.app.port }}
+          volumeMounts:
+            - name: {{ .Values.app.volume.pv-name }}
+              mountPath: "{{ .Values.app.volume.mountPath }}"
+      volumes:
+        - name: {{ .Values.app.volume.pv-name }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.volume.claim-name }}

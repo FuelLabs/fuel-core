@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claim-name }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.access-modes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storage-size }}
+  storageClassName: {{ .Values.app.volume.storage-class }}
+  volumeName: {{ .Values.app.volume.pv-name }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.app.volume.pv-name }}
+spec:
+  storageClassName: {{ .Values.app.volume.storage-class }}
+  capacity:
+    storage: {{ .Values.app.volume.storage-size }}
+  accessModes:
+    - {{ .Values.app.volume.access-modes }}
+  hostPath:
+    path: "{{ .Values.app.volume.mountPath }}"
+  persistentVolumeReclaimPolicy: {{ .Values.app.volume.claim-policy }}
