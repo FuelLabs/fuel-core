@@ -2,4 +2,3 @@
 **/*.swp
 .terraform
 *.tfstate*
-
