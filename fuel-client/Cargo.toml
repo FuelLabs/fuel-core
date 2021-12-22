@@ -1,8 +1,11 @@
 [package]
 name = "fuel-client"
 version = "0.1.0"
-authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
+authors = ["Fuel Labs <contact@fuel.sh>"]
+categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
 # Disable auto-targeting of integ tests or benchmarks
