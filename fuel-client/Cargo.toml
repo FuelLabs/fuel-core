@@ -1,7 +1,7 @@
 [package]
 name = "fuel-client"
 version = "0.1.0"
-authors = ["Victor Lopez <victor.lopez@fuel.sh>"]
+authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
