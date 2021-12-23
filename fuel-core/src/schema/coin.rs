@@ -69,6 +69,7 @@ impl CoinQuery {
         first: Option<i32>,
         last: Option<i32>,
         #[graphql(desc = "address of the owner")] owner: HexString256,
+        #[graphql(desc = "color of the coins")] color: Option<HexString256>,
     ) -> async_graphql::Result<Connection<HexString256, Coin, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
 
@@ -136,6 +137,12 @@ impl CoinQuery {
                             .map(|coin| Coin(id, coin.into_owned()))
                     })
                     .try_collect()?;
+
+                // filter coins by color
+                let mut coins = coins;
+                if let Some(color) = color {
+                    coins.retain(|coin| coin.1.color == color.0.into());
+                }
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= coins.len());

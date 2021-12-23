@@ -21,6 +21,8 @@ pub struct CoinByIdQuery {
 pub struct CoinsByOwnerConnectionArgs {
     /// Select coins based on the `owner` field
     pub owner: HexString256,
+    /// Select coins based on the `color` field
+    pub color: HexString256,
     /// Skip until coin id (forward pagination)
     pub after: Option<String>,
     /// Skip until coin id (backward pagination)
@@ -32,22 +34,24 @@ pub struct CoinsByOwnerConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionArgs {
-    fn from(r: (HexString256, PaginationRequest<String>)) -> Self {
-        match r.1.direction {
+impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionArgs {
+    fn from(r: (HexString256, HexString256, PaginationRequest<String>)) -> Self {
+        match r.2.direction {
             PageDirection::Forward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
-                after: r.1.cursor,
+                color: r.1,
+                after: r.2.cursor,
                 before: None,
-                first: Some(r.1.results as i32),
+                first: Some(r.2.results as i32),
                 last: None,
             },
             PageDirection::Backward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
+                color: r.1,
                 after: None,
-                before: r.1.cursor,
+                before: r.2.cursor,
                 first: None,
-                last: Some(r.1.results as i32),
+                last: Some(r.2.results as i32),
             },
         }
     }
@@ -60,7 +64,7 @@ impl From<(HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionA
     argument_struct = "CoinsByOwnerConnectionArgs"
 )]
 pub struct CoinsQuery {
-    #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(owner = &args.owner, color = &args.color, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
     pub coins_by_owner: CoinConnection,
 }
 
@@ -129,6 +133,7 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = CoinsQuery::build(CoinsByOwnerConnectionArgs {
             owner: HexString256::default(),
+            color: HexString256::default(),
             after: None,
             before: None,
             first: None,

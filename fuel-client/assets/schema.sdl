@@ -169,7 +169,7 @@ type Query {
 	"""
 	health: Boolean!
 	coin(id: HexString256!): Coin
-	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!): CoinConnection!
+	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!, color: HexString256): CoinConnection!
 }
 type Receipt {
 	id: HexString256

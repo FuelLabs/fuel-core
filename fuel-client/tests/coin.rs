@@ -78,6 +78,7 @@ async fn first_5_coins() {
     let coins = client
         .coins_by_owner(
             format!("{:#x}", owner).as_str(),
+            None,
             PaginationRequest {
                 cursor: None,
                 results: 5,
