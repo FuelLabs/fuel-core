@@ -79,6 +79,7 @@ async fn first_5_coins() {
         .coins_by_owner(
             format!("{:#x}", owner).as_str(),
             None,
+            None,
             PaginationRequest {
                 cursor: None,
                 results: 5,

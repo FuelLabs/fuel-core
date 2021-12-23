@@ -23,6 +23,8 @@ pub struct CoinsByOwnerConnectionArgs {
     pub owner: HexString256,
     /// Select coins based on the `color` field
     pub color: HexString256,
+    /// Select coins based on the `status` field
+    pub status: CoinStatus,
     /// Skip until coin id (forward pagination)
     pub after: Option<String>,
     /// Skip until coin id (backward pagination)
@@ -34,24 +36,40 @@ pub struct CoinsByOwnerConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionArgs {
-    fn from(r: (HexString256, HexString256, PaginationRequest<String>)) -> Self {
-        match r.2.direction {
+impl
+    From<(
+        HexString256,
+        HexString256,
+        CoinStatus,
+        PaginationRequest<String>,
+    )> for CoinsByOwnerConnectionArgs
+{
+    fn from(
+        r: (
+            HexString256,
+            HexString256,
+            CoinStatus,
+            PaginationRequest<String>,
+        ),
+    ) -> Self {
+        match r.3.direction {
             PageDirection::Forward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
                 color: r.1,
-                after: r.2.cursor,
+                status: r.2,
+                after: r.3.cursor,
                 before: None,
-                first: Some(r.2.results as i32),
+                first: Some(r.3.results as i32),
                 last: None,
             },
             PageDirection::Backward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
                 color: r.1,
+                status: r.2,
                 after: None,
-                before: r.2.cursor,
+                before: r.3.cursor,
                 first: None,
-                last: Some(r.2.results as i32),
+                last: Some(r.3.results as i32),
             },
         }
     }
@@ -64,7 +82,7 @@ impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsByOw
     argument_struct = "CoinsByOwnerConnectionArgs"
 )]
 pub struct CoinsQuery {
-    #[arguments(owner = &args.owner, color = &args.color, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(owner = &args.owner, color = &args.color, status = &args.status, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
     pub coins_by_owner: CoinConnection,
 }
 
@@ -134,6 +152,7 @@ mod tests {
         let operation = CoinsQuery::build(CoinsByOwnerConnectionArgs {
             owner: HexString256::default(),
             color: HexString256::default(),
+            status: CoinStatus::default(),
             after: None,
             before: None,
             first: None,
