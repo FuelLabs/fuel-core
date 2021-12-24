@@ -8,7 +8,7 @@ pub struct CoinByIdArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "CoinByIdArgs"
 )]
@@ -55,7 +55,7 @@ impl From<(HexString256, PaginationRequest<String>)> for CoinsByOwnerConnectionA
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "CoinsByOwnerConnectionArgs"
 )]
@@ -65,7 +65,7 @@ pub struct CoinsQuery {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
     pub edges: Option<Vec<Option<CoinEdge>>>,
     pub page_info: PageInfo,
@@ -86,14 +86,14 @@ impl From<CoinConnection> for PaginatedResult<Coin, String> {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinEdge {
     pub cursor: String,
     pub node: Coin,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {
     pub amount: U64,
     pub block_created: U64,
@@ -105,7 +105,7 @@ pub struct Coin {
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinStatus {
     Unspent,
     Spent,

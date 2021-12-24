@@ -13,7 +13,7 @@ pub struct TxIdArgs {
 /// Retrieves the transaction in opaque form
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "TxIdArgs"
 )]
@@ -24,7 +24,7 @@ pub struct TransactionQuery {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "ConnectionArgs"
 )]
@@ -34,7 +34,7 @@ pub struct TransactionsQuery {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
     pub edges: Option<Vec<Option<TransactionEdge>>>,
     pub page_info: PageInfo,
@@ -59,14 +59,14 @@ impl TryFrom<TransactionConnection> for PaginatedResult<fuel_tx::Transaction, St
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionEdge {
     pub cursor: String,
     pub node: OpaqueTransaction,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(graphql_type = "Transaction", schema_path = "../assets/schema.sdl")]
+#[cynic(graphql_type = "Transaction", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
     pub receipts: Option<Vec<OpaqueReceipt>>,
@@ -83,7 +83,7 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(graphql_type = "Receipt", schema_path = "../assets/schema.sdl")]
+#[cynic(graphql_type = "Receipt", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueReceipt {
     pub raw_payload: HexString,
 }
@@ -100,7 +100,7 @@ impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
 
 #[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
@@ -108,13 +108,13 @@ pub enum TransactionStatus {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
     pub time: super::DateTime,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block_id: HexString256,
     pub time: super::DateTime,
@@ -122,7 +122,7 @@ pub struct SuccessStatus {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block_id: HexString256,
     pub time: super::DateTime,
@@ -167,7 +167,7 @@ impl From<(HexString256, PaginationRequest<String>)> for TransactionsByOwnerConn
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "TransactionsByOwnerConnectionArgs"
 )]
@@ -185,7 +185,7 @@ pub struct TxArg {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
     argument_struct = "TxArg"
 )]
@@ -196,7 +196,7 @@ pub struct DryRun {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
     argument_struct = "TxArg"
 )]

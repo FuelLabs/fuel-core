@@ -8,7 +8,7 @@ use std::{
 use structopt::StructOpt;
 
 // stored in the root of the workspace
-const SCHEMA_URL: &str = "../assets/schema.sdl";
+const SCHEMA_URL: &str = "../fuel-client/assets/schema.sdl";
 
 #[derive(Debug, StructOpt)]
 pub struct DumpCommand {}
