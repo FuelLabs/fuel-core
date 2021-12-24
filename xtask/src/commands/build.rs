@@ -10,6 +10,8 @@ use structopt::StructOpt;
 pub struct BuildCommand {}
 
 pub fn cargo_build_and_dump_schema() -> Result<(), Box<dyn std::error::Error>> {
+    dump_schema()?;
+
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
@@ -19,8 +21,6 @@ pub fn cargo_build_and_dump_schema() -> Result<(), Box<dyn std::error::Error>> {
     if !status.success() {
         return Err("cargo build failed".into());
     }
-
-    dump_schema()?;
 
     Ok(())
 }
