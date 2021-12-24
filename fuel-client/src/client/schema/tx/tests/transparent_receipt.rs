@@ -4,7 +4,7 @@ use crate::client::schema::{
 use fuel_types::Word;
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Receipt {
     pub a: Option<U64>,
     pub b: Option<U64>,
@@ -32,7 +32,7 @@ pub struct Receipt {
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ReceiptType {
     Call,
     Return,
