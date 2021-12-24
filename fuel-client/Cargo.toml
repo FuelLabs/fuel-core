@@ -1,5 +1,5 @@
 [package]
-name = "fuel-client"
+name = "fuel-gql-client"
 version = "0.1.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
@@ -16,7 +16,7 @@ autotests = false
 autobenches = false
 
 [[bin]]
-name = "fuel-client"
+name = "fuel-gql-cli"
 path = "src/main.rs"
 
 [dependencies]
@@ -36,7 +36,7 @@ surf = "2.2"
 thiserror = "1.0"
 
 [dev-dependencies]
-fuel-client = { path = ".", features = ["test-helpers"] }
+fuel-gql-client = { path = ".", features = ["test-helpers"] }
 fuel-core = { path = "../fuel-core", features = ["test-helpers"] }
 fuel-vm = { git = "ssh://git@github.com/FuelLabs/fuel-vm.git", features = ["serde-types", "random"] }
 insta = "1.8"

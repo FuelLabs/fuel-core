@@ -1212,33 +1212,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-client"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "cynic",
- "derive_more",
- "fuel-client",
- "fuel-core",
- "fuel-storage",
- "fuel-tx",
- "fuel-types",
- "fuel-vm",
- "futures",
- "hex",
- "insta",
- "itertools",
- "rand 0.8.4",
- "schemafy_lib",
- "serde",
- "serde_json",
- "structopt",
- "surf",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "fuel-core"
 version = "0.1.0"
 dependencies = [
@@ -1276,6 +1249,33 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "fuel-gql-client"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "cynic",
+ "derive_more",
+ "fuel-core",
+ "fuel-gql-client",
+ "fuel-storage",
+ "fuel-tx",
+ "fuel-types",
+ "fuel-vm",
+ "futures",
+ "hex",
+ "insta",
+ "itertools",
+ "rand 0.8.4",
+ "schemafy_lib",
+ "serde",
+ "serde_json",
+ "structopt",
+ "surf",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
