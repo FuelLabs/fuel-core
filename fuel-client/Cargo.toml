@@ -6,6 +6,7 @@ categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
 homepage = "https://fuel.network/"
 keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
 # Disable auto-targeting of integ tests or benchmarks
