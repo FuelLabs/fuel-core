@@ -10,17 +10,21 @@ use crate::{
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
-use fuel_vm::prelude::{Interpreter, InterpreterError};
+use fuel_vm::{
+    consts::REG_SP,
+    prelude::{Backtrace as FuelBacktrace, Interpreter, InterpreterError},
+};
 use std::error::Error as StdError;
 use std::ops::DerefMut;
 use thiserror::Error;
+use tracing::warn;
 
 pub struct Executor {
     pub database: Database,
 }
 
 impl Executor {
-    pub async fn execute(&self, block: &FuelBlock) -> Result<(), Error> {
+    pub async fn execute(&self, block: &FuelBlock, with_backtrace: bool) -> Result<(), Error> {
         let mut block_tx = self.database.transaction();
         let block_id = block.id();
         Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
@@ -41,9 +45,8 @@ impl Executor {
 
             // execute vm
             let mut vm = Interpreter::with_storage(tx_db.clone());
-            let execution_result = vm.transact(tx);
-
-            match execution_result {
+            let result = vm.transact(tx);
+            match result {
                 Ok(result) => {
                     // persist any outputs
                     self.persist_outputs(block.fuel_height, result.tx(), tx_db)?;
@@ -95,6 +98,19 @@ impl Executor {
                 }
                 // save error status on block_tx since the sub_tx changes are dropped
                 Err(e) => {
+                    if with_backtrace {
+                        if let Some(backtrace) = vm.backtrace() {
+                            warn!(
+                            target = "vm",
+                            "Execution panic {:?} on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
+                            backtrace.error(),
+                            backtrace.contract(),
+                            backtrace.registers(),
+                            backtrace.call_stack(),
+                            hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                        );
+                        }
+                    }
                     block_tx.update_tx_status(
                         tx_id,
                         TransactionStatus::Failed {
@@ -291,6 +307,14 @@ pub enum Error {
     },
     #[error("VM execution error: {0:?}")]
     VmExecution(fuel_vm::prelude::InterpreterError),
+    #[error("Execution error with backtrace")]
+    Backtrace(Box<FuelBacktrace>),
+}
+
+impl From<FuelBacktrace> for Error {
+    fn from(e: FuelBacktrace) -> Self {
+        Error::Backtrace(Box::new(e))
+    }
 }
 
 impl From<crate::database::KvStoreError> for Error {
