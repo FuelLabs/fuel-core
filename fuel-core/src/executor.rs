@@ -11,8 +11,8 @@ use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_vm::{
-    consts::REG_SP,
-    prelude::{Backtrace as FuelBacktrace, Interpreter, InterpreterError},
+    consts::REG_SP, transactor::Transactor,
+    prelude::{Backtrace as FuelBacktrace, InterpreterError},
 };
 use std::error::Error as StdError;
 use std::ops::DerefMut;
@@ -44,9 +44,9 @@ impl Executor {
             self.persist_owners_index(block.fuel_height, &tx, tx_id, idx, block_tx.deref_mut())?;
 
             // execute vm
-            let mut vm = Interpreter::with_storage(tx_db.clone());
-            let result = vm.transact(tx);
-            match result {
+            let mut vm = Transactor::new(tx_db.clone());
+            let vm = vm.transact(tx);
+            match vm.result() {
                 Ok(result) => {
                     // persist any outputs
                     self.persist_outputs(block.fuel_height, result.tx(), tx_db)?;
@@ -96,14 +96,13 @@ impl Executor {
                         sub_tx.commit()?;
                     }
                 }
-                // save error status on block_tx since the sub_tx changes are dropped
                 Err(e) => {
                     if with_backtrace {
                         if let Some(backtrace) = vm.backtrace() {
                             warn!(
                             target = "vm",
                             "Execution panic {:?} on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
-                            backtrace.error(),
+                            e,
                             backtrace.contract(),
                             backtrace.registers(),
                             backtrace.call_stack(),
@@ -111,6 +110,7 @@ impl Executor {
                         );
                         }
                     }
+                    // save error status on block_tx since the sub_tx changes are dropped
                     block_tx.update_tx_status(
                         tx_id,
                         TransactionStatus::Failed {
