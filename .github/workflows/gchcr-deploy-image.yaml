@@ -38,6 +38,6 @@ jobs:
           IMAGE_TAG: ${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
         run: |
           echo "Building fuel-core image..."
-          docker build -t $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
+          DOCKER_BUILDKIT=1  docker build -t $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
           docker push $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG      
           echo "::set-output name=image::$REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG"
