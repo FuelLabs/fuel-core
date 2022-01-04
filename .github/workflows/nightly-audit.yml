@@ -1,9 +1,8 @@
-name: Nightly Security Audit
-
+name: Security audit
+name: Nightly Security Cargo Audit
 on:
-  push:
-    branches:
-      - roy-cargo-audit-nightly
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   security_audit:
