@@ -12,3 +12,6 @@ fuels-core = { git = "ssh://git@github.com/FuelLabs/fuels-rs.git", package="fuel
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }
+
+[build-dependencies]
+fuel-indexer-util = { path = "../../fuel-indexer/util" }

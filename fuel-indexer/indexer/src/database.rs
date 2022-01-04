@@ -202,7 +202,7 @@ impl Database {
 mod tests {
     use super::*;
     use crate::IndexEnv;
-    use fuel_tx::Address;
+    use fuel_types::Address;
     use wasmer::{imports, Instance, Module, Store, WasmerEnv};
     use wasmer_engine_universal::Universal;
 
