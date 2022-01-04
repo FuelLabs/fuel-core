@@ -17,7 +17,7 @@ WORKDIR /build/
 
 COPY . .
 
-RUN --mount=type=ssh cargo build --release
+RUN cargo build --release
 
 # Stage 2: Run
 FROM ubuntu:20.04 as run
