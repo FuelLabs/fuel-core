@@ -44,6 +44,12 @@ jobs:
         command: fmt
         args: --all --verbose -- --check
 
+    - name: Install fuels-abi-cli
+      uses: actions-rs/cargo@v1
+      with:
+        command: install
+        args: fuels-abi-cli
+
     - name: Check build
       uses: actions-rs/cargo@v1
       with:
