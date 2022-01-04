@@ -8,7 +8,7 @@ publish = false
 crate-type = ['cdylib']
 
 [dependencies]
-fuels-core = { git = "ssh://git@github.com/FuelLabs/fuels-rs.git", package="fuels-core", features=["no-std"] }
+fuels-core = { version = "0.1", features=["no-std"] }
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }

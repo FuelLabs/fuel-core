@@ -1371,9 +1371,6 @@ dependencies = [
 name = "fuel-types"
 version = "0.1.0"
 source = "git+ssh://git@github.com/FuelLabs/fuel-types.git#c1aa6e6dbce71c8b0e7742c79b0d69cb621fe204"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "fuel-vm"
@@ -3156,7 +3153,7 @@ dependencies = [
  "fuel-indexer",
  "fuel-indexer-derive",
  "fuel-indexer-util",
- "fuels-core 0.1.0",
+ "fuels-core 0.1.1",
  "serde",
 ]
 
