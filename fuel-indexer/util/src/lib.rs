@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 
 pub fn generate_abi(contract: &str) {
     let base = std::env::var("CARGO_MANIFEST_DIR").unwrap();
