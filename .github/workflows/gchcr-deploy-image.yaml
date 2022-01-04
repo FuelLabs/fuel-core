@@ -1,4 +1,4 @@
-name: Create and Publish a Docker image to ghcr.io
+name: Build and Publish fuel-core Docker Image to ghcr.io
 
 on:
   push:
@@ -30,11 +30,11 @@ jobs:
         run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
         id: extract_branch
       
-      - name: Build, tag, and push the image to Amazon ECR
+      - name: Build, tag, and push the image to ghcr.io
         id: build-tag-push-image
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          GIT_REPOSITORY: ${{ github.repository }}
+          GIT_REPOSITORY: fuel-core
           IMAGE_TAG: ${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
         run: |
           echo "Building fuel-core image..."
