@@ -30,7 +30,7 @@ jobs:
           images: |
             ghcr.io/fuellabs/fuelcore
           tags: |
-            type=ref,event=branch,type=sha
+            type=sha
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -53,14 +53,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      
-      #- name: Build, tag, and push the image to ghcr.io
-        #id: build-tag-push-image
-        #env:
-          #REGISTRY: ${{ env.REGISTRY }}
-          #GIT_REPOSITORY: fuellabs/fuel-core
-          #IMAGE_TAG: ${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
-        #run: |
-          #echo "Building $GIT_REPOSITORY image..."
-          #DOCKER_BUILDKIT=1  docker build -t $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
-          #docker push $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG 
