@@ -204,7 +204,20 @@ mod tests {
     use crate::IndexEnv;
     use fuel_tx::Address;
     use wasmer::{imports, Instance, Module, Store, WasmerEnv};
-    use wasmer_compiler_llvm::LLVM;
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "llvm")] {
+            use wasmer_compiler_llvm::LLVM;
+            fn compiler() -> LLVM {
+                LLVM::default()
+            }
+        } else {
+            use wasmer_compiler_cranelift::Cranelift;
+            fn compiler() -> Cranelift {
+                Cranelift::default()
+            }
+        }
+    }
+
     use wasmer_engine_universal::Universal;
 
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
@@ -222,7 +235,7 @@ mod tests {
     ];
 
     fn wasm_instance() -> IndexerResult<Instance> {
-        let compiler = LLVM::default();
+        let compiler = compiler();
         let store = Store::new(&Universal::new(compiler).engine());
         let module = Module::new(&store, WASM_BYTES)?;
 

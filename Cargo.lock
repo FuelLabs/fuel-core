@@ -1253,14 +1253,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "327b53a6586ef96bad9173ec7671dd7089187f6ae2e4804555877ff765de17b1"
+dependencies = [
+ "async-graphql",
+ "axum",
+ "bincode",
+ "chrono",
+ "derive_more",
+ "dirs",
+ "env_logger",
+ "fuel-asm",
+ "fuel-storage",
+ "fuel-tx",
+ "fuel-types",
+ "fuel-vm",
+ "futures",
+ "graphql-parser",
+ "hex",
+ "hyper",
+ "itertools",
+ "lazy_static",
+ "rand 0.8.4",
+ "rocksdb",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "structopt",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tower-http",
+ "tower-layer",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "fuel-gql-client"
 version = "0.1.2"
 dependencies = [
  "chrono",
  "cynic",
  "derive_more",
- "fuel-core",
- "fuel-gql-client",
+ "fuel-core 0.1.2",
+ "fuel-gql-client 0.1.2",
  "fuel-storage",
  "fuel-tx",
  "fuel-types",
@@ -1277,6 +1318,29 @@ dependencies = [
  "surf",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "fuel-gql-client"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b44be65acdaae1d0c010b7eca682d20b0c72b4652a594173eda3b96a50a545e"
+dependencies = [
+ "chrono",
+ "cynic",
+ "derive_more",
+ "fuel-storage",
+ "fuel-tx",
+ "fuel-types",
+ "fuel-vm",
+ "futures",
+ "hex",
+ "schemafy_lib",
+ "serde",
+ "serde_json",
+ "structopt",
+ "surf",
+ "thiserror",
 ]
 
 [[package]]
@@ -1385,10 +1449,16 @@ name = "fuel-wasm-executor"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
+ "chrono",
  "diesel",
+ "fuel-core 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-gql-client 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "fuel-indexer",
  "fuel-indexer-schema",
+ "fuel-storage",
  "fuel-tx",
+ "fuel-vm",
+ "itertools",
  "r2d2",
  "r2d2-diesel",
  "serde",
@@ -1396,6 +1466,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "thiserror",
+ "tokio",
  "wasmer",
  "wasmer-compiler-cranelift",
  "wasmer-compiler-llvm",
@@ -4204,7 +4275,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
- "fuel-core",
+ "fuel-core 0.1.2",
  "structopt",
 ]
 

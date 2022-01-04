@@ -1,7 +1,18 @@
 #[cfg(feature = "postgres")]
 mod tests {
+    use chrono::{TimeZone, Utc};
+    use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+    use fuel_core::database::Database;
+    use fuel_core::{
+        model::fuel_block::FuelBlock,
+        schema::scalars::HexString256,
+        service::{Config, FuelService},
+    };
     use fuel_indexer::types::*;
+    use fuel_storage::Storage;
+    use fuel_vm::{consts::*, prelude::*};
     use fuel_wasm_executor::{IndexExecutor, Manifest, SchemaManager};
+    use itertools::Itertools;
     use serde::{Deserialize, Serialize};
     use serde_json;
 
@@ -56,5 +67,62 @@ mod tests {
                 println!("NO handler for {}", event.trigger);
             }
         }
+    }
+
+
+    #[tokio::test]
+    async fn test_blocks() {
+        let script = vec![
+            Opcode::ADDI(0x10, REG_ZERO, 0xca),
+            Opcode::ADDI(0x11, REG_ZERO, 0xba),
+            Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
+            Opcode::RET(REG_ONE),
+        ]
+        .iter()
+        .copied()
+        .collect::<Vec<u8>>();
+
+        let gas_price = 0;
+        let gas_limit = 1_000_000;
+        let maturity = 0;
+        let transaction = fuel_tx::Transaction::script(
+            gas_price,
+            gas_limit,
+            maturity,
+            script,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        );
+        let id = transaction.id();
+
+
+        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+        // submit tx
+        let result = client.submit(&transaction).await;
+
+
+        // run test
+        let blocks = client
+            .blocks(PaginationRequest {
+                cursor: None,
+                results: 5,
+                direction: PageDirection::Backward,
+            })
+            .await
+            .unwrap();
+        for block in blocks.results {
+            for trans in block.transactions {
+                if let Some(receipts) = trans.receipts {
+                    for receipt in receipts {
+                        let rec = fuel_tx::Receipt::try_from(receipt).expect("Bad receipt");
+                        println!("Rekpt {:?}", rec);
+                    }
+                }
+            }
+        }
+        assert!(false);
     }
 }
