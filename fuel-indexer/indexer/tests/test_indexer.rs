@@ -113,8 +113,11 @@ mod tests {
             })
             .await
             .unwrap();
+
         for block in blocks.results {
             for trans in block.transactions {
+                let tx = fuel_tx::Transaction::try_from(trans).expect("Bad transaction");
+
                 if let Some(receipts) = trans.receipts {
                     for receipt in receipts {
                         let rec = fuel_tx::Receipt::try_from(receipt).expect("Bad receipt");
