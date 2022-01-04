@@ -10,6 +10,7 @@ mod tests {
     };
     use fuel_indexer::types::*;
     use fuel_storage::Storage;
+    use fuel_tx::Receipt;
     use fuel_vm::{consts::*, prelude::*};
     use fuel_wasm_executor::{IndexExecutor, Manifest, SchemaManager};
     use itertools::Itertools;
@@ -76,6 +77,9 @@ mod tests {
             Opcode::ADDI(0x10, REG_ZERO, 0xca),
             Opcode::ADDI(0x11, REG_ZERO, 0xba),
             Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
+            Opcode::LOG(0x11, 0x12, REG_ZERO, REG_ZERO),
+            Opcode::LOG(0x12, 0x13, REG_ZERO, REG_ZERO),
+            Opcode::LOG(0x13, 0x14, REG_ZERO, REG_ZERO),
             Opcode::RET(REG_ONE),
         ]
         .iter()
@@ -116,12 +120,25 @@ mod tests {
 
         for block in blocks.results {
             for trans in block.transactions {
-                let tx = fuel_tx::Transaction::try_from(trans).expect("Bad transaction");
+                //let tx = fuel_tx::Transaction::try_from(trans).expect("Bad transaction");
 
                 if let Some(receipts) = trans.receipts {
                     for receipt in receipts {
-                        let rec = fuel_tx::Receipt::try_from(receipt).expect("Bad receipt");
-                        println!("Rekpt {:?}", rec);
+                        let rec = Receipt::try_from(receipt).expect("Bad receipt");
+                        match rec {
+                            Receipt::Log { id, ra, rb, rc, rd, pc, is, } => println!("Log {:?} {:?} {:?} {:?} {:?} {:?} {:?}", id, ra, rb, rc, rd, pc, is),
+                            Receipt::Return { id, val, pc, is, } => println!("Return {:?} {:?} {:?} {:?}", id, val, pc, is),
+                            Receipt::ScriptResult { result, gas_used, } => println!("ScriptResult {:?} {:?}", result, gas_used),
+                            o => panic!("Danggittt {:?}", o),
+                        }
+                        // TODO: Other receipt types:
+                        //Call { id: ContractId, to: ContractId, amount: Word, color: Color, gas: Word, a: Word, b: Word, pc: Word, is: Word, },
+                        //ReturnData { id: ContractId, ptr: Word, len: Word, digest: Bytes32, data: Vec<u8>, pc: Word, is: Word, },
+                        //Panic { id: ContractId, reason: Word, pc: Word, is: Word, },
+                        //Revert { id: ContractId, ra: Word, pc: Word, is: Word, },
+                        //LogData { id: ContractId, ra: Word, rb: Word, ptr: Word, len: Word, digest: Bytes32, data: Vec<u8>, pc: Word, is: Word, },
+                        //Transfer { id: ContractId, to: ContractId, amount: Word, color: Color, pc: Word, is: Word, },
+                        //TransferOut { id: ContractId, to: Address, amount: Word, color: Color, pc: Word, is: Word, },
                     }
                 }
             }
