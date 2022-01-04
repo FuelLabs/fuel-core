@@ -18,11 +18,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
       
-      - name: Log in to the Container registry
+      - name: Log in to the ghcr.io registry
         uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
         with:
           registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract branch name
@@ -34,10 +34,9 @@ jobs:
         id: build-tag-push-image
         env:
           REGISTRY: ${{ env.REGISTRY }}
-          GIT_REPOSITORY: fuel-core
+          GIT_REPOSITORY: fuellabs/fuel-core
           IMAGE_TAG: ${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
         run: |
           echo "Building fuel-core image..."
           DOCKER_BUILDKIT=1  docker build -t $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
-          docker push $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG      
-          echo "::set-output name=image::$REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG"
+          docker push $REGISTRY/$GIT_REPOSITORY:$IMAGE_TAG 
