@@ -28,9 +28,10 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            $REGISTRY/fuellabs/fuelcore
+            ghcr.io/fuellabs/fuelcore
           tags: |
             type=ref,event=branch
+            type=sha
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
