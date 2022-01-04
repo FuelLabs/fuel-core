@@ -5,7 +5,7 @@ module "fuel-core-aws-deploy" {
   environment = "terraform-test"
 
   # AWS
-  eks-cluster-name    = "fuel-test"
+  eks-cluster-name    = "fuelcore-test"
   region              = "us-east-1"
   account_id          = "756756437019"
   vpc_cidr_block      = "10.128.0.0/20"
