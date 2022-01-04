@@ -1,4 +1,7 @@
-use commands::build::{cargo_build_and_dump_schema, BuildCommand};
+use commands::{
+    build::{cargo_build_and_dump_schema, BuildCommand},
+    dump::{dump_schema, DumpCommand},
+};
 use structopt::StructOpt;
 
 mod commands;
@@ -13,6 +16,7 @@ pub struct Opt {
 #[derive(Debug, StructOpt)]
 enum Xtask {
     Build(BuildCommand),
+    Dump(DumpCommand),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -20,5 +24,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match opt.command {
         Xtask::Build(_) => cargo_build_and_dump_schema(),
+        Xtask::Dump(_) => dump_schema(),
     }
 }

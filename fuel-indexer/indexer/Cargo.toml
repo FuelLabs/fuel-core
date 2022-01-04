@@ -2,6 +2,8 @@
 name = "fuel-wasm-executor"
 version = "0.1.0"
 edition = "2021"
+license = "BUSL-1.1"
+publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -22,7 +24,7 @@ wasmer-engine-universal = "2.0"
 [dev-dependencies]
 fuel-indexer = { path = "../lib" }
 fuels-core = { git = "ssh://git@github.com/FuelLabs/fuels-rs.git", package="fuels-core" }
-fuel-tx = { git = "ssh://git@github.com/FuelLabs/fuel-tx.git", features = ["serde-types"] }
+fuel-tx = { version = "0.1", features = ["serde-types"] }
 serde_yaml = "0.8.19"
 
 [features]
