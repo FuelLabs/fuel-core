@@ -22,7 +22,7 @@ pub struct CoinsByOwnerConnectionArgs {
     /// Select coins based on the `owner` field
     pub owner: HexString256,
     /// Select coins based on the `color` field
-    pub color: HexString256,
+    pub color: Option<HexString256>,
     /// Skip until coin id (forward pagination)
     pub after: Option<String>,
     /// Skip until coin id (backward pagination)
@@ -39,7 +39,7 @@ impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsByOw
         match r.2.direction {
             PageDirection::Forward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
-                color: r.1,
+                color: Some(r.1),
                 after: r.2.cursor,
                 before: None,
                 first: Some(r.2.results as i32),
@@ -47,7 +47,7 @@ impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsByOw
             },
             PageDirection::Backward => CoinsByOwnerConnectionArgs {
                 owner: r.0,
-                color: r.1,
+                color: Some(r.1),
                 after: None,
                 before: r.2.cursor,
                 first: None,
@@ -133,7 +133,7 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = CoinsQuery::build(CoinsByOwnerConnectionArgs {
             owner: HexString256::default(),
-            color: HexString256::default(),
+            color: HexString256::default().into(),
             after: None,
             before: None,
             first: None,
