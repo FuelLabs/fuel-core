@@ -5,6 +5,7 @@ use fuel_core::{
 };
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
+use fuel_tx::Color;
 use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
@@ -82,6 +83,62 @@ async fn first_5_coins() {
             PaginationRequest {
                 cursor: None,
                 results: 5,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!coins.results.is_empty());
+    assert_eq!(coins.results.len(), 5)
+}
+
+#[tokio::test]
+async fn only_color_filtered_coins() {
+    let owner = Address::default();
+
+    // setup test data in the node
+    let coins: Vec<(Bytes32, Coin)> = (1..10usize)
+        .map(|i| {
+            let coin = Coin {
+                owner,
+                amount: i as Word,
+                color: if i <= 5 {
+                    Color::new([1u8; 32])
+                } else {
+                    Default::default()
+                },
+                maturity: Default::default(),
+                status: CoinStatus::Unspent,
+                block_created: Default::default(),
+            };
+
+            let utxo_id = UtxoId {
+                tx_id: Bytes32::from([i as u8; 32]),
+                output_index: 0,
+            };
+            (utxo_id.into(), coin)
+        })
+        .collect();
+
+    let mut db = Database::default();
+    for (id, coin) in coins {
+        Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
+    }
+
+    // setup server & client
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // run test
+    let coins = client
+        .coins_by_owner(
+            format!("{:#x}", owner).as_str(),
+            Some(format!("{:#x}", Color::new([1u8; 32])).as_str()),
+            PaginationRequest {
+                cursor: None,
+                results: 10,
                 direction: PageDirection::Forward,
             },
         )
