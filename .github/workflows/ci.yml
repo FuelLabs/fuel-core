@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - roy-docker-ghcr-build
   pull_request:
   release:
     types: [published]
