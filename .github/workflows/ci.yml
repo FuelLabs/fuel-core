@@ -92,6 +92,7 @@ jobs:
   build-and-push-image:
     needs: build
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     permissions:
       contents: read
       packages: write
