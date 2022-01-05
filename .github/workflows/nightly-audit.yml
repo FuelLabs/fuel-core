@@ -15,13 +15,9 @@ jobs:
     steps:
       - name: Checkout Repository
       - uses: actions/checkout@v1
-
-      - name: Run Cargo Audit 
       - uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Notify Slack Channel of Cargo Audit Failures
       - uses: ravsamhq/notify-slack-action@v1
         if: always()
         with:
