@@ -10,7 +10,7 @@ on:
 
 
 jobs:
-  security_audit:
+  run_cargo_audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -25,9 +25,5 @@ jobs:
           message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}>'
           footer: 'Linked Repo <{repo_url}|{repo}>'
           notify_when: 'failure'
-          mention_users: 'U0160UUNH8S,U0080UUAA9N'
-          mention_users_when: 'failure,warnings'
-          mention_groups: 'SAZ94GDB8'
-          mention_groups_when: 'failure,warnings'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
