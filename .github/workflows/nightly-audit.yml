@@ -13,7 +13,6 @@ jobs:
   security_audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
       - uses: actions/checkout@v1
       - uses: actions-rs/audit-check@v1
         with:
