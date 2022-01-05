@@ -144,6 +144,9 @@ impl CoinQuery {
                     coins.retain(|coin| coin.1.color == color.0.into());
                 }
 
+                // filter coins by status
+                coins.retain(|coin| coin.1.status == CoinStatus::Unspent);
+
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= coins.len());
                 connection.append(
