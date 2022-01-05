@@ -1,9 +1,7 @@
 name: Nightly Security Cargo Audit
-
 on:
   push:
     branches: ['roy-cargo-audit-nightly']
-
 #on:
   #schedule:
     #- cron: '0 0 * * *'
