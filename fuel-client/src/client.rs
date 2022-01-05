@@ -10,7 +10,7 @@ pub mod schema;
 
 use schema::{
     block::BlockByIdArgs,
-    coin::{Coin, CoinByIdArgs, CoinStatus},
+    coin::{Coin, CoinByIdArgs},
     tx::{TxArg, TxIdArgs},
     Bytes, HexString, HexString256, IdArg, MemoryArgs, RegisterArgs,
 };
@@ -228,7 +228,6 @@ impl FuelClient {
         &self,
         owner: &str,
         color: Option<&str>,
-        status: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
         let owner: HexString256 = owner.parse()?;
@@ -236,11 +235,7 @@ impl FuelClient {
             Some(color) => color.parse()?,
             None => HexString256::default(),
         };
-        let status: CoinStatus = match status {
-            Some(status) => status.parse()?,
-            None => CoinStatus::default(),
-        };
-        let query = schema::coin::CoinsQuery::build(&(owner, color, status, request).into());
+        let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
 
         let coins = self.query(query).await?.coins_by_owner.into();
         Ok(coins)
