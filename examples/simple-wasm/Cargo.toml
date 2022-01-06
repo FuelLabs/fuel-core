@@ -11,7 +11,5 @@ crate-type = ['cdylib']
 fuels-core = { version = "0.1", features=["no-std"] }
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
+fuels-abigen-macro = { git = "https://github.com/fuellabs/fuels-rs.git", package="fuels-abigen-macro" }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }
-
-[build-dependencies]
-fuel-indexer-util = { path = "../../fuel-indexer/util" }

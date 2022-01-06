@@ -29,12 +29,6 @@ This command will run `cargo build` and also dump the latest schema into `/asset
 
 There are several system requirements including llvm, clang and postgres.
 
-##### Fuels abigen cli tool
-The fuels-abi-cli tool must be installed for compiling the wasm examples.
-```bash
-cargo install fuels-abi-cli
-```
-
 ###### MacOS
 ```bash
 brew update

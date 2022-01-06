@@ -34,17 +34,6 @@ jobs:
 
     # Build caching action
     - uses: Swatinem/rust-cache@v1
-    - name: Cache Fuels Binaries
-      uses: actions/cache@v2
-      env:
-        cache-name: cache-bin
-      with:
-        path: ~/.cargo/bin/fuels-abi-cli
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('./Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
 
     - name: Install rustfmt
       run: rustup component add rustfmt
@@ -54,12 +43,6 @@ jobs:
       with:
         command: fmt
         args: --all --verbose -- --check
-
-    - name: Install fuels-abi-cli
-      uses: actions-rs/cargo@v1
-      with:
-        command: install
-        args: fuels-abi-cli
 
     - name: Check build
       uses: actions-rs/cargo@v1

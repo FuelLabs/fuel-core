@@ -4,7 +4,7 @@
         "inputs":[
             {
                 "name":"SomeEvent",
-                "type":"struct",
+                "type":"struct SomeEvent",
                 "components": [
                     {
                         "name": "id",
@@ -18,7 +18,7 @@
             },
             {
                 "name":"AnotherEvent",
-                "type":"struct",
+                "type":"struct AnotherEvent",
                 "components": [
                     {
                         "name": "id",
