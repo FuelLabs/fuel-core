@@ -13,16 +13,10 @@ mod no_name_mod {
     }
     impl SomeEvent {
         pub fn param_types() -> Vec<ParamType> {
-            let mut types = Vec::new();
-            types.push(ParamType::U64);
-            types.push(ParamType::B256);
-            types
+            vec![ParamType::U64, ParamType::B256]
         }
         pub fn into_token(self) -> Token {
-            let mut tokens = Vec::new();
-            tokens.push(Token::U64(self.id));
-            tokens.push(Token::B256(self.account));
-            Token::Struct(tokens)
+            Token::Struct(vec![Token::U64(self.id), Token::B256(self.account)])
         }
         pub fn new_from_tokens(tokens: &[Token]) -> Self {
             Self { id : < u64 > :: from_token (tokens [0usize] . clone ()) . expect ("Failed to run `new_from_tokens()` for custom struct, make sure to pass tokens in the right order and right types") , account : < [u8 ; 32] > :: from_token (tokens [1usize] . clone ()) . expect ("Failed to run `new_from_tokens()` for custom struct, make sure to pass tokens in the right order and right types") }
@@ -36,18 +30,10 @@ mod no_name_mod {
     }
     impl AnotherEvent {
         pub fn param_types() -> Vec<ParamType> {
-            let mut types = Vec::new();
-            types.push(ParamType::U64);
-            types.push(ParamType::B256);
-            types.push(ParamType::Bool);
-            types
+            vec![ParamType::U64, ParamType::B256, ParamType::Bool]
         }
         pub fn into_token(self) -> Token {
-            let mut tokens = Vec::new();
-            tokens.push(Token::U64(self.id));
-            tokens.push(Token::B256(self.hash));
-            tokens.push(Token::Bool(self.bar));
-            Token::Struct(tokens)
+            Token::Struct(vec![Token::U64(self.id), Token::B256(self.hash), Token::Bool(self.bar)])
         }
         pub fn new_from_tokens(tokens: &[Token]) -> Self {
             Self { id : < u64 > :: from_token (tokens [0usize] . clone ()) . expect ("Failed to run `new_from_tokens()` for custom struct, make sure to pass tokens in the right order and right types") , hash : < [u8 ; 32] > :: from_token (tokens [1usize] . clone ()) . expect ("Failed to run `new_from_tokens()` for custom struct, make sure to pass tokens in the right order and right types") , bar : < bool > :: from_token (tokens [2usize] . clone ()) . expect ("Failed to run `new_from_tokens()` for custom struct, make sure to pass tokens in the right order and right types") }
