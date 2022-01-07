@@ -4,6 +4,7 @@ on:
   push:
     branches: 
       - 'master' 
+      - 'roy-docker-ghcr-build'
   pull_request:
   release:
     types: [published]
@@ -92,7 +93,7 @@ jobs:
 
   build-publish-master-image:
     needs: build
-    if: github.ref == 'refs/heads/roy-docker-ghcr-build'
+    #if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
