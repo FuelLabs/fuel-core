@@ -92,7 +92,7 @@ jobs:
 
   build-publish-master-image:
     needs: build
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/roy-docker-ghcr-build'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -128,7 +128,7 @@ jobs:
           context: .
           file: deployment/Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}, test
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max  
