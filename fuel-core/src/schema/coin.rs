@@ -61,6 +61,7 @@ impl CoinQuery {
         Ok(block)
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn coins_by_owner(
         &self,
         ctx: &Context<'_>,
