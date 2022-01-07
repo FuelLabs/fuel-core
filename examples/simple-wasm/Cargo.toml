@@ -8,7 +8,8 @@ publish = false
 crate-type = ['cdylib']
 
 [dependencies]
+fuels-core = { version = "0.1", features=["no-std"] }
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
-# TODO: abigen
+fuels-abigen-macro = { git = "https://github.com/fuellabs/fuels-rs.git", package="fuels-abigen-macro" }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }

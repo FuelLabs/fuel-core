@@ -18,6 +18,7 @@ quote = "1.0"
 syn = { version = "1.0", features = ["full"] }
 
 [dev-dependencies]
+fuels-core = { version = "0.1" }
 fuel-indexer = { path = "../lib" }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 trybuild = "1.0"

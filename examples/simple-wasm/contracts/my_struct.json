@@ -1,0 +1,41 @@
+[
+    {
+        "type":"contract",
+        "inputs":[
+            {
+                "name":"SomeEvent",
+                "type":"struct SomeEvent",
+                "components": [
+                    {
+                        "name": "id",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "account",
+                        "type": "b256"
+                    }
+                ]
+            },
+            {
+                "name":"AnotherEvent",
+                "type":"struct AnotherEvent",
+                "components": [
+                    {
+                        "name": "id",
+                        "type": "u64"
+                    },
+                    {
+                        "name": "hash",
+                        "type": "b256"
+                    },
+                    {
+                        "name": "bar",
+                        "type": "bool"
+                    }
+                ]
+            }
+        ],
+        "name":"takes_struct",
+        "outputs":[]
+    }
+]

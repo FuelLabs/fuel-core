@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 diesel = { version = "1.4", optional = true, features = ["postgres", "serde_json"] }
-fuel-tx = { version = "0.1", default-features = false }
+fuel-types = { version = "0.1", default-features = false }
 graphql-parser = "0.3"
 itertools = { version = "0.10", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
@@ -20,6 +20,6 @@ thiserror = { version = "1.0", optional = true }
 insta = "1.8"
 
 [features]
-default = ["fuel-tx/serde-types-minimal"]
+default = ["fuel-types/serde-types-minimal"]
 db-models = ["use-std", "itertools", "thiserror"]
-use-std = ["fuel-tx/default", "fuel-tx/serde-types", "diesel"]
+use-std = ["fuel-types/default", "fuel-types/serde-types", "diesel"]
