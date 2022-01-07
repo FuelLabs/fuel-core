@@ -3,8 +3,7 @@ name: CI
 on:
   push:
     branches: 
-      - 'master' 
-      - 'roy-docker-ghcr-build'
+      - master 
   pull_request:
   release:
     types: [published]
@@ -93,7 +92,7 @@ jobs:
 
   build-publish-master-image:
     needs: build
-    #if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -173,4 +172,4 @@ jobs:
           tags: ${{ github.ref_name }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max  
+          cache-to: type=gha,mode=max
