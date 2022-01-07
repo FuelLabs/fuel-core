@@ -9,7 +9,6 @@ RUN apt-get update && \
     clang \
     libclang-dev \
     libssl-dev \
-    && mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
