@@ -1,10 +1,11 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
+assertion_line: 142
 expression: operation.query
 
 ---
-query Query($_0: HexString256!, $_1: String, $_2: String, $_3: Int, $_4: Int) {
-  coinsByOwner(owner: $_0, after: $_1, before: $_2, first: $_3, last: $_4) {
+query Query($_0: HexString256!, $_1: String, $_2: String, $_3: Int, $_4: Int, $_5: HexString256) {
+  coinsByOwner(owner: $_0, after: $_1, before: $_2, first: $_3, last: $_4, color: $_5) {
     edges {
       cursor
       node {
