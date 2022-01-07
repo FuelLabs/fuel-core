@@ -90,7 +90,7 @@ jobs:
         with:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  build-and-push-image:
+  build-publish-master-image:
     needs: build
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
@@ -133,7 +133,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max  
   
-  release-build-publish:
+  build-publish-release-image:
     # Build & Publish Docker Image Per Fuel-Core Release
     needs: build
     if: github.event_name == 'release' && github.event.action == 'published'
