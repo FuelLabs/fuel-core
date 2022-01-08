@@ -77,7 +77,7 @@ async fn first_5_coins() {
 
     // run test
     let coins = client
-        .coins_by_owner(
+        .coins(
             format!("{:#x}", owner).as_str(),
             None,
             PaginationRequest {
@@ -133,7 +133,7 @@ async fn only_color_filtered_coins() {
 
     // run test
     let coins = client
-        .coins_by_owner(
+        .coins(
             format!("{:#x}", owner).as_str(),
             Some(format!("{:#x}", Color::new([1u8; 32])).as_str()),
             PaginationRequest {
@@ -189,7 +189,7 @@ async fn only_spent_coins() {
 
     // run test
     let coins = client
-        .coins_by_owner(
+        .coins(
             format!("{:#x}", owner).as_str(),
             None,
             PaginationRequest {
