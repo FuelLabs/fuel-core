@@ -72,7 +72,13 @@ type CoinEdge {
 	cursor: String!
 }
 input CoinFilterInput {
+	"""
+	address of the owner
+	"""
 	owner: HexString256!
+	"""
+	color of the coins
+	"""
 	color: HexString256
 }
 type CoinOutput {

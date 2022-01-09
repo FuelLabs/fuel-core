@@ -47,9 +47,9 @@ impl Coin {
 
 #[derive(InputObject)]
 struct CoinFilterInput {
-    // #[graphql(desc = "address of the owner")]
+    /// address of the owner
     owner: HexString256,
-    // #[graphql(desc = "color of the coins")]
+    /// color of the coins
     color: Option<HexString256>,
 }
 
