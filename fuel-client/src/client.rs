@@ -224,7 +224,7 @@ impl FuelClient {
     }
 
     /// Retrieve a page of coins by their owner
-    pub async fn coins_by_owner(
+    pub async fn coins(
         &self,
         owner: &str,
         color: Option<&str>,
@@ -237,7 +237,7 @@ impl FuelClient {
         };
         let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
 
-        let coins = self.query(query).await?.coins_by_owner.into();
+        let coins = self.query(query).await?.coins.into();
         Ok(coins)
     }
 }
