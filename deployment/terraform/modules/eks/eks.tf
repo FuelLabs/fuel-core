@@ -26,7 +26,7 @@ module "eks" {
     blue = {
       ami_type               = var.eks-node-ami-type
       instance_types         = var.eks-node-instance-types
-      disk_size              = 100
+      disk_size              = var.eks-node-disk-size
       min_size               = var.eks-node-min-size
       max_size               = var.eks-node-max-size
       desired_size           = var.eks-node-desired-size
