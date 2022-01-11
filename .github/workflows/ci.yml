@@ -113,6 +113,8 @@ jobs:
             type=sha
             type=ref,event=branch
             type=ref,event=tag
+          flavor: |
+            latest=auto
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
