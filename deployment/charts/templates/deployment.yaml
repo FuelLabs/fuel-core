@@ -29,6 +29,8 @@ spec:
           volumeMounts:
             - name: {{ .Values.app.volume.pv-name }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
+      imagePullSecrets:
+        - name: gchr-auth-token
       volumes:
         - name: {{ .Values.app.volume.pv-name }}
           persistentVolumeClaim:

@@ -7,9 +7,9 @@ app:
   replicas: 1
   port: 4000
   image:
-    repository: fuel-core
-    tag: latest
-    pullPolicy: Never
+    repository: ghcr.io/fuellabs/fuelcore
+    tag: master
+    pullPolicy: Always
   volume: 
     pv-name: db-volume
     mountPath: /mnt/db/
