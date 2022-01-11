@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master 
+      - roy-docker-ghcr-build
   pull_request:
   release:
     types: [published]
@@ -92,7 +93,7 @@ jobs:
 
   build-publish-master-image:
     needs: build
-    if: github.ref == 'refs/heads/master'
+    #if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -111,6 +112,7 @@ jobs:
           tags: |
             type=sha
             type=ref,event=branch
+            type=ref,event=tag
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -135,8 +137,7 @@ jobs:
   
   build-publish-release-image:
     # Build & Publish Docker Image Per Fuel-Core Release
-    needs: build
-    if: github.event_name == 'release' && github.event.action == 'published'
+    needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
