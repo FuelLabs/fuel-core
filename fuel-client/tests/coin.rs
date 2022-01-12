@@ -3,7 +3,9 @@ use fuel_core::{
     model::coin::{Coin, CoinStatus, UtxoId},
     service::{Config, FuelService},
 };
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_gql_client::client::{
+    schema::coin::CoinStatus as SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
+};
 use fuel_storage::Storage;
 use fuel_tx::Color;
 use fuel_vm::prelude::{Address, Bytes32, Word};
@@ -95,6 +97,7 @@ async fn first_5_coins() {
 #[tokio::test]
 async fn only_color_filtered_coins() {
     let owner = Address::default();
+    let color = Color::new([1u8; 32]);
 
     // setup test data in the node
     let coins: Vec<(Bytes32, Coin)> = (1..10usize)
@@ -102,11 +105,7 @@ async fn only_color_filtered_coins() {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                color: if i <= 5 {
-                    Color::new([1u8; 32])
-                } else {
-                    Default::default()
-                },
+                color: if i <= 5 { color } else { Default::default() },
                 maturity: Default::default(),
                 status: CoinStatus::Unspent,
                 block_created: Default::default(),
@@ -145,11 +144,12 @@ async fn only_color_filtered_coins() {
         .await
         .unwrap();
     assert!(!coins.results.is_empty());
-    assert_eq!(coins.results.len(), 5)
+    assert_eq!(coins.results.len(), 5);
+    assert!(coins.results.into_iter().all(|c| color == c.color.into()));
 }
 
 #[tokio::test]
-async fn only_spent_coins() {
+async fn only_unspent_coins() {
     let owner = Address::default();
 
     // setup test data in the node
@@ -201,5 +201,9 @@ async fn only_spent_coins() {
         .await
         .unwrap();
     assert!(!coins.results.is_empty());
-    assert_eq!(coins.results.len(), 5)
+    assert_eq!(coins.results.len(), 5);
+    assert!(coins
+        .results
+        .into_iter()
+        .all(|c| c.status == SchemaCoinStatus::Unspent));
 }
