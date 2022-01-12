@@ -11,7 +11,7 @@ pub struct BlockByIdArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "BlockByIdArgs"
 )]
@@ -22,7 +22,7 @@ pub struct BlockByIdQuery {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "../assets/schema.sdl",
+    schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
     argument_struct = "ConnectionArgs"
 )]
@@ -32,7 +32,7 @@ pub struct BlocksQuery {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BlockConnection {
     pub edges: Option<Vec<Option<BlockEdge>>>,
     pub page_info: PageInfo,
@@ -53,14 +53,14 @@ impl From<BlockConnection> for PaginatedResult<Block, String> {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct BlockEdge {
     pub cursor: String,
     pub node: Block,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
     pub height: U64,
     pub id: HexString256,

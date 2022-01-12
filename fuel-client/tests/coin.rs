@@ -1,9 +1,9 @@
-use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::{
     database::Database,
     model::coin::{Coin, CoinStatus, UtxoId},
     service::{Config, FuelService},
 };
+use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, Word};
 

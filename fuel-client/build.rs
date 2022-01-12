@@ -5,15 +5,11 @@ use std::io::prelude::*;
 use std::path::PathBuf;
 
 fn main() {
-    println!("cargo:rerun-if-changed=../fuel-core/src/schema");
+    println!("cargo:rerun-if-changed=./assets/debugAdapterProtocol.json");
 
     let path = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
-        .map(|p| {
-            p.parent()
-                .expect("Failed to uproot")
-                .join("fuel-client/assets/debugAdapterProtocol.json")
-        })
+        .map(|p| p.join("assets/debugAdapterProtocol.json"))
         .expect("Failed to fetch JSON schema");
 
     let json = fs::read_to_string(&path).expect("Failed to parse JSON from schema");
