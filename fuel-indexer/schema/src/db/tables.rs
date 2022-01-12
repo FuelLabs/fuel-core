@@ -126,7 +126,7 @@ impl SchemaBuilder {
                     return;
                 }
 
-                let type_id = type_id(&o.name);
+                let type_id = type_id(&self.namespace, &o.name);
                 let columns = self.generate_columns(type_id as i64, &o.fields);
                 let table_name = o.name.to_lowercase();
 

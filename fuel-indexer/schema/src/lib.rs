@@ -21,7 +21,7 @@ pub mod sql_types;
 #[cfg(feature = "db-models")]
 pub mod db;
 
-pub use fuel_tx::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt};
+pub use fuel_types::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt};
 
 pub type ID = u64;
 
@@ -34,9 +34,9 @@ pub fn deserialize<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> T {
 }
 
 #[cfg(feature = "use-std")]
-pub fn type_id(type_name: &str) -> u64 {
+pub fn type_id(namespace: &str, type_name: &str) -> u64 {
     let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&Sha256::digest(type_name.as_bytes())[..8]);
+    bytes.copy_from_slice(&Sha256::digest(format!("{}:{}", namespace, type_name).as_bytes())[..8]);
     u64::from_le_bytes(bytes)
 }
 
