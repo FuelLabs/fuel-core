@@ -224,15 +224,20 @@ impl FuelClient {
     }
 
     /// Retrieve a page of coins by their owner
-    pub async fn coins_by_owner(
+    pub async fn coins(
         &self,
         owner: &str,
+        color: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
         let owner: HexString256 = owner.parse()?;
-        let query = schema::coin::CoinsQuery::build(&(owner, request).into());
+        let color: HexString256 = match color {
+            Some(color) => color.parse()?,
+            None => HexString256::default(),
+        };
+        let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
 
-        let coins = self.query(query).await?.coins_by_owner.into();
+        let coins = self.query(query).await?.coins.into();
         Ok(coins)
     }
 }

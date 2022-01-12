@@ -2,6 +2,7 @@ use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{HexString256, U64};
 use crate::state::IterDirection;
+use async_graphql::InputObject;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
@@ -44,6 +45,14 @@ impl Coin {
     }
 }
 
+#[derive(InputObject)]
+struct CoinFilterInput {
+    /// address of the owner
+    owner: HexString256,
+    /// color of the coins
+    color: Option<HexString256>,
+}
+
 #[derive(Default)]
 pub struct CoinQuery;
 
@@ -61,14 +70,14 @@ impl CoinQuery {
         Ok(block)
     }
 
-    async fn coins_by_owner(
+    async fn coins(
         &self,
         ctx: &Context<'_>,
         after: Option<String>,
         before: Option<String>,
         first: Option<i32>,
         last: Option<i32>,
-        #[graphql(desc = "address of the owner")] owner: HexString256,
+        filter: CoinFilterInput,
     ) -> async_graphql::Result<Connection<HexString256, Coin, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
 
@@ -100,7 +109,7 @@ impl CoinQuery {
                     end = after;
                 }
 
-                let owner: Address = owner.into();
+                let owner: Address = filter.owner.into();
 
                 let mut coin_ids = db.owned_coins(owner, start, Some(direction));
                 let mut started = None;
@@ -136,6 +145,15 @@ impl CoinQuery {
                             .map(|coin| Coin(id, coin.into_owned()))
                     })
                     .try_collect()?;
+
+                // filter coins by color
+                let mut coins = coins;
+                if let Some(color) = filter.color {
+                    coins.retain(|coin| coin.1.color == color.0.into());
+                }
+
+                // filter coins by status
+                coins.retain(|coin| coin.1.status == CoinStatus::Unspent);
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= coins.len());

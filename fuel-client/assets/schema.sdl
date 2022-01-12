@@ -71,6 +71,16 @@ type CoinEdge {
 	"""
 	cursor: String!
 }
+input CoinFilterInput {
+	"""
+	address of the owner
+	"""
+	owner: HexString256!
+	"""
+	color of the coins
+	"""
+	color: HexString256
+}
 type CoinOutput {
 	to: HexString256!
 	amount: Int!
@@ -169,7 +179,7 @@ type Query {
 	"""
 	health: Boolean!
 	coin(id: HexString256!): Coin
-	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!): CoinConnection!
+	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
 }
 type Receipt {
 	id: HexString256
