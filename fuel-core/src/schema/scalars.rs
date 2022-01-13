@@ -3,7 +3,7 @@ use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
-use fuel_tx::{Address, Bytes32, Color, ContractId, Salt};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Salt, UtxoId};
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},
@@ -224,6 +224,76 @@ impl From<Salt> for HexString256 {
 }
 
 impl CursorType for HexString256 {
+    type Error = String;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        Self::from_str(s)
+    }
+
+    fn encode_cursor(&self) -> String {
+        self.to_string()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HexStringUtxoId(pub(crate) UtxoId);
+
+#[Scalar(name = "HexStringUtxoId")]
+impl ScalarType for HexStringUtxoId {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(value) = &value {
+            HexStringUtxoId::from_str(value.as_str()).map_err(Into::into)
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.to_string())
+    }
+}
+
+impl FromStr for HexStringUtxoId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // trim leading 0x
+        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+        // pad input to 33 bytes
+        let mut bytes = ((value.len() / 2)..33).map(|_| 0).collect::<Vec<u8>>();
+        // decode into bytes
+        bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);
+        let output_index = bytes.pop().unwrap();
+        // attempt conversion to fixed length array, error if too long
+        let tx_id: [u8; 32] = bytes
+            .try_into()
+            .map_err(|e: Vec<u8>| format!("expected 32 bytes, received {}", e.len()))?;
+        let tx_id: Bytes32 = tx_id.into();
+
+        Ok(Self(UtxoId::new(tx_id, output_index)))
+    }
+}
+
+impl Display for HexStringUtxoId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = format!("{:#x}{:02x?}", self.0.tx_id(), self.0.output_index());
+        s.fmt(f)
+    }
+}
+
+impl From<HexStringUtxoId> for UtxoId {
+    fn from(s: HexStringUtxoId) -> Self {
+        s.0
+    }
+}
+
+impl From<UtxoId> for HexStringUtxoId {
+    fn from(utxo_id: UtxoId) -> Self {
+        Self(utxo_id)
+    }
+}
+
+impl CursorType for HexStringUtxoId {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {

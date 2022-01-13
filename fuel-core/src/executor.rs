@@ -2,14 +2,14 @@ use crate::database::transaction::TransactionIndex;
 use crate::{
     database::{Database, KvStoreError},
     model::{
-        coin::{Coin, CoinStatus, UtxoId},
+        coin::{Coin, CoinStatus},
         fuel_block::{BlockHeight, FuelBlock},
     },
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
+use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_vm::prelude::{Interpreter, InterpreterError};
 use std::error::Error as StdError;
 use std::ops::DerefMut;
@@ -92,7 +92,7 @@ impl Executor {
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = Storage::<Bytes32, Coin>::get(db, &utxo_id.clone())? {
+                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
@@ -153,16 +153,13 @@ impl Executor {
     fn insert_coin(
         fuel_height: u32,
         tx_id: Bytes32,
-        out_index: u8,
+        output_index: u8,
         amount: &Word,
         color: &Color,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let txo_pointer = UtxoId {
-            tx_id,
-            output_index: out_index,
-        };
+        let utxo_id = UtxoId::new(tx_id, output_index);
         let coin = Coin {
             owner: *to,
             amount: *amount,
@@ -172,7 +169,7 @@ impl Executor {
             block_created: fuel_height.into(),
         };
 
-        if Storage::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)?.is_some() {
+        if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
             return Err(Error::OutputAlreadyExists);
         }
         Ok(())
