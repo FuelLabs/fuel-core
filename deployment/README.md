@@ -26,8 +26,8 @@ docker-compose down
 
 In order to deploy Fuel Client on k8s you must:
 
-1) Create [k8s Cluster via Terraform][k8s-terraform]
-2) Deploy [Fuel-Core Helm Chart][fuel-helm-chart] to your k8s Cluster
+1) Create [k8s cluster via terraform][k8s-terraform]
+2) Deploy [fuel-core helm chart][fuel-helm-chart] to your k8s cluster
 
 ## Prerequisites
 
@@ -43,7 +43,7 @@ Before proceeding make sure to have these software packages installed on your ma
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
-## Creating k8s Cluster
+## Deploying k8s Cluster
 
 Currently Fuel Core provides terraform based k8s cluster environment deployments for:
 
@@ -53,12 +53,11 @@ Currently Fuel Core provides terraform based k8s cluster environment deployments
 
 To begin to setup your EKS cluster, you will need to modify the [state.tf][tf-state].
 
-
 The state.tf will store the state of your deployed EKS cluster and requires a S3 bucket to be created in your account. 
 
 Update the S3 bucket, key, and region in the state.tf.
 
-You will need modify [main.tf][main-tf]
+Next you will need modify [main.tf][main-tf] with your inputs for:
 
 - environment: You can input any environment name 
 
@@ -123,7 +122,7 @@ Do you want to perform these actions?
   Enter a value: yes
 ```
 
-Terraform will deploy your VPC network (subnets, route tables, internet & nat gateways) as well as the EKS Cluster and node groups.
+Terraform will deploy your VPC network (subnets, route tables, internet & nat gateways) as well as the EKS cluster and node groups.
 
 ## Deploying Fuel Client on k8s
 
@@ -133,23 +132,23 @@ First you need to update the [secrets.yaml][secrets-yaml] with your personal git
 
 Create a [github access token][create-git-token] and make sure to select "read:packages" to pull the [fuel-core image][fuel-core-image].
 
-You need to first Base64 encode "git-username:git-auth-token" string in secrets.yaml - make sure to substitute your github username and personal access token:
+You need to first Base64 encode "git-username:git-auth-token" string in secrets.yaml: 
 
 ```
   .dockerconfigjson: {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
 ```
 
-At your command line, run:
+At your command line, run (make sure to substitute your github username and personal access token here):
 
 ```
   echo -n "git-username:git-auth-token" | base64
 ```
-Take the string output and insert back into the original place of "git-username:git-auth-token" in the auths json.
+Take the string output and insert back into the original place of "git-username:git-auth-token" in the auths json string.
 
-Now Base64 encode the {"auths": ...} json, by running at your command line:
+Now Base64 encode the {"auths": ...} json string, by running at your command line:
 
 ```
-  echo -n  '{"auths":{"ghcr.io":{"auth":"<base64-string>"}}}' | base64
+  echo -n  '{"auths":{"ghcr.io":{"auth":"<your-first-base64-output>"}}}' | base64
 ```
 
 Finally take this string output and insert in the secrets.yaml:
@@ -158,7 +157,7 @@ Finally take this string output and insert in the secrets.yaml:
   .dockerconfigjson: <base64-final-output>
 ```
 
-Save your secrets.yaml
+Save your secrets.yaml.
 
 Now deploy the [fuel-core-deploy][fuel-deploy-script]. 
 
