@@ -9,7 +9,6 @@ RUN apt-get update && \
     clang \
     libclang-dev \
     libssl-dev \
-    && mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -17,7 +16,7 @@ WORKDIR /build/
 
 COPY . .
 
-RUN --mount=type=ssh cargo build --release
+RUN cargo build --release
 
 # Stage 2: Run
 FROM ubuntu:20.04 as run
