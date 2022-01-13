@@ -17,12 +17,14 @@ module "fuel-core-aws-deploy" {
   # EKS
   eks-cluster-name          = "fuelcore-deploy"
   eks-cluster-version       = "1.21"
+  eks-node-groupname        = "nodes"
   eks-node-ami-type         = "AL2_x86_64"
   eks-node-disk-size        = "100"
   eks-node-instance-types   = ["t3.xlarge"]
-  eks-node-min-size         = "1"
-  eks-node-desired-size     = "1"
-  eks-node-max-size         = "1"
-  eks-capacity-type          = "ON_DEMAND"
+  eks-node-min-size         = "2"
+  eks-node-desired-size     = "2"
+  eks-node-max-size         = "3"
+  eks-capacity-type         = "ON_DEMAND"
+  ec2-ssh-key               = "fuel-test"
 
 }

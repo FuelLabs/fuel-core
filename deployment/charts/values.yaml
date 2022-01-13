@@ -7,17 +7,18 @@ app:
   replicas: 1
   port: 4000
   image:
-    repository: ghcr.io/fuellabs/fuelcore
-    tag: master
+    repository: ghcr.io/fuellabs/fuel-core
+    tag: latest
     pullPolicy: Always
   volume: 
-    pv-name: db-volume
+    pvname: db-volume
     mountPath: /mnt/db/
-    claim-name: db-volume-pv-claim
-    storage-class: db-storage
-    storage-size: 1Gi
-    access-modes: ReadWriteMany
-    claim-policy: Retain
+    claimname: db-volume-pv-claim
+    storageclass: gp2
+    storagesize: 3Gi
+    storagerequests: 1Gi
+    accessmodes: ReadWriteMany
+    claimpolicy: Retain
 
 service:
   port: 4000

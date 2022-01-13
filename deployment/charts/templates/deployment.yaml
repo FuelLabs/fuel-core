@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ template "fuel-core.name" . }}-k8
+  name: {{ template "fuel-core.name" . }}-k8s
   labels:
     app: {{ template "fuel-core.name" . }}
     chart: {{ template "fuel-core.chart" . }}
@@ -27,11 +27,11 @@ spec:
           ports:
             - containerPort: {{ .Values.app.port }}
           volumeMounts:
-            - name: {{ .Values.app.volume.pv-name }}
+            - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
       imagePullSecrets:
         - name: gchr-auth-token
       volumes:
-        - name: {{ .Values.app.volume.pv-name }}
+        - name: {{ .Values.app.volume.pvname }}
           persistentVolumeClaim:
-            claimName: {{ .Values.app.volume.claim-name }}
+            claimName: {{ .Values.app.volume.claimname }}

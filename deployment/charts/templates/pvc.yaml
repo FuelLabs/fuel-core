@@ -1,26 +1,33 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: {{ .Values.app.volume.claim-name }}
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
   accessModes:
-    - {{ .Values.app.volume.access-modes }}
+    - {{ .Values.app.volume.accessmodes }}
   resources:
     requests:
-      storage: {{ .Values.app.volume.storage-size }}
-  storageClassName: {{ .Values.app.volume.storage-class }}
-  volumeName: {{ .Values.app.volume.pv-name }}
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: {{ .Values.app.volume.pv-name }}
+  name: {{ .Values.app.volume.pvname }}
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
 spec:
-  storageClassName: {{ .Values.app.volume.storage-class }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
   capacity:
-    storage: {{ .Values.app.volume.storage-size }}
+    storage: {{ .Values.app.volume.storagesize }}
   accessModes:
-    - {{ .Values.app.volume.access-modes }}
-  hostPath:
-    path: "{{ .Values.app.volume.mountPath }}"
-  persistentVolumeReclaimPolicy: {{ .Values.app.volume.claim-policy }}
+    - {{ .Values.app.volume.accessmodes }}
+  persistentVolumeReclaimPolicy: {{ .Values.app.volume.claimpolicy }}

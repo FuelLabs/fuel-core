@@ -20,6 +20,10 @@ variable "eks-cluster-version" {
   type = string
 }
 
+variable "eks-node-groupname" {
+  type = string
+}
+
 variable "eks-node-ami-type" {
   type = string
 }
@@ -64,5 +68,8 @@ variable "vpc_cidr_block" {
   type = string
 }
 
+variable "ec2-ssh-key" {
+  type = string
+}
 
 

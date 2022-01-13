@@ -6,7 +6,7 @@ metadata:
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-  name: {{ template "fuel-core.name" . }}-k8-lb
+  name: {{ template "fuel-core.name" . }}-k8s-lb
 spec:
   ports:
     - port: {{ .Values.service.port }}

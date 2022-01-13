@@ -7,18 +7,16 @@ read cloud
 if [ "${cloud}" == "aws" ]; then
     echo "Please make sure to configure your aws cli locally"
     echo "Please enter your EKS Cluster Name"
-    read eks-cluster-name
+    read eks
     echo "Updating your kube context locally"
-    aws eks update-kubeconfig --name ${eks-cluster-name}
+    aws eks update-kubeconfig --name $eks
     cd ../charts
-    echo "Please enter your fuel-core image tag to be deployed"
-    read tag
-    echo "Deploying fuel-core helm chart to ${eks-cluster-name}"
-    helm upgrade fuel-core- . \
+    echo "Deploying fuel-core helm chart to $eks"
+    helm upgrade fuel-core . \
               --values values.yaml \
               --install \
+              --create-namespace \
               --namespace=fuel-core \
-              --set image.tag=${tag} \
               --wait \
               --timeout 8000s \
               --debug
