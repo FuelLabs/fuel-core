@@ -21,10 +21,5 @@ if [ "${cloud}" == "aws" ]; then
               --timeout 1200s \
               --debug
 else
-   echo "You have chosen non-supported cloud provider .."
+   echo "You have chosen a non-supported cloud provider - please re-run this script with one of these options: aws"
 fi
-
-
-
-
-
