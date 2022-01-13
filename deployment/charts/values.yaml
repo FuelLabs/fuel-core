@@ -15,9 +15,8 @@ app:
     mountPath: /mnt/db/
     claimname: db-volume-pv-claim
     storageclass: gp2
-    storagesize: 3Gi
-    storagerequests: 1Gi
-    accessmodes: ReadWriteMany
+    storagerequests: 3Gi
+    accessmodes: ReadWriteOnce
     claimpolicy: Retain
 
 service:

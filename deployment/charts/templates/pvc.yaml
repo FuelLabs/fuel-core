@@ -3,8 +3,6 @@ kind: PersistentVolumeClaim
 metadata:
   name: {{ .Values.app.volume.claimname }}
   labels:
-    app: {{ template "fuel-core.name" . }}
-    chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
 spec:
@@ -14,20 +12,3 @@ spec:
     requests:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: {{ .Values.app.volume.pvname }}
-  labels:
-    app: {{ template "fuel-core.name" . }}
-    chart: {{ template "fuel-core.chart" . }}
-    release: {{ .Release.Name }}
-    heritage: {{ .Release.Service }}
-spec:
-  storageClassName: {{ .Values.app.volume.storageclass }}
-  capacity:
-    storage: {{ .Values.app.volume.storagesize }}
-  accessModes:
-    - {{ .Values.app.volume.accessmodes }}
-  persistentVolumeReclaimPolicy: {{ .Values.app.volume.claimpolicy }}
