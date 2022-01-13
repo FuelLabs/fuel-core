@@ -25,6 +25,6 @@ module "fuel-core-aws-deploy" {
   eks-node-desired-size     = "2"
   eks-node-max-size         = "3"
   eks-capacity-type         = "ON_DEMAND"
-  ec2-ssh-key               = "fuel-test"
+  ec2-ssh-key               = "fuelcore-ssh-key"
 
 }
