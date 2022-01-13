@@ -9,7 +9,7 @@ In order to deploy Fuel Client on k8s you must:
 
 Before proceeding make sure to have these software packages installed on your machine:
 
-1) Helm : Install latest version of Helm3 for your OS (https://helm.sh/docs/intro/install/)
+1) [Helm][helm]: Install latest version of Helm3 for your OS
 
 2) Terraform: Install latest version of Terraform for your OS (https://learn.hashicorp.com/tutorials/terraform/install-cli)
 
@@ -57,8 +57,7 @@ You will need modify then the main.tf in deployment/terraform/environments/aws:
 - eks-node-groupname: Your EKS Worker Node Group name
 
 - eks-node-ami-type: The EKS Worker Node Group AMI Type 
-  Options: AL2_x86_64 | AL2_x86_64_GPU | AL2_ARM_64 | CUSTOM | BOTTLEROCKET_ARM_64 | 
-  | BOTTLEROCKET_x86_64
+Options: AL2_x86_64 | AL2_x86_64_GPU | AL2_ARM_64 | CUSTOM | BOTTLEROCKET_ARM_64 | BOTTLEROCKET_x86_64
 
 - eks-node-disk-size: Disk size in GiB for EKS Worker Nodes
 
@@ -70,11 +69,11 @@ You will need modify then the main.tf in deployment/terraform/environments/aws:
 
 - eks-node-max-size: Maximum Number of EKS Worker Nodes
 
-- eks-capacity-type: Type of capacity associated with the EKS Node Group 
+- eks-capacity-type: Type of capacity associated with the EKS Node Group
 Options: ON_DEMAND | SPOT
 
 - ec2-ssh-key: EC2 Key Pair name for SSH Access - You must create this key pair in
-  your acount prior cluster creation
+your acount prior cluster creation
 
 Once your main.tf is updated with your parameters, then run the create-k8s.sh script:
 
@@ -160,12 +159,15 @@ If the "STATUS" is deployed, the fuel-core helm chart has been deployed successf
 Having fuel-core pod(s) running and a service associated with an External IP, load balancer DNS address 
 further means the helm chart was deployed successfully.
 
-If its not "deployed', then you will need to delete the helm chart 
+If its not "deployed', then you will need to delete the helm chart:
 
 ```bash
   % helm delete fuel-core --namespace fuel-core
 ```
 
-And then re-run the fuel-core-deploy script.
+Then re-run the fuel-core-deploy script.
+
+[helm]: https://helm.sh/docs/intro/install/
+
 
 
