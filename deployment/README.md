@@ -27,7 +27,7 @@ docker-compose down
 In order to deploy Fuel Client on k8s you must:
 
 1) Create [k8s Cluster via Terraform][k8s-terraform]
-2) Deploy [Fuel Core Helm Chart][fuel-helm-chart] to your k8s Cluster
+2) Deploy [Fuel-Core Helm Chart][fuel-helm-chart] to your k8s Cluster
 
 ## Prerequisites
 
@@ -41,7 +41,7 @@ Before proceeding make sure to have these software packages installed on your ma
 
 4) AWS:
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
-- [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via IAM
+- [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
 ## Creating k8s Cluster
 
@@ -51,12 +51,14 @@ Currently Fuel Core provides terraform based k8s cluster environment deployments
 
 ### EKS Cluster Setup
 
-To begin to setup your EKS cluster, you will need to modify the [state.tf][tf-state] 
+To begin to setup your EKS cluster, you will need to modify the [state.tf][tf-state].
 
 
-The state.tf will store the state of your deployed EKS cluster and requires a S3 bucket to be created in your account. Update the S3 bucket, key, and region in the state.tf.
+The state.tf will store the state of your deployed EKS cluster and requires a S3 bucket to be created in your account. 
 
-You will need modify then the [main.tf][main-tf]
+Update the S3 bucket, key, and region in the state.tf.
+
+You will need modify [main.tf][main-tf]
 
 - environment: You can input any environment name 
 
@@ -75,12 +77,14 @@ You will need modify then the [main.tf][main-tf]
 - eks-cluster-name: Your EKS Cluster Name
 
 - eks-cluster-version: The EKS Cluster Version
+  
   Options: 1.18.16 | 1.19.8 | 1.20.7 | 1.21.2
 
 - eks-node-groupname: Your EKS Worker Node Group name
 
 - eks-node-ami-type: The EKS Worker Node Group AMI Type 
-Options: AL2_x86_64 | AL2_x86_64_GPU | AL2_ARM_64 | CUSTOM | BOTTLEROCKET_ARM_64 | BOTTLEROCKET_x86_64
+
+  Options: AL2_x86_64 | AL2_x86_64_GPU | AL2_ARM_64 | CUSTOM 
 
 - eks-node-disk-size: Disk size in GiB for EKS Worker Nodes
 
@@ -109,7 +113,7 @@ The script will prompt you for your cloud provider, type in 'aws'
 Please input your cloud provider - options include: aws ....
 aws
 ```
-When terraform proposes the infrastructure updates to be deployed, either type "yes" to deploy the changes:
+When terraform proposes the infrastructure updates to be deployed, type "yes" to deploy the changes:
 
 ```bash
 Do you want to perform these actions?
@@ -119,7 +123,7 @@ Do you want to perform these actions?
   Enter a value: yes
 ```
 
-Terraform then will deploy your VPC network (subnets, route tables, internet & nat gateways) as well as the EKS Cluster and node groups.
+Terraform will deploy your VPC network (subnets, route tables, internet & nat gateways) as well as the EKS Cluster and node groups.
 
 ## Deploying Fuel Client on k8s
 
@@ -129,13 +133,13 @@ First you need to update the [secrets.yaml][secrets-yaml] with your personal git
 
 Create a [github access token][create-git-token] and make sure to select "read:packages" to pull the [fuel-core image][fuel-core-image].
 
-Then in the secrets.yaml, you need to first Base64 encode "git-username:git-auth-token" via your command line:
+You need to first Base64 encode "git-username:git-auth-token" string in secrets.yaml - make sure to substitute your github username and personal access token:
 
 ```
   .dockerconfigjson: {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
 ```
 
-At your command line:
+At your command line, run:
 
 ```
   echo -n "git-username:git-auth-token" | base64
@@ -148,11 +152,13 @@ Now Base64 encode the {"auths": ...} json, by running at your command line:
   echo -n  '{"auths":{"ghcr.io":{"auth":"<base64-string>"}}}' | base64
 ```
 
-Finally take this string and insert in the secrets.yaml and save:
+Finally take this string output and insert in the secrets.yaml:
 
 ```
   .dockerconfigjson: <base64-final-output>
 ```
+
+Save your secrets.yaml
 
 Now deploy the [fuel-core-deploy][fuel-deploy-script]. 
 
