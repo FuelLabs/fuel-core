@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches:
-      - master 
+      - master
   pull_request:
   release:
     types: [published]
@@ -107,7 +107,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ghcr.io/fuellabs/fuelcore
+            ghcr.io/fuellabs/fuel-core
           tags: |
             type=sha
             type=ref,event=branch
@@ -153,7 +153,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ghcr.io/fuellabs/fuelcore
+            ghcr.io/fuellabs/fuel-core
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
