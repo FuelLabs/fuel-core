@@ -1,8 +1,8 @@
 #!/bin/bash
 
-echo "This script is to create or update your k8s cluster"
+echo "This script is to create a new or update existing k8s cluster"
 
-echo "Please input the correct cloud provider- options include: aws"
+echo "Please input your cloud provider - options include: aws ...."
 
 read cloud
 

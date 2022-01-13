@@ -2,11 +2,11 @@ module "fuel-core-aws-deploy" {
   source = "../../modules/eks"
 
   # Environment
-  environment = "terraform-test"
+  environment = "production"
 
   # AWS
   region              = "us-east-1"
-  account_id          = "756756437019"
+  account_id          = "123456789123"
 
   # Networking
   vpc_cidr_block      = "10.128.0.0/20"

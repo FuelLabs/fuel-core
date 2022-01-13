@@ -1,3 +1,37 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.accessmodes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fuel-core.name" . }}-k8s-lb
+spec:
+  ports:
+    - port: {{ .Values.app.port }}
+      targetPort: {{ .Values.app.targetport }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ template "fuel-core.name" . }}
+  type: LoadBalancer
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

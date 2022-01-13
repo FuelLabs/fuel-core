@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
-    bucket = "fuel-terraform"
-    key    = "test"
+    bucket = "terraform-deploy"
+    key    = "eks-deploy"
     region = "us-east-1"
   }
 }

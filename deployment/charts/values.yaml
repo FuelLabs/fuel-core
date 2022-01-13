@@ -5,7 +5,8 @@
 app:
   name: fuel-core
   replicas: 1
-  port: 4000
+  port: 80
+  targetport: 4000
   image:
     repository: ghcr.io/fuellabs/fuel-core
     tag: latest
@@ -17,7 +18,3 @@ app:
     storageclass: gp2
     storagerequests: 3Gi
     accessmodes: ReadWriteOnce
-    claimpolicy: Retain
-
-service:
-  port: 4000
