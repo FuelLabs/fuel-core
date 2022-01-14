@@ -34,7 +34,7 @@ async fn coin() {
 
     // run test
     let coin = client
-        .coin(format!("{:#x}{:02x?}", utxo_id.tx_id(), utxo_id.output_index()).as_str())
+        .coin(format!("{:#x}", utxo_id).as_str())
         .await
         .unwrap();
     assert!(coin.is_some());

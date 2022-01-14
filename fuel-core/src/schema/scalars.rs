@@ -257,26 +257,13 @@ impl FromStr for HexStringUtxoId {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // trim leading 0x
-        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
-        // pad input to 33 bytes
-        let mut bytes = ((value.len() / 2)..33).map(|_| 0).collect::<Vec<u8>>();
-        // decode into bytes
-        bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);
-        let output_index = bytes.pop().unwrap();
-        // attempt conversion to fixed length array, error if too long
-        let tx_id: [u8; 32] = bytes
-            .try_into()
-            .map_err(|e: Vec<u8>| format!("expected 32 bytes, received {}", e.len()))?;
-        let tx_id: Bytes32 = tx_id.into();
-
-        Ok(Self(UtxoId::new(tx_id, output_index)))
+        UtxoId::from_str(s).map(Self).map_err(str::to_owned)
     }
 }
 
 impl Display for HexStringUtxoId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = format!("{:#x}{:02x?}", self.0.tx_id(), self.0.output_index());
+        let s = format!("{:#x}", self.0);
         s.fmt(f)
     }
 }

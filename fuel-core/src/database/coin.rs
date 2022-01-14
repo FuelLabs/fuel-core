@@ -18,7 +18,7 @@ fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {
         .copied()
         .collect()
 }
-const SIZE_OF_UTXO_ID: usize = 257;
+const SIZE_OF_UTXO_ID: usize = 264;
 
 fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
     let mut out = Vec::with_capacity(SIZE_OF_UTXO_ID);
