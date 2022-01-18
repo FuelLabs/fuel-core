@@ -26,7 +26,7 @@ impl SomeEvent {
         Token::Struct(t)
     }
 
-    fn new_from_tokens(tokens: &[Token]) -> SomeEvent {
+    fn new_from_token(tokens: &[Token]) -> SomeEvent {
         let id = match tokens[0] {
             Token::U64(i) => i,
             _ => panic!("Should be a U64"),

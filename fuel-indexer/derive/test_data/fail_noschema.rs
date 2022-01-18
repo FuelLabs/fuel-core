@@ -20,7 +20,7 @@ impl SomeEvent {
     pub fn into_token(self) -> Token {
         Token::Struct(Vec::new())
     }
-    pub fn new_from_tokens(tokens: &[Token]) -> SomeEvent {
+    pub fn new_from_token(tokens: &[Token]) -> SomeEvent {
         SomeEvent {
             id: 4,
             account: Address::default(),

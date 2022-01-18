@@ -1767,7 +1767,9 @@ dependencies = [
 
 [[package]]
 name = "fuels-abigen-macro"
-version = "0.1.2"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96e54592ab8a4a700964328651c2da2a4c730e7d6d114c70f7b6c6eb105214b4"
 dependencies = [
  "Inflector",
  "anyhow",
@@ -1799,17 +1801,27 @@ dependencies = [
 
 [[package]]
 name = "fuels-core"
-version = "0.1.2"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76d068682178a61451321c8089908100c35ec696880c4f20a31b66cffcc16fd1"
 dependencies = [
+ "fuel-tx",
  "fuel-types",
+ "fuel-vm",
+ "hex",
+ "rand 0.8.4",
+ "serde",
  "sha2",
  "strum",
  "strum_macros",
+ "thiserror",
 ]
 
 [[package]]
 name = "fuels-rs"
-version = "0.1.2"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03e055dacebe51e8d3dbd6861ea975b7af2cf770f528b4236bed2afdd141ac5e"
 dependencies = [
  "Inflector",
  "anyhow",
