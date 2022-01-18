@@ -169,10 +169,12 @@ impl FuelClient {
 
         let status = tx
             .status
-            .ok_or(io::Error::new(
-                ErrorKind::NotFound,
-                format!("status not found for transaction {}", id),
-            ))?
+            .ok_or_else(|| {
+                io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("status not found for transaction {}", id),
+                )
+            })?
             .try_into()?;
         Ok(status)
     }

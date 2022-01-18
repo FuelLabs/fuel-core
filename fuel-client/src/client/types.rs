@@ -62,7 +62,7 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
             .map_err(ConversionError::TransactionFromBytesError)?;
         let status = value
             .status
-            .ok_or(ConversionError::MissingField("status".to_string()))?
+            .ok_or_else(|| ConversionError::MissingField("status".to_string()))?
             .try_into()?;
 
         Ok(Self {
