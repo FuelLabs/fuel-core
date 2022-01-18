@@ -2,14 +2,14 @@ use crate::database::transaction::TransactionIndex;
 use crate::{
     database::{Database, KvStoreError},
     model::{
-        coin::{Coin, CoinStatus, UtxoId},
+        coin::{Coin, CoinStatus},
         fuel_block::{BlockHeight, FuelBlock},
     },
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction};
+use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_vm::prelude::{Interpreter, InterpreterError};
 use std::error::Error as StdError;
 use std::ops::DerefMut;
@@ -51,18 +51,47 @@ impl Executor {
                     // persist receipts
                     self.persist_receipts(tx_id, result.receipts(), tx_db)?;
 
-                    // persist tx status
-                    tx_db.update_tx_status(
-                        tx_id,
+                    let status = if result.should_revert() {
+                        // if script result exists, log reason
+                        if let Some((script_result, _)) = result.receipts().iter().find_map(|r| {
+                            if let Receipt::ScriptResult { result, gas_used } = r {
+                                Some((result, gas_used))
+                            } else {
+                                None
+                            }
+                        }) {
+                            TransactionStatus::Failed {
+                                block_id,
+                                time: block.time,
+                                reason: format!("{:?}", script_result.reason()),
+                                result: Some(*result.state()),
+                            }
+                        }
+                        // otherwise just log the revert arg
+                        else {
+                            TransactionStatus::Failed {
+                                block_id,
+                                time: block.time,
+                                reason: format!("{:?}", result.state()),
+                                result: Some(*result.state()),
+                            }
+                        }
+                    } else {
+                        // else tx was a success
                         TransactionStatus::Success {
                             block_id,
                             time: block.time,
                             result: *result.state(),
-                        },
-                    )?;
+                        }
+                    };
+
+                    // persist tx status at the block level
+                    block_tx.update_tx_status(tx_id, status)?;
 
                     // only commit state changes if execution was a success
-                    sub_tx.commit()?;
+                    if !result.should_revert() {
+                        sub_tx.commit()?;
+                    }
                 }
                 // save error status on block_tx since the sub_tx changes are dropped
                 Err(e) => {
@@ -72,6 +101,7 @@ impl Executor {
                             block_id,
                             time: block.time,
                             reason: e.to_string(),
+                            result: None,
                         },
                     )?;
                 }
@@ -92,7 +122,7 @@ impl Executor {
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = Storage::<Bytes32, Coin>::get(db, &utxo_id.clone())? {
+                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
@@ -153,16 +183,13 @@ impl Executor {
     fn insert_coin(
         fuel_height: u32,
         tx_id: Bytes32,
-        out_index: u8,
+        output_index: u8,
         amount: &Word,
         color: &Color,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let txo_pointer = UtxoId {
-            tx_id,
-            output_index: out_index,
-        };
+        let utxo_id = UtxoId::new(tx_id, output_index);
         let coin = Coin {
             owner: *to,
             amount: *amount,
@@ -172,7 +199,7 @@ impl Executor {
             block_created: fuel_height.into(),
         };
 
-        if Storage::<Bytes32, Coin>::insert(db, &txo_pointer.into(), &coin)?.is_some() {
+        if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
             return Err(Error::OutputAlreadyExists);
         }
         Ok(())

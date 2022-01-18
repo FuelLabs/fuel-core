@@ -3,7 +3,7 @@ use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
-use fuel_tx::{Address, Bytes32, Color, ContractId, Salt};
+use fuel_tx::{Address, Bytes32, Color, ContractId, Salt, UtxoId};
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},
@@ -224,6 +224,63 @@ impl From<Salt> for HexString256 {
 }
 
 impl CursorType for HexString256 {
+    type Error = String;
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        Self::from_str(s)
+    }
+
+    fn encode_cursor(&self) -> String {
+        self.to_string()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HexStringUtxoId(pub(crate) UtxoId);
+
+#[Scalar(name = "HexStringUtxoId")]
+impl ScalarType for HexStringUtxoId {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(value) = &value {
+            HexStringUtxoId::from_str(value.as_str()).map_err(Into::into)
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.to_string())
+    }
+}
+
+impl FromStr for HexStringUtxoId {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        UtxoId::from_str(s).map(Self).map_err(str::to_owned)
+    }
+}
+
+impl Display for HexStringUtxoId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let s = format!("{:#x}", self.0);
+        s.fmt(f)
+    }
+}
+
+impl From<HexStringUtxoId> for UtxoId {
+    fn from(s: HexStringUtxoId) -> Self {
+        s.0
+    }
+}
+
+impl From<UtxoId> for HexStringUtxoId {
+    fn from(utxo_id: UtxoId) -> Self {
+        Self(utxo_id)
+    }
+}
+
+impl CursorType for HexStringUtxoId {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {

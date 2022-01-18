@@ -1,8 +1,10 @@
 use crate::client::schema::{
     schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
 };
+use crate::client::types::TransactionResponse;
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 use fuel_types::bytes::Deserializable;
+use fuel_types::Bytes32;
 use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -40,11 +42,11 @@ pub struct TransactionConnection {
     pub page_info: PageInfo,
 }
 
-impl TryFrom<TransactionConnection> for PaginatedResult<fuel_tx::Transaction, String> {
+impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, String> {
     type Error = ConversionError;
 
     fn try_from(conn: TransactionConnection) -> Result<Self, Self::Error> {
-        let results: Result<Vec<fuel_tx::Transaction>, Self::Error> = conn
+        let results: Result<Vec<TransactionResponse>, Self::Error> = conn
             .edges
             .unwrap_or_default()
             .into_iter()
@@ -70,6 +72,7 @@ pub struct TransactionEdge {
 pub struct OpaqueTransaction {
     pub raw_payload: HexString,
     pub receipts: Option<Vec<OpaqueReceipt>>,
+    pub status: Option<TransactionStatus>,
 }
 
 impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
@@ -98,6 +101,43 @@ impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
     }
 }
 
+#[derive(cynic::Enum, Copy, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum ReturnType {
+    Return,
+    ReturnData,
+    Revert,
+}
+
+#[derive(cynic::QueryFragment, Clone, Debug)]
+#[cynic(graphql_type = "ProgramState", schema_path = "./assets/schema.sdl")]
+pub struct ProgramState {
+    pub return_type: ReturnType,
+    pub data: HexString,
+}
+
+impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
+    type Error = ConversionError;
+
+    fn try_from(state: ProgramState) -> Result<Self, Self::Error> {
+        Ok(match state.return_type {
+            ReturnType::Return => fuel_vm::prelude::ProgramState::Return({
+                let b = state.data.0 .0;
+                let b: [u8; 8] = b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                u64::from_be_bytes(b)
+            }),
+            ReturnType::ReturnData => fuel_vm::prelude::ProgramState::ReturnData({
+                Bytes32::try_from(state.data.0 .0.as_slice())?
+            }),
+            ReturnType::Revert => fuel_vm::prelude::ProgramState::Revert({
+                let b = state.data.0 .0;
+                let b: [u8; 8] = b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                u64::from_be_bytes(b)
+            }),
+        })
+    }
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -118,7 +158,7 @@ pub struct SubmittedStatus {
 pub struct SuccessStatus {
     pub block_id: HexString256,
     pub time: super::DateTime,
-    pub program_state: HexString,
+    pub program_state: ProgramState,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -127,6 +167,7 @@ pub struct FailureStatus {
     pub block_id: HexString256,
     pub time: super::DateTime,
     pub reason: String,
+    pub program_state: Option<ProgramState>,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]

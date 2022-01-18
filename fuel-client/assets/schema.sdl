@@ -40,7 +40,7 @@ type ChangeOutput {
 	color: HexString256!
 }
 type Coin {
-	id: HexString256!
+	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: U64!
 	color: HexString256!
@@ -71,6 +71,16 @@ type CoinEdge {
 	"""
 	cursor: String!
 }
+input CoinFilterInput {
+	"""
+	address of the owner
+	"""
+	owner: HexString256!
+	"""
+	color of the coins
+	"""
+	color: HexString256
+}
 type CoinOutput {
 	to: HexString256!
 	amount: Int!
@@ -98,12 +108,14 @@ type FailureStatus {
 	blockId: HexString256!
 	time: DateTime!
 	reason: String!
+	programState: ProgramState
 }
 scalar HexString
 scalar HexString256
+scalar HexStringUtxoId
 union Input = | InputCoin | InputContract
 type InputCoin {
-	utxoId: HexString256!
+	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: Int!
 	color: HexString256!
@@ -113,7 +125,7 @@ type InputCoin {
 	predicateData: HexString!
 }
 type InputContract {
-	utxoId: HexString256!
+	utxoId: HexStringUtxoId!
 	balanceRoot: HexString256!
 	stateRoot: HexString256!
 	contractId: HexString256!
@@ -154,6 +166,10 @@ type PageInfo {
 	"""
 	endCursor: String
 }
+type ProgramState {
+	returnType: ReturnType!
+	data: HexString!
+}
 type Query {
 	register(id: ID!, register: U64!): U64!
 	memory(id: ID!, start: U64!, size: U64!): String!
@@ -168,8 +184,8 @@ type Query {
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!
-	coin(id: HexString256!): Coin
-	coinsByOwner(after: String, before: String, first: Int, last: Int, owner: HexString256!): CoinConnection!
+	coin(utxoId: HexStringUtxoId!): Coin
+	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
 }
 type Receipt {
 	id: HexString256
@@ -209,13 +225,18 @@ enum ReceiptType {
 	TRANSFER_OUT
 	SCRIPT_RESULT
 }
+enum ReturnType {
+	RETURN
+	RETURN_DATA
+	REVERT
+}
 type SubmittedStatus {
 	time: DateTime!
 }
 type SuccessStatus {
 	blockId: HexString256!
 	time: DateTime!
-	programState: HexString!
+	programState: ProgramState!
 }
 type Transaction {
 	id: HexString256!

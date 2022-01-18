@@ -1,6 +1,6 @@
 [package]
 name = "fuel-wasm-executor"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 license = "BUSL-1.1"
 publish = false
@@ -34,6 +34,7 @@ fuel-core = { version = "0.1", features = ["test-helpers"] }
 fuel-gql-client = { version = "0.1", features = ["test-helpers"] }
 fuel-indexer = { path = "../lib" }
 fuel-storage = { version = "0.1" }
+fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 fuel-vm = { version = "0.1" }
 itertools = { version = "0.10" }

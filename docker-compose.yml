@@ -1,8 +1,10 @@
-version: "3"
+version: "3.9"
 
 services:
-  api:
-    build: .
+  fuel-core:
+    build: 
+      context: . 
+      dockerfile: deployment/Dockerfile
     image: fuel-core
     ports:
       - "4000:4000"

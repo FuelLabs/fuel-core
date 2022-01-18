@@ -1,14 +1,15 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
+assertion_line: 124
 expression: operation.query
 
 ---
-query Query($_0: HexString256!) {
-  coin(id: $_0) {
+query Query($_0: HexStringUtxoId!) {
+  coin(utxoId: $_0) {
     amount
     blockCreated
     color
-    id
+    utxoId
     maturity
     owner
     status
