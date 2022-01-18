@@ -108,6 +108,7 @@ type FailureStatus {
 	blockId: HexString256!
 	time: DateTime!
 	reason: String!
+	programState: ProgramState
 }
 scalar HexString
 scalar HexString256
@@ -165,6 +166,10 @@ type PageInfo {
 	"""
 	endCursor: String
 }
+type ProgramState {
+	returnType: ReturnType!
+	data: HexString!
+}
 type Query {
 	register(id: ID!, register: U64!): U64!
 	memory(id: ID!, start: U64!, size: U64!): String!
@@ -220,13 +225,18 @@ enum ReceiptType {
 	TRANSFER_OUT
 	SCRIPT_RESULT
 }
+enum ReturnType {
+	RETURN
+	RETURN_DATA
+	REVERT
+}
 type SubmittedStatus {
 	time: DateTime!
 }
 type SuccessStatus {
 	blockId: HexString256!
 	time: DateTime!
-	programState: HexString!
+	programState: ProgramState!
 }
 type Transaction {
 	id: HexString256!

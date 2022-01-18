@@ -155,6 +155,12 @@ impl<'de> Deserialize<'de> for Bytes {
     }
 }
 
+impl Display for Bytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{}", hex::encode(&self.0))
+    }
+}
+
 #[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, PartialEq)]
 pub struct U64(pub u64);
 impl_scalar!(U64, schema::U64);

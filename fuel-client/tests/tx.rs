@@ -5,6 +5,7 @@ use fuel_core::{
     model::fuel_block::FuelBlock,
     service::{Config, FuelService},
 };
+use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
 use fuel_vm::{consts::*, prelude::*};
@@ -114,7 +115,8 @@ async fn submit() {
         .transaction(&id.0.to_string())
         .await
         .unwrap()
-        .unwrap();
+        .unwrap()
+        .transaction;
     assert_eq!(tx, ret_tx);
 }
 
@@ -139,18 +141,22 @@ async fn get_transaction_by_id() {
     // setup test data in the node
     let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
-    let mut db = Database::default();
-    Storage::<Bytes32, fuel_tx::Transaction>::insert(&mut db, &id, &transaction).unwrap();
 
     // setup server & client
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
+    // submit tx to api
+    client.submit(&transaction).await.unwrap();
 
     // run test
-    let transaction = client.transaction(&format!("{:#x}", id)).await.unwrap();
-    assert!(transaction.is_some());
+    let transaction_response = client.transaction(&format!("{:#x}", id)).await.unwrap();
+    assert!(transaction_response.is_some());
+    if let Some(transaction_response) = transaction_response {
+        assert!(matches!(
+            transaction_response.status,
+            TransactionStatus::Success { .. }
+        ))
+    }
 }
 
 #[tokio::test]
@@ -170,7 +176,8 @@ async fn get_transparent_transaction_by_id() {
         .transaction(&format!("{:#x}", id))
         .await
         .unwrap()
-        .expect("expected some result");
+        .expect("expected some result")
+        .transaction;
 
     // run test
     let transparent_transaction = client
@@ -209,7 +216,11 @@ async fn get_transactions() {
     };
 
     let response = client.transactions(page_request.clone()).await.unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(transactions, &[tx1, tx2, tx3]);
 
     // Query backwards from last given cursor [3]: [1,2]
@@ -227,11 +238,19 @@ async fn get_transactions() {
     };
 
     let response = client.transactions(page_request_backwards).await.unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(transactions, &[tx1, tx2]);
 
     let response = client.transactions(page_request_forwards).await.unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(transactions, &[tx4, tx5, tx6]);
 }
 
@@ -278,7 +297,11 @@ async fn get_transactions_from_manual_blcoks() {
         direction: PageDirection::Forward,
     };
     let response = client.transactions(page_request_forwards).await.unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(transactions, &[txs[0].id(), txs[1].id(), txs[2].id()]);
 
     // Query forwards from last given cursor [2]: [3,4,5,6]
@@ -291,7 +314,11 @@ async fn get_transactions_from_manual_blcoks() {
         .transactions(next_page_request_forwards)
         .await
         .unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(
         transactions,
         &[txs[3].id(), txs[4].id(), txs[5].id(), txs[6].id()]
@@ -304,7 +331,11 @@ async fn get_transactions_from_manual_blcoks() {
         direction: PageDirection::Backward,
     };
     let response = client.transactions(page_request_backwards).await.unwrap();
-    let transactions = &response.results.iter().map(|tx| tx.id()).collect_vec();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
     assert_eq!(
         transactions,
         &[
@@ -342,7 +373,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.id())
+        .map(|tx| tx.transaction.id())
         .collect_vec();
 
     let bob_txs = client
@@ -351,7 +382,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.id())
+        .map(|tx| tx.transaction.id())
         .collect_vec();
 
     let charlie_txs = client
@@ -360,7 +391,7 @@ async fn get_owned_transactions() {
         .unwrap()
         .results
         .iter()
-        .map(|tx| tx.id())
+        .map(|tx| tx.transaction.id())
         .collect_vec();
 
     assert_eq!(&alice_txs, &[tx1]);

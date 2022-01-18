@@ -1,5 +1,6 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
+assertion_line: 273
 expression: operation.query
 
 ---
@@ -8,6 +9,29 @@ query Query($_0: HexString256!) {
     rawPayload
     receipts {
       rawPayload
+    }
+    status {
+      __typename
+      ... on SubmittedStatus {
+        time
+      }
+      ... on SuccessStatus {
+        blockId
+        time
+        programState {
+          returnType
+          data
+        }
+      }
+      ... on FailureStatus {
+        blockId
+        time
+        reason
+        programState {
+          returnType
+          data
+        }
+      }
     }
   }
 }

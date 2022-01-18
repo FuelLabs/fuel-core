@@ -7,6 +7,7 @@ use std::{
 };
 
 pub mod schema;
+pub mod types;
 
 use schema::{
     block::BlockByIdArgs,
@@ -16,6 +17,7 @@ use schema::{
 };
 
 use crate::client::schema::ConversionError;
+use crate::client::types::{TransactionResponse, TransactionStatus};
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 use std::io::ErrorKind;
 
@@ -149,7 +151,7 @@ impl FuelClient {
         Ok(serde_json::from_str(memory.as_str())?)
     }
 
-    pub async fn transaction(&self, id: &str) -> io::Result<Option<fuel_tx::Transaction>> {
+    pub async fn transaction(&self, id: &str) -> io::Result<Option<TransactionResponse>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;
@@ -157,11 +159,31 @@ impl FuelClient {
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
+    /// Get the status of a transaction
+    pub async fn transaction_status(&self, id: &str) -> io::Result<TransactionStatus> {
+        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+
+        let tx = self.query(query).await?.transaction.ok_or_else(|| {
+            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+        })?;
+
+        let status = tx
+            .status
+            .ok_or_else(|| {
+                io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("status not found for transaction {}", id),
+                )
+            })?
+            .try_into()?;
+        Ok(status)
+    }
+
     /// returns a paginated set of transactions sorted by block height
     pub async fn transactions(
         &self,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<Transaction, String>> {
+    ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
         let query = schema::tx::TransactionsQuery::build(&request.into());
         let transactions = self.query(query).await?.transactions.try_into()?;
         Ok(transactions)
@@ -172,7 +194,7 @@ impl FuelClient {
         &self,
         owner: &str,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<Transaction, String>> {
+    ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
         let owner: HexString256 = owner.parse()?;
         let query = schema::tx::TransactionsByOwnerQuery::build(&(owner, request).into());
 
