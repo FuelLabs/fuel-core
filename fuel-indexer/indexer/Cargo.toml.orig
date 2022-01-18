@@ -1,0 +1,52 @@
+[package]
+name = "fuel-wasm-executor"
+version = "0.0.0"
+edition = "2021"
+license = "BUSL-1.1"
+publish = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+cfg-if = "1.0"
+diesel = { version = "1.4", features = ["postgres", "serde_json"] }
+env_logger = "0.9"
+fuels-core = { version = "0.1" }
+fuel-gql-client = { version = "0.1" }
+fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
+fuel-tx = { version = "0.1" }
+log = "0.4"
+r2d2 = "0.8"
+r2d2-diesel = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde-scale = "0.2"
+serde_json = { version = "1.0", features = ["raw_value"] }
+thiserror = "1.0"
+wasmer = "2.0"
+wasmer-compiler-cranelift = { version = "2.0", optional = true }
+wasmer-compiler-llvm = { version = "2.0", optional = true }
+wasmer-engine-universal = "2.0"
+
+[dev-dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+fuels-abigen-macro = { version = "0.1" }
+fuels-rs = { version = "0.1" }
+fuel-core = { version = "0.1", features = ["test-helpers"] }
+fuel-gql-client = { version = "0.1", features = ["test-helpers"] }
+fuel-indexer = { path = "../lib" }
+<<<<<<< HEAD
+fuel-storage = { version = "0.1" }
+fuel-types = { version = "0.1", features = ["serde-types"] }
+fuel-vm = { version = "0.1" }
+itertools = { version = "0.10" }
+=======
+fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuels-core = { version = "0.1" }
+fuel-types = { version = "0.1", features = ["serde-types"] }
+>>>>>>> master
+serde_yaml = "0.8.19"
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+
+[features]
+default = ["wasmer-compiler-cranelift"]
+llvm = ["wasmer-compiler-llvm"]
+postgres = []

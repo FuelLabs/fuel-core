@@ -6,7 +6,7 @@ use fuels_core::Tokenizable;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 
 pub struct IndexerService {
     client: FuelClient,
@@ -37,13 +37,13 @@ impl IndexerService {
         let name = manifest.namespace.clone();
         let executor = IndexExecutor::new(self.database_url.clone(), manifest, wasm_bytes)?;
 
-        let result = self.manager.new_schema(&name, graphql_schema)?;
+        let _ = self.manager.new_schema(&name, graphql_schema)?;
         self.executors.insert(name.clone(), executor);
         info!("Registered indexer {}", name);
         Ok(())
     }
 
-    fn get_registered_for(&self, id: ContractId) -> Option<Vec<&IndexExecutor>> {
+    fn get_registered_for(&self, _: ContractId) -> Option<Vec<&IndexExecutor>> {
         Some(vec![self.executors.get("demo_namespace").unwrap()])
     }
 
@@ -61,7 +61,7 @@ impl IndexerService {
         for block in blocks.results {
             for mut trans in block.transactions {
                 let receipts = trans.receipts.take();
-                let tx = fuel_tx::Transaction::try_from(trans).expect("Bad transaction");
+                let _tx = fuel_tx::Transaction::try_from(trans).expect("Bad transaction");
 
                 if let Some(receipts) = receipts {
                     for receipt in receipts {

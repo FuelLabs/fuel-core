@@ -1,5 +1,4 @@
 use fuel_indexer_schema::FtColumn;
-use log::info;
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
@@ -74,7 +73,7 @@ fn get_object_id(mem: &Memory, ptr: u32) -> u64 {
     WasmPtr::<u64>::new(ptr).deref(mem).unwrap().get()
 }
 
-fn log_data(env: &IndexEnv, ptr: u32, len: u32, log_level: u32) {
+fn log_data(env: &IndexEnv, ptr: u32, len: u32, _log_level: u32) {
     let mem = env.memory_ref().expect("Memory uninitialized");
     let log_string = get_string(mem, ptr, len).expect("Log string could not be fetched");
 
