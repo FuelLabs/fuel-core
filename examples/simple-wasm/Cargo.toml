@@ -1,6 +1,6 @@
 [package]
 name = "simple-wasm"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 publish = false
 
@@ -8,8 +8,8 @@ publish = false
 crate-type = ['cdylib']
 
 [dependencies]
-fuels-core = { version = "0.1", features=["no-std"] }
 fuel-indexer = { path = "../../fuel-indexer/lib" }
 fuel-indexer-derive = { path = "../../fuel-indexer/derive" }
-fuels-abigen-macro = { git = "https://github.com/fuellabs/fuels-rs.git", package="fuels-abigen-macro" }
+fuels-abigen-macro = "0.1"
+fuels-core = { version = "0.1", features=["no-std"] }
 serde = { version = "1.0.128", default-features = false, features = ["derive"] }

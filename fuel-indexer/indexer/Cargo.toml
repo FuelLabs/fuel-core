@@ -1,6 +1,6 @@
 [package]
 name = "fuel-wasm-executor"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 license = "BUSL-1.1"
 publish = false
