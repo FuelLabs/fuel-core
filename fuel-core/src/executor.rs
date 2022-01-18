@@ -11,8 +11,9 @@ use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_vm::{
-    consts::REG_SP, transactor::Transactor,
+    consts::REG_SP,
     prelude::{Backtrace as FuelBacktrace, InterpreterError},
+    transactor::Transactor,
 };
 use std::error::Error as StdError;
 use std::ops::DerefMut;
@@ -45,7 +46,19 @@ impl Executor {
 
             // execute vm
             let mut vm = Transactor::new(tx_db.clone());
-            let vm = vm.transact(tx);
+            vm.transact(tx);
+            if with_backtrace {
+                if let Some(backtrace) = vm.backtrace() {
+                    warn!(
+                    target = "vm",
+                    "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
+                    backtrace.contract(),
+                    backtrace.registers(),
+                    backtrace.call_stack(),
+                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                );
+                }
+            }
             match vm.result() {
                 Ok(result) => {
                     // persist any outputs
@@ -97,19 +110,6 @@ impl Executor {
                     }
                 }
                 Err(e) => {
-                    if with_backtrace {
-                        if let Some(backtrace) = vm.backtrace() {
-                            warn!(
-                            target = "vm",
-                            "Execution panic {:?} on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
-                            e,
-                            backtrace.contract(),
-                            backtrace.registers(),
-                            backtrace.call_stack(),
-                            hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
-                        );
-                        }
-                    }
                     // save error status on block_tx since the sub_tx changes are dropped
                     block_tx.update_tx_status(
                         tx_id,
