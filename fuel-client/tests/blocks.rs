@@ -1,11 +1,11 @@
 use chrono::{TimeZone, Utc};
-use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::database::Database;
 use fuel_core::{
     model::fuel_block::FuelBlock,
     schema::scalars::HexString256,
     service::{Config, FuelService},
 };
+use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Bytes32;
 use itertools::{rev, Itertools};

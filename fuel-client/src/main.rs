@@ -1,4 +1,4 @@
-use fuel_client::client::FuelClient;
+use fuel_gql_client::client::FuelClient;
 use fuel_tx::Transaction;
 use serde_json::json;
 use structopt::StructOpt;

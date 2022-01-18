@@ -1,11 +1,11 @@
 use chrono::Utc;
-use fuel_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_core::{
     database::Database,
     executor::Executor,
     model::{coin::UtxoId, fuel_block::FuelBlock},
     service::{Config, FuelService},
 };
+use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
@@ -63,7 +63,7 @@ async fn dry_run() {
     );
 
     let log = client.dry_run(&tx).await.unwrap();
-    assert_eq!(2, log.len());
+    assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
         Receipt::Log {

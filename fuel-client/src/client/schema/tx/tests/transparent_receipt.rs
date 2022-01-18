@@ -1,10 +1,10 @@
 use crate::client::schema::{
-    schema, ConversionError, ConversionError::MissingField, HexString256, U64,
+    schema, ConversionError, ConversionError::MissingField, HexString, HexString256, U64,
 };
 use fuel_types::Word;
 
 #[derive(cynic::QueryFragment, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Receipt {
     pub a: Option<U64>,
     pub b: Option<U64>,
@@ -28,10 +28,11 @@ pub struct Receipt {
     pub len: Option<U64>,
     pub result: Option<U64>,
     pub gas_used: Option<U64>,
+    pub data: Option<HexString>,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
-#[cynic(schema_path = "../assets/schema.sdl")]
+#[cynic(schema_path = "./assets/schema.sdl")]
 pub enum ReceiptType {
     Call,
     Return,
@@ -119,7 +120,14 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .len
                     .ok_or_else(|| MissingField("len".to_string()))?
                     .into(),
-                digest: Default::default(),
+                digest: schema
+                    .digest
+                    .ok_or_else(|| MissingField("digest".to_string()))?
+                    .into(),
+                data: schema
+                    .data
+                    .ok_or_else(|| MissingField("data".to_string()))?
+                    .into(),
                 pc: schema
                     .pc
                     .ok_or_else(|| MissingField("pc".to_string()))?
@@ -219,6 +227,10 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 digest: schema
                     .digest
                     .ok_or_else(|| MissingField("digest".to_string()))?
+                    .into(),
+                data: schema
+                    .data
+                    .ok_or_else(|| MissingField("data".to_string()))?
                     .into(),
                 pc: schema
                     .pc
