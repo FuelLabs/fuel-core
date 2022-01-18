@@ -8,7 +8,11 @@ wasm_abigen!(no_name, "examples/indexer-demo/contracts/indexer_demo.json");
 
 #[handler]
 fn function_one(event: MyEvent) {
-    let MyEvent { contract, rega, regb } = event;
+    let MyEvent {
+        contract,
+        rega,
+        regb,
+    } = event;
 
     let t1 = Thing1 {
         id: rega,

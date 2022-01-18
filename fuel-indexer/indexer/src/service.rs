@@ -1,13 +1,12 @@
 use crate::{IndexExecutor, IndexerResult, Manifest, SchemaManager};
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use fuels_core::Tokenizable;
-use fuels_core::abi_encoder::ABIEncoder;
 use fuel_tx::{ContractId, Receipt};
+use fuels_core::abi_encoder::ABIEncoder;
+use fuels_core::Tokenizable;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use log::{info, warn, error, debug};
-
+use log::{debug, error, info, warn};
 
 pub struct IndexerService {
     client: FuelClient,
@@ -29,7 +28,12 @@ impl IndexerService {
         })
     }
 
-    pub fn add_indexer(&mut self, manifest: Manifest, graphql_schema: &str, wasm_bytes: impl AsRef<[u8]>) -> IndexerResult<()> {
+    pub fn add_indexer(
+        &mut self,
+        manifest: Manifest,
+        graphql_schema: &str,
+        wasm_bytes: impl AsRef<[u8]>,
+    ) -> IndexerResult<()> {
         let name = manifest.namespace.clone();
         let executor = IndexExecutor::new(self.database_url.clone(), manifest, wasm_bytes)?;
 
@@ -44,7 +48,8 @@ impl IndexerService {
     }
 
     pub async fn run(&self) {
-        let blocks = self.client
+        let blocks = self
+            .client
             .blocks(PaginationRequest {
                 cursor: None,
                 results: 5,
@@ -69,17 +74,22 @@ impl IndexerService {
                         };
 
                         match receipt {
-                            Receipt::Log { id, ra, rb, ..} => {
+                            Receipt::Log { id, ra, rb, .. } => {
                                 if let Some(executors) = self.get_registered_for(id) {
-                                    let token = fuels_core::Token::Struct(vec![id.into_token(), ra.into_token(), rb.into_token()]);
+                                    let token = fuels_core::Token::Struct(vec![
+                                        id.into_token(),
+                                        ra.into_token(),
+                                        rb.into_token(),
+                                    ]);
                                     for exe in executors {
-                                       let args = ABIEncoder::new().encode(&[token.clone()]).expect("FUCK");
-                                       if let Err(e) = exe.trigger_event("an_event_name", args) {
-                                           error!("Event processing failed {:?}", e);
-                                       }
+                                        let args = ABIEncoder::new()
+                                            .encode(&[token.clone()])
+                                            .expect("FUCK");
+                                        if let Err(e) = exe.trigger_event("an_event_name", args) {
+                                            error!("Event processing failed {:?}", e);
+                                        }
                                     }
                                 }
-
                             }
                             o => warn!("Unhandled receipt type: {:?}", o),
                         }

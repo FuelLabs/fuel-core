@@ -6,7 +6,7 @@ use wasmer::{
     WasmPtr,
 };
 
-use crate::{IndexerResult, IndexEnv};
+use crate::{IndexEnv, IndexerResult};
 
 #[derive(Debug, Error)]
 pub enum FFIError {
@@ -148,7 +148,9 @@ pub(crate) struct WasmArg<'a> {
 
 impl<'a> WasmArg<'a> {
     pub fn new(instance: &Instance, bytes: Vec<u8>) -> IndexerResult<WasmArg> {
-        let alloc_fn = instance.exports.get_native_function::<u32, u32>("alloc_fn")?;
+        let alloc_fn = instance
+            .exports
+            .get_native_function::<u32, u32>("alloc_fn")?;
         let memory = instance.exports.get_memory("memory")?;
 
         let len = bytes.len() as u32;
@@ -159,12 +161,7 @@ impl<'a> WasmArg<'a> {
             memory.data_unchecked_mut()[range].copy_from_slice(&bytes);
         }
 
-
-        Ok(WasmArg {
-            instance,
-            ptr,
-            len,
-        })
+        Ok(WasmArg { instance, ptr, len })
     }
 
     pub fn get_ptr(&self) -> u32 {
@@ -178,7 +175,11 @@ impl<'a> WasmArg<'a> {
 
 impl<'a> Drop for WasmArg<'a> {
     fn drop(&mut self) {
-        let dealloc_fn = self.instance.exports.get_native_function::<(u32, u32), ()>("dealloc_fn").expect("No dealloc fn");
+        let dealloc_fn = self
+            .instance
+            .exports
+            .get_native_function::<(u32, u32), ()>("dealloc_fn")
+            .expect("No dealloc fn");
         dealloc_fn.call(self.ptr, self.len).expect("Dealloc failed");
     }
 }

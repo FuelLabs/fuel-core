@@ -130,7 +130,10 @@ mod tests {
     const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
 
-    abigen!(MyContract, "fuel-indexer/indexer/src/test_data/my_struct.json");
+    abigen!(
+        MyContract,
+        "fuel-indexer/indexer/src/test_data/my_struct.json"
+    );
 
     #[test]
     fn test_executor() {
@@ -165,7 +168,9 @@ mod tests {
         };
 
         let tokens = [evt1.into_token(), evt2.into_token()];
-        let bytes = ABIEncoder::new().encode(&tokens).expect("Struct encoding failed");
+        let bytes = ABIEncoder::new()
+            .encode(&tokens)
+            .expect("Struct encoding failed");
 
         let result = executor.trigger_event("an_event_name", bytes);
         assert!(result.is_ok());

@@ -68,5 +68,5 @@ fn alloc_fn(size: u32) -> *const u8 {
 
 #[no_mangle]
 fn dealloc_fn(ptr: *mut u8, len: usize) {
-    let _vec = unsafe { Vec::from_raw_parts(ptr, len, len)};
+    let _vec = unsafe { Vec::from_raw_parts(ptr, len, len) };
 }

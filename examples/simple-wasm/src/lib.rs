@@ -9,7 +9,7 @@ wasm_abigen!(no_name, "examples/simple-wasm/contracts/my_struct.json");
 #[handler]
 fn function_one(event: SomeEvent, event2: AnotherEvent) {
     let SomeEvent { id, account } = event;
-    let AnotherEvent { hash, bar, ..} = event2;
+    let AnotherEvent { hash, bar, .. } = event2;
 
     let t1 = Thing1 {
         id,

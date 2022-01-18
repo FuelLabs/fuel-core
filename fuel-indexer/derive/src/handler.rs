@@ -75,7 +75,6 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
     };
     block.stmts.extend(forgets);
 
-
     std::mem::swap(&mut block, &mut item_fn.block);
     item_fn.block.stmts.extend(block.stmts);
 

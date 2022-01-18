@@ -2,16 +2,16 @@ use diesel::result::Error as DieselError;
 use thiserror::Error;
 use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
 
-mod service;
 mod database;
 pub mod executor;
 mod ffi;
 mod manifest;
+mod service;
 
-pub use service::IndexerService;
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};
 pub use manifest::Manifest;
+pub use service::IndexerService;
 
 pub type IndexerResult<T> = core::result::Result<T, IndexerError>;
 
