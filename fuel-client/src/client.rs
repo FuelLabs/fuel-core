@@ -218,7 +218,9 @@ impl FuelClient {
     }
 
     pub async fn coin(&self, id: &str) -> io::Result<Option<Coin>> {
-        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs { id: id.parse()? });
+        let query = schema::coin::CoinByIdQuery::build(CoinByIdArgs {
+            utxo_id: id.parse()?,
+        });
         let coin = self.query(query).await?.coin;
         Ok(coin)
     }

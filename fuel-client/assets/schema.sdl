@@ -40,7 +40,7 @@ type ChangeOutput {
 	color: HexString256!
 }
 type Coin {
-	id: HexString256!
+	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: U64!
 	color: HexString256!
@@ -111,9 +111,10 @@ type FailureStatus {
 }
 scalar HexString
 scalar HexString256
+scalar HexStringUtxoId
 union Input = | InputCoin | InputContract
 type InputCoin {
-	utxoId: HexString256!
+	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: Int!
 	color: HexString256!
@@ -123,7 +124,7 @@ type InputCoin {
 	predicateData: HexString!
 }
 type InputContract {
-	utxoId: HexString256!
+	utxoId: HexStringUtxoId!
 	balanceRoot: HexString256!
 	stateRoot: HexString256!
 	contractId: HexString256!
@@ -178,7 +179,7 @@ type Query {
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!
-	coin(id: HexString256!): Coin
+	coin(utxoId: HexStringUtxoId!): Coin
 	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
 }
 type Receipt {

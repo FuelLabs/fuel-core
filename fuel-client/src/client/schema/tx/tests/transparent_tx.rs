@@ -1,7 +1,7 @@
 use crate::client::schema::{
     schema,
     tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
-    ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
+    ConnectionArgs, ConversionError, HexString, HexString256, HexStringUtxoId, PageInfo,
 };
 use core::convert::{TryFrom, TryInto};
 
@@ -146,7 +146,7 @@ pub enum Input {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputCoin {
-    pub utxo_id: HexString256,
+    pub utxo_id: HexStringUtxoId,
     pub owner: HexString256,
     pub amount: i32,
     pub color: HexString256,
@@ -159,7 +159,7 @@ pub struct InputCoin {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputContract {
-    pub utxo_id: HexString256,
+    pub utxo_id: HexStringUtxoId,
     pub balance_root: HexString256,
     pub state_root: HexString256,
     pub contract_id: HexString256,

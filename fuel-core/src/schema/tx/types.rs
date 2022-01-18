@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::schema::scalars::{HexString, HexString256};
+use crate::schema::scalars::{HexString, HexString256, HexStringUtxoId};
 use crate::tx_pool::TransactionStatus as TxStatus;
 use async_graphql::{Context, Object, Union};
 use chrono::{DateTime, Utc};
@@ -17,7 +17,7 @@ pub enum Input {
 }
 
 pub struct InputCoin {
-    utxo_id: HexString256,
+    utxo_id: HexStringUtxoId,
     owner: HexString256,
     amount: Word,
     color: HexString256,
@@ -29,10 +29,9 @@ pub struct InputCoin {
 
 #[Object]
 impl InputCoin {
-    async fn utxo_id(&self) -> HexString256 {
+    async fn utxo_id(&self) -> HexStringUtxoId {
         self.utxo_id
     }
-
     async fn owner(&self) -> HexString256 {
         self.owner
     }
@@ -63,7 +62,7 @@ impl InputCoin {
 }
 
 pub struct InputContract {
-    utxo_id: HexString256,
+    utxo_id: HexStringUtxoId,
     balance_root: HexString256,
     state_root: HexString256,
     contract_id: HexString256,
@@ -71,7 +70,7 @@ pub struct InputContract {
 
 #[Object]
 impl InputContract {
-    async fn utxo_id(&self) -> HexString256 {
+    async fn utxo_id(&self) -> HexStringUtxoId {
         self.utxo_id
     }
 
@@ -101,7 +100,7 @@ impl From<&fuel_tx::Input> for Input {
                 predicate,
                 predicate_data,
             } => Input::Coin(InputCoin {
-                utxo_id: HexString256(*utxo_id.deref()),
+                utxo_id: HexStringUtxoId(*utxo_id),
                 owner: HexString256(*owner.deref()),
                 amount: *amount,
                 color: HexString256(*color.deref()),
@@ -116,7 +115,7 @@ impl From<&fuel_tx::Input> for Input {
                 state_root,
                 contract_id,
             } => Input::Contract(InputContract {
-                utxo_id: HexString256(*utxo_id.deref()),
+                utxo_id: HexStringUtxoId(*utxo_id),
                 balance_root: HexString256(*balance_root.deref()),
                 state_root: HexString256(*state_root.deref()),
                 contract_id: HexString256(*contract_id.deref()),

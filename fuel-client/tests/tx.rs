@@ -2,7 +2,7 @@ use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::Executor,
-    model::{coin::UtxoId, fuel_block::FuelBlock},
+    model::fuel_block::FuelBlock,
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
@@ -391,11 +391,7 @@ impl TestContext {
             script,
             script_data: vec![],
             inputs: vec![Input::Coin {
-                utxo_id: UtxoId {
-                    tx_id: self.rng.gen(),
-                    output_index: 0,
-                }
-                .into(),
+                utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
                 color: Default::default(),

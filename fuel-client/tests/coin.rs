@@ -1,13 +1,13 @@
 use fuel_core::{
     database::Database,
-    model::coin::{Coin, CoinStatus, UtxoId},
+    model::coin::{Coin, CoinStatus},
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use fuel_storage::Storage;
-use fuel_tx::Color;
+use fuel_tx::{Color, UtxoId};
 use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
@@ -22,15 +22,10 @@ async fn coin() {
         block_created: Default::default(),
     };
 
-    let utxo_id = UtxoId {
-        tx_id: Default::default(),
-        output_index: 0,
-    };
+    let utxo_id = UtxoId::new(Default::default(), 5);
 
-    let id: Bytes32 = utxo_id.into();
     let mut db = Database::default();
-    Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
-
+    Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
         .await
@@ -38,7 +33,10 @@ async fn coin() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
-    let coin = client.coin(format!("{:#x}", id).as_str()).await.unwrap();
+    let coin = client
+        .coin(format!("{:#x}", utxo_id).as_str())
+        .await
+        .unwrap();
     assert!(coin.is_some());
 }
 
@@ -47,7 +45,7 @@ async fn first_5_coins() {
     let owner = Address::default();
 
     // setup test data in the node
-    let coins: Vec<(Bytes32, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
@@ -58,17 +56,14 @@ async fn first_5_coins() {
                 block_created: Default::default(),
             };
 
-            let utxo_id = UtxoId {
-                tx_id: Bytes32::from([i as u8; 32]),
-                output_index: 0,
-            };
-            (utxo_id.into(), coin)
+            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
+            (utxo_id, coin)
         })
         .collect();
 
     let mut db = Database::default();
-    for (id, coin) in coins {
-        Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
+    for (utxo_id, coin) in coins {
+        Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
     }
 
     // setup server & client
@@ -100,7 +95,7 @@ async fn only_color_filtered_coins() {
     let color = Color::new([1u8; 32]);
 
     // setup test data in the node
-    let coins: Vec<(Bytes32, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
@@ -111,17 +106,14 @@ async fn only_color_filtered_coins() {
                 block_created: Default::default(),
             };
 
-            let utxo_id = UtxoId {
-                tx_id: Bytes32::from([i as u8; 32]),
-                output_index: 0,
-            };
-            (utxo_id.into(), coin)
+            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
+            (utxo_id, coin)
         })
         .collect();
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
+        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
     }
 
     // setup server & client
@@ -153,7 +145,7 @@ async fn only_unspent_coins() {
     let owner = Address::default();
 
     // setup test data in the node
-    let coins: Vec<(Bytes32, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
@@ -168,17 +160,14 @@ async fn only_unspent_coins() {
                 block_created: Default::default(),
             };
 
-            let utxo_id = UtxoId {
-                tx_id: Bytes32::from([i as u8; 32]),
-                output_index: 0,
-            };
-            (utxo_id.into(), coin)
+            let utxo_id = UtxoId::new(Bytes32::from([i as u8; 32]), 0);
+            (utxo_id, coin)
         })
         .collect();
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<Bytes32, Coin>::insert(&mut db, &id, &coin).unwrap();
+        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
     }
 
     // setup server & client

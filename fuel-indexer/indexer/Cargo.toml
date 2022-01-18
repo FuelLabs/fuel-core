@@ -23,6 +23,7 @@ wasmer-engine-universal = "2.0"
 
 [dev-dependencies]
 fuel-indexer = { path = "../lib" }
+fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuels-core = { version = "0.1" }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 serde_yaml = "0.8.19"

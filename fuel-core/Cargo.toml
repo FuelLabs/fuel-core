@@ -27,9 +27,9 @@ dirs = "3.0"
 env_logger = "0.9"
 fuel-asm = { version = "0.1", features = ["serde-types"] }
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.1", features = ["serde-types"] }
+fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
-fuel-vm = { version = "0.1", features = ["serde-types"] }
+fuel-vm = { version = "0.2", features = ["serde-types"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -53,7 +53,7 @@ tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
-fuel-vm = { version = "0.1", features = ["serde-types", "random"] }
+fuel-vm = { version = "0.2", features = ["serde-types", "random"] }
 insta = "1.8"
 
 [features]

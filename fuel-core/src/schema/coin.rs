@@ -8,15 +8,16 @@ use async_graphql::{
     Context, Object,
 };
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32};
+use fuel_tx::{Address, UtxoId};
 use itertools::Itertools;
-use std::convert::TryInto;
 
-pub struct Coin(Bytes32, CoinModel);
+use super::scalars::HexStringUtxoId;
+
+pub struct Coin(UtxoId, CoinModel);
 
 #[Object]
 impl Coin {
-    async fn id(&self) -> HexString256 {
+    async fn utxo_id(&self) -> HexStringUtxoId {
         self.0.into()
     }
 
@@ -61,12 +62,12 @@ impl CoinQuery {
     async fn coin(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "id of the coin")] id: HexString256,
+        #[graphql(desc = "utxo_id of the coin")] utxo_id: HexStringUtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
-        let id: Bytes32 = id.0.try_into()?;
+        let utxo_id = utxo_id.0;
         let db = ctx.data_unchecked::<Database>().clone();
-        let block =
-            Storage::<Bytes32, CoinModel>::get(&db, &id)?.map(|coin| Coin(id, coin.into_owned()));
+        let block = Storage::<UtxoId, CoinModel>::get(&db, &utxo_id)?
+            .map(|coin| Coin(utxo_id, coin.into_owned()));
         Ok(block)
     }
 
@@ -78,7 +79,7 @@ impl CoinQuery {
         first: Option<i32>,
         last: Option<i32>,
         filter: CoinFilterInput,
-    ) -> async_graphql::Result<Connection<HexString256, Coin, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<HexStringUtxoId, Coin, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
 
         query(
@@ -86,7 +87,7 @@ impl CoinQuery {
             before,
             first,
             last,
-            |after: Option<HexString256>, before: Option<HexString256>, first, last| async move {
+            |after: Option<HexStringUtxoId>, before: Option<HexStringUtxoId>, first, last| async move {
                 let (records_to_fetch, direction) = if let Some(first) = first {
                     (first, IterDirection::Forward)
                 } else if let Some(last) = last {
@@ -95,8 +96,8 @@ impl CoinQuery {
                     (0, IterDirection::Forward)
                 };
 
-                let after = after.map(Bytes32::from);
-                let before = before.map(Bytes32::from);
+                let after = after.map(UtxoId::from);
+                let before = before.map(UtxoId::from);
 
                 let start;
                 let end;
@@ -122,15 +123,15 @@ impl CoinQuery {
                 let coins = coin_ids
                     .take_while(|r| {
                         // take until we've reached the end
-                        if let (Ok(t), Some(end)) = (r, end) {
-                            if t == &end {
+                        if let (Ok(t), Some(end)) = (r, end.as_ref()) {
+                            if *t == *end {
                                 return false;
                             }
                         }
                         true
                     })
                     .take(records_to_fetch);
-                let mut coins: Vec<Bytes32> = coins.try_collect()?;
+                let mut coins: Vec<UtxoId> = coins.try_collect()?;
                 if direction == IterDirection::Reverse {
                     coins.reverse();
                 }
@@ -139,7 +140,7 @@ impl CoinQuery {
                 let coins: Vec<Coin> = coins
                     .into_iter()
                     .map(|id| {
-                        Storage::<Bytes32, CoinModel>::get(db, &id)
+                        Storage::<UtxoId, CoinModel>::get(db, &id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
                             .map(|coin| Coin(id, coin.into_owned()))
@@ -160,7 +161,7 @@ impl CoinQuery {
                 connection.append(
                     coins
                         .into_iter()
-                        .map(|item| Edge::new(HexString256::from(item.0), item)),
+                        .map(|item| Edge::new(HexStringUtxoId::from(item.0), item)),
                 );
                 Ok(connection)
             },

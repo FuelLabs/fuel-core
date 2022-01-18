@@ -12,7 +12,7 @@ query Query($_0: CoinFilterInput!, $_1: String, $_2: String, $_3: Int, $_4: Int)
         amount
         blockCreated
         color
-        id
+        utxoId
         maturity
         owner
         status
