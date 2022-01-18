@@ -1,0 +1,8 @@
+---
+namespace: demo_namespace
+graphql_schema: demo_schema.graphql
+wasm_module: indexer_demo.wasm
+handlers:
+  - event: an_event_name
+    handler: function_one
+test_events: []

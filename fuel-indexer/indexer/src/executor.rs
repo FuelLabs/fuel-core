@@ -27,6 +27,8 @@ pub struct IndexEnv {
     memory: LazyInit<Memory>,
     #[wasmer(export(name = "alloc_fn"))]
     alloc: LazyInit<NativeFunc<u32, u32>>,
+    #[wasmer(export(name = "dealloc_fn"))]
+    dealloc: LazyInit<NativeFunc<(u32, u32), ()>>,
     pub db: Arc<Mutex<Database>>,
 }
 
@@ -36,6 +38,7 @@ impl IndexEnv {
         Ok(IndexEnv {
             memory: Default::default(),
             alloc: Default::default(),
+            dealloc: Default::default(),
             db,
         })
     }
@@ -99,11 +102,7 @@ impl IndexExecutor {
 
     /// Trigger a WASM event handler, passing in a serialized event struct.
     pub fn trigger_event(&self, event_name: &str, bytes: Vec<u8>) -> IndexerResult<()> {
-        let alloc_fn = self
-            .instance
-            .exports
-            .get_native_function::<u32, u32>("alloc_fn")?;
-        let memory = self.instance.exports.get_memory("memory")?;
+        let args = ffi::WasmArg::new(&self.instance, bytes)?;
 
         if let Some(handlers) = self.events.get(event_name) {
             for handler in handlers.iter() {
@@ -112,17 +111,7 @@ impl IndexExecutor {
                     .exports
                     .get_native_function::<(u32, u32), ()>(handler)?;
 
-                let wasm_mem = alloc_fn.call(bytes.len() as u32)?;
-                let range = wasm_mem as usize..wasm_mem as usize + bytes.len();
-
-                unsafe {
-                    // Safety: the alloc call for wasm_mem has succeeded for bytes.len()
-                    //         so we have this block of memory for copying. The fun.call() below
-                    //         will release it.
-                    memory.data_unchecked_mut()[range].copy_from_slice(&bytes);
-                }
-
-                let _result = fun.call(wasm_mem, bytes.len() as u32)?;
+                let _result = fun.call(args.get_ptr(), args.get_len())?;
             }
         }
         Ok(())
@@ -133,11 +122,15 @@ impl IndexExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuels_abigen_macro::abigen;
+    use fuels_rs::abi_encoder::ABIEncoder;
+
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
     const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
-    const GOOD_DATA: &'static [u8] = include_bytes!("test_data/good_event.bin");
+
+    abigen!(MyContract, "fuel-indexer/indexer/src/test_data/my_struct.json");
 
     #[test]
     fn test_executor() {
@@ -161,7 +154,20 @@ mod tests {
             e => panic!("Should have been a runtime error {:#?}", e),
         }
 
-        let result = executor.trigger_event("an_event_name", GOOD_DATA.to_vec());
+        let evt1 = SomeEvent {
+            id: 1020,
+            account: [0xaf; 32],
+        };
+        let evt2 = AnotherEvent {
+            id: 100,
+            hash: [0x43; 32],
+            bar: true,
+        };
+
+        let tokens = [evt1.into_token(), evt2.into_token()];
+        let bytes = ABIEncoder::new().encode(&tokens).expect("Struct encoding failed");
+
+        let result = executor.trigger_event("an_event_name", bytes);
         assert!(result.is_ok());
     }
 }

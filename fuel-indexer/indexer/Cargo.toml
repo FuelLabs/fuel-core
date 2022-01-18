@@ -9,7 +9,12 @@ publish = false
 [dependencies]
 cfg-if = "1.0"
 diesel = { version = "1.4", features = ["postgres", "serde_json"] }
+env_logger = "0.9"
+fuels-core = { path = "../../../fuels-rs/fuels-core" }
+fuel-gql-client = { version = "0.1" }
 fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
+fuel-tx = { version = "0.1" }
+log = "0.4"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -23,13 +28,15 @@ wasmer-engine-universal = "2.0"
 
 [dev-dependencies]
 chrono = { version = "0.4", features = ["serde"] }
+fuels-abigen-macro = { path = "../../../fuels-rs/fuels-abigen-macro" }
+fuels-rs = { path = "../../../fuels-rs/fuels-rs" }
 fuel-core = { version = "0.1", features = ["test-helpers"] }
 fuel-gql-client = { version = "0.1", features = ["test-helpers"] }
 fuel-indexer = { path = "../lib" }
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.1", features = ["serde-types"] }
+fuel-types = { version = "0.1", features = ["serde-types"] }
 fuel-vm = { version = "0.1" }
-itertools = "0.10"
+itertools = { version = "0.10" }
 serde_yaml = "0.8.19"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 

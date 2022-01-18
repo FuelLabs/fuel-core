@@ -1,11 +1,12 @@
 use fuel_indexer_schema::FtColumn;
+use log::info;
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
     WasmPtr,
 };
 
-use crate::IndexEnv;
+use crate::{IndexerResult, IndexEnv};
 
 #[derive(Debug, Error)]
 pub enum FFIError {
@@ -73,6 +74,14 @@ fn get_object_id(mem: &Memory, ptr: u32) -> u64 {
     WasmPtr::<u64>::new(ptr).deref(mem).unwrap().get()
 }
 
+fn log_data(env: &IndexEnv, ptr: u32, len: u32, log_level: u32) {
+    let mem = env.memory_ref().expect("Memory uninitialized");
+    let log_string = get_string(mem, ptr, len).expect("Log string could not be fetched");
+
+    // TODO: should incorporate log-levels here.....
+    println!("TJDEBUG {}", log_string);
+}
+
 fn get_object(env: &IndexEnv, type_id: u64, ptr: u32, len_ptr: u32) -> u32 {
     let mem = env.memory_ref().expect("Memory uninitialized");
 
@@ -125,5 +134,51 @@ pub fn get_exports(env: &IndexEnv, store: &Store) -> Exports {
     let mut exports = Exports::new();
     declare_export!(get_object, exports, store, env);
     declare_export!(put_object, exports, store, env);
+    declare_export!(log_data, exports, store, env);
     exports
+}
+
+/// Holds on to a byte blob that has been copied into WASM memory until
+/// it's not needed anymore, then tells WASM to deallocate.
+pub(crate) struct WasmArg<'a> {
+    instance: &'a Instance,
+    ptr: u32,
+    len: u32,
+}
+
+impl<'a> WasmArg<'a> {
+    pub fn new(instance: &Instance, bytes: Vec<u8>) -> IndexerResult<WasmArg> {
+        let alloc_fn = instance.exports.get_native_function::<u32, u32>("alloc_fn")?;
+        let memory = instance.exports.get_memory("memory")?;
+
+        let len = bytes.len() as u32;
+        let ptr = alloc_fn.call(len)?;
+        let range = ptr as usize..(ptr + len) as usize;
+
+        unsafe {
+            memory.data_unchecked_mut()[range].copy_from_slice(&bytes);
+        }
+
+
+        Ok(WasmArg {
+            instance,
+            ptr,
+            len,
+        })
+    }
+
+    pub fn get_ptr(&self) -> u32 {
+        self.ptr
+    }
+
+    pub fn get_len(&self) -> u32 {
+        self.len
+    }
+}
+
+impl<'a> Drop for WasmArg<'a> {
+    fn drop(&mut self) {
+        let dealloc_fn = self.instance.exports.get_native_function::<(u32, u32), ()>("dealloc_fn").expect("No dealloc fn");
+        dealloc_fn.call(self.ptr, self.len).expect("Dealloc failed");
+    }
 }

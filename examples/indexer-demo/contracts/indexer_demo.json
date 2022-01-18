@@ -1,0 +1,28 @@
+[
+    {
+        "type":"contract",
+        "inputs":[
+            {
+                "name": "my_event",
+                "type": "struct MyEvent",
+                "components":
+                [
+                    {
+                        "name":"contract",
+                        "type":"b256"
+                    },
+                    {
+                        "name":"rega",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regb",
+                        "type":"u64"
+                    }
+                ]
+            }
+        ],
+        "name":"takes_struct",
+        "outputs":[]
+    }
+]

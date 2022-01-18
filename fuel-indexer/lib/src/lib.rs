@@ -11,6 +11,15 @@ extern "C" {
     // TODO: error codes? or just panic and let the runtime handle it?
     fn ff_get_object(type_id: u64, ptr: *const u8, len: *mut u8) -> *mut u8;
     fn ff_put_object(type_id: u64, ptr: *const u8, len: u32);
+    fn ff_log_data(ptr: *const u8, len: u32, log_level: u32);
+}
+
+//TODO: expand on this....
+pub struct Logger;
+impl Logger {
+    pub fn info(log: &str) {
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, 0) }
+    }
 }
 
 pub trait Entity: Sized + PartialEq + Eq {
@@ -55,4 +64,9 @@ fn alloc_fn(size: u32) -> *const u8 {
     core::mem::forget(vec);
 
     ptr
+}
+
+#[no_mangle]
+fn dealloc_fn(ptr: *mut u8, len: usize) {
+    let _vec = unsafe { Vec::from_raw_parts(ptr, len, len)};
 }
