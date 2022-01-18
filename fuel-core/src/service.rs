@@ -1,8 +1,9 @@
 use crate::chain_config::{ChainConfig, ContractConfig, StateConfig};
 use crate::database::Database;
-use crate::model::coin::{Coin, CoinStatus, UtxoId};
+use crate::model::coin::{Coin, CoinStatus};
 use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
+use fuel_tx::UtxoId;
 use fuel_types::{Bytes32, Color, ContractId, Salt, Word};
 use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
@@ -127,17 +128,17 @@ impl FuelService {
     /// initialize coins
     fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-        let mut generated_coin_idx = 0;
+        let mut generated_output_index = 0;
         if let Some(coins) = &state.coins {
             for coin in coins {
-                let utxo_id = coin.utxo_id.unwrap_or_else(|| {
-                    generated_coin_idx += 1;
-                    UtxoId {
-                        tx_id: Default::default(),
-                        output_index: generated_coin_idx,
-                    }
-                    .into()
-                });
+                let utxo_id = UtxoId::new(
+                    coin.tx_id.unwrap_or_default(),
+                    coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
+                        generated_output_index += 1;
+                        generated_output_index
+                    }),
+                );
+
                 let coin = Coin {
                     owner: coin.owner,
                     amount: coin.amount,
@@ -147,7 +148,7 @@ impl FuelService {
                     block_created: coin.block_created.unwrap_or_default(),
                 };
 
-                let _ = Storage::<Bytes32, Coin>::insert(db, &utxo_id, &coin)?;
+                let _ = Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?;
             }
         }
         Ok(())
@@ -308,7 +309,9 @@ mod tests {
         let alice_value = rng.gen();
         let alice_maturity = Some(rng.next_u32().into());
         let alice_block_created = Some(rng.next_u32().into());
-        let alice_utxo_id = Some(rng.gen());
+        let alice_tx_id = Some(rng.gen());
+        let alice_output_index = Some(rng.gen());
+        let alice_utxo_id = UtxoId::new(alice_tx_id.unwrap(), alice_output_index.unwrap());
 
         // a coin with minimal options set
         let bob: Address = rng.gen();
@@ -320,7 +323,8 @@ mod tests {
                 initial_state: Some(StateConfig {
                     coins: Some(vec![
                         CoinConfig {
-                            utxo_id: alice_utxo_id,
+                            tx_id: alice_tx_id,
+                            output_index: alice_output_index.map(|i| i as u64),
                             block_created: alice_block_created,
                             maturity: alice_maturity,
                             owner: alice,
@@ -328,7 +332,8 @@ mod tests {
                             color: color_alice,
                         },
                         CoinConfig {
-                            utxo_id: None,
+                            tx_id: None,
+                            output_index: None,
                             block_created: None,
                             maturity: None,
                             owner: bob,
@@ -369,7 +374,7 @@ mod tests {
                 block_created,
                 maturity,
                 ..
-            })] if utxo_id == alice_utxo_id.unwrap()
+            })] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
             && color == color_alice
@@ -471,11 +476,11 @@ mod tests {
         assert_eq!(test_balance, ret)
     }
 
-    fn get_coins(db: &Database, owner: Address) -> Vec<(Bytes32, Coin)> {
+    fn get_coins(db: &Database, owner: Address) -> Vec<(UtxoId, Coin)> {
         db.owned_coins(owner, None, None)
             .map(|r| {
                 r.and_then(|coin_id| {
-                    Storage::<Bytes32, Coin>::get(db, &coin_id)
+                    Storage::<UtxoId, Coin>::get(db, &coin_id)
                         .map_err(Into::into)
                         .map(|v| (coin_id, v.unwrap().into_owned()))
                 })

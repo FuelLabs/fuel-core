@@ -15,7 +15,7 @@ pub(crate) mod tx_pool;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    trace!("Initializing in TRACE mode");
+    trace!("Initializing in TRACE mode.");
     // load configuration
     let config = args::Opt::from_args().exec()?;
     // initialize the server
