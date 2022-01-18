@@ -2,9 +2,14 @@
 extern crate alloc;
 use core::convert::TryFrom;
 use fuel_indexer_derive::handler;
-use alloc::vec::Vec;
+use alloc::{format, vec::Vec};
 use fuel_indexer::types::*;
 use fuels_core::{ParamType, Token};
+
+struct Logger;
+impl Logger {
+    pub fn info(_: &str) {}
+}
 
 struct SomeEvent {
     id: u64,
@@ -12,11 +17,11 @@ struct SomeEvent {
 }
 
 impl SomeEvent {
-    fn param_types() -> Vec<ParamType> {
+    fn param_types() -> ParamType {
         let mut t = Vec::new();
         t.push(ParamType::U64);
         t.push(ParamType::B256);
-        t
+        ParamType::Struct(t)
     }
 
     fn into_token(self) -> Token {
@@ -26,7 +31,11 @@ impl SomeEvent {
         Token::Struct(t)
     }
 
-    fn new_from_token(tokens: &[Token]) -> SomeEvent {
+    fn new_from_token(tokens: &Token) -> SomeEvent {
+        let tokens = match tokens {
+            Token::Struct(t) => t,
+            _ => panic!("Invalid token type!"),
+        };
         let id = match tokens[0] {
             Token::U64(i) => i,
             _ => panic!("Should be a U64"),
@@ -51,7 +60,6 @@ fn function_one(event: SomeEvent) {
 
 fn main() {
     use fuels_core::abi_encoder::ABIEncoder;
-    use alloc::vec;
 
     let s = SomeEvent {
         id: 0,
@@ -63,13 +71,6 @@ fn main() {
     let ptr = bytes.as_mut_ptr();
     let len = bytes.len();
     core::mem::forget(bytes);
-    let mut ptr = vec![ptr];
-    let mut len = vec![len];
-    let ptrs = ptr.as_mut_ptr();
-    let lens = len.as_mut_ptr();
-    core::mem::forget(ptr);
-    core::mem::forget(len);
 
-
-    function_one(ptrs, lens, 1);
+    function_one(ptr, len);
 }
