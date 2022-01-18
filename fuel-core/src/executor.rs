@@ -51,18 +51,47 @@ impl Executor {
                     // persist receipts
                     self.persist_receipts(tx_id, result.receipts(), tx_db)?;
 
-                    // persist tx status
-                    tx_db.update_tx_status(
-                        tx_id,
+                    let status = if result.should_revert() {
+                        // if script result exists, log reason
+                        if let Some((script_result, _)) = result.receipts().iter().find_map(|r| {
+                            if let Receipt::ScriptResult { result, gas_used } = r {
+                                Some((result, gas_used))
+                            } else {
+                                None
+                            }
+                        }) {
+                            TransactionStatus::Failed {
+                                block_id,
+                                time: block.time,
+                                reason: format!("{:?}", script_result.reason()),
+                                result: Some(*result.state()),
+                            }
+                        }
+                        // otherwise just log the revert arg
+                        else {
+                            TransactionStatus::Failed {
+                                block_id,
+                                time: block.time,
+                                reason: format!("{:?}", result.state()),
+                                result: Some(*result.state()),
+                            }
+                        }
+                    } else {
+                        // else tx was a success
                         TransactionStatus::Success {
                             block_id,
                             time: block.time,
                             result: *result.state(),
-                        },
-                    )?;
+                        }
+                    };
+
+                    // persist tx status at the block level
+                    block_tx.update_tx_status(tx_id, status)?;
 
                     // only commit state changes if execution was a success
-                    sub_tx.commit()?;
+                    if !result.should_revert() {
+                        sub_tx.commit()?;
+                    }
                 }
                 // save error status on block_tx since the sub_tx changes are dropped
                 Err(e) => {
@@ -72,6 +101,7 @@ impl Executor {
                             block_id,
                             time: block.time,
                             reason: e.to_string(),
+                            result: None,
                         },
                     )?;
                 }

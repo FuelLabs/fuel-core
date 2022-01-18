@@ -23,6 +23,7 @@ pub enum TransactionStatus {
         block_id: Bytes32,
         time: DateTime<Utc>,
         reason: String,
+        result: Option<ProgramState>,
     },
 }
 

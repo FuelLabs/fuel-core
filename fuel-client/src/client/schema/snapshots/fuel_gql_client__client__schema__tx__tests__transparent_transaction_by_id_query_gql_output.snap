@@ -1,5 +1,6 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
+assertion_line: 264
 expression: operation.query
 
 ---
@@ -71,12 +72,19 @@ query Query($_0: HexString256!) {
       ... on SuccessStatus {
         blockId
         time
-        programState
+        programState {
+          returnType
+          data
+        }
       }
       ... on FailureStatus {
         blockId
         time
         reason
+        programState {
+          returnType
+          data
+        }
       }
     }
     witnesses
