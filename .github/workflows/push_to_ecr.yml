@@ -43,10 +43,8 @@ jobs:
           ECR_REPOSITORY: fuel-core
           IMAGE_TAG: ${{ steps.extract_branch.outputs.branch }}-${{ github.sha }}
         run: |
-          mkdir root-config
-          cp -r ~/.gitconfig  ~/.ssh root-config/
-          echo "Building image..."
-          docker build --ssh default -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
+          echo "Building and pushing image to ECR"
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG . -f deployment/Dockerfile
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest        
