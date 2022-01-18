@@ -2249,17 +2249,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "indexer-demo"
-version = "0.1.0"
-dependencies = [
- "fuel-indexer",
- "fuel-indexer-derive",
- "fuels-abigen-macro",
- "fuels-core",
- "serde",
-]
-
-[[package]]
 name = "indexmap"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3953,17 +3942,6 @@ name = "similar"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e24979f63a11545f5f2c60141afe249d4f19f84581ea2138065e400941d83d3"
-
-[[package]]
-name = "simple-wasm"
-version = "0.1.0"
-dependencies = [
- "fuel-indexer",
- "fuel-indexer-derive",
- "fuels-abigen-macro",
- "fuels-core",
- "serde",
-]
 
 [[package]]
 name = "slab"
