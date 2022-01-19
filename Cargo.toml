@@ -10,6 +10,7 @@ members = [
   "fuel-indexer/schema",
   "interfaces",
   "txpool",
+  "relayer",
   "xtask",
 ]
 
