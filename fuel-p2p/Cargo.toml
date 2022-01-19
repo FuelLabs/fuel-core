@@ -1,0 +1,16 @@
+[package]
+edition = "2021"
+name = "fuel-p2p"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+futures = "0.3"
+futures-timer = "3.0.2"
+libp2p = {version = "0.41.0", features = ["ping"]}
+log = "0.4.8"
+sha2 = "0.9"
+
+[dev-dependencies]
+rand = "0.8.4"
