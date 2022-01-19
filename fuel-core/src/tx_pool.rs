@@ -4,9 +4,12 @@ use crate::model::fuel_block::FuelBlock;
 use chrono::{DateTime, Utc};
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
+use fuel_txpool::{Config as TxPoolConfig, TxPoolService};
 use fuel_vm::prelude::{ProgramState, Transaction};
+use interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDB};
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,20 +50,32 @@ impl From<crate::state::Error> for Error {
     }
 }
 
+impl TxPoolDB for Database {}
+
 /// Holds submitted transactions and attempts to propose blocks
 pub struct TxPool {
     executor: Executor,
     db: Database,
+    fuel_txpool: Arc<dyn TxPoolTrait>,
 }
 
 impl TxPool {
+    pub fn pool(&self) -> &dyn TxPoolTrait {
+        self.fuel_txpool.as_ref()
+    }
+
     pub fn new(database: Database) -> Self {
         let executor = Executor {
             database: database.clone(),
         };
+        let config = Arc::new(TxPoolConfig::default());
         TxPool {
             executor,
-            db: database,
+            db: database.clone(),
+            fuel_txpool: Arc::new(TxPoolService::new(
+                Arc::new(database) as Arc<dyn TxPoolDB>,
+                config,
+            )),
         }
     }
 

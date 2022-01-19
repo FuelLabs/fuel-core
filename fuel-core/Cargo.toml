@@ -19,6 +19,7 @@ test = false
 
 [dependencies]
 async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz"] }
+async-trait = "0.1"
 axum = { version = "0.2" }
 bincode = "1.3"
 chrono = { version = "0.4", features = ["serde"] }
@@ -28,12 +29,14 @@ env_logger = "0.9"
 fuel-asm = { version = "0.1", features = ["serde-types"] }
 fuel-storage = { version = "0.1" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-txpool = { path = "../txpool", version = "0.1.0" }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 fuel-vm = { version = "0.2", features = ["serde-types"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
+interfaces = { path = "../interfaces", package = "fuel-client-interfaces", version = "0.1.0" }
 itertools = "0.10"
 lazy_static = "1.4"
 rand = "0.8"

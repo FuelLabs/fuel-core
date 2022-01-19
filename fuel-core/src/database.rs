@@ -8,14 +8,13 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use fuel_storage::Storage;
-use fuel_vm::prelude::{Address, Bytes32, InterpreterError, InterpreterStorage};
+use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
-use std::io::ErrorKind;
+use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use std::sync::Arc;
-use thiserror::Error;
 
 pub mod balances;
 pub mod block;
@@ -59,6 +58,12 @@ pub mod columns {
 pub struct Database {
     data: DataSource,
 }
+
+/*** SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwriten
+ * it is not Send+Sync by default because Storage insert fn takes &mut self
+*/
+unsafe impl Send for Database {}
+unsafe impl Sync for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
@@ -171,46 +176,4 @@ impl InterpreterStorage for Database {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum KvStoreError {
-    #[error("generic error occurred")]
-    Error(Box<dyn std::error::Error + Send + Sync>),
-    #[error("resource not found")]
-    NotFound,
-}
-
-impl From<bincode::Error> for KvStoreError {
-    fn from(e: bincode::Error) -> Self {
-        KvStoreError::Error(Box::new(e))
-    }
-}
-
-impl From<crate::state::Error> for KvStoreError {
-    fn from(e: Error) -> Self {
-        KvStoreError::Error(Box::new(e))
-    }
-}
-
-impl From<KvStoreError> for crate::state::Error {
-    fn from(e: KvStoreError) -> Self {
-        crate::state::Error::DatabaseError(Box::new(e))
-    }
-}
-
-impl From<KvStoreError> for std::io::Error {
-    fn from(e: KvStoreError) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
-    }
-}
-
-impl From<crate::state::Error> for InterpreterError {
-    fn from(e: Error) -> Self {
-        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-    }
-}
-
-impl From<KvStoreError> for InterpreterError {
-    fn from(e: KvStoreError) -> Self {
-        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-    }
-}
+pub use interfaces::db::KvStoreError;
