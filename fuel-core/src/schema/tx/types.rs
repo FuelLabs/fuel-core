@@ -1,13 +1,13 @@
 use crate::database::Database;
-use crate::schema::scalars::{HexString, HexString256};
+use crate::schema::scalars::{HexString, HexString256, HexStringUtxoId};
 use crate::tx_pool::TransactionStatus as TxStatus;
-use async_graphql::{Context, Object, Union};
+use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
 use fuel_types::bytes::SerializableVec;
-use fuel_vm::prelude::ProgramState;
+use fuel_vm::prelude::ProgramState as VmProgramState;
 use std::ops::Deref;
 
 #[derive(Union)]
@@ -17,7 +17,7 @@ pub enum Input {
 }
 
 pub struct InputCoin {
-    utxo_id: HexString256,
+    utxo_id: HexStringUtxoId,
     owner: HexString256,
     amount: Word,
     color: HexString256,
@@ -29,10 +29,9 @@ pub struct InputCoin {
 
 #[Object]
 impl InputCoin {
-    async fn utxo_id(&self) -> HexString256 {
+    async fn utxo_id(&self) -> HexStringUtxoId {
         self.utxo_id
     }
-
     async fn owner(&self) -> HexString256 {
         self.owner
     }
@@ -63,7 +62,7 @@ impl InputCoin {
 }
 
 pub struct InputContract {
-    utxo_id: HexString256,
+    utxo_id: HexStringUtxoId,
     balance_root: HexString256,
     state_root: HexString256,
     contract_id: HexString256,
@@ -71,7 +70,7 @@ pub struct InputContract {
 
 #[Object]
 impl InputContract {
-    async fn utxo_id(&self) -> HexString256 {
+    async fn utxo_id(&self) -> HexStringUtxoId {
         self.utxo_id
     }
 
@@ -101,7 +100,7 @@ impl From<&fuel_tx::Input> for Input {
                 predicate,
                 predicate_data,
             } => Input::Coin(InputCoin {
-                utxo_id: HexString256(*utxo_id.deref()),
+                utxo_id: HexStringUtxoId(*utxo_id),
                 owner: HexString256(*owner.deref()),
                 amount: *amount,
                 color: HexString256(*color.deref()),
@@ -116,7 +115,7 @@ impl From<&fuel_tx::Input> for Input {
                 state_root,
                 contract_id,
             } => Input::Contract(InputContract {
-                utxo_id: HexString256(*utxo_id.deref()),
+                utxo_id: HexStringUtxoId(*utxo_id),
                 balance_root: HexString256(*balance_root.deref()),
                 state_root: HexString256(*state_root.deref()),
                 contract_id: HexString256(*contract_id.deref()),
@@ -286,6 +285,48 @@ impl From<&fuel_tx::Output> for Output {
     }
 }
 
+pub struct ProgramState {
+    return_type: ReturnType,
+    data: Vec<u8>,
+}
+
+#[Object]
+impl ProgramState {
+    async fn return_type(&self) -> ReturnType {
+        self.return_type
+    }
+
+    async fn data(&self) -> HexString {
+        self.data.clone().into()
+    }
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum ReturnType {
+    Return,
+    ReturnData,
+    Revert,
+}
+
+impl From<VmProgramState> for ProgramState {
+    fn from(state: VmProgramState) -> Self {
+        match state {
+            VmProgramState::Return(d) => ProgramState {
+                return_type: ReturnType::Return,
+                data: d.to_be_bytes().to_vec(),
+            },
+            VmProgramState::ReturnData(d) => ProgramState {
+                return_type: ReturnType::ReturnData,
+                data: d.as_ref().to_vec(),
+            },
+            VmProgramState::Revert(d) => ProgramState {
+                return_type: ReturnType::Revert,
+                data: d.to_be_bytes().to_vec(),
+            },
+        }
+    }
+}
+
 #[derive(Union)]
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
@@ -305,7 +346,7 @@ impl SubmittedStatus {
 pub struct SuccessStatus {
     block_id: Bytes32,
     time: DateTime<Utc>,
-    result: ProgramState,
+    result: VmProgramState,
 }
 
 #[Object]
@@ -318,12 +359,8 @@ impl SuccessStatus {
         self.time
     }
 
-    async fn program_state(&self) -> HexString {
-        match self.result {
-            ProgramState::Return(word) => HexString(word.to_be_bytes().to_vec()),
-            ProgramState::ReturnData(data) => HexString(data.deref().to_vec()),
-            ProgramState::Revert(word) => HexString(word.to_be_bytes().to_vec()),
-        }
+    async fn program_state(&self) -> ProgramState {
+        self.result.into()
     }
 }
 
@@ -331,6 +368,7 @@ pub struct FailureStatus {
     block_id: Bytes32,
     time: DateTime<Utc>,
     reason: String,
+    state: Option<VmProgramState>,
 }
 
 #[Object]
@@ -345,6 +383,10 @@ impl FailureStatus {
 
     async fn reason(&self) -> String {
         self.reason.clone()
+    }
+
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.state.map(Into::into)
     }
 }
 
@@ -365,10 +407,12 @@ impl From<TxStatus> for TransactionStatus {
                 block_id,
                 reason,
                 time,
+                result,
             } => TransactionStatus::Failed(FailureStatus {
                 block_id,
                 reason,
                 time,
+                state: result,
             }),
         }
     }

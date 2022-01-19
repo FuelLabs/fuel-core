@@ -5,6 +5,7 @@ pub mod schema {
 }
 
 use hex::FromHexError;
+use std::array::TryFromSliceError;
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use std::num::TryFromIntError;
@@ -192,6 +193,8 @@ pub enum ConversionError {
     TransactionFromBytesError(std::io::Error),
     #[error("failed to deserialize receipt from bytes {0}")]
     ReceiptFromBytesError(std::io::Error),
+    #[error("failed to convert from bytes due to unexpected length")]
+    BytesLength,
 }
 
 impl From<FromHexError> for ConversionError {
@@ -209,5 +212,11 @@ impl From<ConversionError> for std::io::Error {
 impl From<TryFromIntError> for ConversionError {
     fn from(_: TryFromIntError) -> Self {
         ConversionError::IntegerConversion
+    }
+}
+
+impl From<TryFromSliceError> for ConversionError {
+    fn from(_: TryFromSliceError) -> Self {
+        ConversionError::BytesLength
     }
 }

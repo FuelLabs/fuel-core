@@ -4,7 +4,7 @@ use fuel_indexer_derive::{graphql_schema, handler};
 use fuels_abigen_macro::wasm_abigen;
 
 graphql_schema!("test_namespace", "schema/schema.graphql");
-wasm_abigen!(no_name, "examples/simple-wasm/contracts/my_struct.json");
+wasm_abigen!(no_name, "simple-wasm/contracts/my_struct.json");
 
 #[handler]
 fn function_one(event: SomeEvent) {

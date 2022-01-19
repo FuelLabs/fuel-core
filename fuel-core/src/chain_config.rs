@@ -26,7 +26,8 @@ impl ChainConfig {
         // endow 10 mock accounts with an initial balance
         let initial_coins = (1..10)
             .map(|idx| CoinConfig {
-                utxo_id: None,
+                tx_id: None,
+                output_index: None,
                 block_created: None,
                 maturity: None,
                 owner: Address::new([idx; 32]),
@@ -102,7 +103,10 @@ pub struct CoinConfig {
     /// auto-generated if None
     #[serde_as(as = "Option<HexType>")]
     #[serde(default)]
-    pub utxo_id: Option<Bytes32>,
+    pub tx_id: Option<Bytes32>,
+    #[serde_as(as = "Option<HexNumber>")]
+    #[serde(default)]
+    pub output_index: Option<u64>,
     /// used if coin is forked from another chain to preserve id
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
@@ -296,7 +300,8 @@ mod tests {
 
     fn test_config_coin_state() -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
-        let utxo_id: Option<Bytes32> = Some(rng.gen());
+        let tx_id: Option<Bytes32> = Some(rng.gen());
+        let output_index: Option<u64> = Some(rng.gen());
         let block_created = Some(rng.next_u32().into());
         let maturity = Some(rng.next_u32().into());
         let owner = rng.gen();
@@ -306,7 +311,8 @@ mod tests {
         ChainConfig {
             initial_state: Some(StateConfig {
                 coins: Some(vec![CoinConfig {
-                    utxo_id,
+                    tx_id,
+                    output_index,
                     block_created,
                     maturity,
                     owner,

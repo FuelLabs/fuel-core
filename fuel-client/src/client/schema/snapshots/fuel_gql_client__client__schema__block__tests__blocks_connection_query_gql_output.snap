@@ -1,5 +1,6 @@
 ---
 source: fuel-client/src/client/schema/block.rs
+assertion_line: 94
 expression: operation.query
 
 ---
@@ -16,6 +17,29 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
           rawPayload
           receipts {
             rawPayload
+          }
+          status {
+            __typename
+            ... on SubmittedStatus {
+              time
+            }
+            ... on SuccessStatus {
+              blockId
+              time
+              programState {
+                returnType
+                data
+              }
+            }
+            ... on FailureStatus {
+              blockId
+              time
+              reason
+              programState {
+                returnType
+                data
+              }
+            }
           }
         }
       }

@@ -2,6 +2,7 @@ use super::schema;
 use crate::client::schema::ConversionError;
 use crate::client::schema::ConversionError::HexStringPrefixError;
 use cynic::impl_scalar;
+use fuel_tx::UtxoId;
 use fuel_types::{Address, Bytes32, Color, ContractId, Salt};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -93,6 +94,24 @@ impl From<HexString256> for Salt {
     }
 }
 
+#[derive(cynic::Scalar, Debug, Clone, Default)]
+pub struct HexStringUtxoId(pub HexFormatted<UtxoId>);
+
+impl FromStr for HexStringUtxoId {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b = HexFormatted::<UtxoId>::from_str(s)?;
+        Ok(HexStringUtxoId(b))
+    }
+}
+
+impl From<HexStringUtxoId> for UtxoId {
+    fn from(s: HexStringUtxoId) -> Self {
+        s.0 .0
+    }
+}
+
 #[derive(cynic::Scalar, Debug, Clone)]
 pub struct HexString(pub Bytes);
 
@@ -133,6 +152,12 @@ impl<'de> Deserialize<'de> for Bytes {
     {
         let s: String = Deserialize::deserialize(deserializer)?;
         Self::from_str(s.as_str()).map_err(D::Error::custom)
+    }
+}
+
+impl Display for Bytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{}", hex::encode(&self.0))
     }
 }
 

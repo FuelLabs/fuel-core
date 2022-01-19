@@ -1,9 +1,9 @@
-use crate::client::schema::{schema, HexString256, PageInfo, U64};
+use crate::client::schema::{schema, HexString256, HexStringUtxoId, PageInfo, U64};
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
-    pub id: HexString256,
+    pub utxo_id: HexStringUtxoId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -13,7 +13,7 @@ pub struct CoinByIdArgs {
     argument_struct = "CoinByIdArgs"
 )]
 pub struct CoinByIdQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(utxo_id = &args.utxo_id)]
     pub coin: Option<Coin>,
 }
 
@@ -113,7 +113,7 @@ pub struct Coin {
     pub amount: U64,
     pub block_created: U64,
     pub color: HexString256,
-    pub id: HexString256,
+    pub utxo_id: HexStringUtxoId,
     pub maturity: U64,
     pub owner: HexString256,
     pub status: CoinStatus,
@@ -134,7 +134,7 @@ mod tests {
     fn coin_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = CoinByIdQuery::build(CoinByIdArgs {
-            id: HexString256::default(),
+            utxo_id: HexStringUtxoId::default(),
         });
         insta::assert_snapshot!(operation.query)
     }
