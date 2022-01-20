@@ -323,7 +323,7 @@ pub mod tests {
         let mut seen = HashMap::new();
         txpool
             .dependency()
-            .find_dependent(tx2, &mut seen, &txpool.txs());
+            .find_dependent(tx2, &mut seen, txpool.txs());
         let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
         // sort from high to low price
         list.sort_by_key(|tx| Reverse(tx.gas_price()));

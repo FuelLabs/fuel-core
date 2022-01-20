@@ -180,7 +180,7 @@ pub mod tests {
             assert_eq!(added[0].id(), tx1_hash, "First added should be tx1");
             assert_eq!(added[1].id(), tx2_hash, "First added should be tx2");
         }
-        service.remove(&vec![tx1_hash.clone()]).await;
+        service.remove(&[tx1_hash]).await;
         {
             // removing tx1 removed tx2, bcs it is dependent.
             let removed = sub.rem_tx.read().await;
