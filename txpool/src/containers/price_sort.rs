@@ -1,5 +1,5 @@
-use std::{cmp, collections::BTreeMap};
 use crate::types::*;
+use std::{cmp, collections::BTreeMap};
 
 #[derive(Debug, Clone)]
 pub struct PriceSort {

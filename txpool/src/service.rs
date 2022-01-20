@@ -6,17 +6,17 @@ use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl
 use interfaces::txpool::{Subscriber, TxPool, TxPoolDB};
 
 use async_trait::async_trait;
-use hashbrown::HashMap;
+use std::collections::HashMap;
 use tokio::sync::RwLock;
 
 pub struct TxPoolService {
     txpool: RwLock<TxPoolImpl>,
-    db: Arc<dyn TxPoolDB>,
+    db: Box<dyn TxPoolDB>,
     subs: MultiSubscriber,
 }
 
 impl TxPoolService {
-    pub fn new(db: Arc<dyn TxPoolDB>, config: Arc<Config>) -> Self {
+    pub fn new(db: Box<dyn TxPoolDB>, config: Arc<Config>) -> Self {
         Self {
             txpool: RwLock::new(TxPoolImpl::new(config)),
             db,
@@ -104,7 +104,7 @@ impl TxPool for TxPoolService {
 
     /// When block is updated we need to receive all spend outputs and remove them from txpool
     async fn block_update(&self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {
-        todo!()
+        self.txpool.write().await.block_update()
     }
 
     /// remove transaction from pool needed on user demand. Low priority
@@ -134,7 +134,7 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Arc::new(Config::default());
-        let db = Arc::new(DummyDB::filled()) as Arc<dyn TxPoolDB>;
+        let db = Box::new(DummyDB::filled());
 
         let tx1_hash =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")

@@ -56,7 +56,7 @@ impl TxPoolDB for Database {}
 pub struct TxPool {
     executor: Executor,
     db: Database,
-    fuel_txpool: Arc<dyn TxPoolTrait>,
+    fuel_txpool: Box<dyn TxPoolTrait>,
 }
 
 impl TxPool {
@@ -72,8 +72,8 @@ impl TxPool {
         TxPool {
             executor,
             db: database.clone(),
-            fuel_txpool: Arc::new(TxPoolService::new(
-                Arc::new(database) as Arc<dyn TxPoolDB>,
+            fuel_txpool: Box::new(TxPoolService::new(
+                Box::new(database) as Box<dyn TxPoolDB>,
                 config,
             )),
         }

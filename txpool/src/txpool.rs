@@ -1,8 +1,8 @@
 use crate::containers::dependency::Dependency;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
-use hashbrown::HashMap;
 use interfaces::txpool::TxPoolDB;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -89,9 +89,7 @@ impl TxPool {
     }
 
     // When block is updated we need to receive all spend outputs and remove them from txpool
-    pub fn block_update(&self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {
-        todo!()
-    }
+    pub fn block_update(&mut self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {}
 
     pub fn remove(&mut self, tx: &ArcTx) -> Vec<ArcTx> {
         self.remove_by_tx_id(&tx.id())

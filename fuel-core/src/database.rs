@@ -9,6 +9,7 @@ use crate::state::{
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
+pub use interfaces::db::KvStoreError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use std::marker::Send;
@@ -175,5 +176,3 @@ impl InterpreterStorage for Database {
         Ok(block.producer)
     }
 }
-
-pub use interfaces::db::KvStoreError;

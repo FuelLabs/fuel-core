@@ -1,6 +1,6 @@
 [package]
-name = "fuel-client-interfaces"
-version = "0.1.0"
+name = "fuel-interfaces"
+version = "0.2.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 repository = "https://github.com/FuelLabs/fuel-core"
@@ -15,7 +15,6 @@ fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 fuel-vm = "0.2"
 futures = "0.3"
-hashbrown = "0.12"
 parking_lot = "0.11"
 thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }

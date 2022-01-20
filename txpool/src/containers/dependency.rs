@@ -1,8 +1,7 @@
 use crate::{types::*, Error};
 use fuel_tx::{Input, Output, UtxoId};
-use hashbrown::{HashMap, HashSet};
-//use interfaces::db::DB;
 use interfaces::txpool::TxPoolDB;
+use std::collections::{HashMap, HashSet};
 
 /// Check and hold dependency between inputs and outputs. Be mindful
 /// about depth of connection

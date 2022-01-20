@@ -61,9 +61,6 @@ impl From<KvStoreError> for InterpreterError {
     }
 }
 
-#[cfg(any(test_helpers))]
-pub struct DummyDB {}
-
 #[cfg(any(test, feature = "test_helpers"))]
 pub mod helpers {
 
@@ -76,7 +73,7 @@ pub mod helpers {
         Address, Bytes32, ContractId, Input, Metadata, Output, Transaction, TxId, UtxoId,
     };
     use fuel_vm::prelude::Contract;
-    use hashbrown::{HashMap, HashSet};
+    use std::collections::{HashMap, HashSet};
 
     use crate::txpool::TxPoolDB;
 
