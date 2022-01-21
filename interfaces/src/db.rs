@@ -92,6 +92,7 @@ pub mod helpers {
             // One dependent transfer tx2 on tx1
             // One higher gas_price transfer tx3 from tx1
             // one higher gas_price transfer tx4 then tx2
+            // tx5 that depends on tx1 contract
 
             let db1 = TxId::from_str(
                 "0x00000000000000000000000000000000000000000000000000000000000000000",
@@ -126,6 +127,15 @@ pub mod helpers {
                 "0x0000000000000000000000000000000000000000000000000000000000000013",
             )
             .unwrap();
+            let n5 = TxId::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000014",
+            )
+            .unwrap();
+
+            let contract1 = ContractId::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000100",
+            )
+            .unwrap();
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
             let tx1 = Transaction::Script {
@@ -145,11 +155,16 @@ pub mod helpers {
                     predicate: vec![],
                     predicate_data: vec![],
                 }],
-                outputs: vec![Output::Coin {
-                    amount: 100,
-                    to: Address::default(),
-                    color: Default::default(),
-                }],
+                outputs: vec![
+                    Output::Coin {
+                        amount: 100,
+                        to: Address::default(),
+                        color: Default::default(),
+                    },
+                    Output::ContractCreated {
+                        contract_id: contract1,
+                    },
+                ],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
                     n1,
@@ -265,11 +280,49 @@ pub mod helpers {
                 )),
             };
 
+            let script = Opcode::RET(0x10).to_bytes().to_vec();
+            let tx5 = Transaction::Script {
+                gas_price: 5, //lower then tx1
+                gas_limit: 1_000_000,
+                maturity: 0,
+                receipts_root: Default::default(),
+                script,
+                script_data: vec![],
+                inputs: vec![Input::Contract {
+                    utxo_id: UtxoId::default(),
+                    balance_root: Bytes32::default(),
+                    state_root: Bytes32::default(),
+                    contract_id: contract1,
+                }],
+                outputs: vec![
+                    Output::Coin {
+                        amount: 100,
+                        to: Address::default(),
+                        color: Default::default(),
+                    },
+                    Output::Contract {
+                        input_index: 0,
+                        balance_root: Bytes32::default(),
+                        state_root: Bytes32::default(),
+                    },
+                ],
+                witnesses: vec![vec![].into()],
+                metadata: Some(Metadata::new(
+                    n1,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                )),
+            };
+
             match txhash {
                 _ if n1 == txhash => tx1,
                 _ if n2 == txhash => tx2,
                 _ if n3 == txhash => tx3,
                 _ if n4 == txhash => tx4,
+                _ if n5 == txhash => tx5,
                 _ => {
                     panic!("Transaction not found: {:#x?}", txhash);
                 }

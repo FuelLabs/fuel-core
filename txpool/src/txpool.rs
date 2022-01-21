@@ -181,6 +181,59 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn underpriced_tx1_not_included_coin_colision() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
+                .unwrap();
+
+        let tx3_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000012")
+                .unwrap();
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx3, &db).await;
+        assert!(out.is_ok(), "Tx3 should be okay:{:?}", out);
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_err(), "Tx1 should be ERR");
+        let err = out.err().unwrap();
+        assert_eq!(err.to_string(),"Transaction is not inserted. More priced tx 0x0000000000000000000000000000000000000000000000000000000000000012 already spend this UTXO output: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000000, output_index: 0 }", "Tx1 should not be included:{:?}",err);
+    }
+
+    #[tokio::test]
+    async fn overpriced_tx5_contract_input_not_include() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
+                .unwrap();
+
+        let tx5_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000014")
+                .unwrap();
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let mut tx5 = DummyDB::dummy_tx(tx5_hash);
+        tx5.set_gas_price(tx1.gas_price()+1);
+        tx5.precompute_metadata();
+        let tx5 = Arc::new(tx5);
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_ok(), "Tx1 should be okay:{:?}", out);
+        let out = txpool.insert(tx5, &db).await;
+        assert!(out.is_err(), "Tx5 should be ERR");
+        let err = out.err().unwrap();
+        assert_eq!(err.to_string(),"Transaction is not inserted. UTXO requires Contract input 0x0000000000000000000000000000000000000000000000000000000000000100 that is priced lower", "Tx5 should not be included:{:?}",err);
+    }
+
+    #[tokio::test]
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();

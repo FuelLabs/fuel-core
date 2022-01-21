@@ -116,46 +116,46 @@ impl Dependency {
             match output {
                 Output::Coin { to, amount, color } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIOWrongOwner.into());
+                        return Err(Error::NotInsertedIoWrongOwner.into());
                     }
-                    if amount < i_amount {
-                        return Err(Error::NotInsertedIOWrongAmount.into());
+                    if amount != i_amount {
+                        return Err(Error::NotInsertedIoWrongAmount.into());
                     }
                     if color != i_color {
-                        return Err(Error::NotInsertedIOWrongAssetIt.into());
+                        return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                 }
-                Output::Contract { .. } => return Err(Error::NotInsertedIOConractOutput.into()),
+                Output::Contract { .. } => return Err(Error::NotInsertedIoConractOutput.into()),
                 Output::Withdrawal { .. } => {
-                    return Err(Error::NotInsertedIOWithdrawalInput.into());
+                    return Err(Error::NotInsertedIoWithdrawalInput.into());
                 }
                 Output::Change { to, color, amount } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIOWrongOwner.into());
+                        return Err(Error::NotInsertedIoWrongOwner.into());
                     }
                     if color != i_color {
-                        return Err(Error::NotInsertedIOWrongAssetIt.into());
+                        return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
-                    if is_output_filled && amount < i_amount {
-                        return Err(Error::NotInsertedIOWrongAmount.into());
+                    if is_output_filled && amount != i_amount {
+                        return Err(Error::NotInsertedIoWrongAmount.into());
                     }
                 }
                 Output::Variable { to, amount, color } => {
                     if is_output_filled {
                         if to != i_owner {
-                            return Err(Error::NotInsertedIOWrongOwner.into());
+                            return Err(Error::NotInsertedIoWrongOwner.into());
                         }
-                        if amount < i_amount {
-                            return Err(Error::NotInsertedIOWrongAmount.into());
+                        if amount != i_amount {
+                            return Err(Error::NotInsertedIoWrongAmount.into());
                         }
                         if color != i_color {
-                            return Err(Error::NotInsertedIOWrongAssetIt.into());
+                            return Err(Error::NotInsertedIoWrongAssetId.into());
                         }
                     }
                     // else do nothing, everything is variable and can be only check on execution
                 }
                 Output::ContractCreated { .. } => {
-                    return Err(Error::NotInsertedIOConractOutput.into())
+                    return Err(Error::NotInsertedIoConractOutput.into())
                 }
             };
         } else {
@@ -272,7 +272,7 @@ impl Dependency {
                     // Does contract exist. We dont need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
-                        if state.gas_price > tx.gas_price() {
+                        if tx.gas_price() > state.gas_price {
                             return Err(Error::NotInsertedContractPricedLower(*contract_id).into());
                         }
                         // check depth.
@@ -311,7 +311,7 @@ impl Dependency {
         for collided in collided.into_iter() {
             let collided = txs
                 .get(&collided)
-                .expect("Collided should be present in txs");
+                .expect("Collided should be present in txpool");
             removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.clone()));
         }
 

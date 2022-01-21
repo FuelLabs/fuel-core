@@ -95,7 +95,7 @@ pub enum Error {
     NotInsertedLimitHit,
     #[error("TxPool required that transaction contains metadata")]
     NoMetadata,
-    #[error("Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}. Price should be bumped by 12.5%")]
+    #[error("Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}")]
     NotInsertedCollision(TxId, UtxoId),
     #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:?}")]
     NotInsertedOutputNotExisting(UtxoId),
@@ -108,15 +108,15 @@ pub enum Error {
     )]
     NotInsertedContractPricedLower(ContractId),
     #[error("Transaction is not inserted. Input output missamatch. Coin owner is different from expected input")]
-    NotInsertedIOWrongOwner,
+    NotInsertedIoWrongOwner,
     #[error("Transaction is not inserted. Input output missamatch. Coin output does not match expected input")]
-    NotInsertedIOWrongAmount,
+    NotInsertedIoWrongAmount,
     #[error("Transaction is not inserted. Input output missamatch. Coin output asset_id does not match expected inputs")]
-    NotInsertedIOWrongAssetIt,
+    NotInsertedIoWrongAssetId,
     #[error("Transaction is not inserted. Input output missamatch. Expected coin but output is contract")]
-    NotInsertedIOConractOutput,
+    NotInsertedIoConractOutput,
     #[error("Transaction is not inserted. Input output missamatch. Expected coin but output is withdrawal")]
-    NotInsertedIOWithdrawalInput,
+    NotInsertedIoWithdrawalInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
     #[error("Transaction is not inserted.Input output missmatch: {0}")]
