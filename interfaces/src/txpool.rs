@@ -2,8 +2,6 @@ use async_trait::async_trait;
 use fuel_tx::{Transaction, TxId};
 use std::sync::Arc;
 
-use std::borrow::Cow;
-
 use fuel_tx::{ContractId, UtxoId};
 use thiserror::Error;
 
@@ -95,7 +93,9 @@ pub enum Error {
     NotInsertedLimitHit,
     #[error("TxPool required that transaction contains metadata")]
     NoMetadata,
-    #[error("Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}")]
+    #[error(
+        "Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}"
+    )]
     NotInsertedCollision(TxId, UtxoId),
     #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:?}")]
     NotInsertedOutputNotExisting(UtxoId),
@@ -107,20 +107,20 @@ pub enum Error {
         "Transaction is not inserted. UTXO requires Contract input {0:?} that is priced lower"
     )]
     NotInsertedContractPricedLower(ContractId),
-    #[error("Transaction is not inserted. Input output missamatch. Coin owner is different from expected input")]
+    #[error("Transaction is not inserted. Input output missmatch. Coin owner is different from expected input")]
     NotInsertedIoWrongOwner,
-    #[error("Transaction is not inserted. Input output missamatch. Coin output does not match expected input")]
+    #[error("Transaction is not inserted. Input output missmatch. Coin output does not match expected input")]
     NotInsertedIoWrongAmount,
-    #[error("Transaction is not inserted. Input output missamatch. Coin output asset_id does not match expected inputs")]
+    #[error("Transaction is not inserted. Input output missmatch. Coin output asset_id does not match expected inputs")]
     NotInsertedIoWrongAssetId,
-    #[error("Transaction is not inserted. Input output missamatch. Expected coin but output is contract")]
+    #[error(
+        "Transaction is not inserted. Input output missmatch. Expected coin but output is contract"
+    )]
     NotInsertedIoConractOutput,
-    #[error("Transaction is not inserted. Input output missamatch. Expected coin but output is withdrawal")]
+    #[error("Transaction is not inserted. Input output missmatch. Expected coin but output is withdrawal")]
     NotInsertedIoWithdrawalInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
-    #[error("Transaction is not inserted.Input output missmatch: {0}")]
-    NotInsertedInputOutputMismatch(Cow<'static, str>),
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,

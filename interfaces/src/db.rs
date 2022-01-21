@@ -93,6 +93,7 @@ pub mod helpers {
             // One higher gas_price transfer tx3 from tx1
             // one higher gas_price transfer tx4 then tx2
             // tx5 that depends on tx1 contract
+            // tx6 same as tx1 but without coin output
 
             let db1 = TxId::from_str(
                 "0x00000000000000000000000000000000000000000000000000000000000000000",
@@ -131,6 +132,10 @@ pub mod helpers {
                 "0x0000000000000000000000000000000000000000000000000000000000000014",
             )
             .unwrap();
+            let n1_faulty = TxId::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000015",
+            )
+            .unwrap();
 
             let contract1 = ContractId::from_str(
                 "0x0000000000000000000000000000000000000000000000000000000000000100",
@@ -165,6 +170,38 @@ pub mod helpers {
                         contract_id: contract1,
                     },
                 ],
+                witnesses: vec![vec![].into()],
+                metadata: Some(Metadata::new(
+                    n1,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                )),
+            };
+
+            let script = Opcode::RET(0x10).to_bytes().to_vec();
+            let tx1_faulty = Transaction::Script {
+                gas_price: 10,
+                gas_limit: 1_000_000,
+                maturity: 0,
+                receipts_root: Default::default(),
+                script,
+                script_data: vec![],
+                inputs: vec![Input::Coin {
+                    utxo_id: UtxoId::new(db1, 0),
+                    owner: Address::default(),
+                    amount: 100,
+                    color: Default::default(),
+                    witness_index: 0,
+                    maturity: 0,
+                    predicate: vec![],
+                    predicate_data: vec![],
+                }],
+                outputs: vec![Output::ContractCreated {
+                    contract_id: contract1,
+                }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
                     n1,
@@ -308,7 +345,7 @@ pub mod helpers {
                 ],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n1,
+                    n5,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -323,6 +360,7 @@ pub mod helpers {
                 _ if n3 == txhash => tx3,
                 _ if n4 == txhash => tx4,
                 _ if n5 == txhash => tx5,
+                _ if n1_faulty == txhash => tx1_faulty,
                 _ => {
                     panic!("Transaction not found: {:#x?}", txhash);
                 }

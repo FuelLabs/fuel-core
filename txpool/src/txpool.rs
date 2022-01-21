@@ -154,6 +154,70 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn missing_dep_faulty_tx1_tx2() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1_faulty_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000015")
+                .unwrap();
+
+        let tx2_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
+                .unwrap();
+        let tx1_faulty = Arc::new(DummyDB::dummy_tx(tx1_faulty_hash));
+        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1_faulty, &db).await;
+        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+        let out = txpool.insert(tx2, &db).await;
+        assert!(out.is_err(), "Tx2 should be error");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010");
+    }
+
+    #[tokio::test]
+    async fn not_inserted_known_tx() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1 =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
+                .unwrap();
+
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1.clone(), &db).await;
+        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_err(), "Second insertion of Tx1 should be error");
+        assert_eq!(
+            out.err().unwrap().to_string(),
+            "Transaction is not inserted. Hash is already known"
+        );
+    }
+
+    #[tokio::test]
+    async fn try_to_insert_tx2_missing_utxo() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx2_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
+                .unwrap();
+        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx2, &db).await;
+        assert!(out.is_err(), "Tx2 should be error");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010",);
+    }
+
+    #[tokio::test]
     async fn more_priced_tx3_removes_tx1() {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
@@ -206,7 +270,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn overpriced_tx5_contract_input_not_include() {
+    async fn overpriced_tx5_contract_input_not_inserted() {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
@@ -219,7 +283,7 @@ pub mod tests {
                 .unwrap();
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let mut tx5 = DummyDB::dummy_tx(tx5_hash);
-        tx5.set_gas_price(tx1.gas_price()+1);
+        tx5.set_gas_price(tx1.gas_price() + 1);
         tx5.precompute_metadata();
         let tx5 = Arc::new(tx5);
 
@@ -231,6 +295,28 @@ pub mod tests {
         assert!(out.is_err(), "Tx5 should be ERR");
         let err = out.err().unwrap();
         assert_eq!(err.to_string(),"Transaction is not inserted. UTXO requires Contract input 0x0000000000000000000000000000000000000000000000000000000000000100 that is priced lower", "Tx5 should not be included:{:?}",err);
+    }
+
+    #[tokio::test]
+    async fn dependent_tx5_contract_input_inserted() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
+                .unwrap();
+
+        let tx5_hash =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000014")
+                .unwrap();
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx5 = Arc::new(DummyDB::dummy_tx(tx5_hash));
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_ok(), "Tx1 should be Ok:{:?}", out);
+        let out = txpool.insert(tx5, &db).await;
+        assert!(out.is_ok(), "Tx5 should be Ok:{:?}", out);
     }
 
     #[tokio::test]

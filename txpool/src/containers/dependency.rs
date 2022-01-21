@@ -164,14 +164,20 @@ impl Dependency {
         Ok(())
     }
 
-    /// insert tx inside dependency
-    /// return list of transactions that are removed from txpool
-    pub async fn insert<'a>(
+    /// Check for colision. Used only inside insert function.
+    /// Return (max_depth,db_coins,db_contracts, collided transactions);
+    #[allow(clippy::type_complexity)]
+    fn check_for_colision<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, ArcTx>,
         db: &dyn TxPoolDB,
         tx: &'a ArcTx,
-    ) -> anyhow::Result<Vec<ArcTx>> {
+    ) -> anyhow::Result<(
+        usize,
+        HashMap<UtxoId, CoinState>,
+        HashMap<ContractId, ContractState>,
+        Vec<TxId>,
+    )> {
         let mut collided: Vec<TxId> = Vec::new();
         // iterate over all inputs and check for colision
         let mut max_depth = 0;
@@ -305,6 +311,17 @@ impl Dependency {
                 }
             }
         }
+        Ok((max_depth, db_coins, db_contracts, collided))
+    }
+    /// insert tx inside dependency
+    /// return list of transactions that are removed from txpool
+    pub async fn insert<'a>(
+        &'a mut self,
+        txs: &'a HashMap<TxId, ArcTx>,
+        db: &dyn TxPoolDB,
+        tx: &'a ArcTx,
+    ) -> anyhow::Result<Vec<ArcTx>> {
+        let (max_depth, db_coins, db_contracts, collided) = self.check_for_colision(txs, db, tx)?;
 
         // now we are sure that transaction can be included. remove all collided transactions
         let mut removed_tx = Vec::new();
@@ -478,5 +495,141 @@ impl Dependency {
         }
 
         removed_tx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::str::FromStr;
+
+    use fuel_tx::{Address, Color, UtxoId};
+
+    use super::*;
+
+    #[test]
+    fn test_check_between_input_output() {
+        let output = Output::Coin {
+            to: Address::default(),
+            amount: 10,
+            color: Color::default(),
+        };
+        let input = Input::Coin {
+            utxo_id: UtxoId::default(),
+            owner: Address::default(),
+            amount: 10,
+            color: Color::default(),
+            witness_index: 0,
+            maturity: 0,
+            predicate: Vec::new(),
+            predicate_data: Vec::new(),
+        };
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_ok(), "test1. It should be Ok");
+
+        let output = Output::Coin {
+            to: Address::default(),
+            amount: 12,
+            color: Color::default(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test2 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoWrongAmount),
+            "test2"
+        );
+
+        let output = Output::Coin {
+            to: Address::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
+            amount: 10,
+            color: Color::default(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test3 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoWrongOwner),
+            "test3"
+        );
+
+        let output = Output::Coin {
+            to: Address::default(),
+            amount: 10,
+            color: Color::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test4 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoWrongAssetId),
+            "test4"
+        );
+
+        let output = Output::Coin {
+            to: Address::default(),
+            amount: 10,
+            color: Color::from_str(
+                "0x0000000000000000000000000000000000000000000000000000000000000001",
+            )
+            .unwrap(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test5 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoWrongAssetId),
+            "test5"
+        );
+
+        let output = Output::Contract {
+            input_index: 0,
+            balance_root: Default::default(),
+            state_root: Default::default(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test6 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoConractOutput),
+            "test6"
+        );
+
+        let output = Output::Withdrawal {
+            to: Default::default(),
+            amount: Default::default(),
+            color: Default::default(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test7 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoWithdrawalInput),
+            "test7"
+        );
+
+        let output = Output::ContractCreated {
+            contract_id: ContractId::default(),
+        };
+
+        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        assert!(out.is_err(), "test8 There should be error");
+        assert_eq!(
+            out.err().unwrap().downcast_ref(),
+            Some(&Error::NotInsertedIoConractOutput),
+            "test8"
+        );
     }
 }
