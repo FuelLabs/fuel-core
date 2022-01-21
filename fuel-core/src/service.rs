@@ -15,7 +15,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, EnumVariantNames};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -40,7 +40,8 @@ impl Config {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, EnumString, Display)]
+#[derive(Clone, Debug, Display, PartialEq, EnumString, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,
     RocksDb,
