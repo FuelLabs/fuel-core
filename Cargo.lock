@@ -1232,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1273,7 +1273,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "cynic",
