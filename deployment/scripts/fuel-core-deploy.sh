@@ -1,25 +1,20 @@
 #!/bin/bash
 
-echo "Please input your cloud provider - options include: aws ...."
+source .env
 
-read cloud
-
-if [ "${cloud}" == "aws" ]; then
-    echo "Please configure your aws cli locally ...."
-    echo "Please enter your EKS cluster name:"
-    read eks
+if [ "${k8s_provider}" == "eks" ]; then
     echo "Updating your kube context locally ...."
-    aws eks update-kubeconfig --name $eks
+    aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     cd ../charts
-    echo "Deploying fuel-core helm chart to $eks ...."
+    echo "Deploying fuel-core helm chart to ${TF_VAR_eks_cluster_name} ...."
     helm upgrade fuel-core . \
               --values values.yaml \
               --install \
               --create-namespace \
               --namespace=fuel-core \
               --wait \
-              --timeout 1200s \
+              --timeout 8000s \
               --debug
 else
-   echo "You have chosen a non-supported cloud provider - please re-run this script with one of these options: aws"
+   echo "You have chosen a non-supported kubernetes provider"
 fi

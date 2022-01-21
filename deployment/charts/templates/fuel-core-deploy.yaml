@@ -59,7 +59,9 @@ spec:
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
-            - containerPort: {{ .Values.app.port }}
+            - name: http
+              containerPort: {{ .Values.app.targetport }}
+              protocol: TCP
           volumeMounts:
             - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"

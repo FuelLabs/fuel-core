@@ -12,43 +12,43 @@ variable "region" {
 }
 
 # EKS
-variable "eks-cluster-name" {
+variable "eks_cluster_name" {
   type = string
 }
 
-variable "eks-cluster-version" {
+variable "eks_cluster_version" {
   type = string
 }
 
-variable "eks-node-groupname" {
+variable "eks_node_groupname" {
   type = string
 }
 
-variable "eks-node-ami-type" {
+variable "eks_node_ami_type" {
   type = string
 }
 
-variable "eks-node-disk-size" {
+variable "eks_node_disk_size" {
   type = string
 }
 
-variable "eks-node-instance-types" {
+variable "eks_node_instance_types" {
   type = list(string)
 }
 
-variable "eks-node-min-size" {
+variable "eks_node_min_size" {
   type = string
 }
 
-variable "eks-node-desired-size" {
+variable "eks_node_desired_size" {
   type = string
 }
 
-variable "eks-node-max-size" {
+variable "eks_node_max_size" {
   type = string
 }
 
-variable "eks-capacity-type" {
+variable "eks_capacity_type" {
   type = string
 }
 
@@ -68,7 +68,7 @@ variable "vpc_cidr_block" {
   type = string
 }
 
-variable "ec2-ssh-key" {
+variable "ec2_ssh_key" {
   type = string
 }
 

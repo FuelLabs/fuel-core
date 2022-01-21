@@ -1,5 +1,5 @@
 locals {
-  vpc_eks_tag_key = "kubernetes.io/cluster/${var.eks-cluster-name}"
+  vpc_eks_tag_key = "kubernetes.io/cluster/${var.eks_cluster_name}"
   vpc_eks_tag = {
     (local.vpc_eks_tag_key) = "shared"
   }

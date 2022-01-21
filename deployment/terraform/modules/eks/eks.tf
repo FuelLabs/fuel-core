@@ -2,8 +2,8 @@
 module "eks" {
   source = "terraform-aws-modules/eks/aws"
 
-  cluster_name                    = "${var.eks-cluster-name}"
-  cluster_version                 = "${var.eks-cluster-version}"
+  cluster_name                    = "${var.eks_cluster_name}"
+  cluster_version                 = "${var.eks_cluster_version}"
   cluster_endpoint_private_access = true
   cluster_endpoint_public_access  = true
 
@@ -36,22 +36,22 @@ resource "aws_eks_addon" "core_dns" {
 # EKS Node Group
 resource "aws_eks_node_group" "nodes" {
   cluster_name    = module.eks.cluster_id
-  node_group_name = var.eks-node-groupname
+  node_group_name = var.eks_node_groupname
   node_role_arn   = aws_iam_role.eks-nodegroup-iam-role.arn
   subnet_ids      = module.vpc.private_subnets
-  capacity_type   = var.eks-capacity-type 
-  ami_type        = var.eks-node-ami-type
-  instance_types  = var.eks-node-instance-types
-  disk_size       = var.eks-node-disk-size
+  capacity_type   = var.eks_capacity_type 
+  ami_type        = var.eks_node_ami_type
+  instance_types  = var.eks_node_instance_types
+  disk_size       = var.eks_node_disk_size
 
   scaling_config {
-    desired_size = var.eks-node-desired-size
-    max_size     = var.eks-node-max-size
-    min_size     = var.eks-node-min-size
+    desired_size = var.eks_node_desired_size
+    max_size     = var.eks_node_max_size
+    min_size     = var.eks_node_min_size
   }
 
   remote_access {
-    ec2_ssh_key = var.ec2-ssh-key 
+    ec2_ssh_key = var.ec2_ssh_key 
     source_security_group_ids = [aws_security_group.eks-node-sg.id]
   }
 
@@ -227,6 +227,6 @@ ingress {
   }
 
   tags = {
-    "kubernetes.io/cluster/${var.eks-cluster-name}" = "shared"
+    "kubernetes.io/cluster/${var.eks_cluster_name}" = "shared"
   }
 }
