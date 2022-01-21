@@ -3,10 +3,9 @@ use crate::schema::{build_schema, dap, CoreSchema};
 use crate::service::Config;
 use crate::tx_pool::TxPool;
 use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
+use axum::routing::{get, post};
 use axum::{
-    body::Body,
     extract::Extension,
-    handler::{get, post},
     http::{
         header::{
             ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
@@ -40,19 +39,18 @@ pub async fn start_server(
         .route("/graphql", post(graphql_handler).options(ok))
         .route("/health", get(health))
         .layer(AddExtensionLayer::new(schema))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+        .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),
         ))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+        .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_METHODS,
             HeaderValue::from_static("*"),
         ))
-        .layer(SetResponseHeaderLayer::<_, Body>::overriding(
+        .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_HEADERS,
             HeaderValue::from_static("*"),
-        ))
-        .boxed();
+        ));
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     let listener = TcpListener::bind(&config.addr)?;
