@@ -27,6 +27,7 @@ derive_more = { version = "0.99" }
 dirs = "3.0"
 env_logger = "0.9"
 fuel-asm = { version = "0.1", features = ["serde-types"] }
+fuel-interfaces = { path = "../fuel-interfaces", version = "0.2.1" }
 fuel-storage = { version = "0.1" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-txpool = { path = "../fuel-txpool", version = "0.2.1" }
@@ -36,7 +37,6 @@ futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
-fuel-interfaces = { path = "../fuel-interfaces", version = "0.2.1" }
 itertools = "0.10"
 lazy_static = "1.4"
 rand = "0.8"

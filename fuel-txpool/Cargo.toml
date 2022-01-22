@@ -9,15 +9,15 @@ description = "Transaction pool"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+fuel-interfaces = { path = "../fuel-interfaces", version = "0.2.1" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 futures = "0.3"
-fuel-interfaces = { path = "../fuel-interfaces", version = "0.2" }
 parking_lot = "0.11"
 thiserror = "1.0"
 tokio = { version = "1.14", default-features = false, features = ["sync"] }
 
 [dev-dependencies]
-fuel-interfaces = { path = "../fuel-interfaces", version = "0.2", features = [
+fuel-interfaces = { path = "../fuel-interfaces", version = "0.2.1", features = [
     "test_helpers",
 ] }
