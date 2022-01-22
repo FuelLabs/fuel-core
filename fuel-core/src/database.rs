@@ -7,9 +7,9 @@ use crate::state::rocks_db::RocksDb;
 use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
+pub use fuel_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
-pub use interfaces::db::KvStoreError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use std::marker::Send;

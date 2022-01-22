@@ -69,7 +69,7 @@ impl Default for IterDirection {
     }
 }
 
-pub use interfaces::db::Error;
+pub use fuel_interfaces::db::Error;
 
 pub trait BatchOperations: KeyValueStore {
     fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<()> {

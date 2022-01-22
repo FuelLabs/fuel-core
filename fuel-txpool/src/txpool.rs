@@ -1,7 +1,7 @@
 use crate::containers::dependency::Dependency;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
-use interfaces::txpool::TxPoolDB;
+use fuel_interfaces::txpool::TxPoolDB;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -112,7 +112,7 @@ pub mod tests {
     use super::*;
     use crate::Error;
     use core::str::FromStr;
-    use interfaces::db::helpers::*;
+    use fuel_interfaces::db::helpers::*;
     use std::cmp::Reverse;
 
     #[tokio::test]

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::Error;
 use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl};
-use interfaces::txpool::{Subscriber, TxPool, TxPoolDB};
+use fuel_interfaces::txpool::{Subscriber, TxPool, TxPoolDB};
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -127,7 +127,7 @@ impl TxPool for TxPoolService {
 #[cfg(any(test))]
 pub mod tests {
     use super::*;
-    use interfaces::db::helpers::DummyDB;
+    use fuel_interfaces::db::helpers::DummyDB;
     use std::str::FromStr;
 
     //use crate::interface::tests::DummyDB;
