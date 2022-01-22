@@ -1,4 +1,5 @@
 pub mod chain_config;
+pub mod coin_lookup;
 pub mod database;
 pub mod executor;
 pub mod model;
