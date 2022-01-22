@@ -1243,7 +1243,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "fuel-asm",
- "fuel-interfaces",
+ "fuel-core-interfaces",
  "fuel-storage",
  "fuel-tx 0.2.0",
  "fuel-txpool",
@@ -1271,6 +1271,23 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "fuel-core-interfaces"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-asm",
+ "fuel-storage",
+ "fuel-tx 0.2.0",
+ "fuel-types",
+ "fuel-vm 0.2.0",
+ "futures",
+ "parking_lot",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -1340,23 +1357,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-interfaces"
-version = "0.2.1"
-dependencies = [
- "anyhow",
- "async-trait",
- "fuel-asm",
- "fuel-storage",
- "fuel-tx 0.2.0",
- "fuel-types",
- "fuel-vm 0.2.0",
- "futures",
- "parking_lot",
- "thiserror",
- "tokio",
-]
-
-[[package]]
 name = "fuel-merkle"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1411,7 +1411,7 @@ version = "0.2.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-interfaces",
+ "fuel-core-interfaces",
  "fuel-tx 0.2.0",
  "fuel-types",
  "futures",

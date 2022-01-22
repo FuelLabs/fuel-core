@@ -2,7 +2,7 @@ use crate::database::{Database, KvStoreError};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
 use chrono::{DateTime, Utc};
-use fuel_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDB};
+use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDB};
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
 use fuel_txpool::{Config as TxPoolConfig, TxPoolService};

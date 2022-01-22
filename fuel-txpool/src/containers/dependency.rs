@@ -1,5 +1,5 @@
 use crate::{types::*, Error};
-use fuel_interfaces::txpool::TxPoolDB;
+use fuel_core_interfaces::txpool::TxPoolDB;
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 

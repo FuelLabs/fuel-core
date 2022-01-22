@@ -1,6 +1,6 @@
 pub mod config;
 mod containers;
-pub use fuel_interfaces::txpool::Error;
+pub use fuel_core_interfaces::txpool::Error;
 
 pub mod service;
 mod subscribers;

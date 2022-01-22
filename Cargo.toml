@@ -8,7 +8,7 @@ members = [
   "fuel-indexer/indexer",
   "fuel-indexer/lib",
   "fuel-indexer/schema",
-  "fuel-interfaces",
+  "fuel-core-interfaces",
   "fuel-txpool",
   "xtask",
 ]

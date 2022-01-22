@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{types::ArcTx, Error};
 use async_trait::async_trait;
-use fuel_interfaces::txpool::Subscriber;
+use fuel_core_interfaces::txpool::Subscriber;
 use parking_lot::RwLock;
 
 pub struct MultiSubscriber {
