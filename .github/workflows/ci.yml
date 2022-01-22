@@ -63,30 +63,6 @@ jobs:
         command: test
         args: --verbose --all-targets
 
-    - name: Check formatting (examples)
-      uses: actions-rs/cargo@v1
-      with:
-        command: fmt
-        args: --manifest-path examples/Cargo.toml --all --verbose -- --check
-
-    - name: Check build (examples)
-      uses: actions-rs/cargo@v1
-      with:
-        command: check
-        args: --manifest-path examples/Cargo.toml --verbose --all-targets
-
-    - name: Check Clippy Lints (examples)
-      uses: actions-rs/cargo@v1
-      with:
-        command: clippy
-        args: --manifest-path examples/Cargo.toml --verbose --all-targets
-
-    - name: Run tests (examples)
-      uses: actions-rs/cargo@v1
-      with:
-        command: test
-        args: --manifest-path examples/Cargo.toml --verbose --all-targets
-
   publish:
     # Only do this job if publishing a release
     needs: build
