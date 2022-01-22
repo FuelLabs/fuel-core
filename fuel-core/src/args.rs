@@ -24,7 +24,7 @@ pub struct Opt {
     )]
     pub database_path: PathBuf,
 
-    #[structopt(long = "db-type", default_value = "RocksDb", possible_values = &DbType::VARIANTS, case_insensitive = true)]
+    #[structopt(long = "db-type", default_value = "rocks-db", possible_values = &DbType::VARIANTS, case_insensitive = true)]
     pub database_type: DbType,
 
     /// Specify either an alias to a built-in configuration or filepath to a JSON file.
