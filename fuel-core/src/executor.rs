@@ -1,4 +1,5 @@
 use crate::database::transaction::TransactionIndex;
+use crate::service::VMConfig;
 use crate::{
     database::{Database, KvStoreError},
     model::{
@@ -25,7 +26,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub async fn execute(&self, block: &FuelBlock, with_backtrace: bool) -> Result<(), Error> {
+    pub async fn execute(&self, block: &FuelBlock, config: &VMConfig) -> Result<(), Error> {
         let mut block_tx = self.database.transaction();
         let block_id = block.id();
         Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
@@ -47,7 +48,7 @@ impl Executor {
             // execute vm
             let mut vm = Transactor::new(tx_db.clone());
             vm.transact(tx);
-            if with_backtrace {
+            if config.backtrace {
                 if let Some(backtrace) = vm.backtrace() {
                     warn!(
                     target = "vm",
