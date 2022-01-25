@@ -16,18 +16,13 @@ pub trait TxPoolDB:
     + Send
     + Sync
 {
-    fn transaction(&self, tx_hash: TxId) -> Option<Arc<Transaction>> {
+    fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
         Storage::<Bytes32, Transaction>::get(self, &tx_hash)
-            .ok()
-            .flatten()
-            .map(|t| Arc::new(t.as_ref().clone()))
+            .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))
     }
 
-    fn contract_exist(&self, contract_id: ContractId) -> bool {
-        if let Ok(exist) = Storage::<ContractId, Contract>::contains_key(self, &contract_id) {
-            return exist;
-        }
-        false
+    fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
+        Storage::<ContractId, Contract>::contains_key(self, &contract_id)
     }
 }
 

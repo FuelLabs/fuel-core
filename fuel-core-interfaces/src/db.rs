@@ -534,12 +534,12 @@ pub mod helpers {
     }
 
     impl TxPoolDB for DummyDB {
-        fn transaction(&self, tx_hash: TxId) -> Option<Arc<Transaction>> {
-            self.tx.get(&tx_hash).cloned()
+        fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
+            Ok(self.tx.get(&tx_hash).cloned())
         }
 
-        fn contract_exist(&self, contract_id: ContractId) -> bool {
-            self.contract.get(&contract_id).is_some()
+        fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {
+            Ok(self.contract.get(&contract_id).is_some())
         }
     }
 }

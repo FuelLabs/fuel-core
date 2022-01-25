@@ -206,7 +206,7 @@ impl Dependency {
                             } else {
                                 if state.depth == 0 {
                                     //this means it is loaded from db. Get tx to compare output.
-                                    let db_tx = db.transaction(*utxo_id.tx_id());
+                                    let db_tx = db.transaction(*utxo_id.tx_id())?;
                                     let output = if let Some(ref db_tx) = db_tx {
                                         if let Some(output) =
                                             db_tx.outputs().get(utxo_id.output_index() as usize)
@@ -244,7 +244,7 @@ impl Dependency {
                         // if coin is not spend, it will be spend later down the line
                     } else {
                         // fetch from db and check if tx exist.
-                        if let Some(db_tx) = db.transaction(*utxo_id.tx_id()) {
+                        if let Some(db_tx) = db.transaction(*utxo_id.tx_id())? {
                             if let Some(output) =
                                 db_tx.outputs().get(utxo_id.output_index() as usize)
                             {
@@ -287,7 +287,7 @@ impl Dependency {
                             return Err(Error::NotInsertedMaxDepth.into());
                         }
                     } else {
-                        if !db.contract_exist(*contract_id) {
+                        if !db.contract_exist(*contract_id)? {
                             return Err(
                                 Error::NotInsertedInputContractNotExisting(*contract_id).into()
                             );
