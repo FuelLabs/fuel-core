@@ -8,7 +8,7 @@ cd ../terraform/environments/${k8s_provider}
 
 terraform init
 
-terraform apply
+terraform apply -auto-approve
 
 
 
