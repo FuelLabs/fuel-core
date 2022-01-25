@@ -13,7 +13,7 @@ use libp2p::{
     NetworkBehaviour, PeerId,
 };
 
-use crate::discovery::{Discovery, DiscoveryOutEvent};
+use crate::discovery::{DiscoveryBehaviour, DiscoveryEvent};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -35,7 +35,7 @@ pub struct FuelBehaviour {
     gossipsub: Gossipsub,
 
     /// node discovery
-    discovery: Discovery,
+    discovery: DiscoveryBehaviour,
 
     //peer info let's do it later
     //identify: Identify,
@@ -82,8 +82,8 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<DiscoveryOutEvent> for FuelBehaviour {
-    fn inject_event(&mut self, _event: DiscoveryOutEvent) {
+impl NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour {
+    fn inject_event(&mut self, _event: DiscoveryEvent) {
         todo!()
     }
 }

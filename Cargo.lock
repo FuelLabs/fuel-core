@@ -1655,12 +1655,14 @@ dependencies = [
 name = "fuel-p2p"
 version = "0.1.0"
 dependencies = [
+ "env_logger",
  "futures",
  "futures-timer",
  "libp2p",
  "log",
  "rand 0.8.4",
  "sha2",
+ "tokio",
 ]
 
 [[package]]

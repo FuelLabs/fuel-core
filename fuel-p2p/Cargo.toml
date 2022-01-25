@@ -13,4 +13,6 @@ log = "0.4.8"
 sha2 = "0.9"
 
 [dev-dependencies]
+env_logger = "0.9"
 rand = "0.8.4"
+tokio = {version = "1.8", features = ["full"]}
