@@ -4,7 +4,7 @@
         "inputs":[
             {
                 "name": "my_event",
-                "type": "struct MyEvent",
+                "type": "struct LogEvent",
                 "components":
                 [
                     {
@@ -17,6 +17,22 @@
                     },
                     {
                         "name":"regb",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regc",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regd",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"pc",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"is",
                         "type":"u64"
                     }
                 ]

@@ -19,59 +19,68 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
         item_fn.attrs.push(no_mangle);
     };
 
-    let mut sig: Punctuated<FnArg, Token![,]> = parse_quote! { bytes: *mut u8, len: usize };
+    let mut sig: Punctuated<FnArg, Token![,]> = parse_quote! { blobs: *mut *mut u8, lens: *mut usize, len: usize };
     std::mem::swap(&mut sig, &mut item_fn.sig.inputs);
-    let num_args = sig.len();
 
-    let mut param_types = Vec::new();
-    for item in sig.iter() {
-        match item {
-            FnArg::Typed(PatType { ty, .. }) => {
-                param_types.push(quote! { #ty::param_types() });
-            }
-            FnArg::Receiver(_) => {
-                proc_macro_error::abort_call_site!("'self' in function signature not allowed here")
-            }
-        }
-    }
+    // TODO: need to work out some abi stuff.... (struct FixedString<const N: usize>(String) and FixedAray type???)
+    //let num_args = sig.len();
+    //let mut param_types = Vec::new();
+    //for item in sig.iter() {
+    //    match item {
+    //        FnArg::Typed(PatType { ty, .. }) => {
+    //            param_types.push(quote! { <#ty as Tokenizable>::param_type() });
+    //        }
+    //        FnArg::Receiver(_) => {
+    //            proc_macro_error::abort_call_site!("'self' in function signature not allowed here")
+    //        }
+    //    }
+    //}
+    // and then... something like this.
+    //let bytes = unsafe { Vec::from_raw_parts(bytes, len, len) };
+    //let mut tokens = decoder.decode(&[#( #param_types, )*], &bytes).expect("Failed to decode tokens");
+    //if #num_args != tokens.len() {
+    //    panic!("Handler called with invalid args! Required {:?} != Input {:?}", #num_args, tokens.len());
+    //}
+    //let stmts: Vec<_> = tokens.into_iter().zip(param_types.into_iter()).map(|tok, ty| quote! { let #name = <#ty as Tokenizable>::from_token(#tok) }).collect();
 
     let mut block: Block = parse_quote! {
         {
             use fuel_indexer::types::*;
             use fuels_core::abi_decoder::ABIDecoder;
-            // TODO: make log macros for this....
-            Logger::info("Running handler");
 
             let mut decoder = ABIDecoder::new();
-            let bytes = unsafe { Vec::from_raw_parts(bytes, len, len) };
-            let mut tokens = decoder.decode(&[#( #param_types, )*], &bytes).expect("Failed to decode tokens");
-            if #num_args != tokens.len() {
-                panic!("Handler called with invalid args! Required {:?} != Input {:?}", #num_args, tokens.len());
-            }
+            let (blobs, lens) = unsafe { (Vec::from_raw_parts(blobs, len, len), Vec::from_raw_parts(lens, len, len)) };
         }
     };
 
+    let mut byteses: Vec<_> = parse_quote! {};
     let mut decoded: Vec<_> = parse_quote! {};
-    // reverse order of arg list to pop them off.
-    for item in sig.iter().rev() {
+    for (idx,item) in sig.iter().enumerate() {
         match item {
             FnArg::Typed(PatType { pat, ty, .. }) => {
-                let decode: Vec<_> = parse_quote! {
-                    let tok = tokens.pop().expect("Not enough inputs!");
-                    let st = format!("{:?}", tok);
-                    let #pat = #ty::new_from_token(&tok);
+                let bytes: Vec<_> = parse_quote! {
+                    let tokens = unsafe { Vec::from_raw_parts(blobs[#idx], lens[#idx], lens[#idx]) };
+                    let #pat = decoder.decode(&#ty::param_types(), &tokens).expect("Failed decoding");
+                    core::mem::forget(tokens);
                 };
 
-                decoded.extend(decode);
+                let dec: Vec<_> = parse_quote! {
+                    let #pat = #ty::new_from_tokens(&#pat);
+                };
+
+                byteses.extend(bytes);
+                decoded.extend(dec);
             }
             FnArg::Receiver(_) => {
                 proc_macro_error::abort_call_site!("'self' in function signature not allowed here")
             }
         }
     }
+    block.stmts.extend(byteses);
     block.stmts.extend(decoded);
     let forgets: Vec<_> = parse_quote! {
-        core::mem::forget(bytes);
+        core::mem::forget(blobs);
+        core::mem::forget(lens);
     };
     block.stmts.extend(forgets);
 

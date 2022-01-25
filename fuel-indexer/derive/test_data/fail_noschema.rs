@@ -2,7 +2,7 @@
 extern crate alloc;
 use core::convert::TryFrom;
 use fuel_indexer_derive::{graphql_schema, handler};
-use alloc::{format, vec::Vec};
+use alloc::vec::Vec;
 use fuel_indexer::types::*;
 use fuels_core::{ParamType, Token};
 
@@ -20,17 +20,13 @@ struct SomeEvent {
 }
 
 impl SomeEvent {
-    fn param_types() -> ParamType {
-        ParamType::Struct(Vec::new())
+    fn param_types() -> Vec<ParamType> {
+        Vec::new()
     }
     pub fn into_token(self) -> Token {
         Token::Struct(Vec::new())
     }
-    pub fn new_from_token(token: &Token) -> SomeEvent {
-        let tokens = match token {
-            Token::Struct(s) => s,
-            _ => panic!("Invalid token!"),
-        };
+    pub fn new_from_tokens(token: &[Token]) -> SomeEvent {
         SomeEvent {
             id: 4,
             account: Address::default(),
@@ -48,6 +44,8 @@ fn function_one(event: SomeEvent) {
 
 fn main() {
     use fuels_core::abi_encoder::ABIEncoder;
+    use alloc::vec;
+
     let s = SomeEvent {
         id: 0,
         account: Address::try_from([0; 32]).expect("failed"),
@@ -58,6 +56,10 @@ fn main() {
     let ptr = bytes.as_mut_ptr();
     let len = bytes.len();
     core::mem::forget(bytes);
+    let mut ptrs = vec![ptr];
+    let mut lens = vec![len];
+    let ptrs = ptrs.as_mut_ptr();
+    let lens = lens.as_mut_ptr();
 
-    function_one(ptr, len);
+    function_one(ptrs, lens, 1);
 }

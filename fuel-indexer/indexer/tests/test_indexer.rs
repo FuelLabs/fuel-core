@@ -2,28 +2,17 @@ extern crate alloc;
 
 #[cfg(feature = "postgres")]
 mod tests {
-    use super::*;
-    use chrono::{TimeZone, Utc};
-    use fuel_core::database::Database;
-    use fuel_core::{
-        model::fuel_block::FuelBlock,
-        schema::scalars::HexString256,
-        service::{Config, FuelService},
-    };
-    use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-    use fuel_indexer::types::*;
-    use fuel_storage::Storage;
-    use fuel_tx::Receipt;
+    use fuel_core::service::{Config, FuelService};
+    use fuel_gql_client::client::FuelClient;
     use fuel_vm::{consts::*, prelude::*};
-    use fuel_wasm_executor::{IndexExecutor, IndexerService, Manifest, SchemaManager};
-    use fuels_rs::abi_encoder::ABIEncoder;
+    use fuel_wasm_executor::{IndexerConfig, IndexerService, Manifest};
 
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const GRAPHQL_SCHEMA: &'static str = include_str!("./test_data/demo_schema.graphql");
     const MANIFEST: &'static str = include_str!("./test_data/demo_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/indexer_demo.wasm");
 
-    fn create_log_transaction(rega: u16, regb: u16) -> fuel_tx::Transaction {
+    fn create_log_transaction(rega: u16, regb: u16) -> Transaction {
         let script = vec![
             Opcode::ADDI(0x10, REG_ZERO, rega),
             Opcode::ADDI(0x11, REG_ZERO, regb),
@@ -38,7 +27,7 @@ mod tests {
         let gas_price = 0;
         let gas_limit = 1_000_000;
         let maturity = 0;
-        fuel_tx::Transaction::script(
+        Transaction::script(
             gas_price,
             gas_limit,
             maturity,
@@ -58,14 +47,19 @@ mod tests {
         let _ = client.submit(&create_log_transaction(0xca, 0xba)).await;
         let _ = client.submit(&create_log_transaction(0xfa, 0x4f)).await;
         let _ = client.submit(&create_log_transaction(0x33, 0x11)).await;
-        let mut indexer_service =
-            IndexerService::new(srv.bound_address, DATABASE_URL.to_string()).unwrap();
+
+        let config = IndexerConfig {
+            fuel_node_addr: srv.bound_address,
+            database_url: DATABASE_URL.to_string(),
+        };
+
+        let mut indexer_service = IndexerService::new(config).unwrap();
 
         let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad yaml file");
         indexer_service
             .add_indexer(manifest, GRAPHQL_SCHEMA, WASM_BYTES)
             .expect("Failed to initialize indexer");
 
-        indexer_service.run().await;
+        indexer_service.run(true).await;
     }
 }

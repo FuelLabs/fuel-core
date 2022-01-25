@@ -101,17 +101,22 @@ impl IndexExecutor {
     }
 
     /// Trigger a WASM event handler, passing in a serialized event struct.
-    pub fn trigger_event(&self, event_name: &str, bytes: Vec<u8>) -> IndexerResult<()> {
-        let args = ffi::WasmArg::new(&self.instance, bytes)?;
+    pub fn trigger_event(&self, event_name: &str, bytes: Vec<Vec<u8>>) -> IndexerResult<()> {
+        let mut args = Vec::with_capacity(bytes.len());
+        for arg in bytes.into_iter() {
+            args.push(ffi::WasmArg::new(&self.instance, arg)?)
+        }
+        let arg_list = ffi::WasmArgList::new(&self.instance, args.iter().collect())?;
 
         if let Some(handlers) = self.events.get(event_name) {
             for handler in handlers.iter() {
                 let fun = self
                     .instance
                     .exports
-                    .get_native_function::<(u32, u32), ()>(handler)?;
+                    .get_native_function::<(u32, u32, u32), ()>(handler)?;
 
-                let _result = fun.call(args.get_ptr(), args.get_len())?;
+                let _result =
+                    fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len())?;
             }
         }
         Ok(())
@@ -151,7 +156,7 @@ mod tests {
 
         let executor = executor.unwrap();
 
-        let result = executor.trigger_event("an_event_name", b"ejfiaiddiie".to_vec());
+        let result = executor.trigger_event("an_event_name", vec![b"ejfiaiddiie".to_vec()]);
         match result {
             Err(IndexerError::RuntimeError(_)) => (),
             e => panic!("Should have been a runtime error {:#?}", e),
@@ -167,12 +172,16 @@ mod tests {
             bar: true,
         };
 
-        let tokens = [evt1.into_token(), evt2.into_token()];
-        let bytes = ABIEncoder::new()
-            .encode(&tokens)
-            .expect("Struct encoding failed");
+        let encoded = vec![
+            ABIEncoder::new()
+                .encode(&[evt1.into_token()])
+                .expect("Failed to encode"),
+            ABIEncoder::new()
+                .encode(&[evt2.into_token()])
+                .expect("Failed to encode"),
+        ];
 
-        let result = executor.trigger_event("an_event_name", bytes);
+        let result = executor.trigger_event("an_event_name", encoded);
         assert!(result.is_ok());
     }
 }

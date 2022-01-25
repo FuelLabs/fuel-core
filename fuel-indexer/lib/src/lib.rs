@@ -1,7 +1,16 @@
 extern crate alloc;
 use alloc::vec::Vec;
 
-use fuel_indexer_schema::{deserialize, serialize, FtColumn};
+use fuel_indexer_schema::{
+    deserialize,
+    serialize,
+    FtColumn,
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_TRACE,
+};
 
 pub mod types {
     pub use fuel_indexer_schema::*;
@@ -14,11 +23,28 @@ extern "C" {
     fn ff_log_data(ptr: *const u8, len: u32, log_level: u32);
 }
 
-//TODO: expand on this....
+// TODO: more to do here, hook up to 'impl log::Log for Logger'
 pub struct Logger;
+
 impl Logger {
+    pub fn error(log: &str) {
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, LOG_LEVEL_ERROR) }
+    }
+
+    pub fn warn(log: &str) {
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, LOG_LEVEL_WARN) }
+    }
+
     pub fn info(log: &str) {
-        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, 0) }
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, LOG_LEVEL_INFO) }
+    }
+
+    pub fn debug(log: &str) {
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, LOG_LEVEL_DEBUG) }
+    }
+
+    pub fn trace(log: &str) {
+        unsafe { ff_log_data(log.as_ptr(), log.len() as u32, LOG_LEVEL_TRACE) }
     }
 }
 

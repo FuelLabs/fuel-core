@@ -1,7 +1,5 @@
 use core::ops::Deref;
-use diesel::{
-    connection::Connection, prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl,
-};
+use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
@@ -10,7 +8,7 @@ use crate::ffi;
 use crate::IndexerResult;
 use fuel_indexer_schema::{
     db::models::{ColumnInfo, EntityData, TypeIds},
-    db::tables::SchemaBuilder,
+    db::tables::{Schema, SchemaBuilder},
     schema_version, FtColumn,
 };
 
@@ -86,19 +84,16 @@ impl SchemaManager {
         let version = schema_version(schema);
 
         if !TypeIds::schema_exists(&*connection, name, &version)? {
-            let db_schema = SchemaBuilder::new(name, &version).build(schema);
-
-            connection.transaction::<(), diesel::result::Error, _>(|| {
-                for query in db_schema.statements.iter() {
-                    sql_query(query).execute(&*connection)?;
-                }
-
-                db_schema.commit_metadata(&*connection)?;
-
-                Ok(())
-            })?;
+            let db_schema = SchemaBuilder::new(name, &version)
+                .build(schema)
+                .commit_metadata(&*connection)?;
         }
         Ok(())
+    }
+
+    pub fn load_schema(&self, name: &str) -> IndexerResult<Schema> {
+        // TODO: might be nice to cache this data in server?
+        Ok(Schema::load_from_db(&*self.pool.get()?, name)?)
     }
 }
 

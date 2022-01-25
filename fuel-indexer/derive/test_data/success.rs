@@ -2,7 +2,7 @@
 extern crate alloc;
 use core::convert::TryFrom;
 use fuel_indexer_derive::handler;
-use alloc::{format, vec::Vec};
+use alloc::vec::Vec;
 use fuel_indexer::types::*;
 use fuels_core::{ParamType, Token};
 
@@ -17,11 +17,11 @@ struct SomeEvent {
 }
 
 impl SomeEvent {
-    fn param_types() -> ParamType {
+    fn param_types() -> Vec<ParamType> {
         let mut t = Vec::new();
         t.push(ParamType::U64);
         t.push(ParamType::B256);
-        ParamType::Struct(t)
+        t
     }
 
     fn into_token(self) -> Token {
@@ -31,11 +31,7 @@ impl SomeEvent {
         Token::Struct(t)
     }
 
-    fn new_from_token(tokens: &Token) -> SomeEvent {
-        let tokens = match tokens {
-            Token::Struct(t) => t,
-            _ => panic!("Invalid token type!"),
-        };
+    fn new_from_tokens(tokens: &[Token]) -> SomeEvent {
         let id = match tokens[0] {
             Token::U64(i) => i,
             _ => panic!("Should be a U64"),
@@ -60,6 +56,7 @@ fn function_one(event: SomeEvent) {
 
 fn main() {
     use fuels_core::abi_encoder::ABIEncoder;
+    use alloc::vec;
 
     let s = SomeEvent {
         id: 0,
@@ -71,6 +68,10 @@ fn main() {
     let ptr = bytes.as_mut_ptr();
     let len = bytes.len();
     core::mem::forget(bytes);
+    let mut ptrs = vec![ptr];
+    let mut lens = vec![len];
+    let ptrs = ptrs.as_mut_ptr();
+    let lens = lens.as_mut_ptr();
 
-    function_one(ptr, len);
+    function_one(ptrs, lens, 1);
 }

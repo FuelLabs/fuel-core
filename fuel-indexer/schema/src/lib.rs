@@ -7,8 +7,13 @@ use alloc::vec::Vec;
 
 use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
-// serde_scale for now, can look at other options if necessary.
 use crate::sql_types::ColumnType;
+
+pub const LOG_LEVEL_ERROR: u32  = 0;
+pub const LOG_LEVEL_WARN: u32  = 1;
+pub const LOG_LEVEL_INFO: u32  = 2;
+pub const LOG_LEVEL_DEBUG: u32  = 3;
+pub const LOG_LEVEL_TRACE: u32  = 4;
 
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
@@ -25,6 +30,7 @@ pub use fuel_types::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt, 
 
 pub type ID = u64;
 
+// serde_scale for now, can look at other options if necessary.
 pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
     serde_scale::to_vec(obj).expect("Serialize failed")
 }

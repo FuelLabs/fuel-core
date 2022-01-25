@@ -1,7 +1,8 @@
 use graphql_parser::query as gql;
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use thiserror::Error;
+use crate::db::tables::Schema;
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
@@ -25,40 +26,6 @@ pub enum GraphqlError {
     FragmentResolverFailed,
     #[error("Selection not supported.")]
     SelectionNotSupported,
-}
-
-pub struct Schema {
-    namespace: String,
-    query: String,
-    types: HashSet<String>,
-    fields: HashMap<String, HashMap<String, String>>,
-}
-
-impl Schema {
-    pub fn new(
-        namespace: String,
-        query: String,
-        types: HashSet<String>,
-        fields: HashMap<String, HashMap<String, String>>,
-    ) -> Schema {
-        Schema {
-            namespace,
-            query,
-            types,
-            fields,
-        }
-    }
-
-    pub fn check_type(&self, type_name: &str) -> bool {
-        self.types.contains(type_name)
-    }
-
-    pub fn field_type(&self, cond: &str, name: &str) -> Option<&String> {
-        match self.fields.get(cond) {
-            Some(fieldset) => fieldset.get(name),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -459,6 +426,7 @@ impl<'a> GraphqlQueryBuilder<'a> {
 mod tests {
     use super::*;
     use std::iter::FromIterator;
+    use std::collections::HashSet;
 
     fn generate_schema() -> Schema {
         let t = ["Address", "Bytes32", "ID", "Thing1", "Thing2"]
@@ -486,7 +454,14 @@ mod tests {
             ("Thing1".to_string(), f2),
             ("Thing2".to_string(), f3),
         ]);
-        Schema::new("test_namespace".to_string(), "Query".into(), types, fields)
+
+        Schema {
+            version: "".into(),
+            namespace: "test_namespace".to_string(),
+            query: "Query".into(),
+            types,
+            fields,
+        }
     }
 
     #[test]
