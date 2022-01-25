@@ -5,19 +5,20 @@ use libp2p::{mdns::Mdns, Multiaddr, PeerId};
 use log::warn;
 use std::task::{Context, Poll};
 
-pub enum MdnsWorker {
+// Wrapper around mDNS so that `DiscoveryConfig::finish` does not have to be an `async` function
+pub enum MdnsWrapper {
     Instantiating(futures::future::BoxFuture<'static, std::io::Result<Mdns>>),
     Ready(Mdns),
     Disabled,
 }
 
-impl MdnsWorker {
+impl MdnsWrapper {
     pub fn new() -> Self {
-        MdnsWorker::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
+        MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
     }
 
     pub fn disabled() -> Self {
-        MdnsWorker::Disabled
+        MdnsWrapper::Disabled
     }
 
     pub fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
