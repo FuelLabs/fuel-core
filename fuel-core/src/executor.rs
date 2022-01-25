@@ -48,18 +48,6 @@ impl Executor {
             // execute vm
             let mut vm = Transactor::new(tx_db.clone());
             vm.transact(tx);
-            if config.backtrace {
-                if let Some(backtrace) = vm.backtrace() {
-                    warn!(
-                    target = "vm",
-                    "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
-                    backtrace.contract(),
-                    backtrace.registers(),
-                    backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
-                );
-                }
-            }
             match vm.result() {
                 Ok(result) => {
                     // persist any outputs
@@ -69,6 +57,18 @@ impl Executor {
                     self.persist_receipts(tx_id, result.receipts(), tx_db)?;
 
                     let status = if result.should_revert() {
+                        if config.backtrace {
+                            if let Some(backtrace) = vm.backtrace() {
+                                warn!(
+                                target = "vm",
+                                "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
+                                backtrace.contract(),
+                                backtrace.registers(),
+                                backtrace.call_stack(),
+                                hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                            );
+                            }
+                        }
                         // if script result exists, log reason
                         if let Some((script_result, _)) = result.receipts().iter().find_map(|r| {
                             if let Receipt::ScriptResult { result, gas_used } = r {
