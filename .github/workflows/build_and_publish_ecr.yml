@@ -12,7 +12,7 @@ env:
   CARGO_TERM_COLOR: always
   DOCKER_BUILDKIT: 1
   RUSTFLAGS: -D warnings
-  REGISTRY: 756756437019.dkr.ecr.us-west-2.amazonaws.com/fuel-core
+  REGISTRY: 756756437019.dkr.ecr.us-east-1.amazonaws.com/fuel-core
 
 jobs:
   build:
