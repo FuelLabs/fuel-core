@@ -31,7 +31,8 @@ pub async fn start_server(
     db: Database,
     tx_pool: Arc<TxPool>,
 ) -> Result<(SocketAddr, JoinHandle<Result<(), crate::service::Error>>), std::io::Error> {
-    let schema = build_schema().data(db).data(tx_pool);
+    let network_addr = config.addr;
+    let schema = build_schema().data(db).data(tx_pool).data(config);
     let schema = dap::init(schema).finish();
 
     let router = Router::new()
@@ -53,7 +54,7 @@ pub async fn start_server(
         ));
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let listener = TcpListener::bind(&config.addr)?;
+    let listener = TcpListener::bind(&network_addr)?;
     let bound_addr = listener.local_addr().unwrap();
 
     info!("Binding GraphQL provider to {}", bound_addr);

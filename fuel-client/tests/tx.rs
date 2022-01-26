@@ -3,7 +3,7 @@ use fuel_core::{
     database::Database,
     executor::Executor,
     model::fuel_block::FuelBlock,
-    service::{Config, FuelService},
+    service::{Config, FuelService, VMConfig},
 };
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
@@ -287,8 +287,9 @@ async fn get_transactions_from_manual_blcoks() {
     };
 
     // process blocks and save block height
-    executor.execute(&first_test_block).await.unwrap();
-    executor.execute(&second_test_block).await.unwrap();
+    let config = VMConfig::default();
+    executor.execute(&first_test_block, &config).await.unwrap();
+    executor.execute(&second_test_block, &config).await.unwrap();
 
     // Query for first 3: [0,1,2]
     let page_request_forwards = PaginationRequest {

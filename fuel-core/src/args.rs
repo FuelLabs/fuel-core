@@ -1,4 +1,4 @@
-use crate::service::{Config, DbType};
+use crate::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf, string::ToString};
 use structopt::StructOpt;
 use strum::VariantNames;
@@ -30,6 +30,10 @@ pub struct Opt {
     /// Specify either an alias to a built-in configuration or filepath to a JSON file.
     #[structopt(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
+
+    /// Specify if backtraces are going to be traced in logs (Default false)
+    #[structopt(long = "vm-backtrace")]
+    pub vm_backtrace: bool,
 }
 
 impl Opt {
@@ -50,6 +54,7 @@ impl Opt {
             database_path,
             database_type,
             chain_config,
+            vm_backtrace,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -59,6 +64,9 @@ impl Opt {
             database_path,
             database_type,
             chain_conf: chain_config.as_str().parse()?,
+            vm: VMConfig {
+                backtrace: vm_backtrace,
+            },
         })
     }
 }

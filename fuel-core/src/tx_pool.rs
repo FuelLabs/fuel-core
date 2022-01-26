@@ -1,6 +1,7 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
+use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
@@ -64,7 +65,7 @@ impl TxPool {
         }
     }
 
-    pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+    pub async fn submit_tx(&self, tx: Transaction, config: &Config) -> Result<Bytes32, Error> {
         let tx_id = tx.id();
         // persist transaction to database
         let mut db = self.db.clone();
@@ -82,14 +83,14 @@ impl TxPool {
         };
         // immediately execute block
         self.executor
-            .execute(&block)
+            .execute(&block, &config.vm)
             .await
             .map_err(Error::Execution)?;
         Ok(tx_id)
     }
 
-    pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
-        let id = self.submit_tx(tx).await?;
+    pub async fn run_tx(&self, tx: Transaction, config: &Config) -> Result<Vec<Receipt>, Error> {
+        let id = self.submit_tx(tx, config).await?;
         // note: we'll need to await tx completion once it's not instantaneous
         let db = &self.db;
         let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &id)?.unwrap_or_default();
