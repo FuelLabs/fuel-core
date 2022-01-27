@@ -12,4 +12,6 @@ envsubst < state.template > state.tf
 
 rm state.template 
 
+terraform init
+
 terraform destroy -auto-approve
