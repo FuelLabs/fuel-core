@@ -32,7 +32,7 @@ There are several system requirements including llvm, clang and postgres.
 ###### MacOS
 ```bash
 brew update
-brew install openssl cmake llvm libpq
+brew install openssl cmake llvm libpq postgresql
 ```
 
 ###### Debian
