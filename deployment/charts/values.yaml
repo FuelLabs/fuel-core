@@ -4,12 +4,12 @@
 
 app:
   name: fuel-core
-  replicas: 1
+  replicas: ${fuel_core_pod_replicas}
   port: 80
   targetport: 4000
   image:
-    repository: ghcr.io/fuellabs/fuel-core
-    tag: latest
+    repository: ${fuel_core_image_repository}
+    tag: ${fuel_core_image_tag}
     pullPolicy: Always
   volume: 
     pvname: db-volume
