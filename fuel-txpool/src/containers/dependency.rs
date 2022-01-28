@@ -352,47 +352,44 @@ impl Dependency {
 
         // insert all coins/contracts that we got from db;
         self.coins.extend(db_coins.into_iter());
+        // for contracts from db that are not found in dependency, we already inserted used_by
+        // and are okay to just extend current list
         self.contracts.extend(db_contracts.into_iter());
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
-            let is_contract = match output {
-                Output::Coin { .. }
-                | Output::Withdrawal { .. }
-                | Output::Change { .. }
-                | Output::Variable { .. } => None,
-                Output::Contract { input_index, .. } => {
-                    if let Input::Contract { contract_id, .. } = tx.inputs()[*input_index as usize]
-                    {
-                        Some(contract_id)
-                    } else {
-                        panic!("InputIndex for contract should be always correct");
-                    }
-                }
-                Output::ContractCreated { contract_id } => Some(*contract_id),
-            };
             let utxo_id = UtxoId::new(tx.id(), index as u8);
-            if let Some(contract_id) = is_contract {
-                // insert contract
-                self.contracts.insert(
-                    contract_id,
-                    ContractState {
-                        depth: max_depth,
-                        used_by: HashSet::new(),
-                        origin: Some(utxo_id),
-                        gas_price: tx.gas_price(),
-                    },
-                );
-            } else {
-                // insert output coin inside by_coin
-                self.coins.insert(
-                    utxo_id,
-                    CoinState {
-                        is_spend_by: None,
-                        depth: max_depth,
-                    },
-                );
-            }
+            match output {
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    // insert output coin inside by_coin
+                    self.coins.insert(
+                        utxo_id,
+                        CoinState {
+                            is_spend_by: None,
+                            depth: max_depth,
+                        },
+                    );
+                }
+                Output::ContractCreated { contract_id } => {
+                    // insert contract
+                    self.contracts.insert(
+                        *contract_id,
+                        ContractState {
+                            depth: max_depth,
+                            used_by: HashSet::new(),
+                            origin: Some(utxo_id),
+                            gas_price: tx.gas_price(),
+                        },
+                    );
+                }
+                Output::Withdrawal { .. } => {
+                    // withdrawal does nothing and it should not be found in dependency.
+                }
+                Output::Contract { .. } => {
+                    // do nothing, this contract is already already found in dependencies.
+                    // as it is tied with input and used_by is already inserted.
+                }
+            };
         }
 
         Ok(removed_tx)

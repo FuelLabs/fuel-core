@@ -127,18 +127,59 @@ impl TxPool for TxPoolService {
 #[cfg(any(test))]
 pub mod tests {
     use super::*;
-    use fuel_core_interfaces::db::helpers::DummyDB;
-    use std::str::FromStr;
+    use fuel_core_interfaces::db::helpers::*;
 
-    //use crate::interface::tests::DummyDB;
+    #[tokio::test]
+    async fn test_filter_by_negative() {
+        let config = Arc::new(Config::default());
+        let db = Box::new(DummyDB::filled());
+
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
+        let tx3_hash = *TX_ID3;
+
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+
+        let service = TxPoolService::new(db, config);
+        let out = service.insert(vec![tx1, tx2]).await;
+        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
+        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
+        let out = service.filter_by_negative(&[tx1_hash, tx3_hash]).await;
+        assert_eq!(out.len(), 1, "Shoud be len 1:{:?}", out);
+        assert_eq!(out[0], tx3_hash, "Found tx id match{:?}", out);
+    }
+
+    #[tokio::test]
+    async fn test_find() {
+        let config = Arc::new(Config::default());
+        let db = Box::new(DummyDB::filled());
+
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
+        let tx3_hash = *TX_ID3;
+
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+
+        let service = TxPoolService::new(db, config);
+        let out = service.insert(vec![tx1, tx2]).await;
+        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
+        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
+        let out = service.find(&[tx1_hash, tx3_hash]).await;
+        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
+        let id = out[0].as_ref().unwrap().id();
+        assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
+        assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
+    }
+
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Arc::new(Config::default());
         let db = Box::new(DummyDB::filled());
-
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
 
         struct Subs {
             pub new_tx: RwLock<Vec<ArcTx>>,
@@ -163,17 +204,17 @@ pub mod tests {
             rem_tx: RwLock::new(Vec::new()),
         });
 
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
+
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
 
         let service = TxPoolService::new(db, config);
         service.subscribe(sub.clone()).await;
         let out = service.insert(vec![tx1, tx2]).await;
-        assert!(out[0].is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        assert!(out[1].is_ok(), "Tx2 should be OK, get err:{:?}", out);
+        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
+        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
         {
             let added = sub.new_tx.read().await;
             assert_eq!(added.len(), 2, "Sub should contains two new tx");

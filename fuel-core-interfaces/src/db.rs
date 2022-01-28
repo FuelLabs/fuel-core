@@ -64,6 +64,47 @@ impl From<KvStoreError> for InterpreterError {
 #[cfg(any(test, feature = "test_helpers"))]
 pub mod helpers {
 
+    use lazy_static::lazy_static;
+
+    // constants
+    lazy_static! {
+        pub static ref TX_ID_DB1: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap();
+        pub static ref TX_ID_DB2: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000001")
+                .unwrap();
+        pub static ref TX_ID_DB3: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000002")
+                .unwrap();
+        pub static ref TX_ID_DB4: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000003")
+                .unwrap();
+        pub static ref TX_ID1: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
+                .unwrap();
+        pub static ref TX_ID2: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
+                .unwrap();
+        pub static ref TX_ID3: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000012")
+                .unwrap();
+        pub static ref TX_ID4: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000013")
+                .unwrap();
+        pub static ref TX_ID5: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000014")
+                .unwrap();
+        pub static ref TX_ID_FAULTY1: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000015")
+                .unwrap();
+        pub static ref CONTRACT_ID1: ContractId = ContractId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000100",
+        )
+        .unwrap();
+    }
+    //const DB_TX1_HASH: TxId = 0x0000.into();
+
     use core::str::FromStr;
     use std::sync::Arc;
 
@@ -95,53 +136,6 @@ pub mod helpers {
             // tx5 that depends on tx1 contract
             // tx6 same as tx1 but without coin output
 
-            let db1 = TxId::from_str(
-                "0x00000000000000000000000000000000000000000000000000000000000000000",
-            )
-            .unwrap();
-            let db2 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000001",
-            )
-            .unwrap();
-            let _db3 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000002",
-            )
-            .unwrap();
-            let _db4 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000003",
-            )
-            .unwrap();
-
-            let n1 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000010",
-            )
-            .unwrap();
-            let n2 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000011",
-            )
-            .unwrap();
-            let n3 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000012",
-            )
-            .unwrap();
-            let n4 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000013",
-            )
-            .unwrap();
-            let n5 = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000014",
-            )
-            .unwrap();
-            let n1_faulty = TxId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000015",
-            )
-            .unwrap();
-
-            let contract1 = ContractId::from_str(
-                "0x0000000000000000000000000000000000000000000000000000000000000100",
-            )
-            .unwrap();
-
             let script = Opcode::RET(0x10).to_bytes().to_vec();
             let tx1 = Transaction::Script {
                 gas_price: 10,
@@ -151,7 +145,7 @@ pub mod helpers {
                 script,
                 script_data: vec![],
                 inputs: vec![Input::Coin {
-                    utxo_id: UtxoId::new(db1, 0),
+                    utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     color: Default::default(),
@@ -167,12 +161,12 @@ pub mod helpers {
                         color: Default::default(),
                     },
                     Output::ContractCreated {
-                        contract_id: contract1,
+                        contract_id: *CONTRACT_ID1,
                     },
                 ],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n1,
+                    *TX_ID1,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -190,7 +184,7 @@ pub mod helpers {
                 script,
                 script_data: vec![],
                 inputs: vec![Input::Coin {
-                    utxo_id: UtxoId::new(db1, 0),
+                    utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     color: Default::default(),
@@ -200,11 +194,11 @@ pub mod helpers {
                     predicate_data: vec![],
                 }],
                 outputs: vec![Output::ContractCreated {
-                    contract_id: contract1,
+                    contract_id: *CONTRACT_ID1,
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n1,
+                    *TX_ID1,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -222,7 +216,7 @@ pub mod helpers {
                 script,
                 script_data: vec![],
                 inputs: vec![Input::Coin {
-                    utxo_id: UtxoId::new(n1, 0),
+                    utxo_id: UtxoId::new(*TX_ID1, 0),
                     owner: Address::default(),
                     amount: 100,
                     color: Default::default(),
@@ -238,7 +232,7 @@ pub mod helpers {
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n2,
+                    *TX_ID2,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -257,7 +251,7 @@ pub mod helpers {
                 script,
                 script_data: vec![],
                 inputs: vec![Input::Coin {
-                    utxo_id: UtxoId::new(db1, 0),
+                    utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     color: Default::default(),
@@ -273,7 +267,7 @@ pub mod helpers {
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n3,
+                    *TX_ID3,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -292,7 +286,7 @@ pub mod helpers {
                 script,
                 script_data: vec![],
                 inputs: vec![Input::Coin {
-                    utxo_id: UtxoId::new(db2, 0),
+                    utxo_id: UtxoId::new(*TX_ID_DB2, 0),
                     owner: Address::default(),
                     amount: 200,
                     color: Default::default(),
@@ -308,7 +302,7 @@ pub mod helpers {
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n4,
+                    *TX_ID4,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -329,7 +323,7 @@ pub mod helpers {
                     utxo_id: UtxoId::default(),
                     balance_root: Bytes32::default(),
                     state_root: Bytes32::default(),
-                    contract_id: contract1,
+                    contract_id: *CONTRACT_ID1,
                 }],
                 outputs: vec![
                     Output::Coin {
@@ -345,7 +339,7 @@ pub mod helpers {
                 ],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
-                    n5,
+                    *TX_ID5,
                     None,
                     Vec::new(),
                     Vec::new(),
@@ -355,12 +349,12 @@ pub mod helpers {
             };
 
             match txhash {
-                _ if n1 == txhash => tx1,
-                _ if n2 == txhash => tx2,
-                _ if n3 == txhash => tx3,
-                _ if n4 == txhash => tx4,
-                _ if n5 == txhash => tx5,
-                _ if n1_faulty == txhash => tx1_faulty,
+                _ if *TX_ID1 == txhash => tx1,
+                _ if *TX_ID2 == txhash => tx2,
+                _ if *TX_ID3 == txhash => tx3,
+                _ if *TX_ID4 == txhash => tx4,
+                _ if *TX_ID5 == txhash => tx5,
+                _ if *TX_ID_FAULTY1 == txhash => tx1_faulty,
                 _ => {
                     panic!("Transaction not found: {:#x?}", txhash);
                 }
@@ -368,24 +362,7 @@ pub mod helpers {
         }
 
         pub fn filled() -> Self {
-            let tx_ids = [
-                TxId::from_str(
-                    "0x0000000000000000000000000000000000000000000000000000000000000000",
-                )
-                .unwrap(),
-                TxId::from_str(
-                    "0x0000000000000000000000000000000000000000000000000000000000000001",
-                )
-                .unwrap(),
-                TxId::from_str(
-                    "0x0000000000000000000000000000000000000000000000000000000000000002",
-                )
-                .unwrap(),
-                TxId::from_str(
-                    "0x0000000000000000000000000000000000000000000000000000000000000003",
-                )
-                .unwrap(),
-            ];
+            let tx_ids = [*TX_ID_DB1, *TX_ID_DB2, *TX_ID_DB3, *TX_ID_DB4];
 
             let fun = |mut t: Transaction| {
                 t.precompute_metadata();

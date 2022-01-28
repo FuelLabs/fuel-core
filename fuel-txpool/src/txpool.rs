@@ -111,7 +111,6 @@ impl TxPool {
 pub mod tests {
     use super::*;
     use crate::Error;
-    use core::str::FromStr;
     use fuel_core_interfaces::db::helpers::*;
     use std::cmp::Reverse;
 
@@ -120,9 +119,7 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
 
         let mut txpool = TxPool::new(config);
@@ -135,13 +132,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
 
@@ -154,17 +146,13 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn missing_dep_faulty_tx1_tx2() {
+    async fn fails_to_insert_tx2_with_missing_utxo_dependency_on_faulty_tx1() {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_faulty_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000015")
-                .unwrap();
+        let tx1_faulty_hash = *TX_ID_FAULTY1;
+        let tx2_hash = *TX_ID2;
 
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
         let tx1_faulty = Arc::new(DummyDB::dummy_tx(tx1_faulty_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
 
@@ -182,10 +170,7 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1 =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
+        let tx1 = *TX_ID1;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1));
 
         let mut txpool = TxPool::new(config);
@@ -205,9 +190,7 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx2_hash = *TX_ID2;
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
 
         let mut txpool = TxPool::new(config);
@@ -222,13 +205,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx3_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000012")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx3_hash = *TX_ID3;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
 
@@ -249,13 +227,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx3_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000012")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx3_hash = *TX_ID3;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
 
@@ -274,13 +247,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx5_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000014")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx5_hash = *TX_ID5;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let mut tx5 = DummyDB::dummy_tx(tx5_hash);
         tx5.set_gas_price(tx1.gas_price() + 1);
@@ -302,13 +270,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx5_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000014")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx5_hash = *TX_ID5;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx5 = Arc::new(DummyDB::dummy_tx(tx5_hash));
         let mut txpool = TxPool::new(config);
@@ -324,17 +287,9 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
-
-        let tx3_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000012")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
+        let tx3_hash = *TX_ID3;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
         let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
@@ -361,13 +316,8 @@ pub mod tests {
         });
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
@@ -387,13 +337,8 @@ pub mod tests {
         });
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
@@ -410,15 +355,9 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
-        let tx4_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000013")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
+        let tx4_hash = *TX_ID4;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
         let tx4 = Arc::new(DummyDB::dummy_tx(tx4_hash));
@@ -444,13 +383,8 @@ pub mod tests {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();
 
-        let tx1_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000010")
-                .unwrap();
-
-        let tx2_hash =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID2;
         let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);

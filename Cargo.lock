@@ -1285,6 +1285,7 @@ dependencies = [
  "fuel-types",
  "fuel-vm 0.2.0",
  "futures",
+ "lazy_static",
  "parking_lot",
  "thiserror",
  "tokio",

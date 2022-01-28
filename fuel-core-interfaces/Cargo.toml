@@ -18,6 +18,7 @@ futures = "0.3"
 parking_lot = "0.11"
 thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }
+lazy_static = "1.4"
 
 [dev-dependencies]
 
