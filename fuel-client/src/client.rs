@@ -273,7 +273,7 @@ impl FuelClient {
         &self,
         owner: &str,
         spend_query: Vec<(&str, u64)>,
-        max_inputs: Option<usize>,
+        max_inputs: Option<i32>,
     ) -> io::Result<Vec<schema::coin::Coin>> {
         let owner: HexString256 = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
@@ -285,7 +285,6 @@ impl FuelClient {
                 })
             })
             .try_collect()?;
-        let max_inputs: Option<i32> = max_inputs.map(|max_inputs| max_inputs as i32);
         let query =
             schema::coin::CoinsToSpendQuery::build(&(owner, spend_query, max_inputs).into());
 

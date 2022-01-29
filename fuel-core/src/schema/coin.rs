@@ -1,4 +1,4 @@
-use crate::coin_lookup::{largest_first, random_improve, CoinLookupError};
+use crate::coin_lookup::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{HexString256, U64};
@@ -186,37 +186,21 @@ impl CoinQuery {
         #[graphql(desc = "The total amount of each asset type to spend")] spend_query: Vec<
             SpendQueryElementInput,
         >,
-        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<i32>,
+        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u8>,
     ) -> async_graphql::Result<Vec<Coin>> {
         let owner: Address = owner.0.into();
-        let spend_query: Vec<(FuelTxColor, u64)> = spend_query
+        let spend_query: Vec<SpendQueryElement> = spend_query
             .iter()
-            .map(|e| (FuelTxColor::from(e.color.0), e.amount.0))
+            .map(|e| (owner, FuelTxColor::from(e.color.0), e.amount.0))
             .collect();
-        let max_inputs: u8 = max_inputs
-            .map(u8::try_from)
-            .map(Result::unwrap)
-            .unwrap_or(MAX_INPUTS);
+        let max_inputs: u8 = max_inputs.unwrap_or(MAX_INPUTS);
 
         let db = ctx.data_unchecked::<Database>();
 
-        let owned_coin_ids: Vec<Vec<UtxoId>> = spend_query
-            .iter()
-            .map(|(color, _)| {
-                db.owned_coins_by_color(owner, *color, None, None)
-                    .try_collect()
-            })
-            .try_collect()?;
-
-        let coins = match random_improve(db, &owned_coin_ids, &spend_query, max_inputs) {
-            Err(CoinLookupError::NotEnoughInputs) => {
-                largest_first(db, &owned_coin_ids, &spend_query, max_inputs)
-            }
-            result => result,
-        }?
-        .into_iter()
-        .map(|(id, coin)| Coin(id, coin))
-        .collect();
+        let coins = random_improve(db, &spend_query, max_inputs)?
+            .into_iter()
+            .map(|(id, coin)| Coin(id, coin))
+            .collect();
 
         Ok(coins)
     }
