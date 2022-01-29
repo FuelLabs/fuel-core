@@ -165,10 +165,11 @@ impl Dependency {
     }
 
     /// Check for colision. Used only inside insert function.
-    /// Return (max_depth,db_coins,db_contracts, collided transactions);
+    /// Id doesn't change any dependency it just checks if it has posibility to be included.
+    /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
     #[allow(clippy::type_complexity)]
     fn check_for_colision<'a>(
-        &'a mut self,
+        &'a self,
         txs: &'a HashMap<TxId, ArcTx>,
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
@@ -188,7 +189,7 @@ impl Dependency {
             match input {
                 Input::Coin { utxo_id, .. } => {
                     // is it dependent output?
-                    if let Some(state) = self.coins.get_mut(utxo_id) {
+                    if let Some(state) = self.coins.get(utxo_id) {
                         // check depth
                         max_depth = core::cmp::max(state.depth + 1, max_depth);
                         if max_depth > self.max_depth {
@@ -342,7 +343,9 @@ impl Dependency {
                     }
                 }
                 Input::Contract { contract_id, .. } => {
-                    // contract
+                    // Contract that we want to use can be already inside dependency (this case)
+                    // or it will be added when db_contracts extends self.contracts (and it
+                    // already contains changed used_by)
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.insert(tx.id());
                     }
