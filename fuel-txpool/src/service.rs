@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::Error;
 use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl};
-use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDB};
+use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDb};
 
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -11,12 +11,12 @@ use tokio::sync::RwLock;
 
 pub struct TxPoolService {
     txpool: RwLock<TxPoolImpl>,
-    db: Box<dyn TxPoolDB>,
+    db: Box<dyn TxPoolDb>,
     subs: MultiSubscriber,
 }
 
 impl TxPoolService {
-    pub fn new(db: Box<dyn TxPoolDB>, config: Arc<Config>) -> Self {
+    pub fn new(db: Box<dyn TxPoolDb>, config: Arc<Config>) -> Self {
         Self {
             txpool: RwLock::new(TxPoolImpl::new(config)),
             db,

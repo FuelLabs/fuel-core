@@ -1,7 +1,7 @@
 use crate::containers::dependency::Dependency;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
-use fuel_core_interfaces::txpool::TxPoolDB;
+use fuel_core_interfaces::txpool::TxPoolDb;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -32,7 +32,7 @@ impl TxPool {
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    pub async fn insert(&mut self, tx: ArcTx, db: &dyn TxPoolDB) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn insert(&mut self, tx: ArcTx, db: &dyn TxPoolDb) -> anyhow::Result<Vec<ArcTx>> {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into());
         }

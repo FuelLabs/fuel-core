@@ -10,7 +10,7 @@ use fuel_storage::Storage;
 use fuel_tx::Bytes32;
 use fuel_vm::prelude::Contract;
 
-pub trait TxPoolDB:
+pub trait TxPoolDb:
     Storage<Bytes32, Transaction, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
     + Send

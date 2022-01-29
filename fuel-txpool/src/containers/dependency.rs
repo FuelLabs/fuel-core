@@ -1,5 +1,5 @@
 use crate::{types::*, Error};
-use fuel_core_interfaces::txpool::TxPoolDB;
+use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 
@@ -170,7 +170,7 @@ impl Dependency {
     fn check_for_colision<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, ArcTx>,
-        db: &dyn TxPoolDB,
+        db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<(
         usize,
@@ -318,7 +318,7 @@ impl Dependency {
     pub async fn insert<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, ArcTx>,
-        db: &dyn TxPoolDB,
+        db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
         let (max_depth, db_coins, db_contracts, collided) = self.check_for_colision(txs, db, tx)?;

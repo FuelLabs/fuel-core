@@ -116,7 +116,7 @@ pub mod helpers {
     use fuel_vm::prelude::Contract;
     use std::collections::{HashMap, HashSet};
 
-    use crate::txpool::TxPoolDB;
+    use crate::txpool::TxPoolDb;
 
     use super::*;
     #[derive(Clone, Debug)]
@@ -510,7 +510,7 @@ pub mod helpers {
         }
     }
 
-    impl TxPoolDB for DummyDB {
+    impl TxPoolDb for DummyDB {
         fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
             Ok(self.tx.get(&tx_hash).cloned())
         }
