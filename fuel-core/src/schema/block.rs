@@ -2,7 +2,7 @@ use crate::database::Database;
 use crate::schema::scalars::U64;
 use crate::{
     database::KvStoreError,
-    model::fuel_block::{BlockHeight, FuelBlock},
+    model::fuel_block::{BlockHeight, FuelBlockLight},
     schema::scalars::HexString256,
     schema::tx::types::Transaction,
     state::IterDirection,
@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::convert::TryInto;
 use std::ops::Deref;
 
-pub struct Block(pub(crate) FuelBlock);
+pub struct Block(pub(crate) FuelBlockLight);
 
 #[Object]
 impl Block {
@@ -87,7 +87,8 @@ impl BlockQuery {
             (None, None) => return Err(async_graphql::Error::new("missing either id or height")),
         };
 
-        let block = Storage::<Bytes32, FuelBlock>::get(db, &id)?.map(|b| Block(b.into_owned()));
+        let block =
+            Storage::<Bytes32, FuelBlockLight>::get(db, &id)?.map(|b| Block(b.into_owned()));
         Ok(block)
     }
 
@@ -150,10 +151,10 @@ impl BlockQuery {
                 }
 
                 // TODO: do a batch get instead
-                let blocks: Vec<Cow<FuelBlock>> = blocks
+                let blocks: Vec<Cow<FuelBlockLight>> = blocks
                     .iter()
                     .map(|(_, id)| {
-                        Storage::<Bytes32, FuelBlock>::get(&db, id)
+                        Storage::<Bytes32, FuelBlockLight>::get(&db, id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
                     })

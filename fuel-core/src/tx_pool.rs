@@ -1,6 +1,6 @@
 use crate::database::{Database, KvStoreError};
-use crate::executor::Executor;
-use crate::model::fuel_block::FuelBlock;
+use crate::executor::{ExecutionMode, Executor};
+use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders, FuelBlockLight};
 use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
@@ -90,15 +90,18 @@ impl TxPool {
 
         // setup and execute block
         let block_height = db.get_block_height()?.unwrap_or_default() + 1u32.into();
-        let block = FuelBlock {
-            fuel_height: block_height,
-            transactions: vec![tx_id],
-            time: Utc::now(),
-            producer: Default::default(),
+        let mut block = FuelBlockFull {
+            headers: FuelBlockHeaders {
+                fuel_height: block_height,
+                time: Utc::now(),
+                producer: Default::default(),
+                transactions_commitment: (0, Default::default()),
+            },
+            transactions: vec![tx],
         };
         // immediately execute block
         self.executor
-            .execute(&block, &config.vm)
+            .execute(&mut block, ExecutionMode::Production)
             .await
             .map_err(Error::Execution)?;
         Ok(tx_id)

@@ -1,7 +1,10 @@
+use crate::database::columns::CONTRACT_UTXO_ID;
 use crate::{
     database::{columns::CONTRACTS, Database},
     state::Error,
 };
+use fuel_merkle::common::Bytes32;
+use fuel_tx::UtxoId;
 use fuel_vm::prelude::{Contract, ContractId, Storage};
 use std::borrow::Cow;
 
@@ -25,12 +28,33 @@ impl Storage<ContractId, Contract> for Database {
     }
 }
 
+impl Storage<ContractId, UtxoId> for Database {
+    type Error = Error;
+
+    fn insert(&mut self, key: &ContractId, value: &UtxoId) -> Result<Option<UtxoId>, Self::Error> {
+        Database::insert(self, key.as_ref(), CONTRACT_UTXO_ID, value.clone())
+    }
+
+    fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
+        Database::remove(self, key.as_ref(), CONTRACT_UTXO_ID)
+    }
+
+    fn get<'a>(&'a self, key: &ContractId) -> Result<Option<Cow<'a, UtxoId>>, Self::Error> {
+        self.get(key.as_ref(), CONTRACT_UTXO_ID)
+    }
+
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
+        self.exists(key.as_ref(), CONTRACT_UTXO_ID)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_tx::TxId;
 
     #[test]
-    fn get() {
+    fn contract_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -50,7 +74,7 @@ mod tests {
     }
 
     #[test]
-    fn put() {
+    fn contract_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -65,7 +89,7 @@ mod tests {
     }
 
     #[test]
-    fn remove() {
+    fn contract_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -80,7 +104,7 @@ mod tests {
     }
 
     #[test]
-    fn exists() {
+    fn contract_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -90,5 +114,29 @@ mod tests {
             .unwrap();
 
         assert!(Storage::<ContractId, Contract>::contains_key(&database, &contract_id).unwrap());
+    }
+
+    #[test]
+    fn contract_utxo_id_get() {
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+
+        let database = Database::default();
+
+        database
+            .insert(
+                contract_id.as_ref().to_vec(),
+                CONTRACT_UTXO_ID,
+                utxo_id.clone(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            Storage::<ContractId, UtxoId>::get(&database, &contract_id)
+                .unwrap()
+                .unwrap()
+                .into_owned(),
+            utxo_id
+        );
     }
 }

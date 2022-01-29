@@ -1,16 +1,18 @@
 use crate::database::transaction::TransactionIndex;
+use crate::model::fuel_block::FuelBlockFull;
 use crate::service::VMConfig;
 use crate::{
     database::{Database, KvStoreError},
     model::{
         coin::{Coin, CoinStatus},
-        fuel_block::{BlockHeight, FuelBlock},
+        fuel_block::{BlockHeight, FuelBlockLight},
     },
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
+use fuel_vm::prelude::StateTransitionRef;
 use fuel_vm::{
     consts::REG_SP,
     prelude::{Backtrace as FuelBacktrace, InterpreterError},
@@ -21,59 +23,71 @@ use std::ops::DerefMut;
 use thiserror::Error;
 use tracing::warn;
 
+///! The executor is used for block production and validation. Given a block, it will execute all
+/// the transactions contained in the block and persist changes to the underlying database as needed.
+/// In production mode, block fields like transaction commitments are set based on the executed txs.
+/// In validation mode, the processed block commitments are compared with the proposed block.
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecutionMode {
+    Production,
+    Validation,
+}
+
 pub struct Executor {
     pub database: Database,
+    pub config: VMConfig,
 }
 
 impl Executor {
-    pub async fn execute(&self, block: &FuelBlock, config: &VMConfig) -> Result<(), Error> {
-        let mut block_tx = self.database.transaction();
+    pub async fn execute(
+        &self,
+        block: &mut FuelBlockFull,
+        mode: ExecutionMode,
+    ) -> Result<(), Error> {
+        let mut block_db_commit = self.database.transaction();
         let block_id = block.id();
-        Storage::<Bytes32, FuelBlock>::insert(block_tx.deref_mut(), &block_id, block)?;
 
-        for (idx, tx_id) in block.transactions.iter().enumerate() {
-            let mut sub_tx = block_tx.transaction();
+        for (idx, tx) in block.transactions.iter_mut().enumerate() {
+            let mut sub_block_db_commit = block_db_commit.transaction();
             // A database view that only lives for the duration of the transaction
-            let tx_db = sub_tx.deref_mut();
-            let tx = Storage::<Bytes32, Transaction>::get(tx_db, tx_id)?
-                .ok_or(Error::MissingTransactionData {
-                    block_id,
-                    transaction_id: *tx_id,
-                })?
-                .into_owned();
+            let sub_db_view = sub_block_db_commit.deref_mut();
+            let tx_id = tx.id();
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
-            self.persist_owners_index(block.fuel_height, &tx, tx_id, idx, block_tx.deref_mut())?;
+            self.persist_owners_index(
+                block.headers.fuel_height,
+                &tx,
+                &tx_id,
+                idx,
+                block_db_commit.deref_mut(),
+            )?;
 
             // execute vm
-            let mut vm = Transactor::new(tx_db.clone());
-            vm.transact(tx);
-
+            let mut vm = Transactor::new(sub_db_view.clone());
+            vm.transact(tx.clone());
             match vm.result() {
                 Ok(result) => {
-                    // only commit state changes if execution was a success
-                    if !result.should_revert() {
-                        sub_tx.commit()?;
+                    if mode == ExecutionMode::Validation {
+                        // ensure tx matches vm output exactly
+                        if result.tx() != tx {
+                            return Err(Error::InvalidTransactionOutcome);
+                        }
+                    } else {
+                        // malleate the block with the resultant tx from the vm
+                        *tx = result.tx().clone()
                     }
+
+                    Storage::<Bytes32, Transaction>::insert(sub_db_view, &tx_id, result.tx())?;
+
                     // persist any outputs
-                    self.persist_outputs(block.fuel_height, result.tx(), block_tx.deref_mut())?;
+                    self.persist_outputs(block.headers.fuel_height, result.tx(), sub_db_view)?;
 
                     // persist receipts
-                    self.persist_receipts(tx_id, result.receipts(), block_tx.deref_mut())?;
+                    self.persist_receipts(&tx_id, result.receipts(), sub_db_view)?;
 
                     let status = if result.should_revert() {
-                        if config.backtrace {
-                            if let Some(backtrace) = vm.backtrace() {
-                                warn!(
-                                target = "vm",
-                                "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
-                                backtrace.contract(),
-                                backtrace.registers(),
-                                backtrace.call_stack(),
-                                hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
-                            );
-                            }
-                        }
+                        self.log_backtrace(&vm);
                         // if script result exists, log reason
                         if let Some((script_result, _)) = result.receipts().iter().find_map(|r| {
                             if let Receipt::ScriptResult { result, gas_used } = r {
@@ -84,7 +98,7 @@ impl Executor {
                         }) {
                             TransactionStatus::Failed {
                                 block_id,
-                                time: block.time,
+                                time: block.headers.time,
                                 reason: format!("{:?}", script_result.reason()),
                                 result: Some(*result.state()),
                             }
@@ -93,7 +107,7 @@ impl Executor {
                         else {
                             TransactionStatus::Failed {
                                 block_id,
-                                time: block.time,
+                                time: block.headers.time,
                                 reason: format!("{:?}", result.state()),
                                 result: Some(*result.state()),
                             }
@@ -102,21 +116,28 @@ impl Executor {
                         // else tx was a success
                         TransactionStatus::Success {
                             block_id,
-                            time: block.time,
+                            time: block.headers.time,
                             result: *result.state(),
                         }
                     };
 
                     // persist tx status at the block level
-                    block_tx.update_tx_status(tx_id, status)?;
+                    block_db_commit.update_tx_status(&tx_id, status)?;
+
+                    // only commit state changes if execution was a success
+                    if !result.should_revert() {
+                        sub_block_db_commit.commit()?;
+                    }
                 }
                 Err(e) => {
-                    // save error status on block_tx
-                    block_tx.update_tx_status(
-                        tx_id,
+                    // TODO: if it's a validation related error, then this block should be marked
+                    //       as invalid and the `block_tx` dropped / uncommitted.
+                    // save error status on block_tx since the sub_tx changes are dropped
+                    block_db_commit.update_tx_status(
+                        &tx_id,
                         TransactionStatus::Failed {
                             block_id,
-                            time: block.time,
+                            time: block.headers.time,
                             reason: e.to_string(),
                             result: None,
                         },
@@ -125,7 +146,13 @@ impl Executor {
             }
         }
 
-        block_tx.commit()?;
+        // insert block into database
+        Storage::<Bytes32, FuelBlockLight>::insert(
+            block_db_commit.deref_mut(),
+            &block_id,
+            &block.as_light(),
+        )?;
+        block_db_commit.commit()?;
         Ok(())
     }
 
@@ -133,17 +160,17 @@ impl Executor {
     fn _verify_input_state(
         &self,
         transaction: Transaction,
-        block: FuelBlock,
+        block: FuelBlockLight,
     ) -> Result<(), TransactionValidityError> {
         let db = &self.database;
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
+                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, &utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
-                        if block.fuel_height < coin.block_created + coin.maturity {
+                        if block.headers.fuel_height < coin.block_created + coin.maturity {
                             return Err(TransactionValidityError::CoinHasNotMatured);
                         }
                     } else {
@@ -155,6 +182,22 @@ impl Executor {
         }
 
         Ok(())
+    }
+
+    /// Log a VM backtrace if configured to do so
+    fn log_backtrace(&self, transactor: &Transactor<'_, Database>) {
+        if self.config.backtrace {
+            if let Some(backtrace) = transactor.backtrace() {
+                warn!(
+                    target = "vm",
+                    "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
+                    backtrace.contract(),
+                    backtrace.registers(),
+                    backtrace.call_stack(),
+                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                );
+            }
+        }
     }
 
     fn persist_outputs(
@@ -170,9 +213,9 @@ impl Executor {
                     block_height.into(),
                     id,
                     out_idx as u8,
-                    amount,
-                    color,
-                    to,
+                    &amount,
+                    &color,
+                    &to,
                     db,
                 )?,
                 Output::Contract {
@@ -185,9 +228,9 @@ impl Executor {
                     block_height.into(),
                     id,
                     out_idx as u8,
-                    amount,
-                    color,
-                    to,
+                    &amount,
+                    &color,
+                    &to,
                     db,
                 )?,
                 Output::Variable { .. } => {}
@@ -267,7 +310,7 @@ impl Executor {
         owners.dedup();
 
         for owner in owners {
-            db.record_tx_id_owner(owner, block_height, tx_idx as TransactionIndex, tx_id)?;
+            db.record_tx_id_owner(&owner, block_height, tx_idx as TransactionIndex, tx_id)?;
         }
 
         Ok(())
@@ -310,6 +353,8 @@ pub enum Error {
     VmExecution(fuel_vm::prelude::InterpreterError),
     #[error("Execution error with backtrace")]
     Backtrace(Box<FuelBacktrace>),
+    #[error("Transaction doesn't match expected result")]
+    InvalidTransactionOutcome,
 }
 
 impl From<FuelBacktrace> for Error {

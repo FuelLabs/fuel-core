@@ -2,7 +2,7 @@ use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::Executor,
-    model::fuel_block::FuelBlock,
+    model::fuel_block::FuelBlockLight,
     service::{Config, FuelService, VMConfig},
 };
 use fuel_gql_client::client::types::TransactionStatus;
@@ -88,6 +88,7 @@ async fn submit() {
     let gas_limit = 1_000_000;
     let byte_price = 0;
     let maturity = 0;
+    let byte_price = 0;
 
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
@@ -106,6 +107,7 @@ async fn submit() {
         gas_limit,
         byte_price,
         maturity,
+        byte_price,
         script,
         vec![],
         vec![],
@@ -273,7 +275,7 @@ async fn get_transactions_from_manual_blcoks() {
     }
 
     // make 1st test block
-    let first_test_block = FuelBlock {
+    let first_test_block = FuelBlockLight {
         fuel_height: 1u32.into(),
         // set the first 5 ids of the manually saved txs
         transactions: txs.iter().take(5).map(|tx| tx.id()).collect(),
@@ -282,7 +284,7 @@ async fn get_transactions_from_manual_blcoks() {
     };
 
     // make 2nd test block
-    let second_test_block = FuelBlock {
+    let second_test_block = FuelBlockLight {
         fuel_height: 2u32.into(),
         // set the last 5 ids of the manually saved txs
         transactions: txs.iter().skip(5).take(5).map(|tx| tx.id()).collect(),
