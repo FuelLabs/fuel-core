@@ -60,6 +60,6 @@ jobs:
       - name: Push Docker image from GHCR to AWS ECR
         uses: akhilerm/tag-push-action@v2.0.0
         with:
-          src: ghcr.io/fuellabs/fuel-core:${{ steps.meta.outputs.tags }}
+          src: ${{ steps.meta.outputs.tags }}
           dst: |
             ${{ env.AWS_REGISTRY }}
