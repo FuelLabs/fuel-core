@@ -50,4 +50,4 @@ jobs:
         with:
           src: ghcr.io/fuellabs/fuel-core
           dst: |
-            ${{ env.AWS_REGISTRY }}
+            ${{ secrets.AWS_ECR_REPO }}
