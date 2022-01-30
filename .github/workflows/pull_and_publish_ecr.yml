@@ -1,0 +1,73 @@
+name: Build & Publish Docker Image to AWS ECR
+
+on:
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: "Log level"
+        required: true
+        default: "warning"
+
+env:
+  CARGO_TERM_COLOR: always
+  DOCKER_BUILDKIT: 1
+  RUSTFLAGS: -D warnings
+  GHCR_REGISTRY: ghcr.io
+  AWS_REGISTRY: 756756437019.dkr.ecr.us-east-1.amazonaws.com/fuel-core
+
+jobs:
+  pull_and_publish_image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        
+      - name: Log in to the ghcr.io registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            ghcr.io/fuellabs/fuel-core
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+          flavor: |
+            latest=${{ github.ref == 'refs/heads/master' }}
+
+      - name: Pull Docker image from GHCR
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          
+      - name: Push Docker image from GHCR to AWS ECR
+        uses: akhilerm/tag-push-action@v2.0.0
+        with:
+          src: ghcr.io/fuellabs/fuel-core:${{ steps.meta.outputs.tags }}
+          dst: |
+            ${{ env.AWS_REGISTRY }}
