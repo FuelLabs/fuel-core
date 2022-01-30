@@ -44,10 +44,22 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.GCHR_REGISTRY }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=tag
+          flavor: |
+            latest=${{ github.ref == 'refs/heads/master' }}
           
       - name: Push Docker image from GHCR to AWS ECR
         uses: akhilerm/tag-push-action@v2.0.0
         with:
-          src: ghcr.io/fuellabs/fuel-core
+          src: ${{ steps.meta.outputs.tags }}
           dst: |
             ${{ env.AWS_REGISTRY }}
