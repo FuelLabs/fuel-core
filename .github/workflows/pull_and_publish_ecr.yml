@@ -57,14 +57,6 @@ jobs:
             type=ref,event=tag
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
-
-      - name: Pull Docker image from GHCR
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
           
       - name: Push Docker image from GHCR to AWS ECR
         uses: akhilerm/tag-push-action@v2.0.0
