@@ -14,7 +14,6 @@ env:
   DOCKER_BUILDKIT: 1
   RUSTFLAGS: -D warnings
   GHCR_REGISTRY: ghcr.io
-  AWS_REGISTRY: 756756437019.dkr.ecr.us-east-1.amazonaws.com/fuel-core
 
 jobs:
   pull_and_publish_image:
