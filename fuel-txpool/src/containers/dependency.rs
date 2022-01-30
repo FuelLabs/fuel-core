@@ -29,7 +29,7 @@ pub struct ContractState {
     used_by: HashSet<TxId>,
     /// how deep are we inside UTXO dependency
     depth: usize,
-    /// origin is needed for child to parent rel, in case when contract is in dependency this is we make a chain.
+    /// origin is needed for child to parent rel, in case when contract is in dependency this is how we make a chain.
     origin: Option<UtxoId>,
     /// gas_price. We can probably derive this from Tx
     gas_price: GasPrice,
@@ -301,7 +301,7 @@ impl Dependency {
                             .or_insert(ContractState {
                                 used_by: HashSet::new(),
                                 depth: 0,
-                                origin: None, //there is no need for owner if contract is in db
+                                origin: None, //there is no owner if contract is in db
                                 gas_price: GasPrice::MAX,
                             })
                             .used_by
@@ -312,6 +312,35 @@ impl Dependency {
                 }
             }
         }
+
+        // nice, our inputs don't collide. Now check if our newly created contracts collide on ContractId
+        for output in tx.outputs() {
+            match output {
+                Output::ContractCreated { contract_id } => {
+                    if let Some(contract) = self.contracts.get(contract_id) {
+                        // we have a collision :(
+                        if contract.depth == 0 {
+                            // if depth is zero it means it is contract from db
+                            return Err(
+                                Error::NotInsertedContractIdAlreadyTaken(*contract_id).into()
+                            );
+                        }
+                        // check who is priced more
+                        if contract.gas_price > tx.gas_price() {
+                            // new tx is priced less then current tx
+                            return Err(Error::NotInsertedCollisionContractId(*contract_id).into());
+                        }
+                        // if we are prices more, mark current contract origin for removal.
+                        let origin = contract.origin.expect(
+                            "Only contract without origin are the ones that are inside DB. And we check depth for that, so we are okay to just unwrap
+                        ");
+                        collided.push(*origin.tx_id());
+                    }
+                }
+                _ => (), // collision of other outputs is not possible.
+            }
+        }
+
         Ok((max_depth, db_coins, db_contracts, collided))
     }
     /// insert tx inside dependency
