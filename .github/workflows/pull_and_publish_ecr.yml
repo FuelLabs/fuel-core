@@ -49,7 +49,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v3
         with:
-          images: ghcr.io/fuellabs/fuel-core
+          images: ${{ env.AWS_REGISTRY }}
           tags: |
             type=sha
             type=ref,event=branch
@@ -60,6 +60,6 @@ jobs:
       - name: Push Docker image from GHCR to AWS ECR
         uses: akhilerm/tag-push-action@v2.0.0
         with:
-          src: ${{ steps.meta.outputs.tags }}
+          src: ghcr.io/fuellabs/fuel-core
           dst: |
-            ${{ env.AWS_REGISTRY }}
+            ${{ steps.meta.outputs.tags }}
