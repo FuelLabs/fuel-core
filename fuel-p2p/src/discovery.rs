@@ -1,6 +1,7 @@
 use self::mdns::MdnsWrapper;
 use futures::FutureExt;
 use futures_timer::Delay;
+use ip_network::IpNetwork;
 use libp2p::{
     core::{
         connection::{ConnectionId, ListenerId},
@@ -8,12 +9,14 @@ use libp2p::{
     },
     kad::{handler::KademliaHandlerProto, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
     mdns::MdnsEvent,
+    multiaddr::Protocol,
     swarm::{
         DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
         ProtocolsHandler,
     },
     Multiaddr, PeerId,
 };
+use log::trace;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     io,
@@ -41,14 +44,11 @@ pub enum DiscoveryEvent {
 
 /// NetworkBehavior for discovery of nodes
 pub struct DiscoveryBehaviour {
-    /// Store the local peer id
-    local_peer_id: PeerId,
-
     /// Store Peer IDs of currently connected peers
     connected_peers: HashSet<PeerId>,
 
-    /// Store all peer addresses of currently connected peers
-    connected_peer_addresses: HashMap<PeerId, Vec<Multiaddr>>,
+    /// Store all peer addresses of discovered peers
+    peer_addresses: HashMap<PeerId, Vec<Multiaddr>>,
 
     /// Predefined list of nodes and their addresses
     predefined_nodes: Vec<(PeerId, Multiaddr)>,
@@ -74,17 +74,23 @@ pub struct DiscoveryBehaviour {
 
     /// Maximum amount of allowed peers
     max_peers_connected: u64,
+
+    /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
+    /// except for the ones stored in `predefined_nodes`.
+    allow_private_addresses: bool,
 }
 
 impl DiscoveryBehaviour {
     /// Returns reference to a connected peers set.
+    #[allow(dead_code)]
     pub fn connected_peers(&self) -> &HashSet<PeerId> {
         &self.connected_peers
     }
 
-    /// Returns a map of connected peers ids and their multiaddresses
-    pub fn connected_peer_addresses(&self) -> &HashMap<PeerId, Vec<Multiaddr>> {
-        &self.connected_peer_addresses
+    /// Returns a map of peers ids and their multiaddresses
+    #[allow(dead_code)]
+    pub fn peer_addresses(&self) -> &HashMap<PeerId, Vec<Multiaddr>> {
+        &self.peer_addresses
     }
 }
 
@@ -235,8 +241,21 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             list_to_filter.extend(self.kademlia.addresses_of_peer(peer_id));
             list_to_filter.extend(self.mdns.addresses_of_peer(peer_id));
 
+            // filter private addresses
+            // nodes could potentially report addresses in the private network
+            // which are not actually part of the network
+            if !self.allow_private_addresses {
+                list_to_filter.retain(|addr| match addr.iter().next() {
+                    Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
+                    Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
+                    _ => true,
+                });
+            }
+
             list.extend(list_to_filter);
         }
+
+        trace!("Addresses of {:?}: {:?}", peer_id, list);
 
         list
     }
@@ -260,7 +279,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
         let multiaddr = self.addresses_of_peer(peer_id);
-        self.connected_peer_addresses.insert(*peer_id, multiaddr);
+        self.peer_addresses.insert(*peer_id, multiaddr);
         self.connected_peers.insert(*peer_id);
 
         self.events.push_back(DiscoveryEvent::Connected(*peer_id));
@@ -280,7 +299,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
         self.connected_peers.remove(peer_id);
-        self.connected_peer_addresses.remove(peer_id);
 
         self.events
             .push_back(DiscoveryEvent::Disconnected(*peer_id));
@@ -350,11 +368,12 @@ mod tests {
             .boxed();
 
         let behaviour = {
-            let mut config = DiscoveryConfig::new(keypair.clone().public(), "test_network".into());
+            let mut config =
+                DiscoveryConfig::new(keypair.clone().public().to_peer_id(), "test_network".into());
             config
                 .discovery_limit(50)
                 .with_predefined_nodes(predefined_peers)
-                .enable_random_walk();
+                .enable_random_walk(true);
 
             config.finish()
         };
@@ -423,11 +442,9 @@ mod tests {
                                                 let unroutable_peer_id = peer;
                                                 let unroutable_peer_addr = discovery_swarms
                                                     .iter()
-                                                    .find_map(|(next_swarm, next_addr, _)| {
+                                                    .find_map(|(_, next_addr, next_peer_id)| {
                                                         // identify the peer
-                                                        if next_swarm.behaviour().local_peer_id
-                                                            == unroutable_peer_id
-                                                        {
+                                                        if next_peer_id == &unroutable_peer_id {
                                                             // and return it's address
                                                             Some(next_addr.clone())
                                                         } else {
@@ -468,8 +485,9 @@ mod tests {
             if left_to_discover.iter().all(|l| l.is_empty()) {
                 // at this point we are already done but we double check the state of swarms
 
-                // check if the first swarm has 24 connected nodes
-                let (mut first_swarm, first_peer_addr, _) = discovery_swarms.pop_front().unwrap();
+                // check if the first swarm has N - 1 connected nodes
+                let (mut first_swarm, first_peer_addr, first_peer_id) =
+                    discovery_swarms.pop_front().unwrap();
                 let first_swarm_discovery = first_swarm.behaviour_mut();
                 assert_eq!(
                     first_swarm_discovery.connected_peers().len(),
@@ -480,8 +498,8 @@ mod tests {
                 let mut last_swarm = discovery_swarms.pop_back().unwrap().0;
                 let last_swarm_discovery = last_swarm.behaviour_mut();
                 let first_swarm_addresses = last_swarm_discovery
-                    .connected_peer_addresses()
-                    .get(&first_swarm_discovery.local_peer_id)
+                    .peer_addresses()
+                    .get(&first_peer_id)
                     .unwrap();
                 assert!(first_swarm_addresses.contains(&first_peer_addr));
 

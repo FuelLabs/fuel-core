@@ -1,29 +1,26 @@
-use std::{
-    collections::VecDeque,
-    task::{Context, Poll},
+use crate::{
+    config::P2PConfig,
+    discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
 };
-
 use libp2p::{
-    gossipsub::{Gossipsub, GossipsubEvent, TopicHash},
-    identify::IdentifyEvent,
-    identity::Keypair,
     swarm::{
         NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
     NetworkBehaviour, PeerId,
 };
+use std::{
+    collections::VecDeque,
+    task::{Context, Poll},
+};
 
-use crate::discovery::{DiscoveryBehaviour, DiscoveryEvent};
-
+// todo: define which events outside world is intersted in
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
-    GossipsubMessage {
-        peer_id: PeerId,
-        topic: TopicHash,
-        message: Vec<u8>,
-    },
+    PeerConnected(PeerId),
+    PeerDisconnected(PeerId),
 }
 
+/// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
 #[behaviour(
     out_event = "FuelBehaviourEvent",
@@ -31,23 +28,36 @@ pub enum FuelBehaviourEvent {
     event_process = true
 )]
 pub struct FuelBehaviour {
-    /// message propagation for p2p
-    gossipsub: Gossipsub,
-
-    /// node discovery
+    /// Node discovery
     discovery: DiscoveryBehaviour,
 
-    //peer info let's do it later
-    //identify: Identify,
     #[behaviour(ignore)]
     events: VecDeque<FuelBehaviourEvent>,
 }
 
 impl FuelBehaviour {
-    pub fn new(local_key: Keypair) -> Self {
-        todo!()
+    pub fn new(local_peer_id: PeerId, config: &P2PConfig) -> Self {
+        let discovery_config = {
+            let mut discovery_config =
+                DiscoveryConfig::new(local_peer_id, config.network_name.clone());
+
+            discovery_config
+                .enable_mdns(config.enable_mdns)
+                .discovery_limit(config.max_peers_connected)
+                .allow_private_addresses(config.allow_private_addresses)
+                .with_predefined_nodes(config.predefined_nodes.clone())
+                .enable_random_walk(config.enable_random_walk);
+
+            discovery_config
+        };
+
+        Self {
+            discovery: discovery_config.finish(),
+            events: VecDeque::default(),
+        }
     }
 
+    // report events to the swarm
     fn poll(
         &mut self,
         _cx: &mut Context,
@@ -65,31 +75,16 @@ impl FuelBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
-    fn inject_event(&mut self, message: GossipsubEvent) {
-        if let GossipsubEvent::Message {
-            propagation_source,
-            message,
-            message_id: _,
-        } = message
-        {
-            self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
-                peer_id: propagation_source,
-                topic: message.topic,
-                message: message.data,
-            })
-        }
-    }
-}
-
 impl NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour {
-    fn inject_event(&mut self, _event: DiscoveryEvent) {
-        todo!()
-    }
-}
-
-impl NetworkBehaviourEventProcess<IdentifyEvent> for FuelBehaviour {
-    fn inject_event(&mut self, _event: IdentifyEvent) {
-        todo!()
+    fn inject_event(&mut self, event: DiscoveryEvent) {
+        match event {
+            DiscoveryEvent::Connected(peer_id) => self
+                .events
+                .push_back(FuelBehaviourEvent::PeerConnected(peer_id)),
+            DiscoveryEvent::Disconnected(peer_id) => self
+                .events
+                .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id)),
+            _ => {}
+        }
     }
 }
