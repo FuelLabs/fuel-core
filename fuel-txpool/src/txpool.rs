@@ -146,6 +146,27 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn faulty_t2_collided_on_contract_id_from_tx1() {
+        let config = Arc::new(Config::default());
+        let db = DummyDB::filled();
+
+        let tx1_hash = *TX_ID1;
+        let tx2_hash = *TX_ID_FAULTY2;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+        let out = txpool.insert(tx2, &db).await;
+        assert!(out.is_err(), "Tx2 should collide on ContractId");
+        assert_eq!(out.err().unwrap().to_string(),
+        "Transaction is not inserted. More priced tx has created contract with ContractId 0x0000000000000000000000000000000000000000000000000000000000000100"
+    );
+    }
+
+    #[tokio::test]
     async fn fails_to_insert_tx2_with_missing_utxo_dependency_on_faulty_tx1() {
         let config = Arc::new(Config::default());
         let db = DummyDB::filled();

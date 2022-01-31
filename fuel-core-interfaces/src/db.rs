@@ -98,6 +98,10 @@ pub mod helpers {
         pub static ref TX_ID_FAULTY1: TxId =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000015")
                 .unwrap();
+        /// Same as TX_ID2 but it has same ContractId as TX_ID1 so it is not going to be added.
+        pub static ref TX_ID_FAULTY2: TxId =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000016")
+                .unwrap();
         pub static ref CONTRACT_ID1: ContractId = ContractId::from_str(
             "0x0000000000000000000000000000000000000000000000000000000000000100",
         )
@@ -242,6 +246,45 @@ pub mod helpers {
             };
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
+            let tx2_faulty = Transaction::Script {
+                gas_price: 9,
+                gas_limit: 1_000_001,
+                maturity: 0,
+                receipts_root: Default::default(),
+                script,
+                script_data: vec![],
+                inputs: vec![Input::Coin {
+                    utxo_id: UtxoId::new(*TX_ID1, 0),
+                    owner: Address::default(),
+                    amount: 100,
+                    color: Default::default(),
+                    witness_index: 0,
+                    maturity: 0,
+                    predicate: vec![],
+                    predicate_data: vec![],
+                }],
+                outputs: vec![
+                    Output::Coin {
+                        amount: 100,
+                        to: Address::default(),
+                        color: Default::default(),
+                    },
+                    Output::ContractCreated {
+                        contract_id: *CONTRACT_ID1,
+                    },
+                ],
+                witnesses: vec![vec![].into()],
+                metadata: Some(Metadata::new(
+                    *TX_ID2,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                )),
+            };
+
+            let script = Opcode::RET(0x10).to_bytes().to_vec();
             // clashes with tx1
             let tx3 = Transaction::Script {
                 gas_price: 20, // more then tx1
@@ -355,6 +398,7 @@ pub mod helpers {
                 _ if *TX_ID4 == txhash => tx4,
                 _ if *TX_ID5 == txhash => tx5,
                 _ if *TX_ID_FAULTY1 == txhash => tx1_faulty,
+                _ if *TX_ID_FAULTY2 == txhash => tx2_faulty,
                 _ => {
                     panic!("Transaction not found: {:#x?}", txhash);
                 }

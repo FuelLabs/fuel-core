@@ -315,30 +315,26 @@ impl Dependency {
 
         // nice, our inputs don't collide. Now check if our newly created contracts collide on ContractId
         for output in tx.outputs() {
-            match output {
-                Output::ContractCreated { contract_id } => {
-                    if let Some(contract) = self.contracts.get(contract_id) {
-                        // we have a collision :(
-                        if contract.depth == 0 {
-                            // if depth is zero it means it is contract from db
-                            return Err(
-                                Error::NotInsertedContractIdAlreadyTaken(*contract_id).into()
-                            );
-                        }
-                        // check who is priced more
-                        if contract.gas_price > tx.gas_price() {
-                            // new tx is priced less then current tx
-                            return Err(Error::NotInsertedCollisionContractId(*contract_id).into());
-                        }
-                        // if we are prices more, mark current contract origin for removal.
-                        let origin = contract.origin.expect(
+            if let Output::ContractCreated { contract_id } = output {
+                if let Some(contract) = self.contracts.get(contract_id) {
+                    // we have a collision :(
+                    if contract.depth == 0 {
+                        // if depth is zero it means it is contract from db
+                        return Err(Error::NotInsertedContractIdAlreadyTaken(*contract_id).into());
+                    }
+                    // check who is priced more
+                    if contract.gas_price > tx.gas_price() {
+                        // new tx is priced less then current tx
+                        return Err(Error::NotInsertedCollisionContractId(*contract_id).into());
+                    }
+                    // if we are prices more, mark current contract origin for removal.
+                    let origin = contract.origin.expect(
                             "Only contract without origin are the ones that are inside DB. And we check depth for that, so we are okay to just unwrap
                         ");
-                        collided.push(*origin.tx_id());
-                    }
+                    collided.push(*origin.tx_id());
                 }
-                _ => (), // collision of other outputs is not possible.
             }
+            // collision of other outputs is not possible.
         }
 
         Ok((max_depth, db_coins, db_contracts, collided))
