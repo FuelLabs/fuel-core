@@ -1,7 +1,6 @@
 use crate::discovery::{mdns::MdnsWrapper, DiscoveryBehaviour};
 use futures_timer::Delay;
 use libp2p::{
-    core::PublicKey,
     kad::{store::MemoryStore, Kademlia, KademliaConfig},
     Multiaddr, PeerId,
 };
@@ -11,34 +10,43 @@ use std::{
     time::Duration,
 };
 
+#[derive(Clone, Debug)]
 pub struct DiscoveryConfig {
     local_peer_id: PeerId,
     predefined_nodes: Vec<(PeerId, Multiaddr)>,
     with_mdns: bool,
     with_random_walk: bool,
+    allow_private_addresses: bool,
     network_name: String,
     max_peers_connected: u64,
 }
 
 impl DiscoveryConfig {
-    pub fn new(public_key: PublicKey, network_name: String) -> Self {
+    pub fn new(local_peer_id: PeerId, network_name: String) -> Self {
         Self {
-            local_peer_id: public_key.to_peer_id(),
+            local_peer_id,
             predefined_nodes: vec![],
             max_peers_connected: std::u64::MAX,
+            allow_private_addresses: false,
             with_mdns: false,
             network_name,
             with_random_walk: false,
         }
     }
 
-    // limit the number of connected nodes
+    /// limit the number of connected nodes
     pub fn discovery_limit(&mut self, limit: u64) -> &mut Self {
         self.max_peers_connected = limit;
         self
     }
 
-    // bootstrapped nodes
+    /// Enable reporting of private addresses
+    pub fn allow_private_addresses(&mut self, value: bool) -> &mut Self {
+        self.allow_private_addresses = value;
+        self
+    }
+
+    // List of predefined nodes to bootstrap the network
     pub fn with_predefined_nodes<I>(&mut self, predefined_nodes: I) -> &mut Self
     where
         I: IntoIterator<Item = (PeerId, Multiaddr)>,
@@ -47,13 +55,13 @@ impl DiscoveryConfig {
         self
     }
 
-    pub fn enable_mdns(&mut self) -> &mut Self {
-        self.with_mdns = true;
+    pub fn enable_mdns(&mut self, value: bool) -> &mut Self {
+        self.with_mdns = value;
         self
     }
 
-    pub fn enable_random_walk(&mut self) -> &mut Self {
-        self.with_random_walk = true;
+    pub fn enable_random_walk(&mut self, value: bool) -> &mut Self {
+        self.with_random_walk = value;
         self
     }
 
@@ -62,11 +70,13 @@ impl DiscoveryConfig {
             local_peer_id,
             predefined_nodes,
             network_name,
+            max_peers_connected,
+            allow_private_addresses,
             ..
         } = self;
 
         let connected_peers = HashSet::new();
-        let connected_peer_addresses = HashMap::new();
+        let peer_addresses = HashMap::new();
 
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
@@ -83,7 +93,7 @@ impl DiscoveryConfig {
             warn!("Kademlia bootstrap failed: {}", e);
         }
 
-        let next_kad_random_query = if self.with_random_walk {
+        let next_kad_random_walk = if self.with_random_walk {
             Some(Delay::new(Duration::new(0, 0)))
         } else {
             None
@@ -97,17 +107,17 @@ impl DiscoveryConfig {
         };
 
         DiscoveryBehaviour {
-            local_peer_id: self.local_peer_id,
             connected_peers,
-            connected_peer_addresses,
+            peer_addresses,
             predefined_nodes,
             events: VecDeque::new(),
             kademlia,
-            next_kad_random_walk: next_kad_random_query,
+            next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
             connected_peers_count: 0,
-            max_peers_connected: self.max_peers_connected,
+            max_peers_connected,
             mdns,
+            allow_private_addresses,
         }
     }
 }

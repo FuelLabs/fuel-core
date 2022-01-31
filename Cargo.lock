@@ -1658,6 +1658,7 @@ dependencies = [
  "env_logger",
  "futures",
  "futures-timer",
+ "ip_network",
  "libp2p",
  "log",
  "rand 0.8.4",
@@ -2363,6 +2364,12 @@ checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
 ]
+
+[[package]]
+name = "ip_network"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa2f047c0a98b2f299aa5d6d7088443570faae494e9ae1305e48be000c9e0eb1"
 
 [[package]]
 name = "ipconfig"

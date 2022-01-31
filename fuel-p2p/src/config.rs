@@ -1,24 +1,21 @@
-use std::{net::IpAddr, path::PathBuf};
-
-use libp2p::Multiaddr;
+use libp2p::{Multiaddr, PeerId};
+use std::net::IpAddr;
 
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
-    /// path to the private key
-    pub key_path: PathBuf,
+    /// Name of the Network
+    pub network_name: String,
 
-    /// IP address for p2p to listen on
+    /// IP address for Swarm to listen on
     pub address: IpAddr,
 
-    /// The TCP port that libp2p listens on
+    /// The TCP port that Swarm listens on
     pub tcp_port: u16,
 
-    /// List of libp2p peer nodes to connect to
-    pub peers: Vec<Multiaddr>,
-
-    /// topics to subscribe to
-    pub topics: Vec<FuelP2PTopics>,
+    // `DiscoveryBehaviour` related fields
+    pub predefined_nodes: Vec<(PeerId, Multiaddr)>,
+    pub enable_mdns: bool,
+    pub max_peers_connected: u64,
+    pub allow_private_addresses: bool,
+    pub enable_random_walk: bool,
 }
-
-#[derive(Clone, Debug, Copy)]
-pub enum FuelP2PTopics {}
