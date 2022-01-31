@@ -9,11 +9,11 @@ version = "0.1.0"
 futures = "0.3"
 futures-timer = "3.0.2"
 ip_network = "0.4.1"
-libp2p = {version = "0.41.0", features = ["ping"]}
+libp2p = { version = "0.41.0" }
 log = "0.4.8"
 sha2 = "0.9"
 
 [dev-dependencies]
 env_logger = "0.9"
 rand = "0.8.4"
-tokio = {version = "1.8", features = ["full"]}
+tokio = { version = "1.8", features = ["full"] }
