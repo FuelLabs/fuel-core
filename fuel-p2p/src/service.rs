@@ -134,13 +134,9 @@ mod tests {
         loop {
             tokio::select! {
                 p2p_event_on_second_service = second_p2p_service.next_event() => {
-                    match p2p_event_on_second_service {
-                        FuelP2PEvent::Behaviour(fuel_behaviour) => match fuel_behaviour {
-                            // successfully connected to the first service
-                            FuelBehaviourEvent::PeerConnected(_peer) => break,
-                            _ => {}
-                        },
-                        _ => {}
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerConnected(_)) =  p2p_event_on_second_service {
+                        // successfully connected to the first service
+                        break
                     }
                 },
                 _ = first_p2p_service.next_event() => {}
