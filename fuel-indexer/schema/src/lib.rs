@@ -29,6 +29,11 @@ pub mod db;
 pub use fuel_types::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt, Word};
 
 pub type ID = u64;
+pub type Int4 = i32;
+pub type Int8 = i64;
+pub type UInt4 = u32;
+pub type UInt8 = u64;
+pub type Timestamp = u64;
 
 // serde_scale for now, can look at other options if necessary.
 pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
@@ -60,6 +65,11 @@ pub enum FtColumn {
     Bytes32(Bytes32),
     Color(Color),
     ContractId(ContractId),
+    Int4(i32),
+    Int8(i64),
+    UInt4(u32),
+    UInt8(u64),
+    Timestamp(u64),
     Salt(Salt),
 }
 
@@ -100,6 +110,26 @@ impl FtColumn {
                 let salt = Salt::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Salt(salt)
             }
+            ColumnType::Int4 => {
+                let int4 = i32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Int4(int4)
+            }
+            ColumnType::Int8 => {
+                let int8 = i64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Int8(int8)
+            }
+            ColumnType::UInt4 => {
+                let int4 = u32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::UInt4(int4)
+            }
+            ColumnType::UInt8 => {
+                let int8 = u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::UInt8(int8)
+            }
+            ColumnType::Timestamp => {
+                let uint8 = u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Timestamp(uint8)
+            }
             ColumnType::Blob => {
                 panic!("Blob not supported for FtColumn!");
             }
@@ -130,6 +160,21 @@ impl FtColumn {
             FtColumn::ContractId(value) => {
                 format!("'{:x}'", value)
             }
+            FtColumn::Int4(value) => {
+                format!("{}", value)
+            }
+            FtColumn::Int8(value) => {
+                format!("{}", value)
+            }
+            FtColumn::UInt4(value) => {
+                format!("{}", value)
+            }
+            FtColumn::UInt8(value) => {
+                format!("{}", value)
+            }
+            FtColumn::Timestamp(value) => {
+                format!("{}", value)
+            }
             FtColumn::Salt(value) => {
                 format!("'{:x}'", value)
             }
@@ -150,6 +195,11 @@ mod tests {
         let bytes32 = FtColumn::Bytes32(Bytes32::try_from([0xEE; 32]).expect("Bad bytes"));
         let color = FtColumn::Color(Color::try_from([0xA5; 32]).expect("Bad bytes"));
         let contractid = FtColumn::ContractId(ContractId::try_from([0x78; 32]).expect("Bad bytes"));
+        let int4 = FtColumn::Int4(i32::from_le_bytes([0x78; 4]));
+        let int8 = FtColumn::Int8(i64::from_le_bytes([0x78; 8]));
+        let uint4 = FtColumn::UInt4(u32::from_le_bytes([0x78; 4]));
+        let uint8 = FtColumn::UInt8(u64::from_le_bytes([0x78; 8]));
+        let uint64 = FtColumn::Timestamp(u64::from_le_bytes([0x78; 8]));
         let salt = FtColumn::Salt(Salt::try_from([0x31; 32]).expect("Bad bytes"));
 
         insta::assert_yaml_snapshot!(id.query_fragment());
@@ -160,5 +210,10 @@ mod tests {
         insta::assert_yaml_snapshot!(color.query_fragment());
         insta::assert_yaml_snapshot!(contractid.query_fragment());
         insta::assert_yaml_snapshot!(salt.query_fragment());
+        insta::assert_yaml_snapshot!(int4.query_fragment());
+        insta::assert_yaml_snapshot!(int8.query_fragment());
+        insta::assert_yaml_snapshot!(uint4.query_fragment());
+        insta::assert_yaml_snapshot!(uint8.query_fragment());
+        insta::assert_yaml_snapshot!(uint64.query_fragment());
     }
 }

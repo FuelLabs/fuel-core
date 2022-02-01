@@ -20,3 +20,9 @@ CREATE TABLE IF NOT EXISTS graph_registry.root_columns (
 
 ALTER TABLE graph_registry.columns
 ADD COLUMN graphql_type varchar not null;
+
+ALTER TYPE ColumnTypeName ADD VALUE 'Int4';
+ALTER TYPE ColumnTypeName ADD VALUE 'Int8';
+ALTER TYPE ColumnTypeName ADD VALUE 'UInt4';
+ALTER TYPE ColumnTypeName ADD VALUE 'UInt8';
+ALTER TYPE ColumnTypeName ADD VALUE 'Timestamp';

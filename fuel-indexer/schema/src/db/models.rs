@@ -145,6 +145,11 @@ impl NewColumn {
             ColumnType::Color => "varchar(64)",
             ColumnType::ContractId => "varchar(64)",
             ColumnType::Salt => "varchar(64)",
+            ColumnType::Int4 => "integer",
+            ColumnType::Int8 => "bigint",
+            ColumnType::UInt4 => "integer",
+            ColumnType::UInt8 => "bigint",
+            ColumnType::Timestamp => "timestamp",
             ColumnType::Blob => "bytea",
         }
     }
