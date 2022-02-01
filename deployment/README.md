@@ -8,7 +8,7 @@ Before proceeding make sure to have these software packages installed on your ma
 
 ## Deploying Fuel Client with Docker
 
-Navigate to the [deployment][deploy-dir] directory and run at your command line:
+Navigate to the root of the fuel-core git repo and run at your command line:
 
 ```bash
 docker-compose up -d
@@ -41,13 +41,65 @@ Before proceeding make sure to have these software packages installed on your ma
 
 3) [kubectl][kubectl-cli]: Install latest version of kubectl
 
-4) AWS:
+4) [gettext][gettext-cli]: Install gettext for your OS
+
+4) AWS (for eks only):
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
+
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
-5) [gettext][gettext-cli]: Install gettext for your OS
+- IAM user with AWS access keys with following IAM access:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateInstanceProfile",
+                "iam:GetPolicyVersion",
+                "iam:PutRolePermissionsBoundary",
+                "iam:DeletePolicy",
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePermissionsBoundary",
+                "iam:CreateLoginProfile",
+                "iam:ListInstanceProfilesForRole",
+                "iam:PassRole",
+                "iam:DetachRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:ListAttachedRolePolicies",
+                "iam:ListRolePolicies",
+                "iam:CreatePolicyVersion",
+                "iam:DeleteInstanceProfile",
+                "iam:GetRole",
+                "iam:GetInstanceProfile",
+                "iam:GetPolicy",
+                "iam:ListRoles",
+                "iam:DeleteRole",
+                "iam:CreatePolicy",
+                "iam:ListPolicyVersions",
+                "iam:UpdateRole",
+                "iam:DeleteServiceLinkedRole",
+                "iam:GetRolePolicy",
+                "iam:DeletePolicyVersion",
+                "logs:*",
+                "s3:*",
+                "autoscaling:*",
+                "cloudwatch:*",
+                "elasticloadbalancing:*",
+                "ec2:*",
+                "eks:*"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
 
-Note: Currently only Linux and Unix operating systems are supported for k8s cluster creation.
+Note: Currently only Linux and Unix operating systems are supported for terraform creation of a k8s cluster.
 
 ## Deploying k8s Cluster
 
@@ -62,7 +114,7 @@ The current k8s cluster configuration is based on a single [env][env-file] file.
 You will need to customize the following environment variables as needed (for variables not needed - keep the defaults):
 
 | ENV Variable                   |  Script Usage     | Description                                                                                       |
-| ------------------------------ |:-----------------:|:-------------------------------------------------------------------------------------------------:|
+|:------------------------------:|:-----------------:|:-------------------------------------------------------------------------------------------------:|
 | k8s_provider                   |  create-k8s (all) | your kubernetes provider name, possible options: eks                                              | 
 | fuel_core_image_repository     |  fuel-core-deploy | fuel-core ghcr image registry URI                                                                 |   
 | fuel_core_image_tag            |  fuel-core-deploy | fuel-core ghcr image tag                                                                          | 
@@ -81,13 +133,12 @@ You will need to customize the following environment variables as needed (for va
 | TF_VAR_eks_node_groupname      |  create-k8s (aws) | EKS worker node group name                                                                        |
 | TF_VAR_eks_node_ami_type       |  create-k8s (aws) | EKS worker node group AMI type, possible options: AL2_x86_64, AL2_x86_64_GPU, AL2_ARM_64, CUSTOM  | 
 | TF_VAR_eks_node_disk_size      |  create-k8s (aws) | disk size (GiB) for EKS worker nodes                                                              |
-| TF_VAR_eks_node_instance_types |  create-k8s (aws) | A list of instance type for EKS worker nodes                                                      |
+| TF_VAR_eks_node_instance_types |  create-k8s (aws) | A list of instance types for the EKS worker nodes                                                 |
 | TF_VAR_eks_node_min_size       |  create-k8s (aws) | minimum number of eks worker nodes                                                                |
 | TF_VAR_eks_node_desired_size   |  create-k8s (aws) | desired number of eks worker nodes                                                                |
 | TF_VAR_eks_node_max_size       |  create-k8s (aws) | maximum number of eks worker nodes                                                                |
 | TF_VAR_eks_capacity_type       |  create-k8s (aws) | type of capacity associated with the eks node group, possible options: ON_DEMAND, SPOT            |
-| TF_VAR_ec2_ssh_key             |  create-k8s (aws) | EC2 key Pair name for ssh access (must create this key pair in your AWS account before)           |
-
+| TF_VAR_ec2_ssh_key             |  create-k8s (aws) | ec2 key Pair name for ssh access (must create this key pair in your AWS account before)           |
 
 Notes:
 
@@ -97,9 +148,9 @@ Notes:
 
 - for 'base64_github_auth_token' environment variable:
 
-First create a [github access token][create-git-token] and make sure to select "read:packages" to pull the [fuel-core image][fuel-core-image].
+First create a [github access token][create-git-token] and make sure to select "read:packages" permission to pull the [fuel-core image][fuel-core-image].
 
-You need to first Base64 encode "git-username:git-auth-token" string: 
+You need to first base64 encode "git-username:git-auth-token" string in: 
 
 ```
   {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
@@ -112,7 +163,7 @@ At your command line, run (make sure to substitute your github username and pers
 ```
 Take the string output and insert back into the original place of "git-username:git-auth-token" in the auths json string.
 
-Now base64 encode the {"auths": ...} json string, by running at your command line:
+Now base64 encode the '{"auths": ...}' json string, by running at your command line:
 
 ```
   echo -n  '{"auths":{"ghcr.io":{"auth":"<your-first-base64-output>"}}}' | base64
@@ -120,19 +171,26 @@ Now base64 encode the {"auths": ...} json string, by running at your command lin
 
 This final encoded value is your 'base64_github_auth_token' environment variable
 
-
 ### k8s Cluster Deployment
 
-Once your env file is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh] to create your k8s cluster on your cloud provider:
+Once your env file is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh] to deploy the k8s cluster to your cloud provider:
 
 ```bash
 ./create-k8s.sh
 ```
-The script will read your "k8s_provider" from the env file and then terraform will start deploy your k8s cluster automatically to your specified cloud provider.
+The script will read the "k8s_provider" from the env file and then terraform will automatically create the k8s cluster.
+
+### k8s Cluster Delete
+
+If you need to tear down your k8s cluster, just run the [delete-k8s.sh][delete-k8s-sh] script:
+
+```bash
+./delete-k8s.sh
+```
 
 ## Deploying Fuel Client on k8s
 
-Now that your k8s cluster is setup - you can deploy the fuel-core helm chart via the [fuel-core-deploy][fuel-deploy-script]. 
+Now that the k8s cluster is setup - you can deploy the fuel-core helm chart via the [fuel-core-deploy][fuel-deploy-script]. 
 
 ```bash
   ./fuel-core-deploy.sh
@@ -166,30 +224,28 @@ If the "STATUS" is deployed, the fuel-core helm chart has been deployed successf
 Having fuel-core pod(s) running and a service associated with an External IP, load balancer DNS address 
 further means the helm chart was deployed successfully.
 
-If its not "deployed', then you will need to delete the helm chart:
+If the helm chart deployments fails and/or the fuel-core pod(s) are not healthy, then you will need to delete the helm chart via [fuel-core-delete][fuel-delete-script] script:
 
 ```bash
-  % helm delete fuel-core --namespace fuel-core
+  ./fuel-core-delete.sh
 ```
 
 Then re-run the fuel-core-deploy script.
 
-[helm]: https://helm.sh/docs/intro/install/
-[docker-desktop]: https://docs.docker.com/engine/install/
-[terraform]: https://learn.hashicorp.com/tutorials/terraform/install-cli
-[kubectl-cli]: https://kubernetes.io/docs/tasks/tools/
 [aws-cli]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
-[iam-auth]: https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html
-[gettext-cli]: https://www.gnu.org/software/gettext/
-[tf-state]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/terraform/environments/aws/state.tf
-[k8s-terraform]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/terraform
-[env-file]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/.env
-[deploy-dir]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment
-[fuel-helm-chart]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/charts
 [aws-eks]: https://aws.amazon.com/eks/
-[main-tf]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/terraform/environments/aws/main.tf
-[create-k8s-sh]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/create-k8s.sh
 [create-git-token]:  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
-[secrets-yaml]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/charts/templates/secrets.yaml
+[create-k8s-sh]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/create-k8s.sh
+[delete-k8s-sh]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/delete-k8s.sh
+[docker-desktop]: https://docs.docker.com/engine/install/
+[env-file]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/.env
 [fuel-core-image]: https://github.com/fuellabs/fuel-core/pkgs/container/fuel-core
+[fuel-delete-script]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/fuel-core-delete.sh
 [fuel-deploy-script]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/fuel-core-deploy.sh
+[fuel-helm-chart]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/charts
+[gettext-cli]: https://www.gnu.org/software/gettext/
+[helm]: https://helm.sh/docs/intro/install/
+[iam-auth]: https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html
+[k8s-terraform]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/terraform
+[kubectl-cli]: https://kubernetes.io/docs/tasks/tools/
+[terraform]: https://learn.hashicorp.com/tutorials/terraform/install-cli
