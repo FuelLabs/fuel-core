@@ -51,6 +51,7 @@ mod tests {
         let config = IndexerConfig {
             fuel_node_addr: srv.bound_address,
             database_url: DATABASE_URL.to_string(),
+            listen_endpoint: "0.0.0.0:9999".parse().unwrap(),
         };
 
         let mut indexer_service = IndexerService::new(config).unwrap();

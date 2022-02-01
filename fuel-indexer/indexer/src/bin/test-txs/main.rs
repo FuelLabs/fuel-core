@@ -34,11 +34,15 @@ fn create_log_transaction(rega: u16, regb: u16) -> Transaction {
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
-    let addr: SocketAddr = "127.0.0.1:44141".parse().expect("Bad addr");
+    let args: Vec<_> = std::env::args().collect();
+    let addr: SocketAddr = args[1].parse().expect("Bad addr");
     let client = FuelClient::from(addr);
-    let _ = client.submit(&create_log_transaction(0xca, 0xba)).await;
-    let _ = client.submit(&create_log_transaction(0xfa, 0x4f)).await;
-    let _ = client.submit(&create_log_transaction(0x33, 0x11)).await;
+    let result = client.submit(&create_log_transaction(0x0a, 0xaa)).await;
+    println!("Rezulte0 {result:?}");
+    let result = client.submit(&create_log_transaction(0xfa, 0x4f)).await;
+    println!("Rezulte1 {result:?}");
+    let result = client.submit(&create_log_transaction(0x33, 0x11)).await;
+    println!("Rezulte2 {result:?}");
 
     Ok(())
 }

@@ -14,40 +14,14 @@ use fuel_indexer_schema::{
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
-//#[cfg(test)]
-//mod test_helpers {
-//    use diesel::{connection::Connection, prelude::PgConnection};
-//
-//    #[derive(Debug)]
-//    pub struct TestTransaction;
-//
-//    impl r2d2::CustomizeConnection<PgConnection, r2d2_diesel::Error> for TestTransaction {
-//        fn on_acquire(&self, conn: &mut PgConnection) -> std::result::Result<(), r2d2_diesel::Error> {
-//            conn.begin_test_transaction().unwrap();
-//            Ok(())
-//        }
-//    }
-//}
-
 #[derive(Clone)]
 pub struct DbPool(PgConnectionPool);
 
 impl DbPool {
-    //    #[cfg(not(test))]
     pub fn new(db_conn: impl Into<String>) -> IndexerResult<DbPool> {
         let manager = ConnectionManager::<PgConnection>::new(db_conn);
         Ok(DbPool(r2d2::Pool::builder().build(manager)?))
     }
-
-    //#[cfg(test)]
-    //pub fn new(db_conn: impl Into<String>) -> IndexerResult<DbPool> {
-    //    let manager = ConnectionManager::<PgConnection>::new(db_conn);
-    //    let pool = r2d2::Pool::builder()
-    //        .connection_customizer(Box::new(test_helpers::TestTransaction))
-    //        .max_size(1)
-    //        .build(manager)?;
-    //    Ok(DbPool(pool))
-    //}
 }
 
 impl Deref for DbPool {
@@ -84,7 +58,7 @@ impl SchemaManager {
         let version = schema_version(schema);
 
         if !TypeIds::schema_exists(&*connection, name, &version)? {
-            let db_schema = SchemaBuilder::new(name, &version)
+            let _db_schema = SchemaBuilder::new(name, &version)
                 .build(schema)
                 .commit_metadata(&*connection)?;
         }

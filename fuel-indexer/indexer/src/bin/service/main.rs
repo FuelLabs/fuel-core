@@ -4,6 +4,7 @@ use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{GraphQlAPI, IndexerConfig, IndexerService, Manifest};
 use std::path::PathBuf;
 use structopt::StructOpt;
+use tokio::join;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -31,7 +32,7 @@ pub async fn main() -> Result<()> {
 
     let mut config: IndexerConfig = serde_yaml::from_str(&contents)?;
 
-    let _ = if opt.local {
+    let _local_node = if opt.local {
         let s = FuelService::new_node(Config::local_node()).await.unwrap();
         config.fuel_node_addr = s.bound_address;
         Some(s)
@@ -66,11 +67,8 @@ pub async fn main() -> Result<()> {
         service.add_indexer(manifest, &schema, bytes)?;
     }
 
-    let handle = tokio::spawn(async {
-        let f = move || service.run(false);
-        f()
-    });
+    let service_handle = tokio::spawn(service.run(false));
 
-    api_handle.await?;
+    join!(api_handle, service_handle);
     Ok(())
 }

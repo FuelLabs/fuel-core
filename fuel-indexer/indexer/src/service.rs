@@ -45,9 +45,9 @@ impl IndexerService {
         wasm_bytes: impl AsRef<[u8]>,
     ) -> IndexerResult<()> {
         let name = manifest.namespace.clone();
+        let _ = self.manager.new_schema(&name, graphql_schema)?;
         let executor = IndexExecutor::new(self.database_url.clone(), manifest, wasm_bytes)?;
 
-        let _ = self.manager.new_schema(&name, graphql_schema)?;
         self.executors.insert(name.clone(), executor);
         info!("Registered indexer {}", name);
         Ok(())
@@ -59,6 +59,7 @@ impl IndexerService {
 
     pub async fn run(self, run_once: bool) {
         let mut next_cursor = None;
+        let mut next_block = 0;
 
         loop {
             debug!("Fetching paginated results from {:?}", next_cursor);
@@ -67,13 +68,18 @@ impl IndexerService {
                 .blocks(PaginationRequest {
                     cursor: next_cursor,
                     results: 5,
-                    direction: PageDirection::Forward,
+                    direction: PageDirection::Backward,
                 })
                 .await
                 .unwrap();
 
             debug!("Processing {} results", results.len());
             for block in results {
+                if block.height.0 < next_block {
+                    // TODO: sleep?
+                    continue;
+                }
+                next_block += 1;
                 for mut trans in block.transactions {
                     let receipts = trans.receipts.take();
                     let _tx = Transaction::try_from(trans).expect("Bad transaction");
