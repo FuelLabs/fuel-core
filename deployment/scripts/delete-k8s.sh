@@ -2,7 +2,7 @@
 
 echo "This script is to delete existing k8s cluster"
 
-source .env
+set -o allexport && source .env && set +o allexport 
 
 cd ../terraform/environments/${k8s_provider}
 

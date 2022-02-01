@@ -2,7 +2,7 @@
 
 echo "This script is to create a new or update existing k8s cluster"
 
-source .env
+set -o allexport && source .env && set +o allexport 
 
 cd ../terraform/environments/${k8s_provider}
 

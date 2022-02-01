@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source .env
+set -o allexport && source .env && set +o allexport 
 
 if [ "${k8s_provider}" == "eks" ]; then
     echo "Updating your kube context locally ...."
