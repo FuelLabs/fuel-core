@@ -35,11 +35,11 @@ pub async fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
     let addr: SocketAddr = args[1].parse().expect("Bad addr");
     let client = FuelClient::from(addr);
-    let result = client.submit(&create_log_transaction(0x0a, 0xaa)).await;
+    let result = client.submit(&create_log_transaction(0x0a, 0x01)).await;
     println!("Rezulte0 {result:?}");
-    let result = client.submit(&create_log_transaction(0xfa, 0x4f)).await;
+    let result = client.submit(&create_log_transaction(0xfa, 0x02)).await;
     println!("Rezulte1 {result:?}");
-    let result = client.submit(&create_log_transaction(0x33, 0x11)).await;
+    let result = client.submit(&create_log_transaction(0x0a, 0x01)).await;
     println!("Rezulte2 {result:?}");
 
     Ok(())

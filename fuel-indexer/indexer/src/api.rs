@@ -1,12 +1,29 @@
 use crate::{IndexerConfig, SchemaManager};
 use async_std::sync::{Arc, RwLock};
-use fuel_indexer_schema::db::{graphql::GraphqlQueryBuilder, tables::Schema};
+use fuel_indexer_schema::db::{graphql::{GraphqlError, GraphqlQueryBuilder}, tables::Schema};
 use log::error;
 use serde::Deserialize;
+use thiserror::Error;
 use tokio_postgres::{connect, types::Type, NoTls};
 use warp::{http::StatusCode, reply::with_status, Filter, Reply};
 
+
 const MAX_JSON_BODY: u64 = 1024 * 16;
+
+
+#[derive(Debug, Error)]
+enum APIError {
+    #[error("Postgres error {0:?}")]
+    PostgresError(#[from] tokio_postgres::Error),
+    #[error("Query builder error {0:?}")]
+    GraphqlError(#[from] GraphqlError),
+    #[error("Unexpected DB type {0:?}")]
+    UnexpectedDBType(String),
+    #[error("Unexpected JSON type {0:?}")]
+    UnexpectedJSONType(String),
+    #[error("Serde Error {0:?}")]
+    SerdeError(#[from] serde_json::Error),
+}
 
 #[derive(Clone, Deserialize)]
 struct Query {
@@ -29,11 +46,10 @@ async fn query_graph(
             Ok(response) => {
                 Ok(with_status(format!("{}", response), StatusCode::OK).into_response())
             }
-            Err(e) => Ok(with_status(
-                format!("Server Error {:?}", e),
-                StatusCode::INTERNAL_SERVER_ERROR,
-            )
-            .into_response()),
+            Err(e) => {
+                error!("Query error {e:?}");
+                Ok(with_status(format!("Internal Server Error"), StatusCode::INTERNAL_SERVER_ERROR).into_response())
+            }
         },
         Err(e) => Ok(with_status(
             format!("The graph {} was not found ({:?})", name, e),
@@ -69,12 +85,11 @@ impl GraphQlAPI {
     }
 }
 
-// TODO: proper error types for this api...
 async fn run_query(
     query: Query,
     schema: Schema,
     config: Arc<IndexerConfig>,
-) -> Result<String, tokio_postgres::Error> {
+) -> Result<String, APIError> {
     let (client, conn) = connect(&config.database_url, NoTls).await?;
     tokio::spawn(async move {
         if let Err(e) = conn.await {
@@ -82,9 +97,8 @@ async fn run_query(
         }
     });
 
-    let builder =
-        GraphqlQueryBuilder::new(&schema, &query.query).expect("Error constructing builder");
-    let query = builder.build().expect("Query builder failed");
+    let builder = GraphqlQueryBuilder::new(&schema, &query.query)?;
+    let query = builder.build()?;
 
     let queries = query.as_sql(true).join(";\n");
     let results = client.query(&queries, &[]).await?;
@@ -95,15 +109,15 @@ async fn run_query(
         let c = &row.columns()[0];
         let value = match c.type_() {
             &Type::JSON => row.get::<&str, serde_json::Value>(c.name()),
-            t => panic!("Unhandled type! {}", t),
+            t => return Err(APIError::UnexpectedDBType(format!("{t:?}"))),
         };
 
         if let serde_json::Value::Object(obj) = value {
             response.push(obj.clone());
         } else {
-            panic!("Expected an object type!");
-        };
+            return Err(APIError::UnexpectedJSONType(format!("{value:?}")));
+        }
     }
 
-    Ok(serde_json::to_string(&response).expect("Could not serialize response"))
+    Ok(serde_json::to_string(&response)?)
 }

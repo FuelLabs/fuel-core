@@ -10,6 +10,7 @@ type QueryRoot {
 type Thing1 {
     id: ID!
     account: Address!
+    count: UInt8!
 }
 
 
