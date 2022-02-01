@@ -7,6 +7,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::net::SocketAddr;
+use tokio::time::{sleep, Duration};
 
 use log::{debug, error, info, warn};
 
@@ -76,7 +77,6 @@ impl IndexerService {
             debug!("Processing {} results", results.len());
             for block in results {
                 if block.height.0 < next_block {
-                    // TODO: sleep?
                     continue;
                 }
                 next_block += 1;
@@ -133,6 +133,7 @@ impl IndexerService {
                     }
                 }
             }
+            sleep(Duration::from_secs(5)).await;
             next_cursor = cursor;
 
             if run_once {

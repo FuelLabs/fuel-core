@@ -3,7 +3,6 @@ use async_std::sync::{Arc, RwLock};
 use fuel_indexer_schema::db::{graphql::GraphqlQueryBuilder, tables::Schema};
 use log::error;
 use serde::Deserialize;
-use std::collections::HashMap;
 use tokio_postgres::{connect, types::Type, NoTls};
 use warp::{http::StatusCode, reply::with_status, Filter, Reply};
 
@@ -87,28 +86,23 @@ async fn run_query(
         GraphqlQueryBuilder::new(&schema, &query.query).expect("Error constructing builder");
     let query = builder.build().expect("Query builder failed");
 
-    let queries = query.as_sql().join(";\n");
+    let queries = query.as_sql(true).join(";\n");
     let results = client.query(&queries, &[]).await?;
 
-    // TODO: need a results formatter.
     let mut response = Vec::new();
     for row in results {
-        response.push(HashMap::<String, serde_json::Value>::from_iter(
-            row.columns()
-                .iter()
-                .map(|c| match c.type_() {
-                    &Type::INT8 => (
-                        c.name().to_string(),
-                        serde_json::Value::Number(row.get::<&str, i64>(c.name()).into()),
-                    ),
-                    &Type::VARCHAR => (
-                        c.name().to_string(),
-                        serde_json::Value::String(row.get::<&str, String>(c.name())),
-                    ),
-                    t => panic!("Unhandled type! {}", t),
-                })
-                .collect::<Vec<(String, serde_json::Value)>>(),
-        ));
+        assert_eq!(row.columns().len(), 1);
+        let c = &row.columns()[0];
+        let value = match c.type_() {
+            &Type::JSON => row.get::<&str, serde_json::Value>(c.name()),
+            t => panic!("Unhandled type! {}", t),
+        };
+
+        if let serde_json::Value::Object(obj) = value {
+            response.push(obj.clone());
+        } else {
+            panic!("Expected an object type!");
+        };
     }
 
     Ok(serde_json::to_string(&response).expect("Could not serialize response"))

@@ -2,6 +2,7 @@ use anyhow::Result;
 use async_std::{fs::File, io::ReadExt};
 use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{GraphQlAPI, IndexerConfig, IndexerService, Manifest};
+use log::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::join;
@@ -69,6 +70,8 @@ pub async fn main() -> Result<()> {
 
     let service_handle = tokio::spawn(service.run(false));
 
-    join!(api_handle, service_handle);
+    let (first, second) = join!(api_handle, service_handle);
+
+    info!("Exiting.... {first:?} {second:?}");
     Ok(())
 }

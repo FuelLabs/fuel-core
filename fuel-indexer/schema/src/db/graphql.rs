@@ -45,7 +45,7 @@ impl Filter {
         Filter { name, value }
     }
 
-    pub fn as_sql(&self) -> String {
+    pub fn as_sql(&self, _jsonify: bool) -> String {
         format!("{} = {}", self.name, self.value)
     }
 }
@@ -226,7 +226,7 @@ impl Operation {
         }
     }
 
-    pub fn as_sql(&self) -> Vec<String> {
+    pub fn as_sql(&self, jsonify: bool) -> Vec<String> {
         let Operation {
             namespace,
             selections,
@@ -259,8 +259,12 @@ impl Operation {
                 );
 
                 if !filters.is_empty() {
-                    let filter_text: String = filters.iter().map(Filter::as_sql).join(" AND ");
+                    let filter_text: String = filters.iter().map(|f| Filter::as_sql(f, jsonify)).join(" AND ");
                     query.push_str(format!(" WHERE {}", filter_text).as_str());
+                }
+
+                if jsonify {
+                    query = format!("SELECT row_to_json(x) as row from ({query}) x");
                 }
 
                 queries.push(query)
@@ -277,11 +281,11 @@ pub struct GraphqlQuery {
 }
 
 impl GraphqlQuery {
-    pub fn as_sql(&self) -> Vec<String> {
+    pub fn as_sql(&self, jsonify: bool) -> Vec<String> {
         let mut queries = Vec::new();
 
         for op in &self.operations {
-            queries.extend(op.as_sql());
+            queries.extend(op.as_sql(jsonify));
         }
 
         queries
@@ -502,7 +506,18 @@ mod tests {
         let q = query.expect("It's ok here").build();
         assert!(q.is_ok());
         let q = q.expect("It's ok");
-        let sql = q.as_sql();
+        let sql = q.as_sql(true);
+
+        assert_eq!(
+            vec![
+                "SELECT row_to_json(x) as row from (SELECT account, hash FROM test_namespace.thing2 WHERE id = 1234) x".to_string(),
+                "SELECT row_to_json(x) as row from (SELECT account, hash, id FROM test_namespace.thing2 WHERE id = 84848) x".to_string(),
+                "SELECT row_to_json(x) as row from (SELECT account FROM test_namespace.thing1 WHERE id = 4321) x".to_string(),
+            ],
+            sql
+        );
+
+        let sql = q.as_sql(false);
 
         assert_eq!(
             vec![

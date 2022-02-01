@@ -1,8 +1,6 @@
 use anyhow::Result;
-use fuel_core::service::{Config, FuelService};
 use fuel_gql_client::client::FuelClient;
 use fuel_vm::{consts::*, prelude::*};
-use fuel_wasm_executor::{IndexerConfig, IndexerService, Manifest};
 use std::net::SocketAddr;
 
 fn create_log_transaction(rega: u16, regb: u16) -> Transaction {
