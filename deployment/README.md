@@ -22,6 +22,8 @@ In order to stop and remove the fuel-core container, run at your command line:
 docker-compose down
 ```
 
+Note: Linx, Unix, and Windows operating systems are supported for docker-compose deployment option.
+
 # Fuel Client Deployment on Kubernetes (k8s)
 
 In order to deploy Fuel Client on k8s you must:
@@ -35,7 +37,7 @@ Before proceeding make sure to have these software packages installed on your ma
 
 1) [Helm][helm]: Install latest version of Helm3 for your OS
 
-2) [Terraform][terraform]: Install latest version of Terraform for your OS 
+2) [Terraform][terraform]: Install latest version of Terraform for your OS
 
 3) [kubectl][kubectl-cli]: Install latest version of kubectl
 
@@ -43,99 +45,64 @@ Before proceeding make sure to have these software packages installed on your ma
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
+5) [gettext][gettext-cli]: Install gettext for your OS
+
+Note: Currently only Linux and Unix operating systems are supported for k8s cluster creation.
+
 ## Deploying k8s Cluster
 
-Currently Fuel Core provides terraform based k8s cluster environment deployments for:
+Currently Fuel Core support terraform based k8s cluster environment deployments for:
 
 1) AWS Elastic Kubernetes Service ([EKS][aws-eks])
 
-### EKS Cluster Setup
+### k8s Cluster Configuration
 
-To begin to setup your EKS cluster, you will need to modify the [state.tf][tf-state].
+The current k8s cluster configuration is based on a single [env][env-file] file.
 
-The state.tf will store the state of your deployed EKS cluster and requires a S3 bucket to be created in your account. 
+You will need to customize the following environment variables as needed (for variables not needed - keep the defaults):
 
-Update the S3 bucket, key, and region in the state.tf.
+| ENV Variable                   |  Script Usage     | Description                                                                                       |
+| ------------------------------ |:-----------------:|:-------------------------------------------------------------------------------------------------:|
+| k8s_provider                   |  create-k8s (all) | your kubernetes provider name, possible options: eks                                              | 
+| fuel_core_image_repository     |  fuel-core-deploy | fuel-core ghcr image registry URI                                                                 |   
+| fuel_core_image_tag            |  fuel-core-deploy | fuel-core ghcr image tag                                                                          | 
+| base64_github_auth_token       |  fuel-core-deploy | base64 encoded github auth token to pull the fuel-core ghcr image (more info below)               |
+| TF_VAR_environment             |  create-k8s (all) | environment name                                                                                  |
+| TF_VAR_region                  |  create-k8s (aws) | AWS region where you plan to deploy your EKS cluster e.g. us-east-1                               |
+| TF_VAR_account_id              |  create-k8s (aws) | AWS account id                                                                                    |
+| TF_state_bucket                |  create-k8s (aws) | the s3 bucket to store the deployed terraform state                                               |
+| TF_state_bucket_key            |  create-k8s (aws) | the s3 key to save the deployed terraform state.tf                                                |
+| TF_VAR_vpc_cidr_block          |  create-k8s (aws) | AWS vpc cidr block                                                                                |
+| TF_VAR_azs                     |  create-k8s (aws) | A list of regional availability zones for the AWS vpc subnets                                     |
+| TF_VAR_public_subnets          |  create-k8s (aws) | A list of cidr blocks for AWS public subnets                                                      |
+| TF_VAR_private_subnets         |  create-k8s (aws) | A list of cidr blocks for AWS private subnets                                                     | 
+| TF_VAR_eks_cluster_name        |  create-k8s (aws) | EKS cluster name                                                                                  |
+| TF_VAR_eks_cluster_version     |  create-k8s (aws) | EKS cluster version, possible options: 1.18.16, 1.19.8, 1.20.7, 1.21.2                            |
+| TF_VAR_eks_node_groupname      |  create-k8s (aws) | EKS worker node group name                                                                        |
+| TF_VAR_eks_node_ami_type       |  create-k8s (aws) | EKS worker node group AMI type, possible options: AL2_x86_64, AL2_x86_64_GPU, AL2_ARM_64, CUSTOM  | 
+| TF_VAR_eks_node_disk_size      |  create-k8s (aws) | disk size (GiB) for EKS worker nodes                                                              |
+| TF_VAR_eks_node_instance_types |  create-k8s (aws) | A list of instance type for EKS worker nodes                                                      |
+| TF_VAR_eks_node_min_size       |  create-k8s (aws) | minimum number of eks worker nodes                                                                |
+| TF_VAR_eks_node_desired_size   |  create-k8s (aws) | desired number of eks worker nodes                                                                |
+| TF_VAR_eks_node_max_size       |  create-k8s (aws) | maximum number of eks worker nodes                                                                |
+| TF_VAR_eks_capacity_type       |  create-k8s (aws) | type of capacity associated with the eks node group, possible options: ON_DEMAND, SPOT            |
+| TF_VAR_ec2_ssh_key             |  create-k8s (aws) | EC2 key Pair name for ssh access (must create this key pair in your AWS account before)           |
 
-Next you will need modify [main.tf][main-tf] with your inputs for:
 
-- environment: You can input any environment name 
+Notes:
 
-- region: The region where you plan to deploy your EKS Cluster to
+- create-k8s refers to the [create-k8s.sh][create-k8s-sh] script
 
-- account_id: Your AWS Account ID 
+- fuel-core-deploy refers to [fuel-core-deploy][fuel-deploy-script] script
 
-- vpc_cidr_block: Your VPC CIDR Block
+- for 'base64_github_auth_token' environment variable:
 
-- azs: A list of regional availability zones for your VPC's subnets
+First create a [github access token][create-git-token] and make sure to select "read:packages" to pull the [fuel-core image][fuel-core-image].
 
-- public_subnets: A list of CIDR Blocks for your public subnets
-
-- private_subnets: A list of CIDR Blocks for your private subnets
-
-- eks-cluster-name: Your EKS Cluster Name
-
-- eks-cluster-version: The EKS Cluster Version
-  
-  Options: 1.18.16 | 1.19.8 | 1.20.7 | 1.21.2
-
-- eks-node-groupname: Your EKS Worker Node Group name
-
-- eks-node-ami-type: The EKS Worker Node Group AMI Type 
-
-  Options: AL2_x86_64 | AL2_x86_64_GPU | AL2_ARM_64 | CUSTOM 
-
-- eks-node-disk-size: Disk size in GiB for EKS Worker Nodes
-
-- eks-node-instance-types: A list of instance type for EKS Worker Nodes
-
-- eks-node-min-size: Minimum number of EKS Worker Nodes
-
-- eks-node-desired-size: Desired number of EKS Worker Nodes
-
-- eks-node-max-size: Maximum Number of EKS Worker Nodes
-
-- eks-capacity-type: Type of capacity associated with the EKS Node Group
-Options: ON_DEMAND | SPOT
-
-- ec2-ssh-key: EC2 Key Pair name for SSH Access - You must create this key pair in
-your account prior cluster creation
-
-Once your main.tf is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh]:
-
-```bash
-./create-k8s.sh
-```
-The script will prompt you for your cloud provider, type in 'aws'
-
-```bash
-Please input your cloud provider - options include: aws ....
-aws
-```
-When terraform proposes the infrastructure updates to be deployed, type "yes" to deploy the changes:
-
-```bash
-Do you want to perform these actions?
-  Terraform will perform the actions described above.
-  Only 'yes' will be accepted to approve.
-
-  Enter a value: yes
-```
-
-Terraform will deploy your VPC network (subnets, route tables, internet & nat gateways) as well as the EKS cluster and node groups.
-
-## Deploying Fuel Client on k8s
-
-Now that your k8s cluster is setup you can deploy the fuel-core helm chart.
-
-First you need to update the [secrets.yaml][secrets-yaml] with your personal github access token.
-
-Create a [github access token][create-git-token] and make sure to select "read:packages" to pull the [fuel-core image][fuel-core-image].
-
-You need to first Base64 encode "git-username:git-auth-token" string in secrets.yaml: 
+You need to first Base64 encode "git-username:git-auth-token" string: 
 
 ```
-  .dockerconfigjson: {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
+  {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
 ```
 
 At your command line, run (make sure to substitute your github username and personal access token here):
@@ -145,29 +112,33 @@ At your command line, run (make sure to substitute your github username and pers
 ```
 Take the string output and insert back into the original place of "git-username:git-auth-token" in the auths json string.
 
-Now Base64 encode the {"auths": ...} json string, by running at your command line:
+Now base64 encode the {"auths": ...} json string, by running at your command line:
 
 ```
   echo -n  '{"auths":{"ghcr.io":{"auth":"<your-first-base64-output>"}}}' | base64
 ```
 
-Finally take this string output and insert in the secrets.yaml:
+This final encoded value is your 'base64_github_auth_token' environment variable
 
+
+### k8s Cluster Deployment
+
+Once your env file is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh] to create your k8s cluster on your cloud provider:
+
+```bash
+./create-k8s.sh
 ```
-  .dockerconfigjson: <base64-final-output>
-```
+The script will read your "k8s_provider" from the env file and then terraform will start deploy your k8s cluster automatically to your specified cloud provider.
 
-Save your secrets.yaml.
+## Deploying Fuel Client on k8s
 
-Now deploy the [fuel-core-deploy][fuel-deploy-script]. 
+Now that your k8s cluster is setup - you can deploy the fuel-core helm chart via the [fuel-core-deploy][fuel-deploy-script]. 
 
 ```bash
   ./fuel-core-deploy.sh
 ```
 
-You will be prompted to enter your cloud provider and cluster name and then helm will install the fuel-core helm chart.
-
-To check that the helm chart is succesful, run the following at your command line:
+To check that the helm chart is successful, run the following at your command line:
 
 ```bash
   % helm list
@@ -209,8 +180,10 @@ Then re-run the fuel-core-deploy script.
 [kubectl-cli]: https://kubernetes.io/docs/tasks/tools/
 [aws-cli]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 [iam-auth]: https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html
+[gettext-cli]: https://www.gnu.org/software/gettext/
 [tf-state]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/terraform/environments/aws/state.tf
 [k8s-terraform]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/terraform
+[env-file]: https://github.com/FuelLabs/fuel-core/blob/roy-fuel-eks-helm-charts/deployment/scripts/.env
 [deploy-dir]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment
 [fuel-helm-chart]: https://github.com/FuelLabs/fuel-core/tree/roy-fuel-eks-helm-charts/deployment/charts
 [aws-eks]: https://aws.amazon.com/eks/
