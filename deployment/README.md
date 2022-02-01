@@ -43,7 +43,7 @@ Before proceeding make sure to have these software packages installed on your ma
 
 4) [gettext][gettext-cli]: Install gettext for your OS
 
-4) AWS (for eks only):
+4) AWS (for EKS only):
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
 
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
@@ -114,7 +114,7 @@ The current k8s cluster configuration is based on a single [env][env-file] file.
 You will need to customize the following environment variables as needed (for variables not needed - keep the defaults):
 
 | ENV Variable                   |  Script Usage     | Description                                                                                       |
-|:------------------------------:|:-----------------:|:-------------------------------------------------------------------------------------------------:|
+|--------------------------------|-------------------|---------------------------------------------------------------------------------------------------|
 | k8s_provider                   |  create-k8s (all) | your kubernetes provider name, possible options: eks                                              | 
 | fuel_core_image_repository     |  fuel-core-deploy | fuel-core ghcr image registry URI                                                                 |   
 | fuel_core_image_tag            |  fuel-core-deploy | fuel-core ghcr image tag                                                                          | 
