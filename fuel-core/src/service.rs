@@ -15,7 +15,7 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
-use strum_macros::{Display, EnumString};
+use strum_macros::{Display, EnumString, EnumVariantNames};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
@@ -27,6 +27,7 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
+    pub vm: VMConfig,
 }
 
 impl Config {
@@ -36,11 +37,18 @@ impl Config {
             database_path: Default::default(),
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
+            vm: Default::default(),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, EnumString, Display)]
+#[derive(Clone, Debug, Default)]
+pub struct VMConfig {
+    pub backtrace: bool,
+}
+
+#[derive(Clone, Debug, Display, PartialEq, EnumString, EnumVariantNames)]
+#[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,
     RocksDb,
