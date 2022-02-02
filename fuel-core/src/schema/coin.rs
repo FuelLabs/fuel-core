@@ -1,4 +1,4 @@
-use crate::coin_lookup::{random_improve, SpendQueryElement};
+use crate::coin_query::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{HexString256, U64};
