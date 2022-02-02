@@ -1,0 +1,26 @@
+[package]
+name = "fuel-core-interfaces"
+version = "0.2.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Fuel core interfaces"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+fuel-asm = "0.1"
+fuel-storage = "0.1"
+fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-types = { version = "0.1", features = ["serde-types"] }
+fuel-vm = "0.2"
+futures = "0.3"
+parking_lot = "0.11"
+thiserror = "1.0"
+tokio = { version = "1.14", features = ["full"] }
+lazy_static = "1.4"
+
+[dev-dependencies]
+
+[features]
+test_helpers = []

@@ -1,0 +1,23 @@
+[package]
+name = "fuel-txpool"
+version = "0.2.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Transaction pool"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.2.1" }
+fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-types = { version = "0.1", features = ["serde-types"] }
+futures = "0.3"
+parking_lot = "0.11"
+thiserror = "1.0"
+tokio = { version = "1.14", default-features = false, features = ["sync"] }
+
+[dev-dependencies]
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.2.1", features = [
+    "test_helpers",
+] }

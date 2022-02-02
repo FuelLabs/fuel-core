@@ -1,12 +1,16 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::Executor;
 use crate::model::fuel_block::FuelBlock;
+use crate::service::Config;
 use chrono::{DateTime, Utc};
+use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
+use fuel_txpool::{Config as TxPoolConfig, TxPoolService};
 use fuel_vm::prelude::{ProgramState, Transaction};
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
+use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,24 +51,36 @@ impl From<crate::state::Error> for Error {
     }
 }
 
+impl TxPoolDb for Database {}
+
 /// Holds submitted transactions and attempts to propose blocks
 pub struct TxPool {
     executor: Executor,
     db: Database,
+    fuel_txpool: Box<dyn TxPoolTrait>,
 }
 
 impl TxPool {
+    pub fn pool(&self) -> &dyn TxPoolTrait {
+        self.fuel_txpool.as_ref()
+    }
+
     pub fn new(database: Database) -> Self {
         let executor = Executor {
             database: database.clone(),
         };
+        let config = Arc::new(TxPoolConfig::default());
         TxPool {
             executor,
-            db: database,
+            db: database.clone(),
+            fuel_txpool: Box::new(TxPoolService::new(
+                Box::new(database) as Box<dyn TxPoolDb>,
+                config,
+            )),
         }
     }
 
-    pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+    pub async fn submit_tx(&self, tx: Transaction, config: &Config) -> Result<Bytes32, Error> {
         let tx_id = tx.id();
         // persist transaction to database
         let mut db = self.db.clone();
@@ -82,14 +98,14 @@ impl TxPool {
         };
         // immediately execute block
         self.executor
-            .execute(&block)
+            .execute(&block, &config.vm)
             .await
             .map_err(Error::Execution)?;
         Ok(tx_id)
     }
 
-    pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
-        let id = self.submit_tx(tx).await?;
+    pub async fn run_tx(&self, tx: Transaction, config: &Config) -> Result<Vec<Receipt>, Error> {
+        let id = self.submit_tx(tx, config).await?;
         // note: we'll need to await tx completion once it's not instantaneous
         let db = &self.db;
         let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &id)?.unwrap_or_default();

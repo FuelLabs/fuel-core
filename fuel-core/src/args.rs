@@ -1,6 +1,7 @@
-use crate::service::{Config, DbType};
+use crate::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf, string::ToString};
 use structopt::StructOpt;
+use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
 lazy_static::lazy_static! {
@@ -23,12 +24,16 @@ pub struct Opt {
     )]
     pub database_path: PathBuf,
 
-    #[structopt(long = "db-type", default_value = "RocksDb")]
+    #[structopt(long = "db-type", default_value = "rocks-db", possible_values = &DbType::VARIANTS, case_insensitive = true)]
     pub database_type: DbType,
 
     /// Specify either an alias to a built-in configuration or filepath to a JSON file.
     #[structopt(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
+
+    /// Specify if backtraces are going to be traced in logs (Default false)
+    #[structopt(long = "vm-backtrace")]
+    pub vm_backtrace: bool,
 }
 
 impl Opt {
@@ -49,6 +54,7 @@ impl Opt {
             database_path,
             database_type,
             chain_config,
+            vm_backtrace,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -58,6 +64,9 @@ impl Opt {
             database_path,
             database_type,
             chain_conf: chain_config.as_str().parse()?,
+            vm: VMConfig {
+                backtrace: vm_backtrace,
+            },
         })
     }
 }
