@@ -29,6 +29,7 @@ enum APIError {
 #[derive(Clone, Deserialize)]
 struct Query {
     query: String,
+    #[allow(unused)] // TODO
     params: String,
 }
 

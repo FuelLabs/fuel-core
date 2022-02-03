@@ -1,8 +1,8 @@
 ---
 source: fuel-indexer/schema/src/lib.rs
-assertion_line: 192
-expression: uint8.query_fragment()
+assertion_line: 220
+expression: uint4.query_fragment()
 
 ---
-"8680820740569200760"
+"2021161080"
 

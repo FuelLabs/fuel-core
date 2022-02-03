@@ -316,7 +316,7 @@ mod tests {
     const CREATE_THING1: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing1 (\n",
-        " id bigint not null,\n",
+        " id bigint primary key not null,\n",
         "account varchar(64) not null,\n",
         "object bytea not null",
         "\n)"
@@ -324,7 +324,7 @@ mod tests {
     const CREATE_THING2: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing2 (\n",
-        " id bigint not null,\n",
+        " id bigint primary key not null,\n",
         "account varchar(64) not null,\n",
         "hash varchar(64) not null,\n",
         "object bytea not null\n",
