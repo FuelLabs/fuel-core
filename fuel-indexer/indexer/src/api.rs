@@ -45,12 +45,11 @@ async fn query_graph(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     match manager.read().await.load_schema(&name) {
         Ok(schema) => match run_query(query, schema, config).await {
-            Ok(response) => {
-                Ok(with_status(response, StatusCode::OK).into_response())
-            }
+            Ok(response) => Ok(with_status(response, StatusCode::OK).into_response()),
             Err(e) => {
                 error!("Query error {e:?}");
-                Ok(with_status("Internal Server Error".to_string(),
+                Ok(with_status(
+                    "Internal Server Error".to_string(),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
                 .into_response())
