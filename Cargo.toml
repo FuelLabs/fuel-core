@@ -4,10 +4,12 @@ resolver = "2"
 members = [
   "fuel-client",
   "fuel-core",
+  "fuel-core-interfaces",
   "fuel-indexer/derive",
   "fuel-indexer/indexer",
   "fuel-indexer/lib",
   "fuel-indexer/schema",
+  "fuel-txpool",
   "xtask",
 ]
 

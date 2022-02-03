@@ -84,6 +84,8 @@ jobs:
           cargo install toml-cli
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
 
       - name: Publish crate
         uses: katyo/publish-crates@v1
@@ -155,6 +157,8 @@ jobs:
         with:
           images: |
             ghcr.io/fuellabs/fuel-core
+          tags: |
+            type=semver,pattern={{raw}}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -172,7 +176,7 @@ jobs:
           context: .
           file: deployment/Dockerfile
           push: true
-          tags: ${{ github.ref_name }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

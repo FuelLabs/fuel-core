@@ -400,19 +400,23 @@ checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
 name = "axum"
-version = "0.2.8"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f08f95a202e827209db1491047aa57c18c8adb4c5efcfcfd4a2da4838ee3a72"
+checksum = "310a147401c66e79fc78636e4db63ac68cd6acb9ece056de806ea173a15bce32"
 dependencies = [
  "async-trait",
+ "axum-core",
  "bitflags",
  "bytes 1.1.0",
  "futures-util",
  "http",
  "http-body",
  "hyper",
+ "matchit",
+ "memchr",
+ "mime",
+ "percent-encoding",
  "pin-project-lite",
- "regex",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -1503,18 +1507,21 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-graphql",
- "axum 0.2.8",
+ "async-trait",
+ "axum",
  "bincode",
  "chrono",
  "derive_more",
  "dirs 3.0.2",
  "env_logger",
  "fuel-asm",
+ "fuel-core-interfaces",
  "fuel-storage",
- "fuel-tx 0.2.1",
+ "fuel-tx 0.2.0",
+ "fuel-txpool",
  "fuel-types",
  "fuel-vm",
  "futures",
@@ -1584,8 +1591,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-interfaces"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-asm",
+ "fuel-storage",
+ "fuel-tx 0.2.0",
+ "fuel-types",
+ "fuel-vm 0.2.0",
+ "futures",
+ "lazy_static",
+ "parking_lot",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-gql-client"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "chrono",
  "cynic",
@@ -1762,6 +1787,21 @@ dependencies = [
  "rand 0.8.4",
  "serde",
  "sha2 0.9.9",
+]
+
+[[package]]
+name = "fuel-txpool"
+version = "0.2.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-interfaces",
+ "fuel-tx 0.2.0",
+ "fuel-types",
+ "futures",
+ "parking_lot",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -4754,6 +4794,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "tokio-macros",
@@ -4871,16 +4912,18 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
-version = "0.1.3"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81eca72647e58054bbfa41e6f297c23436f1c60aff6e5eb38455a0f9ca420bb5"
+checksum = "03650267ad175b51c47d02ed9547fc7d4ba2c7e5cb76df0bed67edd1825ae297"
 dependencies = [
+ "bitflags",
  "bytes 1.1.0",
  "futures-core",
  "futures-util",
  "http",
  "http-body",
- "pin-project",
+ "http-range-header",
+ "pin-project-lite",
  "tower-layer",
  "tower-service",
 ]
