@@ -38,11 +38,13 @@ jobs:
     - uses: Swatinem/rust-cache@v1
 
     - name: Install rustfmt
-      run: rustup component add rustfmt
+      run: rustup #component #add rustfmt
 
     - name: Check formatting
       uses: actions-rs/cargo@v1
       with:
+        command: fmt
+        args: --all --verbose -- --check
 
     - name: Check build
       uses: actions-rs/cargo@v1
