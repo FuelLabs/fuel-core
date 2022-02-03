@@ -65,7 +65,7 @@ jobs:
         args: --verbose --all-targets
     
     - uses: ravsamhq/notify-slack-action@v1
-      if: github.ref == 'refs/heads/roy/notify-ci-failures'
+      if: always()
       with:
         status: ${{ job.status }}
         token: ${{ secrets.GITHUB_TOKEN }}
