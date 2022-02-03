@@ -94,17 +94,25 @@ impl Database {
         })
     }
 
-    fn upsert_query(&self, table: &str, inserts: Vec<String>) -> String {
+    fn upsert_query(
+        &self,
+        table: &str,
+        columns: &Vec<String>,
+        inserts: Vec<String>,
+        updates: Vec<String>,
+    ) -> String {
         format!(
             "INSERT INTO {}.{}
                 ({})
              VALUES
                 ({}, $1)
-             ON CONFLICT DO NOTHING",
+             ON CONFLICT(id)
+             DO UPDATE SET {}",
             self.namespace,
             table,
-            self.schema[table].join(", "),
-            inserts.join(", ")
+            columns.join(", "),
+            inserts.join(", "),
+            updates.join(", "),
         )
     }
 
@@ -120,8 +128,19 @@ impl Database {
 
         let table = &self.tables[&type_id];
         let inserts: Vec<_> = columns.iter().map(|col| col.query_fragment()).collect();
+        let updates: Vec<_> = self.schema[table]
+            .iter()
+            .zip(columns.iter())
+            .filter_map(|(colname, value)| {
+                if colname == "id" {
+                    None
+                } else {
+                    Some(format!("{} = {}", colname, value.query_fragment()))
+                }
+            })
+            .collect();
 
-        let query_text = self.upsert_query(table, inserts);
+        let query_text = self.upsert_query(table, &self.schema[table], inserts, updates);
 
         let query = sql_query(&query_text).bind::<Binary, _>(bytes);
 

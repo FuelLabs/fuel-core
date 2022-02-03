@@ -65,10 +65,10 @@ pub async fn main() -> Result<()> {
         let mut file = File::open(&path).await?;
         let mut bytes = Vec::<u8>::new();
         file.read_to_end(&mut bytes).await?;
-        service.add_indexer(manifest, &schema, bytes)?;
+        service.add_indexer(manifest, &schema, bytes, false)?;
     }
 
-    let service_handle = tokio::spawn(service.run(false));
+    let service_handle = tokio::spawn(service.run());
 
     let (first, second) = join!(api_handle, service_handle);
 

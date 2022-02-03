@@ -1,15 +1,16 @@
 use crate::{IndexerConfig, SchemaManager};
 use async_std::sync::{Arc, RwLock};
-use fuel_indexer_schema::db::{graphql::{GraphqlError, GraphqlQueryBuilder}, tables::Schema};
+use fuel_indexer_schema::db::{
+    graphql::{GraphqlError, GraphqlQueryBuilder},
+    tables::Schema,
+};
 use log::error;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio_postgres::{connect, types::Type, NoTls};
 use warp::{http::StatusCode, reply::with_status, Filter, Reply};
 
-
 const MAX_JSON_BODY: u64 = 1024 * 16;
-
 
 #[derive(Debug, Error)]
 enum APIError {
@@ -48,7 +49,11 @@ async fn query_graph(
             }
             Err(e) => {
                 error!("Query error {e:?}");
-                Ok(with_status(format!("Internal Server Error"), StatusCode::INTERNAL_SERVER_ERROR).into_response())
+                Ok(with_status(
+                    format!("Internal Server Error"),
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                )
+                .into_response())
             }
         },
         Err(e) => Ok(with_status(

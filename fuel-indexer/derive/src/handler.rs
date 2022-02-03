@@ -22,27 +22,6 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
     let mut sig: Punctuated<FnArg, Token![,]> = parse_quote! { blobs: *mut *mut u8, lens: *mut usize, len: usize };
     std::mem::swap(&mut sig, &mut item_fn.sig.inputs);
 
-    // TODO: need to work out some abi stuff.... (struct FixedString<const N: usize>(String) and FixedAray type???)
-    //let num_args = sig.len();
-    //let mut param_types = Vec::new();
-    //for item in sig.iter() {
-    //    match item {
-    //        FnArg::Typed(PatType { ty, .. }) => {
-    //            param_types.push(quote! { <#ty as Tokenizable>::param_type() });
-    //        }
-    //        FnArg::Receiver(_) => {
-    //            proc_macro_error::abort_call_site!("'self' in function signature not allowed here")
-    //        }
-    //    }
-    //}
-    // and then... something like this.
-    //let bytes = unsafe { Vec::from_raw_parts(bytes, len, len) };
-    //let mut tokens = decoder.decode(&[#( #param_types, )*], &bytes).expect("Failed to decode tokens");
-    //if #num_args != tokens.len() {
-    //    panic!("Handler called with invalid args! Required {:?} != Input {:?}", #num_args, tokens.len());
-    //}
-    //let stmts: Vec<_> = tokens.into_iter().zip(param_types.into_iter()).map(|tok, ty| quote! { let #name = <#ty as Tokenizable>::from_token(#tok) }).collect();
-
     let mut block: Block = parse_quote! {
         {
             use fuel_indexer::types::*;

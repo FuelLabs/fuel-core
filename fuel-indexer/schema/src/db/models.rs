@@ -137,7 +137,7 @@ impl NewColumn {
 
     fn sql_type(&self) -> &str {
         match self.column_type {
-            ColumnType::ID => "bigint",
+            ColumnType::ID => "bigint primary key",
             ColumnType::Address => "varchar(64)",
             ColumnType::Bytes4 => "varchar(8)",
             ColumnType::Bytes8 => "varchar(16)",

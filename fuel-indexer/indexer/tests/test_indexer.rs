@@ -58,9 +58,9 @@ mod tests {
 
         let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad yaml file");
         indexer_service
-            .add_indexer(manifest, GRAPHQL_SCHEMA, WASM_BYTES)
+            .add_indexer(manifest, GRAPHQL_SCHEMA, WASM_BYTES, true)
             .expect("Failed to initialize indexer");
 
-        indexer_service.run(true).await;
+        indexer_service.run().await;
     }
 }
