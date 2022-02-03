@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - roy/notify-ci-failures
   pull_request:
   release:
     types: [published]
@@ -38,7 +37,7 @@ jobs:
     - uses: Swatinem/rust-cache@v1
 
     - name: Install rustfmt
-      run: rustup #component #add rustfmt
+      run: rustup component add rustfmt
 
     - name: Check formatting
       uses: actions-rs/cargo@v1
