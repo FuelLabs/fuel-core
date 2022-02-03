@@ -60,7 +60,7 @@ impl IndexerService {
         run_once: bool,
     ) -> IndexerResult<()> {
         let name = manifest.namespace.clone();
-        let start_block = manifest.start_block.clone();
+        let start_block = manifest.start_block;
         let _ = self.manager.new_schema(&name, graphql_schema)?;
         let executor = IndexExecutor::new(self.database_url.clone(), manifest, wasm_bytes)?;
 

@@ -180,7 +180,7 @@ impl SchemaBuilder {
     }
 
     fn generate_table_sql<'a>(&mut self, root: &str, typ: &TypeDefinition<'a, String>) {
-        fn map_fields<'a>(fields: &[Field<'a, String>]) -> HashMap<String, String> {
+        fn map_fields(fields: &[Field<'_, String>]) -> HashMap<String, String> {
             fields
                 .iter()
                 .map(|f| (f.name.to_string(), f.field_type.to_string()))

@@ -97,7 +97,7 @@ impl Database {
     fn upsert_query(
         &self,
         table: &str,
-        columns: &Vec<String>,
+        columns: &[String],
         inserts: Vec<String>,
         updates: Vec<String>,
     ) -> String {
