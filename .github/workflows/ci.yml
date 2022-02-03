@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - roy/notify-ci-failures
   pull_request:
   release:
     types: [published]
@@ -43,7 +44,7 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: fmt
-        args: --all --verbose -- --check
+        args: --all
 
     - name: Check build
       uses: actions-rs/cargo@v1
@@ -62,6 +63,18 @@ jobs:
       with:
         command: test
         args: --verbose --all-targets
+    
+    - uses: ravsamhq/notify-slack-action@v1
+      if: github.ref == 'refs/heads/roy/notify-ci-failures'
+      with:
+        status: ${{ job.status }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        notification_title: '{workflow} has {status_message}'
+        message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+        footer: ''
+        notify_when: 'failure'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
   publish:
     # Only do this job if publishing a release
