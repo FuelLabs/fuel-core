@@ -1,10 +1,12 @@
 use crate::{
-    db::models::{GraphRoot, RootColumns, NewRootColumns, NewGraphRoot, Columns, NewColumn, TypeIds},
+    db::models::{
+        Columns, GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, RootColumns, TypeIds,
+    },
     sql_types::ColumnType,
     type_id,
 };
-use diesel::{Connection, RunQueryDsl, prelude::PgConnection, sql_query};
 use diesel::result::QueryResult;
+use diesel::{prelude::PgConnection, sql_query, Connection, RunQueryDsl};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefinition};
 use std::collections::{HashMap, HashSet};
@@ -92,18 +94,20 @@ impl SchemaBuilder {
                 schema_name: namespace.clone(),
                 query: query.clone(),
                 schema,
-            }.insert(conn)?;
+            }
+            .insert(conn)?;
 
             let latest = GraphRoot::get_latest(conn, &namespace)?;
 
             let fields = query_fields.get(&query).expect("No query root!");
 
-            for (key,val) in fields {
+            for (key, val) in fields {
                 NewRootColumns {
                     root_id: latest.id,
                     column_name: key.to_string(),
                     graphql_type: val.to_string(),
-                }.insert(conn)?;
+                }
+                .insert(conn)?;
             }
 
             for query in statements.iter() {
@@ -125,7 +129,7 @@ impl SchemaBuilder {
             namespace,
             query,
             types,
-            fields
+            fields,
         })
     }
 
@@ -177,15 +181,20 @@ impl SchemaBuilder {
 
     fn generate_table_sql<'a>(&mut self, root: &str, typ: &TypeDefinition<'a, String>) {
         fn map_fields<'a>(fields: &[Field<'a, String>]) -> HashMap<String, String> {
-            fields.iter().map(|f| (f.name.to_string(), f.field_type.to_string())).collect()
+            fields
+                .iter()
+                .map(|f| (f.name.to_string(), f.field_type.to_string()))
+                .collect()
         }
         match typ {
             TypeDefinition::Object(o) => {
                 self.types.insert(o.name.to_string());
-                self.fields.insert(o.name.to_string(), map_fields(&o.fields));
+                self.fields
+                    .insert(o.name.to_string(), map_fields(&o.fields));
 
                 if o.name == root {
-                    self.query_fields.insert(root.to_string(), map_fields(&o.fields));
+                    self.query_fields
+                        .insert(root.to_string(), map_fields(&o.fields));
                     return;
                 }
 
@@ -235,12 +244,24 @@ impl Schema {
         let mut fields = HashMap::new();
 
         types.insert(root.query.clone());
-        fields.insert(root.query.clone(), root_cols.into_iter().map(|c| (c.column_name, c.graphql_type)).collect());
+        fields.insert(
+            root.query.clone(),
+            root_cols
+                .into_iter()
+                .map(|c| (c.column_name, c.graphql_type))
+                .collect(),
+        );
         for tid in typeids {
             types.insert(tid.graphql_name.clone());
 
             let columns = Columns::list_by_id(conn, tid.id)?;
-            fields.insert(tid.graphql_name, columns.into_iter().map(|c| (c.column_name, c.graphql_type)).collect());
+            fields.insert(
+                tid.graphql_name,
+                columns
+                    .into_iter()
+                    .map(|c| (c.column_name, c.graphql_type))
+                    .collect(),
+            );
         }
 
         Ok(Schema {
@@ -314,9 +335,7 @@ mod tests {
     fn test_schema_builder() {
         let sb = SchemaBuilder::new("test_namespace", "a_version_string");
 
-        let SchemaBuilder {
-            statements, ..
-        } = sb.build(GRAPHQL_SCHEMA);
+        let SchemaBuilder { statements, .. } = sb.build(GRAPHQL_SCHEMA);
 
         assert_eq!(statements[0], CREATE_SCHEMA);
         assert_eq!(statements[1], CREATE_THING1);

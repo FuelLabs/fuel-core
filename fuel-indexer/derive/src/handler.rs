@@ -19,7 +19,8 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
         item_fn.attrs.push(no_mangle);
     };
 
-    let mut sig: Punctuated<FnArg, Token![,]> = parse_quote! { blobs: *mut *mut u8, lens: *mut usize, len: usize };
+    let mut sig: Punctuated<FnArg, Token![,]> =
+        parse_quote! { blobs: *mut *mut u8, lens: *mut usize, len: usize };
     std::mem::swap(&mut sig, &mut item_fn.sig.inputs);
 
     let mut block: Block = parse_quote! {
@@ -34,7 +35,7 @@ pub fn process_handler_attr(attrs: TokenStream, item: TokenStream) -> TokenStrea
 
     let mut byteses: Vec<_> = parse_quote! {};
     let mut decoded: Vec<_> = parse_quote! {};
-    for (idx,item) in sig.iter().enumerate() {
+    for (idx, item) in sig.iter().enumerate() {
         match item {
             FnArg::Typed(PatType { pat, ty, .. }) => {
                 let bytes: Vec<_> = parse_quote! {

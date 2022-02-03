@@ -1,8 +1,8 @@
+use crate::db::tables::Schema;
 use graphql_parser::query as gql;
 use itertools::Itertools;
 use std::collections::HashMap;
 use thiserror::Error;
-use crate::db::tables::Schema;
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
@@ -259,7 +259,10 @@ impl Operation {
                 );
 
                 if !filters.is_empty() {
-                    let filter_text: String = filters.iter().map(|f| Filter::as_sql(f, jsonify)).join(" AND ");
+                    let filter_text: String = filters
+                        .iter()
+                        .map(|f| Filter::as_sql(f, jsonify))
+                        .join(" AND ");
                     query.push_str(format!(" WHERE {}", filter_text).as_str());
                 }
 
@@ -429,8 +432,8 @@ impl<'a> GraphqlQueryBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::iter::FromIterator;
     use std::collections::HashSet;
+    use std::iter::FromIterator;
 
     fn generate_schema() -> Schema {
         let t = ["Address", "Bytes32", "ID", "Thing1", "Thing2"]

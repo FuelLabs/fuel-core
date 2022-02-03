@@ -5,7 +5,6 @@ use diesel::prelude::*;
 use diesel::{result::QueryResult, sql_types::*};
 use gr::{columns, graph_root, root_columns, type_ids};
 
-
 #[derive(Insertable, Queryable, QueryableByName)]
 #[table_name = "root_columns"]
 #[allow(unused)]
@@ -68,7 +67,10 @@ pub struct GraphRoot {
 impl GraphRoot {
     pub fn get_latest(conn: &PgConnection, name: &str) -> QueryResult<GraphRoot> {
         use gr::graph_root::dsl::*;
-        graph_root.filter(schema_name.eq(name)).order_by(id.desc()).first(conn)
+        graph_root
+            .filter(schema_name.eq(name))
+            .order_by(id.desc())
+            .first(conn)
     }
 }
 
@@ -84,9 +86,15 @@ pub struct TypeIds {
 }
 
 impl TypeIds {
-    pub fn list_by_name(conn: &PgConnection, name: &str, version: &str) -> QueryResult<Vec<TypeIds>> {
+    pub fn list_by_name(
+        conn: &PgConnection,
+        name: &str,
+        version: &str,
+    ) -> QueryResult<Vec<TypeIds>> {
         use gr::type_ids::dsl::*;
-        type_ids.filter(schema_name.eq(name).and(schema_version.eq(version))).load(conn)
+        type_ids
+            .filter(schema_name.eq(name).and(schema_version.eq(version)))
+            .load(conn)
     }
 
     pub fn insert(&self, conn: &PgConnection) -> QueryResult<usize> {

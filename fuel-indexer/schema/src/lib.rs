@@ -5,15 +5,15 @@ extern crate diesel;
 extern crate alloc;
 use alloc::vec::Vec;
 
+use crate::sql_types::ColumnType;
 use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
-use crate::sql_types::ColumnType;
 
-pub const LOG_LEVEL_ERROR: u32  = 0;
-pub const LOG_LEVEL_WARN: u32  = 1;
-pub const LOG_LEVEL_INFO: u32  = 2;
-pub const LOG_LEVEL_DEBUG: u32  = 3;
-pub const LOG_LEVEL_TRACE: u32  = 4;
+pub const LOG_LEVEL_ERROR: u32 = 0;
+pub const LOG_LEVEL_WARN: u32 = 1;
+pub const LOG_LEVEL_INFO: u32 = 2;
+pub const LOG_LEVEL_DEBUG: u32 = 3;
+pub const LOG_LEVEL_TRACE: u32 = 4;
 
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
@@ -111,23 +111,28 @@ impl FtColumn {
                 FtColumn::Salt(salt)
             }
             ColumnType::Int4 => {
-                let int4 = i32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                let int4 =
+                    i32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::Int4(int4)
             }
             ColumnType::Int8 => {
-                let int8 = i64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                let int8 =
+                    i64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::Int8(int8)
             }
             ColumnType::UInt4 => {
-                let int4 = u32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                let int4 =
+                    u32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::UInt4(int4)
             }
             ColumnType::UInt8 => {
-                let int8 = u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                let int8 =
+                    u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::UInt8(int8)
             }
             ColumnType::Timestamp => {
-                let uint8 = u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                let uint8 =
+                    u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
                 FtColumn::Timestamp(uint8)
             }
             ColumnType::Blob => {
