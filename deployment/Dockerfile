@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.56 as builder
+FROM rust:1.58.1 as builder
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
@@ -16,7 +16,7 @@ WORKDIR /build/
 
 COPY . .
 
-RUN cargo build --release
+RUN cargo build --release -p fuel-core
 
 # Stage 2: Run
 FROM ubuntu:20.04 as run
