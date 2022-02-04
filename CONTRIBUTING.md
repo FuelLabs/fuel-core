@@ -67,7 +67,7 @@ cargo test --all-targets
 ### Build issues
 
 Due to dependencies on external components such as RocksDb, build times can be large without caching.
-Using in-memory (hashmap) based database is supported for testing purposes, so build times can be improved by disabling 
+Using an in-memory (hashmap) based database is supported for testing purposes, so build times can be improved by disabling 
 default features.
 
 ```
