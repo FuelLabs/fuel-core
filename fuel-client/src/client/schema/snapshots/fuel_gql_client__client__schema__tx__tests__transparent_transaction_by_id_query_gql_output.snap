@@ -8,6 +8,7 @@ query Query($_0: HexString256!) {
   transaction(id: $_0) {
     gasLimit
     gasPrice
+    bytePrice
     id
     inputColors
     inputContracts
@@ -60,6 +61,7 @@ query Query($_0: HexString256!) {
       }
       ... on ContractCreated {
         contractId
+        stateRoot
       }
     }
     maturity
@@ -117,6 +119,7 @@ query Query($_0: HexString256!) {
     scriptData
     salt
     staticContracts
+    storageSlots
     bytecodeWitnessIndex
   }
 }

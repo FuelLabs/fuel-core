@@ -11,9 +11,9 @@ anyhow = "1.0"
 async-trait = "0.1"
 fuel-asm = "0.1"
 fuel-storage = "0.1"
-fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-tx = { version = "0.5", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
-fuel-vm = "0.2"
+fuel-vm = "0.4"
 futures = "0.3"
 parking_lot = "0.11"
 thiserror = "1.0"

@@ -92,6 +92,7 @@ enum CoinStatus {
 }
 type ContractCreated {
 	contractId: HexString256!
+	stateRoot: HexString256!
 }
 type ContractOutput {
 	inputIndex: Int!
@@ -244,6 +245,7 @@ type Transaction {
 	inputContracts: [HexString256!]!
 	gasPrice: Int!
 	gasLimit: Int!
+	bytePrice: Int!
 	maturity: Int!
 	isScript: Boolean!
 	inputs: [Input!]!
@@ -257,6 +259,7 @@ type Transaction {
 	bytecodeWitnessIndex: Int
 	salt: HexString256
 	staticContracts: [HexString256!]
+	storageSlots: [HexString!]
 	"""
 	Return the transaction bytes using canonical encoding
 	"""
