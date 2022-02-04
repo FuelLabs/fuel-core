@@ -22,6 +22,8 @@ To build Fuel Core you'll need to at least have the following installed:
  * Postgres - Used for indexing on-chain data
  * [`llvm` and `clang`](http://releases.llvm.org/download.html) - Used to generate bindings for different platforms (WASM) and build native libraries (required for rocksdb).
 
+See the [README.md](README.md#system-requirements) for platform specific setup steps.
+
 ### Getting the repository
 
 ```
@@ -49,6 +51,8 @@ You can build Fuel Core:
 cargo xtask build
 ```
 
+This command will run `cargo build` and also dump the latest schema into `/assets/` folder.
+
 Linting is done using rustfmt and clippy, which are each separate commands:
 
 ```
@@ -59,10 +63,21 @@ cargo fmt --all --check
 cargo clippy --all-targets
 ```
 
+The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by Tower and will emulate a server/client structure.
+
 Testing is simply done using Cargo:
 ```
 cargo test --all-targets
 ```
+
+##### Build Options
+
+For optimal performance, we recommend using native builds. The generated binary will be optimized for your CPU and may contain specific instructions supported only in your hardware.
+
+To build, run:
+`$ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin fuel-core`
+
+The generated binary will be located in `./target/release/fuel-core`
 
 ### Build issues
 
