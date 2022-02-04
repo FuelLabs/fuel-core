@@ -4,6 +4,9 @@ use crate::client::schema::{
     ConnectionArgs, ConversionError, HexString, HexString256, HexStringUtxoId, PageInfo,
 };
 use core::convert::{TryFrom, TryInto};
+use fuel_tx::StorageSlot;
+use fuel_types::Bytes32;
+use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
 #[derive(cynic::QueryFragment, Debug)]
@@ -47,6 +50,7 @@ pub struct TransactionEdge {
 pub struct Transaction {
     pub gas_limit: i32,
     pub gas_price: i32,
+    pub byte_price: i32,
     pub id: HexString256,
     pub input_colors: Vec<HexString256>,
     pub input_contracts: Vec<HexString256>,
@@ -62,6 +66,7 @@ pub struct Transaction {
     pub script_data: Option<HexString>,
     pub salt: Option<HexString256>,
     pub static_contracts: Option<Vec<HexString256>>,
+    pub storage_slots: Option<Vec<HexString>>,
     pub bytecode_witness_index: Option<i32>,
 }
 
@@ -73,6 +78,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
             true => Self::Script {
                 gas_price: tx.gas_price.try_into()?,
                 gas_limit: tx.gas_limit.try_into()?,
+                byte_price: tx.byte_price.try_into()?,
                 maturity: tx.maturity.try_into()?,
                 receipts_root: tx
                     .receipts_root
@@ -102,6 +108,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
             false => Self::Create {
                 gas_price: tx.gas_price.try_into()?,
                 gas_limit: tx.gas_limit.try_into()?,
+                byte_price: tx.byte_price.try_into()?,
                 maturity: tx.maturity.try_into()?,
                 bytecode_witness_index: tx
                     .bytecode_witness_index
@@ -119,6 +126,23 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .into_iter()
                     .map(Into::into)
                     .collect(),
+                storage_slots: tx
+                    .storage_slots
+                    .ok_or_else(|| ConversionError::MissingField("storage_slots".to_string()))?
+                    .into_iter()
+                    .map(|slot| {
+                        if slot.0 .0.len() != 64 {
+                            return Err(ConversionError::BytesLength);
+                        }
+                        let key = &slot.0 .0[0..32];
+                        let value = &slot.0 .0[32..];
+                        Ok(StorageSlot::new(
+                            // unwrap is safe because length is checked
+                            Bytes32::try_from(key).map_err(|_| ConversionError::BytesLength)?,
+                            Bytes32::try_from(value).map_err(|_| ConversionError::BytesLength)?,
+                        ))
+                    })
+                    .try_collect()?,
                 inputs: tx
                     .inputs
                     .into_iter()
@@ -245,6 +269,7 @@ pub struct ContractOutput {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
     contract_id: HexString256,
+    state_root: HexString256,
 }
 
 impl TryFrom<Output> for fuel_tx::Output {
@@ -279,6 +304,7 @@ impl TryFrom<Output> for fuel_tx::Output {
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
                 contract_id: contract.contract_id.into(),
+                state_root: contract.state_root.into(),
             },
         })
     }

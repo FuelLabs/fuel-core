@@ -315,7 +315,7 @@ impl Dependency {
 
         // nice, our inputs don't collide. Now check if our newly created contracts collide on ContractId
         for output in tx.outputs() {
-            if let Output::ContractCreated { contract_id } = output {
+            if let Output::ContractCreated { contract_id, .. } = output {
                 if let Some(contract) = self.contracts.get(contract_id) {
                     // we have a collision :(
                     if contract.depth == 0 {
@@ -398,7 +398,7 @@ impl Dependency {
                         },
                     );
                 }
-                Output::ContractCreated { contract_id } => {
+                Output::ContractCreated { contract_id, .. } => {
                     // insert contract
                     self.contracts.insert(
                         *contract_id,
@@ -446,7 +446,7 @@ impl Dependency {
                         panic!("InputIndex for contract should be always correct");
                     }
                 }
-                Output::ContractCreated { contract_id } => Some(*contract_id),
+                Output::ContractCreated { contract_id, .. } => Some(*contract_id),
             };
             // remove contract childrens.
             if let Some(ref contract_id) = is_contract {
@@ -529,6 +529,7 @@ mod tests {
     use std::str::FromStr;
 
     use fuel_tx::{Address, Color, UtxoId};
+    use fuel_types::Bytes32;
 
     use super::*;
 
@@ -647,6 +648,7 @@ mod tests {
 
         let output = Output::ContractCreated {
             contract_id: ContractId::default(),
+            state_root: Bytes32::default(),
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);

@@ -1245,10 +1245,10 @@ dependencies = [
  "fuel-asm",
  "fuel-core-interfaces",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-txpool",
  "fuel-types",
- "fuel-vm 0.2.0",
+ "fuel-vm 0.3.0",
  "futures",
  "graphql-parser",
  "hex",
@@ -1281,9 +1281,9 @@ dependencies = [
  "async-trait",
  "fuel-asm",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
- "fuel-vm 0.2.0",
+ "fuel-vm 0.3.0",
  "futures",
  "lazy_static",
  "parking_lot",
@@ -1301,9 +1301,9 @@ dependencies = [
  "fuel-core",
  "fuel-gql-client",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
- "fuel-vm 0.2.0",
+ "fuel-vm 0.3.0",
  "futures",
  "hex",
  "insta",
@@ -1401,6 +1401,19 @@ dependencies = [
  "fuel-asm",
  "fuel-types",
  "itertools",
+ "serde",
+ "sha2",
+]
+
+[[package]]
+name = "fuel-tx"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f2f7b870e050bab2e9a2178ed6ac627a56ce7ea4fb036cecdacbcc2854212ef"
+dependencies = [
+ "fuel-asm",
+ "fuel-types",
+ "itertools",
  "rand 0.8.4",
  "serde",
  "sha2",
@@ -1413,7 +1426,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-interfaces",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
  "futures",
  "parking_lot",
@@ -1450,16 +1463,16 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6a51584f4230a4bf19099fee60da2e4a00b67d2e39a3bc94a434f207e8a224e"
+version = "0.3.0"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=master#5347cd1b8b542ee8123e6ae2f3fd51579377ff25"
 dependencies = [
  "fuel-asm",
  "fuel-merkle",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
  "itertools",
+ "rand 0.8.4",
  "secp256k1",
  "serde",
  "sha3",
