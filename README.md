@@ -7,21 +7,9 @@
 
 Fuel client implementation.
 
-## Testing
+## Contributing
 
-The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by Tower and will emulate a server/client structure.
-
-To run the suite:
-`$ cargo test`
-
-## Developing
-
-When contributing we recommend using `xtask` for building the code.
-
-Build:
-`$ cargo xtask build`
-
-This command will run `cargo build` and also dump the latest schema into `/assets/` folder.
+If you are interested in contributing to Fuel, see our [CONTRIBUTING.md](CONTRIBUTING.md) guidelines for coding standards and review process.
 
 ## Building
 
@@ -48,14 +36,15 @@ export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
 export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
 ```
 
-##### Build Options
+## Building 
 
-For optimal performance, we recommend using native builds. The generated binary will be optimized for your CPU and may contain specific instructions supported only in your hardware.
+We recommend using `xtask` to build fuel-core:
 
-To build, run:
-`$ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin fuel-core`
+```
+cargo xtask build
+```
 
-The generated binary will be located in `./target/release/fuel-core`
+This will run `cargo build` as well as any other custom build processes we have such as re-generating a GraphQL schema for the client.
 
 ## Running
 
@@ -95,8 +84,7 @@ Clear your local database using: `rm -rf ~/.fuel/db`
 
 #### Log level
 
-The service relies on the environment variable `RUST_LOG`. For more information, check the [env_logger](https://docs.rs/env_logger) crate.
-
+The service relies on the environment variable `RUST_LOG`. For more information, check the [EnvFilter examples](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/struct.EnvFilter.html#examples) crate.
 
 ## Docker & Kubernetes
 ```
