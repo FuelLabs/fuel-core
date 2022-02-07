@@ -45,7 +45,7 @@ impl FuelBehaviour {
                 .enable_mdns(config.enable_mdns)
                 .discovery_limit(config.max_peers_connected)
                 .allow_private_addresses(config.allow_private_addresses)
-                .with_predefined_nodes(config.predefined_nodes.clone())
+                .with_bootstrap_nodes(config.bootstrap_nodes.clone())
                 .enable_random_walk(config.enable_random_walk);
 
             discovery_config

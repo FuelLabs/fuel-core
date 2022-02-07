@@ -13,7 +13,7 @@ use std::{
 #[derive(Clone, Debug)]
 pub struct DiscoveryConfig {
     local_peer_id: PeerId,
-    predefined_nodes: Vec<(PeerId, Multiaddr)>,
+    bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     with_mdns: bool,
     with_random_walk: bool,
     allow_private_addresses: bool,
@@ -25,7 +25,7 @@ impl DiscoveryConfig {
     pub fn new(local_peer_id: PeerId, network_name: String) -> Self {
         Self {
             local_peer_id,
-            predefined_nodes: vec![],
+            bootstrap_nodes: vec![],
             max_peers_connected: std::u64::MAX,
             allow_private_addresses: false,
             with_mdns: false,
@@ -46,12 +46,12 @@ impl DiscoveryConfig {
         self
     }
 
-    // List of predefined nodes to bootstrap the network
-    pub fn with_predefined_nodes<I>(&mut self, predefined_nodes: I) -> &mut Self
+    // List of bootstrap nodes to bootstrap the network
+    pub fn with_bootstrap_nodes<I>(&mut self, bootstrap_nodes: I) -> &mut Self
     where
         I: IntoIterator<Item = (PeerId, Multiaddr)>,
     {
-        self.predefined_nodes.extend(predefined_nodes);
+        self.bootstrap_nodes.extend(bootstrap_nodes);
         self
     }
 
@@ -68,7 +68,7 @@ impl DiscoveryConfig {
     pub fn finish(self) -> DiscoveryBehaviour {
         let DiscoveryConfig {
             local_peer_id,
-            predefined_nodes,
+            bootstrap_nodes,
             network_name,
             max_peers_connected,
             allow_private_addresses,
@@ -85,7 +85,7 @@ impl DiscoveryConfig {
         kademlia_config.set_protocol_name(network.as_bytes().to_vec());
         let mut kademlia = Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
 
-        for (peer_id, addr) in &predefined_nodes {
+        for (peer_id, addr) in &bootstrap_nodes {
             kademlia.add_address(peer_id, addr.clone());
         }
 
@@ -109,7 +109,7 @@ impl DiscoveryConfig {
         DiscoveryBehaviour {
             connected_peers,
             peer_addresses,
-            predefined_nodes,
+            bootstrap_nodes,
             events: VecDeque::new(),
             kademlia,
             next_kad_random_walk,

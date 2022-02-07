@@ -13,7 +13,7 @@ pub struct P2PConfig {
     pub tcp_port: u16,
 
     // `DiscoveryBehaviour` related fields
-    pub predefined_nodes: Vec<(PeerId, Multiaddr)>,
+    pub bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     pub enable_mdns: bool,
     pub max_peers_connected: u64,
     pub allow_private_addresses: bool,

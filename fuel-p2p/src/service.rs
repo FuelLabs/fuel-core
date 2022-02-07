@@ -77,7 +77,7 @@ mod tests {
             network_name: "test_network".into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 4000,
-            predefined_nodes: vec![],
+            bootstrap_nodes: vec![],
             enable_mdns: true,
             max_peers_connected: 50,
             allow_private_addresses: true,
@@ -125,7 +125,7 @@ mod tests {
         // Second P2P Service
         let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4002;
-        p2p_config.predefined_nodes = vec![(
+        p2p_config.bootstrap_nodes = vec![(
             first_p2p_service.local_peer_id,
             first_p2p_service_address.unwrap(),
         )];

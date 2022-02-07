@@ -50,8 +50,8 @@ pub struct DiscoveryBehaviour {
     /// Store all peer addresses of discovered peers
     peer_addresses: HashMap<PeerId, Vec<Multiaddr>>,
 
-    /// Predefined list of nodes and their addresses
-    predefined_nodes: Vec<(PeerId, Multiaddr)>,
+    /// List of bootstrap nodes and their addresses
+    bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
 
     /// Events to report to the swarm
     events: VecDeque<DiscoveryEvent>,
@@ -76,7 +76,7 @@ pub struct DiscoveryBehaviour {
     max_peers_connected: u64,
 
     /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
-    /// except for the ones stored in `predefined_nodes`.
+    /// except for the ones stored in `bootstrap_nodes`.
     allow_private_addresses: bool,
 }
 
@@ -222,7 +222,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     /// return list of known addresses for a given peer
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
         let mut list = self
-            .predefined_nodes
+            .bootstrap_nodes
             .iter()
             .filter_map(|(current_peer_id, multiaddr)| {
                 if current_peer_id == peer_id {
@@ -350,7 +350,7 @@ mod tests {
 
     /// helper function for building Discovery Behaviour for testing
     fn build_fuel_discovery(
-        predefined_peers: Vec<(PeerId, Multiaddr)>,
+        bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     ) -> (Swarm<DiscoveryBehaviour>, Multiaddr, PeerId) {
         let keypair = Keypair::generate_secp256k1();
         let public_key = keypair.public();
@@ -370,7 +370,7 @@ mod tests {
                 DiscoveryConfig::new(keypair.public().to_peer_id(), "test_network".into());
             config
                 .discovery_limit(50)
-                .with_predefined_nodes(predefined_peers)
+                .with_bootstrap_nodes(bootstrap_nodes)
                 .enable_random_walk(true);
 
             config.finish()
