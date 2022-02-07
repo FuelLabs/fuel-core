@@ -17,7 +17,7 @@ use tokio::{
     time::{sleep, Duration},
 };
 
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 
 #[derive(Clone, Deserialize)]
 pub struct IndexerConfig {

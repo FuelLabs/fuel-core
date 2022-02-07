@@ -19,14 +19,12 @@ bench = false
 [dependencies]
 cfg-if = "1.0"
 diesel = { version = "1.4", features = ["postgres", "serde_json"] }
-env_logger = "0.9"
 fuels-core = { version = "0.2" }
 fuel-core = { version = "0.2" }
 fuel-gql-client = { version = "0.2" }
 fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-vm = { version = "0.2" }
-log = "0.4"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -36,6 +34,8 @@ serde_yaml = "0.8.19"
 structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 warp = "0.3"
 wasmer = "2.0"
 wasmer-compiler-cranelift = { version = "2.0", optional = true }

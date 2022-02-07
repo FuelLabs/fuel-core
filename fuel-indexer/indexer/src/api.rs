@@ -4,7 +4,7 @@ use fuel_indexer_schema::db::{
     graphql::{GraphqlError, GraphqlQueryBuilder},
     tables::Schema,
 };
-use log::error;
+use tracing::error;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio_postgres::{connect, types::Type, NoTls};

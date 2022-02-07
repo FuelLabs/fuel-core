@@ -1,7 +1,7 @@
 use fuel_indexer_schema::{
     FtColumn, LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_TRACE, LOG_LEVEL_WARN,
 };
-use log::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use thiserror::Error;
 use wasmer::{
     ExportError, Exports, Function, HostEnvInitError, Instance, Memory, RuntimeError, Store,
