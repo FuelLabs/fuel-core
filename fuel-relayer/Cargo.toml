@@ -1,0 +1,40 @@
+[package]
+name = "fuel-relayer"
+version = "0.1.0"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Transaction pool"
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-types = { version = "0.1", features = ["serde-types"] }
+futures = "0.3"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.2.1" }
+parking_lot = "0.11"
+thiserror = "1.0"
+env_logger = "0.9"
+ethers-core = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-core", default-features = false }
+ethers-middleware = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-middleware", default-features = false }
+ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-providers", default-features = false, features = [
+    "ws",
+    "rustls",
+] }
+features = "0.10"
+log = "0.4"
+serde = "1.0"
+serde_json = "1.0"
+tokio = { version = "1.15", features = ["full"] }
+
+
+[dev-dependencies]
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.2.1", features = [
+    "test_helpers",
+] }
+
+
+[[bin]]
+name = "fuel-relayer"
+path = "src/main.rs"
