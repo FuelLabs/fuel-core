@@ -187,6 +187,7 @@ type Query {
 	health: Boolean!
 	coin(utxoId: HexStringUtxoId!): Coin
 	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
+	coinsToSpend(owner: HexString256!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int): [Coin!]!
 }
 type Receipt {
 	id: HexString256
@@ -230,6 +231,16 @@ enum ReturnType {
 	RETURN
 	RETURN_DATA
 	REVERT
+}
+input SpendQueryElementInput {
+	"""
+	color of the coins
+	"""
+	color: HexString256!
+	"""
+	address of the owner
+	"""
+	amount: U64!
 }
 type SubmittedStatus {
 	time: DateTime!

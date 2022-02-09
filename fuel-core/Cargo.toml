@@ -61,6 +61,7 @@ uuid = { version = "0.8", features = ["v4"] }
 [dev-dependencies]
 fuel-vm = { version = "0.4", features = ["serde-types", "random"] }
 insta = "1.8"
+assert_matches = "1.5"
 
 [features]
 default = ["rocksdb"]

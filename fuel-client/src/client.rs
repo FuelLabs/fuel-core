@@ -1,5 +1,6 @@
 use cynic::{http::SurfExt, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
+use itertools::Itertools;
 use std::{
     convert::TryInto,
     io, net,
@@ -20,6 +21,8 @@ use crate::client::schema::ConversionError;
 use crate::client::types::{TransactionResponse, TransactionStatus};
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 use std::io::ErrorKind;
+
+use self::schema::coin::SpendQueryElementInput;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -262,6 +265,30 @@ impl FuelClient {
         let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
 
         let coins = self.query(query).await?.coins.into();
+        Ok(coins)
+    }
+
+    /// Retrieve coins to spend in a transaction
+    pub async fn coins_to_spend(
+        &self,
+        owner: &str,
+        spend_query: Vec<(&str, u64)>,
+        max_inputs: Option<i32>,
+    ) -> io::Result<Vec<schema::coin::Coin>> {
+        let owner: HexString256 = owner.parse()?;
+        let spend_query: Vec<SpendQueryElementInput> = spend_query
+            .iter()
+            .map(|(color, amount)| -> Result<_, ConversionError> {
+                Ok(SpendQueryElementInput {
+                    color: color.parse()?,
+                    amount: (*amount).into(),
+                })
+            })
+            .try_collect()?;
+        let query =
+            schema::coin::CoinsToSpendQuery::build(&(owner, spend_query, max_inputs).into());
+
+        let coins = self.query(query).await?.coins_to_spend;
         Ok(coins)
     }
 }
