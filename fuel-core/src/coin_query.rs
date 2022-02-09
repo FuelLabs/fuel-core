@@ -1,4 +1,3 @@
-use std::cmp::Reverse;
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin, CoinStatus};
 use crate::state::{self};
@@ -6,6 +5,7 @@ use fuel_storage::Storage;
 use fuel_tx::{Address, Color, UtxoId};
 use itertools::Itertools;
 use rand::prelude::*;
+use std::cmp::Reverse;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
