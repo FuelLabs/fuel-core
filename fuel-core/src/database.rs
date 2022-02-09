@@ -27,6 +27,8 @@ mod receipts;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
+pub mod token_deposit;
+pub mod validator_set;
 
 // Crude way to invalidate incompatible databases,
 // can be used to perform migrations in the future.
@@ -49,10 +51,12 @@ pub mod columns {
     pub const BLOCKS: u32 = 11;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 12;
-
+    pub const TOKEN_DEPOSITS: u32 = 13;
+    pub const VALIDATOR_SET: u32 = 14;
+    pub const VALIDATOR_SET_DIFFS: u32 = 15;
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 13;
+    pub const COLUMN_NUM: u32 = 16;
 }
 
 #[derive(Clone, Debug)]

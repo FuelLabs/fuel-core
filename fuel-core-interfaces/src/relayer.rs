@@ -32,7 +32,8 @@ pub trait RelayerDB: Send + Sync {
         amount: Word,
     );
 
-    async fn best_fuel_block_number(&self) -> u64;
+    /// current best block number
+    async fn chain_height(&self) -> u64;
 
     /// set newest finalized eth block
     async fn set_eth_finalized_block(&self, block: u64);
