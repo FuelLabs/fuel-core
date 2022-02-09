@@ -149,8 +149,7 @@ pub fn random_improve(
 
             Ok(coins)
         })
-        .try_collect()
-        .unwrap();
+        .try_collect()?;
     let mut collected_amounts: Vec<u64> = spend_query.iter().map(|_| 0).collect();
 
     // Collect enough coins to satisfy the spend query
