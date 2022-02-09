@@ -1,5 +1,4 @@
 use std::cmp::Reverse;
-
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin, CoinStatus};
 use crate::state::{self};
