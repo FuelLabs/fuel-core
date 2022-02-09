@@ -5,17 +5,20 @@ use std::{
 };
 
 use crate::{log::EthEventLog, Config};
-use fuel_tx::Bytes32;
-use fuel_types::{Address, Color, Word};
+use fuel_types::{Address, Bytes32, Color, Word};
 use log::{error, info, trace, warn};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 use anyhow::Error;
 use ethers_core::types::{Filter, Log, ValueOrArray};
 use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, PubsubClient, StreamExt, SyncingStatus, Ws,
 };
-use fuel_core_interfaces::relayer::{RelayerDB, RelayerEvent, RelayerStatus, RelayerError};
+use fuel_core_interfaces::{
+    block_importer::NewBlockEvent,
+    relayer::{RelayerDB, RelayerError, RelayerEvent, RelayerStatus},
+    signer::SignerEvent,
+};
 ///
 pub struct Relayer {
     /// Pendning stakes/assets/withdrawals. Before they are finalized
@@ -34,13 +37,17 @@ pub struct Relayer {
     config: Config,
     /// state of relayer
     status: RelayerStatus,
-    // new fuel block notifier.
+    /// new fuel block notifier.
     receiver: mpsc::Receiver<RelayerEvent>,
     /// This is litlle bit hacky but because we relate validator staking with fuel commit block and not on eth block
     /// we need to be sure that we are taking proper order of those transactions
     /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
     /// I checked this with infura endpoint.
     pending_removed_eth_events: Vec<(u64, Vec<EthEventLog>)>,
+    /// Notification of new block event
+    new_block_event: broadcast::Receiver<NewBlockEvent>,
+    /// Service for signing of arbitrary hash
+    signer: mpsc::Sender<SignerEvent>,
 }
 
 /// Pending diff between FuelBlocks
@@ -79,6 +86,8 @@ impl Relayer {
         config: Config,
         db: Box<dyn RelayerDB>,
         receiver: mpsc::Receiver<RelayerEvent>,
+        new_block_event: broadcast::Receiver<NewBlockEvent>,
+        signer: mpsc::Sender<SignerEvent>,
     ) -> Self {
         Self {
             config,
@@ -90,6 +99,8 @@ impl Relayer {
             current_fuel_block: 0,
             status: RelayerStatus::EthIsSyncing,
             receiver,
+            new_block_event,
+            signer,
             pending_removed_eth_events: Vec::new(),
         }
     }
@@ -346,6 +357,18 @@ impl Relayer {
                     }
                     this.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
                 }
+
+                new_block = this.new_block_event.recv() => {
+                    match new_block {
+                        Err(e) => {
+                            error!("Unexpected error happened in relayer new block event receiver:{}",e);
+                            return;
+                        },
+                        Ok(new_block) => {
+                            this.handle_new_block_event(new_block).await
+                        },
+                    }
+                }
                 log = logs_watcher.next() => {
                     this.handle_eth_event(log).await
                 }
@@ -353,17 +376,21 @@ impl Relayer {
         }
     }
 
-    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerEvent) {
-        match inner_event {
-            RelayerEvent::Stop => {
-                self.status = RelayerStatus::Stop;
+    async fn handle_new_block_event(&mut self, new_block: NewBlockEvent) {
+        match new_block {
+            NewBlockEvent::NewBlockCreated(_created_block) => {
+                // TODO:
+                // 1. compress block for eth contract.
+                // 2. Create eth transaction.
+                // 3. Sign transaction
+                // 4. Send transaction to eth client.
             }
-            RelayerEvent::NewBlock(fuel_block) => {
+            NewBlockEvent::NewBlockIncluded(block_number) => {
                 // ignore reorganization
 
                 let finality_slider = self.config.fuel_finality_slider();
                 let validator_set_block =
-                    std::cmp::max(fuel_block, finality_slider) - finality_slider;
+                    std::cmp::max(block_number, finality_slider) - finality_slider;
 
                 // TODO handle lagging here. compare current_fuel_block and finalized_fuel_block and send error notification
                 // if we are lagging over ethereum events.
@@ -371,7 +398,7 @@ impl Relayer {
                 // first if is for start of contract and first few validator blocks
                 if validator_set_block < finality_slider {
                     if self.current_fuel_block != 0 {
-                        error!("Initial sync seems incorrent. current_fuel_block should be zero but it is {}",self.current_fuel_block);
+                        error!( "Initial sync seems incorrent. current_fuel_block should be zero but it is {}", self.current_fuel_block);
                     }
                     return;
                 } else {
@@ -391,6 +418,14 @@ impl Relayer {
                     }
                     self.current_fuel_block = new_current_fuel_block;
                 }
+            }
+        }
+    }
+
+    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerEvent) {
+        match inner_event {
+            RelayerEvent::Stop => {
+                self.status = RelayerStatus::Stop;
             }
             RelayerEvent::GetValidatorSet {
                 fuel_block,

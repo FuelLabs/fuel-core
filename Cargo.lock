@@ -1692,7 +1692,7 @@ dependencies = [
  "futures-util",
  "hex",
  "http",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project",
  "reqwest",
  "serde",
@@ -1822,7 +1822,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58631627ae1dccf81f7c8a214722746883b03d304ececbdb020bca08954f8312"
 dependencies = [
- "fuel-types",
+ "fuel-types 0.1.0",
  "serde",
 ]
 
@@ -1843,7 +1843,7 @@ dependencies = [
  "fuel-storage",
  "fuel-tx 0.5.0",
  "fuel-txpool",
- "fuel-types",
+ "fuel-types 0.1.0",
  "fuel-vm 0.4.0",
  "futures",
  "graphql-parser",
@@ -1878,11 +1878,11 @@ dependencies = [
  "fuel-asm",
  "fuel-storage",
  "fuel-tx 0.5.0",
- "fuel-types",
+ "fuel-types 0.2.0",
  "fuel-vm 0.4.0",
  "futures",
  "lazy_static",
- "parking_lot",
+ "parking_lot 0.12.0",
  "thiserror",
  "tokio",
 ]
@@ -1898,7 +1898,7 @@ dependencies = [
  "fuel-gql-client",
  "fuel-storage",
  "fuel-tx 0.5.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "fuel-vm 0.4.0",
  "futures",
  "hex",
@@ -1943,7 +1943,7 @@ version = "0.0.0"
 dependencies = [
  "diesel",
  "fuel-tx 0.2.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "graphql-parser",
  "insta",
  "itertools",
@@ -1981,11 +1981,11 @@ dependencies = [
  "ethers-providers",
  "features",
  "fuel-core-interfaces",
- "fuel-tx 0.2.0",
- "fuel-types",
+ "fuel-tx 0.5.0",
+ "fuel-types 0.2.0",
  "futures",
  "log",
- "parking_lot",
+ "parking_lot 0.12.0",
  "serde",
  "serde_json",
  "thiserror",
@@ -2005,7 +2005,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2ae7148d11382ae57c1336f3b59465c8d4affb68031c23b264151b16a8f56c4c"
 dependencies = [
  "fuel-asm",
- "fuel-types",
+ "fuel-types 0.1.0",
  "itertools",
  "rand 0.8.4",
  "sha2 0.9.9",
@@ -2018,10 +2018,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7476f63e5e3c4a7a34f7c66d7bc87b730448ba847913129fed3c85228f534abc"
 dependencies = [
  "fuel-asm",
- "fuel-types",
+ "fuel-types 0.1.0",
  "itertools",
  "serde",
- "sha2",
+ "sha2 0.9.9",
 ]
 
 [[package]]
@@ -2031,7 +2031,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f2f7b870e050bab2e9a2178ed6ac627a56ce7ea4fb036cecdacbcc2854212ef"
 dependencies = [
  "fuel-asm",
- "fuel-types",
+ "fuel-types 0.1.0",
  "itertools",
  "rand 0.8.4",
  "serde",
@@ -2046,9 +2046,9 @@ dependencies = [
  "async-trait",
  "fuel-core-interfaces",
  "fuel-tx 0.5.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "futures",
- "parking_lot",
+ "parking_lot 0.11.2",
  "thiserror",
  "tokio",
 ]
@@ -2064,6 +2064,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-types"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "898daa0b25cd2479785c051c6af0f9343185a27a0bbf65dc443aed27dfe013d5"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "fuel-vm"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2073,7 +2082,7 @@ dependencies = [
  "fuel-merkle",
  "fuel-storage",
  "fuel-tx 0.1.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "itertools",
  "secp256k1",
  "sha3",
@@ -2090,7 +2099,7 @@ dependencies = [
  "fuel-merkle",
  "fuel-storage",
  "fuel-tx 0.5.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "itertools",
  "rand 0.8.4",
  "secp256k1",
@@ -2108,7 +2117,7 @@ dependencies = [
  "fuel-indexer",
  "fuel-indexer-schema",
  "fuel-tx 0.2.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "fuels-core",
  "r2d2",
  "r2d2-diesel",
@@ -2130,7 +2139,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76d068682178a61451321c8089908100c35ec696880c4f20a31b66cffcc16fd1"
 dependencies = [
  "fuel-tx 0.1.0",
- "fuel-types",
+ "fuel-types 0.1.0",
  "fuel-vm 0.1.1",
  "hex",
  "rand 0.8.4",
@@ -2664,7 +2673,7 @@ dependencies = [
  "libc",
  "llvm-sys",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.11.2",
  "regex",
 ]
 
@@ -2903,9 +2912,9 @@ dependencies = [
 
 [[package]]
 name = "lock_api"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "712a4d093c9976e24e7dbca41db895dabcbac38eb5f4045393d17a95bdfb1109"
+checksum = "88943dd7ef4a2e5a4bfa2753aaab3013e34ce2533d1996fb18ef591e315e2b3b"
 dependencies = [
  "scopeguard",
 ]
@@ -3216,7 +3225,17 @@ checksum = "7d17b78036a60663b797adeaee46f5c9dfebb86948d1255007a1d6be0271ff99"
 dependencies = [
  "instant",
  "lock_api",
- "parking_lot_core",
+ "parking_lot_core 0.8.5",
+]
+
+[[package]]
+name = "parking_lot"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87f5ec2493a61ac0506c0f4199f99070cbe83857b0337006a30f3e6719b8ef58"
+dependencies = [
+ "lock_api",
+ "parking_lot_core 0.9.1",
 ]
 
 [[package]]
@@ -3231,6 +3250,19 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "winapi",
+]
+
+[[package]]
+name = "parking_lot_core"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28141e0cc4143da2443301914478dc976a61ffdb3f043058310c70df2fed8954"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "redox_syscall",
+ "smallvec",
+ "windows-sys",
 ]
 
 [[package]]
@@ -3517,7 +3549,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "545c5bc2b880973c9c10e4067418407a0ccaa3091781d1671d46eb35107cb26f"
 dependencies = [
  "log",
- "parking_lot",
+ "parking_lot 0.11.2",
  "scheduled-thread-pool",
 ]
 
@@ -3969,7 +4001,7 @@ version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc6f74fd1204073fa02d5d5d68bec8021be4c38690b61264b2fdb48083d0e7d7"
 dependencies = [
- "parking_lot",
+ "parking_lot 0.11.2",
 ]
 
 [[package]]
@@ -4748,7 +4780,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-project-lite",
  "signal-hook-registry",
  "tokio-macros",
@@ -5257,7 +5289,7 @@ checksum = "be0ecb0db480561e9a7642b5d3e4187c128914e58aa84330b9493e3eb68c5e7f"
 dependencies = [
  "futures",
  "js-sys",
- "parking_lot",
+ "parking_lot 0.11.2",
  "pin-utils",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -5583,6 +5615,49 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "windows-sys"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3df6e476185f92a12c072be4a189a0210dcdcf512a1891d6dff9edb874deadc6"
+dependencies = [
+ "windows_aarch64_msvc",
+ "windows_i686_gnu",
+ "windows_i686_msvc",
+ "windows_x86_64_gnu",
+ "windows_x86_64_msvc",
+]
+
+[[package]]
+name = "windows_aarch64_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8e92753b1c443191654ec532f14c199742964a061be25d77d7a96f09db20bf5"
+
+[[package]]
+name = "windows_i686_gnu"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a711c68811799e017b6038e0922cb27a5e2f43a2ddb609fe0b6f3eeda9de615"
+
+[[package]]
+name = "windows_i686_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "146c11bb1a02615db74680b32a68e2d61f553cc24c4eb5b4ca10311740e44172"
+
+[[package]]
+name = "windows_x86_64_gnu"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c912b12f7454c6620635bbff3450962753834be2a594819bd5e945af18ec64bc"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "504a2476202769977a040c6364301a3f65d0cc9e3fb08600b2bda150a0488316"
 
 [[package]]
 name = "winreg"
