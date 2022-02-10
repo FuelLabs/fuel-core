@@ -7,7 +7,8 @@ use std::{
 use crate::{log::EthEventLog, Config};
 use fuel_types::{Address, Bytes32, Color, Word};
 use log::{error, info, trace, warn};
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::Mutex;
+use tokio::sync::{broadcast, mpsc};
 
 use anyhow::Error;
 use ethers_core::types::{Filter, Log, ValueOrArray};
@@ -32,7 +33,7 @@ pub struct Relayer {
     /// current fuel block
     current_fuel_block: u64,
     /// db connector to apply stake and token deposit
-    db: Box<dyn RelayerDB>,
+    db: Box<Mutex<dyn RelayerDB>>,
     /// Relayer Configuration
     config: Config,
     /// state of relayer
@@ -47,7 +48,7 @@ pub struct Relayer {
     /// Notification of new block event
     new_block_event: broadcast::Receiver<NewBlockEvent>,
     /// Service for signing of arbitrary hash
-    signer: mpsc::Sender<SignerEvent>,
+    _signer: mpsc::Sender<SignerEvent>,
 }
 
 /// Pending diff between FuelBlocks
@@ -84,7 +85,7 @@ impl PendingDiff {
 impl Relayer {
     pub fn new(
         config: Config,
-        db: Box<dyn RelayerDB>,
+        db: Box<Mutex<dyn RelayerDB>>,
         receiver: mpsc::Receiver<RelayerEvent>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: mpsc::Sender<SignerEvent>,
@@ -100,7 +101,7 @@ impl Relayer {
             status: RelayerStatus::EthIsSyncing,
             receiver,
             new_block_event,
-            signer,
+            _signer: signer,
             pending_removed_eth_events: Vec::new(),
         }
     }
@@ -129,14 +130,22 @@ impl Relayer {
             }
             // push new value for changed validators to database
             self.db
-                .insert_validator_changes(diffs.fuel_number, &stake_diff)
+                .lock()
+                .await
+                .insert_validator_set_diff(diffs.fuel_number, &stake_diff)
                 .await;
-            self.db.set_fuel_finalized_block(diffs.fuel_number).await;
+            self.db
+                .lock()
+                .await
+                .set_fuel_finalized_block(diffs.fuel_number)
+                .await;
 
             // push fanalized deposit to db
             let block_enabled_fuel_block = diffs.fuel_number + self.config.fuel_finality_slider();
             for (nonce, deposit) in diffs.assets_deposited.iter() {
                 self.db
+                    .lock()
+                    .await
                     .insert_token_deposit(
                         *nonce,
                         block_enabled_fuel_block,
@@ -146,11 +155,19 @@ impl Relayer {
                     )
                     .await
             }
-            self.db.set_eth_finalized_block(finalized_eth_block).await;
+            self.db
+                .lock()
+                .await
+                .set_eth_finalized_block(finalized_eth_block)
+                .await;
             self.finalized_fuel_block = diffs.fuel_number;
             self.pending.pop_back();
         }
-        self.db.set_eth_finalized_block(finalized_eth_block).await;
+        self.db
+            .lock()
+            .await
+            .set_eth_finalized_block(finalized_eth_block)
+            .await;
     }
 
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
@@ -178,7 +195,7 @@ impl Relayer {
 
         let last_finalized_eth_block = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
-            self.db.get_eth_finalized_block().await,
+            self.db.lock().await.get_eth_finalized_block().await,
         );
         // should be allways more then last finalized_eth_block
         let best_finalized_block =
@@ -318,7 +335,9 @@ impl Relayer {
         let mut validator_set = HashMap::new();
         for (_, diffs) in self
             .db
-            .get_validator_changes(0, Some(best_fuel_block))
+            .lock()
+            .await
+            .get_validator_set_diff(0, Some(best_fuel_block))
             .await
         {
             validator_set.extend(diffs)
@@ -409,7 +428,12 @@ impl Relayer {
                     }
                     let mut db_changes = self
                         .db
-                        .get_validator_changes(new_current_fuel_block, Some(new_current_fuel_block))
+                        .lock()
+                        .await
+                        .get_validator_set_diff(
+                            new_current_fuel_block,
+                            Some(new_current_fuel_block),
+                        )
                         .await;
                     if let Some((_, changes)) = db_changes.pop() {
                         for (address, new_value) in changes {

@@ -1,8 +1,8 @@
-pub mod interface;
-pub mod relayer;
 pub mod config;
+pub mod interface;
 pub mod log;
+pub mod relayer;
 pub mod service;
 
-pub use relayer::Relayer;
 pub use config::Config;
+pub use relayer::Relayer;

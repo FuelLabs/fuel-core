@@ -57,6 +57,7 @@ tower-layer = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
+byteorder = "1.4.3"
 
 [dev-dependencies]
 fuel-vm = { version = "0.4", features = ["serde-types", "random"] }

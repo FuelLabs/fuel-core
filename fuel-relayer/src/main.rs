@@ -1,8 +1,7 @@
-use anyhow::Error;
-use ethers_core::types::{Address, Filter, ValueOrArray, H160};
+use ethers_core::types::{Filter, ValueOrArray, H160};
 
-use ethers_providers::{FilterKind, Middleware, Provider, StreamExt, Ws};
-use std::{convert::TryFrom, str::FromStr, time::Duration};
+use ethers_providers::{Middleware, Provider, StreamExt, Ws};
+use std::{str::FromStr, time::Duration};
 
 use env_logger::Builder;
 use std::env;
@@ -121,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut logs_watcher = provider.watch(&filter).await.expect("to work");
     tokio::time::sleep(Duration::from_secs(40)).await;
-    let now  = std::time::Instant::now();
+    let now = std::time::Instant::now();
     println!("sleep finished");
     while let Some(log) = logs_watcher.next().await {
         //if let Some(true) = log.removed {

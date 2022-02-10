@@ -7,28 +7,34 @@ use crate::state::rocks_db::RocksDb;
 use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
+use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
+use fuel_core_interfaces::relayer::RelayerDB;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use std::sync::Arc;
 
+use self::columns::METADATA;
+
 pub mod balances;
 pub mod block;
 pub mod code_root;
 pub mod coin;
 pub mod contracts;
+pub mod deposit_coin;
 pub mod metadata;
 mod receipts;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
-pub mod token_deposit;
 pub mod validator_set;
+pub mod validator_set_diffs;
 
 // Crude way to invalidate incompatible databases,
 // can be used to perform migrations in the future.
@@ -178,5 +184,115 @@ impl InterpreterStorage for Database {
         let id = self.block_hash(height.into())?;
         let block = Storage::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
         Ok(block.producer)
+    }
+}
+
+#[async_trait]
+impl RelayerDB for Database {
+    /// get validator set for current fuel block
+    async fn current_validator_set(&self) -> HashMap<Address, u64> {
+        let mut out = HashMap::new();
+        struct WrapAddress(pub Address);
+        impl From<Vec<u8>> for WrapAddress {
+            fn from(i: Vec<u8>) -> Self {
+                Self(Address::try_from(i.as_ref()).unwrap())
+            }
+        }
+        for diff in self.iter_all::<WrapAddress, u64>(columns::VALIDATOR_SET, None, None, None) {
+            match diff {
+                Ok((address, stake)) => {
+                    out.insert(address.0, stake);
+                }
+                Err(_) => return out,
+            }
+        }
+        out
+    }
+
+    /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
+    async fn get_validator_set_diff(
+        &self,
+        from_fuel_block: u64,
+        to_fuel_block: Option<u64>,
+    ) -> Vec<(u64, HashMap<Address, u64>)> {
+        let to_fuel_block = if let Some(to_fuel_block) = to_fuel_block {
+            if from_fuel_block > to_fuel_block {
+                return Vec::new();
+            }
+            to_fuel_block
+        } else {
+            u64::MAX
+        };
+        struct Wrapu64BE(pub u64);
+        impl From<Vec<u8>> for Wrapu64BE {
+            fn from(i: Vec<u8>) -> Self {
+                use byteorder::{BigEndian, ReadBytesExt};
+                use std::io::Cursor;
+                let mut i = Cursor::new(i);
+                Self(i.read_u64::<BigEndian>().unwrap_or_default())
+            }
+        }
+        let mut out = Vec::new();
+        for diff in self.iter_all::<Wrapu64BE, HashMap<Address, u64>>(
+            columns::VALIDATOR_SET_DIFFS,
+            None,
+            Some(from_fuel_block.to_be_bytes().to_vec()),
+            None,
+        ) {
+            match diff {
+                Ok((key, diff)) => {
+                    let block = key.0;
+                    if block >= to_fuel_block {
+                        return out;
+                    }
+                    out.push((block, diff))
+                }
+                Err(_) => return out,
+            }
+        }
+        out
+    }
+
+    /// current best block number
+    async fn get_block_height(&self) -> u64 {
+        self.get_block_height()
+            .unwrap_or_default()
+            .unwrap_or_default()
+            .0 as u64
+    }
+
+    /// set newest finalized eth block
+    async fn set_eth_finalized_block(&self, block: u64) {
+        let _ = self.insert(metadata::ETH_FINALIZED_BLOCK_NUMBER, METADATA, block);
+    }
+
+    /// assume it is allways set sa initialization of database.
+    async fn get_eth_finalized_block(&self) -> u64 {
+        self.get(metadata::ETH_FINALIZED_BLOCK_NUMBER, METADATA)
+            .unwrap_or_default()
+            .unwrap_or_default()
+    }
+
+    /// set last finalized fuel block. In usual case this will be
+    async fn set_fuel_finalized_block(&self, block: u64) {
+        let _ = self.insert(metadata::ETH_FINALIZED_FUEL_BLOCK_NUMBER, METADATA, block);
+    }
+    /// Assume it is allways set as initialization of database.
+    async fn get_fuel_finalized_block(&self) -> u64 {
+        self.get(metadata::ETH_FINALIZED_FUEL_BLOCK_NUMBER, METADATA)
+            .unwrap_or_default()
+            .unwrap_or_default()
+    }
+
+    /// set last finalized fuel block. In usual case this will be
+    async fn set_current_validator_set_block(&self, block: u64) {
+        let _ = self.insert(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA, block);
+    }
+
+    /// Assume it is allways set as initialization of database.
+    async fn get_current_validator_set_block(&self) -> u64 {
+        self.get(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA)
+            .unwrap_or_default()
+            .unwrap_or_default()
     }
 }

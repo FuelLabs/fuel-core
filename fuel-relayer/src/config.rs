@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use ethers_core::types::H160;
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct Config {
     /// number of blocks between fuel blocks where deposits get finalized.
     /// Finalization is done on fuel_block measurement and not on eth measurement.
@@ -28,7 +28,10 @@ impl Config {
             eth_client: String::from(
                 "wss://mainnet.infura.io/ws/v3/0954246eab5544e89ac236b668980810",
             ),
-            eth_v2_contract_addresses: vec![H160::from_str("0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2").unwrap()],
+            eth_v2_contract_addresses: vec![H160::from_str(
+                "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+            )
+            .unwrap()],
             eth_v2_contract_deployment: 14_095_090,
         }
     }

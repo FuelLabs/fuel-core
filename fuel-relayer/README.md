@@ -40,7 +40,9 @@ Example of sliding window:
 For last problem we need to introduce two slidding windows, one for how long do we wait for eth blocks to be finalized and second one is how far in past are we taking validator stake and deposits. Two are needed because there could be small desyncronization between eth and fuel and we need to introduce buffer just to be safe.
 
 ### Validator related stake:
-Validator stake is deposited on Ethereum contract side,
+Validator stake is deposited on Ethereum contract side.
+
+When deposit happens and finality period passes, stakes are included in validator set.
 
 - Problem: Validator before its eth finality passes, withdraws its stake. We have sliding windows that is in past but if we allow withdrawal immediately there will be no stake to take if slashing happens in present.
 - Solution: Lock period. Withdrawal should be two step process, first step is WithdrawalIntention that will lock funds for Withdrawal and wait for eth finality time to kick in. After WithdrawalIntention gets eth finalize, stake is removed from Fuel Validation Leader selection. Fuel does not see this stake any more, on contract side we need to wait for fuel slider to finish and additional time for challange time to pass after than stake can be withdrawed.
@@ -96,3 +98,11 @@ For passive sync we are using ethereum pubsub protocol to get `logs` event: http
 * "transaction_log_index":"None",
 * "log_type":"None",
 * "removed":"Some(false)"
+
+
+### Database:
+
+We are adding three colums:
+* Validator set diff: mapping of fuel_block and hashmap of diffs for finalized new stakes.
+* Validator set: mapping of validator address to its current stakes.
+* Deposits: mapping of deposit_nonce to token deposits.

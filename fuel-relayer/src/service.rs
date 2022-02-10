@@ -5,6 +5,7 @@ use fuel_core_interfaces::{
     relayer::{RelayerDB, RelayerEvent},
     signer::SignerEvent,
 };
+use tokio::sync::Mutex;
 use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
@@ -18,12 +19,12 @@ pub struct Service {
 impl Service {
     pub async fn new(
         config: &Config,
-        db: Box<dyn RelayerDB>,
+        db: Box<Mutex<dyn RelayerDB>>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: mpsc::Sender<SignerEvent>,
     ) -> Result<Self, anyhow::Error> {
         let (sender, receiver) = mpsc::channel(100);
-        let best_block = db.chain_height().await;
+        let best_block = db.lock().await.get_block_height().await;
         let relayer = Relayer::new(config.clone(), db, receiver, new_block_event, signer);
         let provider = Relayer::provider(config.eth_client()).await?;
         let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider, best_block)));

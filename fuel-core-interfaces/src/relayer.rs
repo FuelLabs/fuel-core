@@ -1,39 +1,81 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use fuel_storage::Storage;
 use fuel_types::{Address, Bytes32, Color, Word};
+use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-// Database has two main functionalities, ValidatorSet and TokenDeposits.
-// From relayer perspectiv TokenDeposits are just insert when they get finalized. 
-// But for ValidatorSet, It is litle bit different. 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepositCoin {
+    pub owner: Address,
+    pub amount: Word,
+    pub color: Color,
+    pub block_deposited: u64,
+    pub block_spend: u64,
+}
 
+// Database has two main functionalities, ValidatorSet and TokenDeposits.
+// From relayer perspectiv TokenDeposits are just insert when they get finalized.
+// But for ValidatorSet, It is litle bit different.
 #[async_trait]
-pub trait RelayerDB: Send + Sync {
+pub trait RelayerDB:
+     Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
+    + Storage<Address, u64,Error = KvStoreError> // validator set
+    + Storage<u64, HashMap<Address, u64>,Error = KvStoreError> //validator set diff
+    + Send
+    + Sync
+{
+    /// deposit token to database. Token deposits are not revertable
+    async fn insert_token_deposit(
+        &mut self,
+        deposit_nonce: Bytes32, // this is ID
+        fuel_block: u64,        //block after it becomes available for using
+        owner: Address,       // owner
+        token: Color,
+        amount: Word,
+    ) {
+        let coin = DepositCoin {
+            owner,
+            amount,
+            color: token,
+            block_deposited: fuel_block,
+            block_spend: 0,
+        };
+        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit_nonce,&coin);
+    }
+
     /// Asumption is that validator state is already checke in eth side, and we can blidly apply
     /// changed to db without checking if we have enought stake to reduce.
     /// What needs to be done is to have validator set state and diff as saparate database values.
-    async fn insert_validator_changes(&self, fuel_block: u64, stakes: &HashMap<Address, u64>);
+    async fn insert_validator_set_diff(&mut self, fuel_block: u64, stakes: &HashMap<Address, u64>) {
+        let _ = Storage::<u64,HashMap<Address,u64>>::insert(self, &fuel_block,stakes);
+    }
 
-    /// Return validator set inside HashMap and fuel_block that this validator set is assigned to.
-    /// async fn get_latest_validator_set(&self) -> (HashMap<Address,u64>,u64);
+    async fn apply_current_validator_set(&mut self, changes: HashMap<Address,u64>) {
+        for (ref address,ref stake) in changes {
+            let _ = Storage::<Address,u64>::insert(self,address,stake);
+        }
+    }
+
+    /// get validator set for current fuel block
+    async fn current_validator_set(&self) -> HashMap<Address,u64>;
+
+    /// set last finalized fuel block. In usual case this will be
+    async fn set_current_validator_set_block(&self, block: u64);
+    /// Assume it is allways set as initialization of database.
+    async fn get_current_validator_set_block(&self) -> u64;
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
-    /// 
-    async fn get_validator_changes(&self, from_fuel_block: u64, to_fuel_block: Option<u64>) -> Vec<(u64,HashMap<Address,u64>)>;
-
-    /// deposit token to database. Token deposits are not revertable
-    async fn insert_token_deposit(
-        &self,
-        deposit_nonce: Bytes32, // this is ID
-        fuel_block: u64, //block after it becomes available for using
-        account: Address, // owner
-        token: Color,
-        amount: Word,
-    );
+    async fn get_validator_set_diff(
+            &self,
+            from_fuel_block: u64,
+            to_fuel_block: Option<u64>,
+    ) -> Vec<(u64, HashMap<Address, u64>)>;
 
     /// current best block number
-    async fn chain_height(&self) -> u64;
+    async fn get_block_height(&self) -> u64;
+
 
     /// set newest finalized eth block
     async fn set_eth_finalized_block(&self, block: u64);
@@ -41,12 +83,11 @@ pub trait RelayerDB: Send + Sync {
     /// assume it is allways set sa initialization of database.
     async fn get_eth_finalized_block(&self) -> u64;
 
-    /// set last finalized fuel block. In usual case this will be 
+    /// set last finalized fuel block. In usual case this will be
     async fn set_fuel_finalized_block(&self, block: u64);
     /// Assume it is allways set as initialization of database.
     async fn get_fuel_finalized_block(&self) -> u64;
 }
-
 
 #[derive(Debug)]
 pub enum RelayerEvent {
@@ -64,6 +105,8 @@ pub enum RelayerEvent {
 }
 
 pub use thiserror::Error;
+
+use crate::db::KvStoreError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum RelayerError {
