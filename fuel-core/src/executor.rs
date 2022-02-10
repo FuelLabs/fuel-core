@@ -12,7 +12,6 @@ use crate::{
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
-use fuel_vm::prelude::StateTransitionRef;
 use fuel_vm::{
     consts::REG_SP,
     prelude::{Backtrace as FuelBacktrace, InterpreterError},

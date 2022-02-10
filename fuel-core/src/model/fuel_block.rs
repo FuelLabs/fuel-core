@@ -2,6 +2,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
 use fuel_tx::{crypto::Hasher, Address, Bytes32, Transaction};
 use fuel_types::Word;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     array::TryFromSliceError,
@@ -83,7 +84,7 @@ impl FuelBlockHeaders {
         hasher.input(&self.fuel_height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.producer.as_ref());
-        hasher.input(self.transactions_commitment.0.to_be_bytes()[..]);
+        hasher.input(self.transactions_commitment.0.to_be_bytes());
         hasher.input(self.transactions_commitment.1.as_ref());
         hasher.digest()
     }
@@ -122,7 +123,7 @@ pub struct FuelBlockFull {
 impl FuelBlockFull {
     pub fn id(&self) -> Bytes32 {
         self.headers
-            .id(&self.transactions.iter().map(|tx| tx.id()).collect())
+            .id(&self.transactions.iter().map(|tx| tx.id()).collect_vec())
     }
 
     pub fn as_light(&self) -> FuelBlockLight {

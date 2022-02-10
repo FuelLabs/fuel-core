@@ -175,6 +175,6 @@ impl InterpreterStorage for Database {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
         let block = Storage::<Bytes32, FuelBlockLight>::get(self, &id)?.unwrap_or_default();
-        Ok(block.producer)
+        Ok(block.headers.producer)
     }
 }

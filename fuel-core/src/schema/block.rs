@@ -28,7 +28,7 @@ impl Block {
     }
 
     async fn height(&self) -> U64 {
-        self.0.fuel_height.into()
+        self.0.headers.fuel_height.into()
     }
 
     async fn transactions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Transaction>> {
@@ -47,11 +47,11 @@ impl Block {
     }
 
     async fn time(&self) -> DateTime<Utc> {
-        self.0.time
+        self.0.headers.time
     }
 
     async fn producer(&self) -> HexString256 {
-        self.0.producer.into()
+        self.0.headers.producer.into()
     }
 }
 
@@ -163,9 +163,9 @@ impl BlockQuery {
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= blocks.len());
                 connection.append(
-                    blocks
-                        .into_iter()
-                        .map(|item| Edge::new(item.fuel_height.to_usize(), item.into_owned())),
+                    blocks.into_iter().map(|item| {
+                        Edge::new(item.headers.fuel_height.to_usize(), item.into_owned())
+                    }),
                 );
                 Ok(connection)
             },

@@ -252,8 +252,8 @@ impl TxMutation {
         let cfg = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(transaction.deref().clone());
-        let receipts = tx_pool.run_tx(tx, cfg).await?;
+        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.vm.clone());
+        let receipts = tx_pool.run_tx(tx).await?;
         Ok(receipts.into_iter().map(receipt::Receipt).collect())
     }
 
@@ -264,9 +264,8 @@ impl TxMutation {
         tx: HexString,
     ) -> async_graphql::Result<HexString256> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        let cfg = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let id = tx_pool.submit_tx(tx, cfg).await?;
+        let id = tx_pool.submit_tx(tx).await?;
 
         Ok(id.into())
     }

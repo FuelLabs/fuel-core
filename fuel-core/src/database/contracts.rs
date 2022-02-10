@@ -3,7 +3,6 @@ use crate::{
     database::{columns::CONTRACTS, Database},
     state::Error,
 };
-use fuel_merkle::common::Bytes32;
 use fuel_tx::UtxoId;
 use fuel_vm::prelude::{Contract, ContractId, Storage};
 use std::borrow::Cow;
@@ -138,5 +137,50 @@ mod tests {
                 .into_owned(),
             utxo_id
         );
+    }
+
+    #[test]
+    fn contract_utxo_id_put() {
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+
+        let mut database = Database::default();
+        Storage::<ContractId, UtxoId>::insert(&mut database, &contract_id, &utxo_id).unwrap();
+
+        let returned: UtxoId = database
+            .get(contract_id.as_ref(), CONTRACT_UTXO_ID)
+            .unwrap()
+            .unwrap();
+        assert_eq!(returned, utxo_id);
+    }
+
+    #[test]
+    fn contract_utxo_id_remove() {
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+
+        let mut database = Database::default();
+        database
+            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
+            .unwrap();
+
+        Storage::<ContractId, UtxoId>::remove(&mut database, &contract_id).unwrap();
+
+        assert!(!database
+            .exists(contract_id.as_ref(), CONTRACT_UTXO_ID)
+            .unwrap());
+    }
+
+    #[test]
+    fn contract_utxo_id_exists() {
+        let contract_id: ContractId = ContractId::from([1u8; 32]);
+        let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
+
+        let database = Database::default();
+        database
+            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
+            .unwrap();
+
+        assert!(Storage::<ContractId, UtxoId>::contains_key(&database, &contract_id).unwrap());
     }
 }

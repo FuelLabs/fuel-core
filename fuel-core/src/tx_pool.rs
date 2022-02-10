@@ -1,7 +1,7 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::{ExecutionMode, Executor};
-use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders, FuelBlockLight};
-use crate::service::Config;
+use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders};
+use crate::service::VMConfig;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
 use fuel_storage::Storage;
@@ -65,9 +65,10 @@ impl TxPool {
         self.fuel_txpool.as_ref()
     }
 
-    pub fn new(database: Database) -> Self {
+    pub fn new(database: Database, config: VMConfig) -> Self {
         let executor = Executor {
             database: database.clone(),
+            config,
         };
         let config = Arc::new(TxPoolConfig::default());
         TxPool {
@@ -80,7 +81,7 @@ impl TxPool {
         }
     }
 
-    pub async fn submit_tx(&self, tx: Transaction, config: &Config) -> Result<Bytes32, Error> {
+    pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let tx_id = tx.id();
         // persist transaction to database
         let mut db = self.db.clone();
@@ -107,8 +108,8 @@ impl TxPool {
         Ok(tx_id)
     }
 
-    pub async fn run_tx(&self, tx: Transaction, config: &Config) -> Result<Vec<Receipt>, Error> {
-        let id = self.submit_tx(tx, config).await?;
+    pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
+        let id = self.submit_tx(tx).await?;
         // note: we'll need to await tx completion once it's not instantaneous
         let db = &self.db;
         let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &id)?.unwrap_or_default();

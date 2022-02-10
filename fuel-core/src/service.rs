@@ -87,7 +87,7 @@ impl FuelService {
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
         // initialize transaction pool
-        let tx_pool = Arc::new(TxPool::new(database.clone()));
+        let tx_pool = Arc::new(TxPool::new(database.clone(), config.vm.clone()));
 
         // start background tasks
         let mut tasks = vec![];
