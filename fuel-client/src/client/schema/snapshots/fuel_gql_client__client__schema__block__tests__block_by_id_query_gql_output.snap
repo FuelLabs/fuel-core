@@ -1,6 +1,6 @@
 ---
 source: fuel-client/src/client/schema/block.rs
-assertion_line: 82
+assertion_line: 84
 expression: operation.query
 
 ---
@@ -9,7 +9,9 @@ query Query($_0: HexString256) {
     height
     id
     time
-    producer
+    producer {
+      address
+    }
     transactions {
       rawPayload
       receipts {

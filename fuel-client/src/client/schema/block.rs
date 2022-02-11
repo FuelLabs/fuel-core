@@ -4,6 +4,8 @@ use crate::client::schema::{
 };
 use crate::client::PaginatedResult;
 
+use super::account::Account;
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
     pub id: HexString256,
@@ -65,7 +67,7 @@ pub struct Block {
     pub height: U64,
     pub id: HexString256,
     pub time: DateTime,
-    pub producer: HexString256,
+    pub producer: Account,
     pub transactions: Vec<OpaqueTransaction>,
 }
 

@@ -13,7 +13,9 @@ query Query {
       height
       id
       time
-      producer
+      producer {
+        address
+      }
       transactions {
         rawPayload
         receipts {

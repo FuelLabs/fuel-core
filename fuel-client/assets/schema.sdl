@@ -1,9 +1,12 @@
+type Account {
+	address: HexString256!
+}
 type Block {
 	id: HexString256!
 	height: U64!
 	transactions: [Transaction!]!
 	time: DateTime!
-	producer: HexString256!
+	producer: Account!
 }
 type BlockConnection {
 	"""
@@ -188,6 +191,7 @@ type Query {
 	coin(utxoId: HexStringUtxoId!): Coin
 	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
 	coinsToSpend(owner: HexString256!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int): [Coin!]!
+	account(address: HexString256!): Account
 }
 type Receipt {
 	id: HexString256

@@ -1,4 +1,5 @@
 use crate::database::Database;
+use crate::schema::account::Account;
 use crate::schema::scalars::U64;
 use crate::{
     database::KvStoreError,
@@ -50,7 +51,7 @@ impl Block {
         self.0.time
     }
 
-    async fn producer(&self) -> HexString256 {
+    async fn producer(&self) -> Account {
         self.0.producer.into()
     }
 }
