@@ -1,5 +1,6 @@
 use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
 
+pub mod account;
 pub mod block;
 pub mod chain;
 pub mod coin;
@@ -16,6 +17,7 @@ pub struct Query(
     tx::TxQuery,
     health::HealthQuery,
     coin::CoinQuery,
+    account::AccountQuery,
 );
 
 #[derive(MergedObject, Default)]
