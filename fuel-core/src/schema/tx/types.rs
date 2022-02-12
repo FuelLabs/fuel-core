@@ -1,4 +1,5 @@
 use crate::database::Database;
+use crate::schema::account::Account;
 use crate::schema::scalars::{HexString, HexString256, HexStringUtxoId};
 use crate::tx_pool::TransactionStatus as TxStatus;
 use async_graphql::{Context, Enum, Object, Union};
@@ -32,8 +33,8 @@ impl InputCoin {
     async fn utxo_id(&self) -> HexStringUtxoId {
         self.utxo_id
     }
-    async fn owner(&self) -> HexString256 {
-        self.owner
+    async fn owner(&self) -> Account {
+        Address::from(self.owner.0).into()
     }
 
     async fn amount(&self) -> Word {
@@ -142,8 +143,8 @@ pub struct CoinOutput {
 
 #[Object]
 impl CoinOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.to.deref())
+    async fn to(&self) -> Account {
+        self.to.into()
     }
 
     async fn amount(&self) -> Word {
@@ -159,8 +160,8 @@ pub struct WithdrawalOutput(CoinOutput);
 
 #[Object]
 impl WithdrawalOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
+    async fn to(&self) -> Account {
+        self.0.to.into()
     }
 
     async fn amount(&self) -> Word {
@@ -176,8 +177,8 @@ pub struct ChangeOutput(CoinOutput);
 
 #[Object]
 impl ChangeOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
+    async fn to(&self) -> Account {
+        self.0.to.into()
     }
 
     async fn amount(&self) -> Word {
@@ -193,8 +194,8 @@ pub struct VariableOutput(CoinOutput);
 
 #[Object]
 impl VariableOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
+    async fn to(&self) -> Account {
+        self.0.to.into()
     }
 
     async fn amount(&self) -> Word {

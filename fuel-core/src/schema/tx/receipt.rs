@@ -1,4 +1,7 @@
-use crate::schema::scalars::{HexString, HexString256, U64};
+use crate::schema::{
+    account::Account,
+    scalars::{HexString, HexString256, U64},
+};
 use async_graphql::{Enum, Object};
 use derive_more::Display;
 use fuel_asm::Word;
@@ -52,7 +55,7 @@ impl Receipt {
     async fn to(&self) -> Option<HexString256> {
         self.0.to().copied().map(Into::into)
     }
-    async fn to_address(&self) -> Option<HexString256> {
+    async fn to_address(&self) -> Option<Account> {
         self.0.to_address().copied().map(Into::into)
     }
     async fn amount(&self) -> Option<U64> {

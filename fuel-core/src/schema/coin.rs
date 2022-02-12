@@ -13,6 +13,7 @@ use fuel_tx::consts::MAX_INPUTS;
 use fuel_tx::{Address, Color as FuelTxColor, UtxoId};
 use itertools::Itertools;
 
+use super::account::Account;
 use super::scalars::HexStringUtxoId;
 
 pub struct Coin(UtxoId, CoinModel);
@@ -23,7 +24,7 @@ impl Coin {
         self.0.into()
     }
 
-    async fn owner(&self) -> HexString256 {
+    async fn owner(&self) -> Account {
         self.1.owner.into()
     }
 
