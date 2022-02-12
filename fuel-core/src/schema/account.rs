@@ -116,7 +116,6 @@ pub struct AccountQuery;
 impl AccountQuery {
     async fn account(
         &self,
-        ctx: &Context<'_>,
         #[graphql(desc = "Address of the Account")] address: HexString256,
     ) -> async_graphql::Result<Option<Account>> {
         let account = Account(address.into());

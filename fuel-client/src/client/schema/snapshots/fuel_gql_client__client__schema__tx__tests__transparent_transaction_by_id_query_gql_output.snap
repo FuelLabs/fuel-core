@@ -16,7 +16,9 @@ query Query($_0: HexString256!) {
       __typename
       ... on InputCoin {
         utxoId
-        owner
+        owner {
+          address
+        }
         amount
         color
         witnessIndex
@@ -35,7 +37,9 @@ query Query($_0: HexString256!) {
     outputs {
       __typename
       ... on CoinOutput {
-        to
+        to {
+          address
+        }
         amount
         color
       }
@@ -45,17 +49,23 @@ query Query($_0: HexString256!) {
         stateRoot
       }
       ... on WithdrawalOutput {
-        to
+        to {
+          address
+        }
         amount
         color
       }
       ... on ChangeOutput {
-        to
+        to {
+          address
+        }
         amount
         color
       }
       ... on VariableOutput {
-        to
+        to {
+          address
+        }
         amount
         color
       }
@@ -108,7 +118,9 @@ query Query($_0: HexString256!) {
       reason
       receiptType
       to
-      toAddress
+      toAddress {
+        address
+      }
       val
       len
       result

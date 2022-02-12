@@ -1,5 +1,6 @@
 type Account {
 	address: HexString256!
+	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 }
 type Block {
 	id: HexString256!
@@ -38,13 +39,13 @@ type ChainInfo {
 	peerCount: Int!
 }
 type ChangeOutput {
-	to: HexString256!
+	to: Account!
 	amount: Int!
 	color: HexString256!
 }
 type Coin {
 	utxoId: HexStringUtxoId!
-	owner: HexString256!
+	owner: Account!
 	amount: U64!
 	color: HexString256!
 	maturity: U64!
@@ -85,7 +86,7 @@ input CoinFilterInput {
 	color: HexString256
 }
 type CoinOutput {
-	to: HexString256!
+	to: Account!
 	amount: Int!
 	color: HexString256!
 }
@@ -120,7 +121,7 @@ scalar HexStringUtxoId
 union Input = | InputCoin | InputContract
 type InputCoin {
 	utxoId: HexStringUtxoId!
-	owner: HexString256!
+	owner: Account!
 	amount: Int!
 	color: HexString256!
 	witnessIndex: Int!
@@ -198,7 +199,7 @@ type Receipt {
 	pc: U64
 	is: U64
 	to: HexString256
-	toAddress: HexString256
+	toAddress: Account
 	amount: U64
 	color: HexString256
 	gas: U64
@@ -306,12 +307,12 @@ type TransactionEdge {
 union TransactionStatus = | SubmittedStatus | SuccessStatus | FailureStatus
 scalar U64
 type VariableOutput {
-	to: HexString256!
+	to: Account!
 	amount: Int!
 	color: HexString256!
 }
 type WithdrawalOutput {
-	to: HexString256!
+	to: Account!
 	amount: Int!
 	color: HexString256!
 }

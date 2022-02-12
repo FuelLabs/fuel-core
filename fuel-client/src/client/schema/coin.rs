@@ -1,6 +1,8 @@
 use crate::client::schema::{schema, HexString256, HexStringUtxoId, PageInfo, U64};
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 
+use super::account::Account;
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
     pub utxo_id: HexStringUtxoId,
@@ -155,7 +157,7 @@ pub struct Coin {
     pub color: HexString256,
     pub utxo_id: HexStringUtxoId,
     pub maturity: U64,
-    pub owner: HexString256,
+    pub owner: Account,
     pub status: CoinStatus,
 }
 

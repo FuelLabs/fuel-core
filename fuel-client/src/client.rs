@@ -22,7 +22,7 @@ use crate::client::types::{TransactionResponse, TransactionStatus};
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 use std::io::ErrorKind;
 
-use self::schema::coin::SpendQueryElementInput;
+use self::schema::{account::AccountByAddressArgs, coin::SpendQueryElementInput};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -290,6 +290,16 @@ impl FuelClient {
 
         let coins = self.query(query).await?.coins_to_spend;
         Ok(coins)
+    }
+
+    pub async fn account(&self, address: &str) -> io::Result<Option<schema::account::Account>> {
+        let query = schema::account::AccountByAddressQuery::build(&AccountByAddressArgs {
+            address: address.parse()?,
+        });
+
+        let account = self.query(query).await?.account;
+
+        Ok(account)
     }
 }
 

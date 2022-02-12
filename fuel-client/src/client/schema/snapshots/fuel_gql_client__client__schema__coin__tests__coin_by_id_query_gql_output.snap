@@ -1,6 +1,6 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
-assertion_line: 124
+assertion_line: 181
 expression: operation.query
 
 ---
@@ -11,7 +11,9 @@ query Query($_0: HexStringUtxoId!) {
     color
     utxoId
     maturity
-    owner
+    owner {
+      address
+    }
     status
   }
 }

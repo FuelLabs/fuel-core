@@ -1,4 +1,5 @@
 use crate::client::schema::{
+    account::Account,
     schema,
     tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
     ConnectionArgs, ConversionError, HexString, HexString256, HexStringUtxoId, PageInfo,
@@ -171,7 +172,7 @@ pub enum Input {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputCoin {
     pub utxo_id: HexStringUtxoId,
-    pub owner: HexString256,
+    pub owner: Account,
     pub amount: i32,
     pub color: HexString256,
     pub witness_index: i32,
@@ -196,7 +197,7 @@ impl TryFrom<Input> for fuel_tx::Input {
         Ok(match input {
             Input::InputCoin(coin) => fuel_tx::Input::Coin {
                 utxo_id: coin.utxo_id.into(),
-                owner: coin.owner.into(),
+                owner: coin.owner.address.into(),
                 amount: coin.amount.try_into()?,
                 color: coin.color.into(),
                 witness_index: coin.witness_index.try_into()?,
@@ -228,7 +229,7 @@ pub enum Output {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinOutput {
-    pub to: HexString256,
+    pub to: Account,
     pub amount: i32,
     pub color: HexString256,
 }
@@ -236,7 +237,7 @@ pub struct CoinOutput {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct WithdrawalOutput {
-    pub to: HexString256,
+    pub to: Account,
     pub amount: i32,
     pub color: HexString256,
 }
@@ -244,7 +245,7 @@ pub struct WithdrawalOutput {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangeOutput {
-    pub to: HexString256,
+    pub to: Account,
     pub amount: i32,
     pub color: HexString256,
 }
@@ -252,7 +253,7 @@ pub struct ChangeOutput {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct VariableOutput {
-    pub to: HexString256,
+    pub to: Account,
     pub amount: i32,
     pub color: HexString256,
 }
@@ -278,7 +279,7 @@ impl TryFrom<Output> for fuel_tx::Output {
     fn try_from(value: Output) -> Result<Self, Self::Error> {
         Ok(match value {
             Output::CoinOutput(coin) => Self::Coin {
-                to: coin.to.into(),
+                to: coin.to.address.into(),
                 amount: coin.amount.try_into()?,
                 color: coin.color.into(),
             },
@@ -288,17 +289,17 @@ impl TryFrom<Output> for fuel_tx::Output {
                 state_root: contract.state_root.into(),
             },
             Output::WithdrawalOutput(withdrawal) => Self::Withdrawal {
-                to: withdrawal.to.into(),
+                to: withdrawal.to.address.into(),
                 amount: withdrawal.amount.try_into()?,
                 color: withdrawal.color.into(),
             },
             Output::ChangeOutput(change) => Self::Change {
-                to: change.to.into(),
+                to: change.to.address.into(),
                 amount: change.amount.try_into()?,
                 color: change.color.into(),
             },
             Output::VariableOutput(variable) => Self::Variable {
-                to: variable.to.into(),
+                to: variable.to.address.into(),
                 amount: variable.amount.try_into()?,
                 color: variable.color.into(),
             },

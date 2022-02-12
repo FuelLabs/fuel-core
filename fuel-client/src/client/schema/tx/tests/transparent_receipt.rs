@@ -1,5 +1,6 @@
 use crate::client::schema::{
-    schema, ConversionError, ConversionError::MissingField, HexString, HexString256, U64,
+    account::Account, schema, ConversionError, ConversionError::MissingField, HexString,
+    HexString256, U64,
 };
 use fuel_types::Word;
 
@@ -23,7 +24,7 @@ pub struct Receipt {
     pub reason: Option<U64>,
     pub receipt_type: ReceiptType,
     pub to: Option<HexString256>,
-    pub to_address: Option<HexString256>,
+    pub to_address: Option<Account>,
     pub val: Option<U64>,
     pub len: Option<U64>,
     pub result: Option<U64>,
