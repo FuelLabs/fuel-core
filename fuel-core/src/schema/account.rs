@@ -122,3 +122,84 @@ impl AccountQuery {
         Ok(Some(account))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::database::transaction::TransactionIndex;
+    use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, Variables};
+    use fuel_asm::Opcode;
+    use fuel_tx::Transaction as FuelTx;
+    use rand::{prelude::StdRng, Rng, SeedableRng};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn account_transactions_output() {
+        let mut rng = StdRng::seed_from_u64(1);
+        let owner: Address = rng.gen();
+
+        let mut db = Database::default();
+        let txns = (0..10)
+            .map(|_| FuelTx::Script {
+                gas_price: 0,
+                gas_limit: 1_000_000,
+                byte_price: 0,
+                maturity: 0,
+                receipts_root: Default::default(),
+                script: Opcode::RET(0x10).to_bytes().to_vec(),
+                script_data: vec![],
+                inputs: vec![],
+                outputs: vec![],
+                witnesses: vec![vec![].into()],
+                metadata: None,
+            })
+            .collect::<Vec<_>>();
+
+        for (i, tx) in txns.iter().enumerate() {
+            let tx_id = tx.id();
+            Storage::<Bytes32, FuelTx>::insert(&mut db, &tx_id, &tx).unwrap();
+            db.record_tx_id_owner(&owner, 0u64.into(), i as TransactionIndex, &tx_id)
+                .unwrap();
+        }
+
+        let schema = Schema::build(AccountQuery, EmptyMutation, EmptySubscription)
+            .data(db)
+            .finish();
+        let query = Request::new(
+            r#"
+                query AccountTransactionsQuery($address: HexString256) {
+                    account(address: $address) {
+                        transactions(first: 10) {
+                            edges {
+                                node {
+                                    id
+                                }
+                            }
+                        }
+                    }
+                }
+            "#,
+        )
+        .variables(Variables::from_json(json!({
+            "address": owner.to_string()
+        })));
+
+        let result = schema.execute(query).await;
+
+        let expected_edges = txns
+            .iter()
+            .map(|tx| json!({ "node": { "id": tx.id().to_string() } }))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            result.data.into_json().unwrap(),
+            json!({
+                "account": {
+                    "transactions": {
+                        "edges": expected_edges
+                    }
+                }
+            })
+        )
+    }
+}
