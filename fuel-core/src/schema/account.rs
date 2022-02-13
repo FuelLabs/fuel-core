@@ -157,7 +157,7 @@ mod tests {
 
         for (i, tx) in txns.iter().enumerate() {
             let tx_id = tx.id();
-            Storage::<Bytes32, FuelTx>::insert(&mut db, &tx_id, &tx).unwrap();
+            Storage::<Bytes32, FuelTx>::insert(&mut db, &tx_id, tx).unwrap();
             db.record_tx_id_owner(&owner, 0u64.into(), i as TransactionIndex, &tx_id)
                 .unwrap();
         }
