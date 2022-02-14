@@ -29,7 +29,7 @@ impl Service {
         let provider = Relayer::provider(config.eth_client()).await?;
         let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider, best_block)));
         Ok(Self { sender, stop_join })
-    }
+     }
 
     pub async fn stop(&mut self) {
         let _ = self.sender.send(RelayerEvent::Stop);
