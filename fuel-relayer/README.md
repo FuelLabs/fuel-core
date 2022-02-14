@@ -16,7 +16,6 @@ Functionalities expected from Relayer:
 * Block related (mostly skipped for PoS version):
     * Publishing new block
     * Calculating new ValidatorSet.
-    * Receiving block from contract (Not impl)
     * Validating received block (Not impl)
     * pushing challenge if needed (Not impl)
 
@@ -114,8 +113,4 @@ When new fuel block is made it needs to be commited to ethereum network.
 
 Is fuel block in fuel network assumed valid if it is not commited to eth?
 
-How do we handle if somebody else commited random block to eth, without leader selection v2 does not know what isnext in line to be allowed to commit.
-
 How do we handle timeouts in commited fuel block to eth network. Is it okay to say every two eth blocks we need to have one fuel block commit or something similar?
-
-It seems like solution for all problems for our first PoS chain is to have orchestrator as fuel-admin account that does publishing of fuel blocks, it can do validation of it and publish it to ethereum? It seems like easiest solution. We should have only one orcestrator and it will under fuel-admin control.
