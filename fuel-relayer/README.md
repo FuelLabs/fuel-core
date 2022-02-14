@@ -11,7 +11,7 @@ Functionalities expected from Relayer:
     * Deposit. Handle ValidatorList use it in consensus
     * Withdrawal. Handle ValidatorList use it in consensus.
 * Bridge:
-    * Deposit tokne
+    * Deposit token
     * Withdwrap token
 * Block related (mostly skipped for PoS version):
     * Publishing new block
@@ -22,7 +22,7 @@ Functionalities expected from Relayer:
 
 ## Validity, finality and syncronization
 
-With ethereums The Merge comming in few months we are gaining finality of blocks in ethereum after two epochs, epoch contains 32 slots, slot takes 12s so epoch is around 6,4min and two epocs are 12.8min, so after 13min we are sure that our deposits will not be reverted by some big reorganization. So we are okay to say that everything older then ~100blocks are finalized.
+With Ethereums The Merge comming in few months we are gaining finality of blocks in ethereum after two epochs, epoch contains 32 slots, slot takes 12s so epoch is around 6,4min and two epocs are 12.8min, so after 13min we are sure that our deposits will not be reverted by some big reorganization. So we are okay to say that everything older then ~100blocks are finalized.
 
 Second finality that we have is related to fuel block atestation timelimit, how long are we going to wait until challenge comes. It should be at least longer than ethereum finality. Not relavent for first version.
 
@@ -32,12 +32,15 @@ Second finality that we have is related to fuel block atestation timelimit, how 
 Example of sliding window:
 ![Sliding Window](../docs/diagrams/fuel_v2_validator_sliding_window.jpg)
 
-- Problem: How to choose when token deposit event gets processed and enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
+- Problem: How to choose when token deposit event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
 - Reasoning: We can't just say when fuel block N gets chained use deposits from Eth Block in past, those two events (fuel block and eth block) are not correlated.
 - Reasoning: Inside one of eth block we can have block_commit and multiple deposits and order matters if we want to put deposit inside block_number N or block_number N+1. And from this we can have our solution
 - Solution: Use eth logs(events) of block commit and token deposit to conclude where deposit belongs and use contract as main syncronization between eth and fuel. 
 
 For last problem we need to introduce two slidding windows, one for how long do we wait for eth blocks to be finalized and second one is how far in past are we taking validator stake and deposits. Two are needed because there could be small desyncronization between eth and fuel and we need to introduce buffer just to be safe.
+
+- Problem: How long does finalization of fuel block takes.
+- Solution: It probably depends on challenge timeframe. Only when block is finalized then we are safe to do withdrawal without thinking of slashing or reverting of fuel blocks.
 
 ### Validator related stake:
 Validator stake is deposited on Ethereum contract side.
@@ -54,11 +57,10 @@ Bridge has functionality to connect ethereum ERC-20 tokens with Fuel network and
 Deposit transfers token into contract and after fuel slidder time and eth finalization passes it can be used inside Fuel network.
 
 - Problem: How would we specify Deposit as Input to be used by Tx, if it is UtxoId we can use TxId (index_output as zero) but how would this integrate with database.
-- Solution: TokenDeposit has deposit_nonce that we can leverage, introduce DepositInput is cleanest solution. Andwe can hybrid approch of introducing hardcoded UtxoId. 
+- Solution: TokenDeposit has deposit_nonce that we can leverage, introduce DepositInput is cleanest solution. Additionally we can use hybrid approch of introducing hardcoded UtxoId. 
 
 For Withdrawal, any Tx can have OutputWithdrawal and that information is send inside a fuel block to eth contract and token is set for withdrawal.
 
-- Problem: How long does finalization of fuel block takes. It probably depends on challenge timeframe. Only when block is finalized than we are safe to do withdrawal without thinking of slashing or reverting of fuel blocks.
 
 ## Implementation:
 
@@ -76,15 +78,14 @@ Tricky thing that can happen not so often is in initial synchronization. When do
   If not the same, stop listening to events and do 2,3,4 steps again.
 7. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
 
+To have validity of ValidatorSet we need to have logs from ethereum to reconstruct the set. So It does not matter for us if we start syncing to fuel network if we are not connected to eth client.
+
 On active listening of eth events:
 1. Receive event:
     1. if it is removal, append them into pending_removal vec
     2. if it is new event. Apply pending_removal_vec and add new event to dequeue.
 2. On new fuel block, commit changed to db.
-     1. just to be sure introduce check of events by calling eth block logs. This is a double check just to be sure
-         that we match with that is inside contract.
-
-To have validity of ValidatorSet we need to have logs from ethereum to reconstruct the set. So It does not matter for us if we start syncing to fuel network if we are not connected to eth client.
+     1. just to be sure introduce check of events by calling eth block logs. This is a double check just to be sure that we match with that is inside contract.
 
 For passive sync we are using ethereum pubsub protocol to get `logs` event: https://geth.ethereum.org/docs/rpc/pubsub . Example of eth log from log subscription:
 * "address":0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,
@@ -99,10 +100,22 @@ For passive sync we are using ethereum pubsub protocol to get `logs` event: http
 * "log_type":"None",
 * "removed":"Some(false)"
 
-
 ### Database:
 
 We are adding three colums:
 * Validator set diff: mapping of fuel_block and hashmap of diffs for finalized new stakes.
 * Validator set: mapping of validator address to its current stakes.
 * Deposits: mapping of deposit_nonce to token deposits.
+
+
+## Block Commitments
+
+When new fuel block is made it needs to be commited to ethereum network.
+
+Is fuel block in fuel network assumed valid if it is not commited to eth?
+
+How do we handle if somebody else commited random block to eth, without leader selection v2 does not know what isnext in line to be allowed to commit.
+
+How do we handle timeouts in commited fuel block to eth network. Is it okay to say every two eth blocks we need to have one fuel block commit or something similar?
+
+It seems like solution for all problems for our first PoS chain is to have orchestrator as fuel-admin account that does publishing of fuel blocks, it can do validation of it and publish it to ethereum? It seems like easiest solution. We should have only one orcestrator and it will under fuel-admin control.

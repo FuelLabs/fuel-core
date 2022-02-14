@@ -191,13 +191,13 @@ impl InterpreterStorage for Database {
 impl RelayerDB for Database {
     /// get validator set for current fuel block
     async fn current_validator_set(&self) -> HashMap<Address, u64> {
-        let mut out = HashMap::new();
         struct WrapAddress(pub Address);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
                 Self(Address::try_from(i.as_ref()).unwrap())
             }
         }
+        let mut out = HashMap::new();
         for diff in self.iter_all::<WrapAddress, u64>(columns::VALIDATOR_SET, None, None, None) {
             match diff {
                 Ok((address, stake)) => {
