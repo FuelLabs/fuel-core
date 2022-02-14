@@ -18,7 +18,7 @@ use libp2p::{
 };
 use log::trace;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     io,
     task::{Context, Poll},
     time::Duration,
@@ -37,7 +37,7 @@ pub enum DiscoveryEvent {
     UnroutablePeer(PeerId),
 
     /// Notify the swarm of a connected peer
-    Connected(PeerId),
+    Connected(PeerId, Vec<Multiaddr>),
 
     /// Notify the swarm of a disconnected peer
     Disconnected(PeerId),
@@ -45,12 +45,6 @@ pub enum DiscoveryEvent {
 
 /// NetworkBehavior for discovery of nodes
 pub struct DiscoveryBehaviour {
-    /// Store Peer IDs of currently connected peers
-    connected_peers: HashSet<PeerId>,
-
-    /// Store all peer addresses of discovered peers
-    peer_addresses: HashMap<PeerId, Vec<Multiaddr>>,
-
     /// List of bootstrap nodes and their addresses
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
 
@@ -82,16 +76,9 @@ pub struct DiscoveryBehaviour {
 }
 
 impl DiscoveryBehaviour {
-    /// Returns reference to a connected peers set.
-    #[allow(dead_code)]
-    pub fn connected_peers(&self) -> &HashSet<PeerId> {
-        &self.connected_peers
-    }
-
-    /// Returns a map of peers ids and their multiaddresses
-    #[allow(dead_code)]
-    pub fn peer_addresses(&self) -> &HashMap<PeerId, Vec<Multiaddr>> {
-        &self.peer_addresses
+    /// Adds a known listen address of a peer participating in the DHT to the routing table.
+    pub fn add_address(&mut self, peer_id: &PeerId, address: Multiaddr) {
+        self.kademlia.add_address(peer_id, address);
     }
 }
 
@@ -263,7 +250,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
-        endpoint: &libp2p::core::ConnectedPoint,
+        endpoint: &ConnectedPoint,
         failed_addresses: Option<&Vec<Multiaddr>>,
     ) {
         self.connected_peers_count += 1;
@@ -277,11 +264,10 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_connected(&mut self, peer_id: &PeerId) {
-        let multiaddr = self.addresses_of_peer(peer_id);
-        self.peer_addresses.insert(*peer_id, multiaddr);
-        self.connected_peers.insert(*peer_id);
+        let addresses = self.addresses_of_peer(peer_id);
 
-        self.events.push_back(DiscoveryEvent::Connected(*peer_id));
+        self.events
+            .push_back(DiscoveryEvent::Connected(*peer_id, addresses));
         self.kademlia.inject_connected(peer_id);
         trace!("Connected to a peer {:?}", peer_id);
     }
@@ -298,8 +284,6 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
-        self.connected_peers.remove(peer_id);
-
         self.events
             .push_back(DiscoveryEvent::Disconnected(*peer_id));
 
@@ -434,13 +418,12 @@ mod tests {
                         if let SwarmEvent::Behaviour(discovery_event) = event {
                             match discovery_event {
                                 // if peer has connected - remove it from the set
-                                DiscoveryEvent::Connected(connected_peer) => {
+                                DiscoveryEvent::Connected(connected_peer, _) => {
                                     left_to_discover[swarm_index].remove(&connected_peer);
                                 }
                                 DiscoveryEvent::UnroutablePeer(unroutable_peer_id) => {
                                     // kademlia discovered a peer but does not have it's address
                                     // we simulate Identify happening and provide the address
-
                                     let unroutable_peer_addr = discovery_swarms
                                         .iter()
                                         .find_map(|(_, next_addr, next_peer_id)| {
@@ -478,26 +461,6 @@ mod tests {
 
             // if there are no swarms left to discover we are done with the discovery
             if left_to_discover.iter().all(|l| l.is_empty()) {
-                // at this point we are already done but we double check the state of swarms
-
-                // check if the first swarm has N - 1 connected nodes
-                let (mut first_swarm, first_peer_addr, first_peer_id) =
-                    discovery_swarms.pop_front().unwrap();
-                let first_swarm_discovery = first_swarm.behaviour_mut();
-                assert_eq!(
-                    first_swarm_discovery.connected_peers().len(),
-                    num_of_swarms - 1
-                );
-
-                // check if the last swarm contains first_swarm's address in `peer_addresses`
-                let mut last_swarm = discovery_swarms.pop_back().unwrap().0;
-                let last_swarm_discovery = last_swarm.behaviour_mut();
-                let first_swarm_addresses = last_swarm_discovery
-                    .peer_addresses()
-                    .get(&first_peer_id)
-                    .unwrap();
-                assert!(first_swarm_addresses.contains(&first_peer_addr));
-
                 // we are done!
                 Poll::Ready(())
             } else {

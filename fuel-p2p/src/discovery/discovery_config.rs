@@ -84,9 +84,6 @@ impl DiscoveryConfig {
             ..
         } = self;
 
-        let connected_peers = HashSet::new();
-        let peer_addresses = HashMap::new();
-
         // kademlia setup
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
         let mut kademlia_config = KademliaConfig::default();
@@ -117,8 +114,6 @@ impl DiscoveryConfig {
         };
 
         DiscoveryBehaviour {
-            connected_peers,
-            peer_addresses,
             bootstrap_nodes,
             events: VecDeque::new(),
             kademlia,
