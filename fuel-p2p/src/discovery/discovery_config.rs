@@ -4,11 +4,11 @@ use libp2p::{
     kad::{store::MemoryStore, Kademlia, KademliaConfig},
     Multiaddr, PeerId,
 };
-use log::warn;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::Duration,
 };
+use tracing::warn;
 
 #[derive(Clone, Debug)]
 pub struct DiscoveryConfig {

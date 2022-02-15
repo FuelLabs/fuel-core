@@ -16,13 +16,13 @@ use libp2p::{
     },
     Multiaddr, PeerId,
 };
-use log::trace;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     io,
     task::{Context, Poll},
     time::Duration,
 };
+use tracing::trace;
 mod discovery_config;
 mod mdns;
 pub use discovery_config::DiscoveryConfig;
@@ -282,6 +282,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         self.events.push_back(DiscoveryEvent::Connected(*peer_id));
         self.kademlia.inject_connected(peer_id);
+        trace!("Connected to a peer {:?}", peer_id);
     }
 
     fn inject_connection_closed(

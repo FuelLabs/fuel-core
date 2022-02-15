@@ -3,8 +3,8 @@ use futures::FutureExt;
 use libp2p::mdns::{MdnsConfig, MdnsEvent};
 use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
 use libp2p::{mdns::Mdns, Multiaddr, PeerId};
-use log::warn;
 use std::task::{Context, Poll};
+use tracing::warn;
 
 #[allow(clippy::large_enum_variant)]
 // Wrapper around mDNS so that `DiscoveryConfig::finish` does not have to be an `async` function
