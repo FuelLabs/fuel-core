@@ -1820,6 +1820,7 @@ dependencies = [
  "fuels-abigen-macro",
  "fuels-core",
  "fuels-rs",
+ "futures",
  "itertools",
  "r2d2",
  "r2d2-diesel",

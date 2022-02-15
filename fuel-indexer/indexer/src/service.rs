@@ -3,15 +3,14 @@ use fuel_gql_client::client::{FuelClient, PageDirection, PaginatedResult, Pagina
 use fuel_tx::{Receipt, Transaction};
 use fuels_core::abi_encoder::ABIEncoder;
 use fuels_core::{Token, Tokenizable};
+use futures::stream::{StreamExt, futures_unordered::FuturesUnordered};
 use serde::Deserialize;
+use async_std::sync::Arc;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
 use std::net::SocketAddr;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::{
     task::JoinHandle,
     time::{sleep, Duration},
@@ -26,13 +25,12 @@ pub struct IndexerConfig {
     pub listen_endpoint: SocketAddr,
 }
 
-type ExecutorInfo = (Arc<AtomicBool>, JoinHandle<()>);
-
 pub struct IndexerService {
     fuel_node_addr: SocketAddr,
     manager: SchemaManager,
     database_url: String,
-    executors: HashMap<String, ExecutorInfo>,
+    handles: HashMap<String, JoinHandle<()>>,
+    killers: HashMap<String, Arc<AtomicBool>>,
 }
 
 impl IndexerService {
@@ -48,7 +46,8 @@ impl IndexerService {
             fuel_node_addr,
             manager,
             database_url,
-            executors: HashMap::default(),
+            handles: HashMap::default(),
+            killers: HashMap::default(),
         })
     }
 
@@ -68,13 +67,14 @@ impl IndexerService {
         let handle = tokio::spawn(self.make_task(kill_switch.clone(), executor, start_block));
 
         info!("Registered indexer {}", name);
-        self.executors.insert(name, (kill_switch, handle));
+        self.handles.insert(name.clone(), handle);
+        self.killers.insert(name, kill_switch);
         Ok(())
     }
 
     pub fn stop_indexer(&mut self, executor_name: &str) {
-        if let Some(executor) = self.executors.remove(executor_name) {
-            executor.0.store(true, Ordering::SeqCst);
+        if let Some(killer) = self.killers.remove(executor_name) {
+            killer.store(true, Ordering::SeqCst);
         } else {
             warn!("Stop Indexer: No indexer with the name {executor_name}");
         }
@@ -89,6 +89,7 @@ impl IndexerService {
         let mut next_cursor = None;
         let mut next_block = start_block.unwrap_or(1);
         let client = FuelClient::from(self.fuel_node_addr);
+        let executor = Arc::new(executor);
 
         async move {
             loop {
@@ -104,62 +105,69 @@ impl IndexerService {
                     .unwrap();
 
                 debug!("Processing {} results", results.len());
-                // process earliest to latest.
-                for block in results.into_iter().rev() {
-                    if block.height.0 != next_block {
-                        continue;
-                    }
-                    next_block = block.height.0 + 1;
-                    for mut trans in block.transactions {
-                        let receipts = trans.receipts.take();
-                        let _tx = Transaction::try_from(trans).expect("Bad transaction");
+                let exec = executor.clone();
 
-                        if let Some(receipts) = receipts {
-                            for receipt in receipts {
-                                let receipt = match Receipt::try_from(receipt) {
-                                    Ok(r) => r,
-                                    Err(e) => {
-                                        error!("Receipt unpacking failed {:?}", e);
-                                        continue; // Continue? or abort??
-                                    }
-                                };
+                let result = tokio::task::spawn_blocking(move || {
+                    for block in results.into_iter().rev() {
+                        if block.height.0 != next_block {
+                            continue;
+                        }
+                        next_block = block.height.0 + 1;
+                        for mut trans in block.transactions {
+                            let receipts = trans.receipts.take();
+                            let _tx = Transaction::try_from(trans).expect("Bad transaction");
 
-                                match receipt {
-                                    Receipt::Log {
-                                        id,
-                                        ra,
-                                        rb,
-                                        rc,
-                                        rd,
-                                        pc,
-                                        is,
-                                    } => {
-                                        // TODO: might be nice to have Receipt type impl Tokenizable.
-                                        let token = Token::Struct(vec![
-                                            id.into_token(),
-                                            ra.into_token(),
-                                            rb.into_token(),
-                                            rc.into_token(),
-                                            rd.into_token(),
-                                            pc.into_token(),
-                                            is.into_token(),
-                                        ]);
-
-                                        let args = ABIEncoder::new()
-                                            .encode(&[token.clone()])
-                                            .expect("Bad Encoding!");
-                                        // TODO: should wrap this in a db transaction.
-                                        if let Err(e) =
-                                            executor.trigger_event("an_event_name", vec![args])
-                                        {
-                                            error!("Event processing failed {:?}", e);
+                            if let Some(receipts) = receipts {
+                                for receipt in receipts {
+                                    let receipt = match Receipt::try_from(receipt) {
+                                        Ok(r) => r,
+                                        Err(e) => {
+                                            error!("Receipt unpacking failed {:?}", e);
+                                            continue; // Continue? or abort??
                                         }
+                                    };
+
+                                    match receipt {
+                                        Receipt::Log {
+                                            id,
+                                            ra,
+                                            rb,
+                                            rc,
+                                            rd,
+                                            pc,
+                                            is,
+                                        } => {
+                                            // TODO: might be nice to have Receipt type impl Tokenizable.
+                                            let token = Token::Struct(vec![
+                                                id.into_token(),
+                                                ra.into_token(),
+                                                rb.into_token(),
+                                                rc.into_token(),
+                                                rd.into_token(),
+                                                pc.into_token(),
+                                                is.into_token(),
+                                            ]);
+
+                                            let args = ABIEncoder::new()
+                                                .encode(&[token.clone()])
+                                                .expect("Bad Encoding!");
+                                            // TODO: should wrap this in a db transaction.
+                                            if let Err(e) =
+                                                exec.trigger_event("an_event_name", vec![args])
+                                            {
+                                                error!("Event processing failed {:?}", e);
+                                            }
+                                        }
+                                        o => warn!("Unhandled receipt type: {:?}", o),
                                     }
-                                    o => warn!("Unhandled receipt type: {:?}", o),
                                 }
                             }
                         }
                     }
+                }).await;
+
+                if let Err(e) = result {
+                    error!("Indexer executor failed {e:?}");
                 }
 
                 next_cursor = cursor;
@@ -176,10 +184,13 @@ impl IndexerService {
     }
 
     pub async fn run(self) {
-        // TODO: handle this...
-        loop {
-            info!("Thonk....");
-            sleep(Duration::from_secs(5)).await;
+        let IndexerService { handles, ..} = self;
+        let mut futs = FuturesUnordered::from_iter(handles.into_values());
+        //loop {
+        while let Some(fut) = futs.next().await {
+            info!("Retired a future {fut:?}");
         }
+        // TODO: ...
+        //}
     }
 }

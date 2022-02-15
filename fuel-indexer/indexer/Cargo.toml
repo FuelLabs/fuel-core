@@ -25,6 +25,7 @@ fuel-gql-client = { version = "0.2" }
 fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-vm = { version = "0.2" }
+futures = "0.3"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 serde = { version = "1.0", features = ["derive"] }
