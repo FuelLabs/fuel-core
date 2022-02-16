@@ -1,5 +1,6 @@
 [workspace]
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
+resolver = "2"
 members = [
   "fuel-client",
   "fuel-core",
@@ -12,7 +13,6 @@ members = [
   "fuel-p2p",
   "xtask",
 ]
-resolver = "2"
 
 [profile.release]
 codegen-units = 1
