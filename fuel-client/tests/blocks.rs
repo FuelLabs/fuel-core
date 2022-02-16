@@ -1,5 +1,6 @@
 use chrono::{TimeZone, Utc};
 use fuel_core::database::Database;
+use fuel_core::model::fuel_block::FuelBlockHeaders;
 use fuel_core::{
     model::fuel_block::FuelBlockLight,
     schema::scalars::HexString256,
@@ -37,10 +38,13 @@ async fn block_connection_first_5() {
     // blocks
     let blocks = (0..10u32)
         .map(|i| FuelBlockLight {
-            fuel_height: i.into(),
+            headers: FuelBlockHeaders {
+                fuel_height: i.into(),
+                time: Utc.timestamp(i.into(), 0),
+                producer: Default::default(),
+                transactions_commitment: Default::default(),
+            },
             transactions: vec![],
-            time: Utc.timestamp(i.into(), 0),
-            producer: Default::default(),
         })
         .collect_vec();
 
@@ -80,10 +84,13 @@ async fn block_connection_last_5() {
     // blocks
     let blocks = (0..10u32)
         .map(|i| FuelBlockLight {
-            fuel_height: i.into(),
+            headers: FuelBlockHeaders {
+                fuel_height: i.into(),
+                time: Utc.timestamp(i.into(), 0),
+                producer: Default::default(),
+                transactions_commitment: Default::default(),
+            },
             transactions: vec![],
-            time: Utc.timestamp(i.into(), 0),
-            producer: Default::default(),
         })
         .collect_vec();
 

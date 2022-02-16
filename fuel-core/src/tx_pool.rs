@@ -1,7 +1,7 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::{ExecutionMode, Executor};
 use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders};
-use crate::service::VMConfig;
+use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
 use fuel_storage::Storage;
@@ -65,7 +65,7 @@ impl TxPool {
         self.fuel_txpool.as_ref()
     }
 
-    pub fn new(database: Database, config: VMConfig) -> Self {
+    pub fn new(database: Database, config: Config) -> Self {
         let executor = Executor {
             database: database.clone(),
             config,
@@ -82,10 +82,8 @@ impl TxPool {
     }
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+        let db = self.db.clone();
         let tx_id = tx.id();
-        // persist transaction to database
-        let mut db = self.db.clone();
-        Storage::<Bytes32, Transaction>::insert(&mut db, &tx_id, &tx)?;
         // set status to submitted
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
@@ -96,7 +94,7 @@ impl TxPool {
                 fuel_height: block_height,
                 time: Utc::now(),
                 producer: Default::default(),
-                transactions_commitment: (0, Default::default()),
+                transactions_commitment: Default::default(),
             },
             transactions: vec![tx],
         };

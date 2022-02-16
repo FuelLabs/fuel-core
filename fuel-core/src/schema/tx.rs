@@ -252,7 +252,7 @@ impl TxMutation {
         let cfg = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.vm.clone());
+        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
         let receipts = tx_pool.run_tx(tx).await?;
         Ok(receipts.into_iter().map(receipt::Receipt).collect())
     }

@@ -69,13 +69,19 @@ impl BlockHeight {
     }
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct TransactionCommitment {
+    pub sum: Word,
+    pub root: Bytes32,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FuelBlockHeaders {
     pub fuel_height: BlockHeight,
     pub time: DateTime<Utc>,
     pub producer: Address,
     // TODO: integrate with fuel-merkle
-    pub transactions_commitment: (Word, Bytes32),
+    pub transactions_commitment: TransactionCommitment,
 }
 
 impl FuelBlockHeaders {
@@ -84,8 +90,8 @@ impl FuelBlockHeaders {
         hasher.input(&self.fuel_height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.producer.as_ref());
-        hasher.input(self.transactions_commitment.0.to_be_bytes());
-        hasher.input(self.transactions_commitment.1.as_ref());
+        hasher.input(self.transactions_commitment.sum.to_be_bytes());
+        hasher.input(self.transactions_commitment.root.as_ref());
         hasher.digest()
     }
 }

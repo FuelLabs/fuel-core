@@ -1,24 +1,19 @@
-use crate::database::transaction::TransactionIndex;
-use crate::model::fuel_block::FuelBlockFull;
-use crate::service::VMConfig;
 use crate::{
-    database::{Database, KvStoreError},
+    database::{transaction::TransactionIndex, Database, KvStoreError},
     model::{
         coin::{Coin, CoinStatus},
-        fuel_block::{BlockHeight, FuelBlockLight},
+        fuel_block::{BlockHeight, FuelBlockFull, FuelBlockLight},
     },
+    service::Config,
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
-use fuel_vm::{
-    consts::REG_SP,
-    prelude::{Backtrace as FuelBacktrace, InterpreterError},
-    transactor::Transactor,
-};
+use fuel_vm::prelude::{Backtrace, Interpreter};
+use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
 use std::error::Error as StdError;
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 use tracing::warn;
 
@@ -35,7 +30,7 @@ pub enum ExecutionMode {
 
 pub struct Executor {
     pub database: Database,
-    pub config: VMConfig,
+    pub config: Config,
 }
 
 impl Executor {
@@ -44,14 +39,30 @@ impl Executor {
         block: &mut FuelBlockFull,
         mode: ExecutionMode,
     ) -> Result<(), Error> {
-        let mut block_db_commit = self.database.transaction();
         let block_id = block.id();
+        let mut block_db_transaction = self.database.transaction();
 
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
-            let mut sub_block_db_commit = block_db_commit.transaction();
-            // A database view that only lives for the duration of the transaction
-            let sub_db_view = sub_block_db_commit.deref_mut();
             let tx_id = tx.id();
+
+            // Throw a clear error if the transaction id is a duplicate
+            if Storage::<Bytes32, Transaction>::contains_key(
+                block_db_transaction.deref_mut(),
+                &tx_id,
+            )? {
+                return Err(Error::TransactionIdCollision(tx_id));
+            }
+
+            if self.config.utxo_validation {
+                self.verify_input_state(
+                    block_db_transaction.deref(),
+                    tx,
+                    block.headers.fuel_height,
+                )?;
+            }
+
+            // verify that the tx has enough gas to cover committed costs
+            self.verify_gas(tx)?;
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
             self.persist_owners_index(
@@ -59,109 +70,120 @@ impl Executor {
                 &tx,
                 &tx_id,
                 idx,
-                block_db_commit.deref_mut(),
+                block_db_transaction.deref_mut(),
             )?;
 
-            // execute vm
-            let mut vm = Transactor::new(sub_db_view.clone());
-            vm.transact(tx.clone());
-            match vm.result() {
-                Ok(result) => {
-                    if mode == ExecutionMode::Validation {
-                        // ensure tx matches vm output exactly
-                        if result.tx() != tx {
-                            return Err(Error::InvalidTransactionOutcome);
-                        }
-                    } else {
-                        // malleate the block with the resultant tx from the vm
-                        *tx = result.tx().clone()
-                    }
+            // execute transaction
+            // setup database view that only lives for the duration of vm execution
+            let mut sub_block_db_commit = block_db_transaction.transaction();
+            let sub_db_view = sub_block_db_commit.deref_mut();
+            // execution vm
+            let mut vm = Interpreter::with_storage(sub_db_view.clone());
+            let vm_result = vm
+                .transact(tx.clone())
+                .map_err(|error| Error::VmExecution {
+                    error,
+                    transaction_id: tx_id,
+                })?
+                .into_owned();
 
-                    Storage::<Bytes32, Transaction>::insert(sub_db_view, &tx_id, result.tx())?;
+            // only commit state changes if execution was a success
+            if !vm_result.should_revert() {
+                sub_block_db_commit.commit()?;
+            }
 
-                    // persist any outputs
-                    self.persist_outputs(block.headers.fuel_height, result.tx(), sub_db_view)?;
-
-                    // persist receipts
-                    self.persist_receipts(&tx_id, result.receipts(), sub_db_view)?;
-
-                    let status = if result.should_revert() {
-                        self.log_backtrace(&vm);
-                        // if script result exists, log reason
-                        if let Some((script_result, _)) = result.receipts().iter().find_map(|r| {
-                            if let Receipt::ScriptResult { result, gas_used } = r {
-                                Some((result, gas_used))
-                            } else {
-                                None
-                            }
-                        }) {
-                            TransactionStatus::Failed {
-                                block_id,
-                                time: block.headers.time,
-                                reason: format!("{:?}", script_result.reason()),
-                                result: Some(*result.state()),
-                            }
-                        }
-                        // otherwise just log the revert arg
-                        else {
-                            TransactionStatus::Failed {
-                                block_id,
-                                time: block.headers.time,
-                                reason: format!("{:?}", result.state()),
-                                result: Some(*result.state()),
-                            }
-                        }
-                    } else {
-                        // else tx was a success
-                        TransactionStatus::Success {
-                            block_id,
-                            time: block.headers.time,
-                            result: *result.state(),
-                        }
-                    };
-
-                    // persist tx status at the block level
-                    block_db_commit.update_tx_status(&tx_id, status)?;
-
-                    // only commit state changes if execution was a success
-                    if !result.should_revert() {
-                        sub_block_db_commit.commit()?;
+            match mode {
+                ExecutionMode::Validation => {
+                    // ensure tx matches vm output exactly
+                    if vm_result.tx() != tx {
+                        return Err(Error::InvalidTransactionOutcome {
+                            transaction_id: tx_id,
+                        });
                     }
                 }
-                Err(e) => {
-                    // TODO: if it's a validation related error, then this block should be marked
-                    //       as invalid and the `block_tx` dropped / uncommitted.
-                    // save error status on block_tx since the sub_tx changes are dropped
-                    block_db_commit.update_tx_status(
-                        &tx_id,
-                        TransactionStatus::Failed {
-                            block_id,
-                            time: block.headers.time,
-                            reason: e.to_string(),
-                            result: None,
-                        },
-                    )?;
+                ExecutionMode::Production => {
+                    // malleate the block with the resultant tx from the vm
+                    *tx = vm_result.tx().clone()
                 }
             }
+
+            // Store tx into the block db transaction
+            Storage::<Bytes32, Transaction>::insert(
+                block_db_transaction.deref_mut(),
+                &tx_id,
+                vm_result.tx(),
+            )?;
+
+            // persist any outputs
+            self.persist_outputs(
+                block.headers.fuel_height,
+                vm_result.tx(),
+                block_db_transaction.deref_mut(),
+            )?;
+
+            // persist receipts
+            self.persist_receipts(
+                &tx_id,
+                vm_result.receipts(),
+                block_db_transaction.deref_mut(),
+            )?;
+
+            let status = if vm_result.should_revert() {
+                self.log_backtrace(&vm, vm_result.receipts());
+                // if script result exists, log reason
+                if let Some((script_result, _)) = vm_result.receipts().iter().find_map(|r| {
+                    if let Receipt::ScriptResult { result, gas_used } = r {
+                        Some((result, gas_used))
+                    } else {
+                        None
+                    }
+                }) {
+                    TransactionStatus::Failed {
+                        block_id,
+                        time: block.headers.time,
+                        reason: format!("{:?}", script_result.reason()),
+                        result: Some(*vm_result.state()),
+                    }
+                }
+                // otherwise just log the revert arg
+                else {
+                    TransactionStatus::Failed {
+                        block_id,
+                        time: block.headers.time,
+                        reason: format!("{:?}", vm_result.state()),
+                        result: Some(*vm_result.state()),
+                    }
+                }
+            } else {
+                // else tx was a success
+                TransactionStatus::Success {
+                    block_id,
+                    time: block.headers.time,
+                    result: *vm_result.state(),
+                }
+            };
+
+            // persist tx status at the block level
+            block_db_transaction.update_tx_status(&tx_id, status)?;
         }
 
         // insert block into database
         Storage::<Bytes32, FuelBlockLight>::insert(
-            block_db_commit.deref_mut(),
+            block_db_transaction.deref_mut(),
             &block_id,
             &block.as_light(),
         )?;
-        block_db_commit.commit()?;
+        block_db_transaction.commit()?;
         Ok(())
     }
 
     // Waiting until accounts and genesis block setup is working
-    fn _verify_input_state(
+    fn verify_input_state(
         &self,
-        transaction: Transaction,
-        block: FuelBlockLight,
+        db: &Database,
+        transaction: &Transaction,
+        block_height: BlockHeight,
     ) -> Result<(), TransactionValidityError> {
-        let db = &self.database;
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
@@ -169,7 +191,7 @@ impl Executor {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
-                        if block.headers.fuel_height < coin.block_created + coin.maturity {
+                        if block_height < coin.block_created + coin.maturity {
                             return Err(TransactionValidityError::CoinHasNotMatured);
                         }
                     } else {
@@ -183,10 +205,59 @@ impl Executor {
         Ok(())
     }
 
+    /// verify that the transaction has enough gas to cover fees
+    fn verify_gas(&self, tx: &Transaction) -> Result<(), Error> {
+        if tx.gas_price() != 0 || tx.byte_price() != 0 {
+            let gas: Word = tx
+                .inputs()
+                .iter()
+                .filter_map(|input| {
+                    if let Input::Coin { amount, .. } = input {
+                        Some(*amount)
+                    } else {
+                        None
+                    }
+                })
+                .sum();
+            let spent_gas: Word = tx
+                .outputs()
+                .iter()
+                .filter_map(|output| match output {
+                    Output::Coin { amount, color, .. } if color == &Color::default() => {
+                        Some(amount)
+                    }
+                    Output::Withdrawal { amount, color, .. } if color == &Color::default() => {
+                        Some(amount)
+                    }
+                    _ => None,
+                })
+                .sum();
+            let byte_fees = tx.metered_bytes_size() as Word * tx.byte_price();
+            let gas_fees = tx.gas_limit() * tx.gas_price();
+            let total_gas_required = spent_gas
+                .checked_add(byte_fees)
+                .ok_or(Error::FeeOverflow)?
+                .checked_add(gas_fees)
+                .ok_or(Error::FeeOverflow)?;
+            gas.checked_sub(total_gas_required)
+                .ok_or(Error::InsufficientGas {
+                    provided: gas,
+                    required: total_gas_required,
+                })?;
+        }
+
+        Ok(())
+    }
+
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace(&self, transactor: &Transactor<'_, Database>) {
-        if self.config.backtrace {
-            if let Some(backtrace) = transactor.backtrace() {
+    fn log_backtrace(&self, vm: &Interpreter<Database>, receipts: &[Receipt]) {
+        if self.config.vm.backtrace {
+            if let Some(backtrace) = receipts
+                .iter()
+                .find_map(Receipt::result)
+                .copied()
+                .map(|result| Backtrace::from_vm_error(vm, result))
+            {
                 warn!(
                     target = "vm",
                     "Backtrace on contract: 0x{:x}\nregisters: {:?}\ncall_stack: {:?}\nstack\n: {}",
@@ -318,13 +389,10 @@ impl Executor {
 
 #[derive(Debug, Error)]
 pub enum TransactionValidityError {
-    #[allow(dead_code)]
     #[error("Coin input was already spent")]
     CoinAlreadySpent,
-    #[allow(dead_code)]
     #[error("Coin has not yet reached maturity")]
     CoinHasNotMatured,
-    #[allow(dead_code)]
     #[error("The specified coin doesn't exist")]
     CoinDoesntExist,
     #[error("Datastore error occurred")]
@@ -339,21 +407,34 @@ impl From<crate::database::KvStoreError> for TransactionValidityError {
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Transaction id was already used: {0:#x}")]
+    TransactionIdCollision(Bytes32),
     #[error("output already exists")]
     OutputAlreadyExists,
+    #[error("Transaction doesn't include enough value to pay for gas: {provided} < {required}")]
+    InsufficientGas { provided: Word, required: Word },
+    #[error("The computed fee caused an integer overflow")]
+    FeeOverflow,
+    #[error("Invalid transaction: {0}")]
+    TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError>),
-    #[error("missing transaction data for tx {transaction_id:?} in block {block_id:?}")]
+    #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
     MissingTransactionData {
         block_id: Bytes32,
         transaction_id: Bytes32,
     },
-    #[error("VM execution error: {0:?}")]
-    VmExecution(fuel_vm::prelude::InterpreterError),
+    #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
+    VmExecution {
+        error: fuel_vm::prelude::InterpreterError,
+        transaction_id: Bytes32,
+    },
     #[error("Execution error with backtrace")]
     Backtrace(Box<FuelBacktrace>),
-    #[error("Transaction doesn't match expected result")]
-    InvalidTransactionOutcome,
+    #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
+    InvalidTransactionOutcome { transaction_id: Bytes32 },
+    #[error("Block commitment data is invalid")]
+    InvalidBlockCommitment,
 }
 
 impl From<FuelBacktrace> for Error {
@@ -368,14 +449,384 @@ impl From<crate::database::KvStoreError> for Error {
     }
 }
 
-impl From<InterpreterError> for Error {
-    fn from(e: InterpreterError) -> Self {
-        Error::VmExecution(e)
-    }
-}
-
 impl From<crate::state::Error> for Error {
     fn from(e: crate::state::Error) -> Self {
         Error::CorruptedBlockState(Box::new(e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
+    use itertools::Itertools;
+    use rand::prelude::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    fn test_block(num_txs: usize) -> FuelBlockFull {
+        let transactions = (1..num_txs + 1)
+            .into_iter()
+            .map(|i| {
+                TxBuilder::new(2322u64)
+                    .gas_limit(10)
+                    .coin_input(Color::default(), (i as Word) * 100)
+                    .coin_output(Color::default(), (i as Word) * 50)
+                    .change_output(Color::default())
+                    .build()
+            })
+            .collect_vec();
+
+        FuelBlockFull {
+            headers: Default::default(),
+            transactions,
+        }
+    }
+
+    // Happy path test case that a produced block will also validate
+    #[tokio::test]
+    async fn executor_validates_correctly_produced_block() {
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+        let verifier = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+        let mut block = test_block(10);
+
+        producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let validation_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(validation_result.is_ok());
+    }
+
+    // Ensure transaction commitment != default after execution
+    #[tokio::test]
+    async fn executor_commits_transactions_to_block() {
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+        let mut block = test_block(10);
+        let start_block = block.clone();
+
+        producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        assert_ne!(
+            start_block.headers.transactions_commitment,
+            block.headers.transactions_commitment
+        )
+    }
+
+    // Ensure tx has at least one input to cover gas
+    #[tokio::test]
+    async fn executor_invalidates_missing_gas_input() {
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let verifier = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let gas_limit = 100;
+        let gas_price = 1;
+        let mut tx = Transaction::default();
+        tx.set_gas_limit(gas_limit);
+        tx.set_gas_price(gas_price);
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let produce_result = producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await;
+        assert!(matches!(
+            produce_result,
+            Err(Error::InsufficientGas { required, .. }) if required == gas_limit
+        ));
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::InsufficientGas {required, ..}) if required == gas_limit
+        ))
+    }
+
+    #[tokio::test]
+    async fn executor_invalidates_duplicate_tx_id() {
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let verifier = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![Transaction::default(), Transaction::default()],
+        };
+
+        let produce_result = producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await;
+        assert!(matches!(
+            produce_result,
+            Err(Error::TransactionIdCollision(_))
+        ));
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::TransactionIdCollision(_))
+        ));
+    }
+
+    // invalidate a block if a tx input contains a previously used txo
+    #[tokio::test]
+    async fn executor_invalidates_spent_inputs() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        let spent_utxo_id = rng.gen();
+        let owner = Default::default();
+        let amount = 10;
+        let color = Default::default();
+        let maturity = Default::default();
+        let block_created = Default::default();
+        let coin = Coin {
+            owner,
+            amount,
+            color,
+            maturity,
+            status: CoinStatus::Spent,
+            block_created,
+        };
+
+        let mut db = Database::default();
+        // initialize database with coin that was already spent
+        Storage::<UtxoId, Coin>::insert(&mut db, &spent_utxo_id, &coin).unwrap();
+
+        // create an input referring to a coin that is already spent
+        let input = Input::coin(spent_utxo_id, owner, amount, color, 0, 0, vec![], vec![]);
+        let output = Output::Change {
+            to: owner,
+            amount: 0,
+            color,
+        };
+        let tx = Transaction::script(
+            0,
+            0,
+            0,
+            0,
+            vec![],
+            vec![],
+            vec![input],
+            vec![output],
+            vec![Default::default()],
+        );
+
+        // setup executor with utxo-validation enabled
+        let config = Config {
+            utxo_validation: true,
+            ..Config::local_node()
+        };
+        let producer = Executor {
+            database: db.clone(),
+            config: config.clone(),
+        };
+
+        let verifier = Executor {
+            database: db.clone(),
+            config: config.clone(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let produce_result = producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await;
+        assert!(matches!(
+            produce_result,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::CoinAlreadySpent
+            ))
+        ));
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::CoinAlreadySpent
+            ))
+        ));
+    }
+
+    // invalidate a block if a tx input doesn't exist
+    #[tokio::test]
+    async fn executor_invalidates_missing_inputs() {
+        // create an input referring to a coin that is already spent
+        let tx = TxBuilder::new(2322u64)
+            .gas_limit(1)
+            .coin_input(Default::default(), 10)
+            .change_output(Default::default())
+            .build();
+
+        // setup executors with utxo-validation enabled
+        let config = Config {
+            utxo_validation: true,
+            ..Config::local_node()
+        };
+        let producer = Executor {
+            database: Database::default(),
+            config: config.clone(),
+        };
+
+        let verifier = Executor {
+            database: Default::default(),
+            config: config.clone(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let produce_result = producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await;
+        assert!(matches!(
+            produce_result,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::CoinDoesntExist
+            ))
+        ));
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::CoinDoesntExist
+            ))
+        ));
+    }
+
+    // corrupt a produced block by randomizing change amount
+    // and verify that the executor invalidates the tx
+    #[tokio::test]
+    async fn executor_invalidates_blocks_with_diverging_tx_outputs() {
+        let input_amount = 10;
+        let fake_output_amount = 100;
+
+        let tx = TxBuilder::new(2322u64)
+            .gas_limit(1)
+            .coin_input(Default::default(), input_amount)
+            .change_output(Default::default())
+            .build();
+
+        let tx_id = tx.id();
+
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let verifier = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        // modify change amount
+        if let Transaction::Script { outputs, .. } = &mut block.transactions[0] {
+            if let Output::Change { amount, .. } = &mut outputs[0] {
+                *amount = fake_output_amount
+            }
+        }
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
+        ));
+    }
+
+    // corrupt the merkle sum tree commitment from a produced block and verify that the
+    // validation logic will reject the block
+    #[tokio::test]
+    async fn executor_invalidates_blocks_with_diverging_tx_commitment() {
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let tx = TxBuilder::new(2322u64)
+            .gas_limit(1)
+            .coin_input(Default::default(), 10)
+            .change_output(Default::default())
+            .build();
+
+        let producer = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let verifier = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        producer
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        // randomize transaction commitment
+        block.headers.transactions_commitment.root = rng.gen();
+        block.headers.transactions_commitment.sum = rng.gen();
+
+        let verify_result = verifier
+            .execute(&mut block, ExecutionMode::Validation)
+            .await;
+
+        assert!(matches!(verify_result, Err(Error::InvalidBlockCommitment)))
     }
 }
