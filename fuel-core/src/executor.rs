@@ -1,3 +1,4 @@
+use crate::model::fuel_block::TransactionCommitment;
 use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
     model::{
@@ -9,9 +10,11 @@ use crate::{
 };
 use fuel_asm::Word;
 use fuel_storage::Storage;
+use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_vm::prelude::{Backtrace, Interpreter};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
+use itertools::Itertools;
 use std::error::Error as StdError;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
@@ -41,6 +44,8 @@ impl Executor {
     ) -> Result<(), Error> {
         let block_id = block.id();
         let mut block_db_transaction = self.database.transaction();
+
+        let mut commitment = TransactionCommitment::default();
 
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
             let tx_id = tx.id();
@@ -91,6 +96,23 @@ impl Executor {
             if !vm_result.should_revert() {
                 sub_block_db_commit.commit()?;
             }
+
+            // update block commitment
+            let tx_fee = self.total_fee_paid(tx, vm_result.receipts())?;
+            // TODO: use SMT instead of this manual approach
+            commitment.sum = commitment
+                .sum
+                .checked_add(tx_fee)
+                .ok_or(Error::FeeOverflow)?;
+            commitment.root = Hasher::hash(
+                &commitment
+                    .root
+                    .as_ref()
+                    .iter()
+                    .chain(tx_id.as_ref().iter())
+                    .copied()
+                    .collect_vec(),
+            );
 
             match mode {
                 ExecutionMode::Validation => {
@@ -167,6 +189,18 @@ impl Executor {
             block_db_transaction.update_tx_status(&tx_id, status)?;
         }
 
+        // check or set transaction commitment
+        match mode {
+            ExecutionMode::Production => {
+                block.headers.transactions_commitment = commitment;
+            }
+            ExecutionMode::Validation => {
+                if block.headers.transactions_commitment != commitment {
+                    return Err(Error::InvalidBlockCommitment);
+                }
+            }
+        }
+
         // insert block into database
         Storage::<Bytes32, FuelBlockLight>::insert(
             block_db_transaction.deref_mut(),
@@ -202,6 +236,11 @@ impl Executor {
             }
         }
 
+        Ok(())
+    }
+
+    /// Mark inputs as spent
+    fn spend_inputs(&self, tx: &Transaction, db: &Database) -> Result<(), Error> {
         Ok(())
     }
 
@@ -247,6 +286,21 @@ impl Executor {
         }
 
         Ok(())
+    }
+
+    fn total_fee_paid(&self, tx: &Transaction, receipts: &[Receipt]) -> Result<Word, Error> {
+        let mut fee = tx.metered_bytes_size() as Word * tx.byte_price();
+
+        for r in receipts {
+            match r {
+                Receipt::ScriptResult { gas_used, .. } => {
+                    fee = fee.checked_add(*gas_used).ok_or(Error::FeeOverflow)?;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(fee)
     }
 
     /// Log a VM backtrace if configured to do so
@@ -828,5 +882,33 @@ mod tests {
             .await;
 
         assert!(matches!(verify_result, Err(Error::InvalidBlockCommitment)))
+    }
+
+    #[tokio::test]
+    async fn validation_succeeds_when_input_contract_utxo_id_uses_expected_value() {
+        // create a contract in block 1
+        // verify a block 2 containing contract id from block 1, using the correct contract utxo_id from block 1.
+        unimplemented!()
+    }
+
+    // verify that a contract input must exist for a transaction
+    #[tokio::test]
+    async fn invalidates_if_input_contract_utxo_id_divergent() {
+        // create a contract in block 1
+        // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
+        unimplemented!()
+    }
+
+    // verify that a contract output is set for a transaction
+    #[tokio::test]
+    async fn contract_output_is_set() {
+        unimplemented!()
+    }
+
+    // If a produced block creates a different contract output than what the verifier expects,
+    // invalidate the block
+    #[tokio::test]
+    async fn executor_invalidates_divergent_contract_outputs() {
+        unimplemented!()
     }
 }

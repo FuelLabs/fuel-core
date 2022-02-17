@@ -1240,6 +1240,7 @@ dependencies = [
 name = "fuel-core"
 version = "0.3.2"
 dependencies = [
+ "anyhow",
  "assert_matches",
  "async-graphql",
  "async-trait",
