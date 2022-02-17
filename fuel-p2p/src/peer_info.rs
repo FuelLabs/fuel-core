@@ -12,12 +12,12 @@ use libp2p::{
     },
     Multiaddr, PeerId,
 };
-use log::debug;
 use std::{
     collections::{HashMap, HashSet},
     task::{Context, Poll},
     time::Duration,
 };
+use tracing::debug;
 
 /// Events emitted by PeerInfoBehaviour
 #[derive(Debug)]

@@ -4,10 +4,7 @@ use libp2p::{
     kad::{store::MemoryStore, Kademlia, KademliaConfig},
     Multiaddr, PeerId,
 };
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    time::Duration,
-};
+use std::{collections::VecDeque, time::Duration};
 use tracing::warn;
 
 #[derive(Clone, Debug)]

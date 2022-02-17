@@ -11,11 +11,11 @@ use libp2p::{
     },
     NetworkBehaviour, PeerId,
 };
-use log::debug;
 use std::{
     collections::VecDeque,
     task::{Context, Poll},
 };
+use tracing::debug;
 
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
