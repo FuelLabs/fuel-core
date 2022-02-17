@@ -49,13 +49,13 @@ impl Executor {
             let mut vm = Transactor::new(tx_db.clone());
             vm.transact(tx);
 
-            // only commit state changes if execution was a success
-            if !result.should_revert() {
-                sub_tx.commit()?;
-            }
 
             match vm.result() {
                 Ok(result) => {
+                    // only commit state changes if execution was a success
+                    if !result.should_revert() {
+                        sub_tx.commit()?;
+                    }
                     // persist any outputs
                     self.persist_outputs(block.fuel_height, result.tx(), block_tx.deref_mut())?;
 
