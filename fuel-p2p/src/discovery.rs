@@ -16,7 +16,6 @@ use libp2p::{
     },
     Multiaddr, PeerId,
 };
-use log::trace;
 use std::{
     collections::VecDeque,
     io,
