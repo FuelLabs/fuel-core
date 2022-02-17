@@ -1238,7 +1238,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "assert_matches",
  "async-graphql",
@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "cynic",
@@ -1428,7 +1428,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
