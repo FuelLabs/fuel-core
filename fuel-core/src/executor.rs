@@ -48,13 +48,18 @@ impl Executor {
             // execute vm
             let mut vm = Transactor::new(tx_db.clone());
             vm.transact(tx);
+
             match vm.result() {
                 Ok(result) => {
+                    // only commit state changes if execution was a success
+                    if !result.should_revert() {
+                        sub_tx.commit()?;
+                    }
                     // persist any outputs
-                    self.persist_outputs(block.fuel_height, result.tx(), tx_db)?;
+                    self.persist_outputs(block.fuel_height, result.tx(), block_tx.deref_mut())?;
 
                     // persist receipts
-                    self.persist_receipts(tx_id, result.receipts(), tx_db)?;
+                    self.persist_receipts(tx_id, result.receipts(), block_tx.deref_mut())?;
 
                     let status = if result.should_revert() {
                         if config.backtrace {
@@ -104,14 +109,9 @@ impl Executor {
 
                     // persist tx status at the block level
                     block_tx.update_tx_status(tx_id, status)?;
-
-                    // only commit state changes if execution was a success
-                    if !result.should_revert() {
-                        sub_tx.commit()?;
-                    }
                 }
                 Err(e) => {
-                    // save error status on block_tx since the sub_tx changes are dropped
+                    // save error status on block_tx
                     block_tx.update_tx_status(
                         tx_id,
                         TransactionStatus::Failed {

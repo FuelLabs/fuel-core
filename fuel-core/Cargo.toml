@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core"
-version = "0.2.1"
+version = "0.3.2"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -27,10 +27,12 @@ derive_more = { version = "0.99" }
 dirs = "3.0"
 env_logger = "0.9"
 fuel-asm = { version = "0.1", features = ["serde-types"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.3.2" }
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.2", features = ["serde-types"] }
+fuel-tx = { version = "0.5", features = ["serde-types"] }
+fuel-txpool = { path = "../fuel-txpool", version = "0.3.2" }
 fuel-types = { version = "0.1", features = ["serde-types"] }
-fuel-vm = { version = "0.2", features = ["serde-types"] }
+fuel-vm = { version = "0.4", features = ["serde-types"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -38,7 +40,10 @@ hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
 rand = "0.8"
-rocksdb = { version = "0.17", features = ["snappy", "multi-threaded-cf"], optional = true }
+rocksdb = { version = "0.17", features = [
+    "snappy",
+    "multi-threaded-cf",
+], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"
@@ -54,8 +59,9 @@ tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
-fuel-vm = { version = "0.2", features = ["serde-types", "random"] }
+fuel-vm = { version = "0.4", features = ["serde-types", "random"] }
 insta = "1.8"
+assert_matches = "1.5"
 
 [features]
 default = ["rocksdb"]

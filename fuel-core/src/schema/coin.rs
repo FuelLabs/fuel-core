@@ -1,3 +1,4 @@
+use crate::coin_query::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{HexString256, U64};
@@ -8,7 +9,8 @@ use async_graphql::{
     Context, Object,
 };
 use fuel_storage::Storage;
-use fuel_tx::{Address, UtxoId};
+use fuel_tx::consts::MAX_INPUTS;
+use fuel_tx::{Address, Color as FuelTxColor, UtxoId};
 use itertools::Itertools;
 
 use super::scalars::HexStringUtxoId;
@@ -52,6 +54,14 @@ struct CoinFilterInput {
     owner: HexString256,
     /// color of the coins
     color: Option<HexString256>,
+}
+
+#[derive(InputObject)]
+struct SpendQueryElementInput {
+    /// color of the coins
+    color: HexString256,
+    /// address of the owner
+    amount: U64,
 }
 
 #[derive(Default)]
@@ -167,5 +177,31 @@ impl CoinQuery {
             },
         )
         .await
+    }
+
+    async fn coins_to_spend(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The Address of the utxo owner")] owner: HexString256,
+        #[graphql(desc = "The total amount of each asset type to spend")] spend_query: Vec<
+            SpendQueryElementInput,
+        >,
+        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u8>,
+    ) -> async_graphql::Result<Vec<Coin>> {
+        let owner: Address = owner.0.into();
+        let spend_query: Vec<SpendQueryElement> = spend_query
+            .iter()
+            .map(|e| (owner, FuelTxColor::from(e.color.0), e.amount.0))
+            .collect();
+        let max_inputs: u8 = max_inputs.unwrap_or(MAX_INPUTS);
+
+        let db = ctx.data_unchecked::<Database>();
+
+        let coins = random_improve(db, &spend_query, max_inputs)?
+            .into_iter()
+            .map(|(id, coin)| Coin(id, coin))
+            .collect();
+
+        Ok(coins)
     }
 }

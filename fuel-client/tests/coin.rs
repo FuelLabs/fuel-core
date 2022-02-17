@@ -1,4 +1,5 @@
 use fuel_core::{
+    chain_config::{CoinConfig, StateConfig},
     database::Database,
     model::coin::{Coin, CoinStatus},
     service::{Config, FuelService},
@@ -195,4 +196,104 @@ async fn only_unspent_coins() {
         .results
         .into_iter()
         .all(|c| c.status == SchemaCoinStatus::Unspent));
+}
+
+#[tokio::test]
+async fn coins_to_spend() {
+    let owner = Address::default();
+    let color_a = Color::new([1u8; 32]);
+    let color_b = Color::new([2u8; 32]);
+
+    // setup config
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        height: None,
+        contracts: None,
+        coins: Some(
+            vec![
+                (owner, 50, color_a),
+                (owner, 100, color_a),
+                (owner, 150, color_a),
+                (owner, 50, color_b),
+                (owner, 100, color_b),
+                (owner, 150, color_b),
+            ]
+            .into_iter()
+            .map(|(owner, amount, color)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                block_created: None,
+                maturity: None,
+                owner,
+                amount,
+                color,
+            })
+            .collect(),
+        ),
+    });
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    // empty spend_query
+    let coins = client
+        .coins_to_spend(format!("{:#x}", owner).as_str(), vec![], None)
+        .await
+        .unwrap();
+    assert!(coins.is_empty());
+
+    // spend_query for 1 a and 1 b
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![
+                (format!("{:#x}", color_a).as_str(), 1),
+                (format!("{:#x}", color_b).as_str(), 1),
+            ],
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(coins.len(), 2);
+
+    // spend_query for 300 a and 300 b
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![
+                (format!("{:#x}", color_a).as_str(), 300),
+                (format!("{:#x}", color_b).as_str(), 300),
+            ],
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(coins.len(), 6);
+
+    // not enough coins
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![
+                (format!("{:#x}", color_a).as_str(), 301),
+                (format!("{:#x}", color_b).as_str(), 301),
+            ],
+            None,
+        )
+        .await;
+    assert!(coins.is_err());
+
+    // not enough inputs
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![
+                (format!("{:#x}", color_a).as_str(), 300),
+                (format!("{:#x}", color_b).as_str(), 300),
+            ],
+            5.into(),
+        )
+        .await;
+    assert!(coins.is_err());
 }

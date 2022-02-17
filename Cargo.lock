@@ -123,6 +123,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eab1c04a571841102f5345a8fc0f6bb3d31c315dec879b5c6e42e40ce7ffa34e"
 
 [[package]]
+name = "assert_matches"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
+
+[[package]]
 name = "async-channel"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1232,8 +1238,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.2.1"
+version = "0.3.2"
 dependencies = [
+ "assert_matches",
  "async-graphql",
  "async-trait",
  "axum",
@@ -1243,10 +1250,12 @@ dependencies = [
  "dirs",
  "env_logger",
  "fuel-asm",
+ "fuel-core-interfaces",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
+ "fuel-txpool",
  "fuel-types",
- "fuel-vm 0.2.0",
+ "fuel-vm 0.4.0",
  "futures",
  "graphql-parser",
  "hex",
@@ -1272,8 +1281,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-core-interfaces"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-asm",
+ "fuel-storage",
+ "fuel-tx 0.5.0",
+ "fuel-types",
+ "fuel-vm 0.4.0",
+ "futures",
+ "lazy_static",
+ "parking_lot",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-gql-client"
-version = "0.2.1"
+version = "0.3.2"
 dependencies = [
  "chrono",
  "cynic",
@@ -1281,9 +1308,9 @@ dependencies = [
  "fuel-core",
  "fuel-gql-client",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
- "fuel-vm 0.2.0",
+ "fuel-vm 0.4.0",
  "futures",
  "hex",
  "insta",
@@ -1381,9 +1408,37 @@ dependencies = [
  "fuel-asm",
  "fuel-types",
  "itertools",
+ "serde",
+ "sha2",
+]
+
+[[package]]
+name = "fuel-tx"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f2f7b870e050bab2e9a2178ed6ac627a56ce7ea4fb036cecdacbcc2854212ef"
+dependencies = [
+ "fuel-asm",
+ "fuel-types",
+ "itertools",
  "rand 0.8.4",
  "serde",
  "sha2",
+]
+
+[[package]]
+name = "fuel-txpool"
+version = "0.3.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-interfaces",
+ "fuel-tx 0.5.0",
+ "fuel-types",
+ "futures",
+ "parking_lot",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
@@ -1415,16 +1470,17 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.2.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6a51584f4230a4bf19099fee60da2e4a00b67d2e39a3bc94a434f207e8a224e"
+checksum = "49842bf8fafcef12f61711367ba233501f2ae4304eb973746b485439ad3ce517"
 dependencies = [
  "fuel-asm",
  "fuel-merkle",
  "fuel-storage",
- "fuel-tx 0.2.0",
+ "fuel-tx 0.5.0",
  "fuel-types",
  "itertools",
+ "rand 0.8.4",
  "secp256k1",
  "serde",
  "sha3",
@@ -3199,6 +3255,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
 
 [[package]]
+name = "signal-hook-registry"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "similar"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3568,10 +3633,15 @@ version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbbf1c778ec206785635ce8ad57fe52b3009ae9e0c9f574a728f3049d3e55838"
 dependencies = [
+ "bytes 1.1.0",
  "libc",
+ "memchr",
  "mio",
  "num_cpus",
+ "once_cell",
+ "parking_lot",
  "pin-project-lite",
+ "signal-hook-registry",
  "tokio-macros",
  "winapi",
 ]
