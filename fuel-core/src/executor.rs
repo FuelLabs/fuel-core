@@ -49,7 +49,6 @@ impl Executor {
             let mut vm = Transactor::new(tx_db.clone());
             vm.transact(tx);
 
-
             match vm.result() {
                 Ok(result) => {
                     // only commit state changes if execution was a success
