@@ -14,7 +14,7 @@ if [ "${k8s_provider}" == "eks" ]; then
               --values values.yaml \
               --install \
               --create-namespace \
-              --namespace=fuel-core \
+              --namespace=${k8s_namespace} \
               --wait \
               --timeout 8000s \
               --debug
