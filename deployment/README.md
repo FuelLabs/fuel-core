@@ -115,7 +115,8 @@ You will need to customize the following environment variables as needed (for va
 
 | ENV Variable                   |  Script Usage     | Description                                                                                       |
 |--------------------------------|-------------------|---------------------------------------------------------------------------------------------------|
-| k8s_provider                   |  create-k8s (all) | your kubernetes provider name, possible options: eks                                              | 
+| k8s_provider                   |  create-k8s (all) | your kubernetes provider name, possible options: eks                                              |
+| k8s_namespace                  |  fuel-core-deploy | your kubernetes namespace for fuel-core deployment  
 | fuel_core_image_repository     |  fuel-core-deploy | fuel-core ghcr image registry URI                                                                 |   
 | fuel_core_image_tag            |  fuel-core-deploy | fuel-core ghcr image tag                                                                          | 
 | base64_github_auth_token       |  fuel-core-deploy | base64 encoded github auth token to pull the fuel-core ghcr image (more info below)               |
