@@ -29,6 +29,7 @@ use tracing::warn;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionMode {
     Production,
+    #[allow(dead_code)]
     Validation,
 }
 
@@ -410,7 +411,7 @@ impl Executor {
         db: &mut Database,
     ) -> Result<(), Error> {
         for (output_index, output) in tx.outputs().iter().enumerate() {
-            let utxo_id = UtxoId::new(tx_id, output_index as u8);
+            let utxo_id = UtxoId::new(*tx_id, output_index as u8);
             match output {
                 Output::Coin { amount, color, to } => {
                     Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?

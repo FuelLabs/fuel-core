@@ -37,7 +37,7 @@ pub struct Opt {
 
     /// Enable/disable full utxo stateful validation
     /// disabled by default until downstream consumers stabilize
-    #[structopt(long = "utxo-validation", default_value = false)]
+    #[structopt(long = "utxo-validation")]
     pub utxo_validation: bool,
 }
 
