@@ -146,6 +146,7 @@ impl Executor {
             self.persist_outputs(
                 block.headers.fuel_height,
                 vm_result.tx(),
+                &tx_id,
                 block_db_transaction.deref_mut(),
             )?;
 
@@ -345,6 +346,8 @@ impl Executor {
         Ok(fee)
     }
 
+    /// In production mode, lookup and set the proper utxo ids for contract inputs
+    /// In validation mode, verify the proposed utxo ids on contract inputs match the expected values.
     fn compute_contract_input_utxo_ids(
         &self,
         tx: &mut Transaction,
@@ -403,25 +406,19 @@ impl Executor {
         &self,
         block_height: BlockHeight,
         tx: &Transaction,
+        tx_id: &Bytes32,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let id = tx.id();
-        for (out_idx, output) in tx.outputs().iter().enumerate() {
+        for (output_index, output) in tx.outputs().iter().enumerate() {
+            let utxo_id = UtxoId::new(tx_id, output_index as u8);
             match output {
-                Output::Coin { amount, color, to } => Executor::insert_coin(
-                    block_height.into(),
-                    id,
-                    out_idx as u8,
-                    &amount,
-                    &color,
-                    &to,
-                    db,
-                )?,
+                Output::Coin { amount, color, to } => {
+                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                }
                 Output::Contract {
                     input_index: input_idx,
                     ..
                 } => {
-                    let utxo_id = UtxoId::new(id, out_idx as u8);
                     if let Some(Input::Contract { contract_id, .. }) =
                         tx.inputs().get(*input_idx as usize)
                     {
@@ -432,27 +429,16 @@ impl Executor {
                         ));
                     }
                 }
-                Output::Withdrawal { .. } => {}
-                Output::Change { to, color, amount } => Executor::insert_coin(
-                    block_height.into(),
-                    id,
-                    out_idx as u8,
-                    &amount,
-                    &color,
-                    &to,
-                    db,
-                )?,
-                Output::Variable { to, color, amount } => Executor::insert_coin(
-                    block_height.into(),
-                    id,
-                    out_idx as u8,
-                    &amount,
-                    &color,
-                    &to,
-                    db,
-                )?,
+                Output::Withdrawal { .. } => {
+                    // TODO: Handle withdrawals somehow (new field on the block type?)
+                }
+                Output::Change { to, color, amount } => {
+                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                }
+                Output::Variable { to, color, amount } => {
+                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                }
                 Output::ContractCreated { contract_id, .. } => {
-                    let utxo_id = UtxoId::new(id, out_idx as u8);
                     Storage::<ContractId, UtxoId>::insert(db, &contract_id, &utxo_id)?;
                 }
             }
@@ -462,14 +448,12 @@ impl Executor {
 
     fn insert_coin(
         fuel_height: u32,
-        tx_id: Bytes32,
-        output_index: u8,
+        utxo_id: UtxoId,
         amount: &Word,
         color: &Color,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let utxo_id = UtxoId::new(tx_id, output_index);
         let coin = Coin {
             owner: *to,
             amount: *amount,
