@@ -76,7 +76,7 @@ impl Executor {
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
             self.persist_owners_index(
                 block.headers.fuel_height,
-                &tx,
+                tx,
                 &tx_id,
                 idx,
                 block_db_transaction.deref_mut(),
@@ -229,7 +229,7 @@ impl Executor {
         for input in transaction.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
-                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, &utxo_id)? {
+                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent);
                         }
@@ -336,11 +336,8 @@ impl Executor {
         let mut fee = tx.metered_bytes_size() as Word * tx.byte_price();
 
         for r in receipts {
-            match r {
-                Receipt::ScriptResult { gas_used, .. } => {
-                    fee = fee.checked_add(*gas_used).ok_or(Error::FeeOverflow)?;
-                }
-                _ => {}
+            if let Receipt::ScriptResult { gas_used, .. } = r {
+                fee = fee.checked_add(*gas_used).ok_or(Error::FeeOverflow)?;
             }
         }
 
@@ -414,7 +411,7 @@ impl Executor {
             let utxo_id = UtxoId::new(*tx_id, output_index as u8);
             match output {
                 Output::Coin { amount, color, to } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
                 }
                 Output::Contract {
                     input_index: input_idx,
@@ -423,7 +420,7 @@ impl Executor {
                     if let Some(Input::Contract { contract_id, .. }) =
                         tx.inputs().get(*input_idx as usize)
                     {
-                        Storage::<ContractId, UtxoId>::insert(db, &contract_id, &utxo_id)?;
+                        Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
                     } else {
                         return Err(Error::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
@@ -434,13 +431,13 @@ impl Executor {
                     // TODO: Handle withdrawals somehow (new field on the block type?)
                 }
                 Output::Change { to, color, amount } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
                 }
                 Output::Variable { to, color, amount } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, &amount, &color, &to, db)?
+                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
                 }
                 Output::ContractCreated { contract_id, .. } => {
-                    Storage::<ContractId, UtxoId>::insert(db, &contract_id, &utxo_id)?;
+                    Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
                 }
             }
         }
@@ -515,7 +512,7 @@ impl Executor {
         owners.dedup();
 
         for owner in owners {
-            db.record_tx_id_owner(&owner, block_height, tx_idx as TransactionIndex, tx_id)?;
+            db.record_tx_id_owner(owner, block_height, tx_idx as TransactionIndex, tx_id)?;
         }
 
         Ok(())

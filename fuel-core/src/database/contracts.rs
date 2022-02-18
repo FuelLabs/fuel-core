@@ -31,7 +31,7 @@ impl Storage<ContractId, UtxoId> for Database {
     type Error = Error;
 
     fn insert(&mut self, key: &ContractId, value: &UtxoId) -> Result<Option<UtxoId>, Self::Error> {
-        Database::insert(self, key.as_ref(), CONTRACT_UTXO_ID, value.clone())
+        Database::insert(self, key.as_ref(), CONTRACT_UTXO_ID, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
@@ -123,11 +123,7 @@ mod tests {
         let database = Database::default();
 
         database
-            .insert(
-                contract_id.as_ref().to_vec(),
-                CONTRACT_UTXO_ID,
-                utxo_id.clone(),
-            )
+            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
             .unwrap();
 
         assert_eq!(
