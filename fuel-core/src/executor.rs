@@ -12,6 +12,7 @@ use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
+use fuel_types::ContractId;
 use fuel_vm::prelude::{Backtrace, Interpreter};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
 use itertools::Itertools;
@@ -65,6 +66,8 @@ impl Executor {
                     block.headers.fuel_height,
                 )?;
             }
+
+            self.compute_contract_input_utxo_ids(tx, &mode, block_db_transaction.deref())?;
 
             // verify that the tx has enough gas to cover committed costs
             self.verify_gas(tx)?;
@@ -135,6 +138,9 @@ impl Executor {
                 &tx_id,
                 vm_result.tx(),
             )?;
+
+            // change the spent status of the tx inputs
+            self.spend_inputs(vm_result.tx(), block_db_transaction.deref_mut())?;
 
             // persist any outputs
             self.persist_outputs(
@@ -240,7 +246,43 @@ impl Executor {
     }
 
     /// Mark inputs as spent
-    fn spend_inputs(&self, tx: &Transaction, db: &Database) -> Result<(), Error> {
+    fn spend_inputs(&self, tx: &Transaction, db: &mut Database) -> Result<(), Error> {
+        for input in tx.inputs() {
+            if let Input::Coin {
+                utxo_id,
+                owner,
+                amount,
+                color,
+                maturity,
+                ..
+            } = input
+            {
+                let block_created;
+                if self.config.utxo_validation {
+                    block_created = Storage::<UtxoId, Coin>::get(db, utxo_id)?
+                        .ok_or(Error::TransactionValidity(
+                            TransactionValidityError::CoinDoesntExist,
+                        ))?
+                        .block_created;
+                } else {
+                    // if utxo validation is disabled, just assign this new input to the original block
+                    block_created = Default::default();
+                }
+
+                Storage::<UtxoId, Coin>::insert(
+                    db,
+                    utxo_id,
+                    &Coin {
+                        owner: *owner,
+                        amount: *amount,
+                        color: *color,
+                        maturity: (*maturity).into(),
+                        status: CoinStatus::Spent,
+                        block_created,
+                    },
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -303,6 +345,39 @@ impl Executor {
         Ok(fee)
     }
 
+    fn compute_contract_input_utxo_ids(
+        &self,
+        tx: &mut Transaction,
+        mode: &ExecutionMode,
+        db: &Database,
+    ) -> Result<(), Error> {
+        if let Transaction::Script { inputs, .. } = tx {
+            for input in inputs {
+                if let Input::Contract {
+                    utxo_id,
+                    contract_id,
+                    ..
+                } = input
+                {
+                    let expected_utxo_id = Storage::<ContractId, UtxoId>::get(db, contract_id)?
+                        .ok_or(Error::ContractUtxoMissing(*contract_id))?
+                        .into_owned();
+                    match mode {
+                        ExecutionMode::Production => *utxo_id = expected_utxo_id,
+                        ExecutionMode::Validation => {
+                            if *utxo_id != expected_utxo_id {
+                                return Err(Error::InvalidTransactionOutcome {
+                                    transaction_id: tx.id(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Log a VM backtrace if configured to do so
     fn log_backtrace(&self, vm: &Interpreter<Database>, receipts: &[Receipt]) {
         if self.config.vm.backtrace {
@@ -343,10 +418,20 @@ impl Executor {
                     db,
                 )?,
                 Output::Contract {
-                    balance_root: _,
-                    input_index: _,
-                    state_root: _,
-                } => {}
+                    input_index: input_idx,
+                    ..
+                } => {
+                    let utxo_id = UtxoId::new(id, out_idx as u8);
+                    if let Some(Input::Contract { contract_id, .. }) =
+                        tx.inputs().get(*input_idx as usize)
+                    {
+                        Storage::<ContractId, UtxoId>::insert(db, &contract_id, &utxo_id)?;
+                    } else {
+                        return Err(Error::TransactionValidity(
+                            TransactionValidityError::InvalidContractInputIndex(utxo_id),
+                        ));
+                    }
+                }
                 Output::Withdrawal { .. } => {}
                 Output::Change { to, color, amount } => Executor::insert_coin(
                     block_height.into(),
@@ -357,8 +442,19 @@ impl Executor {
                     &to,
                     db,
                 )?,
-                Output::Variable { .. } => {}
-                Output::ContractCreated { .. } => {}
+                Output::Variable { to, color, amount } => Executor::insert_coin(
+                    block_height.into(),
+                    id,
+                    out_idx as u8,
+                    &amount,
+                    &color,
+                    &to,
+                    db,
+                )?,
+                Output::ContractCreated { contract_id, .. } => {
+                    let utxo_id = UtxoId::new(id, out_idx as u8);
+                    Storage::<ContractId, UtxoId>::insert(db, &contract_id, &utxo_id)?;
+                }
             }
         }
         Ok(())
@@ -449,6 +545,8 @@ pub enum TransactionValidityError {
     CoinHasNotMatured,
     #[error("The specified coin doesn't exist")]
     CoinDoesntExist,
+    #[error("Contract output index isn't valid: {0:#x}")]
+    InvalidContractInputIndex(UtxoId),
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn std::error::Error>),
 }
@@ -489,6 +587,8 @@ pub enum Error {
     InvalidTransactionOutcome { transaction_id: Bytes32 },
     #[error("Block commitment data is invalid")]
     InvalidBlockCommitment,
+    #[error("No matching utxo for contract id ${0:#x}")]
+    ContractUtxoMissing(ContractId),
 }
 
 impl From<FuelBacktrace> for Error {
@@ -512,6 +612,11 @@ impl From<crate::state::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::fuel_block::FuelBlockHeaders;
+    use chrono::{TimeZone, Utc};
+    use fuel_asm::Opcode;
+    use fuel_types::{ContractId, Salt};
+    use fuel_vm::consts::REG_ZERO;
     use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
     use itertools::Itertools;
     use rand::prelude::StdRng;
@@ -534,6 +639,32 @@ mod tests {
             headers: Default::default(),
             transactions,
         }
+    }
+
+    fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
+        let salt: Salt = rng.gen();
+        let contract = fuel_vm::contract::Contract::from(contract_code);
+        let root = contract.root();
+        let state_root = fuel_vm::contract::Contract::default_state_root();
+        let contract_id = contract.id(&salt, &root, &state_root);
+
+        let tx = Transaction::create(
+            0,
+            0,
+            0,
+            0,
+            0,
+            salt,
+            vec![],
+            vec![],
+            vec![],
+            vec![Output::ContractCreated {
+                contract_id,
+                state_root,
+            }],
+            vec![Default::default()],
+        );
+        (tx, contract_id)
     }
 
     // Happy path test case that a produced block will also validate
@@ -885,30 +1016,235 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn input_coins_are_marked_as_spent() {
+        // ensure coins are marked as spent after tx is processed
+        let tx = TxBuilder::new(2322u64)
+            .coin_input(Color::default(), 100)
+            .change_output(Color::default())
+            .build();
+
+        let db = Database::default();
+        let executor = Executor {
+            database: db.clone(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        // assert the tx coin is spent
+        let coin = Storage::<UtxoId, Coin>::get(&db, block.transactions[0].inputs()[0].utxo_id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Spent);
+    }
+
+    #[tokio::test]
+    async fn input_coins_are_marked_as_spent_with_utxo_validation_enabled() {
+        let starting_block = BlockHeight::from(5u64);
+        // ensure coins are marked as spent after tx is processed
+        let tx = TxBuilder::new(2322u64)
+            .coin_input(Color::default(), 100)
+            .change_output(Color::default())
+            .build();
+
+        let mut db = Database::default();
+
+        if let Input::Coin {
+            utxo_id,
+            owner,
+            amount,
+            color,
+            ..
+        } = tx.inputs()[0]
+        {
+            Storage::<UtxoId, Coin>::insert(
+                &mut db,
+                &utxo_id,
+                &Coin {
+                    owner,
+                    amount,
+                    color,
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: starting_block,
+                },
+            )
+            .unwrap();
+        }
+
+        let executor = Executor {
+            database: db.clone(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        let mut block = FuelBlockFull {
+            headers: FuelBlockHeaders {
+                fuel_height: 6u64.into(),
+                time: Utc.timestamp(0, 0),
+                producer: Default::default(),
+                transactions_commitment: Default::default(),
+            },
+            transactions: vec![tx],
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        // assert the tx coin is spent
+        let coin = Storage::<UtxoId, Coin>::get(&db, block.transactions[0].inputs()[0].utxo_id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Spent);
+        // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
+        assert_eq!(coin.block_created, starting_block)
+    }
+
+    #[tokio::test]
     async fn validation_succeeds_when_input_contract_utxo_id_uses_expected_value() {
+        let mut rng = StdRng::seed_from_u64(2322);
         // create a contract in block 1
-        // verify a block 2 containing contract id from block 1, using the correct contract utxo_id from block 1.
-        unimplemented!()
+        // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
+        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let mut first_block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let tx2 = TxBuilder::new(2322)
+            .script(vec![Opcode::RET(1)])
+            .contract_input(contract_id)
+            .contract_output(&contract_id)
+            .build();
+        let mut second_block = FuelBlockFull {
+            headers: FuelBlockHeaders {
+                fuel_height: 2u64.into(),
+                ..Default::default()
+            },
+            transactions: vec![tx2],
+        };
+
+        let db = Database::default();
+
+        let setup = Executor {
+            database: db.clone(),
+            config: Config::local_node(),
+        };
+
+        setup
+            .execute(&mut first_block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let producer_view = db.transaction().deref_mut().clone();
+        let producer = Executor {
+            database: producer_view,
+            config: Config::local_node(),
+        };
+        producer
+            .execute(&mut second_block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let verifier = Executor {
+            database: db,
+            config: Config::local_node(),
+        };
+        let verify_result = verifier
+            .execute(&mut second_block, ExecutionMode::Validation)
+            .await;
+        assert!(verify_result.is_ok());
     }
 
     // verify that a contract input must exist for a transaction
     #[tokio::test]
-    async fn invalidates_if_input_contract_utxo_id_divergent() {
+    async fn invalidates_if_input_contract_utxo_id_is_divergent() {
+        let mut rng = StdRng::seed_from_u64(2322);
+
         // create a contract in block 1
         // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
-        unimplemented!()
-    }
+        let (tx, contract_id) = create_contract(vec![], &mut rng);
+        let tx2 = TxBuilder::new(2322)
+            .script(vec![Opcode::ADDI(0x10, REG_ZERO, 0), Opcode::RET(1)])
+            .contract_input(contract_id)
+            .contract_output(&contract_id)
+            .build();
 
-    // verify that a contract output is set for a transaction
-    #[tokio::test]
-    async fn contract_output_is_set() {
-        unimplemented!()
-    }
+        let mut first_block = FuelBlockFull {
+            headers: Default::default(),
+            transactions: vec![tx, tx2],
+        };
 
-    // If a produced block creates a different contract output than what the verifier expects,
-    // invalidate the block
-    #[tokio::test]
-    async fn executor_invalidates_divergent_contract_outputs() {
-        unimplemented!()
+        let tx3 = TxBuilder::new(2322)
+            .script(vec![Opcode::ADDI(0x10, REG_ZERO, 1), Opcode::RET(1)])
+            .contract_input(contract_id)
+            .contract_output(&contract_id)
+            .build();
+        let tx_id = tx3.id();
+
+        let mut second_block = FuelBlockFull {
+            headers: FuelBlockHeaders {
+                fuel_height: 2u64.into(),
+                ..Default::default()
+            },
+            transactions: vec![tx3],
+        };
+
+        let db = Database::default();
+
+        let setup = Executor {
+            database: db.clone(),
+            config: Config::local_node(),
+        };
+
+        setup
+            .execute(&mut first_block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let producer_view = db.transaction().deref_mut().clone();
+        let producer = Executor {
+            database: producer_view,
+            config: Config::local_node(),
+        };
+
+        producer
+            .execute(&mut second_block, ExecutionMode::Production)
+            .await
+            .unwrap();
+        // Corrupt the utxo_id of the contract output
+        if let Transaction::Script { inputs, .. } = &mut second_block.transactions[0] {
+            if let Input::Contract { utxo_id, .. } = &mut inputs[0] {
+                // use a previously valid contract id which isn't the correct one for this block
+                *utxo_id = UtxoId::new(tx_id, 0);
+            }
+        }
+
+        let verifier = Executor {
+            database: db,
+            config: Config::local_node(),
+        };
+        let verify_result = verifier
+            .execute(&mut second_block, ExecutionMode::Validation)
+            .await;
+
+        assert!(matches!(
+            verify_result,
+            Err(Error::InvalidTransactionOutcome {
+                transaction_id
+            }) if transaction_id == tx_id
+        ));
     }
 }
