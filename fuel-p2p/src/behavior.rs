@@ -48,6 +48,10 @@ impl FuelBehaviour {
                 .with_bootstrap_nodes(config.bootstrap_nodes.clone())
                 .enable_random_walk(config.enable_random_walk);
 
+            if let Some(duration) = config.connection_idle_timeout {
+                discovery_config.set_connection_idle_timeout(duration);
+            }
+
             discovery_config
         };
 

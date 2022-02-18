@@ -347,6 +347,7 @@ mod tests {
     use std::{
         collections::{HashSet, VecDeque},
         task::Poll,
+        time::Duration,
     };
 
     /// helper function for building Discovery Behaviour for testing
@@ -372,6 +373,7 @@ mod tests {
             config
                 .discovery_limit(50)
                 .with_bootstrap_nodes(bootstrap_nodes)
+                .set_connection_idle_timeout(Duration::from_secs(120))
                 .enable_random_walk(true);
 
             config.finish()
@@ -462,8 +464,8 @@ mod tests {
                                             unroutable_peer_addr.clone(),
                                         );
                                 }
-                                e => {
-                                    panic!("Unexpected event: {:?}", e)
+                                DiscoveryEvent::Disconnected(peer_id) => {
+                                    panic!("PeerId {:?} disconnected", peer_id);
                                 }
                             }
                         }

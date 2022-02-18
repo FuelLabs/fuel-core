@@ -19,6 +19,7 @@ pub struct DiscoveryConfig {
     allow_private_addresses: bool,
     network_name: String,
     max_peers_connected: u64,
+    connection_idle_timeout: Duration,
 }
 
 impl DiscoveryConfig {
@@ -31,6 +32,7 @@ impl DiscoveryConfig {
             with_mdns: false,
             network_name,
             with_random_walk: false,
+            connection_idle_timeout: Duration::from_secs(10),
         }
     }
 
@@ -43,6 +45,12 @@ impl DiscoveryConfig {
     /// Enable reporting of private addresses
     pub fn allow_private_addresses(&mut self, value: bool) -> &mut Self {
         self.allow_private_addresses = value;
+        self
+    }
+
+    /// Sets the amount of time to keep connections alive when they're idle
+    pub fn set_connection_idle_timeout(&mut self, connection_idle_timeout: Duration) -> &mut Self {
+        self.connection_idle_timeout = connection_idle_timeout;
         self
     }
 
@@ -72,6 +80,7 @@ impl DiscoveryConfig {
             network_name,
             max_peers_connected,
             allow_private_addresses,
+            connection_idle_timeout,
             ..
         } = self;
 
@@ -83,6 +92,7 @@ impl DiscoveryConfig {
         let mut kademlia_config = KademliaConfig::default();
         let network = format!("/fuel/kad/{}/kad/1.0.0", network_name);
         kademlia_config.set_protocol_name(network.as_bytes().to_vec());
+        kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
         let mut kademlia = Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
 
         for (peer_id, addr) in &bootstrap_nodes {

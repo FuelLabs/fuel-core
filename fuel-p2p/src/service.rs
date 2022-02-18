@@ -69,7 +69,10 @@ mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
     use crate::{config::P2PConfig, service::FuelP2PEvent};
     use libp2p::identity::Keypair;
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::{
+        net::{IpAddr, Ipv4Addr},
+        time::Duration,
+    };
 
     /// helper function for building default testing config
     fn build_p2p_config() -> P2PConfig {
@@ -82,6 +85,7 @@ mod tests {
             max_peers_connected: 50,
             allow_private_addresses: true,
             enable_random_walk: true,
+            connection_idle_timeout: Some(Duration::from_secs(120)),
         }
     }
 

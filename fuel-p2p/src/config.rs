@@ -1,5 +1,5 @@
 use libp2p::{Multiaddr, PeerId};
-use std::net::IpAddr;
+use std::{net::IpAddr, time::Duration};
 
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
@@ -18,4 +18,5 @@ pub struct P2PConfig {
     pub max_peers_connected: u64,
     pub allow_private_addresses: bool,
     pub enable_random_walk: bool,
+    pub connection_idle_timeout: Option<Duration>,
 }
