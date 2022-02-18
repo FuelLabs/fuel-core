@@ -360,9 +360,15 @@ impl Executor {
                     ..
                 } = input
                 {
-                    let expected_utxo_id = Storage::<ContractId, UtxoId>::get(db, contract_id)?
-                        .ok_or(Error::ContractUtxoMissing(*contract_id))?
-                        .into_owned();
+                    let maybe_utxo_id = Storage::<ContractId, UtxoId>::get(db, contract_id)?;
+                    let expected_utxo_id = if self.config.utxo_validation {
+                        maybe_utxo_id
+                            .ok_or(Error::ContractUtxoMissing(*contract_id))?
+                            .into_owned()
+                    } else {
+                        maybe_utxo_id.unwrap_or_default().into_owned()
+                    };
+
                     match mode {
                         ExecutionMode::Production => *utxo_id = expected_utxo_id,
                         ExecutionMode::Validation => {
