@@ -1977,6 +1977,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bytes 1.1.0",
  "env_logger",
  "ethers-core",
  "ethers-middleware",
