@@ -1,6 +1,8 @@
 use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
-use fuel_tx::{crypto::Hasher, Address, Bytes32};
+use fuel_tx::{crypto::Hasher, Address, Bytes32, Transaction};
+use fuel_types::Word;
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     array::TryFromSliceError,
@@ -67,31 +69,73 @@ impl BlockHeight {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FuelBlock {
-    pub fuel_height: BlockHeight,
-    pub transactions: Vec<Bytes32>,
-    pub time: DateTime<Utc>,
-    pub producer: Address,
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct TransactionCommitment {
+    pub sum: Word,
+    pub root: Bytes32,
 }
 
-impl Default for FuelBlock {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct FuelBlockHeaders {
+    pub fuel_height: BlockHeight,
+    pub time: DateTime<Utc>,
+    pub producer: Address,
+    // TODO: integrate with fuel-merkle
+    pub transactions_commitment: TransactionCommitment,
+}
+
+impl FuelBlockHeaders {
+    pub fn id(&self, transaction_ids: &[Bytes32]) -> Bytes32 {
+        let mut hasher = Hasher::from_iter(transaction_ids);
+        hasher.input(&self.fuel_height.to_bytes()[..]);
+        hasher.input(self.time.timestamp_millis().to_be_bytes());
+        hasher.input(self.producer.as_ref());
+        hasher.input(self.transactions_commitment.sum.to_be_bytes());
+        hasher.input(self.transactions_commitment.root.as_ref());
+        hasher.digest()
+    }
+}
+
+impl Default for FuelBlockHeaders {
     fn default() -> Self {
         Self {
             fuel_height: 0u32.into(),
-            transactions: vec![],
             time: Utc.timestamp(0, 0),
             producer: Default::default(),
+            transactions_commitment: Default::default(),
         }
     }
 }
 
-impl FuelBlock {
+#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+pub struct FuelBlockLight {
+    pub headers: FuelBlockHeaders,
+    pub transactions: Vec<Bytes32>,
+}
+
+impl FuelBlockLight {
     pub fn id(&self) -> Bytes32 {
-        let mut hasher = Hasher::from_iter(&self.transactions);
-        hasher.input(&self.fuel_height.to_bytes()[..]);
-        hasher.input(self.time.timestamp_millis().to_be_bytes());
-        hasher.input(self.producer.as_ref());
-        hasher.digest()
+        self.headers.id(&self.transactions)
+    }
+}
+
+/// Fuel block with all transaction data included
+#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+pub struct FuelBlockFull {
+    pub headers: FuelBlockHeaders,
+    pub transactions: Vec<Transaction>,
+}
+
+impl FuelBlockFull {
+    pub fn id(&self) -> Bytes32 {
+        self.headers
+            .id(&self.transactions.iter().map(|tx| tx.id()).collect_vec())
+    }
+
+    pub fn as_light(&self) -> FuelBlockLight {
+        FuelBlockLight {
+            headers: self.headers.clone(),
+            transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
+        }
     }
 }

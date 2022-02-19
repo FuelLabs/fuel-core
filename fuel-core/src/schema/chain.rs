@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::model::fuel_block::FuelBlock;
+use crate::model::fuel_block::FuelBlockLight;
 use crate::schema::block::Block;
 use crate::schema::scalars::U64;
 use async_graphql::{Context, Object};
@@ -20,7 +20,7 @@ impl ChainInfo {
         let db = ctx.data_unchecked::<Database>().clone();
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = Storage::<Bytes32, FuelBlock>::get(&db, &id)?.unwrap_or_default();
+        let block = Storage::<Bytes32, FuelBlockLight>::get(&db, &id)?.unwrap_or_default();
         Ok(Block(block.into_owned()))
     }
 

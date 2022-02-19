@@ -34,6 +34,11 @@ pub struct Opt {
     /// Specify if backtraces are going to be traced in logs (Default false)
     #[structopt(long = "vm-backtrace")]
     pub vm_backtrace: bool,
+
+    /// Enable/disable full utxo stateful validation
+    /// disabled by default until downstream consumers stabilize
+    #[structopt(long = "utxo-validation")]
+    pub utxo_validation: bool,
 }
 
 impl Opt {
@@ -55,6 +60,7 @@ impl Opt {
             database_type,
             chain_config,
             vm_backtrace,
+            utxo_validation,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -64,6 +70,7 @@ impl Opt {
             database_path,
             database_type,
             chain_conf: chain_config.as_str().parse()?,
+            utxo_validation,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },

@@ -20,6 +20,7 @@ test = false
 [dependencies]
 async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz"] }
 async-trait = "0.1"
+anyhow = "1.0"
 axum = { version = "0.4.4" }
 bincode = "1.3"
 chrono = { version = "0.4", features = ["serde"] }
@@ -59,7 +60,7 @@ tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
-fuel-vm = { version = "0.4", features = ["serde-types", "random"] }
+fuel-vm = { version = "0.4", features = ["serde-types", "random", "test-helpers"] }
 insta = "1.8"
 assert_matches = "1.5"
 

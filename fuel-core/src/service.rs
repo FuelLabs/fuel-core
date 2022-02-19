@@ -27,6 +27,8 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
+    // default to false until downstream consumers stabilize
+    pub utxo_validation: bool,
     pub vm: VMConfig,
 }
 
@@ -38,6 +40,7 @@ impl Config {
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
             vm: Default::default(),
+            utxo_validation: false,
         }
     }
 }
@@ -87,7 +90,7 @@ impl FuelService {
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
         // initialize transaction pool
-        let tx_pool = Arc::new(TxPool::new(database.clone()));
+        let tx_pool = Arc::new(TxPool::new(database.clone(), config.clone()));
 
         // start background tasks
         let mut tasks = vec![];

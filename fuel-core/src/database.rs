@@ -1,7 +1,7 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::fuel_block::FuelBlock;
+use crate::model::fuel_block::FuelBlockLight;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
@@ -37,18 +37,20 @@ pub mod columns {
     pub const CONTRACTS: u32 = 1;
     pub const CONTRACTS_CODE_ROOT: u32 = 2;
     pub const CONTRACTS_STATE: u32 = 3;
-    pub const BALANCES: u32 = 4;
-    pub const COIN: u32 = 5;
+    // Contract Id -> Utxo Id
+    pub const CONTRACT_UTXO_ID: u32 = 4;
+    pub const BALANCES: u32 = 5;
+    pub const COIN: u32 = 6;
     // (owner, coin id) => true
-    pub const OWNED_COINS: u32 = 6;
-    pub const TRANSACTIONS: u32 = 7;
+    pub const OWNED_COINS: u32 = 7;
+    pub const TRANSACTIONS: u32 = 8;
     // tx id -> current status
-    pub const TRANSACTION_STATUS: u32 = 8;
-    pub const TRANSACTIONS_BY_OWNER_BLOCK_IDX: u32 = 9;
-    pub const RECEIPTS: u32 = 10;
-    pub const BLOCKS: u32 = 11;
+    pub const TRANSACTION_STATUS: u32 = 9;
+    pub const TRANSACTIONS_BY_OWNER_BLOCK_IDX: u32 = 10;
+    pub const RECEIPTS: u32 = 11;
+    pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
-    pub const BLOCK_IDS: u32 = 12;
+    pub const BLOCK_IDS: u32 = 13;
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
@@ -172,7 +174,7 @@ impl InterpreterStorage for Database {
     fn coinbase(&self) -> Result<Address, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
-        let block = Storage::<Bytes32, FuelBlock>::get(self, &id)?.unwrap_or_default();
-        Ok(block.producer)
+        let block = Storage::<Bytes32, FuelBlockLight>::get(self, &id)?.unwrap_or_default();
+        Ok(block.headers.producer)
     }
 }
