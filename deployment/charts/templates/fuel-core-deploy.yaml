@@ -24,10 +24,14 @@ metadata:
   name: {{ template "fuel-core.name" . }}-k8s-lb
 spec:
   ports:
-    - port: {{ .Values.app.port }}
+    - port: {{ .Values.app.httpport }}
       targetPort: {{ .Values.app.targetport }}
       protocol: TCP
       name: http
+    - port: {{ .Values.app.httpsport }}
+      targetPort: {{ .Values.app.targetport }}
+      protocol: TCP
+      name: https
   selector:
     app: {{ template "fuel-core.name" . }}
   type: LoadBalancer

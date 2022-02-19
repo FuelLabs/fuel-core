@@ -5,7 +5,8 @@
 app:
   name: fuel-core
   replicas: ${fuel_core_pod_replicas}
-  port: 80
+  httpport: 80
+  httpsport: 443
   targetport: 4000
   image:
     repository: ${fuel_core_image_repository}
