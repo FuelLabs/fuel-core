@@ -6,17 +6,17 @@ use ethers_core::types::{
 use ethers_providers::{FromErr, Middleware, SyncingStatus};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{fmt::Debug, str::FromStr};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-type TriggerHandler = Box<dyn FnMut(&mut MockData, TriggerType) -> bool + Send + Sync>;
+type TriggerHandler = Box<dyn Fn(&mut MockData, TriggerType) -> bool + Send>;
 
 pub struct MockMiddleware<M> {
     pub inner: M,
     pub data: Mutex<MockData>,
-    pub triggers: Vec<TriggerHandler>,
+    pub triggers: Mutex<Vec<TriggerHandler>>,
     pub triggers_index: AtomicUsize,
 }
 
@@ -53,11 +53,11 @@ impl Default for MockData {
 impl<M: Middleware> MockMiddleware<M> {
     /// Instantiates the nonce manager with a 0 nonce. The `address` should be the
     /// address which you'll be sending transactions from
-    pub fn new(inner: M) -> Self {
+    pub fn new(inner: M, ) -> Self {
         Self {
             inner,
             data: Mutex::new(MockData::default()),
-            triggers: Vec::new(),
+            triggers: Mutex::new(Vec::new()),
             triggers_index: AtomicUsize::new(0),
         }
     }
@@ -68,7 +68,21 @@ impl<M: Middleware> MockMiddleware<M> {
         self.data.lock().await.logs_batch.push(logs)
     }
 
-    fn trigger(&self, trigger_type: TriggerType) {}
+    async fn trigger(&self, trigger_type: TriggerType) {
+        if let Some(trigger) = self
+            .triggers
+            .lock()
+            .await
+            .get(self.triggers_index.load(Ordering::SeqCst))
+        {
+            let mut mock_data = self.data.lock().await;
+            if trigger(&mut mock_data, trigger_type) {
+                self.triggers_index.fetch_add(1, Ordering::SeqCst);
+            }
+        } else {
+            assert!(true, "Badly structured test in Relayer MockMiddleware");
+        }
+    }
 }
 
 #[derive(Error, Debug)]

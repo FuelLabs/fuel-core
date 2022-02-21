@@ -64,7 +64,9 @@ impl From<KvStoreError> for InterpreterError {
 #[cfg(any(test, feature = "test_helpers"))]
 pub mod helpers {
 
+    use async_trait::async_trait;
     use lazy_static::lazy_static;
+    use parking_lot::Mutex;
 
     // constants
     lazy_static! {
@@ -110,7 +112,7 @@ pub mod helpers {
     //const DB_TX1_HASH: TxId = 0x0000.into();
 
     use core::str::FromStr;
-    use std::sync::Arc;
+    use std::{sync::Arc, collections::BTreeMap};
 
     use fuel_asm::Opcode;
     use fuel_storage::Storage;
@@ -120,7 +122,10 @@ pub mod helpers {
     use fuel_vm::prelude::Contract;
     use std::collections::{HashMap, HashSet};
 
-    use crate::txpool::TxPoolDb;
+    use crate::{
+        relayer::{DepositCoin, RelayerDB},
+        txpool::TxPoolDb,
+    };
 
     use super::*;
     #[derive(Clone, Debug)]
@@ -128,6 +133,19 @@ pub mod helpers {
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
         pub contract: HashSet<ContractId>,
+        pub deposit_coin: HashMap<Bytes32,DepositCoin>,
+        // relayer relayer
+        pub data: Arc<Mutex<Data>>,
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct Data {
+        pub block_height: u64,
+        pub current_validator_set: HashMap<Address, u64>,
+        pub current_validator_set_block: u64,
+        pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
+        pub eth_finalized_block: u64,
+        pub fuel_finalized_block: u64,
     }
 
     impl DummyDB {
@@ -503,10 +521,21 @@ pub mod helpers {
                 ));
             }
 
+            let data = Data {
+                block_height: 0,
+                current_validator_set: HashMap::new(),
+                current_validator_set_block: 0,
+                validator_set_diff: BTreeMap::new(),
+                eth_finalized_block: 0,
+                fuel_finalized_block: 0,
+            };
+
             Self {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 contract: HashSet::new(),
+                deposit_coin: HashMap::new(),
+                data: Arc::new(Mutex::new(data)),
             }
         }
 
@@ -575,6 +604,157 @@ pub mod helpers {
 
         fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {
             Ok(self.contract.get(&contract_id).is_some())
+        }
+    }
+
+    /* RELAYER */
+    /*
+    Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
+    Storage<Address, u64,Error = KvStoreError> // validator set
+    Storage<u64, HashMap<Address, u64>,Error = KvStoreError> // validator set diff
+    */
+
+    // token deposit
+    impl Storage<Bytes32, DepositCoin> for DummyDB {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(
+            &mut self,
+            key: &Bytes32,
+            value: &DepositCoin,
+        ) -> Result<Option<DepositCoin>, Self::Error> {
+            Ok(self.deposit_coin.insert(*key,value.clone()))
+        }
+
+        fn remove(&mut self, _key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &Bytes32,
+        ) -> Result<Option<std::borrow::Cow<'a, DepositCoin>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &Bytes32) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    // validator set
+    impl Storage<Address, u64> for DummyDB {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(&mut self, key: &Address, value: &u64) -> Result<Option<u64>, Self::Error> {
+            Ok(self.data.lock().current_validator_set.insert(*key,*value))
+        }
+
+        fn remove(&mut self, _key: &Address) -> Result<Option<u64>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &Address,
+        ) -> Result<Option<std::borrow::Cow<'a, u64>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &Address) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    // validator set diff
+    impl Storage<u64, HashMap<Address, u64>> for DummyDB {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(
+            &mut self,
+            key: &u64,
+            value: &HashMap<Address, u64>,
+        ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
+            Ok(self.data.lock().validator_set_diff.insert(*key,value.clone()))
+        }
+
+        fn remove(&mut self, _key: &u64) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &u64,
+        ) -> Result<Option<std::borrow::Cow<'a, HashMap<Address, u64>>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &u64) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    #[async_trait]
+    impl RelayerDB for DummyDB {
+        /// get validator set for current fuel block
+        async fn current_validator_set(&self) -> HashMap<Address, u64> {
+            self.data.lock().current_validator_set.clone()
+        }
+
+        /// set last finalized fuel block. In usual case this will be
+        async fn set_current_validator_set_block(&self, block: u64) {
+            self.data.lock().current_validator_set_block = block;
+        }
+
+        /// Assume it is allways set as initialization of database.
+        async fn get_current_validator_set_block(&self) -> u64 {
+            self.data.lock().current_validator_set_block
+        }
+
+        /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
+        async fn get_validator_set_diff(
+            &self,
+            from_fuel_block: u64,
+            to_fuel_block: Option<u64>,
+        ) -> Vec<(u64, HashMap<Address, u64>)> {
+            let mut out = Vec::new();
+            let diffs = &self.data.lock().validator_set_diff;
+            // in BTreeMap iteration are done on sorted items.
+            for (block, diff) in diffs {
+                if from_fuel_block >= *block {
+                    out.push((*block, diff.clone()))
+                }
+                if let Some(end_block) = to_fuel_block {
+                    if end_block < *block {
+                        break;
+                    }
+                }
+            }
+            out
+        }
+
+        /// current best block number
+        async fn get_block_height(&self) -> u64 {
+            self.data.lock().block_height
+        }
+
+        /// set newest finalized eth block
+        async fn set_eth_finalized_block(&self, block: u64) {
+            self.data.lock().eth_finalized_block = block;
+        }
+
+        /// assume it is allways set sa initialization of database.
+        async fn get_eth_finalized_block(&self) -> u64 {
+            self.data.lock().eth_finalized_block
+        }
+
+        /// set last finalized fuel block. In usual case this will be
+        async fn set_fuel_finalized_block(&self, block: u64) {
+            self.data.lock().fuel_finalized_block = block;
+        }
+        /// Assume it is allways set as initialization of database.
+        async fn get_fuel_finalized_block(&self) -> u64 {
+            self.data.lock().fuel_finalized_block
         }
     }
 }
