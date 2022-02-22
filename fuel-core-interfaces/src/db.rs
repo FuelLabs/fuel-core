@@ -607,8 +607,7 @@ pub mod helpers {
         }
     }
 
-    /* RELAYER */
-    /*
+    /* RELAYER needs
     Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
     Storage<Address, u64,Error = KvStoreError> // validator set
     Storage<u64, HashMap<Address, u64>,Error = KvStoreError> // validator set diff
@@ -752,6 +751,7 @@ pub mod helpers {
         async fn set_fuel_finalized_block(&self, block: u64) {
             self.data.lock().fuel_finalized_block = block;
         }
+
         /// Assume it is allways set as initialization of database.
         async fn get_fuel_finalized_block(&self) -> u64 {
             self.data.lock().fuel_finalized_block

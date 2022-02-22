@@ -3,7 +3,7 @@ use crate::Relayer;
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDB, RelayerEvent},
-    signer::SignerEvent,
+    signer::Signer,
 };
 use tokio::sync::Mutex;
 use tokio::{
@@ -21,7 +21,7 @@ impl Service {
         config: &Config,
         db: Box<Mutex<dyn RelayerDB>>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
-        signer: mpsc::Sender<SignerEvent>,
+        signer: Box<dyn Signer+Send>,
     ) -> Result<Self, anyhow::Error> {
         let (sender, receiver) = mpsc::channel(100);
         let best_block = db.lock().await.get_block_height().await;

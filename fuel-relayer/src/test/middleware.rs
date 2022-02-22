@@ -3,24 +3,25 @@ use bytes::Bytes;
 use ethers_core::types::{
     Block, BlockId, Bytes as EthersBytes, Filter, Log, TxHash, H160, H256, U256, U64,
 };
-use ethers_providers::{FromErr, Middleware, SyncingStatus};
+use ethers_providers::{Middleware, MockProvider, ProviderError, SyncingStatus};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{fmt::Debug, str::FromStr};
 use thiserror::Error;
-use tokio::sync::Mutex;
+use parking_lot::Mutex;
 
-type TriggerHandler = Box<dyn Fn(&mut MockData, TriggerType) -> bool + Send>;
+type TriggerHandler = dyn FnMut(&mut MockData, TriggerType) -> bool + Send + Sync;
 
-pub struct MockMiddleware<M> {
-    pub inner: M,
+pub struct MockMiddleware {
+    pub inner: MockProvider,
     pub data: Mutex<MockData>,
-    pub triggers: Mutex<Vec<TriggerHandler>>,
+    pub triggers: Arc<Mutex<Vec<Box<TriggerHandler>>>>,
     pub triggers_index: AtomicUsize,
 }
 
-impl<M> fmt::Debug for MockMiddleware<M> {
+impl fmt::Debug for MockMiddleware {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MockMiddleware")
             .field("data", &self.data)
@@ -39,7 +40,7 @@ pub struct MockData {
 impl Default for MockData {
     fn default() -> Self {
         let mut best_block = Block::default();
-        best_block.hash = Some(H256::from_str("0x0000000000000001").unwrap());
+        best_block.hash = Some(H256::from_str("0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6").unwrap());
         best_block.number = Some(U64::from(20i32));
         MockData {
             best_block,
@@ -50,32 +51,29 @@ impl Default for MockData {
     }
 }
 
-impl<M: Middleware> MockMiddleware<M> {
+impl MockMiddleware {
     /// Instantiates the nonce manager with a 0 nonce. The `address` should be the
     /// address which you'll be sending transactions from
-    pub fn new(inner: M, ) -> Self {
+    pub fn new() -> Self {
         Self {
-            inner,
+            inner: MockProvider::new(),
             data: Mutex::new(MockData::default()),
-            triggers: Mutex::new(Vec::new()),
+            triggers: Arc::new(Mutex::new(Vec::new())),
             triggers_index: AtomicUsize::new(0),
         }
     }
 
-    pub fn insert_trigger(&mut self) {}
-
     pub async fn insert_log_batch(&mut self, logs: Vec<Log>) {
-        self.data.lock().await.logs_batch.push(logs)
+        self.data.lock().logs_batch.push(logs)
     }
 
-    async fn trigger(&self, trigger_type: TriggerType) {
+    fn trigger(&self, trigger_type: TriggerType) {
         if let Some(trigger) = self
             .triggers
             .lock()
-            .await
-            .get(self.triggers_index.load(Ordering::SeqCst))
+            .get_mut(self.triggers_index.load(Ordering::SeqCst))
         {
-            let mut mock_data = self.data.lock().await;
+            let mut mock_data = self.data.lock();
             if trigger(&mut mock_data, trigger_type) {
                 self.triggers_index.fetch_add(1, Ordering::SeqCst);
             }
@@ -87,19 +85,19 @@ impl<M: Middleware> MockMiddleware<M> {
 
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
-pub enum MockMiddlewareError<M: Middleware> {
+pub enum MockMiddlewareError {
     /// Thrown when the internal middleware errors
-    #[error("{0}")]
-    MiddlewareError(M::Error),
+    #[error("Test")]
+    MiddlewareError(),
     #[error("Internal error")]
     Internal,
 }
 
-impl<M: Middleware> FromErr<M::Error> for MockMiddlewareError<M> {
-    fn from(src: M::Error) -> Self {
-        Self::MiddlewareError(src)
-    }
-}
+// impl<M: Middleware> FromErr<M::Error> for MockMiddlewareError {
+//     fn from(src: M::Error) -> Self {
+//         Self::MiddlewareError(src)
+//     }
+// }
 
 pub enum TriggerType {
     Syncing,
@@ -120,28 +118,25 @@ WHAT DO I NEED FOR RELAYER FROM PROVIDER:
 */
 
 #[async_trait]
-impl<M> Middleware for MockMiddleware<M>
-where
-    M: Middleware,
-{
-    type Error = MockMiddlewareError<M>;
-    type Provider = M::Provider;
-    type Inner = M;
+impl Middleware for MockMiddleware {
+    type Error = ProviderError;
+    type Provider = MockProvider;
+    type Inner = Self;
 
-    fn inner(&self) -> &M {
-        &self.inner
+    fn inner(&self) -> &Self::Inner {
+        unreachable!("There is no inner provider here")
     }
 
     /// Needs for initial sync of relayer
     async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
         self.trigger(TriggerType::Syncing);
-        Ok(self.data.lock().await.is_syncing.clone())
+        Ok(self.data.lock().is_syncing.clone())
     }
 
     /// Used in initial sync to get current best eth block
     async fn get_block_number(&self) -> Result<U64, Self::Error> {
         self.trigger(TriggerType::GetBlockNumber);
-        Ok(self.data.lock().await.best_block.number.unwrap())
+        Ok(self.data.lock().best_block.number.unwrap())
     }
 
     /// used for initial sync to get logs of already finalized diffs
@@ -158,7 +153,7 @@ where
         let block_id = block_hash_or_number.into();
         self.trigger(TriggerType::GetBlock(block_id.clone()));
         // TODO change
-        Ok(Some(self.data.lock().await.best_block.clone()))
+        Ok(Some(self.data.lock().best_block.clone()))
     }
 
     /// only thing used FilterWatcher
@@ -170,13 +165,14 @@ where
         let block_id = id.into();
         self.trigger(TriggerType::GetFilterChanges(block_id.clone()));
 
-        let data = self.data.lock().await;
+        let data = self.data.lock();
         Ok(
             if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
                 let mut ret_logs = Vec::new();
                 for log in logs {
-                    let log = serde_json::to_value(&log).map_err(|_e| Self::Error::Internal)?;
-                    let res: R = serde_json::from_value(log).map_err(|_e| Self::Error::Internal)?;
+                    let log = serde_json::to_value(&log).map_err(|e| Self::Error::SerdeJson(e))?;
+                    let res: R =
+                        serde_json::from_value(log).map_err(|e| Self::Error::SerdeJson(e))?;
                     ret_logs.push(res);
                 }
                 ret_logs

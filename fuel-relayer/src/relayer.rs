@@ -13,12 +13,12 @@ use tokio::sync::{broadcast, mpsc};
 use anyhow::Error;
 use ethers_core::types::{Filter, Log, ValueOrArray};
 use ethers_providers::{
-    FilterWatcher, JsonRpcClient, Middleware, Provider, PubsubClient, StreamExt, SyncingStatus, Ws,
+    FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDB, RelayerError, RelayerEvent, RelayerStatus},
-    signer::SignerEvent,
+    signer::Signer,
 };
 ///
 pub struct Relayer {
@@ -48,7 +48,7 @@ pub struct Relayer {
     /// Notification of new block event
     new_block_event: broadcast::Receiver<NewBlockEvent>,
     /// Service for signing of arbitrary hash
-    _signer: mpsc::Sender<SignerEvent>,
+    _signer: Box<dyn Signer + Send>,
 }
 
 /// Pending diff between FuelBlocks
@@ -88,7 +88,7 @@ impl Relayer {
         db: Box<Mutex<dyn RelayerDB>>,
         receiver: mpsc::Receiver<RelayerEvent>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
-        signer: mpsc::Sender<SignerEvent>,
+        signer: Box<dyn Signer + Send>,
     ) -> Self {
         Self {
             config,
@@ -174,22 +174,33 @@ impl Relayer {
     /// logs watcher with assurence that we didnt miss any events.
     async fn inital_sync<'a, P>(
         &mut self,
-        provider: &'a Provider<P>,
-    ) -> Result<FilterWatcher<'a, P, Log>, Error>
+        provider: &'a P,
+    ) -> Result<FilterWatcher<'a, P::Provider, Log>, Error>
     where
-        P: JsonRpcClient + PubsubClient,
+        P: Middleware<Error = ProviderError>,
     {
         // loop and wait for eth client to finish syncing
-        loop {
-            if self.status == RelayerStatus::Stop {
-                return Err(RelayerError::Stoped.into());
-            }
-            if let SyncingStatus::IsFalse = provider.syncing().await? {
-                // sleep for some time until eth client is synced
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                continue;
-            } else {
-                break;
+        if matches!(provider.syncing().await?, SyncingStatus::IsSyncing { .. }) {
+            loop {
+                tokio::select! {
+                    inner_fuel_event = self.receiver.recv() => {
+                        match inner_fuel_event.unwrap() {
+                            RelayerEvent::Stop=>{
+                                self.status = RelayerStatus::Stop;
+                                return Err(RelayerError::Stoped.into());
+                            },
+                            RelayerEvent::GetValidatorSet { fuel_block, response_channel } => todo!(),
+                            RelayerEvent::GetStatus { response } => todo!(), }
+                    }
+                    _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                        if matches!(provider.syncing().await?,SyncingStatus::IsFalse) {
+                            break;
+                        }
+                    }
+                }
+                if self.status == RelayerStatus::Stop {
+                    return Err(RelayerError::Stoped.into());
+                }
             }
         }
 
@@ -346,21 +357,25 @@ impl Relayer {
     }
 
     /// Starting point of relayer
-    pub async fn run<P>(self, provider: Provider<P>, best_fuel_block: u64)
+    pub async fn run<P>(self, provider: P, best_fuel_block: u64)
     where
-        P: JsonRpcClient + PubsubClient,
+        P: Middleware<Error = ProviderError>,
     {
         let mut this = self;
 
         // iterate over validator sets and update it to best_fuel_block.
         this.load_current_validator_set(best_fuel_block).await;
+        
 
         loop {
             let mut logs_watcher = match this.inital_sync(&provider).await {
                 Ok(watcher) => watcher,
                 Err(err) => {
                     error!("Initial sync error:{}, try again", err);
-                    continue;
+                    if this.status == RelayerStatus::Stop {
+                        return;
+                    }
+                    continue
                 }
             };
 
@@ -618,5 +633,49 @@ impl Relayer {
         // apply new event to pending queue
         self.append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
             .await;
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use ethers_core::types::U256;
+    use ethers_providers::SyncingStatus;
+    use fuel_core_interfaces::relayer::RelayerEvent;
+
+    use crate::{
+        test::{relayer, MockData, MockMiddleware, TriggerType},
+        Config,
+    };
+
+    #[tokio::test]
+    pub async fn dummy_test() {
+        let config = Config::new();
+        let (relayer, event, new_block) = relayer(config);
+        let middle = MockMiddleware::new();
+        middle.data.lock().is_syncing = SyncingStatus::IsSyncing {
+            starting_block: U256::zero(),
+            current_block: U256::zero(),
+            highest_block: U256::zero(),
+        };
+
+        let mut i = 0;
+        middle.triggers.lock().push(Box::new(
+            move |_: &mut MockData, trigger: TriggerType| -> bool {
+                if matches!(trigger, TriggerType::Syncing) {
+                    i += 1;
+                    if i == 3 {
+                        assert!(false, "Stop signal not handled");
+                    }
+                }
+                false
+            },
+        ));
+
+        let join = tokio::spawn(relayer.run(middle, 10));
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        let _ = event.send(RelayerEvent::Stop).await;
+        let _ = join.await;
     }
 }
