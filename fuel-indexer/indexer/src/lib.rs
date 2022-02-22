@@ -37,6 +37,10 @@ pub enum IndexerError {
     DatabaseQueryError(#[from] DieselError),
     #[error("Missing handler: {0:?}")]
     MissingHandler(String),
+    #[error("Lock poisoned")]
+    LockPoisoned,
+    #[error("Indexer transaction error {0:?}")]
+    TxError(#[from] crate::executor::TxError),
     #[error("Unknown error")]
     Unknown,
 }

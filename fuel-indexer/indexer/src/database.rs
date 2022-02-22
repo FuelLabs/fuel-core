@@ -1,5 +1,6 @@
 use core::ops::Deref;
 use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
+use r2d2::PooledConnection;
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
@@ -13,6 +14,25 @@ use fuel_indexer_schema::{
 };
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+pub type PooledConn = PooledConnection<ConnectionManager<PgConnection>>;
+
+pub struct ConnWrapper(*mut PooledConn);
+
+unsafe impl Send for ConnWrapper {}
+
+impl Deref for ConnWrapper {
+    type Target = *mut PooledConn;
+
+    fn deref(&self) -> &*mut PooledConn {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for ConnWrapper {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(fmt, "DBPool(...)")
+    }
+}
 
 #[derive(Clone)]
 pub struct DbPool(PgConnectionPool);
@@ -72,13 +92,14 @@ impl SchemaManager {
 }
 
 /// Database for an executor instance, with schema info.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Database {
     pub pool: DbPool,
     pub namespace: String,
     pub version: String,
     pub schema: HashMap<String, Vec<String>>,
     pub tables: HashMap<u64, String>,
+    conn_ref: Option<ConnWrapper>,
 }
 
 impl Database {
@@ -91,7 +112,22 @@ impl Database {
             version: Default::default(),
             schema: Default::default(),
             tables: Default::default(),
+            conn_ref: None,
         })
+    }
+
+    pub fn get_connection_ref(&mut self) -> IndexerResult<Box<PooledConn>> {
+        let mut conn = Box::new(self.pool.get()?);
+        let c = Box::into_raw(conn);
+        self.conn_ref = Some(ConnWrapper(c));
+
+        // NOTE: if there's a better way, let's find it.
+        //       need a ref here, but also need one outside of the transaction.
+        Ok( unsafe { Box::from_raw(c) })
+    }
+
+    pub fn drop_connection_ref(&mut self) {
+        let _ = self.conn_ref.take();
     }
 
     fn upsert_query(
@@ -124,7 +160,8 @@ impl Database {
     }
 
     pub fn put_object(&mut self, type_id: u64, columns: Vec<FtColumn>, bytes: Vec<u8>) {
-        let connection = self.pool.get().expect("connection pool failed");
+        let con_wrapper = self.conn_ref.take().expect("No connection ref!");
+        let connection = unsafe { Box::from_raw(*con_wrapper) };
 
         let table = &self.tables[&type_id];
         let inserts: Vec<_> = columns.iter().map(|col| col.query_fragment()).collect();
@@ -144,17 +181,24 @@ impl Database {
 
         let query = sql_query(&query_text).bind::<Binary, _>(bytes);
 
-        query.execute(&*connection).expect("Query failed");
+        let result = query.execute(&**connection);
+        let _ = Box::into_raw(connection);
+        self.conn_ref = Some(con_wrapper);
+        result.expect("Query failed");
     }
 
-    pub fn get_object(&self, type_id: u64, object_id: u64) -> Option<Vec<u8>> {
-        let connection = self.pool.get().expect("connection pool failed");
+    pub fn get_object(&mut self, type_id: u64, object_id: u64) -> Option<Vec<u8>> {
+        let conn_wrapper = self.conn_ref.take().expect("No connection ref!");
+        let connection = unsafe { Box::from_raw(*conn_wrapper) };
         let table = &self.tables[&type_id];
 
         let query = self.get_query(table, object_id);
-        let mut row: Vec<EntityData> = sql_query(&query)
-            .get_results(&*connection)
-            .expect("Query failed");
+        let result = sql_query(&query)
+            .get_results(&**connection);
+
+        let _ = Box::into_raw(connection);
+        self.conn_ref = Some(conn_wrapper);
+        let mut row: Vec<EntityData> = result.expect("Query failed");
 
         row.pop().map(|e| e.object)
     }

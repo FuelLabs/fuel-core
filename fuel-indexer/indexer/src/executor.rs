@@ -1,10 +1,12 @@
 use crate::database::Database;
 use crate::ffi;
 use crate::{IndexerError, IndexerResult, Manifest};
+use diesel::Connection;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmer::{imports, Instance, LazyInit, Memory, Module, NativeFunc, Store, WasmerEnv};
+use thiserror::Error;
+use wasmer::{imports, Instance, LazyInit, Memory, Module, NativeFunc, RuntimeError, Store, WasmerEnv};
 use wasmer_engine_universal::Universal;
 
 cfg_if::cfg_if! {
@@ -19,6 +21,14 @@ cfg_if::cfg_if! {
             Cranelift::default()
         }
     }
+}
+
+#[derive(Error, Debug)]
+pub enum TxError {
+    #[error("Diesel Error {0:?}")]
+    DieselError(#[from] diesel::result::Error),
+    #[error("WASM Runtime Error {0:?}")]
+    WasmRuntimeError(#[from] RuntimeError),
 }
 
 #[derive(WasmerEnv, Clone)]
@@ -51,6 +61,7 @@ pub struct IndexExecutor {
     _module: Module,
     _store: Store,
     events: HashMap<String, Vec<String>>,
+    db: Arc<Mutex<Database>>,
 }
 
 impl IndexExecutor {
@@ -64,7 +75,7 @@ impl IndexExecutor {
 
         let mut import_object = imports! {};
 
-        let mut env = IndexEnv::new(db_conn)?;
+        let mut env = IndexEnv::new(db_conn.clone())?;
         let exports = ffi::get_exports(&env, &store);
         import_object.register("env", exports);
 
@@ -92,6 +103,7 @@ impl IndexExecutor {
             _module: module,
             _store: store,
             events,
+            db: env.db.clone(),
         })
     }
 
@@ -115,8 +127,24 @@ impl IndexExecutor {
                     .exports
                     .get_native_function::<(u32, u32, u32), ()>(handler)?;
 
-                let _result =
-                    fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len())?;
+                println!("TJDEBUG fetching one");
+                let conn = match self.db.lock() {
+                    Ok(mut s) => s.get_connection_ref()?,
+                    Err(_) => return Err(IndexerError::LockPoisoned),
+                };
+
+                println!("TJDEBUG gonna open one");
+                let result = conn.transaction::<_, TxError, _>(|| {
+                    println!("Opened a trans");
+                    Ok(fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len())?)
+                });
+
+                match self.db.lock() {
+                    Ok(mut s) => s.drop_connection_ref(),
+                    Err(_) => return Err(IndexerError::LockPoisoned),
+                }
+
+                let _ = result?;
             }
         }
         Ok(())
