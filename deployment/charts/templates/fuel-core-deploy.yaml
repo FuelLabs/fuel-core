@@ -66,6 +66,13 @@ spec:
             - name: http
               containerPort: {{ .Values.app.targetport }}
               protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.app.targetport }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 10
           volumeMounts:
             - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
