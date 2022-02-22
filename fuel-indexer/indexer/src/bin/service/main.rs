@@ -2,10 +2,10 @@ use anyhow::Result;
 use async_std::{fs::File, io::ReadExt};
 use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{GraphQlAPI, IndexerConfig, IndexerService, Manifest};
-use tracing::info;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::join;
+use tracing::info;
 use tracing_subscriber::filter::EnvFilter;
 
 #[derive(Debug, StructOpt)]

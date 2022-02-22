@@ -229,12 +229,17 @@ impl ContractOutput {
 
 pub struct ContractCreated {
     contract_id: ContractId,
+    state_root: Bytes32,
 }
 
 #[Object]
 impl ContractCreated {
     async fn contract_id(&self) -> HexString256 {
         HexString256(*self.contract_id.deref())
+    }
+
+    async fn state_root(&self) -> HexString256 {
+        HexString256(*self.state_root.deref())
     }
 }
 
@@ -276,11 +281,13 @@ impl From<&fuel_tx::Output> for Output {
                     color: *color,
                 }))
             }
-            fuel_tx::Output::ContractCreated { contract_id } => {
-                Output::ContractCreated(ContractCreated {
-                    contract_id: *contract_id,
-                })
-            }
+            fuel_tx::Output::ContractCreated {
+                contract_id,
+                state_root,
+            } => Output::ContractCreated(ContractCreated {
+                contract_id: *contract_id,
+                state_root: *state_root,
+            }),
         }
     }
 }
@@ -448,6 +455,10 @@ impl Transaction {
         self.0.gas_limit()
     }
 
+    async fn byte_price(&self) -> Word {
+        self.0.byte_price()
+    }
+
     async fn maturity(&self) -> Word {
         self.0.maturity()
     }
@@ -537,6 +548,27 @@ impl Transaction {
             FuelTx::Create {
                 static_contracts, ..
             } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
+        }
+    }
+
+    async fn storage_slots(&self) -> Option<Vec<HexString>> {
+        match &self.0 {
+            FuelTx::Script { .. } => None,
+            FuelTx::Create { storage_slots, .. } => Some(
+                storage_slots
+                    .iter()
+                    .map(|slot| {
+                        HexString(
+                            slot.key()
+                                .as_slice()
+                                .iter()
+                                .chain(slot.value().as_slice())
+                                .copied()
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
         }
     }
 

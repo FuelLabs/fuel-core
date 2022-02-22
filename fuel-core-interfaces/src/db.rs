@@ -144,6 +144,7 @@ pub mod helpers {
             let tx1 = Transaction::Script {
                 gas_price: 10,
                 gas_limit: 1_000_000,
+                byte_price: 10,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -166,6 +167,7 @@ pub mod helpers {
                     },
                     Output::ContractCreated {
                         contract_id: *CONTRACT_ID1,
+                        state_root: Contract::default_state_root(),
                     },
                 ],
                 witnesses: vec![vec![].into()],
@@ -183,6 +185,7 @@ pub mod helpers {
             let tx1_faulty = Transaction::Script {
                 gas_price: 10,
                 gas_limit: 1_000_000,
+                byte_price: 10,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -199,6 +202,7 @@ pub mod helpers {
                 }],
                 outputs: vec![Output::ContractCreated {
                     contract_id: *CONTRACT_ID1,
+                    state_root: Contract::default_state_root(),
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
@@ -215,6 +219,7 @@ pub mod helpers {
             let tx2 = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
+                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -249,6 +254,7 @@ pub mod helpers {
             let tx2_faulty = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
+                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -271,6 +277,7 @@ pub mod helpers {
                     },
                     Output::ContractCreated {
                         contract_id: *CONTRACT_ID1,
+                        state_root: Contract::default_state_root(),
                     },
                 ],
                 witnesses: vec![vec![].into()],
@@ -289,6 +296,7 @@ pub mod helpers {
             let tx3 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
+                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -324,6 +332,7 @@ pub mod helpers {
             let tx4 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
+                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -358,6 +367,7 @@ pub mod helpers {
             let tx5 = Transaction::Script {
                 gas_price: 5, //lower then tx1
                 gas_limit: 1_000_000,
+                byte_price: 5,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -419,6 +429,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -433,6 +444,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -447,6 +459,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script,
                     Vec::new(),
@@ -461,6 +474,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     Vec::new(),
                     Vec::new(),

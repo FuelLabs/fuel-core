@@ -7,7 +7,8 @@ use crate::{
     state::{Error, IterDirection},
 };
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32, UtxoId};
+use fuel_tx::{Address, Bytes32, Color, UtxoId};
+use itertools::Itertools;
 use std::borrow::Cow;
 
 fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {
@@ -81,6 +82,38 @@ impl Database {
                     key[64],
                 )
             })
+        })
+    }
+
+    // TODO: Optimize this by creating an index
+    pub fn owned_coins_by_color(
+        &self,
+        owner: Address,
+        color: Color,
+        start_coin: Option<UtxoId>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
+        self.iter_all::<Vec<u8>, bool>(
+            OWNED_COINS,
+            Some(owner.as_ref().to_vec()),
+            start_coin.map(|b| owner_coin_id_key(&owner, &b)),
+            direction,
+        )
+        // Safety: key is always 64 bytes
+        .map(|res| {
+            res.map(|(key, _)| {
+                UtxoId::new(
+                    unsafe { Bytes32::from_slice_unchecked(&key[32..64]) },
+                    key[64],
+                )
+            })
+        })
+        .filter_ok(move |id| {
+            Storage::<UtxoId, Coin>::get(self, id)
+                .unwrap()
+                .unwrap()
+                .color
+                == color
         })
     }
 }

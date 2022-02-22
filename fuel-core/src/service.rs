@@ -27,6 +27,8 @@ pub struct Config {
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
+    // default to false until downstream consumers stabilize
+    pub utxo_validation: bool,
     pub vm: VMConfig,
 }
 
@@ -38,6 +40,7 @@ impl Config {
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
             vm: Default::default(),
+            utxo_validation: false,
         }
     }
 }
@@ -87,7 +90,7 @@ impl FuelService {
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
         // initialize transaction pool
-        let tx_pool = Arc::new(TxPool::new(database.clone()));
+        let tx_pool = Arc::new(TxPool::new(database.clone(), config.clone()));
 
         // start background tasks
         let mut tasks = vec![];
@@ -169,7 +172,7 @@ impl FuelService {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
-                let contract_id = contract.id(&salt, &root);
+                let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
                 // insert contract code
                 let _ = Storage::<ContractId, Contract>::insert(db, &contract_id, &contract)?;
                 // insert contract root
@@ -412,7 +415,7 @@ mod tests {
         let salt: Salt = rng.gen();
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
         let root = contract.root();
-        let id = contract.id(&salt, &root);
+        let id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
             chain_conf: ChainConfig {
@@ -453,7 +456,7 @@ mod tests {
         let salt: Salt = rng.gen();
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
         let root = contract.root();
-        let id = contract.id(&salt, &root);
+        let id = contract.id(&salt, &root, &Contract::default_state_root());
 
         let service_config = Config {
             chain_conf: ChainConfig {

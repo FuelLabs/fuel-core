@@ -107,6 +107,46 @@ pub struct CoinEdge {
     pub node: Coin,
 }
 
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SpendQueryElementInput {
+    /// color of the coins
+    pub color: HexString256,
+    /// address of the owner
+    pub amount: U64,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct CoinsToSpendArgs {
+    /// The Address of the utxo owner
+    owner: HexString256,
+    /// The total amount of each asset type to spend
+    spend_query: Vec<SpendQueryElementInput>,
+    /// The max number of utxos that can be used
+    max_inputs: Option<i32>,
+}
+
+impl From<(HexString256, Vec<SpendQueryElementInput>, Option<i32>)> for CoinsToSpendArgs {
+    fn from(r: (HexString256, Vec<SpendQueryElementInput>, Option<i32>)) -> Self {
+        CoinsToSpendArgs {
+            owner: r.0,
+            spend_query: r.1,
+            max_inputs: r.2,
+        }
+    }
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "CoinsToSpendArgs"
+)]
+pub struct CoinsToSpendQuery {
+    #[arguments(owner = &args.owner, spend_query = &args.spend_query, max_inputs = &args.max_inputs)]
+    pub coins_to_spend: Vec<Coin>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {

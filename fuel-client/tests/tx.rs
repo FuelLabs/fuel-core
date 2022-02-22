@@ -1,13 +1,13 @@
 use chrono::Utc;
+use fuel_core::executor::ExecutionMode;
+use fuel_core::model::fuel_block::{FuelBlockFull, FuelBlockHeaders};
 use fuel_core::{
     database::Database,
     executor::Executor,
-    model::fuel_block::FuelBlock,
-    service::{Config, FuelService, VMConfig},
+    service::{Config, FuelService},
 };
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use fuel_storage::Storage;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -38,6 +38,7 @@ async fn dry_run() {
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
+    let byte_price = 0;
     let maturity = 0;
 
     let script = vec![
@@ -55,6 +56,7 @@ async fn dry_run() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
+        byte_price,
         maturity,
         script,
         vec![],
@@ -85,6 +87,7 @@ async fn submit() {
     let gas_price = 0;
     let gas_limit = 1_000_000;
     let maturity = 0;
+    let byte_price = 0;
 
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
@@ -101,6 +104,7 @@ async fn submit() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
+        byte_price,
         maturity,
         script,
         vec![],
@@ -117,7 +121,7 @@ async fn submit() {
         .unwrap()
         .unwrap()
         .transaction;
-    assert_eq!(tx, ret_tx);
+    assert_eq!(tx.id(), ret_tx.id());
 }
 
 #[tokio::test]
@@ -255,41 +259,48 @@ async fn get_transactions() {
 }
 
 #[tokio::test]
-async fn get_transactions_from_manual_blcoks() {
-    let (executor, mut db) = get_executor_and_db();
+async fn get_transactions_from_manual_blocks() {
+    let (executor, db) = get_executor_and_db();
     // get access to a client
-    let client = initialize_client(db.clone()).await;
+    let client = initialize_client(db).await;
 
     // create 10 txs
     let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
 
-    // manually store txs in the db
-    for tx in &txs {
-        Storage::<Bytes32, fuel_tx::Transaction>::insert(&mut db, &tx.id(), tx).unwrap();
-    }
-
     // make 1st test block
-    let first_test_block = FuelBlock {
-        fuel_height: 1u32.into(),
+    let mut first_test_block = FuelBlockFull {
+        headers: FuelBlockHeaders {
+            fuel_height: 1u32.into(),
+            time: Utc::now(),
+            producer: Default::default(),
+            transactions_commitment: Default::default(),
+        },
+
         // set the first 5 ids of the manually saved txs
-        transactions: txs.iter().take(5).map(|tx| tx.id()).collect(),
-        time: Utc::now(),
-        producer: Default::default(),
+        transactions: txs.iter().take(5).cloned().collect(),
     };
 
     // make 2nd test block
-    let second_test_block = FuelBlock {
-        fuel_height: 2u32.into(),
+    let mut second_test_block = FuelBlockFull {
+        headers: FuelBlockHeaders {
+            fuel_height: 2u32.into(),
+            time: Utc::now(),
+            producer: Default::default(),
+            transactions_commitment: Default::default(),
+        },
         // set the last 5 ids of the manually saved txs
-        transactions: txs.iter().skip(5).take(5).map(|tx| tx.id()).collect(),
-        time: Utc::now(),
-        producer: Default::default(),
+        transactions: txs.iter().skip(5).take(5).cloned().collect(),
     };
 
     // process blocks and save block height
-    let config = VMConfig::default();
-    executor.execute(&first_test_block, &config).await.unwrap();
-    executor.execute(&second_test_block, &config).await.unwrap();
+    executor
+        .execute(&mut first_test_block, ExecutionMode::Production)
+        .await
+        .unwrap();
+    executor
+        .execute(&mut second_test_block, ExecutionMode::Production)
+        .await
+        .unwrap();
 
     // Query for first 3: [0,1,2]
     let page_request_forwards = PaginationRequest {
@@ -418,6 +429,7 @@ impl TestContext {
         let tx = Transaction::Script {
             gas_price: 0,
             gas_limit: 1_000_000,
+            byte_price: 0,
             maturity: 0,
             receipts_root: Default::default(),
             script,
@@ -448,6 +460,7 @@ fn get_executor_and_db() -> (Executor, Database) {
     let db = Database::default();
     let executor = Executor {
         database: db.clone(),
+        config: Config::local_node(),
     };
 
     (executor, db)
@@ -459,14 +472,15 @@ async fn initialize_client(db: Database) -> FuelClient {
     FuelClient::from(service.bound_address)
 }
 
-// add random maturity for unique tx
-fn create_mock_tx(maturity: u64) -> Transaction {
+// add random val for unique tx
+fn create_mock_tx(val: u64) -> Transaction {
     fuel_tx::Transaction::script(
         0,
         0,
-        maturity,
+        0,
+        0,
         Default::default(),
-        Default::default(),
+        val.to_be_bytes().to_vec(),
         Default::default(),
         Default::default(),
         Default::default(),

@@ -4,10 +4,10 @@ use fuel_indexer_schema::db::{
     graphql::{GraphqlError, GraphqlQueryBuilder},
     tables::Schema,
 };
-use tracing::error;
 use serde::Deserialize;
 use thiserror::Error;
 use tokio_postgres::{connect, types::Type, NoTls};
+use tracing::error;
 use warp::{http::StatusCode, reply::with_status, Filter, Reply};
 
 const MAX_JSON_BODY: u64 = 1024 * 16;

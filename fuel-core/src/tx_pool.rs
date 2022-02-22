@@ -1,6 +1,6 @@
 use crate::database::{Database, KvStoreError};
-use crate::executor::Executor;
-use crate::model::fuel_block::FuelBlock;
+use crate::executor::{ExecutionMode, Executor};
+use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders};
 use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
@@ -65,9 +65,10 @@ impl TxPool {
         self.fuel_txpool.as_ref()
     }
 
-    pub fn new(database: Database) -> Self {
+    pub fn new(database: Database, config: Config) -> Self {
         let executor = Executor {
             database: database.clone(),
+            config,
         };
         let config = Arc::new(TxPoolConfig::default());
         TxPool {
@@ -80,32 +81,33 @@ impl TxPool {
         }
     }
 
-    pub async fn submit_tx(&self, tx: Transaction, config: &Config) -> Result<Bytes32, Error> {
+    pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+        let db = self.db.clone();
         let tx_id = tx.id();
-        // persist transaction to database
-        let mut db = self.db.clone();
-        Storage::<Bytes32, Transaction>::insert(&mut db, &tx_id, &tx)?;
         // set status to submitted
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
         // setup and execute block
         let block_height = db.get_block_height()?.unwrap_or_default() + 1u32.into();
-        let block = FuelBlock {
-            fuel_height: block_height,
-            transactions: vec![tx_id],
-            time: Utc::now(),
-            producer: Default::default(),
+        let mut block = FuelBlockFull {
+            headers: FuelBlockHeaders {
+                fuel_height: block_height,
+                time: Utc::now(),
+                producer: Default::default(),
+                transactions_commitment: Default::default(),
+            },
+            transactions: vec![tx],
         };
         // immediately execute block
         self.executor
-            .execute(&block, &config.vm)
+            .execute(&mut block, ExecutionMode::Production)
             .await
             .map_err(Error::Execution)?;
         Ok(tx_id)
     }
 
-    pub async fn run_tx(&self, tx: Transaction, config: &Config) -> Result<Vec<Receipt>, Error> {
-        let id = self.submit_tx(tx, config).await?;
+    pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
+        let id = self.submit_tx(tx).await?;
         // note: we'll need to await tx completion once it's not instantaneous
         let db = &self.db;
         let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &id)?.unwrap_or_default();

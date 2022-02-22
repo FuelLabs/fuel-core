@@ -1,5 +1,5 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::model::fuel_block::{BlockHeight, FuelBlock};
+use crate::model::fuel_block::{BlockHeight, FuelBlockLight};
 use crate::schema::scalars::{HexString, HexString256, SortedTxCursor};
 use crate::service::Config;
 use crate::state::IterDirection;
@@ -92,7 +92,7 @@ impl TxQuery {
                 let txs = all_block_ids
                     .flat_map(|block| {
                         block.map(|(block_height, block_id)| {
-                            Storage::<Bytes32, FuelBlock>::get(db, &block_id)
+                            Storage::<Bytes32, FuelBlockLight>::get(db, &block_id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|fuel_block| {
@@ -252,8 +252,8 @@ impl TxMutation {
         let cfg = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(transaction.deref().clone());
-        let receipts = tx_pool.run_tx(tx, cfg).await?;
+        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
+        let receipts = tx_pool.run_tx(tx).await?;
         Ok(receipts.into_iter().map(receipt::Receipt).collect())
     }
 
@@ -264,9 +264,8 @@ impl TxMutation {
         tx: HexString,
     ) -> async_graphql::Result<HexString256> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        let cfg = ctx.data_unchecked::<Config>();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let id = tx_pool.submit_tx(tx, cfg).await?;
+        let id = tx_pool.submit_tx(tx).await?;
 
         Ok(id.into())
     }

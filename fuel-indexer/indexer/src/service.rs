@@ -1,11 +1,11 @@
 use crate::{IndexExecutor, IndexerResult, Manifest, SchemaManager};
+use async_std::sync::Arc;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginatedResult, PaginationRequest};
 use fuel_tx::{Receipt, Transaction};
 use fuels_core::abi_encoder::ABIEncoder;
 use fuels_core::{Token, Tokenizable};
-use futures::stream::{StreamExt, futures_unordered::FuturesUnordered};
+use futures::stream::{futures_unordered::FuturesUnordered, StreamExt};
 use serde::Deserialize;
-use async_std::sync::Arc;
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::future::Future;
@@ -164,7 +164,8 @@ impl IndexerService {
                             }
                         }
                     }
-                }).await;
+                })
+                .await;
 
                 if let Err(e) = result {
                     error!("Indexer executor failed {e:?}");
@@ -184,7 +185,7 @@ impl IndexerService {
     }
 
     pub async fn run(self) {
-        let IndexerService { handles, ..} = self;
+        let IndexerService { handles, .. } = self;
         let mut futs = FuturesUnordered::from_iter(handles.into_values());
         //loop {
         while let Some(fut) = futs.next().await {
