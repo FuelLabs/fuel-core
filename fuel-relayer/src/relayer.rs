@@ -1,11 +1,12 @@
 use std::{
-    cmp::min,
+    cmp::{max, min},
     collections::{HashMap, VecDeque},
     time::Duration,
 };
 
 use crate::{log::EthEventLog, Config};
 use fuel_types::{Address, Bytes32, Color, Word};
+use futures::Future;
 use log::{error, info, trace, warn};
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
@@ -170,6 +171,33 @@ impl Relayer {
             .await;
     }
 
+    async fn stop_handle<T: Future>(
+        &mut self,
+        handle: impl Fn() -> T,
+    ) -> Result<T::Output, RelayerError> {
+        loop {
+            tokio::select! {
+                inner_fuel_event = self.receiver.recv() => {
+                    match inner_fuel_event.unwrap() {
+                        RelayerEvent::Stop=>{
+                            self.status = RelayerStatus::Stop;
+                            return Err(RelayerError::Stoped.into());
+                        },
+                        RelayerEvent::GetValidatorSet {response_channel, .. } => {
+                            let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
+                        },
+                        RelayerEvent::GetStatus { response } => {
+                            let _ = response.send(self.status);
+                        },
+                    }
+                }
+                o = handle() => {
+                    return Ok(o)
+                }
+            }
+        }
+    }
+
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
     /// logs watcher with assurence that we didnt miss any events.
     async fn inital_sync<'a, P>(
@@ -180,49 +208,45 @@ impl Relayer {
         P: Middleware<Error = ProviderError>,
     {
         // loop and wait for eth client to finish syncing
-        if matches!(provider.syncing().await?, SyncingStatus::IsSyncing { .. }) {
-            loop {
-                tokio::select! {
-                    inner_fuel_event = self.receiver.recv() => {
-                        match inner_fuel_event.unwrap() {
-                            RelayerEvent::Stop=>{
-                                self.status = RelayerStatus::Stop;
-                                return Err(RelayerError::Stoped.into());
-                            },
-                            RelayerEvent::GetValidatorSet { fuel_block, response_channel } => todo!(),
-                            RelayerEvent::GetStatus { response } => todo!(), }
-                    }
-                    _ = tokio::time::sleep(Duration::from_secs(5)) => {
-                        if matches!(provider.syncing().await?,SyncingStatus::IsFalse) {
-                            break;
-                        }
-                    }
-                }
-                if self.status == RelayerStatus::Stop {
-                    return Err(RelayerError::Stoped.into());
-                }
+        loop {
+            if matches!(
+                self.stop_handle(|| provider.syncing()).await??,
+                SyncingStatus::IsFalse
+            ) {
+                break;
             }
+            self.stop_handle(|| tokio::time::sleep(Duration::from_secs(5)))
+                .await?;
         }
 
         let last_finalized_eth_block = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
             self.db.lock().await.get_eth_finalized_block().await,
         );
-        // should be allways more then last finalized_eth_block
+        // should be allways more then last finalized_eth_blocks
+
         let best_finalized_block =
             provider.get_block_number().await?.as_u64() - self.config.eth_finality_slider();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
-        let step = 1000; // do some stats on optimal value
+        let step = self.config.initial_sync_step(); // do some stats on optimal value
+        let contracts = self.config.eth_v2_contract_addresses().to_vec();
+        println!(
+            "start{}..end{}",
+            last_finalized_eth_block, best_finalized_block
+        );
+        // on start of contract there is possibility of them being overlapping, so we want to skip for loop
+        // with next line
+        let best_finalized_block = max(last_finalized_eth_block, best_finalized_block);
         for start in (last_finalized_eth_block..best_finalized_block).step_by(step) {
             let end = min(start + step as u64, best_finalized_block);
 
             // TODO  can be parallelized
-            let logs = provider
-                .get_logs(&Filter::new().from_block(start).to_block(end).address(
-                    ValueOrArray::Array(self.config.eth_v2_contract_addresses().to_vec()),
-                ))
-                .await?;
+            let filter = Filter::new()
+                .from_block(start)
+                .to_block(end)
+                .address(ValueOrArray::Array(contracts.clone()));
+            let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
 
             for eth_event in logs {
                 let fuel_event = EthEventLog::try_from(&eth_event);
@@ -272,26 +296,22 @@ impl Relayer {
             self.pending.clear();
             self.pending.push_front(last_diff.clone());
 
-            best_block = provider.get_block_number().await?;
+            best_block = self.stop_handle(|| provider.get_block_number()).await??;
             // there is not get block latest from ethers so we need to do it in two steps to get hash
 
-            let block = provider
-                .get_block(best_block)
-                .await?
-                .expect("TODO handle me");
-            let best_block_hash = block.hash.unwrap(); // it is okey to just unwrap
+            let block = self
+                .stop_handle(|| provider.get_block(best_block))
+                .await??
+                .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?;
+            let best_block_hash = block.hash.unwrap(); // it is okay to unwrap
 
             // 2. sync overlap from LastIncludedEthBlock-> BestEthBlock) they are saved in dequeue.
-            let logs = provider
-                .get_logs(
-                    &Filter::new()
-                        .from_block(last_included_block)
-                        .to_block(best_block)
-                        .address(ValueOrArray::Array(
-                            self.config.eth_v2_contract_addresses().to_vec(),
-                        )),
-                )
-                .await?;
+            let filter = Filter::new()
+                .from_block(last_included_block)
+                .to_block(best_block)
+                .address(ValueOrArray::Array(contracts.clone()));
+
+            let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
 
             for eth_event in logs {
                 let fuel_event = EthEventLog::try_from(&eth_event);
@@ -307,23 +327,33 @@ impl Relayer {
             }
 
             // 3. Start listening to eth events
-            let eth_log_filter = Filter::new().address(ValueOrArray::Array(
-                self.config.eth_v2_contract_addresses().to_vec(),
-            ));
-            watcher = Some(provider.watch(&eth_log_filter).await.expect("TO WORK"));
-            // sleep for 300ms just to be sure that our watcher is registered and started receiving events
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            let eth_log_filter = Filter::new().address(ValueOrArray::Array(contracts.clone()));
+            watcher = Some(
+                self.stop_handle(|| provider.watch(&eth_log_filter))
+                    .await??,
+            );
+
+            let t = watcher.as_mut().unwrap().next().await;
+            // sleep for 50ms just to be sure that our watcher is registered and started receiving events
+            tokio::time::sleep(Duration::from_millis(50)).await;
 
             // 4. Check if our LastIncludedEthBlock is same as BestEthBlock
             if best_block == provider.get_block_number().await?
-                && best_block_hash == provider.get_block(best_block).await?.unwrap().hash.unwrap()
+                && best_block_hash
+                    == self
+                        .stop_handle(|| provider.get_block(best_block))
+                        .await??
+                        .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?
+                        .hash
+                        .unwrap()
             {
                 // block number and hash are same as before starting watcher over logs.
                 // we are safe to continue.
                 break;
             }
             // If not the same, stop listening to events and do 2,3,4 steps again.
-            // empty pending and do overlaping sync again
+            // empty pending and do overlaping sync again.
+            // Assume this will not happen very often.
             info!("Need to do overlaping sync again");
             self.pending.clear();
         }
@@ -333,11 +363,7 @@ impl Relayer {
             self.apply_last_validator_diff(best_block.as_u64()).await;
         }
 
-        if let Some(watcher) = watcher {
-            Ok(watcher)
-        } else {
-            Err(RelayerError::ProviderError.into())
-        }
+        watcher.ok_or(RelayerError::ProviderError.into())
     }
 
     // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
@@ -365,7 +391,6 @@ impl Relayer {
 
         // iterate over validator sets and update it to best_fuel_block.
         this.load_current_validator_set(best_fuel_block).await;
-        
 
         loop {
             let mut logs_watcher = match this.inital_sync(&provider).await {
@@ -375,7 +400,7 @@ impl Relayer {
                     if this.status == RelayerStatus::Stop {
                         return;
                     }
-                    continue
+                    continue;
                 }
             };
 
@@ -640,7 +665,7 @@ impl Relayer {
 mod test {
     use std::time::Duration;
 
-    use ethers_core::types::U256;
+    use ethers_core::types::{BlockNumber, FilterBlockOption, U256, U64};
     use ethers_providers::SyncingStatus;
     use fuel_core_interfaces::relayer::RelayerEvent;
 
@@ -650,9 +675,10 @@ mod test {
     };
 
     #[tokio::test]
-    pub async fn dummy_test() {
-        let config = Config::new();
-        let (relayer, event, new_block) = relayer(config);
+    pub async fn initialsync_aggregate_first_n_events() {
+        let mut config = Config::new();
+        config.eth_v2_contract_deployment = 5;
+        let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::new();
         middle.data.lock().is_syncing = SyncingStatus::IsSyncing {
             starting_block: U256::zero(),
@@ -665,7 +691,7 @@ mod test {
             move |_: &mut MockData, trigger: TriggerType| -> bool {
                 if matches!(trigger, TriggerType::Syncing) {
                     i += 1;
-                    if i == 3 {
+                    if i == 2 {
                         assert!(false, "Stop signal not handled");
                     }
                 }
@@ -676,6 +702,61 @@ mod test {
         let join = tokio::spawn(relayer.run(middle, 10));
         tokio::time::sleep(Duration::from_millis(10)).await;
         let _ = event.send(RelayerEvent::Stop).await;
+        let _ = join.await;
+    }
+
+    #[tokio::test]
+    pub async fn sync_first_5_block() {
+        let mut config = Config::new();
+        // start from block 1
+        config.eth_v2_contract_deployment = 100;
+        config.eth_finality_slider = 30;
+        // make 2 steps of 2 blocks
+        config.initial_sync_step = 2;
+        let (relayer, event, _) = relayer(config);
+        let middle = MockMiddleware::new();
+        {
+            let mut data = middle.data.lock();
+            // eth finished syncing
+            data.is_syncing = SyncingStatus::IsFalse;
+            // best block is 4
+            data.best_block.number = Some(U64([134]));
+        }
+        let mut i = 0;
+        middle.triggers.lock().push(Box::new(
+            move |_: &mut MockData, trigger: TriggerType| -> bool {
+                println!("trigger:{:?}",trigger);
+                if i == 2 {
+                    let _ = event.send(RelayerEvent::Stop);
+                    return true;
+                }
+                if let TriggerType::GetLogs(filter) = trigger {
+                    if let FilterBlockOption::Range {
+                        from_block,
+                        to_block,
+                    } = filter.block_option
+                    {
+                        assert_eq!(
+                            from_block,
+                            Some(BlockNumber::Number(U64([100 + i * 2]))),
+                            "Start block not matching on i:{:?}",
+                            i
+                        );
+                        assert_eq!(
+                            to_block,
+                            Some(BlockNumber::Number(U64([102 + i * 2]))),
+                            "Start block not matching on i:{:?}",
+                            i
+                        );
+                        i += 1;
+                    }
+                }
+                false
+            },
+        ));
+
+        let join = tokio::spawn(relayer.run(middle, 10));
+        tokio::time::sleep(Duration::from_millis(10)).await;
         let _ = join.await;
     }
 }

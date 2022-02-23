@@ -108,12 +108,16 @@ pub use thiserror::Error;
 
 use crate::db::KvStoreError;
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
+#[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RelayerError {
     #[error("Temp stopped")]
     Stoped,
     #[error("Temp ProviderError")]
     ProviderError,
+    #[error("Validator Set not returned, waiting for eth client sync")]
+    ValidatorSetEthClientSyncing,
+    #[error("Asked for unknown eth block")]
+    InitialSyncAskedForUnknownBlock,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,7 +132,7 @@ pub enum EthSyncedState {
     Synced,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RelayerStatus {
     EthClientNotConnected,
     EthIsSyncing,

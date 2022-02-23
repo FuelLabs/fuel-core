@@ -6,18 +6,20 @@ use ethers_core::types::H160;
 pub struct Config {
     /// number of blocks between fuel blocks where deposits get finalized.
     /// Finalization is done on fuel_block measurement and not on eth measurement.
-    fuel_finality_slider: u64,
+    pub(crate) fuel_finality_slider: u64,
     /// number of blocks between fuel blocks where deposits get finalized.
     /// Finalization is done on fuel_block measurement and not on eth measurement.
-    eth_finality_slider: u64,
+    pub(crate) eth_finality_slider: u64,
     /// ws address to ethereum client
-    eth_client: String,
+    pub(crate) eth_client: String,
     /// etheruem contract address. Create EthAddress into fuel_types
     /// TODO add ValidatorStake contract address and Fuel contract address
-    eth_v2_contract_addresses: Vec<H160>,
+    pub(crate) eth_v2_contract_addresses: Vec<H160>,
     /// contaract deployed on block. Block number after we can start filtering events related to fuel.
     /// It does not need to be aqurate and can be set in past before contracts are deployed.
-    eth_v2_contract_deployment: u64,
+    pub(crate) eth_v2_contract_deployment: u64,
+    /// number of blocks that will be asked in one step, for initial sync
+    pub(crate) initial_sync_step: usize,
 }
 
 impl Config {
@@ -33,6 +35,7 @@ impl Config {
             )
             .unwrap()],
             eth_v2_contract_deployment: 14_095_090,
+            initial_sync_step: 1000,
         }
     }
 
@@ -54,6 +57,10 @@ impl Config {
 
     pub fn eth_client(&self) -> &str {
         &self.eth_client
+    }
+
+    pub fn initial_sync_step(&self) -> usize {
+        self.initial_sync_step
     }
 }
 
