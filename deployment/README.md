@@ -119,7 +119,6 @@ You will need to customize the following environment variables as needed (for va
 | k8s_namespace                  |  fuel-core-deploy | your kubernetes namespace for fuel-core deployment  
 | fuel_core_image_repository     |  fuel-core-deploy | fuel-core ghcr image registry URI                                                                 |   
 | fuel_core_image_tag            |  fuel-core-deploy | fuel-core ghcr image tag                                                                          | 
-| base64_github_auth_token       |  fuel-core-deploy | base64 encoded github auth token to pull the fuel-core ghcr image (more info below)               |
 | TF_VAR_environment             |  create-k8s (all) | environment name                                                                                  |
 | TF_VAR_region                  |  create-k8s (aws) | AWS region where you plan to deploy your EKS cluster e.g. us-east-1                               |
 | TF_VAR_account_id              |  create-k8s (aws) | AWS account id                                                                                    |
@@ -146,31 +145,6 @@ Notes:
 - create-k8s refers to the [create-k8s.sh][create-k8s-sh] script
 
 - fuel-core-deploy refers to [fuel-core-deploy][fuel-deploy-script] script
-
-- for 'base64_github_auth_token' environment variable:
-
-First create a [github access token][create-git-token] and make sure to select "read:packages" permission to pull the [fuel-core image][fuel-core-image].
-
-You need to first base64 encode "git-username:git-auth-token" string in: 
-
-```
-  {"auths":{"ghcr.io":{"auth":"git-username:git-auth-token"}}}
-```
-
-At your command line, run (make sure to substitute your github username and personal access token here):
-
-```
-  echo -n "git-username:git-auth-token" | base64
-```
-Take the string output and insert back into the original place of "git-username:git-auth-token" in the auths json string.
-
-Now base64 encode the '{"auths": ...}' json string, by running at your command line:
-
-```
-  echo -n  '{"auths":{"ghcr.io":{"auth":"<your-first-base64-output>"}}}' | base64
-```
-
-This final encoded value is your 'base64_github_auth_token' environment variable
 
 ### k8s Cluster Deployment
 
