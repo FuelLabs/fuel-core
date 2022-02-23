@@ -3,7 +3,7 @@ use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
     model::{
         coin::{Coin, CoinStatus},
-        fuel_block::{BlockHeight, FuelBlockFull, FuelBlockLight},
+        fuel_block::{BlockHeight, FuelBlock, FuelBlockDb},
     },
     service::Config,
     tx_pool::TransactionStatus,
@@ -12,6 +12,7 @@ use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
+use fuel_types::bytes::{SerializableVec, SizedBytes};
 use fuel_types::ContractId;
 use fuel_vm::prelude::{Backtrace, Interpreter};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
@@ -39,11 +40,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub async fn execute(
-        &self,
-        block: &mut FuelBlockFull,
-        mode: ExecutionMode,
-    ) -> Result<(), Error> {
+    pub async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error> {
         let block_id = block.id();
         let mut block_db_transaction = self.database.transaction();
 
@@ -103,20 +100,23 @@ impl Executor {
 
             // update block commitment
             let tx_fee = self.total_fee_paid(tx, vm_result.receipts())?;
-            // TODO: use SMT instead of this manual approach
+            // TODO: use merkle-sum-tree instead of this manual hashing approach
             commitment.sum = commitment
                 .sum
                 .checked_add(tx_fee)
                 .ok_or(Error::FeeOverflow)?;
-            commitment.root = Hasher::hash(
-                &commitment
-                    .root
-                    .as_ref()
-                    .iter()
-                    .chain(tx_id.as_ref().iter())
-                    .copied()
-                    .collect_vec(),
-            );
+
+            // include the canonical serialization of the malleated tx into the commitment,
+            // including all witness data.
+            //
+            // TODO: reference the bytes directly from VM memory to save serialization. This isn't
+            //       possible atm because the change output values are set on the tx instance in the vm
+            //       and not also on the in-memory representation of the tx.
+            let tx_bytes = vm_result.tx().clone().to_bytes();
+            commitment.root = Hasher::default()
+                .chain(commitment.root.as_ref().iter())
+                .chain(tx_bytes.iter())
+                .digest();
 
             match mode {
                 ExecutionMode::Validation => {
@@ -210,10 +210,10 @@ impl Executor {
         }
 
         // insert block into database
-        Storage::<Bytes32, FuelBlockLight>::insert(
+        Storage::<Bytes32, FuelBlockDb>::insert(
             block_db_transaction.deref_mut(),
             &block_id,
-            &block.as_light(),
+            &block.to_db_block(),
         )?;
         block_db_transaction.commit()?;
         Ok(())
@@ -600,7 +600,7 @@ impl From<crate::state::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::fuel_block::FuelBlockHeaders;
+    use crate::model::fuel_block::FuelBlockHeader;
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_types::{ContractId, Salt};
@@ -610,7 +610,7 @@ mod tests {
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
 
-    fn test_block(num_txs: usize) -> FuelBlockFull {
+    fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)
             .into_iter()
             .map(|i| {
@@ -623,7 +623,7 @@ mod tests {
             })
             .collect_vec();
 
-        FuelBlockFull {
+        FuelBlock {
             headers: Default::default(),
             transactions,
         }
@@ -719,7 +719,7 @@ mod tests {
         tx.set_gas_limit(gas_limit);
         tx.set_gas_price(gas_price);
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -753,7 +753,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![Transaction::default(), Transaction::default()],
         };
@@ -833,7 +833,7 @@ mod tests {
             config: config.clone(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -884,7 +884,7 @@ mod tests {
             config: config.clone(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -935,7 +935,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -982,7 +982,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -1017,7 +1017,7 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlockFull {
+        let mut block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -1076,8 +1076,8 @@ mod tests {
             },
         };
 
-        let mut block = FuelBlockFull {
-            headers: FuelBlockHeaders {
+        let mut block = FuelBlock {
+            headers: FuelBlockHeader {
                 fuel_height: 6u64.into(),
                 time: Utc.timestamp(0, 0),
                 producer: Default::default(),
@@ -1106,7 +1106,7 @@ mod tests {
         // create a contract in block 1
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
-        let mut first_block = FuelBlockFull {
+        let mut first_block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx],
         };
@@ -1116,8 +1116,8 @@ mod tests {
             .contract_input(contract_id)
             .contract_output(&contract_id)
             .build();
-        let mut second_block = FuelBlockFull {
-            headers: FuelBlockHeaders {
+        let mut second_block = FuelBlock {
+            headers: FuelBlockHeader {
                 fuel_height: 2u64.into(),
                 ..Default::default()
             },
@@ -1170,7 +1170,7 @@ mod tests {
             .contract_output(&contract_id)
             .build();
 
-        let mut first_block = FuelBlockFull {
+        let mut first_block = FuelBlock {
             headers: Default::default(),
             transactions: vec![tx, tx2],
         };
@@ -1182,8 +1182,8 @@ mod tests {
             .build();
         let tx_id = tx3.id();
 
-        let mut second_block = FuelBlockFull {
-            headers: FuelBlockHeaders {
+        let mut second_block = FuelBlock {
+            headers: FuelBlockHeader {
                 fuel_height: 2u64.into(),
                 ..Default::default()
             },

@@ -1,6 +1,6 @@
 use crate::{
     database::{columns::BLOCKS, columns::BLOCK_IDS, Database, KvStoreError},
-    model::fuel_block::{BlockHeight, FuelBlockLight},
+    model::fuel_block::{BlockHeight, FuelBlockDb},
     state::{Error, IterDirection},
 };
 use fuel_storage::Storage;
@@ -8,20 +8,20 @@ use fuel_tx::Bytes32;
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 
-impl Storage<Bytes32, FuelBlockLight> for Database {
+impl Storage<Bytes32, FuelBlockDb> for Database {
     type Error = KvStoreError;
 
     fn insert(
         &mut self,
         key: &Bytes32,
-        value: &FuelBlockLight,
-    ) -> Result<Option<FuelBlockLight>, KvStoreError> {
+        value: &FuelBlockDb,
+    ) -> Result<Option<FuelBlockDb>, KvStoreError> {
         Database::insert(self, value.headers.fuel_height, BLOCK_IDS, *key)?;
         Database::insert(self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlockLight>, KvStoreError> {
-        let block: Option<FuelBlockLight> = Database::remove(self, key.as_ref(), BLOCKS)?;
+    fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlockDb>, KvStoreError> {
+        let block: Option<FuelBlockDb> = Database::remove(self, key.as_ref(), BLOCKS)?;
         if let Some(block) = &block {
             let _: Option<Bytes32> =
                 Database::remove(self, &block.headers.fuel_height.to_bytes(), BLOCK_IDS)?;
@@ -29,7 +29,7 @@ impl Storage<Bytes32, FuelBlockLight> for Database {
         Ok(block)
     }
 
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockLight>>, KvStoreError> {
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockDb>>, KvStoreError> {
         Database::get(self, key.as_ref(), BLOCKS).map_err(Into::into)
     }
 

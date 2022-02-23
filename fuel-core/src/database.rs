@@ -1,7 +1,7 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::fuel_block::FuelBlockLight;
+use crate::model::fuel_block::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
@@ -174,7 +174,7 @@ impl InterpreterStorage for Database {
     fn coinbase(&self) -> Result<Address, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
-        let block = Storage::<Bytes32, FuelBlockLight>::get(self, &id)?.unwrap_or_default();
+        let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
         Ok(block.headers.producer)
     }
 }

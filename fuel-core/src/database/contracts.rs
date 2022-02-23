@@ -1,6 +1,8 @@
-use crate::database::columns::CONTRACT_UTXO_ID;
 use crate::{
-    database::{columns::CONTRACTS, Database},
+    database::{
+        columns::{CONTRACTS, CONTRACT_UTXO_ID},
+        Database,
+    },
     state::Error,
 };
 use fuel_tx::UtxoId;
