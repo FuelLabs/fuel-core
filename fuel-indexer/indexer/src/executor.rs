@@ -6,7 +6,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
-use wasmer::{imports, Instance, LazyInit, Memory, Module, NativeFunc, RuntimeError, Store, WasmerEnv};
+use wasmer::{
+    imports, Instance, LazyInit, Memory, Module, NativeFunc, RuntimeError, Store, WasmerEnv,
+};
 use wasmer_engine_universal::Universal;
 
 cfg_if::cfg_if! {
@@ -134,7 +136,7 @@ impl IndexExecutor {
                 };
 
                 println!("TJDEBUG gonna open one");
-                let result = conn.transaction::<_, TxError, _>(|| {
+                let result = conn.transaction::<_, IndexerError, _>(|| {
                     println!("Opened a trans");
                     Ok(fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len())?)
                 });
