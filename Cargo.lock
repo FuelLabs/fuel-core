@@ -1527,7 +1527,7 @@ dependencies = [
  "fuel-tx 0.5.0",
  "fuel-txpool",
  "fuel-types",
- "fuel-vm 0.4.0",
+ "fuel-vm 0.4.1",
  "futures",
  "graphql-parser",
  "hex",
@@ -1562,7 +1562,7 @@ dependencies = [
  "fuel-storage",
  "fuel-tx 0.5.0",
  "fuel-types",
- "fuel-vm 0.4.0",
+ "fuel-vm 0.4.1",
  "futures",
  "lazy_static",
  "parking_lot",
@@ -1582,7 +1582,7 @@ dependencies = [
  "fuel-storage",
  "fuel-tx 0.5.0",
  "fuel-types",
- "fuel-vm 0.4.0",
+ "fuel-vm 0.4.1",
  "futures",
  "hex",
  "insta",
@@ -1757,9 +1757,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49842bf8fafcef12f61711367ba233501f2ae4304eb973746b485439ad3ce517"
+checksum = "88118d0be5bdda4ae30c939a771b7cb8f1c99cd1de300be266ea77519b2a7e11"
 dependencies = [
  "fuel-asm",
  "fuel-merkle",
