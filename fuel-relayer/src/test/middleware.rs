@@ -4,20 +4,21 @@ use ethers_core::types::{
     Block, BlockId, Bytes as EthersBytes, Filter, Log, TxHash, H160, H256, U256, U64,
 };
 use ethers_providers::{
-    FilterKind, FilterWatcher, JsonRpcClient, Middleware, MockProvider, Provider, ProviderError,
-    SyncingStatus,
+    FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
 };
+use futures::Future;
 use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
-use std::marker::PhantomData;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt::Debug, str::FromStr};
 use thiserror::Error;
 
-type TriggerHandler = dyn FnMut(&mut MockData, TriggerType) -> bool + Send + Sync;
+pub type FooReturn = Pin<Box<dyn Future<Output = bool>>>;
+pub type TriggerHandler = dyn FnMut(&mut MockData, TriggerType) -> (FooReturn) + Send + Sync;
 
 #[derive(Clone)]
 pub struct MockMiddleware {
@@ -25,7 +26,6 @@ pub struct MockMiddleware {
     pub data: Arc<Mutex<MockData>>,
     pub triggers: Arc<Mutex<Vec<Box<TriggerHandler>>>>,
     pub triggers_index: Arc<AtomicUsize>,
-    //_phantom: PhantomData<&'a Self>,
 }
 
 impl fmt::Debug for MockMiddleware {
@@ -70,7 +70,6 @@ impl MockMiddleware {
             data: Arc::new(Mutex::new(MockData::default())),
             triggers: Arc::new(Mutex::new(Vec::new())),
             triggers_index: Arc::new(AtomicUsize::new(0)),
-            //_phantom: PhantomData::default(),
         };
         let sc = s.clone();
         s.inner = Box::new(Some(Provider::new(sc)));
@@ -81,14 +80,14 @@ impl MockMiddleware {
         self.data.lock().logs_batch.push(logs)
     }
 
-    fn trigger(&self, trigger_type: TriggerType) {
+    async fn trigger(&self, trigger_type: TriggerType) {
         if let Some(trigger) = self
             .triggers
             .lock()
             .get_mut(self.triggers_index.load(Ordering::SeqCst))
         {
             let mut mock_data = self.data.lock();
-            if trigger(&mut mock_data, trigger_type) {
+            if trigger(&mut mock_data, trigger_type).await {
                 self.triggers_index.fetch_add(1, Ordering::SeqCst);
             }
         } else {
@@ -128,17 +127,17 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
     {
-        //if method == 'eth_getFilterChanges' {
+        if method == "eth_getFilterChanges" {
             let block_id = U256::zero();
             self.trigger(TriggerType::GetFilterChanges(block_id.clone()));
-    
+
             let data = self.data.lock();
-            Ok(
+            return Ok(
                 if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
                     let mut ret_logs = Vec::new();
                     for log in logs {
@@ -148,17 +147,22 @@ impl JsonRpcClient for MockMiddleware {
                         ret_logs.push(log);
                     }
                     //ret_logs
-                    let res = serde_json::to_value(&ret_logs).map_err(|e| Self::Error::SerdeJson(e))?;
-                    let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                    let res =
+                        serde_json::to_value(&ret_logs).map_err(|e| Self::Error::SerdeJson(e))?;
+                    let res: R =
+                        serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
                     res
                 } else {
-                    let ret : Vec<Log> = Vec::new();
+                    let ret: Vec<Log> = Vec::new();
                     let res = serde_json::to_value(ret)?;
-                    let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                    let res: R =
+                        serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
                     res
-                }
-            )
-        //}
+                },
+            );
+        } else {
+            panic!("Request not mocked: {}", method);
+        }
     }
 }
 
@@ -171,7 +175,6 @@ WHAT DO I NEED FOR RELAYER FROM PROVIDER:
     * LogsWatcher only uses .next()
 * get_block API using only HASH
 */
-
 
 #[async_trait]
 impl Middleware for MockMiddleware {
@@ -240,11 +243,11 @@ impl Middleware for MockMiddleware {
 
     async fn watch<'b>(
         &'b self,
-        filter: &Filter,
+        _filter: &Filter,
     ) -> Result<FilterWatcher<'b, Self::Provider, Log>, Self::Error> {
         let id = U256::zero();
-        let bb = self.inner.as_ref().as_ref().unwrap();
-        let filter = FilterWatcher::new(id, bb).interval(Duration::from_secs(1));
+        let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
+            .interval(Duration::from_secs(1));
         Ok(filter)
     }
 }

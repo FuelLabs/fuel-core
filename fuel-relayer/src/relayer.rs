@@ -177,7 +177,9 @@ impl Relayer {
     ) -> Result<T::Output, RelayerError> {
         loop {
             tokio::select! {
+                biased;
                 inner_fuel_event = self.receiver.recv() => {
+                    println!("Received fuel event");
                     match inner_fuel_event.unwrap() {
                         RelayerEvent::Stop=>{
                             self.status = RelayerStatus::Stop;
@@ -218,6 +220,7 @@ impl Relayer {
             self.stop_handle(|| tokio::time::sleep(Duration::from_secs(5)))
                 .await?;
         }
+        println!("Wait client wait loop finished");
 
         let last_finalized_eth_block = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
@@ -269,6 +272,8 @@ impl Relayer {
             }
         }
 
+        println!("Initial load for loop finished");
+
         // if there is no diffs it means we are at start of contract creating
         let last_diff = if self.pending.is_empty() {
             // set fuel num to zero and contract creating eth.
@@ -290,9 +295,11 @@ impl Relayer {
         let last_included_block = best_finalized_block;
 
         let mut best_block;
+
+        println!("Start intermediate sync loop");
         loop {
             // 1. get best block and its hash sync over it, and push it over
-
+            println!("test one");
             self.pending.clear();
             self.pending.push_front(last_diff.clone());
 
@@ -304,6 +311,7 @@ impl Relayer {
                 .await??
                 .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?;
             let best_block_hash = block.hash.unwrap(); // it is okay to unwrap
+            println!("test two");
 
             // 2. sync overlap from LastIncludedEthBlock-> BestEthBlock) they are saved in dequeue.
             let filter = Filter::new()
@@ -312,6 +320,8 @@ impl Relayer {
                 .address(ValueOrArray::Array(contracts.clone()));
 
             let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
+
+            println!("test threa");
 
             for eth_event in logs {
                 let fuel_event = EthEventLog::try_from(&eth_event);
@@ -332,10 +342,13 @@ impl Relayer {
                 self.stop_handle(|| provider.watch(&eth_log_filter))
                     .await??,
             );
+            println!("test 4th");
 
-            let t = watcher.as_mut().unwrap().next().await;
+            //let t = watcher.as_mut().expect(()).next().await;
             // sleep for 50ms just to be sure that our watcher is registered and started receiving events
             tokio::time::sleep(Duration::from_millis(50)).await;
+
+            println!("test 5th");
 
             // 4. Check if our LastIncludedEthBlock is same as BestEthBlock
             if best_block == provider.get_block_number().await?
@@ -347,6 +360,7 @@ impl Relayer {
                         .hash
                         .unwrap()
             {
+                println!("Break intermediate loop");
                 // block number and hash are same as before starting watcher over logs.
                 // we are safe to continue.
                 break;
@@ -354,7 +368,7 @@ impl Relayer {
             // If not the same, stop listening to events and do 2,3,4 steps again.
             // empty pending and do overlaping sync again.
             // Assume this will not happen very often.
-            info!("Need to do overlaping sync again");
+            println!("Need to do overlaping sync again");
             self.pending.clear();
         }
 
@@ -396,15 +410,18 @@ impl Relayer {
             let mut logs_watcher = match this.inital_sync(&provider).await {
                 Ok(watcher) => watcher,
                 Err(err) => {
-                    error!("Initial sync error:{}, try again", err);
+                    println!("Initial sync error:{}, try again", err);
                     if this.status == RelayerStatus::Stop {
+                        println!("Stop return.");
                         return;
                     }
                     continue;
                 }
             };
+            println!("END1");
 
             if this.status == RelayerStatus::Stop {
+                println!("Stop return2\n");
                 return;
             }
 
@@ -670,7 +687,7 @@ mod test {
     use fuel_core_interfaces::relayer::RelayerEvent;
 
     use crate::{
-        test::{relayer, MockData, MockMiddleware, TriggerType},
+        test::{relayer, FooReturn, MockData, MockMiddleware, TriggerType},
         Config,
     };
 
@@ -688,14 +705,16 @@ mod test {
 
         let mut i = 0;
         middle.triggers.lock().push(Box::new(
-            move |_: &mut MockData, trigger: TriggerType| -> bool {
-                if matches!(trigger, TriggerType::Syncing) {
-                    i += 1;
-                    if i == 2 {
-                        assert!(false, "Stop signal not handled");
+            move |_: &mut MockData, trigger: TriggerType| -> FooReturn {
+                Box::pin(async move {
+                    if matches!(trigger, TriggerType::Syncing) {
+                        i += 1;
+                        if i == 2 {
+                            assert!(false, "Stop signal not handled");
+                        }
                     }
-                }
-                false
+                    false
+                })
             },
         ));
 
@@ -724,39 +743,45 @@ mod test {
         }
         let mut i = 0;
         middle.triggers.lock().push(Box::new(
-            move |_: &mut MockData, trigger: TriggerType| -> bool {
-                println!("trigger:{:?}",trigger);
-                if i == 2 {
-                    let _ = event.send(RelayerEvent::Stop);
-                    return true;
-                }
-                if let TriggerType::GetLogs(filter) = trigger {
-                    if let FilterBlockOption::Range {
-                        from_block,
-                        to_block,
-                    } = filter.block_option
-                    {
-                        assert_eq!(
-                            from_block,
-                            Some(BlockNumber::Number(U64([100 + i * 2]))),
-                            "Start block not matching on i:{:?}",
-                            i
-                        );
-                        assert_eq!(
-                            to_block,
-                            Some(BlockNumber::Number(U64([102 + i * 2]))),
-                            "Start block not matching on i:{:?}",
-                            i
-                        );
-                        i += 1;
+            move |_: &mut MockData, trigger: TriggerType| -> FooReturn {
+                let event = event.clone();
+                Box::pin(async move {
+                    println!("trigger:{:?}", trigger);
+                    if i == 2 {
+                        println!("SENDD STOPPP");
+                        let event = event.clone();
+                        let _ = tokio::spawn(async move { event.send(RelayerEvent::Stop).await });
+                        return false;
                     }
-                }
-                false
+                    if let TriggerType::GetLogs(filter) = trigger {
+                        if let FilterBlockOption::Range {
+                            from_block,
+                            to_block,
+                        } = filter.block_option
+                        {
+                            assert_eq!(
+                                from_block,
+                                Some(BlockNumber::Number(U64([100 + i * 2]))),
+                                "Start block not matching on i:{:?}",
+                                i
+                            );
+                            assert_eq!(
+                                to_block,
+                                Some(BlockNumber::Number(U64([102 + i * 2]))),
+                                "Start block not matching on i:{:?}",
+                                i
+                            );
+                            i += 1;
+                        }
+                    }
+                    false
+                })
             },
         ));
 
         let join = tokio::spawn(relayer.run(middle, 10));
-        tokio::time::sleep(Duration::from_millis(10)).await;
+        //tokio::time::sleep(Duration::from_millis(10)).await;
         let _ = join.await;
+        println!("the END")
     }
 }
