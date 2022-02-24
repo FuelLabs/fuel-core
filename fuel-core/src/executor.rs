@@ -12,11 +12,10 @@ use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
-use fuel_types::bytes::{SerializableVec, SizedBytes};
+use fuel_types::bytes::SerializableVec;
 use fuel_types::ContractId;
 use fuel_vm::prelude::{Backtrace, Interpreter};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
-use itertools::Itertools;
 use std::error::Error as StdError;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
@@ -41,10 +40,16 @@ pub struct Executor {
 
 impl Executor {
     pub async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error> {
-        let block_id = block.id();
+        // Compute the block id before execution, if mode is set to production just use zeroed id.
+        let pre_exec_block_id = match mode {
+            ExecutionMode::Production => Default::default(),
+            ExecutionMode::Validation => block.id(),
+        };
+
         let mut block_db_transaction = self.database.transaction();
 
         let mut commitment = TransactionCommitment::default();
+        let mut tx_status = vec![];
 
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
             let tx_id = tx.id();
@@ -169,7 +174,7 @@ impl Executor {
                     }
                 }) {
                     TransactionStatus::Failed {
-                        block_id,
+                        block_id: Default::default(),
                         time: block.headers.time,
                         reason: format!("{:?}", script_result.reason()),
                         result: Some(*vm_result.state()),
@@ -178,7 +183,7 @@ impl Executor {
                 // otherwise just log the revert arg
                 else {
                     TransactionStatus::Failed {
-                        block_id,
+                        block_id: Default::default(),
                         time: block.headers.time,
                         reason: format!("{:?}", vm_result.state()),
                         result: Some(*vm_result.state()),
@@ -187,14 +192,14 @@ impl Executor {
             } else {
                 // else tx was a success
                 TransactionStatus::Success {
-                    block_id,
+                    block_id: Default::default(),
                     time: block.headers.time,
                     result: *vm_result.state(),
                 }
             };
 
             // persist tx status at the block level
-            block_db_transaction.update_tx_status(&tx_id, status)?;
+            tx_status.push((tx_id, status));
         }
 
         // check or set transaction commitment
@@ -209,10 +214,25 @@ impl Executor {
             }
         }
 
+        let finalized_block_id = block.id();
+        // check if block id doesn't match proposed block id
+        if mode == ExecutionMode::Validation && pre_exec_block_id != finalized_block_id {
+            // In theory this shouldn't happen since any deviance in the block should've already
+            // been checked by now.
+            return Err(Error::InvalidBlockId);
+        }
+
+        // set the transaction status using the finalized block id
+        self.persist_transaction_status(
+            finalized_block_id,
+            &mut tx_status,
+            block_db_transaction.deref_mut(),
+        )?;
+
         // insert block into database
         Storage::<Bytes32, FuelBlockDb>::insert(
             block_db_transaction.deref_mut(),
-            &block_id,
+            &finalized_block_id,
             &block.to_db_block(),
         )?;
         block_db_transaction.commit()?;
@@ -523,6 +543,27 @@ impl Executor {
 
         Ok(())
     }
+
+    fn persist_transaction_status(
+        &self,
+        finalized_block_id: Bytes32,
+        tx_status: &mut [(Bytes32, TransactionStatus)],
+        db: &Database,
+    ) -> Result<(), Error> {
+        for (tx_id, status) in tx_status {
+            match status {
+                TransactionStatus::Submitted { .. } => {}
+                TransactionStatus::Success { block_id, .. } => {
+                    *block_id = finalized_block_id;
+                }
+                TransactionStatus::Failed { block_id, .. } => {
+                    *block_id = finalized_block_id;
+                }
+            }
+            db.update_tx_status(tx_id, status.clone())?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Error)]
@@ -575,6 +616,8 @@ pub enum Error {
     InvalidTransactionOutcome { transaction_id: Bytes32 },
     #[error("Block commitment data is invalid")]
     InvalidBlockCommitment,
+    #[error("Block id is invalid")]
+    InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
     ContractUtxoMissing(ContractId),
 }
