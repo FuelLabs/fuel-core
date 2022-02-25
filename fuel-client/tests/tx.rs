@@ -25,8 +25,7 @@ fn basic_script_snapshot() {
     ];
     let script: Vec<u8> = script
         .iter()
-        .map(|op| u32::from(*op).to_be_bytes())
-        .flatten()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
     insta::assert_snapshot!(format!("{:?}", script));
 }
@@ -49,8 +48,7 @@ async fn dry_run() {
     ];
     let script: Vec<u8> = script
         .iter()
-        .map(|op| u32::from(*op).to_be_bytes())
-        .flatten()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
     let tx = fuel_tx::Transaction::script(
@@ -97,8 +95,7 @@ async fn submit() {
     ];
     let script: Vec<u8> = script
         .iter()
-        .map(|op| u32::from(*op).to_be_bytes())
-        .flatten()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
     let tx = fuel_tx::Transaction::script(
