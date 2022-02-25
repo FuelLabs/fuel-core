@@ -193,7 +193,7 @@ impl Executor {
                 }
             };
 
-            // persist tx status at the block level
+            // queue up status for this tx to be stored once block id is finalized.
             tx_status.push((tx_id, status));
         }
 
