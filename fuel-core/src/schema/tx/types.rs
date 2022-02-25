@@ -496,6 +496,7 @@ impl Transaction {
         Ok(status.map(Into::into))
     }
 
+    #[allow(clippy::unnecessary_to_owned)]
     async fn receipts(
         &self,
         ctx: &Context<'_>,
