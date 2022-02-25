@@ -208,12 +208,21 @@ impl Executor {
             }
             ExecutionMode::Validation => {
                 if block.header.transactions_root != txs_root {
-                    return Err(Error::InvalidBlockCommitment);
+                    return Err(Error::InvalidTransactionRoot);
                 }
             }
         }
         // set the coinbase amount
-        block.header.coinbase = coinbase;
+        match mode {
+            ExecutionMode::Production => {
+                block.header.coinbase = coinbase;
+            }
+            ExecutionMode::Validation => {
+                if block.header.coinbase != coinbase {
+                    return Err(Error::InvalidFeeAmount);
+                }
+            }
+        }
 
         let finalized_block_id = block.id();
         // check if block id doesn't match proposed block id
@@ -615,8 +624,10 @@ pub enum Error {
     Backtrace(Box<FuelBacktrace>),
     #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
     InvalidTransactionOutcome { transaction_id: Bytes32 },
-    #[error("Block commitment data is invalid")]
-    InvalidBlockCommitment,
+    #[error("Transaction root is invalid")]
+    InvalidTransactionRoot,
+    #[error("The amount of charged fees is invalid")]
+    InvalidFeeAmount,
     #[error("Block id is invalid")]
     InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
@@ -1043,7 +1054,7 @@ mod tests {
             .execute(&mut block, ExecutionMode::Validation)
             .await;
 
-        assert!(matches!(verify_result, Err(Error::InvalidBlockCommitment)))
+        assert!(matches!(verify_result, Err(Error::InvalidTransactionRoot)))
     }
 
     #[tokio::test]
