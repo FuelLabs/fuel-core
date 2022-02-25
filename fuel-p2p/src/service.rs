@@ -6,7 +6,7 @@ use futures::prelude::*;
 use libp2p::{identity::Keypair, multiaddr::Protocol, swarm::SwarmEvent, Multiaddr, PeerId, Swarm};
 use std::error::Error;
 
-/// Listens to the evets on the p2p network
+/// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
 pub struct FuelP2PService {
     /// Store the local peer id

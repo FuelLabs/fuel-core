@@ -17,6 +17,7 @@ use std::{
 };
 use tracing::debug;
 
+/// Maximum amount of peer's addresses that we are ready to store per peer
 const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
 // todo: define which events outside world is intersted in

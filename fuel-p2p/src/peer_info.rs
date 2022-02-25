@@ -110,13 +110,10 @@ impl PeerInfoBehaviour {
 
     /// Insert latest ping to a connected Node
     fn insert_latest_ping(&mut self, peer_id: &PeerId, duration: Duration) {
-        match self.peers.get_mut(peer_id) {
-            Some(peer_info) => {
-                peer_info.latest_ping = Some(duration);
-            }
-            _ => {
-                debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
-            }
+        if let Some(peer_info) = self.peers.get_mut(peer_id) {
+            peer_info.latest_ping = Some(duration);
+        } else {
+            debug!(target: "fuel-libp2p", "Peer with PeerId: {:?} is not among the connected peers", peer_id)
         }
     }
 }
@@ -217,15 +214,11 @@ impl NetworkBehaviour for PeerInfoBehaviour {
 
                     return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts });
                 }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(ping_event)) => {
-                    if let PingEvent {
-                        peer,
-                        result: Ok(PingSuccess::Ping { rtt }),
-                    } = ping_event
-                    {
-                        self.insert_latest_ping(&peer, rtt)
-                    }
-                }
+                Poll::Ready(NetworkBehaviourAction::GenerateEvent(PingEvent {
+                    peer,
+                    result: Ok(PingSuccess::Ping { rtt }),
+                })) => self.insert_latest_ping(&peer, rtt),
+                _ => {}
             }
         }
 
