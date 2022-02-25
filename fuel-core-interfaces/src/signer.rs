@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use fuel_types::Bytes32;
 use thiserror::Error;
-use tokio::sync::oneshot;
 
 #[async_trait]
 pub trait Signer {

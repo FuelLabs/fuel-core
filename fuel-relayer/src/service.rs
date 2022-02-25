@@ -21,7 +21,7 @@ impl Service {
         config: &Config,
         db: Box<Mutex<dyn RelayerDB>>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
-        signer: Box<dyn Signer+Send>,
+        signer: Box<dyn Signer + Send>,
     ) -> Result<Self, anyhow::Error> {
         let (sender, receiver) = mpsc::channel(100);
         let best_block = db.lock().await.get_block_height().await;
@@ -29,7 +29,7 @@ impl Service {
         let provider = Relayer::provider(config.eth_client()).await?;
         let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider, best_block)));
         Ok(Self { sender, stop_join })
-     }
+    }
 
     pub async fn stop(&mut self) {
         let _ = self.sender.send(RelayerEvent::Stop);

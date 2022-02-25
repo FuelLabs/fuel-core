@@ -112,7 +112,7 @@ pub mod helpers {
     //const DB_TX1_HASH: TxId = 0x0000.into();
 
     use core::str::FromStr;
-    use std::{sync::Arc, collections::BTreeMap};
+    use std::{collections::BTreeMap, sync::Arc};
 
     use fuel_asm::Opcode;
     use fuel_storage::Storage;
@@ -133,7 +133,7 @@ pub mod helpers {
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
         pub contract: HashSet<ContractId>,
-        pub deposit_coin: HashMap<Bytes32,DepositCoin>,
+        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
         // relayer relayer
         pub data: Arc<Mutex<Data>>,
     }
@@ -622,7 +622,7 @@ pub mod helpers {
             key: &Bytes32,
             value: &DepositCoin,
         ) -> Result<Option<DepositCoin>, Self::Error> {
-            Ok(self.deposit_coin.insert(*key,value.clone()))
+            Ok(self.deposit_coin.insert(*key, value.clone()))
         }
 
         fn remove(&mut self, _key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
@@ -646,7 +646,7 @@ pub mod helpers {
         type Error = crate::db::KvStoreError;
 
         fn insert(&mut self, key: &Address, value: &u64) -> Result<Option<u64>, Self::Error> {
-            Ok(self.data.lock().current_validator_set.insert(*key,*value))
+            Ok(self.data.lock().current_validator_set.insert(*key, *value))
         }
 
         fn remove(&mut self, _key: &Address) -> Result<Option<u64>, Self::Error> {
@@ -674,7 +674,11 @@ pub mod helpers {
             key: &u64,
             value: &HashMap<Address, u64>,
         ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
-            Ok(self.data.lock().validator_set_diff.insert(*key,value.clone()))
+            Ok(self
+                .data
+                .lock()
+                .validator_set_diff
+                .insert(*key, value.clone()))
         }
 
         fn remove(&mut self, _key: &u64) -> Result<Option<HashMap<Address, u64>>, Self::Error> {

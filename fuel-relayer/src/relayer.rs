@@ -680,52 +680,63 @@ impl Relayer {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
 
-    use ethers_core::types::{BlockNumber, FilterBlockOption, U256, U64};
+    use async_trait::async_trait;
+    use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, U256, U64};
     use ethers_providers::SyncingStatus;
     use fuel_core_interfaces::relayer::RelayerEvent;
+    use tokio::sync::mpsc;
 
     use crate::{
-        test::{relayer, FooReturn, MockData, MockMiddleware, TriggerType},
+        test::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
         Config,
     };
 
     #[tokio::test]
-    pub async fn initialsync_aggregate_first_n_events() {
+    pub async fn initialsync_check_wait_for_eth_client_and_handling_stop() {
         let mut config = Config::new();
         config.eth_v2_contract_deployment = 5;
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::new();
-        middle.data.lock().is_syncing = SyncingStatus::IsSyncing {
+        middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {
             starting_block: U256::zero(),
             current_block: U256::zero(),
             highest_block: U256::zero(),
         };
 
-        let mut i = 0;
-        middle.triggers.lock().push(Box::new(
-            move |_: &mut MockData, trigger: TriggerType| -> FooReturn {
-                Box::pin(async move {
-                    if matches!(trigger, TriggerType::Syncing) {
-                        i += 1;
-                        if i == 2 {
-                            assert!(false, "Stop signal not handled");
-                        }
-                    }
-                    false
-                })
-            },
-        ));
+        pub struct Handle {
+            pub i: u64,
+            pub event: mpsc::Sender<RelayerEvent>,
+        }
+        #[async_trait]
+        impl TriggerHandle for Handle {
+            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+                if matches!(trigger, TriggerType::Syncing) {
+                    self.i += 1;
 
-        let join = tokio::spawn(relayer.run(middle, 10));
-        tokio::time::sleep(Duration::from_millis(10)).await;
-        let _ = event.send(RelayerEvent::Stop).await;
-        let _ = join.await;
+                    if self.i == 3 {
+                        let _ = self.event.send(RelayerEvent::Stop).await;
+                        self.i += 1;
+                        return;
+                    }
+                    if self.i == 4 {
+                        assert!(true, "Something is fishy. We should have stopped");
+                    }
+                } else {
+                    assert!(true, "Unknown trigger received");
+                }
+            }
+        }
+
+        middle
+            .trigger_handle(Box::new(Handle { i: 0, event }))
+            .await;
+
+        relayer.run(middle, 10).await;
     }
 
     #[tokio::test]
-    pub async fn sync_first_5_block() {
+    pub async fn sync_first_n_finalized_blocks() {
         let mut config = Config::new();
         // start from block 1
         config.eth_v2_contract_deployment = 100;
@@ -735,53 +746,180 @@ mod test {
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::new();
         {
-            let mut data = middle.data.lock();
+            let mut data = middle.data.lock().await;
             // eth finished syncing
             data.is_syncing = SyncingStatus::IsFalse;
             // best block is 4
             data.best_block.number = Some(U64([134]));
         }
-        let mut i = 0;
-        middle.triggers.lock().push(Box::new(
-            move |_: &mut MockData, trigger: TriggerType| -> FooReturn {
-                let event = event.clone();
-                Box::pin(async move {
-                    println!("trigger:{:?}", trigger);
-                    if i == 2 {
-                        println!("SENDD STOPPP");
-                        let event = event.clone();
-                        let _ = tokio::spawn(async move { event.send(RelayerEvent::Stop).await });
-                        return false;
-                    }
-                    if let TriggerType::GetLogs(filter) = trigger {
-                        if let FilterBlockOption::Range {
+        pub struct Handle {
+            pub i: u64,
+            pub event: mpsc::Sender<RelayerEvent>,
+        }
+        #[async_trait]
+        impl TriggerHandle for Handle {
+            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+                if let TriggerType::GetLogs(filter) = trigger {
+                    if let FilterBlockOption::Range {
+                        from_block,
+                        to_block,
+                    } = filter.block_option
+                    {
+                        assert_eq!(
                             from_block,
+                            Some(BlockNumber::Number(U64([100 + self.i * 2]))),
+                            "Start block not matching on i:{:?}",
+                            self.i
+                        );
+                        assert_eq!(
                             to_block,
-                        } = filter.block_option
-                        {
-                            assert_eq!(
-                                from_block,
-                                Some(BlockNumber::Number(U64([100 + i * 2]))),
-                                "Start block not matching on i:{:?}",
-                                i
-                            );
-                            assert_eq!(
-                                to_block,
-                                Some(BlockNumber::Number(U64([102 + i * 2]))),
-                                "Start block not matching on i:{:?}",
-                                i
-                            );
-                            i += 1;
-                        }
+                            Some(BlockNumber::Number(U64([102 + self.i * 2]))),
+                            "Start block not matching on i:{:?}",
+                            self.i
+                        );
+                        self.i += 1;
                     }
-                    false
-                })
-            },
-        ));
+                }
+                if self.i == 2 {
+                    let _ = self.event.send(RelayerEvent::Stop).await;
+                    return;
+                }
+            }
+        }
+        middle
+            .trigger_handle(Box::new(Handle { i: 0, event }))
+            .await;
 
-        let join = tokio::spawn(relayer.run(middle, 10));
-        //tokio::time::sleep(Duration::from_millis(10)).await;
-        let _ = join.await;
-        println!("the END")
+        relayer.run(middle, 10).await;
+    }
+
+    #[tokio::test]
+    pub async fn initial_sync() {
+        let mut config = Config::new();
+        // start from block 1
+        config.eth_v2_contract_deployment = 100;
+        config.eth_finality_slider = 30;
+        // make 2 steps of 2 blocks
+        config.initial_sync_step = 2;
+        let (relayer, event, _) = relayer(config);
+        let middle = MockMiddleware::new();
+        {
+            let mut data = middle.data.lock().await;
+            // eth finished syncing
+            data.is_syncing = SyncingStatus::IsFalse;
+            // best block is 4
+            data.best_block.number = Some(U64([134]));
+        }
+        pub struct Handle {
+            pub i: u64,
+            pub event: mpsc::Sender<RelayerEvent>,
+        }
+        #[async_trait]
+        impl TriggerHandle for Handle {
+            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+                println!("TEST{:?}   type:{:?}", self.i, trigger);
+                match self.i {
+                    // check if eth client is in sync.
+                    0 => assert_eq!(
+                        TriggerType::Syncing,
+                        trigger,
+                        "We need to check if eth client is synced"
+                    ),
+                    // get best eth block number so that we know until when to sync
+                    1 => assert_eq!(
+                        TriggerType::GetBlockNumber,
+                        trigger,
+                        "We need to get Best eth block number"
+                    ),
+                    // get first batch of logs.
+                    2 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([100]))));
+                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([102]))));
+                                }
+                                _ => assert!(true, "Expect filter block option range"),
+                            };
+                        }
+                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 1", trigger),
+                    },
+                    // get second batch of logs. for initialy sync
+                    3 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([102]))));
+                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([104]))));
+                                }
+                                _ => assert!(true, "Expect filter block option range"),
+                            };
+                        }
+                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 1", trigger),
+                    },
+                    // update our best block
+                    4 => {
+                        assert_eq!(
+                            TriggerType::GetBlockNumber,
+                            trigger,
+                            "We need to get Best eth block number again"
+                        )
+                    }
+                    // get block hash from best block number
+                    5 => {
+                        assert_eq!(
+                            TriggerType::GetBlock(BlockId::Number(BlockNumber::Number(U64([134])))),
+                            trigger,
+                            "Get block hash from best block number"
+                        )
+                    }
+                    // get block log from current finalized to best block
+                    6 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([104]))));
+                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([134]))));
+                                }
+                                _ => assert!(true, "Expect filter block option range for 6"),
+                            };
+                        }
+                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 6", trigger),
+                    },
+                    // get best eth block to syncornize log watcher
+                    7 => {
+                        assert_eq!(
+                            TriggerType::GetBlockNumber,
+                            trigger,
+                            "We need to get Best eth block number to check that it is not changed"
+                        )
+                    }
+                    // get best eth block hash to syncronize log watcher
+                    8 => {
+                        assert_eq!(
+                            TriggerType::GetBlock(BlockId::Number(BlockNumber::Number(U64([134])))),
+                            trigger,
+                            "Get block hash from best block number to check that it is not changed"
+                        )
+                    }
+                    _ => assert!(true, "Unknown request, we should have finished until now"),
+                }
+                self.i += 1;
+            }
+        }
+        middle
+            .trigger_handle(Box::new(Handle { i: 0, event }))
+            .await;
+
+        relayer.run(middle, 10).await;
     }
 }

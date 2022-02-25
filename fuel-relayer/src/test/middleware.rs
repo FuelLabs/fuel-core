@@ -6,26 +6,27 @@ use ethers_core::types::{
 use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
 };
-use futures::Future;
-use parking_lot::Mutex;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
-use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt::Debug, str::FromStr};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
-pub type FooReturn = Pin<Box<dyn Future<Output = bool>>>;
-pub type TriggerHandler = dyn FnMut(&mut MockData, TriggerType) -> (FooReturn) + Send + Sync;
+#[async_trait]
+pub trait TriggerHandle: Send {
+    async fn run(&mut self, _data: &mut MockData, _trigger: TriggerType) {}
+}
+
+pub struct EmptyTriggerHand {}
+impl TriggerHandle for EmptyTriggerHand {}
 
 #[derive(Clone)]
 pub struct MockMiddleware {
     pub inner: Box<Option<Provider<MockMiddleware>>>,
     pub data: Arc<Mutex<MockData>>,
-    pub triggers: Arc<Mutex<Vec<Box<TriggerHandler>>>>,
-    pub triggers_index: Arc<AtomicUsize>,
+    pub handler: Arc<Mutex<Box<dyn TriggerHandle>>>,
 }
 
 impl fmt::Debug for MockMiddleware {
@@ -62,14 +63,16 @@ impl Default for MockData {
 }
 
 impl MockMiddleware {
+    pub async fn trigger_handle(&self, trigger_handle: Box<dyn TriggerHandle>) {
+        *self.handler.lock().await = trigger_handle;
+    }
     /// Instantiates the nonce manager with a 0 nonce. The `address` should be the
     /// address which you'll be sending transactions from
     pub fn new() -> Self {
         let mut s = Self {
             inner: Box::new(None),
             data: Arc::new(Mutex::new(MockData::default())),
-            triggers: Arc::new(Mutex::new(Vec::new())),
-            triggers_index: Arc::new(AtomicUsize::new(0)),
+            handler: Arc::new(Mutex::new(Box::new(EmptyTriggerHand {}))),
         };
         let sc = s.clone();
         s.inner = Box::new(Some(Provider::new(sc)));
@@ -77,22 +80,13 @@ impl MockMiddleware {
     }
 
     pub async fn insert_log_batch(&mut self, logs: Vec<Log>) {
-        self.data.lock().logs_batch.push(logs)
+        self.data.lock().await.logs_batch.push(logs)
     }
 
-    async fn trigger(&self, trigger_type: TriggerType) {
-        if let Some(trigger) = self
-            .triggers
-            .lock()
-            .get_mut(self.triggers_index.load(Ordering::SeqCst))
-        {
-            let mut mock_data = self.data.lock();
-            if trigger(&mut mock_data, trigger_type).await {
-                self.triggers_index.fetch_add(1, Ordering::SeqCst);
-            }
-        } else {
-            assert!(true, "Badly structured test in Relayer MockMiddleware");
-        }
+    async fn trigger(&self, trigger: TriggerType) {
+        let mut data = self.data.lock().await;
+        let mut handler = self.handler.lock().await;
+        handler.run(&mut data, trigger).await
     }
 }
 
@@ -106,13 +100,7 @@ pub enum MockMiddlewareError {
     Internal,
 }
 
-// impl<M: Middleware> FromErr<M::Error> for MockMiddlewareError {
-//     fn from(src: M::Error) -> Self {
-//         Self::MiddlewareError(src)
-//     }
-// }
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TriggerType {
     Syncing,
     GetBlockNumber,
@@ -134,9 +122,10 @@ impl JsonRpcClient for MockMiddleware {
     {
         if method == "eth_getFilterChanges" {
             let block_id = U256::zero();
-            self.trigger(TriggerType::GetFilterChanges(block_id.clone()));
+            self.trigger(TriggerType::GetFilterChanges(block_id.clone()))
+                .await;
 
-            let data = self.data.lock();
+            let data = self.data.lock().await;
             return Ok(
                 if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
                     let mut ret_logs = Vec::new();
@@ -188,19 +177,20 @@ impl Middleware for MockMiddleware {
 
     /// Needs for initial sync of relayer
     async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
-        self.trigger(TriggerType::Syncing);
-        Ok(self.data.lock().is_syncing.clone())
+        self.trigger(TriggerType::Syncing).await;
+        Ok(self.data.lock().await.is_syncing.clone())
     }
 
     /// Used in initial sync to get current best eth block
     async fn get_block_number(&self) -> Result<U64, Self::Error> {
-        self.trigger(TriggerType::GetBlockNumber);
-        Ok(self.data.lock().best_block.number.unwrap())
+        let this = self;
+        let _ = this.trigger(TriggerType::GetBlockNumber).await;
+        Ok(self.data.lock().await.best_block.number.unwrap())
     }
 
     /// used for initial sync to get logs of already finalized diffs
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
-        self.trigger(TriggerType::GetLogs(filter.clone()));
+        self.trigger(TriggerType::GetLogs(filter.clone())).await;
         Ok(Vec::new())
     }
 
@@ -210,9 +200,9 @@ impl Middleware for MockMiddleware {
         block_hash_or_number: T,
     ) -> Result<Option<Block<TxHash>>, Self::Error> {
         let block_id = block_hash_or_number.into();
-        self.trigger(TriggerType::GetBlock(block_id.clone()));
+        self.trigger(TriggerType::GetBlock(block_id.clone())).await;
         // TODO change
-        Ok(Some(self.data.lock().best_block.clone()))
+        Ok(Some(self.data.lock().await.best_block.clone()))
     }
 
     /// only thing used FilterWatcher
@@ -222,9 +212,10 @@ impl Middleware for MockMiddleware {
         R: Serialize + DeserializeOwned + Send + Sync + Debug,
     {
         let block_id = id.into();
-        self.trigger(TriggerType::GetFilterChanges(block_id.clone()));
+        self.trigger(TriggerType::GetFilterChanges(block_id.clone()))
+            .await;
 
-        let data = self.data.lock();
+        let data = self.data.lock().await;
         Ok(
             if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
                 let mut ret_logs = Vec::new();
@@ -252,7 +243,7 @@ impl Middleware for MockMiddleware {
     }
 }
 
-fn log_default() -> Log {
+fn _log_default() -> Log {
     Log {
         address: H160::zero(),
         topics: Vec::new(),
