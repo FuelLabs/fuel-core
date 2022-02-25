@@ -16,7 +16,7 @@ impl Storage<Bytes32, FuelBlockDb> for Database {
         key: &Bytes32,
         value: &FuelBlockDb,
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        Database::insert(self, value.headers.fuel_height, BLOCK_IDS, *key)?;
+        Database::insert(self, value.headers.height, BLOCK_IDS, *key)?;
         Database::insert(self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
     }
 
@@ -24,7 +24,7 @@ impl Storage<Bytes32, FuelBlockDb> for Database {
         let block: Option<FuelBlockDb> = Database::remove(self, key.as_ref(), BLOCKS)?;
         if let Some(block) = &block {
             let _: Option<Bytes32> =
-                Database::remove(self, &block.headers.fuel_height.to_bytes(), BLOCK_IDS)?;
+                Database::remove(self, &block.headers.height.to_bytes(), BLOCK_IDS)?;
         }
         Ok(block)
     }

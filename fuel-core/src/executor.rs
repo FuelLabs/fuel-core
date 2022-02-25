@@ -1,4 +1,3 @@
-use crate::model::fuel_block::TransactionCommitment;
 use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
     model::{
@@ -9,15 +8,19 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
+use fuel_merkle::{binary::MerkleTree, common::StorageMap};
 use fuel_storage::Storage;
-use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
-use fuel_types::bytes::SerializableVec;
-use fuel_types::ContractId;
-use fuel_vm::prelude::{Backtrace, Interpreter};
-use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
-use std::error::Error as StdError;
-use std::ops::{Deref, DerefMut};
+use fuel_types::{bytes::SerializableVec, ContractId};
+use fuel_vm::{
+    consts::REG_SP,
+    prelude::Backtrace as FuelBacktrace,
+    prelude::{Backtrace, Interpreter},
+};
+use std::{
+    error::Error as StdError,
+    ops::{Deref, DerefMut},
+};
 use thiserror::Error;
 use tracing::warn;
 
@@ -47,9 +50,10 @@ impl Executor {
         };
 
         let mut block_db_transaction = self.database.transaction();
-
-        let mut commitment = TransactionCommitment::default();
+        let mut storage = StorageMap::new();
+        let mut txs_merkle = MerkleTree::new(&mut storage);
         let mut tx_status = vec![];
+        let mut coinbase = 0u64;
 
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
             let tx_id = tx.id();
@@ -63,11 +67,7 @@ impl Executor {
             }
 
             if self.config.utxo_validation {
-                self.verify_input_state(
-                    block_db_transaction.deref(),
-                    tx,
-                    block.headers.fuel_height,
-                )?;
+                self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
             }
 
             self.compute_contract_input_utxo_ids(tx, &mode, block_db_transaction.deref())?;
@@ -77,7 +77,7 @@ impl Executor {
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
             self.persist_owners_index(
-                block.headers.fuel_height,
+                block.header.height,
                 tx,
                 &tx_id,
                 idx,
@@ -105,11 +105,7 @@ impl Executor {
 
             // update block commitment
             let tx_fee = self.total_fee_paid(tx, vm_result.receipts())?;
-            // TODO: use merkle-sum-tree instead of this manual hashing approach
-            commitment.sum = commitment
-                .sum
-                .checked_add(tx_fee)
-                .ok_or(Error::FeeOverflow)?;
+            coinbase = coinbase.checked_add(tx_fee).ok_or(Error::FeeOverflow)?;
 
             // include the canonical serialization of the malleated tx into the commitment,
             // including all witness data.
@@ -118,10 +114,9 @@ impl Executor {
             //       possible atm because the change output values are set on the tx instance in the vm
             //       and not also on the in-memory representation of the tx.
             let tx_bytes = vm_result.tx().clone().to_bytes();
-            commitment.root = Hasher::default()
-                .chain(commitment.root.as_ref().iter())
-                .chain(tx_bytes.iter())
-                .digest();
+            txs_merkle
+                .push(&tx_bytes)
+                .expect("In-memory impl should be infallible");
 
             match mode {
                 ExecutionMode::Validation => {
@@ -150,7 +145,7 @@ impl Executor {
 
             // persist any outputs
             self.persist_outputs(
-                block.headers.fuel_height,
+                block.header.height,
                 vm_result.tx(),
                 &tx_id,
                 block_db_transaction.deref_mut(),
@@ -175,7 +170,7 @@ impl Executor {
                 }) {
                     TransactionStatus::Failed {
                         block_id: Default::default(),
-                        time: block.headers.time,
+                        time: block.header.time,
                         reason: format!("{:?}", script_result.reason()),
                         result: Some(*vm_result.state()),
                     }
@@ -184,7 +179,7 @@ impl Executor {
                 else {
                     TransactionStatus::Failed {
                         block_id: Default::default(),
-                        time: block.headers.time,
+                        time: block.header.time,
                         reason: format!("{:?}", vm_result.state()),
                         result: Some(*vm_result.state()),
                     }
@@ -193,7 +188,7 @@ impl Executor {
                 // else tx was a success
                 TransactionStatus::Success {
                     block_id: Default::default(),
-                    time: block.headers.time,
+                    time: block.header.time,
                     result: *vm_result.state(),
                 }
             };
@@ -203,16 +198,22 @@ impl Executor {
         }
 
         // check or set transaction commitment
+        let txs_root = txs_merkle
+            .root()
+            .expect("In-memory impl should be infallible")
+            .into();
         match mode {
             ExecutionMode::Production => {
-                block.headers.transactions_commitment = commitment;
+                block.header.transactions_root = txs_root;
             }
             ExecutionMode::Validation => {
-                if block.headers.transactions_commitment != commitment {
+                if block.header.transactions_root != txs_root {
                     return Err(Error::InvalidBlockCommitment);
                 }
             }
         }
+        // set the coinbase amount
+        block.header.coinbase = coinbase;
 
         let finalized_block_id = block.id();
         // check if block id doesn't match proposed block id
@@ -222,7 +223,7 @@ impl Executor {
             return Err(Error::InvalidBlockId);
         }
 
-        // set the transaction status using the finalized block id
+        // save the status for every transaction using the finalized block id
         self.persist_transaction_status(
             finalized_block_id,
             &mut tx_status,
@@ -667,7 +668,7 @@ mod tests {
             .collect_vec();
 
         FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions,
         }
     }
@@ -738,8 +739,8 @@ mod tests {
             .unwrap();
 
         assert_ne!(
-            start_block.headers.transactions_commitment,
-            block.headers.transactions_commitment
+            start_block.header.transactions_root,
+            block.header.transactions_root
         )
     }
 
@@ -763,7 +764,7 @@ mod tests {
         tx.set_gas_price(gas_price);
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -797,7 +798,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![Transaction::default(), Transaction::default()],
         };
 
@@ -877,7 +878,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -928,7 +929,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -979,7 +980,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -1026,7 +1027,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -1036,8 +1037,7 @@ mod tests {
             .unwrap();
 
         // randomize transaction commitment
-        block.headers.transactions_commitment.root = rng.gen();
-        block.headers.transactions_commitment.sum = rng.gen();
+        block.header.transactions_root = rng.gen();
 
         let verify_result = verifier
             .execute(&mut block, ExecutionMode::Validation)
@@ -1061,7 +1061,7 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -1120,11 +1120,15 @@ mod tests {
         };
 
         let mut block = FuelBlock {
-            headers: FuelBlockHeader {
-                fuel_height: 6u64.into(),
+            header: FuelBlockHeader {
+                height: 6u64.into(),
+                number: Default::default(),
+                prev_hash: Default::default(),
                 time: Utc.timestamp(0, 0),
                 producer: Default::default(),
-                transactions_commitment: Default::default(),
+                transactions_root: Default::default(),
+                prev_root: Default::default(),
+                coinbase: 0,
             },
             transactions: vec![tx],
         };
@@ -1150,7 +1154,7 @@ mod tests {
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let mut first_block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx],
         };
 
@@ -1160,8 +1164,8 @@ mod tests {
             .contract_output(&contract_id)
             .build();
         let mut second_block = FuelBlock {
-            headers: FuelBlockHeader {
-                fuel_height: 2u64.into(),
+            header: FuelBlockHeader {
+                height: 2u64.into(),
                 ..Default::default()
             },
             transactions: vec![tx2],
@@ -1214,7 +1218,7 @@ mod tests {
             .build();
 
         let mut first_block = FuelBlock {
-            headers: Default::default(),
+            header: Default::default(),
             transactions: vec![tx, tx2],
         };
 
@@ -1226,8 +1230,8 @@ mod tests {
         let tx_id = tx3.id();
 
         let mut second_block = FuelBlock {
-            headers: FuelBlockHeader {
-                fuel_height: 2u64.into(),
+            header: FuelBlockHeader {
+                height: 2u64.into(),
                 ..Default::default()
             },
             transactions: vec![tx3],

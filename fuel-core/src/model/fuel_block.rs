@@ -67,29 +67,37 @@ impl BlockHeight {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct TransactionCommitment {
-    pub sum: Word,
-    pub root: Bytes32,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct FuelBlockHeader {
-    pub fuel_height: BlockHeight,
+    /// Fuel block height.
+    pub height: BlockHeight,
+    /// Ethereum block number.
+    pub number: BlockHeight,
+    /// Block header hash of the previous block.
+    pub prev_hash: Bytes32,
+    /// Merkle root of all previous block header hashes.
+    pub prev_root: Bytes32,
+    /// Merkle root of transactions.
+    pub transactions_root: Bytes32,
+    /// The block producer time
     pub time: DateTime<Utc>,
+    /// The block producer public key
     pub producer: Address,
-    // TODO: integrate with fuel-merkle
-    pub transactions_commitment: TransactionCommitment,
+    /// The coinbase award for the block producer
+    pub coinbase: Word,
 }
 
 impl FuelBlockHeader {
     pub fn id(&self) -> Bytes32 {
         let mut hasher = Hasher::default();
-        hasher.input(&self.fuel_height.to_bytes()[..]);
+        hasher.input(&self.height.to_bytes()[..]);
+        hasher.input(&self.number.to_bytes()[..]);
+        hasher.input(self.prev_hash.as_ref());
+        hasher.input(self.prev_root.as_ref());
+        hasher.input(self.transactions_root.as_ref());
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.producer.as_ref());
-        hasher.input(self.transactions_commitment.sum.to_be_bytes());
-        hasher.input(self.transactions_commitment.root.as_ref());
+        hasher.input(&self.coinbase.to_be_bytes()[..]);
         hasher.digest()
     }
 }
@@ -97,10 +105,14 @@ impl FuelBlockHeader {
 impl Default for FuelBlockHeader {
     fn default() -> Self {
         Self {
-            fuel_height: 0u32.into(),
+            height: 0u32.into(),
+            number: 0u32.into(),
+            prev_hash: Default::default(),
             time: Utc.timestamp(0, 0),
             producer: Default::default(),
-            transactions_commitment: Default::default(),
+            transactions_root: Default::default(),
+            prev_root: Default::default(),
+            coinbase: 0,
         }
     }
 }
@@ -121,18 +133,18 @@ impl FuelBlockDb {
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug, Deserialize, Default, Serialize)]
 pub struct FuelBlock {
-    pub headers: FuelBlockHeader,
+    pub header: FuelBlockHeader,
     pub transactions: Vec<Transaction>,
 }
 
 impl FuelBlock {
     pub fn id(&self) -> Bytes32 {
-        self.headers.id()
+        self.header.id()
     }
 
     pub fn to_db_block(&self) -> FuelBlockDb {
         FuelBlockDb {
-            headers: self.headers.clone(),
+            headers: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }

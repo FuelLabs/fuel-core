@@ -39,10 +39,14 @@ async fn block_connection_first_5() {
     let blocks = (0..10u32)
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
-                fuel_height: i.into(),
+                height: i.into(),
+                number: Default::default(),
+                prev_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
                 producer: Default::default(),
-                transactions_commitment: Default::default(),
+                transactions_root: Default::default(),
+                prev_root: Default::default(),
+                coinbase: 0,
             },
             transactions: vec![],
         })
@@ -85,10 +89,14 @@ async fn block_connection_last_5() {
     let blocks = (0..10u32)
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
-                fuel_height: i.into(),
+                height: i.into(),
+                number: Default::default(),
+                prev_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
                 producer: Default::default(),
-                transactions_commitment: Default::default(),
+                transactions_root: Default::default(),
+                prev_root: Default::default(),
+                coinbase: 0,
             },
             transactions: vec![],
         })

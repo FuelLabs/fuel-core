@@ -88,13 +88,21 @@ impl TxPool {
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
         // setup and execute block
-        let block_height = db.get_block_height()?.unwrap_or_default() + 1u32.into();
+        let current_height = db.get_block_height()?.unwrap_or_default();
+        let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+        let new_block_height = current_height + 1u32.into();
+
         let mut block = FuelBlock {
-            headers: FuelBlockHeader {
-                fuel_height: block_height,
+            header: FuelBlockHeader {
+                height: new_block_height,
+                number: Default::default(),
+                prev_hash: current_hash,
                 time: Utc::now(),
                 producer: Default::default(),
-                transactions_commitment: Default::default(),
+                transactions_root: Default::default(),
+                // TODO: compute the current merkle root of all blocks
+                prev_root: Default::default(),
+                coinbase: 0,
             },
             transactions: vec![tx],
         };
