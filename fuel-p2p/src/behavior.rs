@@ -4,7 +4,6 @@ use crate::{
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
 };
 use libp2p::{
-    identify::IdentifyInfo,
     identity::Keypair,
     swarm::{
         NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
@@ -15,16 +14,15 @@ use std::{
     collections::VecDeque,
     task::{Context, Poll},
 };
-use tracing::debug;
-
-/// Maximum amount of peer's addresses that we are ready to store per peer
-const MAX_IDENTIFY_ADDRESSES: usize = 10;
 
 // todo: define which events outside world is intersted in
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum FuelBehaviourEvent {
     PeerConnected(PeerId),
     PeerDisconnected(PeerId),
+    PeerIdentified(PeerId),
+    PeerInfoUpdated(PeerId),
 }
 
 /// Handles all p2p protocols needed for Fuel.
@@ -120,28 +118,19 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour {
 
 impl NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBehaviour {
     fn inject_event(&mut self, event: PeerInfoEvent) {
-        let PeerInfoEvent::PeerIdentified {
-            peer_id,
-            info:
-                IdentifyInfo {
-                    protocol_version,
-                    agent_version,
-                    mut listen_addrs,
-                    ..
-                },
-        } = event;
+        match event {
+            PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
+                for address in addresses {
+                    self.discovery.add_address(&peer_id, address.clone());
+                }
 
-        if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
-            debug!(
-                target: "fuel-libp2p",
-                "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-            );
-            listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
-        }
+                self.events
+                    .push_back(FuelBehaviourEvent::PeerIdentified(peer_id));
+            }
 
-        for address in listen_addrs {
-            self.discovery.add_address(&peer_id, address.clone());
+            PeerInfoEvent::PeerInfoUpdated { peer_id } => self
+                .events
+                .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id)),
         }
     }
 }

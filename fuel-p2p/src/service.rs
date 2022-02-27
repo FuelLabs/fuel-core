@@ -67,7 +67,7 @@ impl FuelP2PService {
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::{config::P2PConfig, service::FuelP2PEvent};
+    use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
     use libp2p::identity::Keypair;
     use std::{
         net::{IpAddr, Ipv4Addr},
@@ -182,6 +182,46 @@ mod tests {
                         }
                     }
                 }
+            };
+        }
+    }
+
+    // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
+    #[tokio::test]
+    async fn peer_info_updates_work() {
+        // Node A
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4006;
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4007;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config).await;
+
+        loop {
+            tokio::select! {
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, latest_ping, client_version, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // Exits after it verifies that:
+                        // 1. Peer Addresses are known
+                        // 2. Client Version is known
+                        // 3. Node has been pinged and responded with success
+                        if !peer_addresses.is_empty() && client_version.is_some() && latest_ping.is_some() {
+                            break;
+                        }
+                    }
+
+                },
+                _ = node_b.next_event() => {}
             };
         }
     }
