@@ -17,8 +17,8 @@ futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
 libp2p = "0.41"
-tracing = "0.1"
 sha2 = "0.9"
+tracing = "0.1"
 
 [dev-dependencies]
 env_logger = "0.9"
