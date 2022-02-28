@@ -1,6 +1,6 @@
+use clap::Parser;
 use service::FuelService;
 use std::io;
-use structopt::StructOpt;
 use tracing::trace;
 
 mod args;
@@ -18,7 +18,7 @@ pub(crate) mod tx_pool;
 async fn main() -> io::Result<()> {
     trace!("Initializing in TRACE mode.");
     // load configuration
-    let config = args::Opt::from_args().exec()?;
+    let config = args::Opt::parse().exec()?;
     // initialize the server
     let server = FuelService::new_node(config).await?;
     // pause the main task while service is running

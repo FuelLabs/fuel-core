@@ -21,6 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "0.14", features = ["surf"] }
 derive_more = { version = "0.99" }
 fuel-storage = "0.1"
@@ -32,7 +33,6 @@ hex = "0.4"
 itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-structopt = "0.3"
 surf = "2.2"
 thiserror = "1.0"
 
