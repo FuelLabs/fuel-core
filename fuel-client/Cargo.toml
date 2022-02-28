@@ -21,7 +21,7 @@ path = "src/main.rs"
 
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "3.1.2", features = ["derive"] }
+clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "0.14", features = ["surf"] }
 derive_more = { version = "0.99" }
 fuel-storage = "0.1"
