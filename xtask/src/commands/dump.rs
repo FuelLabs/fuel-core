@@ -1,3 +1,4 @@
+use clap::Parser;
 use fuel_core::schema::build_schema;
 use std::{
     env,
@@ -5,12 +6,11 @@ use std::{
     io::Write,
     path::PathBuf,
 };
-use structopt::StructOpt;
 
 // stored in the root of the workspace
 const SCHEMA_URL: &str = "../fuel-client/assets/schema.sdl";
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct DumpCommand {}
 
 pub fn dump_schema() -> Result<(), Box<dyn std::error::Error>> {

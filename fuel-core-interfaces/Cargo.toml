@@ -19,10 +19,10 @@ fuel-tx = { version = "0.5", features = ["serde-types"] }
 fuel-types = { version = "0.1", features = ["serde-types"] }
 fuel-vm = "0.4"
 futures = "0.3"
+lazy_static = "1.4"
 parking_lot = "0.11"
 thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }
-lazy_static = "1.4"
 
 [dev-dependencies]
 

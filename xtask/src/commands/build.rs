@@ -1,12 +1,12 @@
 use super::dump::dump_schema;
+use clap::Parser;
 use std::{
     env,
     path::{Path, PathBuf},
     process::Command,
 };
-use structopt::StructOpt;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 pub struct BuildCommand {}
 
 pub fn cargo_build_and_dump_schema() -> Result<(), Box<dyn std::error::Error>> {

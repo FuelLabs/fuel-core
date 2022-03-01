@@ -259,17 +259,16 @@ impl Executor {
                 ..
             } = input
             {
-                let block_created;
-                if self.config.utxo_validation {
-                    block_created = Storage::<UtxoId, Coin>::get(db, utxo_id)?
+                let block_created = if self.config.utxo_validation {
+                    Storage::<UtxoId, Coin>::get(db, utxo_id)?
                         .ok_or(Error::TransactionValidity(
                             TransactionValidityError::CoinDoesntExist,
                         ))?
-                        .block_created;
+                        .block_created
                 } else {
                     // if utxo validation is disabled, just assign this new input to the original block
-                    block_created = Default::default();
-                }
+                    Default::default()
+                };
 
                 Storage::<UtxoId, Coin>::insert(
                     db,

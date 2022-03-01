@@ -8,4 +8,4 @@ publish = false
 
 [dependencies]
 fuel-core = { path = "../fuel-core", default-features = false }
-structopt = "0.3"
+clap = { version = "3.1", features = ["env", "derive"] }
