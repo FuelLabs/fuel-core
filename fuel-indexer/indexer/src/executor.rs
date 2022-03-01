@@ -77,7 +77,7 @@ impl IndexExecutor {
 
         let mut import_object = imports! {};
 
-        let mut env = IndexEnv::new(db_conn.clone())?;
+        let mut env = IndexEnv::new(db_conn)?;
         let exports = ffi::get_exports(&env, &store);
         import_object.register("env", exports);
 
