@@ -1,14 +1,15 @@
+use clap::Parser;
 use fuel_gql_client::client::FuelClient;
 use fuel_tx::Transaction;
 use serde_json::json;
-use structopt::StructOpt;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 enum Command {
+    #[clap(subcommand)]
     Transaction(TransactionCommands),
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 enum TransactionCommands {
     /// Submit a JSON encoded transaction for inclusion in a block
     Submit { tx: String },
@@ -20,11 +21,11 @@ enum TransactionCommands {
     Receipts { id: String },
 }
 
-#[derive(StructOpt)]
+#[derive(Parser)]
 struct CliArgs {
-    #[structopt(name = "endpoint", default_value = "127.0.0.1:4000", long = "endpoint")]
+    #[clap(name = "endpoint", default_value = "127.0.0.1:4000", long = "endpoint")]
     endpoint: String,
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
@@ -62,5 +63,5 @@ impl CliArgs {
 }
 
 fn main() {
-    futures::executor::block_on(CliArgs::from_args().exec());
+    futures::executor::block_on(CliArgs::parse().exec());
 }

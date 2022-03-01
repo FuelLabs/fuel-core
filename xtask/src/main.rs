@@ -1,26 +1,26 @@
+use clap::Parser;
 use commands::{
     build::{cargo_build_and_dump_schema, BuildCommand},
     dump::{dump_schema, DumpCommand},
 };
-use structopt::StructOpt;
 
 mod commands;
 
-#[derive(Debug, StructOpt)]
-#[structopt(name = "xtask", about = "fuel-core dev builder")]
+#[derive(Debug, Parser)]
+#[clap(name = "xtask", about = "fuel-core dev builder")]
 pub struct Opt {
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Xtask,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 enum Xtask {
     Build(BuildCommand),
     Dump(DumpCommand),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
 
     match opt.command {
         Xtask::Build(_) => cargo_build_and_dump_schema(),
