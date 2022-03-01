@@ -41,12 +41,11 @@ async fn block_connection_first_5() {
             headers: FuelBlockHeader {
                 height: i.into(),
                 number: Default::default(),
-                prev_hash: Default::default(),
+                parent_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
                 producer: Default::default(),
                 transactions_root: Default::default(),
                 prev_root: Default::default(),
-                coinbase: 0,
             },
             transactions: vec![],
         })
@@ -91,12 +90,11 @@ async fn block_connection_last_5() {
             headers: FuelBlockHeader {
                 height: i.into(),
                 number: Default::default(),
-                prev_hash: Default::default(),
+                parent_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
                 producer: Default::default(),
                 transactions_root: Default::default(),
                 prev_root: Default::default(),
-                coinbase: 0,
             },
             transactions: vec![],
         })

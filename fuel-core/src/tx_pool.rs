@@ -96,13 +96,12 @@ impl TxPool {
             header: FuelBlockHeader {
                 height: new_block_height,
                 number: Default::default(),
-                prev_hash: current_hash,
+                parent_hash: current_hash,
                 time: Utc::now(),
                 producer: Default::default(),
                 transactions_root: Default::default(),
                 // TODO: compute the current merkle root of all blocks
                 prev_root: Default::default(),
-                coinbase: 0,
             },
             transactions: vec![tx],
         };

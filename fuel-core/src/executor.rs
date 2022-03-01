@@ -22,7 +22,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 use thiserror::Error;
-use tracing::warn;
+use tracing::{debug, warn};
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -212,19 +212,11 @@ impl Executor {
                 }
             }
         }
-        // set the coinbase amount
-        match mode {
-            ExecutionMode::Production => {
-                block.header.coinbase = coinbase;
-            }
-            ExecutionMode::Validation => {
-                if block.header.coinbase != coinbase {
-                    return Err(Error::InvalidFeeAmount);
-                }
-            }
-        }
 
         let finalized_block_id = block.id();
+
+        debug!("Block {:#x} fees: {}", pre_exec_block_id, coinbase);
+
         // check if block id doesn't match proposed block id
         if mode == ExecutionMode::Validation && pre_exec_block_id != finalized_block_id {
             // In theory this shouldn't happen since any deviance in the block should've already
@@ -1133,12 +1125,11 @@ mod tests {
             header: FuelBlockHeader {
                 height: 6u64.into(),
                 number: Default::default(),
-                prev_hash: Default::default(),
+                parent_hash: Default::default(),
                 time: Utc.timestamp(0, 0),
                 producer: Default::default(),
                 transactions_root: Default::default(),
                 prev_root: Default::default(),
-                coinbase: 0,
             },
             transactions: vec![tx],
         };
