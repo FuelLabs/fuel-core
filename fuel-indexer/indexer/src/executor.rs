@@ -1,11 +1,11 @@
 use crate::database::Database;
 use crate::ffi;
 use crate::{IndexerError, IndexerResult, Manifest};
-use diesel::Connection;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
+use tracing::error;
 use wasmer::{
     imports, Instance, LazyInit, Memory, Module, NativeFunc, RuntimeError, Store, WasmerEnv,
 };
@@ -46,7 +46,7 @@ pub struct IndexEnv {
 
 impl IndexEnv {
     pub fn new(db_conn: String) -> IndexerResult<IndexEnv> {
-        let db = Arc::new(Mutex::new(Database::new(db_conn)?));
+        let db = Arc::new(Mutex::new(Database::new(&db_conn)?));
         Ok(IndexEnv {
             memory: Default::default(),
             alloc: Default::default(),
@@ -129,24 +129,25 @@ impl IndexExecutor {
                     .exports
                     .get_native_function::<(u32, u32, u32), ()>(handler)?;
 
-                println!("TJDEBUG fetching one");
-                let conn = match self.db.lock() {
-                    Ok(mut s) => s.get_connection_ref()?,
-                    Err(_) => return Err(IndexerError::LockPoisoned),
-                };
-
-                println!("TJDEBUG gonna open one");
-                let result = conn.transaction::<_, IndexerError, _>(|| {
-                    println!("Opened a trans");
-                    Ok(fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len())?)
-                });
-
-                match self.db.lock() {
-                    Ok(mut s) => s.drop_connection_ref(),
-                    Err(_) => return Err(IndexerError::LockPoisoned),
+                if let Ok(db) = self.db.lock() {
+                    db.start_transaction()?;
+                } else {
+                    return Err(IndexerError::LockPoisoned);
                 }
 
-                let _ = result?;
+                let res = fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len());
+
+                if let Ok(db) = self.db.lock() {
+                    if let Err(e) = res {
+                        error!("Indexer failed {e:?}");
+                        db.revert_transaction()?;
+                        return Err(IndexerError::RuntimeError(e));
+                    } else {
+                        db.commit_transaction()?;
+                    }
+                } else {
+                    return Err(IndexerError::LockPoisoned);
+                }
             }
         }
         Ok(())
@@ -157,6 +158,10 @@ impl IndexExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use diesel::sql_types::*;
+    use diesel::{
+        prelude::PgConnection, sql_query, Connection, Queryable, QueryableByName, RunQueryDsl,
+    };
     use fuels_abigen_macro::abigen;
     use fuels_rs::abi_encoder::ABIEncoder;
 
@@ -169,6 +174,14 @@ mod tests {
         MyContract,
         "fuel-indexer/indexer/src/test_data/my_struct.json"
     );
+
+    #[derive(Debug, Queryable, QueryableByName)]
+    struct Thing1 {
+        #[sql_type = "BigInt"]
+        id: i64,
+        #[sql_type = "Text"]
+        account: String,
+    }
 
     #[test]
     fn test_executor() {
@@ -213,5 +226,18 @@ mod tests {
 
         let result = executor.trigger_event("an_event_name", encoded);
         assert!(result.is_ok());
+
+        let conn = PgConnection::establish(DATABASE_URL).expect("Postgres connection failed");
+        let data: Vec<Thing1> =
+            sql_query("select id,account from test_namespace.thing1 where id = 1020;")
+                .load(&conn)
+                .expect("Database query failed");
+
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].id, 1020);
+        assert_eq!(
+            data[0].account,
+            "afafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafaf"
+        );
     }
 }

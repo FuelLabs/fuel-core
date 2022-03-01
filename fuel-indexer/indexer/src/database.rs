@@ -1,6 +1,5 @@
 use core::ops::Deref;
-use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, RunQueryDsl};
-use r2d2::PooledConnection;
+use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, Connection, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
@@ -14,23 +13,19 @@ use fuel_indexer_schema::{
 };
 
 type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
-pub type PooledConn = PooledConnection<ConnectionManager<PgConnection>>;
-
-pub struct ConnWrapper(*mut PooledConn);
-
-unsafe impl Send for ConnWrapper {}
+pub struct ConnWrapper(PgConnection);
 
 impl Deref for ConnWrapper {
-    type Target = *mut PooledConn;
+    type Target = PgConnection;
 
-    fn deref(&self) -> &*mut PooledConn {
+    fn deref(&self) -> &PgConnection {
         &self.0
     }
 }
 
 impl std::fmt::Debug for ConnWrapper {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(fmt, "DBPool(...)")
+        write!(fmt, "ConnWrapper(...)")
     }
 }
 
@@ -94,40 +89,36 @@ impl SchemaManager {
 /// Database for an executor instance, with schema info.
 #[derive(Debug)]
 pub struct Database {
-    pub pool: DbPool,
+    pub conn: ConnWrapper,
     pub namespace: String,
     pub version: String,
     pub schema: HashMap<String, Vec<String>>,
     pub tables: HashMap<u64, String>,
-    conn_ref: Option<ConnWrapper>,
 }
 
 impl Database {
-    pub fn new(db_conn: impl Into<String>) -> IndexerResult<Database> {
-        let pool = DbPool::new(db_conn)?;
+    pub fn new(db_conn: &str) -> IndexerResult<Database> {
+        let conn = ConnWrapper(PgConnection::establish(db_conn)?);
 
         Ok(Database {
-            pool,
+            conn,
             namespace: Default::default(),
             version: Default::default(),
             schema: Default::default(),
             tables: Default::default(),
-            conn_ref: None,
         })
     }
 
-    pub fn get_connection_ref(&mut self) -> IndexerResult<Box<PooledConn>> {
-        let mut conn = Box::new(self.pool.get()?);
-        let c = Box::into_raw(conn);
-        self.conn_ref = Some(ConnWrapper(c));
-
-        // NOTE: if there's a better way, let's find it.
-        //       need a ref here, but also need one outside of the transaction.
-        Ok( unsafe { Box::from_raw(c) })
+    pub fn start_transaction(&self) -> IndexerResult<usize> {
+        Ok(sql_query("BEGIN").execute(&*self.conn)?)
     }
 
-    pub fn drop_connection_ref(&mut self) {
-        let _ = self.conn_ref.take();
+    pub fn commit_transaction(&self) -> IndexerResult<usize> {
+        Ok(sql_query("COMMIT").execute(&*self.conn)?)
+    }
+
+    pub fn revert_transaction(&self) -> IndexerResult<usize> {
+        Ok(sql_query("ROLLBACK").execute(&*self.conn)?)
     }
 
     fn upsert_query(
@@ -160,9 +151,6 @@ impl Database {
     }
 
     pub fn put_object(&mut self, type_id: u64, columns: Vec<FtColumn>, bytes: Vec<u8>) {
-        let con_wrapper = self.conn_ref.take().expect("No connection ref!");
-        let connection = unsafe { Box::from_raw(*con_wrapper) };
-
         let table = &self.tables[&type_id];
         let inserts: Vec<_> = columns.iter().map(|col| col.query_fragment()).collect();
         let updates: Vec<_> = self.schema[table]
@@ -181,34 +169,26 @@ impl Database {
 
         let query = sql_query(&query_text).bind::<Binary, _>(bytes);
 
-        let result = query.execute(&**connection);
-        let _ = Box::into_raw(connection);
-        self.conn_ref = Some(con_wrapper);
+        let result = query.execute(&*self.conn);
         result.expect("Query failed");
     }
 
     pub fn get_object(&mut self, type_id: u64, object_id: u64) -> Option<Vec<u8>> {
-        let conn_wrapper = self.conn_ref.take().expect("No connection ref!");
-        let connection = unsafe { Box::from_raw(*conn_wrapper) };
         let table = &self.tables[&type_id];
 
         let query = self.get_query(table, object_id);
-        let result = sql_query(&query)
-            .get_results(&**connection);
+        let result = sql_query(&query).get_results(&*self.conn);
 
-        let _ = Box::into_raw(connection);
-        self.conn_ref = Some(conn_wrapper);
         let mut row: Vec<EntityData> = result.expect("Query failed");
 
         row.pop().map(|e| e.object)
     }
 
     pub fn load_schema(&mut self, instance: &Instance) -> IndexerResult<()> {
-        let connection = self.pool.get()?;
         self.namespace = ffi::get_namespace(instance)?;
         self.version = ffi::get_version(instance)?;
 
-        let results = ColumnInfo::get_schema(&*connection, &self.namespace, &self.version)?;
+        let results = ColumnInfo::get_schema(&self.conn, &self.namespace, &self.version)?;
 
         for column in results {
             let table = &column.table_name;

@@ -35,6 +35,8 @@ pub enum IndexerError {
     DatabaseInitError(#[from] r2d2::Error),
     #[error("Database query error: {0:?}")]
     DatabaseQueryError(#[from] DieselError),
+    #[error("Database connection error: {0:?}")]
+    ConnectionError(#[from] diesel::ConnectionError),
     #[error("Missing handler: {0:?}")]
     MissingHandler(String),
     #[error("Lock poisoned")]
