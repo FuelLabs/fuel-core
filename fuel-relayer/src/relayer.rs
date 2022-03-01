@@ -7,9 +7,9 @@ use std::{
 use crate::{log::EthEventLog, Config};
 use fuel_types::{Address, Bytes32, Color, Word};
 use futures::Future;
-use log::{error, info, trace, warn};
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
+use tracing::{error, info, trace, warn};
 
 use anyhow::Error;
 use ethers_core::types::{Filter, Log, ValueOrArray};
@@ -220,7 +220,6 @@ impl Relayer {
             self.stop_handle(|| tokio::time::sleep(Duration::from_secs(5)))
                 .await?;
         }
-        println!("Wait client wait loop finished");
 
         let last_finalized_eth_block = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
@@ -234,10 +233,6 @@ impl Relayer {
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.config.initial_sync_step(); // do some stats on optimal value
         let contracts = self.config.eth_v2_contract_addresses().to_vec();
-        println!(
-            "start{}..end{}",
-            last_finalized_eth_block, best_finalized_block
-        );
         // on start of contract there is possibility of them being overlapping, so we want to skip for loop
         // with next line
         let best_finalized_block = max(last_finalized_eth_block, best_finalized_block);
@@ -255,7 +250,6 @@ impl Relayer {
                 let fuel_event = EthEventLog::try_from(&eth_event);
                 if let Err(err) = fuel_event {
                     // not formated event from contract
-                    error!(target:"relayer", "Eth Event not formated properly in inital sync:{}",err);
                     // just skip it for now.
                     continue;
                 }
@@ -271,8 +265,6 @@ impl Relayer {
                 self.apply_last_validator_diff(u64::MAX).await;
             }
         }
-
-        println!("Initial load for loop finished");
 
         // if there is no diffs it means we are at start of contract creating
         let last_diff = if self.pending.is_empty() {
@@ -296,10 +288,8 @@ impl Relayer {
 
         let mut best_block;
 
-        println!("Start intermediate sync loop");
         loop {
             // 1. get best block and its hash sync over it, and push it over
-            println!("test one");
             self.pending.clear();
             self.pending.push_front(last_diff.clone());
 
@@ -311,7 +301,6 @@ impl Relayer {
                 .await??
                 .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?;
             let best_block_hash = block.hash.unwrap(); // it is okay to unwrap
-            println!("test two");
 
             // 2. sync overlap from LastIncludedEthBlock-> BestEthBlock) they are saved in dequeue.
             let filter = Filter::new()
@@ -320,8 +309,6 @@ impl Relayer {
                 .address(ValueOrArray::Array(contracts.clone()));
 
             let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
-
-            println!("test threa");
 
             for eth_event in logs {
                 let fuel_event = EthEventLog::try_from(&eth_event);
@@ -342,13 +329,10 @@ impl Relayer {
                 self.stop_handle(|| provider.watch(&eth_log_filter))
                     .await??,
             );
-            println!("test 4th");
 
             //let t = watcher.as_mut().expect(()).next().await;
             // sleep for 50ms just to be sure that our watcher is registered and started receiving events
             tokio::time::sleep(Duration::from_millis(50)).await;
-
-            println!("test 5th");
 
             // 4. Check if our LastIncludedEthBlock is same as BestEthBlock
             if best_block == provider.get_block_number().await?
@@ -360,7 +344,6 @@ impl Relayer {
                         .hash
                         .unwrap()
             {
-                println!("Break intermediate loop");
                 // block number and hash are same as before starting watcher over logs.
                 // we are safe to continue.
                 break;
@@ -368,7 +351,6 @@ impl Relayer {
             // If not the same, stop listening to events and do 2,3,4 steps again.
             // empty pending and do overlaping sync again.
             // Assume this will not happen very often.
-            println!("Need to do overlaping sync again");
             self.pending.clear();
         }
 
@@ -409,44 +391,43 @@ impl Relayer {
         loop {
             let mut logs_watcher = match this.inital_sync(&provider).await {
                 Ok(watcher) => watcher,
-                Err(err) => {
-                    println!("Initial sync error:{}, try again", err);
+                Err(_err) => {
                     if this.status == RelayerStatus::Stop {
-                        println!("Stop return.");
                         return;
                     }
                     continue;
                 }
             };
-            println!("END1");
 
-            if this.status == RelayerStatus::Stop {
-                println!("Stop return2\n");
-                return;
-            }
-
-            tokio::select! {
-                inner_fuel_event = this.receiver.recv() => {
-                    if inner_fuel_event.is_none() {
-                        error!("Inner fuel notification broke and returned err");
-                        this.status = RelayerStatus::Stop;
-                    }
-                    this.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
-                }
-
-                new_block = this.new_block_event.recv() => {
-                    match new_block {
-                        Err(e) => {
-                            error!("Unexpected error happened in relayer new block event receiver:{}",e);
+            println!("Finished initial sync");
+            loop {
+                tokio::select! {
+                    inner_fuel_event = this.receiver.recv() => {
+                        println!("Get Inner event:{:?}",inner_fuel_event);
+                        if inner_fuel_event.is_none() {
+                            error!("Inner fuel notification broke and returned err");
+                            this.status = RelayerStatus::Stop;
                             return;
-                        },
-                        Ok(new_block) => {
-                            this.handle_new_block_event(new_block).await
-                        },
+                        }
+                        this.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
                     }
-                }
-                log = logs_watcher.next() => {
-                    this.handle_eth_event(log).await
+
+                    new_block = this.new_block_event.recv() => {
+                        println!("Get new_block event:{:?}",new_block);
+                        match new_block {
+                            Err(e) => {
+                                error!("Unexpected error happened in relayer new block event receiver:{}",e);
+                                return;
+                            },
+                            Ok(new_block) => {
+                                this.handle_new_block_event(new_block).await
+                            },
+                        }
+                    }
+                    log = logs_watcher.next() => {
+                        println!("Get log event:{:?}",log);
+                        this.handle_eth_event(log).await
+                    }
                 }
             }
         }
@@ -693,7 +674,7 @@ mod test {
     };
 
     #[tokio::test]
-    pub async fn initialsync_check_wait_for_eth_client_and_handling_stop() {
+    pub async fn initial_sync_checks_eth_client_pending_and_handling_stop() {
         let mut config = Config::new();
         config.eth_v2_contract_deployment = 5;
         let (relayer, event, _) = relayer(config);
@@ -817,7 +798,6 @@ mod test {
         #[async_trait]
         impl TriggerHandle for Handle {
             async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
-                println!("TEST{:?}   type:{:?}", self.i, trigger);
                 match self.i {
                     // check if eth client is in sync.
                     0 => assert_eq!(
@@ -912,6 +892,53 @@ mod test {
                         )
                     }
                     _ => assert!(true, "Unknown request, we should have finished until now"),
+                }
+                self.i += 1;
+            }
+        }
+        middle
+            .trigger_handle(Box::new(Handle { i: 0, event }))
+            .await;
+
+        relayer.run(middle, 10).await;
+    }
+
+    #[tokio::test]
+    pub async fn passive_sync() {
+        let mut config = Config::new();
+        // start from block 1
+        config.eth_v2_contract_deployment = 100;
+        config.eth_finality_slider = 30;
+        // make 2 steps of 2 blocks
+        config.initial_sync_step = 2;
+        let (relayer, event, new_block_event) = relayer(config);
+        let middle = MockMiddleware::new();
+        {
+            let mut data = middle.data.lock().await;
+            // eth finished syncing
+            data.is_syncing = SyncingStatus::IsFalse;
+            // best block is 4
+            data.best_block.number = Some(U64([134]));
+            let log1 = data.logs_batch = vec![
+                vec![], //Log::]
+            ];
+        }
+        //let t = new_block_event.send(NewBlockEvent::NewBlockIncluded(135));
+        //println!("send out t: {:?}",t);
+        pub struct Handle {
+            pub i: u64,
+            pub event: mpsc::Sender<RelayerEvent>,
+        }
+        #[async_trait]
+        impl TriggerHandle for Handle {
+            async fn run(&mut self, data: &mut MockData, trigger: TriggerType) {
+                //println!("TEST{:?}   type:{:?}", self.i, trigger);
+                match self.i {
+                    n if n < 9 => (), // initialsync do nothing
+                    9 => data.logs_batch_index += 1,
+                    10 => (),
+                    11 => (),
+                    _ => assert!(true, "Case not covered"),
                 }
                 self.i += 1;
             }

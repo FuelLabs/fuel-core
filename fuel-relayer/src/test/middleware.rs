@@ -243,18 +243,19 @@ impl Middleware for MockMiddleware {
     }
 }
 
-fn _log_default() -> Log {
+fn log_default(block_number: u64, removed: bool, topics: Vec<H256>, log_type: Option<String>,data: Bytes) -> Log {
     Log {
-        address: H160::zero(),
-        topics: Vec::new(),
-        data: EthersBytes(Bytes::new()),
+        address: H160::zero(), // we dont check that, assume it is okay
+        topics,
+        data: EthersBytes(data),
         block_hash: None,
-        block_number: None,
+        block_number: Some(U64([block_number])),
         transaction_hash: None,
         transaction_index: None,
         log_index: None,
         transaction_log_index: None,
-        log_type: None,
-        removed: Some(false),
+        log_type,
+        removed: Some(removed),
     }
 }
+

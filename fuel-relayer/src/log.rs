@@ -3,11 +3,12 @@ use std::str::FromStr;
 use ethers_core::types::{Log, H256};
 use fuel_types::{Address, Bytes32, Color, Word};
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
     AssetDeposit {
-        block_number: Word,
         account: Address,
         token: Color,
+        block_number: u32,
         amount: Word,
         deposit_nonce: Bytes32,
     },
@@ -26,6 +27,14 @@ pub enum EthEventLog {
     },
 }
 
+lazy_static::lazy_static! {
+    pub static ref ETH_ASSET_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap();
+    pub static ref ETH_VALIDATOR_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000002").unwrap();
+    pub static ref ETH_VALIDATOR_WITHDRAWAL : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000003").unwrap();
+    pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000004").unwrap();
+
+}
+
 // block_number(32bits) | amount(256bits) | depositNonce(256bits)
 const ASSET_DEPOSIT_DATA_LEN: usize = 4 + 32 + 32;
 
@@ -39,7 +48,7 @@ impl TryFrom<&Log> for EthEventLog {
 
         // TODO extract event name-hashes as static with proper values.
         let log = match log.topics[0] {
-            n if n == H256::from_str("AssetDeposit").unwrap() => {
+            n if n == *ETH_ASSET_DEPOSIT => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for AssetDeposit");
                 }
@@ -56,8 +65,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 let block_number = <[u8; 4]>::try_from(&data[..4])
                     .map(u32::from_be_bytes)
-                    .expect("We have checked slice bounds")
-                    as u64;
+                    .expect("We have checked slice bounds");
 
                 let amount = <[u8; 8]>::try_from(&data[28..36])
                     .map(u64::from_be_bytes)
@@ -73,7 +81,7 @@ impl TryFrom<&Log> for EthEventLog {
                     deposit_nonce,
                 }
             }
-            n if n == H256::from_str("ValidatorDeposit").unwrap() => {
+            n if n == *ETH_VALIDATOR_DEPOSIT => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorDeposit");
                 }
@@ -90,7 +98,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::ValidatorDeposit { depositor, deposit }
             }
-            n if n == H256::from_str("ValidatorWithdrawal").unwrap() => {
+            n if n == *ETH_VALIDATOR_WITHDRAWAL => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorWithdrawal");
                 }
@@ -110,7 +118,7 @@ impl TryFrom<&Log> for EthEventLog {
                     withdrawal,
                 }
             }
-            n if n == H256::from_str("FuelBlockCommited").unwrap() => {
+            n if n == *ETH_FUEL_BLOCK_COMMITED => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for FuelBlockCommited");
                 }
@@ -129,5 +137,218 @@ impl TryFrom<&Log> for EthEventLog {
         };
 
         Ok(log)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use bytes::{Bytes, BytesMut};
+    use ethers_core::types::{Bytes as EthersBytes, H160, H256, U64};
+
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
+
+    use super::*;
+
+    pub fn log_remove(mut log: Log) -> Log {
+        log.removed = Some(true);
+        log
+    }
+
+    pub fn eth_log_validator_deposit(eth_block: u64, depositor: Address, deposit: Word) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                ETH_VALIDATOR_DEPOSIT.clone(),
+                H256::from_slice(depositor.as_ref()),
+                H256::from_low_u64_be(deposit),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    pub fn eth_log_validator_withdrawal(
+        eth_block: u64,
+        withdrawer: Address,
+        withdrawal: Word,
+    ) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                ETH_VALIDATOR_WITHDRAWAL.clone(),
+                H256::from_slice(withdrawer.as_ref()),
+                H256::from_low_u64_be(withdrawal),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    pub fn eth_log_asset_deposit(
+        eth_block: u64,
+        account: Address,
+        token: Color,
+        block_number: u32,
+        amount: Word,
+        deposit_nonce: Bytes32,
+    ) -> Log {
+        //block_number(32bits) | amount(256bits) | depositNonce(256bits)
+        // 4+32+32
+        let mut b = BytesMut::new();
+        b.resize(68,0);
+        //let mut b: [u8; 68] = [0; 68];
+        b[..4].copy_from_slice(&block_number.to_be_bytes());
+        // 4..28 are zeroes
+        b[28..36].copy_from_slice(&amount.to_be_bytes());
+        b[36..68].copy_from_slice(deposit_nonce.as_ref());
+        log_default(
+            eth_block,
+            vec![
+                ETH_ASSET_DEPOSIT.clone(),
+                H256::from_slice(account.as_ref()),
+                H256::from_slice(token.as_ref()),
+            ],
+            b.freeze(),
+        )
+    }
+
+    pub fn eth_log_fuel_block_commited(eth_block: u64, block_root: Bytes32, height: u32) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                ETH_FUEL_BLOCK_COMMITED.clone(),
+                H256::from_slice(block_root.as_ref()),
+                H256::from_low_u64_be(height as u64),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
+        Log {
+            address: H160::zero(), // we dont check that, assume it is okay
+            topics,
+            data: EthersBytes(data),
+            block_hash: None,
+            block_number: Some(U64([eth_block])),
+            transaction_hash: None,
+            transaction_index: None,
+            log_index: None,
+            transaction_log_index: None,
+            log_type: None,
+            removed: Some(false),
+        }
+    }
+
+    #[test]
+    fn eth_event_validator_withdrawal_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let withdrawer = rng.gen();
+        let withdrawal = rng.gen();
+
+        let log = eth_log_validator_withdrawal(eth_block, withdrawer, withdrawal);
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::ValidatorWithdrawal {
+                withdrawer,
+                withdrawal
+            },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_validator_deposit_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let depositor = rng.gen();
+        let deposit = rng.gen();
+
+        let log = eth_log_validator_deposit(eth_block, depositor, deposit);
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::ValidatorDeposit { depositor, deposit },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_fuel_block_comit_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let block_root = rng.gen();
+        let height: u32 = rng.gen();
+
+        let log = eth_log_fuel_block_commited(eth_block, block_root, height);
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        let height = height as u64;
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::FuelBlockCommited { block_root, height },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_asset_deposit_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let account = rng.gen();
+        let token = rng.gen();
+        let block_number: u32 = rng.gen();
+        let amount = rng.gen();
+        let deposit_nonce = rng.gen();
+
+        let log = eth_log_asset_deposit(
+            eth_block,
+            account,
+            token,
+            block_number,
+            amount,
+            deposit_nonce,
+        );
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::AssetDeposit {
+                account,
+                token,
+                block_number,
+                amount,
+                deposit_nonce
+            },
+            "Decoded log does not match data we encoded"
+        );
     }
 }

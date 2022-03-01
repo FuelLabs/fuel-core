@@ -23,17 +23,22 @@ ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "
     "rustls",
 ] }
 features = "0.10"
-log = "0.4"
 serde = "1.0"
 serde_json = "1.0"
 tokio = { version = "1.15", features = ["full"] }
 bytes = "1.1"
+tracing = "0.1"
+tracing-subscriber = "0.3.9"
+lazy_static = "1.4"
 
 
 [dev-dependencies]
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.3.1", features = [
     "test_helpers",
 ] }
+rand = "0.8"
+
+fuel-types = { version = "0.1", features = ["serde-types","random"] }
 
 
 [[bin]]
