@@ -10,8 +10,7 @@ fn create_log_transaction(rega: u16, regb: u16) -> Transaction {
         Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
         Opcode::RET(REG_ONE),
     ]
-    .iter()
-    .copied()
+    .into_iter()
     .collect::<Vec<u8>>();
 
     let gas_price = 0;
