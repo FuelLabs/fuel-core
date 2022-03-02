@@ -441,7 +441,7 @@ impl TestContext {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
-                color: Default::default(),
+                asset_id: Default::default(),
                 witness_index: 0,
                 maturity: 0,
                 predicate: vec![],
@@ -450,7 +450,7 @@ impl TestContext {
             outputs: vec![Output::Coin {
                 amount,
                 to,
-                color: Default::default(),
+                asset_id: Default::default(),
             }],
             witnesses: vec![vec![].into()],
             metadata: None,

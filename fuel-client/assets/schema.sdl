@@ -37,13 +37,13 @@ type ChainInfo {
 type ChangeOutput {
 	to: HexString256!
 	amount: Int!
-	color: HexString256!
+	assetId: HexString256!
 }
 type Coin {
 	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: U64!
-	color: HexString256!
+	assetId: HexString256!
 	maturity: U64!
 	status: CoinStatus!
 	blockCreated: U64!
@@ -77,14 +77,14 @@ input CoinFilterInput {
 	"""
 	owner: HexString256!
 	"""
-	color of the coins
+	asset ID of the coins
 	"""
-	color: HexString256
+	assetId: HexString256
 }
 type CoinOutput {
 	to: HexString256!
 	amount: Int!
-	color: HexString256!
+	assetId: HexString256!
 }
 enum CoinStatus {
 	UNSPENT
@@ -119,7 +119,7 @@ type InputCoin {
 	utxoId: HexStringUtxoId!
 	owner: HexString256!
 	amount: Int!
-	color: HexString256!
+	assetId: HexString256!
 	witnessIndex: Int!
 	maturity: Int!
 	predicate: HexString!
@@ -196,7 +196,7 @@ type Receipt {
 	to: HexString256
 	toAddress: HexString256
 	amount: U64
-	color: HexString256
+	assetId: HexString256
 	gas: U64
 	a: U64
 	b: U64
@@ -234,9 +234,9 @@ enum ReturnType {
 }
 input SpendQueryElementInput {
 	"""
-	color of the coins
+	asset ID of the coins
 	"""
-	color: HexString256!
+	assetId: HexString256!
 	"""
 	address of the owner
 	"""
@@ -252,7 +252,7 @@ type SuccessStatus {
 }
 type Transaction {
 	id: HexString256!
-	inputColors: [HexString256!]!
+	inputAssetIds: [HexString256!]!
 	inputContracts: [HexString256!]!
 	gasPrice: Int!
 	gasLimit: Int!
@@ -304,12 +304,12 @@ scalar U64
 type VariableOutput {
 	to: HexString256!
 	amount: Int!
-	color: HexString256!
+	assetId: HexString256!
 }
 type WithdrawalOutput {
 	to: HexString256!
 	amount: Int!
-	color: HexString256!
+	assetId: HexString256!
 }
 schema {
 	query: Query

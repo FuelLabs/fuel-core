@@ -1,7 +1,7 @@
 ---
 source: fuel-indexer/schema/src/lib.rs
-expression: color.query_fragment()
+expression: bytes32.query_fragment()
 
 ---
-"'a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5'"
+"'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'"
 

@@ -106,22 +106,26 @@ impl Dependency {
         if let Input::Coin {
             owner,
             amount,
-            color,
+            asset_id,
             ..
         } = input
         {
             let i_owner = owner;
             let i_amount = amount;
-            let i_color = color;
+            let i_asset_id = asset_id;
             match output {
-                Output::Coin { to, amount, color } => {
+                Output::Coin {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
                     if to != i_owner {
                         return Err(Error::NotInsertedIoWrongOwner.into());
                     }
                     if amount != i_amount {
                         return Err(Error::NotInsertedIoWrongAmount.into());
                     }
-                    if color != i_color {
+                    if asset_id != i_asset_id {
                         return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                 }
@@ -129,18 +133,26 @@ impl Dependency {
                 Output::Withdrawal { .. } => {
                     return Err(Error::NotInsertedIoWithdrawalInput.into());
                 }
-                Output::Change { to, color, amount } => {
+                Output::Change {
+                    to,
+                    asset_id,
+                    amount,
+                } => {
                     if to != i_owner {
                         return Err(Error::NotInsertedIoWrongOwner.into());
                     }
-                    if color != i_color {
+                    if asset_id != i_asset_id {
                         return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                     if is_output_filled && amount != i_amount {
                         return Err(Error::NotInsertedIoWrongAmount.into());
                     }
                 }
-                Output::Variable { to, amount, color } => {
+                Output::Variable {
+                    to,
+                    amount,
+                    asset_id,
+                } => {
                     if is_output_filled {
                         if to != i_owner {
                             return Err(Error::NotInsertedIoWrongOwner.into());
@@ -148,7 +160,7 @@ impl Dependency {
                         if amount != i_amount {
                             return Err(Error::NotInsertedIoWrongAmount.into());
                         }
-                        if color != i_color {
+                        if asset_id != i_asset_id {
                             return Err(Error::NotInsertedIoWrongAssetId.into());
                         }
                     }
@@ -528,7 +540,7 @@ mod tests {
 
     use std::str::FromStr;
 
-    use fuel_tx::{Address, Color, UtxoId};
+    use fuel_tx::{Address, AssetId, UtxoId};
     use fuel_types::Bytes32;
 
     use super::*;
@@ -538,13 +550,13 @@ mod tests {
         let output = Output::Coin {
             to: Address::default(),
             amount: 10,
-            color: Color::default(),
+            asset_id: AssetId::default(),
         };
         let input = Input::Coin {
             utxo_id: UtxoId::default(),
             owner: Address::default(),
             amount: 10,
-            color: Color::default(),
+            asset_id: AssetId::default(),
             witness_index: 0,
             maturity: 0,
             predicate: Vec::new(),
@@ -556,7 +568,7 @@ mod tests {
         let output = Output::Coin {
             to: Address::default(),
             amount: 12,
-            color: Color::default(),
+            asset_id: AssetId::default(),
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
@@ -573,7 +585,7 @@ mod tests {
             )
             .unwrap(),
             amount: 10,
-            color: Color::default(),
+            asset_id: AssetId::default(),
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
@@ -587,7 +599,7 @@ mod tests {
         let output = Output::Coin {
             to: Address::default(),
             amount: 10,
-            color: Color::from_str(
+            asset_id: AssetId::from_str(
                 "0x0000000000000000000000000000000000000000000000000000000000000001",
             )
             .unwrap(),
@@ -604,7 +616,7 @@ mod tests {
         let output = Output::Coin {
             to: Address::default(),
             amount: 10,
-            color: Color::from_str(
+            asset_id: AssetId::from_str(
                 "0x0000000000000000000000000000000000000000000000000000000000000001",
             )
             .unwrap(),
@@ -635,7 +647,7 @@ mod tests {
         let output = Output::Withdrawal {
             to: Default::default(),
             amount: Default::default(),
-            color: Default::default(),
+            asset_id: Default::default(),
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);

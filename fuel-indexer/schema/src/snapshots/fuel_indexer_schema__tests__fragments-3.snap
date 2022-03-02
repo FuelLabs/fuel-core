@@ -1,7 +1,7 @@
 ---
 source: fuel-indexer/schema/src/lib.rs
-expression: bytes4.query_fragment()
+expression: assetId.query_fragment()
 
 ---
-"'f0f0f0f0'"
+"'a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5'"
 

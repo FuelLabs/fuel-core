@@ -4,7 +4,7 @@ use crate::model::coin::{Coin, CoinStatus};
 use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
 use fuel_tx::UtxoId;
-use fuel_types::{Bytes32, Color, ContractId, Salt, Word};
+use fuel_types::{AssetId, Bytes32, ContractId, Salt, Word};
 use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
 #[cfg(feature = "rocksdb")]
@@ -153,7 +153,7 @@ impl FuelService {
                 let coin = Coin {
                     owner: coin.owner,
                     amount: coin.amount,
-                    color: coin.color,
+                    asset_id: coin.asset_id,
                     maturity: coin.maturity.unwrap_or_default(),
                     status: CoinStatus::Unspent,
                     block_created: coin.block_created.unwrap_or_default(),
@@ -210,7 +210,7 @@ impl FuelService {
         // insert balances related to contract
         if let Some(balances) = &contract.balances {
             for (key, value) in balances {
-                MerkleStorage::<ContractId, Color, Word>::insert(db, contract_id, key, value)?;
+                MerkleStorage::<ContractId, AssetId, Word>::insert(db, contract_id, key, value)?;
             }
         }
         Ok(())
@@ -254,7 +254,7 @@ mod tests {
     use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::fuel_block::BlockHeight;
     use fuel_asm::Opcode;
-    use fuel_types::{Address, Color, Word};
+    use fuel_types::{Address, AssetId, Word};
     use itertools::Itertools;
     use rand::rngs::StdRng;
     use rand::{Rng, RngCore, SeedableRng};
@@ -311,12 +311,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn config_state_initializes_multiple_coins_with_different_owners_and_colors() {
+    async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids() {
         let mut rng = StdRng::seed_from_u64(10);
 
         // a coin with all options set
         let alice: Address = rng.gen();
-        let color_alice: Color = rng.gen();
+        let asset_id_alice: AssetId = rng.gen();
         let alice_value = rng.gen();
         let alice_maturity = Some(rng.next_u32().into());
         let alice_block_created = Some(rng.next_u32().into());
@@ -326,7 +326,7 @@ mod tests {
 
         // a coin with minimal options set
         let bob: Address = rng.gen();
-        let color_bob: Color = rng.gen();
+        let asset_id_bob: AssetId = rng.gen();
         let bob_value = rng.gen();
 
         let service_config = Config {
@@ -340,7 +340,7 @@ mod tests {
                             maturity: alice_maturity,
                             owner: alice,
                             amount: alice_value,
-                            color: color_alice,
+                            asset_id: asset_id_alice,
                         },
                         CoinConfig {
                             tx_id: None,
@@ -349,7 +349,7 @@ mod tests {
                             maturity: None,
                             owner: bob,
                             amount: bob_value,
-                            color: color_bob,
+                            asset_id: asset_id_bob,
                         },
                     ]),
                     height: alice_block_created.map(|h| {
@@ -381,14 +381,14 @@ mod tests {
             &[(utxo_id, Coin {
                 owner,
                 amount,
-                color,
+                asset_id,
                 block_created,
                 maturity,
                 ..
             })] if utxo_id == alice_utxo_id
             && owner == alice
             && amount == alice_value
-            && color == color_alice
+            && asset_id == asset_id_alice
             && block_created == alice_block_created.unwrap()
             && maturity == alice_maturity.unwrap(),
         ));
@@ -397,11 +397,11 @@ mod tests {
             &[Coin {
                 owner,
                 amount,
-                color,
+                asset_id,
                 ..
             }] if owner == bob
             && amount == bob_value
-            && color == color_bob
+            && asset_id == asset_id_bob
         ));
     }
 
@@ -450,9 +450,9 @@ mod tests {
     async fn config_state_initializes_contract_balance() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let test_color: Color = rng.gen();
+        let test_asset_id: AssetId = rng.gen();
         let test_balance: u64 = rng.next_u64();
-        let balances = vec![(test_color, test_balance)];
+        let balances = vec![(test_asset_id, test_balance)];
         let salt: Salt = rng.gen();
         let contract = Contract::from(Opcode::RET(0x10).to_bytes().to_vec());
         let root = contract.root();
@@ -479,7 +479,7 @@ mod tests {
             .await
             .unwrap();
 
-        let ret = MerkleStorage::<ContractId, Color, Word>::get(&db, &id, &test_color)
+        let ret = MerkleStorage::<ContractId, AssetId, Word>::get(&db, &id, &test_asset_id)
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();

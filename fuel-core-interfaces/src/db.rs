@@ -153,7 +153,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -163,7 +163,7 @@ pub mod helpers {
                     Output::Coin {
                         amount: 100,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     },
                     Output::ContractCreated {
                         contract_id: *CONTRACT_ID1,
@@ -194,7 +194,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -228,7 +228,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID1, 0),
                     owner: Address::default(),
                     amount: 100,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -237,7 +237,7 @@ pub mod helpers {
                 outputs: vec![Output::Coin {
                     amount: 100,
                     to: Address::default(),
-                    color: Default::default(),
+                    asset_id: Default::default(),
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
@@ -263,7 +263,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID1, 0),
                     owner: Address::default(),
                     amount: 100,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -273,7 +273,7 @@ pub mod helpers {
                     Output::Coin {
                         amount: 100,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     },
                     Output::ContractCreated {
                         contract_id: *CONTRACT_ID1,
@@ -305,7 +305,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -314,7 +314,7 @@ pub mod helpers {
                 outputs: vec![Output::Coin {
                     amount: 100,
                     to: Address::default(),
-                    color: Default::default(),
+                    asset_id: Default::default(),
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
@@ -341,7 +341,7 @@ pub mod helpers {
                     utxo_id: UtxoId::new(*TX_ID_DB2, 0),
                     owner: Address::default(),
                     amount: 200,
-                    color: Default::default(),
+                    asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                     predicate: vec![],
@@ -350,7 +350,7 @@ pub mod helpers {
                 outputs: vec![Output::Coin {
                     amount: 100,
                     to: Address::default(),
-                    color: Default::default(),
+                    asset_id: Default::default(),
                 }],
                 witnesses: vec![vec![].into()],
                 metadata: Some(Metadata::new(
@@ -382,7 +382,7 @@ pub mod helpers {
                     Output::Coin {
                         amount: 100,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     },
                     Output::Contract {
                         input_index: 0,
@@ -437,7 +437,7 @@ pub mod helpers {
                     vec![Output::Coin {
                         amount: 100,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     }],
                     vec![],
                 )),
@@ -452,7 +452,7 @@ pub mod helpers {
                     vec![Output::Coin {
                         amount: 200,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     }],
                     vec![],
                 )),
@@ -467,7 +467,7 @@ pub mod helpers {
                     vec![Output::Coin {
                         amount: 300,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     }],
                     vec![],
                 )),
@@ -482,7 +482,7 @@ pub mod helpers {
                     vec![Output::Coin {
                         amount: 400,
                         to: Address::default(),
-                        color: Default::default(),
+                        asset_id: Default::default(),
                     }],
                     vec![],
                 )),

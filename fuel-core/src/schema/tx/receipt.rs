@@ -58,8 +58,8 @@ impl Receipt {
     async fn amount(&self) -> Option<U64> {
         self.0.amount().map(Into::into)
     }
-    async fn color(&self) -> Option<HexString256> {
-        self.0.color().copied().map(Into::into)
+    async fn asset_id(&self) -> Option<HexString256> {
+        self.0.asset_id().copied().map(Into::into)
     }
     async fn gas(&self) -> Option<U64> {
         self.0.gas().map(Into::into)

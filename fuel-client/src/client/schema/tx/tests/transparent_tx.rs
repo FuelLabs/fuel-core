@@ -52,7 +52,7 @@ pub struct Transaction {
     pub gas_price: i32,
     pub byte_price: i32,
     pub id: HexString256,
-    pub input_colors: Vec<HexString256>,
+    pub input_asset_ids: Vec<HexString256>,
     pub input_contracts: Vec<HexString256>,
     pub inputs: Vec<Input>,
     pub is_script: bool,
@@ -173,7 +173,7 @@ pub struct InputCoin {
     pub utxo_id: HexStringUtxoId,
     pub owner: HexString256,
     pub amount: i32,
-    pub color: HexString256,
+    pub asset_id: HexString256,
     pub witness_index: i32,
     pub maturity: i32,
     pub predicate: HexString,
@@ -198,7 +198,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                 utxo_id: coin.utxo_id.into(),
                 owner: coin.owner.into(),
                 amount: coin.amount.try_into()?,
-                color: coin.color.into(),
+                asset_id: coin.asset_id.into(),
                 witness_index: coin.witness_index.try_into()?,
                 maturity: coin.maturity.try_into()?,
                 predicate: coin.predicate.into(),
@@ -230,7 +230,7 @@ pub enum Output {
 pub struct CoinOutput {
     pub to: HexString256,
     pub amount: i32,
-    pub color: HexString256,
+    pub asset_id: HexString256,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -238,7 +238,7 @@ pub struct CoinOutput {
 pub struct WithdrawalOutput {
     pub to: HexString256,
     pub amount: i32,
-    pub color: HexString256,
+    pub asset_id: HexString256,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -246,7 +246,7 @@ pub struct WithdrawalOutput {
 pub struct ChangeOutput {
     pub to: HexString256,
     pub amount: i32,
-    pub color: HexString256,
+    pub asset_id: HexString256,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -254,7 +254,7 @@ pub struct ChangeOutput {
 pub struct VariableOutput {
     pub to: HexString256,
     pub amount: i32,
-    pub color: HexString256,
+    pub asset_id: HexString256,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -280,7 +280,7 @@ impl TryFrom<Output> for fuel_tx::Output {
             Output::CoinOutput(coin) => Self::Coin {
                 to: coin.to.into(),
                 amount: coin.amount.try_into()?,
-                color: coin.color.into(),
+                asset_id: coin.asset_id.into(),
             },
             Output::ContractOutput(contract) => Self::Contract {
                 input_index: contract.input_index.try_into()?,
@@ -290,17 +290,17 @@ impl TryFrom<Output> for fuel_tx::Output {
             Output::WithdrawalOutput(withdrawal) => Self::Withdrawal {
                 to: withdrawal.to.into(),
                 amount: withdrawal.amount.try_into()?,
-                color: withdrawal.color.into(),
+                asset_id: withdrawal.asset_id.into(),
             },
             Output::ChangeOutput(change) => Self::Change {
                 to: change.to.into(),
                 amount: change.amount.try_into()?,
-                color: change.color.into(),
+                asset_id: change.asset_id.into(),
             },
             Output::VariableOutput(variable) => Self::Variable {
                 to: variable.to.into(),
                 amount: variable.amount.try_into()?,
-                color: variable.color.into(),
+                asset_id: variable.asset_id.into(),
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
                 contract_id: contract.contract_id.into(),

@@ -69,7 +69,7 @@ impl NewColumn {
             ColumnType::Bytes4 => "varchar(8)",
             ColumnType::Bytes8 => "varchar(16)",
             ColumnType::Bytes32 => "varchar(64)",
-            ColumnType::Color => "varchar(64)",
+            ColumnType::AssetId => "varchar(64)",
             ColumnType::ContractId => "varchar(64)",
             ColumnType::Salt => "varchar(64)",
             ColumnType::Blob => "bytea",

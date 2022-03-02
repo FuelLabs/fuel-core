@@ -9,7 +9,7 @@ pub struct Receipt {
     pub a: Option<U64>,
     pub b: Option<U64>,
     pub amount: Option<U64>,
-    pub color: Option<HexString256>,
+    pub asset_id: Option<HexString256>,
     pub gas: Option<U64>,
     pub digest: Option<HexString256>,
     pub id: Option<HexString256>,
@@ -64,9 +64,9 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
-                    .color
-                    .ok_or_else(|| MissingField("color".to_string()))?
+                asset_id: schema
+                    .asset_id
+                    .ok_or_else(|| MissingField("assetId".to_string()))?
                     .into(),
                 gas: schema
                     .gas
@@ -254,9 +254,9 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
-                    .color
-                    .ok_or_else(|| MissingField("color".to_string()))?
+                asset_id: schema
+                    .asset_id
+                    .ok_or_else(|| MissingField("assetId".to_string()))?
                     .into(),
                 pc: schema
                     .pc
@@ -280,9 +280,9 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
-                    .color
-                    .ok_or_else(|| MissingField("color".to_string()))?
+                asset_id: schema
+                    .asset_id
+                    .ok_or_else(|| MissingField("assetId".to_string()))?
                     .into(),
                 pc: schema
                     .pc

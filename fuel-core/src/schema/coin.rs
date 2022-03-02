@@ -10,7 +10,7 @@ use async_graphql::{
 };
 use fuel_storage::Storage;
 use fuel_tx::consts::MAX_INPUTS;
-use fuel_tx::{Address, Color as FuelTxColor, UtxoId};
+use fuel_tx::{Address, AssetId as FuelTxAssetId, UtxoId};
 use itertools::Itertools;
 
 use super::scalars::HexStringUtxoId;
@@ -31,8 +31,8 @@ impl Coin {
         self.1.amount.into()
     }
 
-    async fn color(&self) -> HexString256 {
-        self.1.color.into()
+    async fn asset_id(&self) -> HexString256 {
+        self.1.asset_id.into()
     }
 
     async fn maturity(&self) -> U64 {
@@ -52,14 +52,14 @@ impl Coin {
 struct CoinFilterInput {
     /// address of the owner
     owner: HexString256,
-    /// color of the coins
-    color: Option<HexString256>,
+    /// asset ID of the coins
+    asset_id: Option<HexString256>,
 }
 
 #[derive(InputObject)]
 struct SpendQueryElementInput {
-    /// color of the coins
-    color: HexString256,
+    /// asset ID of the coins
+    asset_id: HexString256,
     /// address of the owner
     amount: U64,
 }
@@ -157,10 +157,10 @@ impl CoinQuery {
                     })
                     .try_collect()?;
 
-                // filter coins by color
+                // filter coins by asset ID
                 let mut coins = coins;
-                if let Some(color) = filter.color {
-                    coins.retain(|coin| coin.1.color == color.0.into());
+                if let Some(asset_id) = filter.asset_id {
+                    coins.retain(|coin| coin.1.asset_id == asset_id.0.into());
                 }
 
                 // filter coins by status
@@ -191,7 +191,7 @@ impl CoinQuery {
         let owner: Address = owner.0.into();
         let spend_query: Vec<SpendQueryElement> = spend_query
             .iter()
-            .map(|e| (owner, FuelTxColor::from(e.color.0), e.amount.0))
+            .map(|e| (owner, FuelTxAssetId::from(e.asset_id.0), e.amount.0))
             .collect();
         let max_inputs: u8 = max_inputs.unwrap_or(MAX_INPUTS);
 

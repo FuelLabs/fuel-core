@@ -1,6 +1,7 @@
 use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
-use fuel_tx::{crypto::Hasher, Address, Bytes32, Transaction};
+use fuel_crypto::Hasher;
+use fuel_tx::{Address, Bytes32, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
     array::TryFromSliceError,

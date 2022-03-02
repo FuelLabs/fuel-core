@@ -159,7 +159,7 @@
       "maxItems": 32,
       "minItems": 32
     },
-    "Bytes32": {
+    "AssetId": {
       "type": "array",
       "items": {
         "type": "integer",
@@ -169,7 +169,7 @@
       "maxItems": 32,
       "minItems": 32
     },
-    "Color": {
+    "Bytes32": {
       "type": "array",
       "items": {
         "type": "integer",
@@ -201,7 +201,7 @@
               "type": "object",
               "required": [
                 "amount",
-                "color",
+                "asset_id",
                 "maturity",
                 "owner",
                 "predicate",
@@ -215,8 +215,8 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "color": {
-                  "$ref": "#/definitions/Color"
+                "asset_id": {
+                  "$ref": "#/definitions/AssetId"
                 },
                 "maturity": {
                   "type": "integer",
@@ -301,7 +301,7 @@
               "type": "object",
               "required": [
                 "amount",
-                "color",
+                "asset_id",
                 "to"
               ],
               "properties": {
@@ -310,8 +310,8 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "color": {
-                  "$ref": "#/definitions/Color"
+                "asset_id": {
+                  "$ref": "#/definitions/AssetId"
                 },
                 "to": {
                   "$ref": "#/definitions/Address"
@@ -361,7 +361,7 @@
               "type": "object",
               "required": [
                 "amount",
-                "color",
+                "asset_id",
                 "to"
               ],
               "properties": {
@@ -370,8 +370,8 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "color": {
-                  "$ref": "#/definitions/Color"
+                "asset_id": {
+                  "$ref": "#/definitions/AssetId"
                 },
                 "to": {
                   "$ref": "#/definitions/Address"
@@ -391,7 +391,7 @@
               "type": "object",
               "required": [
                 "amount",
-                "color",
+                "asset_id",
                 "to"
               ],
               "properties": {
@@ -400,8 +400,8 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "color": {
-                  "$ref": "#/definitions/Color"
+                "asset_id": {
+                  "$ref": "#/definitions/AssetId"
                 },
                 "to": {
                   "$ref": "#/definitions/Address"
@@ -421,7 +421,7 @@
               "type": "object",
               "required": [
                 "amount",
-                "color",
+                "asset_id",
                 "to"
               ],
               "properties": {
@@ -430,8 +430,8 @@
                   "format": "uint64",
                   "minimum": 0.0
                 },
-                "color": {
-                  "$ref": "#/definitions/Color"
+                "asset_id": {
+                  "$ref": "#/definitions/AssetId"
                 },
                 "to": {
                   "$ref": "#/definitions/Address"

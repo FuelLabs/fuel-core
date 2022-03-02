@@ -1,6 +1,6 @@
 use self::serialization::{HexNumber, HexType};
 use crate::model::fuel_block::BlockHeight;
-use fuel_types::{Address, Bytes32, Color, Salt};
+use fuel_types::{Address, AssetId, Bytes32, Salt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
@@ -32,7 +32,7 @@ impl ChainConfig {
                 maturity: None,
                 owner: Address::new([idx; 32]),
                 amount: TESTNET_INITIAL_BALANCE,
-                color: Default::default(),
+                asset_id: Default::default(),
             })
             .collect_vec();
 
@@ -119,7 +119,7 @@ pub struct CoinConfig {
     #[serde_as(as = "HexNumber")]
     pub amount: u64,
     #[serde_as(as = "HexType")]
-    pub color: Color,
+    pub asset_id: AssetId,
 }
 
 #[skip_serializing_none]
@@ -135,7 +135,7 @@ pub struct ContractConfig {
     pub state: Option<Vec<(Bytes32, Bytes32)>>,
     #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
     #[serde(default)]
-    pub balances: Option<Vec<(Color, u64)>>,
+    pub balances: Option<Vec<(AssetId, u64)>>,
 }
 
 #[cfg(test)]
@@ -275,9 +275,9 @@ mod tests {
             None
         };
         let balances = if balances {
-            let test_color: Color = rng.gen();
+            let test_asset_id: AssetId = rng.gen();
             let test_balance: u64 = rng.next_u64();
-            Some(vec![(test_color, test_balance)])
+            Some(vec![(test_asset_id, test_balance)])
         } else {
             None
         };
@@ -306,7 +306,7 @@ mod tests {
         let maturity = Some(rng.next_u32().into());
         let owner = rng.gen();
         let amount = rng.gen();
-        let color = rng.gen();
+        let asset_id = rng.gen();
 
         ChainConfig {
             initial_state: Some(StateConfig {
@@ -317,7 +317,7 @@ mod tests {
                     maturity,
                     owner,
                     amount,
-                    color,
+                    asset_id,
                 }]),
                 ..Default::default()
             }),

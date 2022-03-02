@@ -8,7 +8,7 @@ use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use fuel_storage::Storage;
-use fuel_tx::{Color, UtxoId};
+use fuel_tx::{AssetId, UtxoId};
 use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
@@ -17,7 +17,7 @@ async fn coin() {
     let coin = Coin {
         owner: Default::default(),
         amount: 0,
-        color: Default::default(),
+        asset_id: Default::default(),
         maturity: Default::default(),
         status: CoinStatus::Unspent,
         block_created: Default::default(),
@@ -51,7 +51,7 @@ async fn first_5_coins() {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                color: Default::default(),
+                asset_id: Default::default(),
                 maturity: Default::default(),
                 status: CoinStatus::Unspent,
                 block_created: Default::default(),
@@ -91,9 +91,9 @@ async fn first_5_coins() {
 }
 
 #[tokio::test]
-async fn only_color_filtered_coins() {
+async fn only_asset_id_filtered_coins() {
     let owner = Address::default();
-    let color = Color::new([1u8; 32]);
+    let asset_id = AssetId::new([1u8; 32]);
 
     // setup test data in the node
     let coins: Vec<(UtxoId, Coin)> = (1..10usize)
@@ -101,7 +101,7 @@ async fn only_color_filtered_coins() {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                color: if i <= 5 { color } else { Default::default() },
+                asset_id: if i <= 5 { asset_id } else { Default::default() },
                 maturity: Default::default(),
                 status: CoinStatus::Unspent,
                 block_created: Default::default(),
@@ -127,7 +127,7 @@ async fn only_color_filtered_coins() {
     let coins = client
         .coins(
             format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", Color::new([1u8; 32])).as_str()),
+            Some(format!("{:#x}", AssetId::new([1u8; 32])).as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -138,7 +138,10 @@ async fn only_color_filtered_coins() {
         .unwrap();
     assert!(!coins.results.is_empty());
     assert_eq!(coins.results.len(), 5);
-    assert!(coins.results.into_iter().all(|c| color == c.color.into()));
+    assert!(coins
+        .results
+        .into_iter()
+        .all(|c| asset_id == c.asset_id.into()));
 }
 
 #[tokio::test]
@@ -151,7 +154,7 @@ async fn only_unspent_coins() {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                color: Default::default(),
+                asset_id: Default::default(),
                 maturity: Default::default(),
                 status: if i <= 5 {
                     CoinStatus::Unspent
@@ -201,8 +204,8 @@ async fn only_unspent_coins() {
 #[tokio::test]
 async fn coins_to_spend() {
     let owner = Address::default();
-    let color_a = Color::new([1u8; 32]);
-    let color_b = Color::new([2u8; 32]);
+    let asset_id_a = AssetId::new([1u8; 32]);
+    let asset_id_b = AssetId::new([2u8; 32]);
 
     // setup config
     let mut config = Config::local_node();
@@ -211,22 +214,22 @@ async fn coins_to_spend() {
         contracts: None,
         coins: Some(
             vec![
-                (owner, 50, color_a),
-                (owner, 100, color_a),
-                (owner, 150, color_a),
-                (owner, 50, color_b),
-                (owner, 100, color_b),
-                (owner, 150, color_b),
+                (owner, 50, asset_id_a),
+                (owner, 100, asset_id_a),
+                (owner, 150, asset_id_a),
+                (owner, 50, asset_id_b),
+                (owner, 100, asset_id_b),
+                (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .map(|(owner, amount, color)| CoinConfig {
+            .map(|(owner, amount, asset_id)| CoinConfig {
                 tx_id: None,
                 output_index: None,
                 block_created: None,
                 maturity: None,
                 owner,
                 amount,
-                color,
+                asset_id,
             })
             .collect(),
         ),
@@ -248,8 +251,8 @@ async fn coins_to_spend() {
         .coins_to_spend(
             format!("{:#x}", owner).as_str(),
             vec![
-                (format!("{:#x}", color_a).as_str(), 1),
-                (format!("{:#x}", color_b).as_str(), 1),
+                (format!("{:#x}", asset_id_a).as_str(), 1),
+                (format!("{:#x}", asset_id_b).as_str(), 1),
             ],
             None,
         )
@@ -262,8 +265,8 @@ async fn coins_to_spend() {
         .coins_to_spend(
             format!("{:#x}", owner).as_str(),
             vec![
-                (format!("{:#x}", color_a).as_str(), 300),
-                (format!("{:#x}", color_b).as_str(), 300),
+                (format!("{:#x}", asset_id_a).as_str(), 300),
+                (format!("{:#x}", asset_id_b).as_str(), 300),
             ],
             None,
         )
@@ -276,8 +279,8 @@ async fn coins_to_spend() {
         .coins_to_spend(
             format!("{:#x}", owner).as_str(),
             vec![
-                (format!("{:#x}", color_a).as_str(), 301),
-                (format!("{:#x}", color_b).as_str(), 301),
+                (format!("{:#x}", asset_id_a).as_str(), 301),
+                (format!("{:#x}", asset_id_b).as_str(), 301),
             ],
             None,
         )
@@ -289,8 +292,8 @@ async fn coins_to_spend() {
         .coins_to_spend(
             format!("{:#x}", owner).as_str(),
             vec![
-                (format!("{:#x}", color_a).as_str(), 300),
-                (format!("{:#x}", color_b).as_str(), 300),
+                (format!("{:#x}", asset_id_a).as_str(), 300),
+                (format!("{:#x}", asset_id_b).as_str(), 300),
             ],
             5.into(),
         )
