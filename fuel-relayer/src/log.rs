@@ -141,7 +141,7 @@ impl TryFrom<&Log> for EthEventLog {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 
     use bytes::{Bytes, BytesMut};
     use ethers_core::types::{Bytes as EthersBytes, H160, H256, U64};

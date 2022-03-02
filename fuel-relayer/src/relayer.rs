@@ -666,11 +666,12 @@ mod test {
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, U256, U64};
     use ethers_providers::SyncingStatus;
     use fuel_core_interfaces::relayer::RelayerEvent;
+    use fuel_tx::Address;
     use tokio::sync::mpsc;
 
     use crate::{
         test::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
-        Config,
+        Config, log,
     };
 
     #[tokio::test]
@@ -920,11 +921,9 @@ mod test {
             // best block is 4
             data.best_block.number = Some(U64([134]));
             let log1 = data.logs_batch = vec![
-                vec![], //Log::]
+                vec![log::tests::eth_log_validator_deposit(136,Address::zeroed(),10)], //Log::]
             ];
         }
-        //let t = new_block_event.send(NewBlockEvent::NewBlockIncluded(135));
-        //println!("send out t: {:?}",t);
         pub struct Handle {
             pub i: u64,
             pub event: mpsc::Sender<RelayerEvent>,
@@ -934,7 +933,7 @@ mod test {
             async fn run(&mut self, data: &mut MockData, trigger: TriggerType) {
                 //println!("TEST{:?}   type:{:?}", self.i, trigger);
                 match self.i {
-                    n if n < 9 => (), // initialsync do nothing
+                    n if n < 9 => (), // initialsync, skip it.
                     9 => data.logs_batch_index += 1,
                     10 => (),
                     11 => (),
