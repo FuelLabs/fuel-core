@@ -20,7 +20,7 @@ pub struct InputCoin {
     utxo_id: HexStringUtxoId,
     owner: HexString256,
     amount: Word,
-    color: HexString256,
+    asset_id: HexString256,
     witness_index: u8,
     maturity: Word,
     predicate: HexString,
@@ -40,8 +40,8 @@ impl InputCoin {
         self.amount
     }
 
-    async fn color(&self) -> HexString256 {
-        self.color
+    async fn asset_id(&self) -> HexString256 {
+        self.asset_id
     }
 
     async fn witness_index(&self) -> u8 {
@@ -103,7 +103,7 @@ impl From<&fuel_tx::Input> for Input {
                 utxo_id: HexStringUtxoId(*utxo_id),
                 owner: HexString256(*owner.deref()),
                 amount: *amount,
-                color: HexString256(*asset_id.deref()),
+                asset_id: HexString256(*asset_id.deref()),
                 witness_index: *witness_index,
                 maturity: *maturity,
                 predicate: HexString(predicate.clone()),
@@ -137,7 +137,7 @@ pub enum Output {
 pub struct CoinOutput {
     to: Address,
     amount: Word,
-    color: AssetId,
+    asset_id: AssetId,
 }
 
 #[Object]
@@ -150,8 +150,8 @@ impl CoinOutput {
         self.amount
     }
 
-    async fn color(&self) -> HexString256 {
-        HexString256(*self.color.deref())
+    async fn asset_id(&self) -> HexString256 {
+        HexString256(*self.asset_id.deref())
     }
 }
 
@@ -167,8 +167,8 @@ impl WithdrawalOutput {
         self.0.amount
     }
 
-    async fn color(&self) -> HexString256 {
-        HexString256(*self.0.color.deref())
+    async fn asset_id(&self) -> HexString256 {
+        HexString256(*self.0.asset_id.deref())
     }
 }
 
@@ -184,8 +184,8 @@ impl ChangeOutput {
         self.0.amount
     }
 
-    async fn color(&self) -> HexString256 {
-        HexString256(*self.0.color.deref())
+    async fn asset_id(&self) -> HexString256 {
+        HexString256(*self.0.asset_id.deref())
     }
 }
 
@@ -201,8 +201,8 @@ impl VariableOutput {
         self.0.amount
     }
 
-    async fn color(&self) -> HexString256 {
-        HexString256(*self.0.color.deref())
+    async fn asset_id(&self) -> HexString256 {
+        HexString256(*self.0.asset_id.deref())
     }
 }
 
@@ -253,7 +253,7 @@ impl From<&fuel_tx::Output> for Output {
             } => Output::Coin(CoinOutput {
                 to: *to,
                 amount: *amount,
-                color: *asset_id,
+                asset_id: *asset_id,
             }),
             fuel_tx::Output::Contract {
                 input_index,
@@ -271,7 +271,7 @@ impl From<&fuel_tx::Output> for Output {
             } => Output::Withdrawal(WithdrawalOutput(CoinOutput {
                 to: *to,
                 amount: *amount,
-                color: *asset_id,
+                asset_id: *asset_id,
             })),
             fuel_tx::Output::Change {
                 to,
@@ -280,7 +280,7 @@ impl From<&fuel_tx::Output> for Output {
             } => Output::Change(ChangeOutput(CoinOutput {
                 to: *to,
                 amount: *amount,
-                color: *asset_id,
+                asset_id: *asset_id,
             })),
             fuel_tx::Output::Variable {
                 to,
@@ -289,7 +289,7 @@ impl From<&fuel_tx::Output> for Output {
             } => Output::Variable(VariableOutput(CoinOutput {
                 to: *to,
                 amount: *amount,
-                color: *asset_id,
+                asset_id: *asset_id,
             })),
             fuel_tx::Output::ContractCreated {
                 contract_id,
@@ -443,7 +443,7 @@ impl Transaction {
         HexString256(*self.0.id().deref())
     }
 
-    async fn input_colors(&self) -> Vec<HexString256> {
+    async fn input_asset_ids(&self) -> Vec<HexString256> {
         self.0
             .input_asset_ids()
             .map(|c| HexString256(*c.deref()))

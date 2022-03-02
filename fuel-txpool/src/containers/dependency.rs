@@ -112,7 +112,7 @@ impl Dependency {
         {
             let i_owner = owner;
             let i_amount = amount;
-            let i_color = asset_id;
+            let i_asset_id = asset_id;
             match output {
                 Output::Coin {
                     to,
@@ -125,7 +125,7 @@ impl Dependency {
                     if amount != i_amount {
                         return Err(Error::NotInsertedIoWrongAmount.into());
                     }
-                    if asset_id != i_color {
+                    if asset_id != i_asset_id {
                         return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                 }
@@ -141,7 +141,7 @@ impl Dependency {
                     if to != i_owner {
                         return Err(Error::NotInsertedIoWrongOwner.into());
                     }
-                    if asset_id != i_color {
+                    if asset_id != i_asset_id {
                         return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                     if is_output_filled && amount != i_amount {
@@ -160,7 +160,7 @@ impl Dependency {
                         if amount != i_amount {
                             return Err(Error::NotInsertedIoWrongAmount.into());
                         }
-                        if asset_id != i_color {
+                        if asset_id != i_asset_id {
                             return Err(Error::NotInsertedIoWrongAssetId.into());
                         }
                     }

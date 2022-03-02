@@ -276,7 +276,7 @@ impl Executor {
                     &Coin {
                         owner: *owner,
                         amount: *amount,
-                        color: *asset_id,
+                        asset_id: *asset_id,
                         maturity: (*maturity).into(),
                         status: CoinStatus::Spent,
                         block_created,
@@ -459,14 +459,14 @@ impl Executor {
         fuel_height: u32,
         utxo_id: UtxoId,
         amount: &Word,
-        color: &AssetId,
+        asset_id: &AssetId,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
         let coin = Coin {
             owner: *to,
             amount: *amount,
-            color: *color,
+            asset_id: *asset_id,
             maturity: 0u32.into(),
             status: CoinStatus::Unspent,
             block_created: fuel_height.into(),
@@ -788,13 +788,13 @@ mod tests {
         let spent_utxo_id = rng.gen();
         let owner = Default::default();
         let amount = 10;
-        let color = Default::default();
+        let asset_id = Default::default();
         let maturity = Default::default();
         let block_created = Default::default();
         let coin = Coin {
             owner,
             amount,
-            color,
+            asset_id,
             maturity,
             status: CoinStatus::Spent,
             block_created,
@@ -805,11 +805,11 @@ mod tests {
         Storage::<UtxoId, Coin>::insert(&mut db, &spent_utxo_id, &coin).unwrap();
 
         // create an input referring to a coin that is already spent
-        let input = Input::coin(spent_utxo_id, owner, amount, color, 0, 0, vec![], vec![]);
+        let input = Input::coin(spent_utxo_id, owner, amount, asset_id, 0, 0, vec![], vec![]);
         let output = Output::Change {
             to: owner,
             amount: 0,
-            asset_id: color,
+            asset_id,
         };
         let tx = Transaction::script(
             0,
@@ -1064,7 +1064,7 @@ mod tests {
                 &Coin {
                     owner,
                     amount,
-                    color: asset_id,
+                    asset_id,
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
                     block_created: starting_block,

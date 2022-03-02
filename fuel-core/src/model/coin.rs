@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct Coin {
     pub owner: Address,
     pub amount: Word,
-    pub color: AssetId,
+    pub asset_id: AssetId,
     pub maturity: BlockHeight,
     pub status: CoinStatus,
     pub block_created: BlockHeight,

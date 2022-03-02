@@ -1,6 +1,6 @@
 ---
 source: fuel-indexer/schema/src/lib.rs
-expression: color.query_fragment()
+expression: assetId.query_fragment()
 
 ---
 "'a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5'"

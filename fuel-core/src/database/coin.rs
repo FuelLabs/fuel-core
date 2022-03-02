@@ -86,10 +86,10 @@ impl Database {
     }
 
     // TODO: Optimize this by creating an index
-    pub fn owned_coins_by_color(
+    pub fn owned_coins_by_asset_id(
         &self,
         owner: Address,
-        color: AssetId,
+        asset_id: AssetId,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
@@ -112,8 +112,8 @@ impl Database {
             Storage::<UtxoId, Coin>::get(self, id)
                 .unwrap()
                 .unwrap()
-                .color
-                == color
+                .asset_id
+                == asset_id
         })
     }
 }

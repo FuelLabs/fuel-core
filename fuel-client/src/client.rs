@@ -254,15 +254,15 @@ impl FuelClient {
     pub async fn coins(
         &self,
         owner: &str,
-        color: Option<&str>,
+        asset_id: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
         let owner: HexString256 = owner.parse()?;
-        let color: HexString256 = match color {
-            Some(color) => color.parse()?,
+        let asset_id: HexString256 = match asset_id {
+            Some(asset_id) => asset_id.parse()?,
             None => HexString256::default(),
         };
-        let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
+        let query = schema::coin::CoinsQuery::build(&(owner, asset_id, request).into());
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
@@ -278,9 +278,9 @@ impl FuelClient {
         let owner: HexString256 = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
-            .map(|(color, amount)| -> Result<_, ConversionError> {
+            .map(|(asset_id, amount)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
-                    color: color.parse()?,
+                    asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
                 })
             })

@@ -22,8 +22,8 @@ pub struct CoinByIdQuery {
 pub struct CoinFilterInput {
     /// Filter coins based on the `owner` field
     pub owner: HexString256,
-    /// Filter coins based on the `color` field
-    pub color: Option<HexString256>,
+    /// Filter coins based on the `asset_id` field
+    pub asset_id: Option<HexString256>,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -47,7 +47,7 @@ impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsConn
             PageDirection::Forward => CoinsConnectionArgs {
                 filter: CoinFilterInput {
                     owner: r.0,
-                    color: Some(r.1),
+                    asset_id: Some(r.1),
                 },
                 after: r.2.cursor,
                 before: None,
@@ -57,7 +57,7 @@ impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsConn
             PageDirection::Backward => CoinsConnectionArgs {
                 filter: CoinFilterInput {
                     owner: r.0,
-                    color: Some(r.1),
+                    asset_id: Some(r.1),
                 },
                 after: None,
                 before: r.2.cursor,
@@ -110,8 +110,8 @@ pub struct CoinEdge {
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SpendQueryElementInput {
-    /// color of the coins
-    pub color: HexString256,
+    /// asset ID of the coins
+    pub asset_id: HexString256,
     /// address of the owner
     pub amount: U64,
 }
@@ -152,7 +152,7 @@ pub struct CoinsToSpendQuery {
 pub struct Coin {
     pub amount: U64,
     pub block_created: U64,
-    pub color: HexString256,
+    pub asset_id: HexString256,
     pub utxo_id: HexStringUtxoId,
     pub maturity: U64,
     pub owner: HexString256,
@@ -185,7 +185,7 @@ mod tests {
         let operation = CoinsQuery::build(CoinsConnectionArgs {
             filter: CoinFilterInput {
                 owner: HexString256::default(),
-                color: HexString256::default().into(),
+                asset_id: HexString256::default().into(),
             },
             after: None,
             before: None,

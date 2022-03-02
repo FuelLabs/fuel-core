@@ -10,7 +10,7 @@ query Query($_0: HexString256!) {
     gasPrice
     bytePrice
     id
-    inputColors
+    inputAssetIds
     inputContracts
     inputs {
       __typename
@@ -18,7 +18,7 @@ query Query($_0: HexString256!) {
         utxoId
         owner
         amount
-        color
+        assetId
         witnessIndex
         maturity
         predicate
@@ -37,7 +37,7 @@ query Query($_0: HexString256!) {
       ... on CoinOutput {
         to
         amount
-        color
+        assetId
       }
       ... on ContractOutput {
         inputIndex
@@ -47,17 +47,17 @@ query Query($_0: HexString256!) {
       ... on WithdrawalOutput {
         to
         amount
-        color
+        assetId
       }
       ... on ChangeOutput {
         to
         amount
-        color
+        assetId
       }
       ... on VariableOutput {
         to
         amount
-        color
+        assetId
       }
       ... on ContractCreated {
         contractId
@@ -94,7 +94,7 @@ query Query($_0: HexString256!) {
       a
       b
       amount
-      color
+      assetId
       gas
       digest
       id

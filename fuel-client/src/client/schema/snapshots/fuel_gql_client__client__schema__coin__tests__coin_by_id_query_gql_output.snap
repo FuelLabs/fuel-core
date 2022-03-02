@@ -8,7 +8,7 @@ query Query($_0: HexStringUtxoId!) {
   coin(utxoId: $_0) {
     amount
     blockCreated
-    color
+    assetId
     utxoId
     maturity
     owner

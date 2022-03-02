@@ -1,10 +1,10 @@
 scalar ID
 scalar Address
+scalar AssetId
 scalar Bytes4
 scalar Bytes8
 scalar Bytes32
 scalar Bytes64
-scalar Color
 scalar ContractId
 scalar Salt
 
