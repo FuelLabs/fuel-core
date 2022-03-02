@@ -8,15 +8,13 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
-use fuel_crypto::Hasher;
 use fuel_merkle::{binary::MerkleTree, common::StorageMap};
 use fuel_storage::Storage;
 use fuel_tx::{Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
     consts::REG_SP,
-    prelude::Backtrace as FuelBacktrace,
-    prelude::{Backtrace, Interpreter},
+    prelude::{Backtrace as FuelBacktrace, Interpreter},
 };
 use std::{
     error::Error as StdError,
@@ -414,7 +412,7 @@ impl Executor {
                 .iter()
                 .find_map(Receipt::result)
                 .copied()
-                .map(|result| Backtrace::from_vm_error(vm, result))
+                .map(|result| FuelBacktrace::from_vm_error(vm, result))
             {
                 warn!(
                     target = "vm",
