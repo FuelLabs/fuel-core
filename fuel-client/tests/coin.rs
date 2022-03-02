@@ -8,7 +8,7 @@ use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use fuel_storage::Storage;
-use fuel_tx::{Color, UtxoId};
+use fuel_tx::{AssetId, UtxoId};
 use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
@@ -93,7 +93,7 @@ async fn first_5_coins() {
 #[tokio::test]
 async fn only_color_filtered_coins() {
     let owner = Address::default();
-    let color = Color::new([1u8; 32]);
+    let color = AssetId::new([1u8; 32]);
 
     // setup test data in the node
     let coins: Vec<(UtxoId, Coin)> = (1..10usize)
@@ -127,7 +127,7 @@ async fn only_color_filtered_coins() {
     let coins = client
         .coins(
             format!("{:#x}", owner).as_str(),
-            Some(format!("{:#x}", Color::new([1u8; 32])).as_str()),
+            Some(format!("{:#x}", AssetId::new([1u8; 32])).as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -201,8 +201,8 @@ async fn only_unspent_coins() {
 #[tokio::test]
 async fn coins_to_spend() {
     let owner = Address::default();
-    let color_a = Color::new([1u8; 32]);
-    let color_b = Color::new([2u8; 32]);
+    let color_a = AssetId::new([1u8; 32]);
+    let color_b = AssetId::new([2u8; 32]);
 
     // setup config
     let mut config = Config::local_node();

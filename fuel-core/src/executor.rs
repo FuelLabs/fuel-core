@@ -9,9 +9,9 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use fuel_asm::Word;
+use fuel_crypto::Hasher;
 use fuel_storage::Storage;
-use fuel_tx::crypto::Hasher;
-use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
+use fuel_tx::{Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_types::ContractId;
 use fuel_vm::prelude::{Backtrace, Interpreter};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
@@ -254,7 +254,7 @@ impl Executor {
                 utxo_id,
                 owner,
                 amount,
-                color,
+                asset_id,
                 maturity,
                 ..
             } = input
@@ -276,7 +276,7 @@ impl Executor {
                     &Coin {
                         owner: *owner,
                         amount: *amount,
-                        color: *color,
+                        color: *asset_id,
                         maturity: (*maturity).into(),
                         status: CoinStatus::Spent,
                         block_created,
@@ -305,12 +305,12 @@ impl Executor {
                 .outputs()
                 .iter()
                 .filter_map(|output| match output {
-                    Output::Coin { amount, color, .. } if color == &Color::default() => {
-                        Some(amount)
-                    }
-                    Output::Withdrawal { amount, color, .. } if color == &Color::default() => {
-                        Some(amount)
-                    }
+                    Output::Coin {
+                        amount, asset_id, ..
+                    } if asset_id == &AssetId::default() => Some(amount),
+                    Output::Withdrawal {
+                        amount, asset_id, ..
+                    } if asset_id == &AssetId::default() => Some(amount),
                     _ => None,
                 })
                 .sum();
@@ -415,9 +415,11 @@ impl Executor {
         for (output_index, output) in tx.outputs().iter().enumerate() {
             let utxo_id = UtxoId::new(*tx_id, output_index as u8);
             match output {
-                Output::Coin { amount, color, to } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
-                }
+                Output::Coin {
+                    amount,
+                    asset_id,
+                    to,
+                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
                 Output::Contract {
                     input_index: input_idx,
                     ..
@@ -435,12 +437,16 @@ impl Executor {
                 Output::Withdrawal { .. } => {
                     // TODO: Handle withdrawals somehow (new field on the block type?)
                 }
-                Output::Change { to, color, amount } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
-                }
-                Output::Variable { to, color, amount } => {
-                    Executor::insert_coin(block_height.into(), utxo_id, amount, color, to, db)?
-                }
+                Output::Change {
+                    to,
+                    asset_id,
+                    amount,
+                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
+                Output::Variable {
+                    to,
+                    asset_id,
+                    amount,
+                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
                 Output::ContractCreated { contract_id, .. } => {
                     Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
                 }
@@ -453,7 +459,7 @@ impl Executor {
         fuel_height: u32,
         utxo_id: UtxoId,
         amount: &Word,
-        color: &Color,
+        color: &AssetId,
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
@@ -615,9 +621,9 @@ mod tests {
             .map(|i| {
                 TxBuilder::new(2322u64)
                     .gas_limit(10)
-                    .coin_input(Color::default(), (i as Word) * 100)
-                    .coin_output(Color::default(), (i as Word) * 50)
-                    .change_output(Color::default())
+                    .coin_input(AssetId::default(), (i as Word) * 100)
+                    .coin_output(AssetId::default(), (i as Word) * 50)
+                    .change_output(AssetId::default())
                     .build()
             })
             .collect_vec();
@@ -803,7 +809,7 @@ mod tests {
         let output = Output::Change {
             to: owner,
             amount: 0,
-            color,
+            asset_id: color,
         };
         let tx = Transaction::script(
             0,
@@ -1006,8 +1012,8 @@ mod tests {
     async fn input_coins_are_marked_as_spent() {
         // ensure coins are marked as spent after tx is processed
         let tx = TxBuilder::new(2322u64)
-            .coin_input(Color::default(), 100)
-            .change_output(Color::default())
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
             .build();
 
         let db = Database::default();
@@ -1038,8 +1044,8 @@ mod tests {
         let starting_block = BlockHeight::from(5u64);
         // ensure coins are marked as spent after tx is processed
         let tx = TxBuilder::new(2322u64)
-            .coin_input(Color::default(), 100)
-            .change_output(Color::default())
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
             .build();
 
         let mut db = Database::default();
@@ -1048,7 +1054,7 @@ mod tests {
             utxo_id,
             owner,
             amount,
-            color,
+            asset_id,
             ..
         } = tx.inputs()[0]
         {
@@ -1058,7 +1064,7 @@ mod tests {
                 &Coin {
                     owner,
                     amount,
-                    color,
+                    color: asset_id,
                     maturity: Default::default(),
                     status: CoinStatus::Unspent,
                     block_created: starting_block,

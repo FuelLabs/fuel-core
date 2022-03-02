@@ -64,7 +64,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
+                asset_id: schema
                     .color
                     .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),
@@ -254,7 +254,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
+                asset_id: schema
                     .color
                     .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),
@@ -280,7 +280,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .amount
                     .ok_or_else(|| MissingField("amount".to_string()))?
                     .into(),
-                color: schema
+                asset_id: schema
                     .color
                     .ok_or_else(|| MissingField("color".to_string()))?
                     .into(),

@@ -7,7 +7,7 @@ use crate::{
     state::{Error, IterDirection},
 };
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32, Color, UtxoId};
+use fuel_tx::{Address, AssetId, Bytes32, UtxoId};
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -89,7 +89,7 @@ impl Database {
     pub fn owned_coins_by_color(
         &self,
         owner: Address,
-        color: Color,
+        color: AssetId,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {

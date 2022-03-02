@@ -198,7 +198,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                 utxo_id: coin.utxo_id.into(),
                 owner: coin.owner.into(),
                 amount: coin.amount.try_into()?,
-                color: coin.color.into(),
+                asset_id: coin.color.into(),
                 witness_index: coin.witness_index.try_into()?,
                 maturity: coin.maturity.try_into()?,
                 predicate: coin.predicate.into(),
@@ -280,7 +280,7 @@ impl TryFrom<Output> for fuel_tx::Output {
             Output::CoinOutput(coin) => Self::Coin {
                 to: coin.to.into(),
                 amount: coin.amount.try_into()?,
-                color: coin.color.into(),
+                asset_id: coin.color.into(),
             },
             Output::ContractOutput(contract) => Self::Contract {
                 input_index: contract.input_index.try_into()?,
@@ -290,17 +290,17 @@ impl TryFrom<Output> for fuel_tx::Output {
             Output::WithdrawalOutput(withdrawal) => Self::Withdrawal {
                 to: withdrawal.to.into(),
                 amount: withdrawal.amount.try_into()?,
-                color: withdrawal.color.into(),
+                asset_id: withdrawal.color.into(),
             },
             Output::ChangeOutput(change) => Self::Change {
                 to: change.to.into(),
                 amount: change.amount.try_into()?,
-                color: change.color.into(),
+                asset_id: change.color.into(),
             },
             Output::VariableOutput(variable) => Self::Variable {
                 to: variable.to.into(),
                 amount: variable.amount.try_into()?,
-                color: variable.color.into(),
+                asset_id: variable.color.into(),
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
                 contract_id: contract.contract_id.into(),

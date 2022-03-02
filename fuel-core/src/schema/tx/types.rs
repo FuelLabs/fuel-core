@@ -5,7 +5,7 @@ use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_asm::Word;
 use fuel_storage::Storage;
-use fuel_tx::{Address, Bytes32, Color, ContractId, Receipt, Transaction as FuelTx};
+use fuel_tx::{Address, AssetId, Bytes32, ContractId, Receipt, Transaction as FuelTx};
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
 use std::ops::Deref;
@@ -94,7 +94,7 @@ impl From<&fuel_tx::Input> for Input {
                 utxo_id,
                 owner,
                 amount,
-                color,
+                asset_id,
                 witness_index,
                 maturity,
                 predicate,
@@ -103,7 +103,7 @@ impl From<&fuel_tx::Input> for Input {
                 utxo_id: HexStringUtxoId(*utxo_id),
                 owner: HexString256(*owner.deref()),
                 amount: *amount,
-                color: HexString256(*color.deref()),
+                color: HexString256(*asset_id.deref()),
                 witness_index: *witness_index,
                 maturity: *maturity,
                 predicate: HexString(predicate.clone()),
@@ -137,7 +137,7 @@ pub enum Output {
 pub struct CoinOutput {
     to: Address,
     amount: Word,
-    color: Color,
+    color: AssetId,
 }
 
 #[Object]
@@ -246,10 +246,14 @@ impl ContractCreated {
 impl From<&fuel_tx::Output> for Output {
     fn from(output: &fuel_tx::Output) -> Self {
         match output {
-            fuel_tx::Output::Coin { to, amount, color } => Output::Coin(CoinOutput {
+            fuel_tx::Output::Coin {
+                to,
+                amount,
+                asset_id,
+            } => Output::Coin(CoinOutput {
                 to: *to,
                 amount: *amount,
-                color: *color,
+                color: *asset_id,
             }),
             fuel_tx::Output::Contract {
                 input_index,
@@ -260,27 +264,33 @@ impl From<&fuel_tx::Output> for Output {
                 balance_root: *balance_root,
                 state_root: *state_root,
             }),
-            fuel_tx::Output::Withdrawal { to, amount, color } => {
-                Output::Withdrawal(WithdrawalOutput(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    color: *color,
-                }))
-            }
-            fuel_tx::Output::Change { to, amount, color } => {
-                Output::Change(ChangeOutput(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    color: *color,
-                }))
-            }
-            fuel_tx::Output::Variable { to, amount, color } => {
-                Output::Variable(VariableOutput(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    color: *color,
-                }))
-            }
+            fuel_tx::Output::Withdrawal {
+                to,
+                amount,
+                asset_id,
+            } => Output::Withdrawal(WithdrawalOutput(CoinOutput {
+                to: *to,
+                amount: *amount,
+                color: *asset_id,
+            })),
+            fuel_tx::Output::Change {
+                to,
+                amount,
+                asset_id,
+            } => Output::Change(ChangeOutput(CoinOutput {
+                to: *to,
+                amount: *amount,
+                color: *asset_id,
+            })),
+            fuel_tx::Output::Variable {
+                to,
+                amount,
+                asset_id,
+            } => Output::Variable(VariableOutput(CoinOutput {
+                to: *to,
+                amount: *amount,
+                color: *asset_id,
+            })),
             fuel_tx::Output::ContractCreated {
                 contract_id,
                 state_root,
@@ -435,7 +445,7 @@ impl Transaction {
 
     async fn input_colors(&self) -> Vec<HexString256> {
         self.0
-            .input_colors()
+            .input_asset_ids()
             .map(|c| HexString256(*c.deref()))
             .collect()
     }

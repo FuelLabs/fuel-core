@@ -4,7 +4,7 @@ use crate::model::coin::{Coin, CoinStatus};
 use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
 use fuel_tx::UtxoId;
-use fuel_types::{Bytes32, Color, ContractId, Salt, Word};
+use fuel_types::{AssetId, Bytes32, ContractId, Salt, Word};
 use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
 #[cfg(feature = "rocksdb")]
@@ -210,7 +210,7 @@ impl FuelService {
         // insert balances related to contract
         if let Some(balances) = &contract.balances {
             for (key, value) in balances {
-                MerkleStorage::<ContractId, Color, Word>::insert(db, contract_id, key, value)?;
+                MerkleStorage::<ContractId, AssetId, Word>::insert(db, contract_id, key, value)?;
             }
         }
         Ok(())
@@ -254,7 +254,7 @@ mod tests {
     use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::fuel_block::BlockHeight;
     use fuel_asm::Opcode;
-    use fuel_types::{Address, Color, Word};
+    use fuel_types::{Address, AssetId, Word};
     use itertools::Itertools;
     use rand::rngs::StdRng;
     use rand::{Rng, RngCore, SeedableRng};
@@ -316,7 +316,7 @@ mod tests {
 
         // a coin with all options set
         let alice: Address = rng.gen();
-        let color_alice: Color = rng.gen();
+        let color_alice: AssetId = rng.gen();
         let alice_value = rng.gen();
         let alice_maturity = Some(rng.next_u32().into());
         let alice_block_created = Some(rng.next_u32().into());
@@ -326,7 +326,7 @@ mod tests {
 
         // a coin with minimal options set
         let bob: Address = rng.gen();
-        let color_bob: Color = rng.gen();
+        let color_bob: AssetId = rng.gen();
         let bob_value = rng.gen();
 
         let service_config = Config {
@@ -450,7 +450,7 @@ mod tests {
     async fn config_state_initializes_contract_balance() {
         let mut rng = StdRng::seed_from_u64(10);
 
-        let test_color: Color = rng.gen();
+        let test_color: AssetId = rng.gen();
         let test_balance: u64 = rng.next_u64();
         let balances = vec![(test_color, test_balance)];
         let salt: Salt = rng.gen();
@@ -479,7 +479,7 @@ mod tests {
             .await
             .unwrap();
 
-        let ret = MerkleStorage::<ContractId, Color, Word>::get(&db, &id, &test_color)
+        let ret = MerkleStorage::<ContractId, AssetId, Word>::get(&db, &id, &test_color)
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();

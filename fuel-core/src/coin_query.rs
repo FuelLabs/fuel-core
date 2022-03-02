@@ -2,7 +2,7 @@ use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin, CoinStatus};
 use crate::state::{self};
 use fuel_storage::Storage;
-use fuel_tx::{Address, Color, UtxoId};
+use fuel_tx::{Address, AssetId, UtxoId};
 use itertools::Itertools;
 use rand::prelude::*;
 use std::cmp::Reverse;
@@ -33,7 +33,7 @@ impl From<state::Error> for CoinQueryError {
 }
 
 pub type SpendQuery = [SpendQueryElement];
-pub type SpendQueryElement = (Address, Color, u64);
+pub type SpendQueryElement = (Address, AssetId, u64);
 
 pub fn largest_first(
     db: &Database,
@@ -251,7 +251,7 @@ mod tests {
 
     use super::*;
 
-    fn gen_test_db(owner: Address, colors: &[Color]) -> Database {
+    fn gen_test_db(owner: Address, colors: &[AssetId]) -> Database {
         let mut db = Database::default();
 
         let coins: Vec<(UtxoId, Coin)> = colors
@@ -283,11 +283,11 @@ mod tests {
     fn largest_first_output() {
         // Setup
         let owner = Address::default();
-        let colors = [Color::new([1u8; 32]), Color::new([2u8; 32])];
+        let colors = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
         let db = gen_test_db(owner, &colors);
         let query = |spend_query: &[SpendQueryElement],
                      max_inputs: u8|
-         -> Result<Vec<(Color, u64)>, CoinQueryError> {
+         -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
             let coins = largest_first(&db, spend_query, max_inputs);
 
             // Transform result for convenience
@@ -351,11 +351,11 @@ mod tests {
     fn random_improve_output() {
         // Setup
         let owner = Address::default();
-        let colors = [Color::new([1u8; 32]), Color::new([2u8; 32])];
+        let colors = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
         let db = gen_test_db(owner, &colors);
         let query = |spend_query: &[SpendQueryElement],
                      max_inputs: u8|
-         -> Result<Vec<(Color, u64)>, CoinQueryError> {
+         -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
             let coins = random_improve(&db, spend_query, max_inputs);
 
             // Transform result for convenience

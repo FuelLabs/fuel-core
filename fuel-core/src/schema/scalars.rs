@@ -3,7 +3,7 @@ use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
-use fuel_tx::{Address, Bytes32, Color, ContractId, Salt, UtxoId};
+use fuel_tx::{Address, AssetId, Bytes32, ContractId, Salt, UtxoId};
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},
@@ -205,8 +205,8 @@ impl From<ContractId> for HexString256 {
     }
 }
 
-impl From<Color> for HexString256 {
-    fn from(c: Color) -> Self {
+impl From<AssetId> for HexString256 {
+    fn from(c: AssetId) -> Self {
         HexString256(*c.deref())
     }
 }

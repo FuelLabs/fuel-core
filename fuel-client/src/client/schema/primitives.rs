@@ -3,7 +3,7 @@ use crate::client::schema::ConversionError;
 use crate::client::schema::ConversionError::HexStringPrefixError;
 use cynic::impl_scalar;
 use fuel_tx::UtxoId;
-use fuel_types::{Address, Bytes32, Color, ContractId, Salt};
+use fuel_types::{Address, AssetId, Bytes32, ContractId, Salt};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter, LowerHex};
@@ -70,9 +70,9 @@ impl From<HexString256> for ContractId {
     }
 }
 
-impl From<HexString256> for Color {
+impl From<HexString256> for AssetId {
     fn from(s: HexString256) -> Self {
-        Color::new(s.0 .0.into())
+        AssetId::new(s.0 .0.into())
     }
 }
 

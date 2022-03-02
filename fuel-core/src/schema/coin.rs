@@ -10,7 +10,7 @@ use async_graphql::{
 };
 use fuel_storage::Storage;
 use fuel_tx::consts::MAX_INPUTS;
-use fuel_tx::{Address, Color as FuelTxColor, UtxoId};
+use fuel_tx::{Address, AssetId as FuelTxColor, UtxoId};
 use itertools::Itertools;
 
 use super::scalars::HexStringUtxoId;
