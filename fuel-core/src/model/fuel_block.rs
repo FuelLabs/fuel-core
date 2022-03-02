@@ -1,13 +1,10 @@
 use chrono::{DateTime, TimeZone, Utc};
 use derive_more::{Add, Display, From, Into};
 use fuel_tx::{crypto::Hasher, Address, Bytes32, Transaction};
-use fuel_types::Word;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::{
     array::TryFromSliceError,
     convert::{TryFrom, TryInto},
-    iter::FromIterator,
 };
 
 #[derive(
@@ -69,72 +66,85 @@ impl BlockHeight {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
-pub struct TransactionCommitment {
-    pub sum: Word,
-    pub root: Bytes32,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct FuelBlockHeaders {
-    pub fuel_height: BlockHeight,
+pub struct FuelBlockHeader {
+    /// Fuel block height.
+    pub height: BlockHeight,
+    /// The layer 1 height of deposits and events to include since the last layer 1 block number.
+    /// This is not meant to represent the layer 1 block this was committed to. Validators will need
+    /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
+    /// example, they should verify that the block number satisfies the finality requirements of the
+    /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
+    /// Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
+    pub number: BlockHeight,
+    /// Block header hash of the previous block.
+    pub parent_hash: Bytes32,
+    /// Merkle root of all previous block header hashes.
+    pub prev_root: Bytes32,
+    /// Merkle root of transactions.
+    pub transactions_root: Bytes32,
+    /// The block producer time
     pub time: DateTime<Utc>,
+    /// The block producer public key
     pub producer: Address,
-    // TODO: integrate with fuel-merkle
-    pub transactions_commitment: TransactionCommitment,
 }
 
-impl FuelBlockHeaders {
-    pub fn id(&self, transaction_ids: &[Bytes32]) -> Bytes32 {
-        let mut hasher = Hasher::from_iter(transaction_ids);
-        hasher.input(&self.fuel_height.to_bytes()[..]);
+impl FuelBlockHeader {
+    pub fn id(&self) -> Bytes32 {
+        let mut hasher = Hasher::default();
+        hasher.input(&self.height.to_bytes()[..]);
+        hasher.input(&self.number.to_bytes()[..]);
+        hasher.input(self.parent_hash.as_ref());
+        hasher.input(self.prev_root.as_ref());
+        hasher.input(self.transactions_root.as_ref());
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.producer.as_ref());
-        hasher.input(self.transactions_commitment.sum.to_be_bytes());
-        hasher.input(self.transactions_commitment.root.as_ref());
         hasher.digest()
     }
 }
 
-impl Default for FuelBlockHeaders {
+impl Default for FuelBlockHeader {
     fn default() -> Self {
         Self {
-            fuel_height: 0u32.into(),
+            height: 0u32.into(),
+            number: 0u32.into(),
+            parent_hash: Default::default(),
             time: Utc.timestamp(0, 0),
             producer: Default::default(),
-            transactions_commitment: Default::default(),
+            transactions_root: Default::default(),
+            prev_root: Default::default(),
         }
     }
 }
 
+/// The compact representation of a block used in the database
 #[derive(Clone, Debug, Deserialize, Default, Serialize)]
-pub struct FuelBlockLight {
-    pub headers: FuelBlockHeaders,
+pub struct FuelBlockDb {
+    pub headers: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
 }
 
-impl FuelBlockLight {
+impl FuelBlockDb {
     pub fn id(&self) -> Bytes32 {
-        self.headers.id(&self.transactions)
+        self.headers.id()
     }
 }
 
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug, Deserialize, Default, Serialize)]
-pub struct FuelBlockFull {
-    pub headers: FuelBlockHeaders,
+pub struct FuelBlock {
+    pub header: FuelBlockHeader,
     pub transactions: Vec<Transaction>,
 }
 
-impl FuelBlockFull {
+impl FuelBlock {
     pub fn id(&self) -> Bytes32 {
-        self.headers
-            .id(&self.transactions.iter().map(|tx| tx.id()).collect_vec())
+        self.header.id()
     }
 
-    pub fn as_light(&self) -> FuelBlockLight {
-        FuelBlockLight {
-            headers: self.headers.clone(),
+    pub fn to_db_block(&self) -> FuelBlockDb {
+        FuelBlockDb {
+            headers: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }

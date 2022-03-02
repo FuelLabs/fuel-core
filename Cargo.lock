@@ -1538,6 +1538,7 @@ dependencies = [
  "env_logger",
  "fuel-asm",
  "fuel-core-interfaces",
+ "fuel-merkle",
  "fuel-storage",
  "fuel-tx 0.5.0",
  "fuel-txpool",
