@@ -1668,7 +1668,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "env_logger",
  "futures",
