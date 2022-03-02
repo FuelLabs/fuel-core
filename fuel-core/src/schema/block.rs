@@ -2,7 +2,7 @@ use crate::database::Database;
 use crate::schema::scalars::U64;
 use crate::{
     database::KvStoreError,
-    model::fuel_block::{BlockHeight, FuelBlockLight},
+    model::fuel_block::{BlockHeight, FuelBlockDb},
     schema::scalars::HexString256,
     schema::tx::types::Transaction,
     state::IterDirection,
@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::convert::TryInto;
 use std::ops::Deref;
 
-pub struct Block(pub(crate) FuelBlockLight);
+pub struct Block(pub(crate) FuelBlockDb);
 
 #[Object]
 impl Block {
@@ -28,7 +28,7 @@ impl Block {
     }
 
     async fn height(&self) -> U64 {
-        self.0.headers.fuel_height.into()
+        self.0.headers.height.into()
     }
 
     async fn transactions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Transaction>> {
@@ -87,8 +87,7 @@ impl BlockQuery {
             (None, None) => return Err(async_graphql::Error::new("missing either id or height")),
         };
 
-        let block =
-            Storage::<Bytes32, FuelBlockLight>::get(db, &id)?.map(|b| Block(b.into_owned()));
+        let block = Storage::<Bytes32, FuelBlockDb>::get(db, &id)?.map(|b| Block(b.into_owned()));
         Ok(block)
     }
 
@@ -151,10 +150,10 @@ impl BlockQuery {
                 }
 
                 // TODO: do a batch get instead
-                let blocks: Vec<Cow<FuelBlockLight>> = blocks
+                let blocks: Vec<Cow<FuelBlockDb>> = blocks
                     .iter()
                     .map(|(_, id)| {
-                        Storage::<Bytes32, FuelBlockLight>::get(&db, id)
+                        Storage::<Bytes32, FuelBlockDb>::get(&db, id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
                     })
@@ -163,9 +162,9 @@ impl BlockQuery {
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= blocks.len());
                 connection.append(
-                    blocks.into_iter().map(|item| {
-                        Edge::new(item.headers.fuel_height.to_usize(), item.into_owned())
-                    }),
+                    blocks
+                        .into_iter()
+                        .map(|item| Edge::new(item.headers.height.to_usize(), item.into_owned())),
                 );
                 Ok(connection)
             },

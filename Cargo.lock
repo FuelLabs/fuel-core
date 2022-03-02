@@ -1555,6 +1555,7 @@ dependencies = [
  "fuel-asm 0.2.0",
  "fuel-core-interfaces",
  "fuel-crypto",
+ "fuel-merkle",
  "fuel-storage",
  "fuel-tx 0.6.0",
  "fuel-txpool",

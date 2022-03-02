@@ -1,6 +1,6 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::{ExecutionMode, Executor};
-use crate::model::fuel_block::{FuelBlockFull, FuelBlockHeaders};
+use crate::model::fuel_block::{FuelBlock, FuelBlockHeader};
 use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
@@ -88,13 +88,20 @@ impl TxPool {
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
         // setup and execute block
-        let block_height = db.get_block_height()?.unwrap_or_default() + 1u32.into();
-        let mut block = FuelBlockFull {
-            headers: FuelBlockHeaders {
-                fuel_height: block_height,
+        let current_height = db.get_block_height()?.unwrap_or_default();
+        let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+        let new_block_height = current_height + 1u32.into();
+
+        let mut block = FuelBlock {
+            header: FuelBlockHeader {
+                height: new_block_height,
+                number: Default::default(),
+                parent_hash: current_hash,
                 time: Utc::now(),
                 producer: Default::default(),
-                transactions_commitment: Default::default(),
+                transactions_root: Default::default(),
+                // TODO: compute the current merkle root of all blocks
+                prev_root: Default::default(),
             },
             transactions: vec![tx],
         };

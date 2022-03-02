@@ -1,5 +1,5 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::model::fuel_block::{BlockHeight, FuelBlockLight};
+use crate::model::fuel_block::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{HexString, HexString256, SortedTxCursor};
 use crate::service::Config;
 use crate::state::IterDirection;
@@ -92,7 +92,7 @@ impl TxQuery {
                 let txs = all_block_ids
                     .flat_map(|block| {
                         block.map(|(block_height, block_id)| {
-                            Storage::<Bytes32, FuelBlockLight>::get(db, &block_id)
+                            Storage::<Bytes32, FuelBlockDb>::get(db, &block_id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|fuel_block| {
