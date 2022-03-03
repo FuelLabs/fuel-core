@@ -1,2 +1,5 @@
 **/target
 **/*.swp
+.terraform
+*.tfstate*
+*.terraform.lock.hcl*

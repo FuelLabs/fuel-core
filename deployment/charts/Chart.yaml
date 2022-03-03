@@ -1,0 +1,6 @@
+apiVersion: v2
+name: fuel-core
+description: Fuel Core Helm Chart
+type: application
+appVersion: "0.3.2"
+version: 0.1.0
