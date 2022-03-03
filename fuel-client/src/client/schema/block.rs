@@ -1,12 +1,13 @@
 use crate::client::schema::{
-    primitives::DateTime, schema, tx::OpaqueTransaction, ConnectionArgs, HexString256, PageInfo,
-    U64,
+    primitives::Address, primitives::DateTime, schema, BlockId, ConnectionArgs, PageInfo, U64,
 };
 use crate::client::PaginatedResult;
 
+use super::tx::TransactionIdFragment;
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
-    pub id: HexString256,
+    pub id: BlockId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -63,10 +64,16 @@ pub struct BlockEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
     pub height: U64,
-    pub id: HexString256,
+    pub id: BlockId,
     pub time: DateTime,
-    pub producer: HexString256,
-    pub transactions: Vec<OpaqueTransaction>,
+    pub producer: Address,
+    pub transactions: Vec<TransactionIdFragment>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Block")]
+pub struct BlockIdFragment {
+    pub id: BlockId,
 }
 
 #[cfg(test)]
@@ -77,7 +84,7 @@ mod tests {
     fn block_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
-            id: HexString256::default(),
+            id: BlockId::default(),
         });
         insta::assert_snapshot!(operation.query)
     }

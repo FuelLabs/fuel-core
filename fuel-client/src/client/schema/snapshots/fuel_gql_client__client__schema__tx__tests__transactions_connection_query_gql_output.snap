@@ -1,11 +1,11 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 285
+assertion_line: 292
 expression: operation.query
 
 ---
-query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
-  transactions(after: $_0, before: $_1, first: $_2, last: $_3) {
+query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
+  transactions(first: $_0, after: $_1, last: $_2, before: $_3) {
     edges {
       cursor
       node {
@@ -19,7 +19,9 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
             time
           }
           ... on SuccessStatus {
-            blockId
+            block {
+              id
+            }
             time
             programState {
               returnType
@@ -27,7 +29,9 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
             }
           }
           ... on FailureStatus {
-            blockId
+            block {
+              id
+            }
             time
             reason
             programState {

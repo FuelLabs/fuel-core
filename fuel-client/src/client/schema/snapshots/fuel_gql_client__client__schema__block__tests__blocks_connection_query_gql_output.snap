@@ -1,11 +1,11 @@
 ---
 source: fuel-client/src/client/schema/block.rs
-assertion_line: 94
+assertion_line: 102
 expression: operation.query
 
 ---
-query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
-  blocks(after: $_0, before: $_1, first: $_2, last: $_3) {
+query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
+  blocks(first: $_0, after: $_1, last: $_2, before: $_3) {
     edges {
       cursor
       node {
@@ -14,33 +14,7 @@ query Query($_0: String, $_1: String, $_2: Int, $_3: Int) {
         time
         producer
         transactions {
-          rawPayload
-          receipts {
-            rawPayload
-          }
-          status {
-            __typename
-            ... on SubmittedStatus {
-              time
-            }
-            ... on SuccessStatus {
-              blockId
-              time
-              programState {
-                returnType
-                data
-              }
-            }
-            ... on FailureStatus {
-              blockId
-              time
-              reason
-              programState {
-                returnType
-                data
-              }
-            }
-          }
+          id
         }
       }
     }

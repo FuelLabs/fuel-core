@@ -3,11 +3,9 @@ use crate::model::fuel_block::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
-use fuel_tx::{Address, AssetId, Bytes32, ContractId, Salt, UtxoId};
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},
-    ops::Deref,
     str::FromStr,
 };
 
@@ -46,11 +44,11 @@ impl From<U64> for usize {
 #[derive(Clone, Debug)]
 pub struct SortedTxCursor {
     pub block_height: BlockHeight,
-    pub tx_id: HexString256,
+    pub tx_id: Bytes32,
 }
 
 impl SortedTxCursor {
-    pub fn new(block_height: BlockHeight, tx_id: HexString256) -> Self {
+    pub fn new(block_height: BlockHeight, tx_id: Bytes32) -> Self {
         Self {
             block_height,
             tx_id,
@@ -68,7 +66,7 @@ impl CursorType for SortedTxCursor {
             usize::from_str(block_height)
                 .map_err(|_| "Failed to decode block_height")?
                 .into(),
-            HexString256::decode_cursor(tx_id)?,
+            Bytes32::decode_cursor(tx_id)?,
         ))
     }
 
@@ -137,112 +135,14 @@ impl FromStr for HexString {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct HexString256(pub(crate) [u8; 32]);
-
-#[Scalar(name = "HexString256")]
-impl ScalarType for HexString256 {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            HexString256::from_str(value.as_str()).map_err(Into::into)
-        } else {
-            Err(InputValueError::expected_type(value))
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.to_string())
-    }
-}
-
-impl FromStr for HexString256 {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // trim leading 0x
-        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
-        // pad input to 32 bytes
-        let mut bytes = ((value.len() / 2)..32).map(|_| 0).collect::<Vec<u8>>();
-        // decode into bytes
-        bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);
-        // attempt conversion to fixed length array, error if too long
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|e: Vec<u8>| format!("expected 32 bytes, received {}", e.len()))?;
-
-        Ok(Self(bytes))
-    }
-}
-
-impl Display for HexString256 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = format!("0x{}", hex::encode(self.0));
-        s.fmt(f)
-    }
-}
-
-impl From<HexString256> for Bytes32 {
-    fn from(s: HexString256) -> Self {
-        Bytes32::new(s.0)
-    }
-}
-
-impl From<HexString256> for Address {
-    fn from(a: HexString256) -> Self {
-        Address::new(a.0)
-    }
-}
-
-impl From<Bytes32> for HexString256 {
-    fn from(b: Bytes32) -> Self {
-        HexString256(*b.deref())
-    }
-}
-
-impl From<ContractId> for HexString256 {
-    fn from(c: ContractId) -> Self {
-        HexString256(*c.deref())
-    }
-}
-
-impl From<AssetId> for HexString256 {
-    fn from(c: AssetId) -> Self {
-        HexString256(*c.deref())
-    }
-}
-
-impl From<Address> for HexString256 {
-    fn from(a: Address) -> Self {
-        HexString256(*a.deref())
-    }
-}
-
-impl From<Salt> for HexString256 {
-    fn from(s: Salt) -> Self {
-        HexString256(*s.deref())
-    }
-}
-
-impl CursorType for HexString256 {
-    type Error = String;
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        Self::from_str(s)
-    }
-
-    fn encode_cursor(&self) -> String {
-        self.to_string()
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
-pub struct HexStringUtxoId(pub(crate) UtxoId);
+pub struct UtxoId(pub(crate) fuel_tx::UtxoId);
 
-#[Scalar(name = "HexStringUtxoId")]
-impl ScalarType for HexStringUtxoId {
+#[Scalar(name = "UtxoId")]
+impl ScalarType for UtxoId {
     fn parse(value: Value) -> InputValueResult<Self> {
         if let Value::String(value) = &value {
-            HexStringUtxoId::from_str(value.as_str()).map_err(Into::into)
+            UtxoId::from_str(value.as_str()).map_err(Into::into)
         } else {
             Err(InputValueError::expected_type(value))
         }
@@ -253,34 +153,36 @@ impl ScalarType for HexStringUtxoId {
     }
 }
 
-impl FromStr for HexStringUtxoId {
+impl FromStr for UtxoId {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        UtxoId::from_str(s).map(Self).map_err(str::to_owned)
+        fuel_tx::UtxoId::from_str(s)
+            .map(Self)
+            .map_err(str::to_owned)
     }
 }
 
-impl Display for HexStringUtxoId {
+impl Display for UtxoId {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let s = format!("{:#x}", self.0);
         s.fmt(f)
     }
 }
 
-impl From<HexStringUtxoId> for UtxoId {
-    fn from(s: HexStringUtxoId) -> Self {
+impl From<UtxoId> for fuel_tx::UtxoId {
+    fn from(s: UtxoId) -> Self {
         s.0
     }
 }
 
-impl From<UtxoId> for HexStringUtxoId {
-    fn from(utxo_id: UtxoId) -> Self {
+impl From<fuel_tx::UtxoId> for UtxoId {
+    fn from(utxo_id: fuel_tx::UtxoId) -> Self {
         Self(utxo_id)
     }
 }
 
-impl CursorType for HexStringUtxoId {
+impl CursorType for UtxoId {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
@@ -291,3 +193,83 @@ impl CursorType for HexStringUtxoId {
         self.to_string()
     }
 }
+
+macro_rules! fuel_type_scalar {
+    ($name:literal, $id:ident, $ft_id:ident, $len:expr) => {
+        #[derive(Copy, Clone, Debug)]
+        pub struct $id(pub(crate) fuel_types::$ft_id);
+
+        #[Scalar(name = $name)]
+        impl ScalarType for $id {
+            fn parse(value: Value) -> InputValueResult<Self> {
+                if let Value::String(value) = &value {
+                    $id::from_str(value.as_str()).map_err(Into::into)
+                } else {
+                    Err(InputValueError::expected_type(value))
+                }
+            }
+
+            fn to_value(&self) -> Value {
+                Value::String(self.to_string())
+            }
+        }
+
+        impl FromStr for $id {
+            type Err = String;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                // trim leading 0x
+                let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+                // pad input to $len bytes
+                let mut bytes = ((value.len() / 2)..$len).map(|_| 0).collect::<Vec<u8>>();
+                // decode into bytes
+                bytes.extend(hex::decode(value).map_err(|e| e.to_string())?);
+                // attempt conversion to fixed length array, error if too long
+                let bytes: [u8; $len] = bytes.try_into().map_err(|e: Vec<u8>| {
+                    format!("expected {} bytes, received {}", $len, e.len())
+                })?;
+
+                Ok(Self(bytes.into()))
+            }
+        }
+
+        impl Display for $id {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                let s = format!("0x{}", hex::encode(self.0));
+                s.fmt(f)
+            }
+        }
+
+        impl From<$id> for fuel_types::$ft_id {
+            fn from(value: $id) -> Self {
+                value.0
+            }
+        }
+
+        impl From<fuel_types::$ft_id> for $id {
+            fn from(value: fuel_types::$ft_id) -> Self {
+                $id(value)
+            }
+        }
+
+        impl CursorType for $id {
+            type Error = String;
+
+            fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+                Self::from_str(s)
+            }
+
+            fn encode_cursor(&self) -> String {
+                self.to_string()
+            }
+        }
+    };
+}
+
+fuel_type_scalar!("Bytes32", Bytes32, Bytes32, 32);
+fuel_type_scalar!("Address", Address, Address, 32);
+fuel_type_scalar!("BlockId", BlockId, Bytes32, 32);
+fuel_type_scalar!("AssetId", AssetId, AssetId, 32);
+fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
+fuel_type_scalar!("Salt", Salt, Salt, 32);
+fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);

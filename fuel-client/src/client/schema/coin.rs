@@ -1,9 +1,9 @@
-use crate::client::schema::{schema, HexString256, HexStringUtxoId, PageInfo, U64};
+use crate::client::schema::{schema, Address, AssetId, PageInfo, UtxoId, U64};
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinByIdArgs {
-    pub utxo_id: HexStringUtxoId,
+    pub utxo_id: UtxoId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -21,9 +21,9 @@ pub struct CoinByIdQuery {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinFilterInput {
     /// Filter coins based on the `owner` field
-    pub owner: HexString256,
+    pub owner: Address,
     /// Filter coins based on the `asset_id` field
-    pub asset_id: Option<HexString256>,
+    pub asset_id: Option<AssetId>,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -41,8 +41,8 @@ pub struct CoinsConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(HexString256, HexString256, PaginationRequest<String>)> for CoinsConnectionArgs {
-    fn from(r: (HexString256, HexString256, PaginationRequest<String>)) -> Self {
+impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs {
+    fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
         match r.2.direction {
             PageDirection::Forward => CoinsConnectionArgs {
                 filter: CoinFilterInput {
@@ -111,7 +111,7 @@ pub struct CoinEdge {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SpendQueryElementInput {
     /// asset ID of the coins
-    pub asset_id: HexString256,
+    pub asset_id: AssetId,
     /// address of the owner
     pub amount: U64,
 }
@@ -119,15 +119,15 @@ pub struct SpendQueryElementInput {
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct CoinsToSpendArgs {
     /// The Address of the utxo owner
-    owner: HexString256,
+    owner: Address,
     /// The total amount of each asset type to spend
     spend_query: Vec<SpendQueryElementInput>,
     /// The max number of utxos that can be used
     max_inputs: Option<i32>,
 }
 
-impl From<(HexString256, Vec<SpendQueryElementInput>, Option<i32>)> for CoinsToSpendArgs {
-    fn from(r: (HexString256, Vec<SpendQueryElementInput>, Option<i32>)) -> Self {
+impl From<(Address, Vec<SpendQueryElementInput>, Option<i32>)> for CoinsToSpendArgs {
+    fn from(r: (Address, Vec<SpendQueryElementInput>, Option<i32>)) -> Self {
         CoinsToSpendArgs {
             owner: r.0,
             spend_query: r.1,
@@ -152,10 +152,10 @@ pub struct CoinsToSpendQuery {
 pub struct Coin {
     pub amount: U64,
     pub block_created: U64,
-    pub asset_id: HexString256,
-    pub utxo_id: HexStringUtxoId,
+    pub asset_id: AssetId,
+    pub utxo_id: UtxoId,
     pub maturity: U64,
-    pub owner: HexString256,
+    pub owner: Address,
     pub status: CoinStatus,
 }
 
@@ -166,6 +166,12 @@ pub enum CoinStatus {
     Spent,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Coin")]
+pub struct CoinIdFragment {
+    pub utxo_id: UtxoId,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,7 +180,7 @@ mod tests {
     fn coin_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = CoinByIdQuery::build(CoinByIdArgs {
-            utxo_id: HexStringUtxoId::default(),
+            utxo_id: UtxoId::default(),
         });
         insta::assert_snapshot!(operation.query)
     }
@@ -184,8 +190,8 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = CoinsQuery::build(CoinsConnectionArgs {
             filter: CoinFilterInput {
-                owner: HexString256::default(),
-                asset_id: HexString256::default().into(),
+                owner: Address::default(),
+                asset_id: Some(AssetId::default()),
             },
             after: None,
             before: None,

@@ -1,17 +1,19 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 264
+assertion_line: 271
 expression: operation.query
 
 ---
-query Query($_0: HexString256!) {
+query Query($_0: TransactionId!) {
   transaction(id: $_0) {
     gasLimit
     gasPrice
     bytePrice
     id
     inputAssetIds
-    inputContracts
+    inputContracts {
+      id
+    }
     inputs {
       __typename
       ... on InputCoin {
@@ -28,7 +30,9 @@ query Query($_0: HexString256!) {
         utxoId
         balanceRoot
         stateRoot
-        contractId
+        contract {
+          id
+        }
       }
     }
     isScript
@@ -60,7 +64,9 @@ query Query($_0: HexString256!) {
         assetId
       }
       ... on ContractCreated {
-        contractId
+        contract {
+          id
+        }
         stateRoot
       }
     }
@@ -72,7 +78,9 @@ query Query($_0: HexString256!) {
         time
       }
       ... on SuccessStatus {
-        blockId
+        block {
+          id
+        }
         time
         programState {
           returnType
@@ -80,7 +88,9 @@ query Query($_0: HexString256!) {
         }
       }
       ... on FailureStatus {
-        blockId
+        block {
+          id
+        }
         time
         reason
         programState {
@@ -97,7 +107,9 @@ query Query($_0: HexString256!) {
       assetId
       gas
       digest
-      id
+      contract {
+        id
+      }
       is
       pc
       ptr
@@ -107,7 +119,9 @@ query Query($_0: HexString256!) {
       rd
       reason
       receiptType
-      to
+      to {
+        id
+      }
       toAddress
       val
       len
@@ -118,7 +132,9 @@ query Query($_0: HexString256!) {
     script
     scriptData
     salt
-    staticContracts
+    staticContracts {
+      id
+    }
     storageSlots
     bytecodeWitnessIndex
   }
