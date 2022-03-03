@@ -56,6 +56,10 @@ jobs:
       with:
         command: clippy
         args: --verbose --all-targets
+    
+    - name: Verify helm chart version
+      run: |
+        ./.github/workflows/scripts/verify_chart_version.sh
 
     - name: Run tests
       uses: actions-rs/cargo@v1
