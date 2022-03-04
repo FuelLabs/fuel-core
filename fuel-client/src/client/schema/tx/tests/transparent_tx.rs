@@ -1,11 +1,12 @@
 use crate::client::schema::{
+    contract::ContractIdFragment,
     schema,
     tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
-    ConnectionArgs, ConversionError, HexString, HexString256, HexStringUtxoId, PageInfo,
+    Address, AssetId, Bytes32, ConnectionArgs, ConversionError, HexString, PageInfo, Salt,
+    TransactionId, UtxoId, U64,
 };
 use core::convert::{TryFrom, TryInto};
 use fuel_tx::StorageSlot;
-use fuel_types::Bytes32;
 use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
@@ -48,24 +49,24 @@ pub struct TransactionEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
-    pub gas_limit: i32,
-    pub gas_price: i32,
-    pub byte_price: i32,
-    pub id: HexString256,
-    pub input_asset_ids: Vec<HexString256>,
-    pub input_contracts: Vec<HexString256>,
+    pub gas_limit: U64,
+    pub gas_price: U64,
+    pub byte_price: U64,
+    pub id: TransactionId,
+    pub input_asset_ids: Vec<AssetId>,
+    pub input_contracts: Vec<ContractIdFragment>,
     pub inputs: Vec<Input>,
     pub is_script: bool,
     pub outputs: Vec<Output>,
-    pub maturity: i32,
-    pub receipts_root: Option<HexString256>,
+    pub maturity: U64,
+    pub receipts_root: Option<Bytes32>,
     pub status: Option<TransactionStatus>,
     pub witnesses: Vec<HexString>,
     pub receipts: Option<Vec<Receipt>>,
     pub script: Option<HexString>,
     pub script_data: Option<HexString>,
-    pub salt: Option<HexString256>,
-    pub static_contracts: Option<Vec<HexString256>>,
+    pub salt: Option<Salt>,
+    pub static_contracts: Option<Vec<ContractIdFragment>>,
     pub storage_slots: Option<Vec<HexString>>,
     pub bytecode_witness_index: Option<i32>,
 }
@@ -76,10 +77,10 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
     fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
         Ok(match tx.is_script {
             true => Self::Script {
-                gas_price: tx.gas_price.try_into()?,
-                gas_limit: tx.gas_limit.try_into()?,
-                byte_price: tx.byte_price.try_into()?,
-                maturity: tx.maturity.try_into()?,
+                gas_price: tx.gas_price.into(),
+                gas_limit: tx.gas_limit.into(),
+                byte_price: tx.byte_price.into(),
+                maturity: tx.maturity.into(),
                 receipts_root: tx
                     .receipts_root
                     .ok_or_else(|| ConversionError::MissingField("receipts_root".to_string()))?
@@ -106,10 +107,10 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 metadata: None,
             },
             false => Self::Create {
-                gas_price: tx.gas_price.try_into()?,
-                gas_limit: tx.gas_limit.try_into()?,
-                byte_price: tx.byte_price.try_into()?,
-                maturity: tx.maturity.try_into()?,
+                gas_price: tx.gas_price.into(),
+                gas_limit: tx.gas_limit.into(),
+                byte_price: tx.byte_price.into(),
+                maturity: tx.maturity.into(),
                 bytecode_witness_index: tx
                     .bytecode_witness_index
                     .ok_or_else(|| {
@@ -124,7 +125,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .static_contracts
                     .ok_or_else(|| ConversionError::MissingField("static_contracts".to_string()))?
                     .into_iter()
-                    .map(Into::into)
+                    .map(|c| c.id.into())
                     .collect(),
                 storage_slots: tx
                     .storage_slots
@@ -138,8 +139,10 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                         let value = &slot.0 .0[32..];
                         Ok(StorageSlot::new(
                             // unwrap is safe because length is checked
-                            Bytes32::try_from(key).map_err(|_| ConversionError::BytesLength)?,
-                            Bytes32::try_from(value).map_err(|_| ConversionError::BytesLength)?,
+                            fuel_types::Bytes32::try_from(key)
+                                .map_err(|_| ConversionError::BytesLength)?,
+                            fuel_types::Bytes32::try_from(value)
+                                .map_err(|_| ConversionError::BytesLength)?,
                         ))
                     })
                     .try_collect()?,
@@ -170,12 +173,12 @@ pub enum Input {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputCoin {
-    pub utxo_id: HexStringUtxoId,
-    pub owner: HexString256,
-    pub amount: i32,
-    pub asset_id: HexString256,
+    pub utxo_id: UtxoId,
+    pub owner: Address,
+    pub amount: U64,
+    pub asset_id: AssetId,
     pub witness_index: i32,
-    pub maturity: i32,
+    pub maturity: U64,
     pub predicate: HexString,
     pub predicate_data: HexString,
 }
@@ -183,10 +186,10 @@ pub struct InputCoin {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct InputContract {
-    pub utxo_id: HexStringUtxoId,
-    pub balance_root: HexString256,
-    pub state_root: HexString256,
-    pub contract_id: HexString256,
+    pub utxo_id: UtxoId,
+    pub balance_root: Bytes32,
+    pub state_root: Bytes32,
+    pub contract: ContractIdFragment,
 }
 
 impl TryFrom<Input> for fuel_tx::Input {
@@ -197,10 +200,10 @@ impl TryFrom<Input> for fuel_tx::Input {
             Input::InputCoin(coin) => fuel_tx::Input::Coin {
                 utxo_id: coin.utxo_id.into(),
                 owner: coin.owner.into(),
-                amount: coin.amount.try_into()?,
+                amount: coin.amount.into(),
                 asset_id: coin.asset_id.into(),
                 witness_index: coin.witness_index.try_into()?,
-                maturity: coin.maturity.try_into()?,
+                maturity: coin.maturity.into(),
                 predicate: coin.predicate.into(),
                 predicate_data: coin.predicate_data.into(),
             },
@@ -208,7 +211,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                 utxo_id: contract.utxo_id.into(),
                 balance_root: contract.balance_root.into(),
                 state_root: contract.state_root.into(),
-                contract_id: contract.contract_id.into(),
+                contract_id: contract.contract.id.into(),
             },
         })
     }
@@ -228,48 +231,48 @@ pub enum Output {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinOutput {
-    pub to: HexString256,
-    pub amount: i32,
-    pub asset_id: HexString256,
+    pub to: Address,
+    pub amount: U64,
+    pub asset_id: AssetId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct WithdrawalOutput {
-    pub to: HexString256,
-    pub amount: i32,
-    pub asset_id: HexString256,
+    pub to: Address,
+    pub amount: U64,
+    pub asset_id: AssetId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ChangeOutput {
-    pub to: HexString256,
-    pub amount: i32,
-    pub asset_id: HexString256,
+    pub to: Address,
+    pub amount: U64,
+    pub asset_id: AssetId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct VariableOutput {
-    pub to: HexString256,
-    pub amount: i32,
-    pub asset_id: HexString256,
+    pub to: Address,
+    pub amount: U64,
+    pub asset_id: AssetId,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractOutput {
     pub input_index: i32,
-    pub balance_root: HexString256,
-    pub state_root: HexString256,
+    pub balance_root: Bytes32,
+    pub state_root: Bytes32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
-    contract_id: HexString256,
-    state_root: HexString256,
+    contract: ContractIdFragment,
+    state_root: Bytes32,
 }
 
 impl TryFrom<Output> for fuel_tx::Output {
@@ -279,7 +282,7 @@ impl TryFrom<Output> for fuel_tx::Output {
         Ok(match value {
             Output::CoinOutput(coin) => Self::Coin {
                 to: coin.to.into(),
-                amount: coin.amount.try_into()?,
+                amount: coin.amount.into(),
                 asset_id: coin.asset_id.into(),
             },
             Output::ContractOutput(contract) => Self::Contract {
@@ -289,21 +292,21 @@ impl TryFrom<Output> for fuel_tx::Output {
             },
             Output::WithdrawalOutput(withdrawal) => Self::Withdrawal {
                 to: withdrawal.to.into(),
-                amount: withdrawal.amount.try_into()?,
+                amount: withdrawal.amount.into(),
                 asset_id: withdrawal.asset_id.into(),
             },
             Output::ChangeOutput(change) => Self::Change {
                 to: change.to.into(),
-                amount: change.amount.try_into()?,
+                amount: change.amount.into(),
                 asset_id: change.asset_id.into(),
             },
             Output::VariableOutput(variable) => Self::Variable {
                 to: variable.to.into(),
-                amount: variable.amount.try_into()?,
+                amount: variable.amount.into(),
                 asset_id: variable.asset_id.into(),
             },
             Output::ContractCreated(contract) => Self::ContractCreated {
-                contract_id: contract.contract_id.into(),
+                contract_id: contract.contract.id.into(),
                 state_root: contract.state_root.into(),
             },
         })

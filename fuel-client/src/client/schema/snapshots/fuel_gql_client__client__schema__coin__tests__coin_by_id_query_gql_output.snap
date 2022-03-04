@@ -1,10 +1,10 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
-assertion_line: 124
+assertion_line: 179
 expression: operation.query
 
 ---
-query Query($_0: HexStringUtxoId!) {
+query Query($_0: UtxoId!) {
   coin(utxoId: $_0) {
     amount
     blockCreated

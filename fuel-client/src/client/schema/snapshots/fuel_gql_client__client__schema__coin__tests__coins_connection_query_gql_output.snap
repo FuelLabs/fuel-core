@@ -1,11 +1,11 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
-assertion_line: 155
+assertion_line: 195
 expression: operation.query
 
 ---
-query Query($_0: CoinFilterInput!, $_1: String, $_2: String, $_3: Int, $_4: Int) {
-  coins(filter: $_0, after: $_1, before: $_2, first: $_3, last: $_4) {
+query Query($_0: CoinFilterInput!, $_1: Int, $_2: String, $_3: Int, $_4: String) {
+  coins(filter: $_0, first: $_1, after: $_2, last: $_3, before: $_4) {
     edges {
       cursor
       node {

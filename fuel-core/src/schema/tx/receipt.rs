@@ -1,8 +1,10 @@
-use crate::schema::scalars::{HexString, HexString256, U64};
+use crate::schema::{
+    contract::Contract,
+    scalars::{Address, AssetId, Bytes32, HexString, U64},
+};
 use async_graphql::{Enum, Object};
 use derive_more::Display;
 use fuel_asm::Word;
-use fuel_tx::Receipt as TxReceipt;
 use fuel_types::bytes::SerializableVec;
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
@@ -19,19 +21,19 @@ pub enum ReceiptType {
     ScriptResult,
 }
 
-impl From<&TxReceipt> for ReceiptType {
-    fn from(r: &TxReceipt) -> Self {
+impl From<&fuel_tx::Receipt> for ReceiptType {
+    fn from(r: &fuel_tx::Receipt) -> Self {
         match r {
-            TxReceipt::Call { .. } => ReceiptType::Call,
-            TxReceipt::Return { .. } => ReceiptType::Return,
-            TxReceipt::ReturnData { .. } => ReceiptType::ReturnData,
-            TxReceipt::Panic { .. } => ReceiptType::Panic,
-            TxReceipt::Revert { .. } => ReceiptType::Revert,
-            TxReceipt::Log { .. } => ReceiptType::Log,
-            TxReceipt::LogData { .. } => ReceiptType::LogData,
-            TxReceipt::Transfer { .. } => ReceiptType::Transfer,
-            TxReceipt::TransferOut { .. } => ReceiptType::TransferOut,
-            TxReceipt::ScriptResult { .. } => ReceiptType::ScriptResult,
+            fuel_tx::Receipt::Call { .. } => ReceiptType::Call,
+            fuel_tx::Receipt::Return { .. } => ReceiptType::Return,
+            fuel_tx::Receipt::ReturnData { .. } => ReceiptType::ReturnData,
+            fuel_tx::Receipt::Panic { .. } => ReceiptType::Panic,
+            fuel_tx::Receipt::Revert { .. } => ReceiptType::Revert,
+            fuel_tx::Receipt::Log { .. } => ReceiptType::Log,
+            fuel_tx::Receipt::LogData { .. } => ReceiptType::LogData,
+            fuel_tx::Receipt::Transfer { .. } => ReceiptType::Transfer,
+            fuel_tx::Receipt::TransferOut { .. } => ReceiptType::TransferOut,
+            fuel_tx::Receipt::ScriptResult { .. } => ReceiptType::ScriptResult,
         }
     }
 }
@@ -40,7 +42,7 @@ pub struct Receipt(pub fuel_tx::Receipt);
 
 #[Object]
 impl Receipt {
-    async fn id(&self) -> Option<HexString256> {
+    async fn contract(&self) -> Option<Contract> {
         Some((*self.0.id()?).into())
     }
     async fn pc(&self) -> Option<U64> {
@@ -49,16 +51,16 @@ impl Receipt {
     async fn is(&self) -> Option<U64> {
         self.0.is().map(Into::into)
     }
-    async fn to(&self) -> Option<HexString256> {
+    async fn to(&self) -> Option<Contract> {
         self.0.to().copied().map(Into::into)
     }
-    async fn to_address(&self) -> Option<HexString256> {
+    async fn to_address(&self) -> Option<Address> {
         self.0.to_address().copied().map(Into::into)
     }
     async fn amount(&self) -> Option<U64> {
         self.0.amount().map(Into::into)
     }
-    async fn asset_id(&self) -> Option<HexString256> {
+    async fn asset_id(&self) -> Option<AssetId> {
         self.0.asset_id().copied().map(Into::into)
     }
     async fn gas(&self) -> Option<U64> {
@@ -76,7 +78,7 @@ impl Receipt {
     async fn ptr(&self) -> Option<U64> {
         self.0.ptr().map(Into::into)
     }
-    async fn digest(&self) -> Option<HexString256> {
+    async fn digest(&self) -> Option<Bytes32> {
         self.0.digest().copied().map(Into::into)
     }
     async fn reason(&self) -> Option<U64> {
@@ -111,5 +113,17 @@ impl Receipt {
     }
     async fn data(&self) -> Option<HexString> {
         self.0.data().map(|d| d.to_vec().into())
+    }
+}
+
+impl From<&fuel_tx::Receipt> for Receipt {
+    fn from(receipt: &fuel_tx::Receipt) -> Self {
+        Receipt(receipt.clone())
+    }
+}
+
+impl From<fuel_tx::Receipt> for Receipt {
+    fn from(receipt: fuel_tx::Receipt) -> Self {
+        Receipt(receipt)
     }
 }

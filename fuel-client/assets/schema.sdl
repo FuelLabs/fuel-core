@@ -1,9 +1,11 @@
+scalar Address
+scalar AssetId
 type Block {
-	id: HexString256!
+	id: BlockId!
 	height: U64!
 	transactions: [Transaction!]!
 	time: DateTime!
-	producer: HexString256!
+	producer: Address!
 }
 type BlockConnection {
 	"""
@@ -28,6 +30,8 @@ type BlockEdge {
 	"""
 	cursor: String!
 }
+scalar BlockId
+scalar Bytes32
 type ChainInfo {
 	name: String!
 	latestBlock: Block!
@@ -35,15 +39,15 @@ type ChainInfo {
 	peerCount: Int!
 }
 type ChangeOutput {
-	to: HexString256!
-	amount: Int!
-	assetId: HexString256!
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
 }
 type Coin {
-	utxoId: HexStringUtxoId!
-	owner: HexString256!
+	utxoId: UtxoId!
+	owner: Address!
 	amount: U64!
-	assetId: HexString256!
+	assetId: AssetId!
 	maturity: U64!
 	status: CoinStatus!
 	blockCreated: U64!
@@ -75,29 +79,34 @@ input CoinFilterInput {
 	"""
 	address of the owner
 	"""
-	owner: HexString256!
+	owner: Address!
 	"""
 	asset ID of the coins
 	"""
-	assetId: HexString256
+	assetId: AssetId
 }
 type CoinOutput {
-	to: HexString256!
-	amount: Int!
-	assetId: HexString256!
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
 }
 enum CoinStatus {
 	UNSPENT
 	SPENT
 }
-type ContractCreated {
-	contractId: HexString256!
-	stateRoot: HexString256!
+type Contract {
+	id: ContractId!
+	bytecode: HexString!
 }
+type ContractCreated {
+	contract: Contract!
+	stateRoot: Bytes32!
+}
+scalar ContractId
 type ContractOutput {
 	inputIndex: Int!
-	balanceRoot: HexString256!
-	stateRoot: HexString256!
+	balanceRoot: Bytes32!
+	stateRoot: Bytes32!
 }
 """
 Implement the DateTime<Utc> scalar
@@ -106,30 +115,28 @@ The input/output is a string in RFC3339 format.
 """
 scalar DateTime
 type FailureStatus {
-	blockId: HexString256!
+	block: Block!
 	time: DateTime!
 	reason: String!
 	programState: ProgramState
 }
 scalar HexString
-scalar HexString256
-scalar HexStringUtxoId
 union Input = | InputCoin | InputContract
 type InputCoin {
-	utxoId: HexStringUtxoId!
-	owner: HexString256!
-	amount: Int!
-	assetId: HexString256!
+	utxoId: UtxoId!
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
 	witnessIndex: Int!
-	maturity: Int!
+	maturity: U64!
 	predicate: HexString!
 	predicateData: HexString!
 }
 type InputContract {
-	utxoId: HexStringUtxoId!
-	balanceRoot: HexString256!
-	stateRoot: HexString256!
-	contractId: HexString256!
+	utxoId: UtxoId!
+	balanceRoot: Bytes32!
+	stateRoot: Bytes32!
+	contract: Contract!
 }
 type Mutation {
 	startSession: ID!
@@ -143,7 +150,7 @@ type Mutation {
 	"""
 	Submits transaction to the pool
 	"""
-	submit(tx: HexString!): HexString256!
+	submit(tx: HexString!): Transaction!
 }
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
 """
@@ -174,35 +181,36 @@ type ProgramState {
 type Query {
 	register(id: ID!, register: U64!): U64!
 	memory(id: ID!, start: U64!, size: U64!): String!
-	block(id: HexString256, height: Int): Block
-	blocks(after: String, before: String, first: Int, last: Int): BlockConnection!
+	block(id: BlockId, height: U64): Block
+	blocks(first: Int, after: String, last: Int, before: String): BlockConnection!
 	chain: ChainInfo!
 	version: String!
-	transaction(id: HexString256!): Transaction
-	transactions(after: String, before: String, first: Int, last: Int): TransactionConnection!
-	transactionsByOwner(owner: HexString256!, after: String, before: String, first: Int, last: Int): TransactionConnection!
+	transaction(id: TransactionId!): Transaction
+	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
+	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
 	health: Boolean!
-	coin(utxoId: HexStringUtxoId!): Coin
-	coins(after: String, before: String, first: Int, last: Int, filter: CoinFilterInput!): CoinConnection!
-	coinsToSpend(owner: HexString256!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int): [Coin!]!
+	coin(utxoId: UtxoId!): Coin
+	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int): [Coin!]!
+	contract(id: ContractId!): Contract
 }
 type Receipt {
-	id: HexString256
+	contract: Contract
 	pc: U64
 	is: U64
-	to: HexString256
-	toAddress: HexString256
+	to: Contract
+	toAddress: Address
 	amount: U64
-	assetId: HexString256
+	assetId: AssetId
 	gas: U64
 	a: U64
 	b: U64
 	val: U64
 	ptr: U64
-	digest: HexString256
+	digest: Bytes32
 	reason: U64
 	ra: U64
 	rb: U64
@@ -232,11 +240,12 @@ enum ReturnType {
 	RETURN_DATA
 	REVERT
 }
+scalar Salt
 input SpendQueryElementInput {
 	"""
 	asset ID of the coins
 	"""
-	assetId: HexString256!
+	assetId: AssetId!
 	"""
 	address of the owner
 	"""
@@ -246,30 +255,30 @@ type SubmittedStatus {
 	time: DateTime!
 }
 type SuccessStatus {
-	blockId: HexString256!
+	block: Block!
 	time: DateTime!
 	programState: ProgramState!
 }
 type Transaction {
-	id: HexString256!
-	inputAssetIds: [HexString256!]!
-	inputContracts: [HexString256!]!
-	gasPrice: Int!
-	gasLimit: Int!
-	bytePrice: Int!
-	maturity: Int!
+	id: TransactionId!
+	inputAssetIds: [AssetId!]!
+	inputContracts: [Contract!]!
+	gasPrice: U64!
+	gasLimit: U64!
+	bytePrice: U64!
+	maturity: U64!
 	isScript: Boolean!
 	inputs: [Input!]!
 	outputs: [Output!]!
 	witnesses: [HexString!]!
-	receiptsRoot: HexString256
+	receiptsRoot: Bytes32
 	status: TransactionStatus
 	receipts: [Receipt!]
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: Int
-	salt: HexString256
-	staticContracts: [HexString256!]
+	salt: Salt
+	staticContracts: [Contract!]
 	storageSlots: [HexString!]
 	"""
 	Return the transaction bytes using canonical encoding
@@ -299,17 +308,19 @@ type TransactionEdge {
 	"""
 	cursor: String!
 }
+scalar TransactionId
 union TransactionStatus = | SubmittedStatus | SuccessStatus | FailureStatus
 scalar U64
+scalar UtxoId
 type VariableOutput {
-	to: HexString256!
-	amount: Int!
-	assetId: HexString256!
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
 }
 type WithdrawalOutput {
-	to: HexString256!
-	amount: Int!
-	assetId: HexString256!
+	to: Address!
+	amount: U64!
+	assetId: AssetId!
 }
 schema {
 	query: Query
