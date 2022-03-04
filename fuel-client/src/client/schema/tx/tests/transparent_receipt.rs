@@ -1,5 +1,5 @@
 use crate::client::schema::{
-    contract::Contract, schema, Address, AssetId, Bytes32, ConversionError,
+    contract::ContractIdFragment, schema, Address, AssetId, Bytes32, ConversionError,
     ConversionError::MissingField, HexString, U64,
 };
 use fuel_types::Word;
@@ -13,7 +13,7 @@ pub struct Receipt {
     pub asset_id: Option<AssetId>,
     pub gas: Option<U64>,
     pub digest: Option<Bytes32>,
-    pub contract: Option<Contract>,
+    pub contract: Option<ContractIdFragment>,
     pub is: Option<U64>,
     pub pc: Option<U64>,
     pub ptr: Option<U64>,
@@ -23,7 +23,7 @@ pub struct Receipt {
     pub rd: Option<U64>,
     pub reason: Option<U64>,
     pub receipt_type: ReceiptType,
-    pub to: Option<Contract>,
+    pub to: Option<ContractIdFragment>,
     pub to_address: Option<Address>,
     pub val: Option<U64>,
     pub len: Option<U64>,

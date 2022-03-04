@@ -1,5 +1,5 @@
 use crate::client::schema::{
-    contract::Contract,
+    contract::ContractIdFragment,
     schema,
     tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
     Address, AssetId, Bytes32, ConnectionArgs, ConversionError, HexString, PageInfo, Salt,
@@ -54,7 +54,7 @@ pub struct Transaction {
     pub byte_price: U64,
     pub id: TransactionId,
     pub input_asset_ids: Vec<AssetId>,
-    pub input_contracts: Vec<Contract>,
+    pub input_contracts: Vec<ContractIdFragment>,
     pub inputs: Vec<Input>,
     pub is_script: bool,
     pub outputs: Vec<Output>,
@@ -66,7 +66,7 @@ pub struct Transaction {
     pub script: Option<HexString>,
     pub script_data: Option<HexString>,
     pub salt: Option<Salt>,
-    pub static_contracts: Option<Vec<Contract>>,
+    pub static_contracts: Option<Vec<ContractIdFragment>>,
     pub storage_slots: Option<Vec<HexString>>,
     pub bytecode_witness_index: Option<i32>,
 }
@@ -189,7 +189,7 @@ pub struct InputContract {
     pub utxo_id: UtxoId,
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
-    pub contract: Contract,
+    pub contract: ContractIdFragment,
 }
 
 impl TryFrom<Input> for fuel_tx::Input {
@@ -271,7 +271,7 @@ pub struct ContractOutput {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractCreated {
-    contract: Contract,
+    contract: ContractIdFragment,
     state_root: Bytes32,
 }
 
