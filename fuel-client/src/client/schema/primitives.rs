@@ -2,8 +2,6 @@ use super::schema;
 use crate::client::schema::ConversionError;
 use crate::client::schema::ConversionError::HexStringPrefixError;
 use cynic::impl_scalar;
-use fuel_tx::UtxoId;
-use fuel_types::{Address, AssetId, Bytes32, ContractId, Salt};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter, LowerHex};
@@ -52,62 +50,62 @@ impl<T: LowerHex + Debug + Clone + Default> Display for HexFormatted<T> {
     }
 }
 
-#[derive(cynic::Scalar, Debug, Clone, Default)]
-pub struct HexString256(pub HexFormatted<Bytes32>);
+macro_rules! fuel_type_scalar {
+    ($id:ident, $ft_id:ident) => {
+        #[derive(cynic::Scalar, Debug, Clone, Default)]
+        pub struct $id(pub HexFormatted<fuel_types::$ft_id>);
 
-impl FromStr for HexString256 {
+        impl FromStr for $id {
+            type Err = ConversionError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let b = HexFormatted::<fuel_types::$ft_id>::from_str(s)?;
+                Ok($id(b))
+            }
+        }
+
+        impl From<$id> for fuel_types::$ft_id {
+            fn from(s: $id) -> Self {
+                fuel_types::$ft_id::new(s.0 .0.into())
+            }
+        }
+
+        impl From<fuel_types::$ft_id> for $id {
+            fn from(s: fuel_types::$ft_id) -> Self {
+                $id(HexFormatted::<fuel_types::$ft_id>(s))
+            }
+        }
+
+        impl Display for $id {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                Display::fmt(&self.0, f)
+            }
+        }
+    };
+}
+
+fuel_type_scalar!(Bytes32, Bytes32);
+fuel_type_scalar!(Address, Address);
+fuel_type_scalar!(BlockId, Bytes32);
+fuel_type_scalar!(AssetId, AssetId);
+fuel_type_scalar!(ContractId, ContractId);
+fuel_type_scalar!(Salt, Salt);
+fuel_type_scalar!(TransactionId, Bytes32);
+
+#[derive(cynic::Scalar, Debug, Clone, Default)]
+pub struct UtxoId(pub HexFormatted<fuel_tx::UtxoId>);
+
+impl FromStr for UtxoId {
     type Err = ConversionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = HexFormatted::<Bytes32>::from_str(s)?;
-        Ok(HexString256(b))
+        let b = HexFormatted::<fuel_tx::UtxoId>::from_str(s)?;
+        Ok(UtxoId(b))
     }
 }
 
-impl From<HexString256> for ContractId {
-    fn from(s: HexString256) -> Self {
-        ContractId::new(s.0 .0.into())
-    }
-}
-
-impl From<HexString256> for AssetId {
-    fn from(s: HexString256) -> Self {
-        AssetId::new(s.0 .0.into())
-    }
-}
-
-impl From<HexString256> for Bytes32 {
-    fn from(s: HexString256) -> Self {
-        Bytes32::new(s.0 .0.into())
-    }
-}
-
-impl From<HexString256> for Address {
-    fn from(s: HexString256) -> Self {
-        Address::new(s.0 .0.into())
-    }
-}
-
-impl From<HexString256> for Salt {
-    fn from(s: HexString256) -> Self {
-        Salt::new(s.0 .0.into())
-    }
-}
-
-#[derive(cynic::Scalar, Debug, Clone, Default)]
-pub struct HexStringUtxoId(pub HexFormatted<UtxoId>);
-
-impl FromStr for HexStringUtxoId {
-    type Err = ConversionError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let b = HexFormatted::<UtxoId>::from_str(s)?;
-        Ok(HexStringUtxoId(b))
-    }
-}
-
-impl From<HexStringUtxoId> for UtxoId {
-    fn from(s: HexStringUtxoId) -> Self {
+impl From<UtxoId> for fuel_tx::UtxoId {
+    fn from(s: UtxoId) -> Self {
         s.0 .0
     }
 }

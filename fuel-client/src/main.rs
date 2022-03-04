@@ -40,7 +40,7 @@ impl CliArgs {
                         serde_json::from_str(tx).expect("invalid transaction json");
 
                     let result = client.submit(&tx).await;
-                    println!("{}", result.unwrap().0);
+                    println!("{}", result.unwrap());
                 }
                 TransactionCommands::DryRun { tx } => {
                     let tx: Transaction =

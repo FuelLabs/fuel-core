@@ -1,306 +1,17 @@
-use crate::database::Database;
-use crate::schema::scalars::{HexString, HexString256, HexStringUtxoId};
+use super::input::Input;
+use super::output::Output;
+use super::receipt::Receipt;
+use crate::model::fuel_block::FuelBlockDb;
+use crate::schema::contract::Contract;
+use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
 use crate::tx_pool::TransactionStatus as TxStatus;
+use crate::{database::Database, schema::block::Block};
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
-use fuel_asm::Word;
+use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, Bytes32, ContractId, Receipt, Transaction as FuelTx};
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
-use std::ops::Deref;
-
-#[derive(Union)]
-pub enum Input {
-    Coin(InputCoin),
-    Contract(InputContract),
-}
-
-pub struct InputCoin {
-    utxo_id: HexStringUtxoId,
-    owner: HexString256,
-    amount: Word,
-    asset_id: HexString256,
-    witness_index: u8,
-    maturity: Word,
-    predicate: HexString,
-    predicate_data: HexString,
-}
-
-#[Object]
-impl InputCoin {
-    async fn utxo_id(&self) -> HexStringUtxoId {
-        self.utxo_id
-    }
-    async fn owner(&self) -> HexString256 {
-        self.owner
-    }
-
-    async fn amount(&self) -> Word {
-        self.amount
-    }
-
-    async fn asset_id(&self) -> HexString256 {
-        self.asset_id
-    }
-
-    async fn witness_index(&self) -> u8 {
-        self.witness_index
-    }
-
-    async fn maturity(&self) -> Word {
-        self.maturity
-    }
-
-    async fn predicate(&self) -> HexString {
-        self.predicate.clone()
-    }
-
-    async fn predicate_data(&self) -> HexString {
-        self.predicate_data.clone()
-    }
-}
-
-pub struct InputContract {
-    utxo_id: HexStringUtxoId,
-    balance_root: HexString256,
-    state_root: HexString256,
-    contract_id: HexString256,
-}
-
-#[Object]
-impl InputContract {
-    async fn utxo_id(&self) -> HexStringUtxoId {
-        self.utxo_id
-    }
-
-    async fn balance_root(&self) -> HexString256 {
-        self.balance_root
-    }
-
-    async fn state_root(&self) -> HexString256 {
-        self.state_root
-    }
-
-    async fn contract_id(&self) -> HexString256 {
-        self.contract_id
-    }
-}
-
-impl From<&fuel_tx::Input> for Input {
-    fn from(input: &fuel_tx::Input) -> Self {
-        match input {
-            fuel_tx::Input::Coin {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                witness_index,
-                maturity,
-                predicate,
-                predicate_data,
-            } => Input::Coin(InputCoin {
-                utxo_id: HexStringUtxoId(*utxo_id),
-                owner: HexString256(*owner.deref()),
-                amount: *amount,
-                asset_id: HexString256(*asset_id.deref()),
-                witness_index: *witness_index,
-                maturity: *maturity,
-                predicate: HexString(predicate.clone()),
-                predicate_data: HexString(predicate_data.clone()),
-            }),
-            fuel_tx::Input::Contract {
-                utxo_id,
-                balance_root,
-                state_root,
-                contract_id,
-            } => Input::Contract(InputContract {
-                utxo_id: HexStringUtxoId(*utxo_id),
-                balance_root: HexString256(*balance_root.deref()),
-                state_root: HexString256(*state_root.deref()),
-                contract_id: HexString256(*contract_id.deref()),
-            }),
-        }
-    }
-}
-
-#[derive(Union)]
-pub enum Output {
-    Coin(CoinOutput),
-    Contract(ContractOutput),
-    Withdrawal(WithdrawalOutput),
-    Change(ChangeOutput),
-    Variable(VariableOutput),
-    ContractCreated(ContractCreated),
-}
-
-pub struct CoinOutput {
-    to: Address,
-    amount: Word,
-    asset_id: AssetId,
-}
-
-#[Object]
-impl CoinOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.to.deref())
-    }
-
-    async fn amount(&self) -> Word {
-        self.amount
-    }
-
-    async fn asset_id(&self) -> HexString256 {
-        HexString256(*self.asset_id.deref())
-    }
-}
-
-pub struct WithdrawalOutput(CoinOutput);
-
-#[Object]
-impl WithdrawalOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
-    }
-
-    async fn amount(&self) -> Word {
-        self.0.amount
-    }
-
-    async fn asset_id(&self) -> HexString256 {
-        HexString256(*self.0.asset_id.deref())
-    }
-}
-
-pub struct ChangeOutput(CoinOutput);
-
-#[Object]
-impl ChangeOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
-    }
-
-    async fn amount(&self) -> Word {
-        self.0.amount
-    }
-
-    async fn asset_id(&self) -> HexString256 {
-        HexString256(*self.0.asset_id.deref())
-    }
-}
-
-pub struct VariableOutput(CoinOutput);
-
-#[Object]
-impl VariableOutput {
-    async fn to(&self) -> HexString256 {
-        HexString256(*self.0.to.deref())
-    }
-
-    async fn amount(&self) -> Word {
-        self.0.amount
-    }
-
-    async fn asset_id(&self) -> HexString256 {
-        HexString256(*self.0.asset_id.deref())
-    }
-}
-
-pub struct ContractOutput {
-    input_index: u8,
-    balance_root: Bytes32,
-    state_root: Bytes32,
-}
-
-#[Object]
-impl ContractOutput {
-    async fn input_index(&self) -> u8 {
-        self.input_index
-    }
-
-    async fn balance_root(&self) -> HexString256 {
-        HexString256(*self.balance_root.deref())
-    }
-
-    async fn state_root(&self) -> HexString256 {
-        HexString256(*self.state_root.deref())
-    }
-}
-
-pub struct ContractCreated {
-    contract_id: ContractId,
-    state_root: Bytes32,
-}
-
-#[Object]
-impl ContractCreated {
-    async fn contract_id(&self) -> HexString256 {
-        HexString256(*self.contract_id.deref())
-    }
-
-    async fn state_root(&self) -> HexString256 {
-        HexString256(*self.state_root.deref())
-    }
-}
-
-impl From<&fuel_tx::Output> for Output {
-    fn from(output: &fuel_tx::Output) -> Self {
-        match output {
-            fuel_tx::Output::Coin {
-                to,
-                amount,
-                asset_id,
-            } => Output::Coin(CoinOutput {
-                to: *to,
-                amount: *amount,
-                asset_id: *asset_id,
-            }),
-            fuel_tx::Output::Contract {
-                input_index,
-                balance_root,
-                state_root,
-            } => Output::Contract(ContractOutput {
-                input_index: *input_index,
-                balance_root: *balance_root,
-                state_root: *state_root,
-            }),
-            fuel_tx::Output::Withdrawal {
-                to,
-                amount,
-                asset_id,
-            } => Output::Withdrawal(WithdrawalOutput(CoinOutput {
-                to: *to,
-                amount: *amount,
-                asset_id: *asset_id,
-            })),
-            fuel_tx::Output::Change {
-                to,
-                amount,
-                asset_id,
-            } => Output::Change(ChangeOutput(CoinOutput {
-                to: *to,
-                amount: *amount,
-                asset_id: *asset_id,
-            })),
-            fuel_tx::Output::Variable {
-                to,
-                amount,
-                asset_id,
-            } => Output::Variable(VariableOutput(CoinOutput {
-                to: *to,
-                amount: *amount,
-                asset_id: *asset_id,
-            })),
-            fuel_tx::Output::ContractCreated {
-                contract_id,
-                state_root,
-            } => Output::ContractCreated(ContractCreated {
-                contract_id: *contract_id,
-                state_root: *state_root,
-            }),
-        }
-    }
-}
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -361,15 +72,20 @@ impl SubmittedStatus {
 }
 
 pub struct SuccessStatus {
-    block_id: Bytes32,
+    block_id: fuel_types::Bytes32,
     time: DateTime<Utc>,
     result: VmProgramState,
 }
 
 #[Object]
 impl SuccessStatus {
-    async fn block_id(&self) -> HexString256 {
-        HexString256(*self.block_id.deref())
+    async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
+        let db = ctx.data_unchecked::<Database>();
+        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &self.block_id)?
+            .ok_or(KvStoreError::NotFound)?
+            .into_owned();
+        let block = Block(block);
+        Ok(block)
     }
 
     async fn time(&self) -> DateTime<Utc> {
@@ -382,7 +98,7 @@ impl SuccessStatus {
 }
 
 pub struct FailureStatus {
-    block_id: Bytes32,
+    block_id: fuel_types::Bytes32,
     time: DateTime<Utc>,
     reason: String,
     state: Option<VmProgramState>,
@@ -390,8 +106,13 @@ pub struct FailureStatus {
 
 #[Object]
 impl FailureStatus {
-    async fn block_id(&self) -> HexString256 {
-        HexString256(*self.block_id.deref())
+    async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
+        let db = ctx.data_unchecked::<Database>();
+        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &self.block_id)?
+            .ok_or(KvStoreError::NotFound)?
+            .into_owned();
+        let block = Block(block);
+        Ok(block)
     }
 
     async fn time(&self) -> DateTime<Utc> {
@@ -435,42 +156,36 @@ impl From<TxStatus> for TransactionStatus {
     }
 }
 
-pub struct Transaction(pub(crate) FuelTx);
+pub struct Transaction(pub(crate) fuel_tx::Transaction);
 
 #[Object]
 impl Transaction {
-    async fn id(&self) -> HexString256 {
-        HexString256(*self.0.id().deref())
+    async fn id(&self) -> TransactionId {
+        TransactionId(self.0.id())
     }
 
-    async fn input_asset_ids(&self) -> Vec<HexString256> {
-        self.0
-            .input_asset_ids()
-            .map(|c| HexString256(*c.deref()))
-            .collect()
+    async fn input_asset_ids(&self) -> Vec<AssetId> {
+        self.0.input_asset_ids().map(|c| AssetId(*c)).collect()
     }
 
-    async fn input_contracts(&self) -> Vec<HexString256> {
-        self.0
-            .input_contracts()
-            .map(|v| HexString256(*v.deref()))
-            .collect()
+    async fn input_contracts(&self) -> Vec<Contract> {
+        self.0.input_contracts().map(|v| Contract(*v)).collect()
     }
 
-    async fn gas_price(&self) -> Word {
-        self.0.gas_price()
+    async fn gas_price(&self) -> U64 {
+        self.0.gas_price().into()
     }
 
-    async fn gas_limit(&self) -> Word {
-        self.0.gas_limit()
+    async fn gas_limit(&self) -> U64 {
+        self.0.gas_limit().into()
     }
 
-    async fn byte_price(&self) -> Word {
-        self.0.byte_price()
+    async fn byte_price(&self) -> U64 {
+        self.0.byte_price().into()
     }
 
-    async fn maturity(&self) -> Word {
-        self.0.maturity()
+    async fn maturity(&self) -> U64 {
+        self.0.maturity().into()
     }
 
     async fn is_script(&self) -> bool {
@@ -493,11 +208,8 @@ impl Transaction {
             .collect()
     }
 
-    async fn receipts_root(&self) -> Option<HexString256> {
-        self.0
-            .receipts_root()
-            .cloned()
-            .map(|b| HexString256(*b.deref()))
+    async fn receipts_root(&self) -> Option<Bytes32> {
+        self.0.receipts_root().cloned().map(Bytes32)
     }
 
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
@@ -506,57 +218,50 @@ impl Transaction {
         Ok(status.map(Into::into))
     }
 
-    #[allow(clippy::unnecessary_to_owned)]
-    async fn receipts(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Option<Vec<super::receipt::Receipt>>> {
+    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let db = ctx.data_unchecked::<Database>();
-        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(db, &self.0.id())?;
-        Ok(receipts.map(|receipts| {
-            receipts
-                .into_owned()
-                .into_iter()
-                .map(super::receipt::Receipt)
-                .collect()
-        }))
+        let receipts =
+            Storage::<fuel_types::Bytes32, Vec<fuel_tx::Receipt>>::get(db, &self.0.id())?;
+        Ok(receipts.map(|receipts| receipts.iter().cloned().map(Receipt).collect()))
     }
 
     async fn script(&self) -> Option<HexString> {
         match &self.0 {
-            FuelTx::Script { script, .. } => Some(HexString(script.clone())),
-            FuelTx::Create { .. } => None,
+            fuel_tx::Transaction::Script { script, .. } => Some(HexString(script.clone())),
+            fuel_tx::Transaction::Create { .. } => None,
         }
     }
 
     async fn script_data(&self) -> Option<HexString> {
         match &self.0 {
-            FuelTx::Script { script_data, .. } => Some(HexString(script_data.clone())),
-            FuelTx::Create { .. } => None,
+            fuel_tx::Transaction::Script { script_data, .. } => {
+                Some(HexString(script_data.clone()))
+            }
+            fuel_tx::Transaction::Create { .. } => None,
         }
     }
 
     async fn bytecode_witness_index(&self) -> Option<u8> {
         match self.0 {
-            FuelTx::Script { .. } => None,
-            FuelTx::Create {
+            fuel_tx::Transaction::Script { .. } => None,
+            fuel_tx::Transaction::Create {
                 bytecode_witness_index,
                 ..
             } => Some(bytecode_witness_index),
         }
     }
 
-    async fn salt(&self) -> Option<HexString256> {
+    async fn salt(&self) -> Option<Salt> {
         match self.0 {
-            FuelTx::Script { .. } => None,
-            FuelTx::Create { salt, .. } => Some(salt.into()),
+            fuel_tx::Transaction::Script { .. } => None,
+            fuel_tx::Transaction::Create { salt, .. } => Some(salt.into()),
         }
     }
 
-    async fn static_contracts(&self) -> Option<Vec<HexString256>> {
+    async fn static_contracts(&self) -> Option<Vec<Contract>> {
         match &self.0 {
-            FuelTx::Script { .. } => None,
-            FuelTx::Create {
+            fuel_tx::Transaction::Script { .. } => None,
+            fuel_tx::Transaction::Create {
                 static_contracts, ..
             } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
         }
@@ -564,8 +269,8 @@ impl Transaction {
 
     async fn storage_slots(&self) -> Option<Vec<HexString>> {
         match &self.0 {
-            FuelTx::Script { .. } => None,
-            FuelTx::Create { storage_slots, .. } => Some(
+            fuel_tx::Transaction::Script { .. } => None,
+            fuel_tx::Transaction::Create { storage_slots, .. } => Some(
                 storage_slots
                     .iter()
                     .map(|slot| {

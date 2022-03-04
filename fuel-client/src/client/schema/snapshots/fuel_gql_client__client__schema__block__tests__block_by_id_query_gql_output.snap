@@ -1,43 +1,17 @@
 ---
 source: fuel-client/src/client/schema/block.rs
-assertion_line: 82
+assertion_line: 90
 expression: operation.query
 
 ---
-query Query($_0: HexString256) {
+query Query($_0: BlockId) {
   block(id: $_0) {
     height
     id
     time
     producer
     transactions {
-      rawPayload
-      receipts {
-        rawPayload
-      }
-      status {
-        __typename
-        ... on SubmittedStatus {
-          time
-        }
-        ... on SuccessStatus {
-          blockId
-          time
-          programState {
-            returnType
-            data
-          }
-        }
-        ... on FailureStatus {
-          blockId
-          time
-          reason
-          programState {
-            returnType
-            data
-          }
-        }
-      }
+      id
     }
   }
 }
