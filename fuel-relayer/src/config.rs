@@ -13,7 +13,6 @@ pub struct Config {
     /// ws address to ethereum client
     pub(crate) eth_client: String,
     /// etheruem contract address. Create EthAddress into fuel_types
-    /// TODO add ValidatorStake contract address and Fuel contract address
     pub(crate) eth_v2_contract_addresses: Vec<H160>,
     /// contaract deployed on block. Block number after we can start filtering events related to fuel.
     /// It does not need to be aqurate and can be set in past before contracts are deployed.

@@ -1,9 +1,9 @@
 pub mod config;
-pub mod interface;
 pub mod log;
 pub mod relayer;
 pub mod service;
-pub mod adapters;
+pub mod validator_set;
+pub mod pending_events;
 
 #[cfg(test)]
 pub mod test;

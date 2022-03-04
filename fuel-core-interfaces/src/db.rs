@@ -710,7 +710,7 @@ pub mod helpers {
         }
 
         /// Assume it is allways set as initialization of database.
-        async fn get_current_validator_set_block(&self) -> u64 {
+        async fn get_current_validator_set_eth_height(&self) -> u64 {
             self.data.lock().current_validator_set_block
         }
 

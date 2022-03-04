@@ -214,7 +214,7 @@ impl RelayerDB for Database {
         &self,
         from_fuel_block: u64,
         to_fuel_block: Option<u64>,
-    ) -> Vec<(u64, HashMap<Address, u64>)> {
+    ) -> Vec<(u64,HashMap<Address, u64>)> {
         let to_fuel_block = if let Some(to_fuel_block) = to_fuel_block {
             if from_fuel_block > to_fuel_block {
                 return Vec::new();
@@ -290,7 +290,7 @@ impl RelayerDB for Database {
     }
 
     /// Assume it is allways set as initialization of database.
-    async fn get_current_validator_set_block(&self) -> u64 {
+    async fn get_current_validator_set_eth_height(&self) -> u64 {
         self.get(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA)
             .unwrap_or_default()
             .unwrap_or_default()

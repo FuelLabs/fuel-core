@@ -24,10 +24,9 @@ impl Service {
         signer: Box<dyn Signer + Send>,
     ) -> Result<Self, anyhow::Error> {
         let (sender, receiver) = mpsc::channel(100);
-        let best_block = db.lock().await.get_block_height().await;
         let relayer = Relayer::new(config.clone(), db, receiver, new_block_event, signer);
         let provider = Relayer::provider(config.eth_client()).await?;
-        let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider, best_block)));
+        let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider)));
         Ok(Self { sender, stop_join })
     }
 

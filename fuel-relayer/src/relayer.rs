@@ -1,15 +1,18 @@
 use std::{
     cmp::{max, min},
-    collections::{HashMap, VecDeque},
     time::Duration,
 };
 
-use crate::{log::EthEventLog, Config};
-use fuel_types::{Address, Bytes32, Color, Word};
+use crate::{
+    log::EthEventLog,
+    pending_events::{PendingDiff, PendingEvents},
+    validator_set::CurrentValidatorSet,
+    Config,
+};
 use futures::Future;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{error, info, trace, warn};
+use tracing::{error, trace, warn};
 
 use anyhow::Error;
 use ethers_core::types::{Filter, Log, ValueOrArray};
@@ -24,15 +27,9 @@ use fuel_core_interfaces::{
 ///
 pub struct Relayer {
     /// Pendning stakes/assets/withdrawals. Before they are finalized
-    pending: VecDeque<PendingDiff>,
-    /// finalized validator set
-    finalized_validator_set: HashMap<Address, u64>,
-    /// finalized fuel block
-    finalized_fuel_block: u64,
+    pending: PendingEvents,
     /// Current validator set
-    current_validator_set: HashMap<Address, u64>,
-    /// current fuel block
-    current_fuel_block: u64,
+    current_validator_set: CurrentValidatorSet,
     /// db connector to apply stake and token deposit
     db: Box<Mutex<dyn RelayerDB>>,
     /// Relayer Configuration
@@ -41,46 +38,10 @@ pub struct Relayer {
     status: RelayerStatus,
     /// new fuel block notifier.
     receiver: mpsc::Receiver<RelayerEvent>,
-    /// This is litlle bit hacky but because we relate validator staking with fuel commit block and not on eth block
-    /// we need to be sure that we are taking proper order of those transactions
-    /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
-    /// I checked this with infura endpoint.
-    pending_removed_eth_events: Vec<(u64, Vec<EthEventLog>)>,
     /// Notification of new block event
     new_block_event: broadcast::Receiver<NewBlockEvent>,
     /// Service for signing of arbitrary hash
     _signer: Box<dyn Signer + Send>,
-}
-
-/// Pending diff between FuelBlocks
-#[derive(Clone, Debug)]
-pub struct PendingDiff {
-    /// fuel block number,
-    fuel_number: u64,
-    /// eth block number, Represent when child number got included in what block.
-    /// This means that when that block is finalized we are okay to commit this pending diff.
-    eth_number: u64,
-    /// Validator stake deposit and withdrawel.
-    stake_diff: HashMap<Address, i64>,
-    /// erc-20 pending deposit. deposit nonce.
-    assets_deposited: HashMap<Bytes32, (Address, Color, Word)>,
-}
-
-impl PendingDiff {
-    pub fn new(fuel_number: u64) -> Self {
-        Self {
-            fuel_number,
-            eth_number: u64::MAX,
-            stake_diff: HashMap::new(),
-            assets_deposited: HashMap::new(),
-        }
-    }
-    pub fn stake_diff(&self) -> &HashMap<Address, i64> {
-        &self.stake_diff
-    }
-    pub fn assets_deposited(&self) -> &HashMap<Bytes32, (Address, Color, Word)> {
-        &self.assets_deposited
-    }
 }
 
 impl Relayer {
@@ -94,16 +55,12 @@ impl Relayer {
         Self {
             config,
             db,
-            pending: VecDeque::new(),
-            finalized_validator_set: HashMap::new(),
-            finalized_fuel_block: 0,
-            current_validator_set: HashMap::new(),
-            current_fuel_block: 0,
+            pending: PendingEvents::new(),
+            current_validator_set: CurrentValidatorSet::new(),
             status: RelayerStatus::EthIsSyncing,
             receiver,
             new_block_event,
             _signer: signer,
-            pending_removed_eth_events: Vec::new(),
         }
     }
 
@@ -114,62 +71,62 @@ impl Relayer {
         Ok(provider)
     }
 
-    /// Used in two places. On initial sync and when new fuel blocks is
-    async fn apply_last_validator_diff(&mut self, current_eth_number: u64) {
-        let finalized_eth_block = current_eth_number - self.config.eth_finality_slider();
-        while let Some(diffs) = self.pending.back() {
-            if diffs.eth_number < finalized_eth_block {
-                break;
-            }
-            let mut stake_diff = HashMap::new();
-            // apply diff to validator_set
-            for (address, diff) in &diffs.stake_diff {
-                let value = self.finalized_validator_set.entry(*address).or_insert(0);
-                // we are okay to cast it, we dont expect that big of number to exist.
-                *value = ((*value as i64) + diff) as u64;
-                stake_diff.insert(*address, *value);
-            }
-            // push new value for changed validators to database
-            self.db
-                .lock()
-                .await
-                .insert_validator_set_diff(diffs.fuel_number, &stake_diff)
-                .await;
-            self.db
-                .lock()
-                .await
-                .set_fuel_finalized_block(diffs.fuel_number)
-                .await;
+    // /// Used in two places. On initial sync and when new fuel blocks is
+    // async fn apply_last_validator_diff(&mut self, current_eth_number: u64) {
+    //     let finalized_eth_block = current_eth_number - self.config.eth_finality_slider();
+    //     while let Some(diffs) = self.pending.back() {
+    //         if diffs.eth_number < finalized_eth_block {
+    //             break;
+    //         }
+    //         let mut stake_diff = HashMap::new();
+    //         // apply diff to validator_set
+    //         for (address, diff) in &diffs.stake_diff {
+    //             let value = self.finalized_validator_set.entry(*address).or_insert(0);
+    //             // we are okay to cast it, we dont expect that big of number to exist.
+    //             *value = ((*value as i64) + diff) as u64;
+    //             stake_diff.insert(*address, *value);
+    //         }
+    //         // push new value for changed validators to database
+    //         self.db
+    //             .lock()
+    //             .await
+    //             .insert_validator_set_diff(diffs.fuel_number, &stake_diff)
+    //             .await;
+    //         self.db
+    //             .lock()
+    //             .await
+    //             .set_fuel_finalized_block(diffs.fuel_number)
+    //             .await;
 
-            // push fanalized deposit to db
-            let block_enabled_fuel_block = diffs.fuel_number + self.config.fuel_finality_slider();
-            for (nonce, deposit) in diffs.assets_deposited.iter() {
-                self.db
-                    .lock()
-                    .await
-                    .insert_token_deposit(
-                        *nonce,
-                        block_enabled_fuel_block,
-                        deposit.0,
-                        deposit.1,
-                        deposit.2,
-                    )
-                    .await
-            }
-            self.db
-                .lock()
-                .await
-                .set_eth_finalized_block(finalized_eth_block)
-                .await;
-            self.finalized_fuel_block = diffs.fuel_number;
-            self.pending.pop_back();
-        }
-        self.db
-            .lock()
-            .await
-            .set_eth_finalized_block(finalized_eth_block)
-            .await;
-    }
+    //         // push fanalized deposit to db
+    //         let block_enabled_fuel_block = diffs.fuel_number + self.config.fuel_finality_slider();
+    //         for (nonce, deposit) in diffs.assets_deposited.iter() {
+    //             self.db
+    //                 .lock()
+    //                 .await
+    //                 .insert_token_deposit(
+    //                     *nonce,
+    //                     block_enabled_fuel_block,
+    //                     deposit.0,
+    //                     deposit.1,
+    //                     deposit.2,
+    //                 )
+    //                 .await
+    //         }
+    //         self.db
+    //             .lock()
+    //             .await
+    //             .set_eth_finalized_block(finalized_eth_block)
+    //             .await;
+    //         self.finalized_fuel_block = diffs.fuel_number;
+    //         self.pending.pop_back();
+    //     }
+    //     self.db
+    //         .lock()
+    //         .await
+    //         .set_eth_finalized_block(finalized_eth_block)
+    //         .await;
+    // }
 
     async fn stop_handle<T: Future>(
         &mut self,
@@ -254,7 +211,8 @@ impl Relayer {
                     continue;
                 }
                 let fuel_event = fuel_event.unwrap();
-                self.append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
+                self.pending
+                    .append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
                     .await;
             }
             // if there is more then two items in pending list flush first one.
@@ -262,7 +220,12 @@ impl Relayer {
             // we dont have reverts to dispute that.
             while self.pending.len() > 1 {
                 // we are sending dummy eth block bcs we are sure that it is finalized
-                self.apply_last_validator_diff(u64::MAX).await;
+                self.pending
+                    .apply_last_validator_diff(
+                        &mut *self.db.lock().await,
+                        u64::MAX,
+                    )
+                    .await;
             }
         }
 
@@ -274,7 +237,12 @@ impl Relayer {
             // apply all pending changed.
             while self.pending.len() > 1 {
                 // we are sending dummy eth block num bcs we are sure that it is finalized
-                self.apply_last_validator_diff(u64::MAX).await;
+                self.pending
+                    .apply_last_validator_diff(
+                        &mut *self.db.lock().await,
+                        u64::MAX,
+                    )
+                    .await;
             }
             self.pending.pop_front().unwrap()
         };
@@ -319,7 +287,8 @@ impl Relayer {
                     continue;
                 }
                 let fuel_event = fuel_event.unwrap();
-                self.append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
+                self.pending
+                    .append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
                     .await;
             }
 
@@ -356,39 +325,29 @@ impl Relayer {
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
         while self.pending.len() > self.config.fuel_finality_slider() as usize {
-            self.apply_last_validator_diff(best_block.as_u64()).await;
+            self.pending
+                .apply_last_validator_diff(
+                    &mut *self.db.lock().await,
+                    best_block.as_u64(),
+                )
+                .await;
         }
 
         watcher.ok_or(RelayerError::ProviderError.into())
     }
 
-    // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
-    // TODO in becomes troublesome to load and takes a lot of time, it is good to optimize
-    async fn load_current_validator_set(&mut self, best_fuel_block: u64) {
-        let mut validator_set = HashMap::new();
-        for (_, diffs) in self
-            .db
-            .lock()
-            .await
-            .get_validator_set_diff(0, Some(best_fuel_block))
-            .await
-        {
-            validator_set.extend(diffs)
-        }
-        self.current_fuel_block = best_fuel_block;
-    }
-
     /// Starting point of relayer
-    pub async fn run<P>(self, provider: P, best_fuel_block: u64)
+    pub async fn run<P>(self, provider: P)
     where
         P: Middleware<Error = ProviderError>,
     {
         let mut this = self;
-
-        // iterate over validator sets and update it to best_fuel_block.
-        this.load_current_validator_set(best_fuel_block).await;
+        this.current_validator_set
+            .load_current_validator_set(&*this.db.lock().await)
+            .await;
 
         loop {
+            // initial sync
             let mut logs_watcher = match this.inital_sync(&provider).await {
                 Ok(watcher) => watcher,
                 Err(_err) => {
@@ -442,44 +401,21 @@ impl Relayer {
                 // 3. Sign transaction
                 // 4. Send transaction to eth client.
             }
-            NewBlockEvent::NewBlockIncluded(block_number) => {
-                // ignore reorganization
+            NewBlockEvent::NewBlockIncluded { height, eth_height } => {
+                // assume that eth_height is checked agains parent block.
 
+                // ignore reorganization
                 let finality_slider = self.config.fuel_finality_slider();
-                let validator_set_block =
-                    std::cmp::max(block_number, finality_slider) - finality_slider;
 
                 // TODO handle lagging here. compare current_fuel_block and finalized_fuel_block and send error notification
                 // if we are lagging over ethereum events.
 
                 // first if is for start of contract and first few validator blocks
-                if validator_set_block < finality_slider {
-                    if self.current_fuel_block != 0 {
-                        error!( "Initial sync seems incorrent. current_fuel_block should be zero but it is {}", self.current_fuel_block);
-                    }
-                    return;
-                } else {
-                    // we assume that for every new fuel block number is increments by one
-                    let new_current_fuel_block = self.current_fuel_block + 1;
-                    if new_current_fuel_block != validator_set_block {
-                        error!("Inconsistency in new fuel block new validator set block is {} but our current is {}",validator_set_block,self.current_fuel_block);
-                    }
-                    let mut db_changes = self
-                        .db
-                        .lock()
-                        .await
-                        .get_validator_set_diff(
-                            new_current_fuel_block,
-                            Some(new_current_fuel_block),
-                        )
-                        .await;
-                    if let Some((_, changes)) = db_changes.pop() {
-                        for (address, new_value) in changes {
-                            self.current_validator_set.insert(address, new_value);
-                        }
-                    }
-                    self.current_fuel_block = new_current_fuel_block;
-                }
+                    self.current_validator_set
+                        .bump_set_to_the_block(
+                            eth_height,
+                            &*self.db.lock().await,
+                        ).await
             }
         }
     }
@@ -497,102 +433,17 @@ impl Relayer {
                 let validator_set_block =
                     std::cmp::max(fuel_block, finality_slider) - finality_slider;
 
-                let validators = if validator_set_block == self.current_fuel_block {
-                    // if we are asking current validator set just return them.
-                    // In first impl this is only thing we will need.
-                    Ok(self.current_validator_set.clone())
-                } else if validator_set_block > self.finalized_fuel_block {
-                    // we are lagging over ethereum finalization
-                    warn!("We started lagging over eth finalization");
-                    Err(RelayerError::ProviderError)
-                } else {
-                    //TODO make this available for all validator sets, go over db and apply diffs between them.
-                    // for first iteration it is not needed.
-                    Err(RelayerError::ProviderError)
+                let res = match self
+                    .current_validator_set
+                    .get_validator_set(validator_set_block)
+                {
+                    Some(set) => Ok(set),
+                    None => Err(RelayerError::ProviderError),
                 };
-                let _ = response_channel.send(validators);
+                let _ = response_channel.send(res);
             }
             RelayerEvent::GetStatus { response } => {
                 let _ = response.send(self.status.clone());
-            }
-        }
-    }
-
-    async fn revert_eth_event(&mut self, fuel_event: &EthEventLog) {
-        match *fuel_event {
-            EthEventLog::AssetDeposit { deposit_nonce, .. } => {
-                if let Some(pending) = self.pending.front_mut() {
-                    pending.assets_deposited.remove(&deposit_nonce);
-                }
-            }
-            EthEventLog::ValidatorDeposit { depositor, deposit } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    // TODO check casting between i64 and u64
-                    *pending.stake_diff.entry(depositor).or_insert(0) -= deposit as i64;
-                }
-            }
-            EthEventLog::ValidatorWithdrawal {
-                withdrawer,
-                withdrawal,
-            } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    *pending.stake_diff.entry(withdrawer).or_insert(0) += withdrawal as i64;
-                }
-            }
-            EthEventLog::FuelBlockCommited { .. } => {
-                //fuel block commit reverted, just pop from pending deque
-                if !self.pending.is_empty() {
-                    self.pending.pop_front();
-                }
-                if let Some(parent) = self.pending.front_mut() {
-                    parent.eth_number = u64::MAX;
-                }
-            }
-        }
-    }
-
-    /// At begining we will ignore all event until event for new fuel block commit commes
-    /// after that syncronization can start.
-    async fn append_eth_events(&mut self, fuel_event: &EthEventLog, eth_block_number: u64) {
-        match *fuel_event {
-            EthEventLog::AssetDeposit {
-                account,
-                token,
-                amount,
-                deposit_nonce,
-                ..
-            } => {
-                // what to do with deposit_nonce and block_number?
-                if let Some(pending) = self.pending.front_mut() {
-                    pending
-                        .assets_deposited
-                        .insert(deposit_nonce, (account, token, amount));
-                }
-            }
-            EthEventLog::ValidatorDeposit { depositor, deposit } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    // overflow is not possible
-                    *pending.stake_diff.entry(depositor).or_insert(0) += deposit as i64;
-                }
-            }
-            EthEventLog::ValidatorWithdrawal {
-                withdrawer,
-                withdrawal,
-            } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    // underflow should not be possible and it should be restrained by contract
-                    *pending.stake_diff.entry(withdrawer).or_insert(0) -= withdrawal as i64;
-                }
-            }
-            EthEventLog::FuelBlockCommited { height, .. } => {
-                if let Some(parent) = self.pending.front_mut() {
-                    parent.eth_number = eth_block_number;
-                }
-                self.pending.push_front(PendingDiff::new(height));
             }
         }
     }
@@ -608,54 +459,28 @@ impl Relayer {
         trace!(target:"relayer", "got new log:{:?}", eth_event.block_hash);
         let fuel_event = EthEventLog::try_from(&eth_event);
         if let Err(err) = fuel_event {
-            // not formated event from contract
             warn!(target:"relayer", "Eth Event not formated properly:{}",err);
             return;
         }
-        let fuel_event = fuel_event.unwrap();
-        // check if this is event from reorg block. if it is we just save it for later processing.
-        // and only after all removed logs are received we apply them.
-        if let Some(true) = eth_event.removed {
-            // agregate all removed events before reverting them.
-            if let Some(eth_block) = eth_event.block_number {
-                // check if we have pending block for removal
-                if let Some((last_eth_block, list)) = self.pending_removed_eth_events.last_mut() {
-                    // check if last pending block is same as log event that we received.
-                    if *last_eth_block == eth_block.as_u64() {
-                        // just push it
-                        list.push(fuel_event)
-                    } else {
-                        // if block number differs just push new block.
-                        self.pending_removed_eth_events
-                            .push((eth_block.as_u64(), vec![fuel_event]));
-                    }
-                } else {
-                    // if there are not pending block for removal just add it.
-                    self.pending_removed_eth_events
-                        .push((eth_block.as_u64(), vec![fuel_event]));
-                }
-            } else {
-                error!("Block number not found in eth log");
-            }
+        if eth_event.block_number.is_none() {
+            error!(target:"relayer", "Block number not found in eth log");
             return;
         }
-        // apply all reverted event
-        if !self.pending_removed_eth_events.is_empty() {
-            info!(target:"relayer", "Reorg happened on ethereum. Reverting {} logs",self.pending_removed_eth_events.len());
-
-            // if there is new log that is not removed it means we can revert our pending removed eth events.
-            for (_, block_events) in
-                std::mem::take(&mut self.pending_removed_eth_events).into_iter()
-            {
-                for fuel_event in block_events.into_iter().rev() {
-                    self.revert_eth_event(&fuel_event).await;
-                }
-            }
+        if eth_event.removed.is_none() {
+            error!(target:"relayer", "Remove not found in eth log");
+            return;
         }
+        let removed = eth_event.removed.unwrap();
+        let block_number = eth_event.block_number.unwrap().as_u64();
+        let fuel_event = fuel_event.unwrap();
 
-        // apply new event to pending queue
-        self.append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
+        self.pending
+            .handle_eth_event(fuel_event, block_number, removed)
             .await;
+
+        // apply pending eth diffs
+        let finalized_eth_height = block_number-self.config.eth_finality_slider;
+        self.pending.apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height).await;
     }
 }
 
@@ -670,8 +495,9 @@ mod test {
     use tokio::sync::mpsc;
 
     use crate::{
+        log,
         test::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
-        Config, log,
+        Config,
     };
 
     #[tokio::test]
@@ -714,7 +540,7 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle, 10).await;
+        relayer.run(middle).await;
     }
 
     #[tokio::test]
@@ -772,7 +598,7 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle, 10).await;
+        relayer.run(middle).await;
     }
 
     #[tokio::test]
@@ -901,7 +727,7 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle, 10).await;
+        relayer.run(middle).await;
     }
 
     #[tokio::test]
@@ -921,7 +747,11 @@ mod test {
             // best block is 4
             data.best_block.number = Some(U64([134]));
             let log1 = data.logs_batch = vec![
-                vec![log::tests::eth_log_validator_deposit(136,Address::zeroed(),10)], //Log::]
+                vec![log::tests::eth_log_validator_deposit(
+                    136,
+                    Address::zeroed(),
+                    10,
+                )], //Log::]
             ];
         }
         pub struct Handle {
@@ -946,6 +776,6 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle, 10).await;
+        relayer.run(middle).await;
     }
 }

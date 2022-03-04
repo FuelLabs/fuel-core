@@ -11,8 +11,8 @@ pub struct DepositCoin {
     pub owner: Address,
     pub amount: Word,
     pub color: Color,
-    pub block_deposited: u64,
-    pub block_spend: u64,
+    pub eth_block_deposited: u64,
+    pub fuel_block_spend: u64,
 }
 
 // Database has two main functionalities, ValidatorSet and TokenDeposits.
@@ -39,17 +39,17 @@ pub trait RelayerDB:
             owner,
             amount,
             color: token,
-            block_deposited: fuel_block,
-            block_spend: 0,
+            eth_block_deposited: fuel_block,
+            fuel_block_spend: 0,
         };
         let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit_nonce,&coin);
     }
 
-    /// Asumption is that validator state is already checke in eth side, and we can blidly apply
+    /// Asumption is that validator state is already checked in eth side, and we can blidly apply
     /// changed to db without checking if we have enought stake to reduce.
     /// What needs to be done is to have validator set state and diff as saparate database values.
-    async fn insert_validator_set_diff(&mut self, fuel_block: u64, stakes: &HashMap<Address, u64>) {
-        let _ = Storage::<u64,HashMap<Address,u64>>::insert(self, &fuel_block,stakes);
+    async fn insert_validator_set_diff(&mut self, eth_height: u64, stakes: &HashMap<Address, u64>) {
+        let _ = Storage::<u64,HashMap<Address,u64>>::insert(self, &eth_height,stakes);
     }
 
     async fn apply_current_validator_set(&mut self, changes: HashMap<Address,u64>) {
@@ -64,14 +64,14 @@ pub trait RelayerDB:
     /// set last finalized fuel block. In usual case this will be
     async fn set_current_validator_set_block(&self, block: u64);
     /// Assume it is allways set as initialization of database.
-    async fn get_current_validator_set_block(&self) -> u64;
+    async fn get_current_validator_set_eth_height(&self) -> u64;
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
     async fn get_validator_set_diff(
             &self,
             from_fuel_block: u64,
             to_fuel_block: Option<u64>,
-    ) -> Vec<(u64, HashMap<Address, u64>)>;
+    ) -> Vec<(u64,HashMap<Address, u64>)>;
 
     /// current best block number
     async fn get_block_height(&self) -> u64;

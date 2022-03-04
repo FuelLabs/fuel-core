@@ -24,6 +24,7 @@ pub enum EthEventLog {
     FuelBlockCommited {
         block_root: Bytes32,
         height: Word,
+        eth_height: u64,
     },
 }
 
@@ -127,10 +128,17 @@ impl TryFrom<&Log> for EthEventLog {
 
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
-                    .expect("Slice bounds are predefined define")
+                    .expect("Slice bounds are predefined")
                     as u64;
+                let eth_height = <[u8; 4]>::try_from(&log.topics[3][28..])
+                    .map(u32::from_be_bytes)
+                    .expect("Slice bounds are predefined") as u64;
 
-                Self::FuelBlockCommited { block_root, height }
+                Self::FuelBlockCommited {
+                    block_root,
+                    height,
+                    eth_height,
+                }
             }
 
             _ => return Err("Unknown event"),
@@ -195,7 +203,7 @@ pub mod tests {
         //block_number(32bits) | amount(256bits) | depositNonce(256bits)
         // 4+32+32
         let mut b = BytesMut::new();
-        b.resize(68,0);
+        b.resize(68, 0);
         //let mut b: [u8; 68] = [0; 68];
         b[..4].copy_from_slice(&block_number.to_be_bytes());
         // 4..28 are zeroes
@@ -212,13 +220,19 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_fuel_block_commited(eth_block: u64, block_root: Bytes32, height: u32) -> Log {
+    pub fn eth_log_fuel_block_commited(
+        eth_block: u64,
+        block_root: Bytes32,
+        height: u32,
+        eth_height: u32,
+    ) -> Log {
         log_default(
             eth_block,
             vec![
                 ETH_FUEL_BLOCK_COMMITED.clone(),
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(height as u64),
+                H256::from_low_u64_be(eth_height as u64),
             ],
             Bytes::new(),
         )
@@ -295,8 +309,9 @@ pub mod tests {
         let eth_block = rng.gen();
         let block_root = rng.gen();
         let height: u32 = rng.gen();
+        let eth_height: u32 = rng.gen();
 
-        let log = eth_log_fuel_block_commited(eth_block, block_root, height);
+        let log = eth_log_fuel_block_commited(eth_block, block_root, height, eth_height);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -308,7 +323,11 @@ pub mod tests {
         let height = height as u64;
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::FuelBlockCommited { block_root, height },
+            EthEventLog::FuelBlockCommited {
+                block_root,
+                height,
+                eth_height: eth_height as u64,
+            },
             "Decoded log does not match data we encoded"
         );
     }
