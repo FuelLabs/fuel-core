@@ -96,7 +96,7 @@ enum CoinStatus {
 }
 type Contract {
 	id: ContractId!
-	bytes: HexString!
+	bytecode: HexString!
 }
 type ContractCreated {
 	contract: Contract!

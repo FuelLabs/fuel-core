@@ -19,7 +19,7 @@ impl Contract {
         self.0.into()
     }
 
-    async fn bytes(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
+    async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let db = ctx.data_unchecked::<Database>().clone();
         let contract = Storage::<fuel_types::ContractId, FuelVmContract>::get(&db, &self.0)?
             .ok_or(KvStoreError::NotFound)?
