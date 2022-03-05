@@ -60,6 +60,7 @@ tower-layer = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
+tempfile = "3.3"
 
 [dev-dependencies]
 assert_matches = "1.5"
