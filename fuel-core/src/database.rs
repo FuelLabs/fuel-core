@@ -11,10 +11,11 @@ pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
+#[cfg(feature = "rocksdb")]
+use std::path::Path;
 use std::{
     fmt::{self, Debug, Formatter},
     marker::Send,
-    path::Path,
     sync::Arc,
 };
 #[cfg(feature = "rocksdb")]

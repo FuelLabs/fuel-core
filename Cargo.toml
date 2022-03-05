@@ -12,6 +12,7 @@ members = [
   "fuel-txpool",
   "fuel-p2p",
   "xtask",
+  "fuel-tests",
 ]
 
 [profile.release]
