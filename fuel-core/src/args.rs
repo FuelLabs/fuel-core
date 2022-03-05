@@ -1,5 +1,5 @@
-use crate::service::{Config, DbType, VMConfig};
 use clap::Parser;
+use fuel_core::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
