@@ -1,9 +1,13 @@
 [package]
 name = "fuel-tests"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 license = "BUSL-1.1"
 publish = false
+# Disable automatic test target discovery. This allows us to run all the integ tests as a single binary target (lib.rs)
+# instead of each integ test file being its own compiled & linked binary which is the default behavior. Linking with
+# RocksDB is expensive so we want to minimize the amount of work on ld. This is also how other projects like diesel-rs
+# structure their integ tests.
 autotests = false
 autobenches = false
 
