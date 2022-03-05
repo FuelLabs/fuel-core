@@ -58,7 +58,7 @@ pub mod columns {
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 13;
+    pub const COLUMN_NUM: u32 = 14;
 }
 
 #[derive(Clone, Debug)]
