@@ -1,6 +1,6 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
 use crate::model::fuel_block::{BlockHeight, FuelBlockDb};
-use crate::schema::scalars::{HexString, HexString256, SortedTxCursor};
+use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;
 use crate::tx_pool::TxPool;
@@ -10,7 +10,6 @@ use async_graphql::{
 };
 use fuel_storage::Storage;
 use fuel_tx::Transaction as FuelTx;
-use fuel_types::{Address, Bytes32};
 use fuel_vm::prelude::Deserializable;
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -19,6 +18,8 @@ use std::ops::Deref;
 use std::sync::Arc;
 use types::Transaction;
 
+pub mod input;
+pub mod output;
 pub mod receipt;
 pub mod types;
 
@@ -36,20 +37,21 @@ impl TxQuery {
     async fn transaction(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "id of the transaction")] id: HexString256,
+        #[graphql(desc = "id of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
-        let key = id.0.into();
-        Ok(Storage::<Bytes32, FuelTx>::get(db, &key)?.map(|tx| Transaction(tx.into_owned())))
+        let key = id.0;
+        Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
+            .map(|tx| Transaction(tx.into_owned())))
     }
 
     async fn transactions(
         &self,
         ctx: &Context<'_>,
-        after: Option<String>,
-        before: Option<String>,
         first: Option<i32>,
+        after: Option<String>,
         last: Option<i32>,
+        before: Option<String>,
     ) -> async_graphql::Result<Connection<SortedTxCursor, Transaction, EmptyFields, EmptyFields>>
     {
         let db = ctx.data_unchecked::<Database>();
@@ -92,7 +94,7 @@ impl TxQuery {
                 let txs = all_block_ids
                     .flat_map(|block| {
                         block.map(|(block_height, block_id)| {
-                            Storage::<Bytes32, FuelBlockDb>::get(db, &block_id)
+                            Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &block_id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|fuel_block| {
@@ -119,7 +121,7 @@ impl TxQuery {
                     .skip(if tx_id.is_some() { 1 } else { 0 })
                     .take(records_to_fetch);
 
-                let mut txs: Vec<(Bytes32, BlockHeight)> = txs.try_collect()?;
+                let mut txs: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
 
                 if direction == IterDirection::Reverse {
                     txs.reverse()
@@ -128,7 +130,7 @@ impl TxQuery {
                 let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = txs
                     .iter()
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
-                        let tx = Storage::<Bytes32, FuelTx>::get(db, tx_id)
+                        let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, tx_id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?;
 
@@ -141,7 +143,7 @@ impl TxQuery {
 
                 connection.append(txs.into_iter().map(|(tx, block_height)| {
                     Edge::new(
-                        SortedTxCursor::new(*block_height, HexString256::from(tx.id())),
+                        SortedTxCursor::new(*block_height, Bytes32::from(tx.id())),
                         tx.into_owned(),
                     )
                 }));
@@ -155,14 +157,14 @@ impl TxQuery {
     async fn transactions_by_owner(
         &self,
         ctx: &Context<'_>,
-        owner: HexString256,
-        after: Option<String>,
-        before: Option<String>,
+        owner: Address,
         first: Option<i32>,
+        after: Option<String>,
         last: Option<i32>,
+        before: Option<String>,
     ) -> async_graphql::Result<Connection<HexString, Transaction, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
-        let owner = Address::from(owner);
+        let owner = fuel_types::Address::from(owner);
 
         query(
             after,
@@ -213,7 +215,7 @@ impl TxQuery {
                     .take(records_to_fetch)
                     .map(|res| {
                         res.and_then(|(cursor, tx_id)| {
-                            let tx = Storage::<Bytes32, FuelTx>::get(db, &tx_id)?
+                            let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, &tx_id)?
                                 .ok_or(KvStoreError::NotFound)?
                                 .into_owned();
                             Ok((cursor, tx))
@@ -254,19 +256,16 @@ impl TxMutation {
         // make virtual txpool from transactional view
         let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
         let receipts = tx_pool.run_tx(tx).await?;
-        Ok(receipts.into_iter().map(receipt::Receipt).collect())
+        Ok(receipts.into_iter().map(Into::into).collect())
     }
 
     /// Submits transaction to the pool
-    async fn submit(
-        &self,
-        ctx: &Context<'_>,
-        tx: HexString,
-    ) -> async_graphql::Result<HexString256> {
+    async fn submit(&self, ctx: &Context<'_>, tx: HexString) -> async_graphql::Result<Transaction> {
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
         let tx = FuelTx::from_bytes(&tx.0)?;
-        let id = tx_pool.submit_tx(tx).await?;
+        tx_pool.submit_tx(tx.clone()).await?;
+        let tx = Transaction(tx);
 
-        Ok(id.into())
+        Ok(tx)
     }
 }

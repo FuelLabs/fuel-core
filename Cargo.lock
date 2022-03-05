@@ -508,7 +508,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "miniz_oxide",
- "object",
+ "object 0.27.1",
  "rustc-demangle",
 ]
 
@@ -1411,6 +1411,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-iterator"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4eeac5c5edb79e4e39fe8439ef35207780a11f69c52cbe424ce3dfad4cb78de6"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c134c37760b27a871ba422106eedbb8247da973a09e82558bf26d619c882b159"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "enumset"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1575,6 +1595,7 @@ dependencies = [
  "serde_with",
  "strum",
  "strum_macros",
+ "tempfile",
  "thiserror",
  "tokio",
  "tower-http",
@@ -1624,8 +1645,6 @@ dependencies = [
  "clap",
  "cynic",
  "derive_more",
- "fuel-core",
- "fuel-gql-client",
  "fuel-storage",
  "fuel-tx 0.6.0",
  "fuel-types 0.3.0",
@@ -1634,13 +1653,11 @@ dependencies = [
  "hex",
  "insta",
  "itertools",
- "rand 0.8.5",
  "schemafy_lib",
  "serde",
  "serde_json",
  "surf",
  "thiserror",
- "tokio",
 ]
 
 [[package]]
@@ -1718,6 +1735,23 @@ name = "fuel-storage"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f97a6a68c3378e486d645a47026bcd7139500345ef214653811ea4f016f142ce"
+
+[[package]]
+name = "fuel-tests"
+version = "0.0.0"
+dependencies = [
+ "chrono",
+ "fuel-core",
+ "fuel-gql-client",
+ "fuel-storage",
+ "fuel-tx 0.6.0",
+ "fuel-types 0.3.0",
+ "fuel-vm 0.5.0",
+ "insta",
+ "itertools",
+ "rand 0.8.5",
+ "tokio",
+]
 
 [[package]]
 name = "fuel-tx"
@@ -3209,9 +3243,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "274353858935c992b13c0ca408752e2121da852d07dec7ce5f108c77dfa14d1f"
+checksum = "fcb87f3080f6d1d69e8c564c0fcfde1d7aa8cc451ce40cae89479111f03bc0eb"
 dependencies = [
  "hashbrown 0.11.2",
 ]
@@ -3495,7 +3529,17 @@ version = "0.27.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ac1d3f9a1d3616fd9a60c8d74296f22406a238b6a72f5cc1e6f314df4ffbf9"
 dependencies = [
+ "memchr",
+]
+
+[[package]]
+name = "object"
+version = "0.28.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40bec70ba014595f99f7aa110b84331ffe1ee9aece7fe6f387cc7e3ecda4d456"
+dependencies = [
  "crc32fast",
+ "hashbrown 0.11.2",
  "indexmap",
  "memchr",
 ]
@@ -4216,9 +4260,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv"
-version = "0.7.33"
+version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf98e3e6c7ed44e474b454b1ebded3193ee5aba3428e29c55d59b1d65e49945e"
+checksum = "2cdcf5caf69bcc87b1e3f5427b4f21a32fdd53c2847687bdf9861abb1cdaa0d8"
 dependencies = [
  "bytecheck",
  "hashbrown 0.12.0",
@@ -4230,9 +4274,9 @@ dependencies = [
 
 [[package]]
 name = "rkyv_derive"
-version = "0.7.33"
+version = "0.7.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc9940ec6a7c62b1d1f476f607c6caf0d7fbf74e43f77bc022143b878fcd3266"
+checksum = "a6cf557da1f81b8c7e889c59c9c3abaf6978f7feb156b9579e4f8bf6d7a2bada"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5569,9 +5613,9 @@ checksum = "3d958d035c4438e28c70e4321a2911302f10135ce78a9c7834c0cab4123d06a2"
 
 [[package]]
 name = "wasmer"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23f0188c23fc1b7de9bd7f8b834d0b1cd5edbe66e287452e8ce36d24418114f7"
+checksum = "bfc7dff846db3f38f8ed0be4a009fdfeb729cf1f94a2c7fb6ff2fec01cefa110"
 dependencies = [
  "cfg-if",
  "indexmap",
@@ -5595,9 +5639,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-compiler"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c51cc589772c5f90bd329244c2416976d6cb2ee00d59429aaa8f421d9fe447"
+checksum = "8c91abf22b16dad3826ec0d0e3ec0a8304262a6c7a14e16528c536131b80e63d"
 dependencies = [
  "enumset",
  "loupe",
@@ -5614,9 +5658,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-compiler-cranelift"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09691e3e323b4e1128d2127f60f9cd988b66ce49afc8184b071c2b5ab16793f2"
+checksum = "7624a1f496b163139a7e0b442426cad805bec70486900287506f9d15a29323ab"
 dependencies = [
  "cranelift-codegen",
  "cranelift-entity",
@@ -5635,9 +5679,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-compiler-llvm"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de51c7fcf88c86c1ba050dfe1dd8fe3613ad1072a58b07a8c50148145cee249"
+checksum = "69388f458c39a66bbab5f12240441bedfdd96390908b77f49efb31e2cb52431e"
 dependencies = [
  "byteorder",
  "cc",
@@ -5646,7 +5690,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "loupe",
- "object",
+ "object 0.28.3",
  "rayon",
  "regex",
  "rustc_version 0.4.0",
@@ -5660,9 +5704,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-derive"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93f5cb7b09640e09f1215da95d6fb7477d2db572f064b803ff705f39ff079cc5"
+checksum = "933b23b5cee0f58aa6c17c6de7e1f3007279357e0d555f22e24d6b395cfe7f89"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -5672,9 +5716,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-engine"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab20311c354fe2c12bc766417e0a1a45f399c1cd8ff262127d1dc86d0588971a"
+checksum = "41db0ac4df90610cda8320cfd5abf90c6ec90e298b6fe5a09a81dff718b55640"
 dependencies = [
  "backtrace",
  "enumset",
@@ -5694,15 +5738,17 @@ dependencies = [
 
 [[package]]
 name = "wasmer-engine-dylib"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8dd5b7a74731e1dcccaf10a8ff5f72216c82f12972ce17cc81c6caa1afff75ea"
+checksum = "591683f3356ac31cc88aaecaf77ac2cc9f456014348b01af46c164f44f531162"
 dependencies = [
  "cfg-if",
+ "enum-iterator",
  "enumset",
  "leb128",
  "libloading",
  "loupe",
+ "object 0.28.3",
  "rkyv",
  "serde",
  "tempfile",
@@ -5717,11 +5763,12 @@ dependencies = [
 
 [[package]]
 name = "wasmer-engine-universal"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfeae8d5b825ad7abcf9a34e66eb11e1507b21020efe7bbf9897e3dd8d7869e2"
+checksum = "dccfde103e9b87427099a6de344b7c791574f307d035c8c7dbbc00974c1af0c1"
 dependencies = [
  "cfg-if",
+ "enum-iterator",
  "enumset",
  "leb128",
  "loupe",
@@ -5736,11 +5783,11 @@ dependencies = [
 
 [[package]]
 name = "wasmer-object"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d4714e4f3bdc3b2157c24284417d19cd99de036da31d00ec5664712dcb72f7"
+checksum = "1d0c4005592998bd840f2289102ef9c67b6138338ed78e1fc0809586aa229040"
 dependencies = [
- "object",
+ "object 0.28.3",
  "thiserror",
  "wasmer-compiler",
  "wasmer-types",
@@ -5748,9 +5795,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-types"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "434e1c0177da0a74ecca90b2aa7d5e86198260f07e8ba83be89feb5f0a4aeead"
+checksum = "4deb854f178265a76b59823c41547d259c65da3687b606b0b9c12d80ab950e3e"
 dependencies = [
  "indexmap",
  "loupe",
@@ -5761,13 +5808,14 @@ dependencies = [
 
 [[package]]
 name = "wasmer-vm"
-version = "2.1.1"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc8f964ebba70d9f81340228b98a164782591f00239fc7f01e1b67afcf0e0156"
+checksum = "5dbc5c989cb14a102433927e630473da52f83d82c469acd5cfa8fc7efacc1e70"
 dependencies = [
  "backtrace",
  "cc",
  "cfg-if",
+ "enum-iterator",
  "indexmap",
  "libc",
  "loupe",

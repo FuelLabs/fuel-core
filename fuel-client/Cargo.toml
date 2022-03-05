@@ -9,11 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
-# Disable auto-targeting of integ tests or benchmarks
-# in order to avoid extra linking overhead associated with
-# each test module being its own binary
-autotests = false
-autobenches = false
 
 [[bin]]
 name = "fuel-gql-cli"
@@ -37,22 +32,11 @@ surf = "2.2"
 thiserror = "1.0"
 
 [dev-dependencies]
-fuel-core = { path = "../fuel-core", features = ["test-helpers"] }
-fuel-gql-client = { path = ".", features = ["test-helpers"] }
-fuel-vm = { version = "0.5", features = ["serde-types", "random"] }
 insta = "1.8"
-rand = "0.8"
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [build-dependencies]
 schemafy_lib = "0.5"
 serde_json = { version = "1.0", features = ["raw_value"] }
 
 [features]
-default = []
 test-helpers = []
-
-[[test]]
-name = "integration_tests"
-path = "tests/lib.rs"
-harness = true

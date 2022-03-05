@@ -1,10 +1,10 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 273
+assertion_line: 280
 expression: operation.query
 
 ---
-query Query($_0: HexString256!) {
+query Query($_0: TransactionId!) {
   transaction(id: $_0) {
     rawPayload
     receipts {
@@ -16,7 +16,9 @@ query Query($_0: HexString256!) {
         time
       }
       ... on SuccessStatus {
-        blockId
+        block {
+          id
+        }
         time
         programState {
           returnType
@@ -24,7 +26,9 @@ query Query($_0: HexString256!) {
         }
       }
       ... on FailureStatus {
-        blockId
+        block {
+          id
+        }
         time
         reason
         programState {

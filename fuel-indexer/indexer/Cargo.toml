@@ -17,7 +17,7 @@ serde-scale = "0.2"
 serde_json = { version = "1.0", features = ["raw_value"] }
 thiserror = "1.0"
 wasmer = "2.0"
-wasmer-compiler-cranelift = { version = "2.0", optional = true }
+wasmer-compiler-cranelift = { version = "2.0" }
 wasmer-compiler-llvm = { version = "2.0", optional = true }
 wasmer-engine-universal = "2.0"
 
@@ -29,6 +29,6 @@ fuels-core = { version = "0.1" }
 serde_yaml = "0.8.19"
 
 [features]
-default = ["wasmer-compiler-cranelift"]
+default = []
 llvm = ["wasmer-compiler-llvm"]
 postgres = []

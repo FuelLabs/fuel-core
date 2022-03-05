@@ -1,0 +1,12 @@
+---
+source: fuel-client/src/client/schema/account.rs
+assertion_line: 35
+expression: operation.query
+
+---
+query Query($_0: HexString256!) {
+  account(address: $_0) {
+    address
+  }
+}
+
