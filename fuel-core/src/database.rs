@@ -78,7 +78,7 @@ impl fmt::Debug for DropFn {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct DropResources {
     // move resources into this closure to have them dropped when db drops
     drop: Option<DropFn>,
@@ -89,12 +89,6 @@ impl<F: 'static + FnOnce()> From<F> for DropResources {
         Self {
             drop: Option::Some(Box::new(closure)),
         }
-    }
-}
-
-impl Default for DropResources {
-    fn default() -> Self {
-        Self { drop: None }
     }
 }
 
