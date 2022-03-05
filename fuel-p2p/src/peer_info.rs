@@ -75,6 +75,10 @@ impl PeerInfoBehaviour {
         }
     }
 
+    pub fn peers(&self) -> &HashMap<PeerId, PeerInfo> {
+        &self.peers
+    }
+
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         self.peers.get(peer_id)
     }

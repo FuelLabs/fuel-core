@@ -19,4 +19,7 @@ pub struct P2PConfig {
     pub allow_private_addresses: bool,
     pub enable_random_walk: bool,
     pub connection_idle_timeout: Option<Duration>,
+
+    // Gossipsub topics to subscribe to
+    pub topics: Vec<String>,
 }
