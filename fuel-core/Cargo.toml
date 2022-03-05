@@ -53,6 +53,7 @@ serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"
 strum = "0.21"
 strum_macros = "0.21"
+tempfile = "3.3"
 thiserror = "1.0.26"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header"] }
