@@ -63,6 +63,7 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
+fuel-tx = { version = "0.6", features = ["serde-types", "builder", "internals"] }
 fuel-vm = { version = "0.5", features = ["serde-types", "random", "test-helpers"] }
 insta = "1.8"
 

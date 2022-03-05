@@ -10,7 +10,9 @@ use crate::{
 use fuel_asm::Word;
 use fuel_merkle::{binary::MerkleTree, common::StorageMap};
 use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId};
+use fuel_tx::{
+    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId, ValidationError,
+};
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
     consts::REG_SP,
@@ -66,7 +68,11 @@ impl Executor {
             }
 
             if self.config.utxo_validation {
+                // validate utxos exist and maturity is properly set
                 self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
+                // validate transaction signature
+                tx.validate_input_signature()
+                    .map_err(TransactionValidityError::from)?;
             }
 
             self.compute_contract_input_utxo_ids(tx, &mode, block_db_transaction.deref())?;
@@ -582,6 +588,8 @@ pub enum TransactionValidityError {
     CoinDoesntExist,
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
+    #[error("Transaction validity: {0:#?}")]
+    Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn std::error::Error>),
 }
@@ -654,8 +662,10 @@ mod tests {
     use crate::model::fuel_block::FuelBlockHeader;
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
+    use fuel_crypto::SecretKey;
+    use fuel_tx::TransactionBuilder;
     use fuel_types::{ContractId, Salt};
-    use fuel_vm::consts::REG_ZERO;
+    use fuel_vm::consts::{REG_ONE, REG_ZERO};
     use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
     use itertools::Itertools;
     use rand::prelude::StdRng;
@@ -913,12 +923,26 @@ mod tests {
     // invalidate a block if a tx input doesn't exist
     #[tokio::test]
     async fn executor_invalidates_missing_inputs() {
-        // create an input referring to a coin that is already spent
-        let tx = TxBuilder::new(2322u64)
-            .gas_limit(1)
-            .coin_input(Default::default(), 10)
-            .change_output(Default::default())
-            .build();
+        // create an input which doesn't exist in the utxo set
+        let mut rng = StdRng::seed_from_u64(2322u64);
+
+        let tx =
+            TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
+                .add_unsigned_coin_input(
+                    rng.gen(),
+                    &SecretKey::random(&mut rng),
+                    10,
+                    Default::default(),
+                    0,
+                    vec![],
+                    vec![],
+                )
+                .add_output(Output::Change {
+                    to: Default::default(),
+                    amount: 0,
+                    asset_id: Default::default(),
+                })
+                .finalize();
 
         // setup executors with utxo-validation enabled
         let config = Config {
@@ -1086,15 +1110,30 @@ mod tests {
 
     #[tokio::test]
     async fn input_coins_are_marked_as_spent_with_utxo_validation_enabled() {
-        let starting_block = BlockHeight::from(5u64);
         // ensure coins are marked as spent after tx is processed
-        let tx = TxBuilder::new(2322u64)
-            .coin_input(AssetId::default(), 100)
-            .change_output(AssetId::default())
-            .build();
+        let mut rng = StdRng::seed_from_u64(2322u64);
+        let starting_block = BlockHeight::from(5u64);
 
+        let tx =
+            TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
+                .add_unsigned_coin_input(
+                    rng.gen(),
+                    &SecretKey::random(&mut rng),
+                    100,
+                    Default::default(),
+                    0,
+                    vec![],
+                    vec![],
+                )
+                .add_output(Output::Change {
+                    to: Default::default(),
+                    amount: 0,
+                    asset_id: Default::default(),
+                })
+                .finalize();
         let mut db = Database::default();
 
+        // insert coin into state
         if let Input::Coin {
             utxo_id,
             owner,
