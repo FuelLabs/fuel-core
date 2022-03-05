@@ -9,11 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Tx client and schema specification."
-# Disable auto-targeting of integ tests or benchmarks
-# in order to avoid extra linking overhead associated with
-# each test module being its own binary
-autotests = false
-autobenches = false
 
 [[bin]]
 name = "fuel-gql-cli"
