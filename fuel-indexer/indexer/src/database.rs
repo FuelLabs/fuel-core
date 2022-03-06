@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use diesel::{prelude::PgConnection, sql_query, sql_types::Binary, Connection, RunQueryDsl};
+use diesel::{sql_query, sql_types::Binary, Connection, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
 use std::collections::HashMap;
 use wasmer::Instance;
@@ -7,18 +7,19 @@ use wasmer::Instance;
 use crate::ffi;
 use crate::IndexerResult;
 use fuel_indexer_schema::{
+    db::Conn,
     db::models::{ColumnInfo, EntityData, TypeIds},
     db::tables::{Schema, SchemaBuilder},
     schema_version, FtColumn,
 };
 
-type PgConnectionPool = r2d2::Pool<ConnectionManager<PgConnection>>;
-pub struct ConnWrapper(PgConnection);
+type ConnectionPool = r2d2::Pool<ConnectionManager<Conn>>;
+pub struct ConnWrapper(Conn);
 
 impl Deref for ConnWrapper {
-    type Target = PgConnection;
+    type Target = Conn;
 
-    fn deref(&self) -> &PgConnection {
+    fn deref(&self) -> &Conn {
         &self.0
     }
 }
@@ -30,19 +31,19 @@ impl std::fmt::Debug for ConnWrapper {
 }
 
 #[derive(Clone)]
-pub struct DbPool(PgConnectionPool);
+pub struct DbPool(ConnectionPool);
 
 impl DbPool {
     pub fn new(db_conn: impl Into<String>) -> IndexerResult<DbPool> {
-        let manager = ConnectionManager::<PgConnection>::new(db_conn);
+        let manager = ConnectionManager::<Conn>::new(db_conn);
         Ok(DbPool(r2d2::Pool::builder().build(manager)?))
     }
 }
 
 impl Deref for DbPool {
-    type Target = PgConnectionPool;
+    type Target = ConnectionPool;
 
-    fn deref(&self) -> &PgConnectionPool {
+    fn deref(&self) -> &ConnectionPool {
         &self.0
     }
 }
@@ -98,7 +99,7 @@ pub struct Database {
 
 impl Database {
     pub fn new(db_conn: &str) -> IndexerResult<Database> {
-        let conn = ConnWrapper(PgConnection::establish(db_conn)?);
+        let conn = ConnWrapper(Conn::establish(db_conn)?);
 
         Ok(Database {
             conn,
@@ -209,7 +210,6 @@ impl Database {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,6 +232,7 @@ mod tests {
         }
     }
 
+    // TODO: need a cfg here too........
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");

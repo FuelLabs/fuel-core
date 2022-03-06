@@ -1,22 +1,15 @@
-#[cfg(feature = "db-models")]
+#[cfg(feature = "db-backends")]
 use diesel::{
     backend::Backend,
     deserialize::{self, FromSql},
-    pg::Pg,
     serialize::{self, IsNull, Output, ToSql},
 };
 
-#[cfg(feature = "db-models")]
+#[cfg(feature = "db-backends")]
 use std::io::Write;
 
-#[cfg(feature = "db-models")]
-#[derive(SqlType)]
-#[postgres(type_name = "Columntypename")]
-pub struct Columntypename;
-
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "db-models", derive(AsExpression, FromSqlRow))]
-#[cfg_attr(feature = "db-models", sql_type = "Columntypename")]
+#[cfg_attr(feature = "db-backends", derive(AsExpression, FromSqlRow))]
 pub enum ColumnType {
     ID = 0,
     Address = 1,
@@ -34,8 +27,8 @@ pub enum ColumnType {
     Blob = 13,
 }
 
-#[cfg(feature = "db-models")]
-impl<DB: Backend> ToSql<Columntypename, DB> for ColumnType {
+#[cfg(feature = "db-backends")]
+impl<DB: Backend> ToSql<Text, DB> for ColumnType {
     fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> serialize::Result {
         match *self {
             ColumnType::ID => out.write_all(b"ID")?,
@@ -57,9 +50,9 @@ impl<DB: Backend> ToSql<Columntypename, DB> for ColumnType {
     }
 }
 
-#[cfg(feature = "db-models")]
-impl FromSql<Columntypename, Pg> for ColumnType {
-    fn from_sql(bytes: Option<&<Pg as Backend>::RawValue>) -> deserialize::Result<Self> {
+#[cfg(feature = "db-backends")]
+impl FromSql<Text, diesel::pg::Pg> for ColumnType {
+    fn from_sql(bytes: Option<&<diesel::pg::Pg as Backend>::RawValue>) -> deserialize::Result<Self> {
         match not_none!(bytes) {
             b"ID" => Ok(ColumnType::ID),
             b"Address" => Ok(ColumnType::Address),

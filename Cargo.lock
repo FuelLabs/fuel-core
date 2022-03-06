@@ -1427,6 +1427,7 @@ dependencies = [
  "bitflags",
  "byteorder",
  "diesel_derives",
+ "libsqlite3-sys",
  "pq-sys",
  "serde_json",
 ]
@@ -1977,6 +1978,7 @@ dependencies = [
 name = "fuel-indexer-schema"
 version = "0.0.0"
 dependencies = [
+ "cfg-if 1.0.0",
  "diesel",
  "fuel-tx 0.6.0",
  "fuel-types 0.3.0",
@@ -3641,6 +3643,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3db8d6ba2cec9eacc40e6e8ccc98931840301f1006e95647ceb2dd5c3aa06f7c"
 dependencies = [
  "libsecp256k1-core",
+]
+
+[[package]]
+name = "libsqlite3-sys"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "290b64917f8b0cb885d9de0f9959fe1f775d7fa12f1da2db9001c1c8ab60f89d"
+dependencies = [
+ "pkg-config",
+ "vcpkg",
 ]
 
 [[package]]

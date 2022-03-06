@@ -11,10 +11,10 @@ anyhow = "1.0.53"
 async-std = "1.10.0"
 axum = "0.4"
 cfg-if = "1.0"
-diesel = { version = "1.4", features = ["postgres", "serde_json"] }
+diesel = { version = "1.4", features = ["postgres", "sqlite", "serde_json"] }
 fuel-core = { version = "0.2" }
 fuel-gql-client = { version = "0.2" }
-fuel-indexer-schema = { path = "../schema", features = ["db-models"] }
+fuel-indexer-schema = { path = "../schema", default-features = false }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-vm = { version = "0.2" }
 fuels-core = { version = "0.2" }
@@ -33,7 +33,7 @@ tokio-postgres = { version = "0.7.5", features = ["with-serde_json-1"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 wasmer = "2.0"
-wasmer-compiler-cranelift = { version = "2.0" }
+wasmer-compiler-cranelift = { version = "2.0", optional = true }
 wasmer-compiler-llvm = { version = "2.0", optional = true }
 wasmer-engine-universal = "2.0"
 
@@ -49,6 +49,6 @@ fuels-rs = { version = "0.2" }
 itertools = { version = "0.10" }
 
 [features]
-default = []
+default = ["cranelift"]
+cranelift = ["wasmer-compiler-cranelift"]
 llvm = ["wasmer-compiler-llvm"]
-postgres = []

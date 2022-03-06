@@ -6,7 +6,7 @@ use crate::{
     type_id,
 };
 use diesel::result::QueryResult;
-use diesel::{prelude::PgConnection, sql_query, Connection, RunQueryDsl};
+use diesel::{sql_query, Connection, RunQueryDsl};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefinition};
 use std::collections::{HashMap, HashSet};
@@ -74,7 +74,7 @@ impl SchemaBuilder {
         self
     }
 
-    pub fn commit_metadata(self, conn: &PgConnection) -> QueryResult<Schema> {
+    pub fn commit_metadata<C: Connection>(self, conn: &C) -> QueryResult<Schema> {
         let SchemaBuilder {
             version,
             statements,
@@ -235,7 +235,7 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub fn load_from_db(conn: &PgConnection, name: &str) -> QueryResult<Self> {
+    pub fn load_from_db<C: Connection>(conn: &C, name: &str) -> QueryResult<Self> {
         let root = GraphRoot::get_latest(conn, name)?;
         let root_cols = RootColumns::list_by_id(conn, root.id)?;
         let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;

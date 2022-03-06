@@ -152,17 +152,21 @@ impl IndexExecutor {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[cfg(test)]
 mod tests {
     use super::*;
     use diesel::sql_types::*;
-    use diesel::{
-        prelude::PgConnection, sql_query, Connection, Queryable, QueryableByName, RunQueryDsl,
-    };
+    use diesel::{sql_query, Connection, Queryable, QueryableByName, RunQueryDsl};
     use fuels_abigen_macro::abigen;
     use fuels_rs::abi_encoder::ABIEncoder;
 
+    #[cfg(feature = "postgres")]
+    use diesel::prelude::PgConnection as Conn;
+
+    #[cfg(feature = "sqlite")]
+    use diesel::prelude::SqliteConnection as Conn;
+
+    // TODO: need a cfg here too.....
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
     const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
@@ -225,7 +229,7 @@ mod tests {
         let result = executor.trigger_event("an_event_name", encoded);
         assert!(result.is_ok());
 
-        let conn = PgConnection::establish(DATABASE_URL).expect("Postgres connection failed");
+        let conn = Conn::establish(DATABASE_URL).expect("Postgres connection failed");
         let data: Vec<Thing1> =
             sql_query("select id,account from test_namespace.thing1 where id = 1020;")
                 .load(&conn)

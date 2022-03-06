@@ -2,6 +2,9 @@ use diesel::result::Error as DieselError;
 use thiserror::Error;
 use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
 
+#[cfg(all(feature = "cranelift", feature = "llvm"))]
+compile_error!("features 'cranelift' and 'llvm' are mutually exclusive");
+
 pub mod api;
 mod database;
 pub mod executor;
