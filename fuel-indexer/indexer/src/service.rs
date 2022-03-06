@@ -187,7 +187,6 @@ impl IndexerService {
     pub async fn run(self) {
         let IndexerService { handles, .. } = self;
         let mut futs = FuturesUnordered::from_iter(handles.into_values());
-        //loop {
         while let Some(fut) = futs.next().await {
             info!("Retired a future {fut:?}");
         }
