@@ -63,7 +63,7 @@ async fn query_graph(
     }
 }
 
-pub struct GraphQlAPI;
+pub struct GraphQlApi;
 
 impl GraphQlAPI {
     pub async fn run(config: IndexerConfig) {
