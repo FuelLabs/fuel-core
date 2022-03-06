@@ -191,7 +191,5 @@ impl IndexerService {
         while let Some(fut) = futs.next().await {
             info!("Retired a future {fut:?}");
         }
-        // TODO: ...
-        //}
     }
 }
