@@ -1,6 +1,6 @@
 -- Your SQL goes here
 create type ColumnTypeName as enum (
-    'ID', 'Address', 'Bytes4', 'Bytes8', 'Bytes32', 'Color', 'ContractId', 'Salt', 'Blob'
+    'ID', 'Address', 'AssetId', 'Bytes4', 'Bytes8', 'Bytes32', 'ContractId', 'Salt', 'Blob'
 );
 
 create schema graph_registry;

@@ -1,5 +1,6 @@
 scalar ID
 scalar Address
+scalar AssetId
 scalar Bytes4
 scalar Bytes8
 scalar Bytes32

@@ -16,6 +16,7 @@ pub use primitives::*;
 pub mod block;
 pub mod chain;
 pub mod coin;
+pub mod contract;
 pub mod primitives;
 pub mod tx;
 

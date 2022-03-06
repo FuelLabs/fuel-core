@@ -12,17 +12,14 @@ pub mod types;
 
 use schema::{
     block::BlockByIdArgs,
-    coin::{Coin, CoinByIdArgs},
+    coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
+    contract::{Contract, ContractByIdArgs},
     tx::{TxArg, TxIdArgs},
-    Bytes, HexString, HexString256, IdArg, MemoryArgs, RegisterArgs,
+    Bytes, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs, TransactionId,
 };
-
-use crate::client::schema::ConversionError;
-use crate::client::types::{TransactionResponse, TransactionStatus};
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 use std::io::ErrorKind;
-
-use self::schema::coin::SpendQueryElementInput;
+use types::{TransactionResponse, TransactionStatus};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -96,13 +93,13 @@ impl FuelClient {
             .collect()
     }
 
-    pub async fn submit(&self, tx: &Transaction) -> io::Result<HexString256> {
+    pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {
         let tx = tx.clone().to_bytes();
         let query = schema::tx::Submit::build(&TxArg {
             tx: HexString(Bytes(tx)),
         });
 
-        let id = self.query(query).await.map(|r| r.submit)?;
+        let id = self.query(query).await.map(|r| r.submit)?.id;
         Ok(id)
     }
 
@@ -198,7 +195,7 @@ impl FuelClient {
         owner: &str,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
-        let owner: HexString256 = owner.parse()?;
+        let owner: schema::Address = owner.parse()?;
         let query = schema::tx::TransactionsByOwnerQuery::build(&(owner, request).into());
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
@@ -254,15 +251,15 @@ impl FuelClient {
     pub async fn coins(
         &self,
         owner: &str,
-        color: Option<&str>,
+        asset_id: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::coin::Coin, String>> {
-        let owner: HexString256 = owner.parse()?;
-        let color: HexString256 = match color {
-            Some(color) => color.parse()?,
-            None => HexString256::default(),
+        let owner: schema::Address = owner.parse()?;
+        let asset_id: schema::AssetId = match asset_id {
+            Some(asset_id) => asset_id.parse()?,
+            None => schema::AssetId::default(),
         };
-        let query = schema::coin::CoinsQuery::build(&(owner, color, request).into());
+        let query = schema::coin::CoinsQuery::build(&(owner, asset_id, request).into());
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
@@ -275,12 +272,12 @@ impl FuelClient {
         spend_query: Vec<(&str, u64)>,
         max_inputs: Option<i32>,
     ) -> io::Result<Vec<schema::coin::Coin>> {
-        let owner: HexString256 = owner.parse()?;
+        let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
-            .map(|(color, amount)| -> Result<_, ConversionError> {
+            .map(|(asset_id, amount)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
-                    color: color.parse()?,
+                    asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
                 })
             })
@@ -290,6 +287,13 @@ impl FuelClient {
 
         let coins = self.query(query).await?.coins_to_spend;
         Ok(coins)
+    }
+
+    pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {
+        let query =
+            schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
+        let contract = self.query(query).await?.contract;
+        Ok(contract)
     }
 }
 

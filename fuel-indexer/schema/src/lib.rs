@@ -26,7 +26,7 @@ pub mod sql_types;
 #[cfg(feature = "db-models")]
 pub mod db;
 
-pub use fuel_types::{Address, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt, Word};
+pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt, Word};
 
 pub type ID = u64;
 pub type Int4 = i32;
@@ -60,10 +60,10 @@ pub fn schema_version(schema: &str) -> String {
 pub enum FtColumn {
     ID(u64),
     Address(Address),
+    AssetId(AssetId),
     Bytes4(Bytes4),
     Bytes8(Bytes8),
     Bytes32(Bytes32),
-    Color(Color),
     ContractId(ContractId),
     Int4(i32),
     Int8(i64),
@@ -85,6 +85,10 @@ impl FtColumn {
                 let address = Address::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Address(address)
             }
+            ColumnType::AssetId => {
+                let asset_id = AssetId::try_from(&bytes[..size]).expect("Invalid slice length");
+                FtColumn::AssetId(asset_id)
+            }
             ColumnType::Bytes4 => {
                 let bytes = Bytes4::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Bytes4(bytes)
@@ -96,10 +100,6 @@ impl FtColumn {
             ColumnType::Bytes32 => {
                 let bytes = Bytes32::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Bytes32(bytes)
-            }
-            ColumnType::Color => {
-                let color = Color::try_from(&bytes[..size]).expect("Invalid slice length");
-                FtColumn::Color(color)
             }
             ColumnType::ContractId => {
                 let contract_id =
@@ -150,6 +150,9 @@ impl FtColumn {
             FtColumn::Address(value) => {
                 format!("'{:x}'", value)
             }
+            FtColumn::AssetId(value) => {
+                format!("'{:x}'", value)
+            }
             FtColumn::Bytes4(value) => {
                 format!("'{:x}'", value)
             }
@@ -157,9 +160,6 @@ impl FtColumn {
                 format!("'{:x}'", value)
             }
             FtColumn::Bytes32(value) => {
-                format!("'{:x}'", value)
-            }
-            FtColumn::Color(value) => {
                 format!("'{:x}'", value)
             }
             FtColumn::ContractId(value) => {
@@ -195,10 +195,10 @@ mod tests {
     fn test_fragments() {
         let id = FtColumn::ID(123456);
         let addr = FtColumn::Address(Address::try_from([0x12; 32]).expect("Bad bytes"));
+        let asset_id = FtColumn::AssetId(AssetId::try_from([0xA5; 32]).expect("Bad bytes"));
         let bytes4 = FtColumn::Bytes4(Bytes4::try_from([0xF0; 4]).expect("Bad bytes"));
         let bytes8 = FtColumn::Bytes8(Bytes8::try_from([0x9D; 8]).expect("Bad bytes"));
         let bytes32 = FtColumn::Bytes32(Bytes32::try_from([0xEE; 32]).expect("Bad bytes"));
-        let color = FtColumn::Color(Color::try_from([0xA5; 32]).expect("Bad bytes"));
         let contractid = FtColumn::ContractId(ContractId::try_from([0x78; 32]).expect("Bad bytes"));
         let int4 = FtColumn::Int4(i32::from_le_bytes([0x78; 4]));
         let int8 = FtColumn::Int8(i64::from_le_bytes([0x78; 8]));
@@ -209,10 +209,10 @@ mod tests {
 
         insta::assert_yaml_snapshot!(id.query_fragment());
         insta::assert_yaml_snapshot!(addr.query_fragment());
+        insta::assert_yaml_snapshot!(asset_id.query_fragment());
         insta::assert_yaml_snapshot!(bytes4.query_fragment());
         insta::assert_yaml_snapshot!(bytes8.query_fragment());
         insta::assert_yaml_snapshot!(bytes32.query_fragment());
-        insta::assert_yaml_snapshot!(color.query_fragment());
         insta::assert_yaml_snapshot!(contractid.query_fragment());
         insta::assert_yaml_snapshot!(salt.query_fragment());
         insta::assert_yaml_snapshot!(int4.query_fragment());

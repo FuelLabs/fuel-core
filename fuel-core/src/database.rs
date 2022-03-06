@@ -1,7 +1,7 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::fuel_block::FuelBlockLight;
+use crate::model::fuel_block::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
@@ -11,11 +11,15 @@ pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use std::sync::Arc;
+use std::{
+    fmt::{self, Debug, Formatter},
+    marker::Send,
+    sync::Arc,
+};
+#[cfg(feature = "rocksdb")]
+use tempfile::TempDir;
 
 pub mod balances;
 pub mod block;
@@ -54,15 +58,49 @@ pub mod columns {
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 13;
+    pub const COLUMN_NUM: u32 = 14;
 }
 
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
+    // used for RAII
+    _drop: Arc<DropResources>,
 }
 
-/*** SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwriten
+trait DropFnTrait: FnOnce() {}
+impl<F> DropFnTrait for F where F: FnOnce() {}
+type DropFn = Box<dyn DropFnTrait>;
+
+impl fmt::Debug for DropFn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DropFn")
+    }
+}
+
+#[derive(Debug, Default)]
+struct DropResources {
+    // move resources into this closure to have them dropped when db drops
+    drop: Option<DropFn>,
+}
+
+impl<F: 'static + FnOnce()> From<F> for DropResources {
+    fn from(closure: F) -> Self {
+        Self {
+            drop: Option::Some(Box::new(closure)),
+        }
+    }
+}
+
+impl Drop for DropResources {
+    fn drop(&mut self) {
+        if let Some(drop) = self.drop.take() {
+            (drop)()
+        }
+    }
+}
+
+/*** SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
  * it is not Send+Sync by default because Storage insert fn takes &mut self
 */
 unsafe impl Send for Database {}
@@ -73,7 +111,17 @@ impl Database {
     pub fn open(path: &Path) -> Result<Self, Error> {
         let db = RocksDb::open(path, COLUMN_NUM)?;
 
-        Ok(Database { data: Arc::new(db) })
+        Ok(Database {
+            data: Arc::new(db),
+            _drop: Default::default(),
+        })
+    }
+
+    pub fn in_memory() -> Self {
+        Self {
+            data: Arc::new(MemoryStore::default()),
+            _drop: Default::default(),
+        }
     }
 
     fn insert<K: Into<Vec<u8>>, V: Serialize + DeserializeOwned>(
@@ -149,11 +197,33 @@ impl AsRef<Database> for Database {
     }
 }
 
-/// Construct an in-memory database
+/// Construct an ephemeral database
+/// uses rocksdb when rocksdb features are enabled
+/// uses in-memory when rocksdb features are disabled
 impl Default for Database {
     fn default() -> Self {
-        Self {
-            data: Arc::new(MemoryStore::default()),
+        #[cfg(not(feature = "rocksdb"))]
+        {
+            Self {
+                data: Arc::new(MemoryStore::default()),
+                _drop: Default::default(),
+            }
+        }
+        #[cfg(feature = "rocksdb")]
+        {
+            let tmp_dir = TempDir::new().unwrap();
+            Self {
+                data: Arc::new(RocksDb::open(tmp_dir.path(), columns::COLUMN_NUM).unwrap()),
+                _drop: Arc::new(
+                    {
+                        move || {
+                            // cleanup temp dir
+                            drop(tmp_dir);
+                        }
+                    }
+                    .into(),
+                ),
+            }
         }
     }
 }
@@ -174,7 +244,7 @@ impl InterpreterStorage for Database {
     fn coinbase(&self) -> Result<Address, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
-        let block = Storage::<Bytes32, FuelBlockLight>::get(self, &id)?.unwrap_or_default();
+        let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
         Ok(block.headers.producer)
     }
 }

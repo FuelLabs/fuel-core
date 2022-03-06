@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.app.volume.claimname }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  accessModes:
+    - {{ .Values.app.volume.accessmodes }}
+  resources:
+    requests:
+      storage: {{ .Values.app.volume.storagerequests }}
+  storageClassName: {{ .Values.app.volume.storageclass }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+  name: {{ template "fuel-core.name" . }}-k8s-lb
+spec:
+  ports:
+    - port: {{ .Values.app.httpport }}
+      targetPort: {{ .Values.app.targetport }}
+      protocol: TCP
+      name: http
+    - port: {{ .Values.app.httpsport }}
+      targetPort: {{ .Values.app.targetport }}
+      protocol: TCP
+      name: https
+  selector:
+    app: {{ template "fuel-core.name" . }}
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "fuel-core.name" . }}-k8s
+  labels:
+    app: {{ template "fuel-core.name" . }}
+    chart: {{ template "fuel-core.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "fuel-core.name" . }}
+      release: {{ .Release.Name }}
+  replicas: {{ .Values.app.replicas }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "fuel-core.name" . }}
+        release: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: {{ .Values.app.name }}
+          image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          resources: {}
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.targetport }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.app.targetport }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 10
+          volumeMounts:
+            - name: {{ .Values.app.volume.pvname }}
+              mountPath: "{{ .Values.app.volume.mountPath }}"
+      volumes:
+        - name: {{ .Values.app.volume.pvname }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.app.volume.claimname }}
