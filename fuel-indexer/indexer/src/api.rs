@@ -69,7 +69,7 @@ impl GraphQlApi {
         let sm = SchemaManager::new(&config.database_url).expect("SchemaManager create failed");
         let schema_manager = Arc::new(RwLock::new(sm));
         let config = Arc::new(config);
-        let listen_on = config.listen_endpoint.clone();
+        let listen_on = config.listen_endpoint;
 
         let app = Router::new()
             .route("/graph/:name", post(query_graph))
