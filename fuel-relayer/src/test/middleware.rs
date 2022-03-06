@@ -243,7 +243,13 @@ impl Middleware for MockMiddleware {
     }
 }
 
-fn log_default(block_number: u64, removed: bool, topics: Vec<H256>, log_type: Option<String>,data: Bytes) -> Log {
+fn log_default(
+    block_number: u64,
+    removed: bool,
+    topics: Vec<H256>,
+    log_type: Option<String>,
+    data: Bytes,
+) -> Log {
     Log {
         address: H160::zero(), // we dont check that, assume it is okay
         topics,
@@ -258,4 +264,3 @@ fn log_default(block_number: u64, removed: bool, topics: Vec<H256>, log_type: Op
         removed: Some(removed),
     }
 }
-

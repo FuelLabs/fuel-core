@@ -4,11 +4,8 @@ use ethers_core::types::H160;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// number of blocks between fuel blocks where deposits get finalized.
-    /// Finalization is done on fuel_block measurement and not on eth measurement.
-    pub(crate) fuel_finality_slider: u64,
-    /// number of blocks between fuel blocks where deposits get finalized.
-    /// Finalization is done on fuel_block measurement and not on eth measurement.
+    /// number of blocks between eth blocks where deposits/validator set get finalized.
+    /// Finalization is done on eth height measurement.
     pub(crate) eth_finality_slider: u64,
     /// ws address to ethereum client
     pub(crate) eth_client: String,
@@ -24,7 +21,6 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Self {
-            fuel_finality_slider: 100,
             eth_finality_slider: 64,
             eth_client: String::from(
                 "wss://mainnet.infura.io/ws/v3/0954246eab5544e89ac236b668980810",
@@ -48,10 +44,6 @@ impl Config {
 
     pub fn eth_finality_slider(&self) -> u64 {
         self.eth_finality_slider
-    }
-
-    pub fn fuel_finality_slider(&self) -> u64 {
-        self.fuel_finality_slider
     }
 
     pub fn eth_client(&self) -> &str {

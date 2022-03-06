@@ -71,63 +71,6 @@ impl Relayer {
         Ok(provider)
     }
 
-    // /// Used in two places. On initial sync and when new fuel blocks is
-    // async fn apply_last_validator_diff(&mut self, current_eth_number: u64) {
-    //     let finalized_eth_block = current_eth_number - self.config.eth_finality_slider();
-    //     while let Some(diffs) = self.pending.back() {
-    //         if diffs.eth_number < finalized_eth_block {
-    //             break;
-    //         }
-    //         let mut stake_diff = HashMap::new();
-    //         // apply diff to validator_set
-    //         for (address, diff) in &diffs.stake_diff {
-    //             let value = self.finalized_validator_set.entry(*address).or_insert(0);
-    //             // we are okay to cast it, we dont expect that big of number to exist.
-    //             *value = ((*value as i64) + diff) as u64;
-    //             stake_diff.insert(*address, *value);
-    //         }
-    //         // push new value for changed validators to database
-    //         self.db
-    //             .lock()
-    //             .await
-    //             .insert_validator_set_diff(diffs.fuel_number, &stake_diff)
-    //             .await;
-    //         self.db
-    //             .lock()
-    //             .await
-    //             .set_fuel_finalized_block(diffs.fuel_number)
-    //             .await;
-
-    //         // push fanalized deposit to db
-    //         let block_enabled_fuel_block = diffs.fuel_number + self.config.fuel_finality_slider();
-    //         for (nonce, deposit) in diffs.assets_deposited.iter() {
-    //             self.db
-    //                 .lock()
-    //                 .await
-    //                 .insert_token_deposit(
-    //                     *nonce,
-    //                     block_enabled_fuel_block,
-    //                     deposit.0,
-    //                     deposit.1,
-    //                     deposit.2,
-    //                 )
-    //                 .await
-    //         }
-    //         self.db
-    //             .lock()
-    //             .await
-    //             .set_eth_finalized_block(finalized_eth_block)
-    //             .await;
-    //         self.finalized_fuel_block = diffs.fuel_number;
-    //         self.pending.pop_back();
-    //     }
-    //     self.db
-    //         .lock()
-    //         .await
-    //         .set_eth_finalized_block(finalized_eth_block)
-    //         .await;
-    // }
-
     async fn stop_handle<T: Future>(
         &mut self,
         handle: impl Fn() -> T,
@@ -205,7 +148,7 @@ impl Relayer {
 
             for eth_event in logs {
                 let fuel_event = EthEventLog::try_from(&eth_event);
-                if let Err(err) = fuel_event {
+                if let Err(_err) = fuel_event {
                     // not formated event from contract
                     // just skip it for now.
                     continue;
@@ -221,10 +164,7 @@ impl Relayer {
             while self.pending.len() > 1 {
                 // we are sending dummy eth block bcs we are sure that it is finalized
                 self.pending
-                    .apply_last_validator_diff(
-                        &mut *self.db.lock().await,
-                        u64::MAX,
-                    )
+                    .apply_last_validator_diff(&mut *self.db.lock().await, best_finalized_block)
                     .await;
             }
         }
@@ -238,10 +178,7 @@ impl Relayer {
             while self.pending.len() > 1 {
                 // we are sending dummy eth block num bcs we are sure that it is finalized
                 self.pending
-                    .apply_last_validator_diff(
-                        &mut *self.db.lock().await,
-                        u64::MAX,
-                    )
+                    .apply_last_validator_diff(&mut *self.db.lock().await, best_finalized_block)
                     .await;
             }
             self.pending.pop_front().unwrap()
@@ -324,14 +261,10 @@ impl Relayer {
         }
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
-        while self.pending.len() > self.config.fuel_finality_slider() as usize {
-            self.pending
-                .apply_last_validator_diff(
-                    &mut *self.db.lock().await,
-                    best_block.as_u64(),
-                )
-                .await;
-        }
+        let finalized_eth_height = best_block.as_u64() - self.config.eth_finality_slider();
+        self.pending
+            .apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height)
+            .await;
 
         watcher.ok_or(RelayerError::ProviderError.into())
     }
@@ -405,17 +338,14 @@ impl Relayer {
                 // assume that eth_height is checked agains parent block.
 
                 // ignore reorganization
-                let finality_slider = self.config.fuel_finality_slider();
 
                 // TODO handle lagging here. compare current_fuel_block and finalized_fuel_block and send error notification
                 // if we are lagging over ethereum events.
 
                 // first if is for start of contract and first few validator blocks
-                    self.current_validator_set
-                        .bump_set_to_the_block(
-                            eth_height,
-                            &*self.db.lock().await,
-                        ).await
+                self.current_validator_set
+                    .bump_set_to_eth_height(eth_height, &*self.db.lock().await)
+                    .await
             }
         }
     }
@@ -426,17 +356,13 @@ impl Relayer {
                 self.status = RelayerStatus::Stop;
             }
             RelayerEvent::GetValidatorSet {
-                fuel_block,
+                eth_height,
                 response_channel,
             } => {
-                let finality_slider = self.config.fuel_finality_slider();
-                let validator_set_block =
-                    std::cmp::max(fuel_block, finality_slider) - finality_slider;
-
-                let res = match self
-                    .current_validator_set
-                    .get_validator_set(validator_set_block)
-                {
+                // TODO check logistics on how fuel-bft is going to ask validator set.
+                // it can ask by fuel_height but in that case we need to get database to
+                // get eth_height
+                let res = match self.current_validator_set.get_validator_set(eth_height) {
                     Some(set) => Ok(set),
                     None => Err(RelayerError::ProviderError),
                 };
@@ -479,8 +405,10 @@ impl Relayer {
             .await;
 
         // apply pending eth diffs
-        let finalized_eth_height = block_number-self.config.eth_finality_slider;
-        self.pending.apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height).await;
+        let finalized_eth_height = block_number - self.config.eth_finality_slider;
+        self.pending
+            .apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height)
+            .await;
     }
 }
 

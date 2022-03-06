@@ -95,7 +95,7 @@ pub enum RelayerEvent {
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
-        fuel_block: u64,
+        eth_height: u64,
         response_channel: oneshot::Sender<Result<HashMap<Address, u64>, RelayerError>>,
     },
     GetStatus {

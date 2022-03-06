@@ -128,8 +128,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
-                    .expect("Slice bounds are predefined")
-                    as u64;
+                    .expect("Slice bounds are predefined") as u64;
                 let eth_height = <[u8; 4]>::try_from(&log.topics[3][28..])
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;

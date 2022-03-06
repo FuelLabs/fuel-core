@@ -34,7 +34,7 @@ impl CurrentValidatorSet {
 
     /// new_block_diff is finality slider adjusted
     /// it supports only going up
-    pub async fn bump_set_to_the_block(&mut self, eth_height: u64, db: &dyn RelayerDB) {
+    pub async fn bump_set_to_eth_height(&mut self, eth_height: u64, db: &dyn RelayerDB) {
         match self.eth_height.cmp(&eth_height) {
             std::cmp::Ordering::Less => {}
             std::cmp::Ordering::Equal => {

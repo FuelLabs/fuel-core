@@ -214,7 +214,7 @@ impl RelayerDB for Database {
         &self,
         from_fuel_block: u64,
         to_fuel_block: Option<u64>,
-    ) -> Vec<(u64,HashMap<Address, u64>)> {
+    ) -> Vec<(u64, HashMap<Address, u64>)> {
         let to_fuel_block = if let Some(to_fuel_block) = to_fuel_block {
             if from_fuel_block > to_fuel_block {
                 return Vec::new();
