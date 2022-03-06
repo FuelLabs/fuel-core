@@ -14,7 +14,7 @@ use axum::{
     },
     response::Html,
     response::IntoResponse,
-    AddExtensionLayer, Json, Router,
+    Json, Router,
 };
 use serde_json::json;
 use std::{
@@ -39,7 +39,7 @@ pub async fn start_server(
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
         .route("/health", get(health))
-        .layer(AddExtensionLayer::new(schema))
+        .layer(Extension(schema))
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),

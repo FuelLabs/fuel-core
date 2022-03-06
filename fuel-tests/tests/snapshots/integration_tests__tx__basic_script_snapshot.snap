@@ -1,5 +1,6 @@
 ---
-source: fuel-client/tests/tx.rs
+source: fuel-tests/tests/tx.rs
+assertion_line: 30
 expression: "format!(\"{:?}\", script)"
 
 ---

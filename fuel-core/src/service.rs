@@ -71,9 +71,9 @@ impl FuelService {
             #[cfg(feature = "rocksdb")]
             DbType::RocksDb => Database::open(&config.database_path)
                 .map_err(|e| std::io::Error::new(ErrorKind::Other, e))?,
-            DbType::InMemory => Database::default(),
+            DbType::InMemory => Database::in_memory(),
             #[cfg(not(feature = "rocksdb"))]
-            _ => Database::default(),
+            _ => Database::in_memory(),
         };
         // initialize service
         Self::init_service(database, config).await
