@@ -81,6 +81,11 @@ pub async fn main() -> Result<()> {
 
     let (first, second) = join!(api_handle, service_handle);
 
-    info!("Exiting.... {first:?} {second:?}");
+    if let Err(e) = first {
+        error!("{:?}", e)
+    }
+    if let Err(e) = second {
+        error!("{:?}", e)
+    }
     Ok(())
 }
