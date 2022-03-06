@@ -129,24 +129,22 @@ impl IndexExecutor {
                     .exports
                     .get_native_function::<(u32, u32, u32), ()>(handler)?;
 
-                if let Ok(db) = self.db.lock() {
-                    db.start_transaction()?;
-                } else {
-                    return Err(IndexerError::LockPoisoned);
-                }
+                self.db.lock().expect("Lock poisoned").start_transaction()?;
 
                 let res = fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len());
 
-                if let Ok(db) = self.db.lock() {
-                    if let Err(e) = res {
-                        error!("Indexer failed {e:?}");
-                        db.revert_transaction()?;
-                        return Err(IndexerError::RuntimeError(e));
-                    } else {
-                        db.commit_transaction()?;
-                    }
+                if let Err(e) = res {
+                    error!("Indexer failed {e:?}");
+                    self.db
+                        .lock()
+                        .expect("Lock poisoned")
+                        .revert_transaction()?;
+                    return Err(IndexerError::RuntimeError(e));
                 } else {
-                    return Err(IndexerError::LockPoisoned);
+                    self.db
+                        .lock()
+                        .expect("Lock poisoned")
+                        .commit_transaction()?;
                 }
             }
         }
