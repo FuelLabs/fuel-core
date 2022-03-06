@@ -1,11 +1,11 @@
 use anyhow::Result;
 use async_std::{fs::File, io::ReadExt};
 use fuel_core::service::{Config, FuelService};
-use fuel_wasm_executor::{GraphQlAPI, IndexerConfig, IndexerService, Manifest};
+use fuel_wasm_executor::{GraphQlApi, IndexerConfig, IndexerService, Manifest};
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::join;
-use tracing::info;
+use tracing::error;
 use tracing_subscriber::filter::EnvFilter;
 
 #[derive(Debug, StructOpt)]
@@ -50,7 +50,7 @@ pub async fn main() -> Result<()> {
         None
     };
 
-    let api_handle = tokio::spawn(GraphQlAPI::run(config.clone()));
+    let api_handle = tokio::spawn(GraphQlApi::run(config.clone()));
 
     let mut service = IndexerService::new(config)?;
 

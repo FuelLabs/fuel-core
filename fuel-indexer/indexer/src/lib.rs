@@ -9,7 +9,7 @@ mod ffi;
 mod manifest;
 mod service;
 
-pub use api::GraphQlAPI;
+pub use api::GraphQlApi;
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};
 pub use manifest::Manifest;

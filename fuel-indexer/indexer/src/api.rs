@@ -65,7 +65,7 @@ async fn query_graph(
 
 pub struct GraphQlApi;
 
-impl GraphQlAPI {
+impl GraphQlApi {
     pub async fn run(config: IndexerConfig) {
         let sm = SchemaManager::new(&config.database_url).expect("SchemaManager create failed");
         let schema_manager = Arc::new(RwLock::new(sm));
