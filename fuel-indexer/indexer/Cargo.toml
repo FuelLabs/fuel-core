@@ -43,7 +43,7 @@ fuel-core = { version = "0.2", features = ["test-helpers"] }
 fuel-gql-client = { version = "0.2", features = ["test-helpers"] }
 fuel-indexer = { path = "../lib" }
 fuel-storage = { version = "0.1" }
-fuel-types = { version = "0.1", features = ["serde-types"] }
+fuel-types = { version = "0.3", features = ["serde-types"] }
 fuels-abigen-macro = { version = "0.2" }
 fuels-rs = { version = "0.2" }
 itertools = { version = "0.10" }

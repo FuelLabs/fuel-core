@@ -26,7 +26,7 @@ pub mod sql_types;
 #[cfg(feature = "db-models")]
 pub mod db;
 
-pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, Color, ContractId, Salt, Word};
+pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, ContractId, Salt, Word};
 
 pub type ID = u64;
 pub type Int4 = i32;

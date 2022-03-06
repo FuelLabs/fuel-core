@@ -3,7 +3,7 @@ use async_std::sync::{Arc, RwLock};
 use axum::{
     extract::{Extension, Json, Path},
     routing::post,
-    AddExtensionLayer, Router,
+    Router,
 };
 use fuel_indexer_schema::db::{
     graphql::{GraphqlError, GraphqlQueryBuilder},
@@ -73,8 +73,8 @@ impl GraphQlApi {
 
         let app = Router::new()
             .route("/graph/:name", post(query_graph))
-            .layer(AddExtensionLayer::new(schema_manager))
-            .layer(AddExtensionLayer::new(config));
+            .layer(Extension(schema_manager))
+            .layer(Extension(config));
 
         axum::Server::bind(&listen_on)
             .serve(app.into_make_service())
