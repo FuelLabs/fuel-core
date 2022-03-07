@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use bytes::Bytes;
 use ethers_core::types::{
-    Block, BlockId, Bytes as EthersBytes, Filter, Log, TxHash, H160, H256, U256, U64,
+    Block, BlockId, Filter, Log, TxHash, H256, U256, U64,
 };
 use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
@@ -240,27 +239,5 @@ impl Middleware for MockMiddleware {
         let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
             .interval(Duration::from_secs(1));
         Ok(filter)
-    }
-}
-
-fn log_default(
-    block_number: u64,
-    removed: bool,
-    topics: Vec<H256>,
-    log_type: Option<String>,
-    data: Bytes,
-) -> Log {
-    Log {
-        address: H160::zero(), // we dont check that, assume it is okay
-        topics,
-        data: EthersBytes(data),
-        block_hash: None,
-        block_number: Some(U64([block_number])),
-        transaction_hash: None,
-        transaction_index: None,
-        log_index: None,
-        transaction_log_index: None,
-        log_type,
-        removed: Some(removed),
     }
 }

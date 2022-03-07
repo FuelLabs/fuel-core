@@ -20,7 +20,6 @@ pub fn relayer(
     let (tx, rx) = mpsc::channel(10);
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
-    let t = broadcast_tx.subscribe();
     let relayer = Relayer::new(config, db, rx, broadcast_rx, signer);
     (relayer, tx, broadcast_tx)
 }

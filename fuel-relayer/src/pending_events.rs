@@ -221,7 +221,6 @@ mod tests {
     use crate::log::tests::*;
     use fuel_core_interfaces::db::helpers::DummyDb;
     use fuel_types::Address;
-    use tokio::sync::Mutex;
 
     #[tokio::test]
     pub async fn check_token_deposits_on_multiple_eth_blocks() {
