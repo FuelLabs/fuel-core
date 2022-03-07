@@ -316,7 +316,7 @@ mod tests {
         let deposit2 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 300)).unwrap();
         let deposit3 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
         let deposit4 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc2, 10)).unwrap();
-        let deposit5 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 200)).unwrap();
+        let deposit5 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 100)).unwrap();
         let deposit6 = EthEventLog::try_from(&eth_log_validator_withdrawal(2, acc1, 50)).unwrap();
 
         pending.handle_eth_event(deposit1, 0, false).await;
@@ -335,7 +335,7 @@ mod tests {
         );
         assert_eq!(
             diff2.stake_diff.get(&acc1),
-            Some(&-500),
+            Some(&-400),
             "Account1 expect -500 diff stake"
         );
         assert_eq!(
@@ -352,13 +352,28 @@ mod tests {
 
         // apply all diffs to finalized state
         let mut db = DummyDb::filled();
-        
+
         pending.apply_last_validator_diff(&mut db, 5).await;
 
-        assert_eq!(pending.pending.len(),0, "All diffs should be flushed");
-        assert_eq!(pending.finalized_eth_height,5,"Finalized should be 5");
-        assert_eq!(pending.finalized_validator_set.get(&acc1),Some(&450),"Acc1 state should be ");
-        assert_eq!(pending.finalized_validator_set.get(&acc2),Some(&50),"Acc2 state should be ");
+        assert_eq!(pending.pending.len(), 0, "All diffs should be flushed");
+        assert_eq!(pending.finalized_eth_height, 5, "Finalized should be 5");
+        assert_eq!(
+            pending.finalized_validator_set.get(&acc1),
+            Some(&550),
+            "Acc1 state should be "
+        );
+        assert_eq!(
+            pending.finalized_validator_set.get(&acc2),
+            Some(&50),
+            "Acc2 state should be "
+        );
 
+        let data = db.data.lock();
+        let diffs = &data.validator_set_diff;
+        assert_eq!(diffs.len(), 3);
+        assert_eq!(diffs.get(&0).unwrap().get(&acc1), Some(&1000));
+        assert_eq!(diffs.get(&1).unwrap().get(&acc1), Some(&600));
+        assert_eq!(diffs.get(&1).unwrap().get(&acc2), Some(&50));
+        assert_eq!(diffs.get(&2).unwrap().get(&acc1), Some(&550));
     }
 }
