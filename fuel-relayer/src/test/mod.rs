@@ -2,7 +2,7 @@ pub mod middleware;
 pub use middleware::*;
 
 use fuel_core_interfaces::{
-    block_importer::NewBlockEvent, db::helpers::DummyDB, relayer::RelayerEvent,
+    block_importer::NewBlockEvent, db::helpers::DummyDb, relayer::RelayerEvent,
     signer::helpers::DummySigner,
 };
 use tokio::sync::{broadcast, mpsc, Mutex};
@@ -16,7 +16,7 @@ pub fn relayer(
     mpsc::Sender<RelayerEvent>,
     broadcast::Sender<NewBlockEvent>,
 ) {
-    let db = Box::new(Mutex::new(DummyDB::filled()));
+    let db = Box::new(Mutex::new(DummyDb::filled()));
     let (tx, rx) = mpsc::channel(10);
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});

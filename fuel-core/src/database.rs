@@ -9,7 +9,7 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::relayer::RelayerDB;
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
@@ -188,7 +188,7 @@ impl InterpreterStorage for Database {
 }
 
 #[async_trait]
-impl RelayerDB for Database {
+impl RelayerDb for Database {
     /// get validator set for current fuel block
     async fn current_validator_set(&self) -> HashMap<Address, u64> {
         struct WrapAddress(pub Address);

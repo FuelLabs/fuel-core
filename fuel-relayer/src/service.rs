@@ -2,7 +2,7 @@ use crate::Config;
 use crate::Relayer;
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
-    relayer::{RelayerDB, RelayerEvent},
+    relayer::{RelayerDb, RelayerEvent},
     signer::Signer,
 };
 use tokio::sync::Mutex;
@@ -19,7 +19,7 @@ pub struct Service {
 impl Service {
     pub async fn new(
         config: &Config,
-        db: Box<Mutex<dyn RelayerDB>>,
+        db: Box<Mutex<dyn RelayerDb>>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
     ) -> Result<Self, anyhow::Error> {

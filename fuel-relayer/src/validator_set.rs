@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use fuel_core_interfaces::relayer::RelayerDB;
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_tx::Address;
 
 pub struct CurrentValidatorSet {
@@ -20,7 +20,7 @@ impl CurrentValidatorSet {
 
     // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
     // TODO in becomes troublesome to load and takes a lot of time, it is good to optimize
-    pub async fn load_current_validator_set(&mut self, db: &dyn RelayerDB) {
+    pub async fn load_current_validator_set(&mut self, db: &dyn RelayerDb) {
         self.eth_height = db.get_current_validator_set_eth_height().await;
         self.set = db.current_validator_set().await;
     }
@@ -34,7 +34,7 @@ impl CurrentValidatorSet {
 
     /// new_block_diff is finality slider adjusted
     /// it supports only going up
-    pub async fn bump_set_to_eth_height(&mut self, eth_height: u64, db: &dyn RelayerDB) {
+    pub async fn bump_set_to_eth_height(&mut self, eth_height: u64, db: &dyn RelayerDb) {
         match self.eth_height.cmp(&eth_height) {
             std::cmp::Ordering::Less => {}
             std::cmp::Ordering::Equal => {

@@ -132,14 +132,14 @@ pub mod tests {
     #[tokio::test]
     async fn test_filter_by_negative() {
         let config = Arc::new(Config::default());
-        let db = Box::new(DummyDB::filled());
+        let db = Box::new(DummyDb::filled());
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx3_hash = *TX_ID3;
 
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let service = TxPoolService::new(db, config);
         let out = service.insert(vec![tx1, tx2]).await;
@@ -154,14 +154,14 @@ pub mod tests {
     #[tokio::test]
     async fn test_find() {
         let config = Arc::new(Config::default());
-        let db = Box::new(DummyDB::filled());
+        let db = Box::new(DummyDb::filled());
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx3_hash = *TX_ID3;
 
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let service = TxPoolService::new(db, config);
         let out = service.insert(vec![tx1, tx2]).await;
@@ -179,7 +179,7 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Arc::new(Config::default());
-        let db = Box::new(DummyDB::filled());
+        let db = Box::new(DummyDb::filled());
 
         struct Subs {
             pub new_tx: RwLock<Vec<ArcTx>>,
@@ -207,8 +207,8 @@ pub mod tests {
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
 
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let service = TxPoolService::new(db, config);
         service.subscribe(sub.clone()).await;

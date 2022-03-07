@@ -123,13 +123,13 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        relayer::{DepositCoin, RelayerDB},
+        relayer::{DepositCoin, RelayerDb},
         txpool::TxPoolDb,
     };
 
     use super::*;
     #[derive(Clone, Debug)]
-    pub struct DummyDB {
+    pub struct DummyDb {
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
         pub contract: HashSet<ContractId>,
@@ -148,7 +148,7 @@ pub mod helpers {
         pub fuel_finalized_block: u64,
     }
 
-    impl DummyDB {
+    impl DummyDb {
         ///
         pub fn dummy_tx(txhash: TxId) -> Transaction {
             // One transfer tx1 depends on db
@@ -544,7 +544,7 @@ pub mod helpers {
         }
     }
 
-    impl Storage<Bytes32, Transaction> for DummyDB {
+    impl Storage<Bytes32, Transaction> for DummyDb {
         type Error = KvStoreError;
 
         fn insert(
@@ -570,7 +570,7 @@ pub mod helpers {
             unreachable!()
         }
     }
-    impl Storage<ContractId, Contract> for DummyDB {
+    impl Storage<ContractId, Contract> for DummyDb {
         type Error = crate::db::Error;
 
         fn insert(
@@ -597,7 +597,7 @@ pub mod helpers {
         }
     }
 
-    impl TxPoolDb for DummyDB {
+    impl TxPoolDb for DummyDb {
         fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
             Ok(self.tx.get(&tx_hash).cloned())
         }
@@ -614,7 +614,7 @@ pub mod helpers {
     */
 
     // token deposit
-    impl Storage<Bytes32, DepositCoin> for DummyDB {
+    impl Storage<Bytes32, DepositCoin> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
@@ -642,7 +642,7 @@ pub mod helpers {
     }
 
     // validator set
-    impl Storage<Address, u64> for DummyDB {
+    impl Storage<Address, u64> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(&mut self, key: &Address, value: &u64) -> Result<Option<u64>, Self::Error> {
@@ -666,7 +666,7 @@ pub mod helpers {
     }
 
     // validator set diff
-    impl Storage<u64, HashMap<Address, u64>> for DummyDB {
+    impl Storage<u64, HashMap<Address, u64>> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
@@ -698,7 +698,7 @@ pub mod helpers {
     }
 
     #[async_trait]
-    impl RelayerDB for DummyDB {
+    impl RelayerDb for DummyDb {
         /// get validator set for current fuel block
         async fn current_validator_set(&self) -> HashMap<Address, u64> {
             self.data.lock().current_validator_set.clone()

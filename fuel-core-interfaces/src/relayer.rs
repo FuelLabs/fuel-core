@@ -19,7 +19,7 @@ pub struct DepositCoin {
 // From relayer perspectiv TokenDeposits are just insert when they get finalized.
 // But for ValidatorSet, It is litle bit different.
 #[async_trait]
-pub trait RelayerDB:
+pub trait RelayerDb:
      Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
     + Storage<Address, u64,Error = KvStoreError> // validator set
     + Storage<u64, HashMap<Address, u64>,Error = KvStoreError> //validator set diff

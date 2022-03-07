@@ -1,6 +1,6 @@
 use std::collections::{HashMap, VecDeque};
 
-use fuel_core_interfaces::relayer::RelayerDB;
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_tx::{Address, Bytes32, Color};
 use fuel_types::Word;
 use tracing::info;
@@ -77,16 +77,16 @@ impl PendingEvents {
         self.pending.is_empty()
     }
 
-    pub fn pop_front(&mut self) -> Option<PendingDiff> {
-        self.pending.pop_front()
+    pub fn pop_back(&mut self) -> Option<PendingDiff> {
+        self.pending.pop_back()
     }
 
     pub fn clear(&mut self) {
         self.pending.clear()
     }
 
-    pub fn push_front(&mut self, pending: PendingDiff) {
-        self.pending.push_front(pending)
+    pub fn push_back(&mut self, pending: PendingDiff) {
+        self.pending.push_back(pending)
     }
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
@@ -127,7 +127,7 @@ impl PendingEvents {
             for (eth_height, _) in std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
             {
                 if eth_height != current_eth_height {
-                    self.pending.pop_front();
+                    self.pending.pop_back();
                     current_eth_height = eth_height;
                 }
             }
@@ -140,11 +140,14 @@ impl PendingEvents {
     /// after that syncronization can start.
     /// Done
     pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, eth_height: u64) {
-        if let Some(front) = self.pending.front() {
+        if let Some(front) = self.pending.back() {
             if front.eth_height != eth_height {
-                self.pending.push_front(PendingDiff::new(eth_height))
+                self.pending.push_back(PendingDiff::new(eth_height))
             }
+        } else {
+            self.pending.push_back(PendingDiff::new(eth_height))
         }
+        let last_diff = self.pending.back_mut().unwrap();
         match *fuel_event {
             EthEventLog::AssetDeposit {
                 account,
@@ -153,29 +156,20 @@ impl PendingEvents {
                 deposit_nonce,
                 ..
             } => {
-                // what to do with deposit_nonce and block_number?
-                if let Some(pending) = self.pending.front_mut() {
-                    pending
-                        .assets_deposited
-                        .insert(deposit_nonce, (account, token, amount));
-                }
+                last_diff
+                    .assets_deposited
+                    .insert(deposit_nonce, (account, token, amount));
             }
             EthEventLog::ValidatorDeposit { depositor, deposit } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    // overflow is not possible
-                    *pending.stake_diff.entry(depositor).or_insert(0) += deposit as i64;
-                }
+                // overflow is not possible
+                *last_diff.stake_diff.entry(depositor).or_insert(0) += deposit as i64;
             }
             EthEventLog::ValidatorWithdrawal {
                 withdrawer,
                 withdrawal,
             } => {
-                // okay to ignore, it is initial sync
-                if let Some(pending) = self.pending.front_mut() {
-                    // underflow should not be possible and it should be restrained by contract
-                    *pending.stake_diff.entry(withdrawer).or_insert(0) -= withdrawal as i64;
-                }
+                // underflow should not be possible and it should be restrained by contract
+                *last_diff.stake_diff.entry(withdrawer).or_insert(0) -= withdrawal as i64;
             }
             EthEventLog::FuelBlockCommited { .. } => {
                 // TODO do nothing? or maybe update some state as BlockCommitSeen, BlockCommitFinalized, etc.
@@ -187,13 +181,14 @@ impl PendingEvents {
     /// Done
     pub async fn apply_last_validator_diff(
         &mut self,
-        db: &mut dyn RelayerDB,
+        db: &mut dyn RelayerDb,
         finalized_eth_block: u64,
     ) {
-        while let Some(diffs) = self.pending.back() {
-            if diffs.eth_height <= finalized_eth_block {
+        while let Some(diffs) = self.pending.front() {
+            if diffs.eth_height > finalized_eth_block {
                 break;
             }
+            //TODO to be paranoid, recheck events got from eth client.
             let mut stake_diff = HashMap::new();
             // apply diff to validator_set
             for (address, diff) in &diffs.stake_diff {
@@ -212,9 +207,158 @@ impl PendingEvents {
                 db.insert_token_deposit(*nonce, diffs.eth_height, deposit.0, deposit.1, deposit.2)
                     .await
             }
-            self.pending.pop_back();
+            self.pending.pop_front();
         }
         self.finalized_eth_height = finalized_eth_block;
         db.set_eth_finalized_block(finalized_eth_block).await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use crate::log::tests::*;
+    use fuel_core_interfaces::db::helpers::DummyDb;
+    use fuel_types::Address;
+    use tokio::sync::Mutex;
+
+    #[tokio::test]
+    pub async fn check_token_deposits_on_multiple_eth_blocks() {
+        let acc1 = Address::from([1; 32]);
+        let token1 = Color::zeroed();
+        let nonce1 = Bytes32::from([2; 32]);
+        let nonce2 = Bytes32::from([3; 32]);
+        let nonce3 = Bytes32::from([4; 32]);
+
+        let mut pending = PendingEvents::new();
+
+        let deposit1 =
+            EthEventLog::try_from(&eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1)).unwrap();
+        let deposit2 =
+            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2)).unwrap();
+        let deposit3 =
+            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3)).unwrap();
+
+        pending.handle_eth_event(deposit1, 0, false).await;
+        pending.handle_eth_event(deposit2, 1, false).await;
+        pending.handle_eth_event(deposit3, 1, false).await;
+        let diff1 = pending.pending[0].clone();
+        let diff2 = pending.pending[1].clone();
+        assert_eq!(
+            diff1.assets_deposited.get(&nonce1),
+            Some(&(acc1, token1, 10)),
+            "Deposit 1 not valid"
+        );
+        assert_eq!(
+            diff2.assets_deposited.get(&nonce2),
+            Some(&(acc1, token1, 20)),
+            "Deposit 2 not valid"
+        );
+        assert_eq!(
+            diff2.assets_deposited.get(&nonce3),
+            Some(&(acc1, token1, 40)),
+            "Deposit 3 not valid"
+        );
+    }
+
+    #[tokio::test]
+    pub async fn check_validator_set_deposits_on_multiple_eth_blocks() {
+        let acc1 = Address::from([1; 32]);
+        let acc2 = Address::from([2; 32]);
+
+        let mut pending = PendingEvents::new();
+
+        let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1)).unwrap();
+        let deposit2 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 20)).unwrap();
+        let deposit3 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 5)).unwrap();
+        let deposit4 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
+        let deposit5 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 300)).unwrap();
+
+        pending.handle_eth_event(deposit1, 0, false).await;
+        pending.handle_eth_event(deposit2, 1, false).await;
+        pending.handle_eth_event(deposit3, 1, false).await;
+        pending.handle_eth_event(deposit4, 1, false).await;
+        pending.handle_eth_event(deposit5, 1, false).await;
+        let diff1 = pending.pending[0].clone();
+        let diff2 = pending.pending[1].clone();
+        assert_eq!(
+            diff1.stake_diff.get(&acc1),
+            Some(&1),
+            "Account1 expect 1 diff stake"
+        );
+        assert_eq!(
+            diff1.stake_diff.get(&acc2),
+            None,
+            "Account2 stake diff should not exist on eth height 0"
+        );
+
+        assert_eq!(
+            diff2.stake_diff.get(&acc1),
+            Some(&320),
+            "Account1 expect 320 diff stake"
+        );
+        assert_eq!(
+            diff2.stake_diff.get(&acc2),
+            Some(&65),
+            "Account2 expect 65 diff stake"
+        );
+    }
+
+    #[tokio::test]
+    pub async fn check_validator_set_withdrawal_on_multiple_eth_blocks() {
+        let acc1 = Address::from([1; 32]);
+        let acc2 = Address::from([2; 32]);
+
+        let mut pending = PendingEvents::new();
+
+        let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1000)).unwrap();
+        let deposit2 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 300)).unwrap();
+        let deposit3 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
+        let deposit4 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc2, 10)).unwrap();
+        let deposit5 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 200)).unwrap();
+        let deposit6 = EthEventLog::try_from(&eth_log_validator_withdrawal(2, acc1, 50)).unwrap();
+
+        pending.handle_eth_event(deposit1, 0, false).await;
+        pending.handle_eth_event(deposit2, 1, false).await;
+        pending.handle_eth_event(deposit3, 1, false).await;
+        pending.handle_eth_event(deposit4, 1, false).await;
+        pending.handle_eth_event(deposit5, 1, false).await;
+        pending.handle_eth_event(deposit6, 2, false).await;
+        let diff1 = pending.pending[0].clone();
+        let diff2 = pending.pending[1].clone();
+        let diff3 = pending.pending[2].clone();
+        assert_eq!(
+            diff1.stake_diff.get(&acc1),
+            Some(&1000),
+            "Account1 expect 1000 diff stake"
+        );
+        assert_eq!(
+            diff2.stake_diff.get(&acc1),
+            Some(&-500),
+            "Account1 expect -500 diff stake"
+        );
+        assert_eq!(
+            diff2.stake_diff.get(&acc2),
+            Some(&50),
+            "Account2 expect 60-10 diff stake"
+        );
+
+        assert_eq!(
+            diff3.stake_diff.get(&acc1),
+            Some(&-50),
+            "Account1 expect -50 diff stake"
+        );
+
+        // apply all diffs to finalized state
+        let mut db = DummyDb::filled();
+        
+        pending.apply_last_validator_diff(&mut db, 5).await;
+
+        assert_eq!(pending.pending.len(),0, "All diffs should be flushed");
+        assert_eq!(pending.finalized_eth_height,5,"Finalized should be 5");
+        assert_eq!(pending.finalized_validator_set.get(&acc1),Some(&450),"Acc1 state should be ");
+        assert_eq!(pending.finalized_validator_set.get(&acc2),Some(&50),"Acc2 state should be ");
+
     }
 }

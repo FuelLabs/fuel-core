@@ -21,7 +21,7 @@ use ethers_providers::{
 };
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
-    relayer::{RelayerDB, RelayerError, RelayerEvent, RelayerStatus},
+    relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
     signer::Signer,
 };
 ///
@@ -31,7 +31,7 @@ pub struct Relayer {
     /// Current validator set
     current_validator_set: CurrentValidatorSet,
     /// db connector to apply stake and token deposit
-    db: Box<Mutex<dyn RelayerDB>>,
+    db: Box<Mutex<dyn RelayerDb>>,
     /// Relayer Configuration
     config: Config,
     /// state of relayer
@@ -47,7 +47,7 @@ pub struct Relayer {
 impl Relayer {
     pub fn new(
         config: Config,
-        db: Box<Mutex<dyn RelayerDB>>,
+        db: Box<Mutex<dyn RelayerDb>>,
         receiver: mpsc::Receiver<RelayerEvent>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
@@ -181,7 +181,7 @@ impl Relayer {
                     .apply_last_validator_diff(&mut *self.db.lock().await, best_finalized_block)
                     .await;
             }
-            self.pending.pop_front().unwrap()
+            self.pending.pop_back().unwrap()
         };
 
         // TODO probably not needed now. but after some time we will need to do sync to best block here.
@@ -196,7 +196,7 @@ impl Relayer {
         loop {
             // 1. get best block and its hash sync over it, and push it over
             self.pending.clear();
-            self.pending.push_front(last_diff.clone());
+            self.pending.push_back(last_diff.clone());
 
             best_block = self.stop_handle(|| provider.get_block_number()).await??;
             // there is not get block latest from ethers so we need to do it in two steps to get hash
@@ -334,7 +334,7 @@ impl Relayer {
                 // 3. Sign transaction
                 // 4. Send transaction to eth client.
             }
-            NewBlockEvent::NewBlockIncluded { height, eth_height } => {
+            NewBlockEvent::NewBlockIncluded { eth_height, .. } => {
                 // assume that eth_height is checked agains parent block.
 
                 // ignore reorganization

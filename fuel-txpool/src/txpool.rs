@@ -117,10 +117,10 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insertion() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
 
         let mut txpool = TxPool::new(config);
         let out = txpool.insert(tx1, &db).await;
@@ -130,12 +130,12 @@ pub mod tests {
     #[tokio::test]
     async fn simple_dependency_tx1_tx2() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -148,12 +148,12 @@ pub mod tests {
     #[tokio::test]
     async fn faulty_t2_collided_on_contract_id_from_tx1() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID_FAULTY2;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -169,13 +169,13 @@ pub mod tests {
     #[tokio::test]
     async fn fails_to_insert_tx2_with_missing_utxo_dependency_on_faulty_tx1() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_faulty_hash = *TX_ID_FAULTY1;
         let tx2_hash = *TX_ID2;
 
-        let tx1_faulty = Arc::new(DummyDB::dummy_tx(tx1_faulty_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1_faulty = Arc::new(DummyDb::dummy_tx(tx1_faulty_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -189,10 +189,10 @@ pub mod tests {
     #[tokio::test]
     async fn not_inserted_known_tx() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1 = *TX_ID1;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1));
 
         let mut txpool = TxPool::new(config);
 
@@ -209,10 +209,10 @@ pub mod tests {
     #[tokio::test]
     async fn try_to_insert_tx2_missing_utxo() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx2_hash = *TX_ID2;
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -224,12 +224,12 @@ pub mod tests {
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx3_hash = *TX_ID3;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx3 = Arc::new(DummyDb::dummy_tx(tx3_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -246,12 +246,12 @@ pub mod tests {
     #[tokio::test]
     async fn underpriced_tx1_not_included_coin_colision() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx3_hash = *TX_ID3;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx3 = Arc::new(DummyDb::dummy_tx(tx3_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -266,12 +266,12 @@ pub mod tests {
     #[tokio::test]
     async fn overpriced_tx5_contract_input_not_inserted() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx5_hash = *TX_ID5;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let mut tx5 = DummyDB::dummy_tx(tx5_hash);
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let mut tx5 = DummyDb::dummy_tx(tx5_hash);
         tx5.set_gas_price(tx1.gas_price() + 1);
         tx5.precompute_metadata();
         let tx5 = Arc::new(tx5);
@@ -289,12 +289,12 @@ pub mod tests {
     #[tokio::test]
     async fn dependent_tx5_contract_input_inserted() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx5_hash = *TX_ID5;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx5 = Arc::new(DummyDB::dummy_tx(tx5_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx5 = Arc::new(DummyDb::dummy_tx(tx5_hash));
         let mut txpool = TxPool::new(config);
 
         let out = txpool.insert(tx1, &db).await;
@@ -306,14 +306,14 @@ pub mod tests {
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx3_hash = *TX_ID3;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
-        let tx3 = Arc::new(DummyDB::dummy_tx(tx3_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let tx3 = Arc::new(DummyDb::dummy_tx(tx3_hash));
 
         let mut txpool = TxPool::new(config);
 
@@ -335,12 +335,12 @@ pub mod tests {
             max_tx: 1,
             max_depth: 10,
         });
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
         let out = txpool.insert(tx1, &db).await;
@@ -356,12 +356,12 @@ pub mod tests {
             max_tx: 10,
             max_depth: 1,
         });
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
         let out = txpool.insert(tx1, &db).await;
@@ -374,14 +374,14 @@ pub mod tests {
     #[tokio::test]
     async fn sorted_out_tx1_2_4() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx4_hash = *TX_ID4;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
-        let tx4 = Arc::new(DummyDB::dummy_tx(tx4_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let tx4 = Arc::new(DummyDb::dummy_tx(tx4_hash));
         let mut txpool = TxPool::new(config);
 
         let out = txpool.insert(tx1, &db).await;
@@ -402,12 +402,12 @@ pub mod tests {
     #[tokio::test]
     async fn find_dependent_tx1_tx2() {
         let config = Arc::new(Config::default());
-        let db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDB::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
         let out = txpool.insert(tx1, &db).await;
