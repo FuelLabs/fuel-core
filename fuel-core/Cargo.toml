@@ -66,4 +66,5 @@ insta = "1.8"
 
 [features]
 default = ["rocksdb"]
+debug = ["fuel-vm/debug"]
 test-helpers = []

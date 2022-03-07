@@ -1,0 +1,13 @@
+[package]
+name = "fuel-debugger"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "3.1", features = ["env", "derive"] }
+fuel-core = { path = "../fuel-core", features = ["debug"] }
+fuel-vm = "0.4"
+phf = { version = "0.10", features = ["macros"] }
+rustyline = "9.1"
+serde_json = "1.0"
+tokio = { version = "1.8", features = ["net"] }

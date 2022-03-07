@@ -1,3 +1,5 @@
+#[cfg(feature = "debug")]
+use super::debugger;
 use crate::model::fuel_block::TransactionCommitment;
 use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
@@ -13,13 +15,17 @@ use fuel_storage::Storage;
 use fuel_tx::crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Color, Input, Output, Receipt, Transaction, UtxoId};
 use fuel_types::ContractId;
-use fuel_vm::prelude::{Backtrace, Interpreter};
+use fuel_vm::prelude::{Backtrace, Interpreter, ProgramState, StateTransitionRef};
 use fuel_vm::{consts::REG_SP, prelude::Backtrace as FuelBacktrace};
+#[cfg(feature = "debug")]
+use fuel_vm::state::DebugEval;
 use itertools::Itertools;
 use std::error::Error as StdError;
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
-use tracing::warn;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpSocket;
+use tracing::{debug, warn};
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -82,19 +88,62 @@ impl Executor {
                 block_db_transaction.deref_mut(),
             )?;
 
-            // execute transaction
-            // setup database view that only lives for the duration of vm execution
+            #[cfg(feature = "debug")]
+            let mut debugger_socket = if let Some(debugger_addr) = self.config.debugger_addr {
+                debug!("Debugger starting");
+                let socket = TcpSocket::new_v4().expect("Unable to create debugger socket");
+                let stream = socket
+                    .connect(debugger_addr)
+                    .await
+                    .expect("Unable to connect to debugger");
+                let _ = stream.set_nodelay(true); // TCP_NODELAY if possible
+                Some(stream)
+            } else {
+                None
+            };
+
+            // Prepare transaction
+            // Setup database view that only lives for the duration of vm execution
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
-            // execution vm
+
+            // Create VM
             let mut vm = Interpreter::with_storage(sub_db_view.clone());
-            let vm_result = vm
-                .transact(tx.clone())
-                .map_err(|error| Error::VmExecution {
+
+            // Allow the debugger, if any, to do pre-run setup
+            #[cfg(feature = "debug")]
+            if let Some(ds) = debugger_socket.as_mut() {
+                debugger::process(ds, &mut vm, None).await;
+            }
+
+            // Initiate transaction
+            let mut state = ProgramState::from(vm.transact(tx.clone()).map_err(|error| {
+                Error::VmExecution {
                     error,
                     transaction_id: tx_id,
-                })?
-                .into_owned();
+                }
+            })?);
+
+            // If the debugger is connected, catch breakpoints for it
+            #[cfg(feature = "debug")]
+            if let Some(ds) = debugger_socket.as_mut() {
+                while let Some(dbg_ref) = state.debug_ref() {
+                    let event = match dbg_ref {
+                        DebugEval::Continue => continue,
+                        DebugEval::Breakpoint(bp) => debugger::Response::Breakpoint(*bp),
+                    };
+                    debugger::process(ds, &mut vm, Some(event)).await;
+                    state = vm.resume().expect("Failed to resume");
+                }
+
+                // On termination, inform the debugger and run it one more time
+                let resp = debugger::Response::Terminated {
+                    receipts: vm.receipts().to_vec(),
+                };
+                debugger::process(ds, &mut vm, Some(resp)).await;
+            }
+
+            let vm_result = StateTransitionRef::new(state, vm.transaction(), vm.receipts());
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {

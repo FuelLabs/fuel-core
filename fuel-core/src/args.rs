@@ -1,5 +1,5 @@
-use crate::service::{Config, DbType, VMConfig};
 use clap::Parser;
+use fuel_core::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
@@ -15,6 +15,13 @@ pub struct Opt {
 
     #[clap(long = "port", default_value = "4000")]
     pub port: u16,
+
+    /// If specified, transactions are not executed immediately when received.
+    /// Instead, a TCP socket to the given address is opened, and a remote debugger
+    /// listening to that port can then be used to control the program execution.
+    #[cfg(feature = "debug")]
+    #[clap(long)]
+    pub debugger_addr: Option<net::SocketAddr>,
 
     #[clap(
         name = "DB_PATH",
@@ -56,6 +63,8 @@ impl Opt {
         let Opt {
             ip,
             port,
+            #[cfg(feature = "debug")]
+            debugger_addr,
             database_path,
             database_type,
             chain_config,
@@ -67,6 +76,8 @@ impl Opt {
 
         Ok(Config {
             addr,
+            #[cfg(feature = "debug")]
+            debugger_addr,
             database_path,
             database_type,
             chain_conf: chain_config.as_str().parse()?,
