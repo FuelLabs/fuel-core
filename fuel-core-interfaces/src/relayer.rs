@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use fuel_storage::Storage;
-use fuel_types::{Address, Bytes32, Color, Word};
+use fuel_types::{Address, AssetId, Bytes32, Word};
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 pub struct DepositCoin {
     pub owner: Address,
     pub amount: Word,
-    pub color: Color,
+    pub asset_id: AssetId,
     pub eth_block_deposited: u64,
     pub fuel_block_spend: u64,
 }
@@ -32,13 +32,13 @@ pub trait RelayerDb:
         deposit_nonce: Bytes32, // this is ID
         fuel_block: u64,        //block after it becomes available for using
         owner: Address,       // owner
-        token: Color,
+        asset_id: AssetId,
         amount: Word,
     ) {
         let coin = DepositCoin {
             owner,
             amount,
-            color: token,
+            asset_id,
             eth_block_deposited: fuel_block,
             fuel_block_spend: 0,
         };

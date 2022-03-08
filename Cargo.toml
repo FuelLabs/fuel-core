@@ -9,7 +9,9 @@ members = [
   "fuel-indexer/indexer",
   "fuel-indexer/lib",
   "fuel-indexer/schema",
+  "fuel-tests",
   "fuel-txpool",
+  "fuel-p2p",
   "fuel-relayer",
   "xtask",
 ]

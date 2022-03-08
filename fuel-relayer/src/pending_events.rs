@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_tx::{Address, Bytes32, Color};
+use fuel_tx::{Address, AssetId, Bytes32};
 use fuel_types::Word;
 use tracing::info;
 
@@ -33,7 +33,7 @@ pub struct PendingDiff {
     /// Validator stake deposit and withdrawel.
     stake_diff: HashMap<Address, i64>,
     /// erc-20 pending deposit. deposit nonce.
-    assets_deposited: HashMap<Bytes32, (Address, Color, Word)>,
+    assets_deposited: HashMap<Bytes32, (Address, AssetId, Word)>,
 }
 
 impl PendingDiff {
@@ -47,7 +47,7 @@ impl PendingDiff {
     pub fn stake_diff(&self) -> &HashMap<Address, i64> {
         &self.stake_diff
     }
-    pub fn assets_deposited(&self) -> &HashMap<Bytes32, (Address, Color, Word)> {
+    pub fn assets_deposited(&self) -> &HashMap<Bytes32, (Address, AssetId, Word)> {
         &self.assets_deposited
     }
 }
@@ -218,7 +218,7 @@ mod tests {
     #[tokio::test]
     pub async fn check_token_deposits_on_multiple_eth_blocks() {
         let acc1 = Address::from([1; 32]);
-        let token1 = Color::zeroed();
+        let token1 = AssetId::zeroed();
         let nonce1 = Bytes32::from([2; 32]);
         let nonce2 = Bytes32::from([3; 32]);
         let nonce3 = Bytes32::from([4; 32]);

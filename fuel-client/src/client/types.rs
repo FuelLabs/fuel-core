@@ -39,12 +39,12 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 submitted_at: s.time,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
-                block_id: s.block_id.0.to_string(),
+                block_id: s.block.id.0.to_string(),
                 time: s.time,
                 program_state: s.program_state.try_into()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
-                block_id: s.block_id.0.to_string(),
+                block_id: s.block.id.0.to_string(),
                 time: s.time,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,

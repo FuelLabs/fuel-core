@@ -1,0 +1,13 @@
+---
+source: fuel-client/src/client/schema/contract.rs
+assertion_line: 42
+expression: operation.query
+
+---
+query Query($_0: ContractId!) {
+  contract(id: $_0) {
+    id
+    bytecode
+  }
+}
+

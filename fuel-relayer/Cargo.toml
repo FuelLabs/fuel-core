@@ -9,10 +9,10 @@ description = "Fuel Relayer"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-tx = { version = "0.5", features = ["serde-types"] }
-fuel-types = { version = "0.1", features = ["serde-types"] }
+fuel-tx = { version = "0.6", features = ["serde-types"] }
+fuel-types = { version = "0.3", features = ["serde-types"] }
 futures = "0.3"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.3.1" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.4.1" }
 parking_lot = "0.12"
 thiserror = "1.0"
 env_logger = "0.9"
@@ -33,7 +33,7 @@ lazy_static = "1.4"
 
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.3.1", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.4.1", features = [
     "test_helpers",
 ] }
 rand = "0.8"

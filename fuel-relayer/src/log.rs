@@ -1,13 +1,13 @@
 use std::str::FromStr;
 
 use ethers_core::types::{Log, H256};
-use fuel_types::{Address, Bytes32, Color, Word};
+use fuel_types::{Address, AssetId, Bytes32, Word};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
     AssetDeposit {
         account: Address,
-        token: Color,
+        token: AssetId,
         block_number: u32,
         amount: Word,
         deposit_nonce: Bytes32,
@@ -54,7 +54,7 @@ impl TryFrom<&Log> for EthEventLog {
                     return Err("Malformed topics for AssetDeposit");
                 }
                 let account = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
-                let token = unsafe { Color::from_slice_unchecked(log.topics[2].as_ref()) };
+                let token = unsafe { AssetId::from_slice_unchecked(log.topics[2].as_ref()) };
                 // data is contains: block_number(32bits) | amount(256bits) | depositNonce(256bits)
                 let data = &log.data.0;
                 if data.len() != ASSET_DEPOSIT_DATA_LEN {
@@ -194,7 +194,7 @@ pub mod tests {
     pub fn eth_log_asset_deposit(
         eth_block: u64,
         account: Address,
-        token: Color,
+        token: AssetId,
         block_number: u32,
         amount: Word,
         deposit_nonce: Bytes32,

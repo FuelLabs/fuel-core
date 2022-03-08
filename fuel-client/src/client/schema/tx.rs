@@ -1,5 +1,6 @@
+use super::block::BlockIdFragment;
 use crate::client::schema::{
-    schema, ConnectionArgs, ConversionError, HexString, HexString256, PageInfo,
+    schema, Address, ConnectionArgs, ConversionError, HexString, PageInfo, TransactionId,
 };
 use crate::client::types::TransactionResponse;
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
@@ -9,7 +10,7 @@ use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
-    pub id: HexString256,
+    pub id: TransactionId,
 }
 
 /// Retrieves the transaction in opaque form
@@ -86,6 +87,12 @@ impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
 }
 
 #[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl", graphql_type = "Transaction")]
+pub struct TransactionIdFragment {
+    pub id: TransactionId,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
 #[cynic(graphql_type = "Receipt", schema_path = "./assets/schema.sdl")]
 pub struct OpaqueReceipt {
     pub raw_payload: HexString,
@@ -156,7 +163,7 @@ pub struct SubmittedStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
-    pub block_id: HexString256,
+    pub block: BlockIdFragment,
     pub time: super::DateTime,
     pub program_state: ProgramState,
 }
@@ -164,7 +171,7 @@ pub struct SuccessStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
-    pub block_id: HexString256,
+    pub block: BlockIdFragment,
     pub time: super::DateTime,
     pub reason: String,
     pub program_state: Option<ProgramState>,
@@ -173,7 +180,7 @@ pub struct FailureStatus {
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TransactionsByOwnerConnectionArgs {
     /// Select transactions based on related `owner`s
-    pub owner: HexString256,
+    pub owner: Address,
     /// Skip until cursor (forward pagination)
     pub after: Option<String>,
     /// Skip until cursor (backward pagination)
@@ -185,8 +192,8 @@ pub struct TransactionsByOwnerConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(HexString256, PaginationRequest<String>)> for TransactionsByOwnerConnectionArgs {
-    fn from(r: (HexString256, PaginationRequest<String>)) -> Self {
+impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectionArgs {
+    fn from(r: (Address, PaginationRequest<String>)) -> Self {
         match r.1.direction {
             PageDirection::Forward => TransactionsByOwnerConnectionArgs {
                 owner: r.0,
@@ -243,7 +250,7 @@ pub struct DryRun {
 )]
 pub struct Submit {
     #[arguments(tx = &args.tx)]
-    pub submit: HexString256,
+    pub submit: TransactionIdFragment,
 }
 
 #[cfg(test)]
@@ -259,7 +266,7 @@ pub mod tests {
     fn transparent_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = transparent_tx::TransactionQuery::build(TxIdArgs {
-            id: HexString256::default(),
+            id: TransactionId::default(),
         });
         insta::assert_snapshot!(operation.query)
     }
@@ -268,7 +275,7 @@ pub mod tests {
     fn opaque_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = TransactionQuery::build(TxIdArgs {
-            id: HexString256::default(),
+            id: TransactionId::default(),
         });
         insta::assert_snapshot!(operation.query)
     }

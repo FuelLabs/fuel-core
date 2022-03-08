@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.58.1 as builder
+FROM rust:1.59.0 as builder
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 

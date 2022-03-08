@@ -1,22 +1,22 @@
 use chrono::{TimeZone, Utc};
 use fuel_core::database::Database;
+use fuel_core::model::fuel_block::FuelBlockHeader;
 use fuel_core::{
-    model::fuel_block::FuelBlock,
-    schema::scalars::HexString256,
+    model::fuel_block::FuelBlockDb,
+    schema::scalars::BlockId,
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_storage::Storage;
-use fuel_vm::prelude::Bytes32;
 use itertools::{rev, Itertools};
 
 #[tokio::test]
 async fn block() {
     // setup test data in the node
-    let block = FuelBlock::default();
+    let block = FuelBlockDb::default();
     let id = block.id();
     let mut db = Database::default();
-    Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
+    Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
 
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
@@ -26,7 +26,7 @@ async fn block() {
 
     // run test
     let block = client
-        .block(HexString256::from(id).to_string().as_str())
+        .block(BlockId::from(id).to_string().as_str())
         .await
         .unwrap();
     assert!(block.is_some());
@@ -36,11 +36,17 @@ async fn block() {
 async fn block_connection_first_5() {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| FuelBlock {
-            fuel_height: i.into(),
+        .map(|i| FuelBlockDb {
+            headers: FuelBlockHeader {
+                height: i.into(),
+                number: Default::default(),
+                parent_hash: Default::default(),
+                time: Utc.timestamp(i.into(), 0),
+                producer: Default::default(),
+                transactions_root: Default::default(),
+                prev_root: Default::default(),
+            },
             transactions: vec![],
-            time: Utc.timestamp(i.into(), 0),
-            producer: Default::default(),
         })
         .collect_vec();
 
@@ -48,7 +54,7 @@ async fn block_connection_first_5() {
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
+        Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
     }
 
     // setup server & client
@@ -79,11 +85,17 @@ async fn block_connection_first_5() {
 async fn block_connection_last_5() {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| FuelBlock {
-            fuel_height: i.into(),
+        .map(|i| FuelBlockDb {
+            headers: FuelBlockHeader {
+                height: i.into(),
+                number: Default::default(),
+                parent_hash: Default::default(),
+                time: Utc.timestamp(i.into(), 0),
+                producer: Default::default(),
+                transactions_root: Default::default(),
+                prev_root: Default::default(),
+            },
             transactions: vec![],
-            time: Utc.timestamp(i.into(), 0),
-            producer: Default::default(),
         })
         .collect_vec();
 
@@ -91,7 +103,7 @@ async fn block_connection_last_5() {
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        Storage::<Bytes32, FuelBlock>::insert(&mut db, &id, &block).unwrap();
+        Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
     }
 
     // setup server & client

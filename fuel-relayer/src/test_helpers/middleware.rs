@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use ethers_core::types::{
-    Block, BlockId, Filter, Log, TxHash, H256, U256, U64,
-};
+use ethers_core::types::{Block, BlockId, Filter, Log, TxHash, H256, U256, U64};
 use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
 };

@@ -213,24 +213,18 @@ impl From<IterDirection> for rocksdb::Direction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env::temp_dir;
-    use std::path::PathBuf;
+    use tempfile::TempDir;
 
-    fn tmp_path() -> PathBuf {
-        let mut path = temp_dir();
-        path.push(rand::random::<u16>().to_string());
-        path
-    }
-
-    fn create_db(cols: u32) -> RocksDb {
-        RocksDb::open(tmp_path(), cols).unwrap()
+    fn create_db(cols: u32) -> (RocksDb, TempDir) {
+        let tmp_dir = TempDir::new().unwrap();
+        (RocksDb::open(tmp_dir.path(), cols).unwrap(), tmp_dir)
     }
 
     #[test]
     fn can_put_and_read() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
 
         assert_eq!(db.get(&key, 0).unwrap().unwrap(), vec![1, 2, 3])
@@ -240,7 +234,7 @@ mod tests {
     fn put_returns_previous_value() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let prev = db.put(key, 0, vec![2, 4, 6]).unwrap();
 
@@ -251,7 +245,7 @@ mod tests {
     fn delete_and_get() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         assert_eq!(db.get(&key, 0).unwrap().unwrap(), vec![1, 2, 3]);
 
@@ -263,7 +257,7 @@ mod tests {
     fn key_exists() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         assert!(db.exists(&key, 0).unwrap());
     }
@@ -273,7 +267,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
         let value = vec![1, 2, 3];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         let ops = vec![WriteOperation::Insert(key.clone(), 0, value.clone())];
 
         db.batch_write(&mut ops.into_iter()).unwrap();
@@ -285,7 +279,7 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
         let value = vec![1, 2, 3];
 
-        let db = create_db(1);
+        let (db, _tmp) = create_db(1);
         db.put(key.clone(), 0, value).unwrap();
 
         let ops = vec![WriteOperation::Remove(key.clone(), 0)];

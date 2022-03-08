@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, trace, warn};
 
 use anyhow::Error;
-use ethers_core::types::{Block,H256, Filter, Log, TxHash, ValueOrArray};
+use ethers_core::types::{Block, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{
     FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
@@ -382,12 +382,10 @@ impl Relayer {
         }
     }
 
-    async fn handle_eth_block_hash<P>(&mut self, provider: &P,new_eth_block_hash: Option<H256>)
+    async fn handle_eth_block_hash<P>(&mut self, provider: &P, new_eth_block_hash: Option<H256>)
     where
         P: Middleware<Error = ProviderError>,
     {
-
-
     }
 
     async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
