@@ -22,13 +22,6 @@ pub struct PendingEvents {
     finalized_eth_height: u64,
 }
 
-// When we are adding new block we need to specify eth block in past that will include all token deposits and
-// new validator set changes. Rules that contract need to enforce is.
-// 1. NewBlock eth_block need to be same or more then current last_consumed_block.
-// 2. In batched fuel block commit this is still enforced for every block inside. This will be litlle bit strained on contract
-// as it need to enforce  validator set change.
-// 3. In batched fuel block it is
-
 /// Pending diff between FuelBlocks
 #[derive(Clone, Debug)]
 pub struct PendingDiff {
@@ -113,7 +106,7 @@ impl PendingEvents {
 
     /// Handle eth log events
     /// Done
-    pub async fn handle_eth_event(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
+    pub async fn handle_eth_log(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
         if removed {
             self.bundle_removed_events(event, eth_block);
             return;
@@ -239,9 +232,9 @@ mod tests {
         let deposit3 =
             EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3)).unwrap();
 
-        pending.handle_eth_event(deposit1, 0, false).await;
-        pending.handle_eth_event(deposit2, 1, false).await;
-        pending.handle_eth_event(deposit3, 1, false).await;
+        pending.handle_eth_log(deposit1, 0, false).await;
+        pending.handle_eth_log(deposit2, 1, false).await;
+        pending.handle_eth_log(deposit3, 1, false).await;
         let diff1 = pending.pending[0].clone();
         let diff2 = pending.pending[1].clone();
         assert_eq!(
@@ -274,11 +267,11 @@ mod tests {
         let deposit4 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
         let deposit5 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 300)).unwrap();
 
-        pending.handle_eth_event(deposit1, 0, false).await;
-        pending.handle_eth_event(deposit2, 1, false).await;
-        pending.handle_eth_event(deposit3, 1, false).await;
-        pending.handle_eth_event(deposit4, 1, false).await;
-        pending.handle_eth_event(deposit5, 1, false).await;
+        pending.handle_eth_log(deposit1, 0, false).await;
+        pending.handle_eth_log(deposit2, 1, false).await;
+        pending.handle_eth_log(deposit3, 1, false).await;
+        pending.handle_eth_log(deposit4, 1, false).await;
+        pending.handle_eth_log(deposit5, 1, false).await;
         let diff1 = pending.pending[0].clone();
         let diff2 = pending.pending[1].clone();
         assert_eq!(
@@ -318,12 +311,12 @@ mod tests {
         let deposit5 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 100)).unwrap();
         let deposit6 = EthEventLog::try_from(&eth_log_validator_withdrawal(2, acc1, 50)).unwrap();
 
-        pending.handle_eth_event(deposit1, 0, false).await;
-        pending.handle_eth_event(deposit2, 1, false).await;
-        pending.handle_eth_event(deposit3, 1, false).await;
-        pending.handle_eth_event(deposit4, 1, false).await;
-        pending.handle_eth_event(deposit5, 1, false).await;
-        pending.handle_eth_event(deposit6, 2, false).await;
+        pending.handle_eth_log(deposit1, 0, false).await;
+        pending.handle_eth_log(deposit2, 1, false).await;
+        pending.handle_eth_log(deposit3, 1, false).await;
+        pending.handle_eth_log(deposit4, 1, false).await;
+        pending.handle_eth_log(deposit5, 1, false).await;
+        pending.handle_eth_log(deposit6, 2, false).await;
         let diff1 = pending.pending[0].clone();
         let diff2 = pending.pending[1].clone();
         let diff3 = pending.pending[2].clone();

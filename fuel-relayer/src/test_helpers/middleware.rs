@@ -155,7 +155,7 @@ impl JsonRpcClient for MockMiddleware {
 }
 
 /*
-WHAT DO I NEED FOR RELAYER FROM PROVIDER:
+Needed functionality for relayer to function:
 * syncing API
 * get_block_number API
 * get_logs API.

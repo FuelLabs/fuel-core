@@ -239,7 +239,7 @@ pub mod tests {
 
     fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
         Log {
-            address: H160::zero(), // we dont check that, assume it is okay
+            address: H160::zero(), // we dont check or use this
             topics,
             data: EthersBytes(data),
             block_hash: None,

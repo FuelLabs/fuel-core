@@ -6,7 +6,7 @@ pub mod service;
 pub mod validator_set;
 
 #[cfg(test)]
-pub mod test;
+pub mod test_helpers;
 
 pub use config::Config;
 pub use relayer::Relayer;

@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, trace, warn};
 
 use anyhow::Error;
-use ethers_core::types::{Filter, Log, ValueOrArray};
+use ethers_core::types::{Block,H256, Filter, Log, TxHash, ValueOrArray};
 use ethers_providers::{
     FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
@@ -105,7 +105,13 @@ impl Relayer {
     async fn inital_sync<'a, P>(
         &mut self,
         provider: &'a P,
-    ) -> Result<FilterWatcher<'a, P::Provider, Log>, Error>
+    ) -> Result<
+        (
+            FilterWatcher<'a, P::Provider, TxHash>,
+            FilterWatcher<'a, P::Provider, Log>,
+        ),
+        Error,
+    >
     where
         P: Middleware<Error = ProviderError>,
     {
@@ -188,7 +194,7 @@ impl Relayer {
         // it depends on how much time it is needed to tranverse first part of this function
         // and how much lag happened in meantime.
 
-        let mut watcher: Option<FilterWatcher<_, _>>;
+        let mut watchers: Option<(FilterWatcher<_, _>, FilterWatcher<_, _>)>;
         let last_included_block = best_finalized_block;
 
         let mut best_block;
@@ -231,10 +237,11 @@ impl Relayer {
 
             // 3. Start listening to eth events
             let eth_log_filter = Filter::new().address(ValueOrArray::Array(contracts.clone()));
-            watcher = Some(
+            watchers = Some((
+                self.stop_handle(|| provider.watch_blocks()).await??,
                 self.stop_handle(|| provider.watch(&eth_log_filter))
                     .await??,
-            );
+            ));
 
             //let t = watcher.as_mut().expect(()).next().await;
             // sleep for 50ms just to be sure that our watcher is registered and started receiving events
@@ -266,25 +273,25 @@ impl Relayer {
             .apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height)
             .await;
 
-        watcher.ok_or(RelayerError::ProviderError.into())
+        watchers.ok_or(RelayerError::ProviderError.into())
     }
 
     /// Starting point of relayer
-    pub async fn run<P>(self, provider: P)
+    pub async fn run<P>(mut self, provider: P)
     where
         P: Middleware<Error = ProviderError>,
     {
-        let mut this = self;
-        this.current_validator_set
-            .load_current_validator_set(&*this.db.lock().await)
+        //let mut this = self;
+        self.current_validator_set
+            .load_current_validator_set(&*self.db.lock().await)
             .await;
 
         loop {
             // initial sync
-            let mut logs_watcher = match this.inital_sync(&provider).await {
+            let (mut blocks_watcher, mut logs_watcher) = match self.inital_sync(&provider).await {
                 Ok(watcher) => watcher,
                 Err(_err) => {
-                    if this.status == RelayerStatus::Stop {
+                    if self.status == RelayerStatus::Stop {
                         return;
                     }
                     continue;
@@ -294,31 +301,32 @@ impl Relayer {
             println!("Finished initial sync");
             loop {
                 tokio::select! {
-                    inner_fuel_event = this.receiver.recv() => {
+                    inner_fuel_event = self.receiver.recv() => {
                         println!("Get Inner event:{:?}",inner_fuel_event);
                         if inner_fuel_event.is_none() {
                             error!("Inner fuel notification broke and returned err");
-                            this.status = RelayerStatus::Stop;
+                            self.status = RelayerStatus::Stop;
                             return;
                         }
-                        this.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
+                        self.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
                     }
 
-                    new_block = this.new_block_event.recv() => {
-                        println!("Get new_block event:{:?}",new_block);
+                    new_block = self.new_block_event.recv() => {
                         match new_block {
                             Err(e) => {
                                 error!("Unexpected error happened in relayer new block event receiver:{}",e);
                                 return;
                             },
                             Ok(new_block) => {
-                                this.handle_new_block_event(new_block).await
+                                self.handle_new_block_event(new_block).await
                             },
                         }
                     }
+                    eth_block_hash = blocks_watcher.next() => {
+                        self.handle_eth_block_hash(&provider,eth_block_hash).await
+                    }
                     log = logs_watcher.next() => {
-                        println!("Get log event:{:?}",log);
-                        this.handle_eth_event(log).await
+                        self.handle_eth_log(log).await
                     }
                 }
             }
@@ -374,7 +382,15 @@ impl Relayer {
         }
     }
 
-    async fn handle_eth_event(&mut self, eth_event: Option<Log>) {
+    async fn handle_eth_block_hash<P>(&mut self, provider: &P,new_eth_block_hash: Option<H256>)
+    where
+        P: Middleware<Error = ProviderError>,
+    {
+
+
+    }
+
+    async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
         // new log
         if eth_event.is_none() {
             // TODO make proper reconnect options.
@@ -401,7 +417,7 @@ impl Relayer {
         let fuel_event = fuel_event.unwrap();
 
         self.pending
-            .handle_eth_event(fuel_event, block_number, removed)
+            .handle_eth_log(fuel_event, block_number, removed)
             .await;
 
         // apply pending eth diffs
@@ -424,7 +440,7 @@ mod test {
 
     use crate::{
         log,
-        test::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
+        test_helpers::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
         Config,
     };
 
@@ -658,7 +674,7 @@ mod test {
         relayer.run(middle).await;
     }
 
-    #[tokio::test]
+    //#[tokio::test]
     pub async fn passive_sync() {
         let mut config = Config::new();
         // start from block 1
