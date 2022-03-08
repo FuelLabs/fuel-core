@@ -120,7 +120,7 @@ impl TryFrom<&Log> for EthEventLog {
                 }
             }
             n if n == *ETH_FUEL_BLOCK_COMMITED => {
-                if log.topics.len() != 3 {
+                if log.topics.len() != 4 {
                     return Err("Malformed topics for FuelBlockCommited");
                 }
                 // Safety: Casting between same sized structures. It is okay not to check size.
@@ -222,7 +222,7 @@ pub mod tests {
     pub fn eth_log_fuel_block_commited(
         eth_block: u64,
         block_root: Bytes32,
-        height: u32,
+        fuel_height: u32,
         eth_height: u32,
     ) -> Log {
         log_default(
@@ -230,7 +230,7 @@ pub mod tests {
             vec![
                 ETH_FUEL_BLOCK_COMMITED.clone(),
                 H256::from_slice(block_root.as_ref()),
-                H256::from_low_u64_be(height as u64),
+                H256::from_low_u64_be(fuel_height as u64),
                 H256::from_low_u64_be(eth_height as u64),
             ],
             Bytes::new(),

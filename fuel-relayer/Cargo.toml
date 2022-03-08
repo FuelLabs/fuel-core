@@ -37,4 +37,4 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-
     "test_helpers",
 ] }
 rand = "0.8"
-fuel-types = { version = "0.1", features = ["serde-types","random"] }
+fuel-types = { version = "0.3", features = ["serde-types","random"] }

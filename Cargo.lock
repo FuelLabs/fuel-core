@@ -2317,7 +2317,6 @@ dependencies = [
  "features",
  "fuel-core-interfaces",
  "fuel-tx 0.6.0",
- "fuel-types 0.1.0",
  "fuel-types 0.3.0",
  "futures",
  "lazy_static",
@@ -2415,7 +2414,6 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9b09a46ea50f8fa092a9a25069d9b5a90dcdb37545b4b3864f5ba006bf7612d"
 dependencies = [
- "rand 0.8.5",
  "serde",
 ]
 
