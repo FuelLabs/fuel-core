@@ -4,7 +4,13 @@ pub mod models;
 pub mod schema;
 pub mod tables;
 
-pub use diesel::prelude::SqliteConnection;
-pub use diesel::sqlite::Sqlite;
-pub use diesel::prelude::PgConnection;
-pub use diesel::pg::Pg;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "db-sqlite")] {
+        pub use diesel::prelude::SqliteConnection as Conn;
+        pub use diesel::sqlite::Sqlite as DBBackend;
+    } else if #[cfg(feature = "db-postgres")] {
+        pub use diesel::prelude::PgConnection as Conn;
+        pub use diesel::pg::Pg DBBackend;
+    }
+}

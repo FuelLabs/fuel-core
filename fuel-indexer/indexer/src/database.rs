@@ -129,6 +129,7 @@ impl Database {
         inserts: Vec<String>,
         updates: Vec<String>,
     ) -> String {
+        println!("TJDEBUG here??");
         format!(
             "INSERT INTO {}.{}
                 ({})
@@ -145,6 +146,7 @@ impl Database {
     }
 
     fn get_query(&self, table: &str, object_id: u64) -> String {
+        println!("TJDEBUG thear");
         format!(
             "SELECT object from {}.{} where id = {}",
             self.namespace, table, object_id

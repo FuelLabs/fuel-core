@@ -1,12 +1,21 @@
 use anyhow::Result;
 use async_std::{fs::File, io::ReadExt};
+use diesel::Connection;
+use diesel_migrations::embed_migrations;
 use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{GraphQlApi, IndexerConfig, IndexerService, Manifest};
+use fuel_indexer_schema::db::Conn;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use tokio::join;
 use tracing::error;
 use tracing_subscriber::filter::EnvFilter;
+
+//#[cfg(feature = "sqlite")]
+//embed_migrations!("../schema/migrations_sqlite");
+//
+//#[cfg(feature = "postgres")]
+//embed_migrations!("../schema/migrations_postgres");
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -41,6 +50,9 @@ pub async fn main() -> Result<()> {
     file.read_to_string(&mut contents).await?;
 
     let mut config: IndexerConfig = serde_yaml::from_str(&contents)?;
+
+    //let conn = Conn::establish(&config.database_url).expect("DB Connection failed");
+    //embedded_migrations::run_with_output(&conn, &mut std::io::stdout());
 
     let _local_node = if opt.local {
         let s = FuelService::new_node(Config::local_node()).await.unwrap();

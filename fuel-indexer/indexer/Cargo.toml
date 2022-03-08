@@ -12,6 +12,7 @@ async-std = "1.10.0"
 axum = "0.4"
 cfg-if = "1.0"
 diesel = { version = "1.4", features = ["postgres", "sqlite", "serde_json"] }
+diesel_migrations = { version = "1.4", default-features = false }
 fuel-core = { version = "0.2" }
 fuel-gql-client = { version = "0.2" }
 fuel-indexer-schema = { path = "../schema", default-features = false }
@@ -49,6 +50,8 @@ fuels-rs = { version = "0.2" }
 itertools = { version = "0.10" }
 
 [features]
-default = ["cranelift"]
+default = ["cranelift", "sqlite"]
+sqlite = ["fuel-indexer-schema/db-sqlite", "diesel_migrations/sqlite"]
+postgres = ["fuel-indexer-schema/db-postgres", "diesel_migrations/postgres"]
 cranelift = ["wasmer-compiler-cranelift"]
 llvm = ["wasmer-compiler-llvm"]

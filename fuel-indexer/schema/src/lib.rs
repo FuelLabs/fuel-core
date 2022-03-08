@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "derive-utils"), no_std)]
-#[cfg(feature = "db-backends")]
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
 #[macro_use]
 extern crate diesel;
 extern crate alloc;
@@ -23,7 +23,7 @@ pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
 
 pub mod sql_types;
 
-#[cfg(feature = "db-backends")]
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
 pub mod db;
 
 pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, ContractId, Salt, Word};

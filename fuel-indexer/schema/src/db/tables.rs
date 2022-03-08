@@ -1,4 +1,5 @@
 use crate::{
+    db::Conn,
     db::models::{
         Columns, GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, RootColumns, TypeIds,
     },
@@ -10,6 +11,24 @@ use diesel::{sql_query, Connection, RunQueryDsl};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefinition};
 use std::collections::{HashMap, HashSet};
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "db-postgres")] {
+        fn create_schema(statements: &mut Vec<String>) {
+            let create = format!("CREATE SCHEMA IF NOT EXISTS {}", self.namespace);
+            statements.push(create);
+        }
+        fn get_table_name(namespace: &String, table: String) -> String {
+            format!("{}.{}", namespace, table)
+        }
+    } else if #[cfg(feature = "db-sqlite")] {
+        fn create_schema(_statements: &mut Vec<String>) {
+        }
+        fn get_table_name(_namespace: &String, table: String) -> String {
+            format!("{}", table)
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct SchemaBuilder {
@@ -35,8 +54,7 @@ impl SchemaBuilder {
     }
 
     pub fn build(mut self, schema: &str) -> Self {
-        let create = format!("CREATE SCHEMA IF NOT EXISTS {}", self.namespace);
-        self.statements.push(create);
+        create_schema(&mut self.statements);
 
         let ast = match parse_schema::<String>(schema) {
             Ok(ast) => ast,
@@ -74,7 +92,7 @@ impl SchemaBuilder {
         self
     }
 
-    pub fn commit_metadata<C: Connection>(self, conn: &C) -> QueryResult<Schema> {
+    pub fn commit_metadata(self, conn: &Conn) -> QueryResult<Schema> {
         let SchemaBuilder {
             version,
             statements,
@@ -109,18 +127,23 @@ impl SchemaBuilder {
                 }
                 .insert(conn)?;
             }
+        println!("TJDEBUG la-know-roote");
 
             for query in statements.iter() {
+                println!("TJDEBUG stmt {}", query);
                 sql_query(query).execute(conn)?;
             }
+        println!("TJDEBUG la-louw-roote");
 
             for type_id in type_ids {
                 type_id.insert(conn)?;
             }
+        println!("TJDEBUG louw-roote");
 
             for column in columns {
                 column.insert(conn)?;
             }
+        println!("TJDEBUG he-nu-roote");
             Ok(())
         })?;
 
@@ -155,7 +178,7 @@ impl SchemaBuilder {
                 type_id,
                 column_position: pos as i32,
                 column_name: f.name.to_string(),
-                column_type: typ,
+                column_type: typ.to_string(),
                 graphql_type: f.field_type.to_string(),
                 nullable,
             };
@@ -168,7 +191,7 @@ impl SchemaBuilder {
             type_id,
             column_position: fragments.len() as i32,
             column_name: "object".to_string(),
-            column_type: ColumnType::Blob,
+            column_type: ColumnType::Blob.to_string(),
             graphql_type: "__".into(),
             nullable: false,
         };
@@ -200,11 +223,11 @@ impl SchemaBuilder {
 
                 let type_id = type_id(&self.namespace, &o.name);
                 let columns = self.generate_columns(type_id as i64, &o.fields);
-                let table_name = o.name.to_lowercase();
+                let table_name = get_table_name(&self.namespace, o.name.to_lowercase());
 
                 let create = format!(
-                    "CREATE TABLE IF NOT EXISTS\n {}.{} (\n {}\n)",
-                    self.namespace, table_name, columns,
+                    "CREATE TABLE IF NOT EXISTS\n {} (\n {}\n)",
+                    table_name, columns,
                 );
 
                 self.statements.push(create);
@@ -235,7 +258,8 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub fn load_from_db<C: Connection>(conn: &C, name: &str) -> QueryResult<Self> {
+    pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
+        println!("TJDEBUG lode-ing?");
         let root = GraphRoot::get_latest(conn, name)?;
         let root_cols = RootColumns::list_by_id(conn, root.id)?;
         let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;

@@ -1,21 +1,28 @@
+#[cfg(feature = "db-postgres")]
 use crate::db::schema::graph_registry as gr;
+
+#[cfg(feature = "db-sqlite")]
+use crate::db::schema as gr;
+
+use crate::db::Conn;
+
 use crate::ColumnType;
 use diesel::prelude::*;
 use diesel::{result::QueryResult, sql_types::*};
 use gr::{columns, graph_root, root_columns, type_ids};
 
-#[derive(Insertable, Queryable, QueryableByName)]
+#[derive(Queryable, QueryableByName)]
 #[table_name = "root_columns"]
 #[allow(unused)]
 pub struct RootColumns {
     pub id: i32,
-    pub root_id: i64,
+    pub root_id: i32,
     pub column_name: String,
     pub graphql_type: String,
 }
 
 impl RootColumns {
-    pub fn list_by_id<C: Connection>(conn: &C, r_id: i64) -> QueryResult<Vec<RootColumns>> {
+    pub fn list_by_id(conn: &Conn, r_id: i32) -> QueryResult<Vec<RootColumns>> {
         use gr::root_columns::dsl::*;
         root_columns.filter(root_id.eq(r_id)).load(conn)
     }
@@ -24,13 +31,13 @@ impl RootColumns {
 #[derive(Insertable, Queryable, QueryableByName)]
 #[table_name = "root_columns"]
 pub struct NewRootColumns {
-    pub root_id: i64,
+    pub root_id: i32,
     pub column_name: String,
     pub graphql_type: String,
 }
 
 impl NewRootColumns {
-    pub fn insert<C: Connection>(self, conn: &C) -> QueryResult<usize> {
+    pub fn insert(self, conn: &Conn) -> QueryResult<usize> {
         use gr::root_columns::dsl::*;
         diesel::insert_into(root_columns).values(self).execute(conn)
     }
@@ -46,9 +53,11 @@ pub struct NewGraphRoot {
 }
 
 impl NewGraphRoot {
-    pub fn insert<C: Connection>(self, conn: &C) -> QueryResult<usize> {
+    pub fn insert(self, conn: &Conn) -> QueryResult<usize> {
         use gr::graph_root::dsl::*;
-        diesel::insert_into(graph_root).values(self).execute(conn)
+        let q = diesel::insert_into(graph_root).values(self);
+        println!("TJDEBUG here it is: {}", diesel::debug_query::<diesel::sqlite::Sqlite, _>(&q).to_string());
+        q.execute(conn)
     }
 }
 
@@ -56,7 +65,7 @@ impl NewGraphRoot {
 #[table_name = "graph_root"]
 #[allow(unused)]
 pub struct GraphRoot {
-    pub id: i64,
+    pub id: i32,
     pub version: String,
     pub schema_name: String,
     pub query: String,
@@ -64,7 +73,7 @@ pub struct GraphRoot {
 }
 
 impl GraphRoot {
-    pub fn get_latest<C: Connection>(conn: &C, name: &str) -> QueryResult<GraphRoot> {
+    pub fn get_latest(conn: &Conn, name: &str) -> QueryResult<GraphRoot> {
         use gr::graph_root::dsl::*;
         graph_root
             .filter(schema_name.eq(name))
@@ -85,8 +94,8 @@ pub struct TypeIds {
 }
 
 impl TypeIds {
-    pub fn list_by_name<C: Connection>(
-        conn: &C,
+    pub fn list_by_name(
+        conn: &Conn,
         name: &str,
         version: &str,
     ) -> QueryResult<Vec<TypeIds>> {
@@ -96,14 +105,14 @@ impl TypeIds {
             .load(conn)
     }
 
-    pub fn insert<C: Connection>(&self, conn: &C) -> QueryResult<usize> {
+    pub fn insert(&self, conn: &Conn) -> QueryResult<usize> {
         let result = diesel::insert_into(gr::type_ids::table)
             .values(self)
             .execute(conn)?;
         Ok(result)
     }
 
-    pub fn schema_exists<C: Connection>(conn: &C, name: &str, version: &str) -> QueryResult<bool> {
+    pub fn schema_exists(conn: &Conn, name: &str, version: &str) -> QueryResult<bool> {
         use gr::type_ids::dsl::*;
 
         let result: i64 = type_ids
@@ -121,13 +130,13 @@ pub struct NewColumn {
     pub type_id: i64,
     pub column_position: i32,
     pub column_name: String,
-    pub column_type: ColumnType,
+    pub column_type: String,
     pub nullable: bool,
     pub graphql_type: String,
 }
 
 impl NewColumn {
-    pub fn insert<C: Connection>(&self, conn: &C) -> QueryResult<usize> {
+    pub fn insert(self, conn: &Conn) -> QueryResult<usize> {
         let result = diesel::insert_into(gr::columns::table)
             .values(self)
             .execute(conn)?;
@@ -143,7 +152,7 @@ impl NewColumn {
     }
 
     fn sql_type(&self) -> &str {
-        match self.column_type {
+        match ColumnType::from(self.column_type.as_str()) {
             ColumnType::ID => "bigint primary key",
             ColumnType::Address => "varchar(64)",
             ColumnType::Bytes4 => "varchar(8)",
@@ -176,7 +185,7 @@ pub struct Columns {
 }
 
 impl Columns {
-    pub fn list_by_id<C: Connection>(conn: &C, col_id: i64) -> QueryResult<Vec<Columns>> {
+    pub fn list_by_id(conn: &Conn, col_id: i64) -> QueryResult<Vec<Columns>> {
         use gr::columns::dsl::*;
         columns.filter(type_id.eq(col_id)).load(conn)
     }
@@ -197,8 +206,8 @@ pub struct ColumnInfo {
 }
 
 impl ColumnInfo {
-    pub fn get_schema<C: Connection>(
-        conn: &C,
+    pub fn get_schema(
+        conn: &Conn,
         name: &str,
         version: &str,
     ) -> QueryResult<Vec<ColumnInfo>> {

@@ -1,6 +1,6 @@
 -- Your SQL goes here
 CREATE TABLE IF NOT EXISTS graph_registry.graph_root (
-    id bigserial primary key,
+    id serial primary key,
     version varchar not null,
     schema_name varchar not null,
     query varchar not null,
