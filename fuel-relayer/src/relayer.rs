@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, trace, warn};
 
 use anyhow::Error;
-use ethers_core::types::{Block, BlockId, Filter, Log, TxHash, ValueOrArray, H256};
+use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{
     FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
@@ -83,7 +83,7 @@ impl Relayer {
                     match inner_fuel_event.unwrap() {
                         RelayerEvent::Stop=>{
                             self.status = RelayerStatus::Stop;
-                            return Err(RelayerError::Stoped.into());
+                            return Err(RelayerError::Stoped);
                         },
                         RelayerEvent::GetValidatorSet {response_channel, .. } => {
                             let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
@@ -273,7 +273,7 @@ impl Relayer {
             .apply_last_validator_diff(&mut *self.db.lock().await, finalized_eth_height)
             .await;
 
-        watchers.ok_or(RelayerError::ProviderError.into())
+        watchers.ok_or_else(|| RelayerError::ProviderError.into())
     }
 
     /// Starting point of relayer
@@ -374,7 +374,7 @@ impl Relayer {
                 let _ = response_channel.send(res);
             }
             RelayerEvent::GetStatus { response } => {
-                let _ = response.send(self.status.clone());
+                let _ = response.send(self.status);
             }
         }
     }

@@ -7,8 +7,7 @@ impl Storage<Address, u64> for Database {
     type Error = KvStoreError;
 
     fn insert(&mut self, key: &Address, value: &u64) -> Result<Option<u64>, KvStoreError> {
-        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, value.clone())
-            .map_err(Into::into)
+        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, *value).map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Address) -> Result<Option<u64>, KvStoreError> {

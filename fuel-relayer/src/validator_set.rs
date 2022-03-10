@@ -10,6 +10,12 @@ pub struct CurrentValidatorSet {
     pub eth_height: u64,
 }
 
+impl Default for CurrentValidatorSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CurrentValidatorSet {
     pub fn new() -> Self {
         Self {

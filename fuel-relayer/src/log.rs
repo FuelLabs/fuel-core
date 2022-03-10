@@ -60,7 +60,7 @@ impl TryFrom<&Log> for EthEventLog {
                 if data.len() != ASSET_DEPOSIT_DATA_LEN {
                     return Err("Malformed data length for AssetDeposit");
                 }
-                if !data[4..28].into_iter().all(|&b| b == 0) {
+                if !data[4..28].iter().all(|&b| b == 0) {
                     return Err("Malformed amount for AssetDeposit. Amount bigger then u64");
                 }
 
@@ -90,7 +90,7 @@ impl TryFrom<&Log> for EthEventLog {
                 let depositor = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
 
                 let deposit = log.topics[2].as_ref();
-                if !deposit[..24].into_iter().all(|&b| b == 0) {
+                if !deposit[..24].iter().all(|&b| b == 0) {
                     return Err("Malformed deposit for ValidatorDeposit. deposit bigger then u64");
                 }
                 let deposit = <[u8; 8]>::try_from(&deposit[24..])
@@ -107,7 +107,7 @@ impl TryFrom<&Log> for EthEventLog {
                 let withdrawer = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
 
                 let withdrawal = log.topics[2].as_ref();
-                if !withdrawal[..24].into_iter().all(|&b| b == 0) {
+                if !withdrawal[..24].iter().all(|&b| b == 0) {
                     return Err("Malformed deposit for ValidatorDeposit. deposit bigger then u64");
                 }
                 let withdrawal = <[u8; 8]>::try_from(&withdrawal[24..])

@@ -52,6 +52,12 @@ impl PendingDiff {
     }
 }
 
+impl Default for PendingEvents {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PendingEvents {
     pub fn new() -> Self {
         Self {
