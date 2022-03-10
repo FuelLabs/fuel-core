@@ -11,9 +11,9 @@ anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.1"
 env_logger = "0.9"
-ethers-core = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-core", default-features = false }
-ethers-middleware = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-middleware", default-features = false }
-ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-providers", default-features = false, features = [
+ethers-core = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-core", default-features = false }
+ethers-middleware = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-middleware", default-features = false }
+ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-providers", default-features = false, features = [
     "ws",
     "rustls",
 ] }
