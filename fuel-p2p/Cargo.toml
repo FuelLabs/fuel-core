@@ -9,7 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-p2p", "networking"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client networking"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -23,4 +22,4 @@ tracing = "0.1"
 [dev-dependencies]
 env_logger = "0.9"
 rand = "0.8"
-tokio = {version = "1.8", features = ["full"]}
+tokio = { version = "1.8", features = ["full"] }

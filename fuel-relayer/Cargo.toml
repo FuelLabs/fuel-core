@@ -9,12 +9,7 @@ description = "Fuel Relayer"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-tx = { version = "0.6", features = ["serde-types"] }
-fuel-types = { version = "0.3", features = ["serde-types"] }
-futures = "0.3"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.4.1" }
-parking_lot = "0.12"
-thiserror = "1.0"
+bytes = "1.1"
 env_logger = "0.9"
 ethers-core = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-core", default-features = false }
 ethers-middleware = { git = "https://github.com/rakita/ethers-rs.git", branch = "eth_syncing", package = "ethers-middleware", default-features = false }
@@ -23,18 +18,22 @@ ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "
     "rustls",
 ] }
 features = "0.10"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.4.1" }
+fuel-tx = { version = "0.6", features = ["serde-types"] }
+fuel-types = { version = "0.3", features = ["serde-types"] }
+futures = "0.3"
+lazy_static = "1.4"
+parking_lot = "0.12"
 serde = "1.0"
 serde_json = "1.0"
+thiserror = "1.0"
 tokio = { version = "1.15", features = ["full"] }
-bytes = "1.1"
 tracing = "0.1"
 tracing-subscriber = "0.3.9"
-lazy_static = "1.4"
-
 
 [dev-dependencies]
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.4.1", features = [
     "test_helpers",
 ] }
-rand = "0.8"
 fuel-types = { version = "0.3", features = ["serde-types","random"] }
+rand = "0.8"

@@ -23,6 +23,7 @@ async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz"] }
 async-trait = "0.1"
 axum = { version = "0.4" }
 bincode = "1.3"
+byteorder = "1.4.3"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
@@ -61,7 +62,6 @@ tower-layer = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 uuid = { version = "0.8", features = ["v4"] }
-byteorder = "1.4.3"
 
 [dev-dependencies]
 assert_matches = "1.5"
