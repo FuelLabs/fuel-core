@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc};
 use tracing::{error, trace, warn};
 
 use anyhow::Error;
-use ethers_core::types::{Block, Filter, Log, TxHash, ValueOrArray, H256};
+use ethers_core::types::{Block, BlockId, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{
     FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
@@ -102,7 +102,7 @@ impl Relayer {
 
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
     /// logs watcher with assurence that we didnt miss any events.
-    async fn inital_sync<'a, P>(
+    async fn initial_sync<'a, P>(
         &mut self,
         provider: &'a P,
     ) -> Result<
@@ -288,7 +288,7 @@ impl Relayer {
 
         loop {
             // initial sync
-            let (mut blocks_watcher, mut logs_watcher) = match self.inital_sync(&provider).await {
+            let (mut blocks_watcher, mut logs_watcher) = match self.initial_sync(&provider).await {
                 Ok(watcher) => watcher,
                 Err(_err) => {
                     if self.status == RelayerStatus::Stop {
@@ -297,12 +297,9 @@ impl Relayer {
                     continue;
                 }
             };
-
-            println!("Finished initial sync");
             loop {
                 tokio::select! {
                     inner_fuel_event = self.receiver.recv() => {
-                        println!("Get Inner event:{:?}",inner_fuel_event);
                         if inner_fuel_event.is_none() {
                             error!("Inner fuel notification broke and returned err");
                             self.status = RelayerStatus::Stop;
@@ -323,7 +320,7 @@ impl Relayer {
                         }
                     }
                     eth_block_hash = blocks_watcher.next() => {
-                        self.handle_eth_block_hash(&provider,eth_block_hash).await
+                        let _ = self.handle_eth_block_hash(&provider,eth_block_hash).await;
                     }
                     log = logs_watcher.next() => {
                         self.handle_eth_log(log).await
@@ -382,10 +379,32 @@ impl Relayer {
         }
     }
 
-    async fn handle_eth_block_hash<P>(&mut self, provider: &P, new_eth_block_hash: Option<H256>)
+    async fn handle_eth_block_hash<P>(
+        &mut self,
+        provider: &P,
+        new_eth_block_hash: Option<H256>,
+    ) -> Result<(), Error>
     where
         P: Middleware<Error = ProviderError>,
     {
+        if new_eth_block_hash.is_none() {
+            return Ok(());
+        }
+        let block_hash = new_eth_block_hash.unwrap();
+        if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
+            if let Some(block_height) = block.number {
+                let finalized_block_height =
+                    block_height.as_u64() - self.config.eth_finality_slider();
+
+                // TODO probably can ask logs for this perticular block few times to be sure that all logs are
+                // in place
+                self.pending
+                    .apply_last_validator_diff(&mut *self.db.lock().await, finalized_block_height)
+                    .await;
+            }
+        }
+
+        Ok(())
     }
 
     async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
@@ -430,7 +449,7 @@ impl Relayer {
 mod test {
 
     use async_trait::async_trait;
-    use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, U256, U64};
+    use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
     use ethers_providers::SyncingStatus;
     use fuel_core_interfaces::relayer::RelayerEvent;
     use fuel_tx::Address;
@@ -559,6 +578,16 @@ mod test {
             data.is_syncing = SyncingStatus::IsFalse;
             // best block is 4
             data.best_block.number = Some(U64([134]));
+
+            data.best_block.number = Some(U64([134]));
+            data.logs_batch = vec![
+                vec![log::tests::eth_log_validator_deposit(
+                    136,
+                    Address::zeroed(),
+                    10,
+                )], //Log::]
+            ];
+            data.blocks_batch = vec![vec![H256::zero()]];
         }
         pub struct Handle {
             pub i: u64,
@@ -661,55 +690,6 @@ mod test {
                         )
                     }
                     _ => assert!(true, "Unknown request, we should have finished until now"),
-                }
-                self.i += 1;
-            }
-        }
-        middle
-            .trigger_handle(Box::new(Handle { i: 0, event }))
-            .await;
-
-        relayer.run(middle).await;
-    }
-
-    //#[tokio::test]
-    pub async fn passive_sync() {
-        let mut config = Config::new();
-        // start from block 1
-        config.eth_v2_contract_deployment = 100;
-        config.eth_finality_slider = 30;
-        // make 2 steps of 2 blocks
-        config.initial_sync_step = 2;
-        let (relayer, event, new_block_event) = relayer(config);
-        let middle = MockMiddleware::new();
-        {
-            let mut data = middle.data.lock().await;
-            // eth finished syncing
-            data.is_syncing = SyncingStatus::IsFalse;
-            // best block is 4
-            data.best_block.number = Some(U64([134]));
-            let log1 = data.logs_batch = vec![
-                vec![log::tests::eth_log_validator_deposit(
-                    136,
-                    Address::zeroed(),
-                    10,
-                )], //Log::]
-            ];
-        }
-        pub struct Handle {
-            pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
-        }
-        #[async_trait]
-        impl TriggerHandle for Handle {
-            async fn run(&mut self, data: &mut MockData, trigger: TriggerType) {
-                //println!("TEST{:?}   type:{:?}", self.i, trigger);
-                match self.i {
-                    n if n < 9 => (), // initialsync, skip it.
-                    9 => data.logs_batch_index += 1,
-                    10 => (),
-                    11 => (),
-                    _ => assert!(true, "Case not covered"),
                 }
                 self.i += 1;
             }

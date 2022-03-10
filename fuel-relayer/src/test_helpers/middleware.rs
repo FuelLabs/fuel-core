@@ -5,6 +5,7 @@ use ethers_providers::{
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt;
+use std::io::BufWriter;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fmt::Debug, str::FromStr};
@@ -40,6 +41,8 @@ pub struct MockData {
     pub best_block: Block<TxHash>,
     pub logs_batch: Vec<Vec<Log>>,
     pub logs_batch_index: usize,
+    pub blocks_batch: Vec<Vec<H256>>,
+    pub blocks_batch_index: usize,
 }
 
 impl Default for MockData {
@@ -55,6 +58,8 @@ impl Default for MockData {
             is_syncing: SyncingStatus::IsFalse,
             logs_batch: Vec::new(),
             logs_batch_index: 0,
+            blocks_batch: Vec::new(),
+            blocks_batch_index: 0,
         }
     }
 }
@@ -103,7 +108,8 @@ pub enum TriggerType {
     GetBlockNumber,
     GetLogs(Filter),
     GetBlock(BlockId),
-    GetFilterChanges(U256),
+    GetLogFilterChanges,
+    GetBlockFilterChanges,
 }
 
 #[async_trait]
@@ -112,40 +118,45 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
     {
         if method == "eth_getFilterChanges" {
-            let block_id = U256::zero();
-            self.trigger(TriggerType::GetFilterChanges(block_id.clone()))
-                .await;
+            let buffer = BufWriter::new(Vec::new());
+            let mut ser = serde_json::Serializer::new(buffer);
+            params.serialize(&mut ser)?;
+            let out = ser.into_inner().buffer().to_vec();
+            println!("Output:{:?}", String::from_utf8_lossy(&out));
+            let parameters: Vec<U256> = serde_json::from_slice(&out)?;
+            if parameters[0] == U256::zero() {
+                self.trigger(TriggerType::GetLogFilterChanges).await;
+                // It is logs
+                let data = self.data.lock().await;
+                let log = data
+                    .logs_batch
+                    .get(data.logs_batch_index)
+                    .cloned()
+                    .unwrap_or_default();
+                let res = serde_json::to_value(&log)?;
+                let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                println!("Passed1");
+                Ok(res)
+            } else {
+                self.trigger(TriggerType::GetBlockFilterChanges).await;
+                // It is block hashes
+                let data = self.data.lock().await;
+                let block_hashes = data
+                    .blocks_batch
+                    .get(data.blocks_batch_index)
+                    .cloned()
+                    .unwrap_or_default();
 
-            let data = self.data.lock().await;
-            return Ok(
-                if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
-                    let mut ret_logs = Vec::new();
-                    for log in logs {
-                        // let log = serde_json::to_value(&log).map_err(|e| Self::Error::SerdeJson(e))?;
-                        // let res: R =
-                        //    ;
-                        ret_logs.push(log);
-                    }
-                    //ret_logs
-                    let res =
-                        serde_json::to_value(&ret_logs).map_err(|e| Self::Error::SerdeJson(e))?;
-                    let res: R =
-                        serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
-                    res
-                } else {
-                    let ret: Vec<Log> = Vec::new();
-                    let res = serde_json::to_value(ret)?;
-                    let res: R =
-                        serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
-                    res
-                },
-            );
+                let res = serde_json::to_value(&block_hashes)?;
+                let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                Ok(res)
+            }
         } else {
             panic!("Request not mocked: {}", method);
         }
@@ -202,33 +213,15 @@ impl Middleware for MockMiddleware {
         Ok(Some(self.data.lock().await.best_block.clone()))
     }
 
-    /// only thing used FilterWatcher
-    async fn get_filter_changes<T, R>(&self, id: T) -> Result<Vec<R>, Self::Error>
-    where
-        T: Into<U256> + Send + Sync,
-        R: Serialize + DeserializeOwned + Send + Sync + Debug,
-    {
-        let block_id = id.into();
-        self.trigger(TriggerType::GetFilterChanges(block_id.clone()))
-            .await;
-
-        let data = self.data.lock().await;
-        Ok(
-            if let Some(logs) = data.logs_batch.get(data.logs_batch_index) {
-                let mut ret_logs = Vec::new();
-                for log in logs {
-                    let log = serde_json::to_value(&log).map_err(|e| Self::Error::SerdeJson(e))?;
-                    let res: R =
-                        serde_json::from_value(log).map_err(|e| Self::Error::SerdeJson(e))?;
-                    ret_logs.push(res);
-                }
-                ret_logs
-            } else {
-                Vec::new()
-            },
-        )
+    /// watch blocks
+    async fn watch_blocks(&self) -> Result<FilterWatcher<'_, Self::Provider, H256>, Self::Error> {
+        let id = U256::one();
+        let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
+            .interval(Duration::from_secs(1));
+        Ok(filter)
     }
 
+    /// watch logs
     async fn watch<'b>(
         &'b self,
         _filter: &Filter,
