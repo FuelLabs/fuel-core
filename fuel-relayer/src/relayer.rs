@@ -123,8 +123,8 @@ impl Relayer {
             ) {
                 break;
             }
-            self.stop_handle(|| tokio::time::sleep(Duration::from_secs(5)))
-                .await?;
+            let wait = self.config.eth_initial_sync_refresh();
+            self.stop_handle(|| tokio::time::sleep(wait)).await?;
         }
 
         let last_finalized_eth_block = std::cmp::max(
@@ -448,6 +448,8 @@ impl Relayer {
 #[cfg(test)]
 mod test {
 
+    use std::time::Duration;
+
     use async_trait::async_trait;
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
     use ethers_providers::SyncingStatus;
@@ -462,9 +464,10 @@ mod test {
     };
 
     #[tokio::test]
-    pub async fn initial_sync_checks_eth_client_pending_and_handling_stop() {
+    pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
         let mut config = Config::new();
         config.eth_v2_contract_deployment = 5;
+        config.eth_initial_sync_refresh = Duration::from_millis(100);
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::new();
         middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {

@@ -699,13 +699,13 @@ pub mod helpers {
 
     #[async_trait]
     impl RelayerDb for DummyDb {
-        /// get validator set for current fuel block
+        /// get validator set for current eth height
         async fn current_validator_set(&self) -> HashMap<Address, u64> {
             self.data.lock().current_validator_set.clone()
         }
 
         /// set last finalized fuel block. In usual case this will be
-        async fn set_current_validator_set_block(&self, block: u64) {
+        async fn set_current_validator_set_eth_height(&self, block: u64) {
             self.data.lock().current_validator_set_block = block;
         }
 

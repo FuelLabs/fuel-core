@@ -1,4 +1,4 @@
-// TODO full block
+/// Currently just placeholder for new block included and new block created events.
 #[derive(Clone, Debug)]
 pub enum NewBlockEvent {
     /// send this to eth

@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::Duration};
 
 use ethers_core::types::H160;
 
@@ -16,6 +16,7 @@ pub struct Config {
     pub(crate) eth_v2_contract_deployment: u64,
     /// number of blocks that will be asked in one step, for initial sync
     pub(crate) initial_sync_step: usize,
+    pub(crate) eth_initial_sync_refresh: Duration,
 }
 
 impl Config {
@@ -31,6 +32,7 @@ impl Config {
             .unwrap()],
             eth_v2_contract_deployment: 14_095_090,
             initial_sync_step: 1000,
+            eth_initial_sync_refresh: Duration::from_secs(5),
         }
     }
 
@@ -52,6 +54,10 @@ impl Config {
 
     pub fn initial_sync_step(&self) -> usize {
         self.initial_sync_step
+    }
+
+    pub fn eth_initial_sync_refresh(&self) -> Duration {
+        self.eth_initial_sync_refresh.clone()
     }
 }
 

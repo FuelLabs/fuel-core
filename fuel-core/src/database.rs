@@ -263,7 +263,7 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    /// get validator set for current fuel block
+    /// get validator set for current eth height
     async fn current_validator_set(&self) -> HashMap<Address, u64> {
         struct WrapAddress(pub Address);
         impl From<Vec<u8>> for WrapAddress {
@@ -359,7 +359,7 @@ impl RelayerDb for Database {
     }
 
     /// set last finalized fuel block. In usual case this will be
-    async fn set_current_validator_set_block(&self, block: u64) {
+    async fn set_current_validator_set_eth_height(&self, block: u64) {
         let _ = self.insert(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA, block);
     }
 

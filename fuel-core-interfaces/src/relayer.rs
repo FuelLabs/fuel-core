@@ -16,7 +16,7 @@ pub struct DepositCoin {
 }
 
 // Database has two main functionalities, ValidatorSet and TokenDeposits.
-// From relayer perspectiv TokenDeposits are just insert when they get finalized.
+// From relayer perspective TokenDeposits are just insert when they get finalized.
 // But for ValidatorSet, It is litle bit different.
 #[async_trait]
 pub trait RelayerDb:
@@ -30,7 +30,7 @@ pub trait RelayerDb:
     async fn insert_token_deposit(
         &mut self,
         deposit_nonce: Bytes32, // this is ID
-        fuel_block: u64,        //block after it becomes available for using
+        eth_block_deposited: u64, // eth block when deposit is made
         owner: Address,       // owner
         asset_id: AssetId,
         amount: Word,
@@ -39,9 +39,11 @@ pub trait RelayerDb:
             owner,
             amount,
             asset_id,
-            eth_block_deposited: fuel_block,
+            eth_block_deposited,
             fuel_block_spend: 0,
         };
+        // TODO check what id are we going to use
+        // depends on https://github.com/FuelLabs/fuel-specs/issues/106
         let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit_nonce,&coin);
     }
 
@@ -58,11 +60,11 @@ pub trait RelayerDb:
         }
     }
 
-    /// get validator set for current fuel block
+    /// get validator set for current eth height
     async fn current_validator_set(&self) -> HashMap<Address,u64>;
 
     /// set last finalized fuel block. In usual case this will be
-    async fn set_current_validator_set_block(&self, block: u64);
+    async fn set_current_validator_set_eth_height(&self, block: u64);
     /// Assume it is allways set as initialization of database.
     async fn get_current_validator_set_eth_height(&self) -> u64;
 
