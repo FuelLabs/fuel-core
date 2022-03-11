@@ -167,7 +167,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                ETH_VALIDATOR_DEPOSIT.clone(),
+                *ETH_VALIDATOR_DEPOSIT,
                 H256::from_slice(depositor.as_ref()),
                 H256::from_low_u64_be(deposit),
             ],
@@ -183,7 +183,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                ETH_VALIDATOR_WITHDRAWAL.clone(),
+                *ETH_VALIDATOR_WITHDRAWAL,
                 H256::from_slice(withdrawer.as_ref()),
                 H256::from_low_u64_be(withdrawal),
             ],
@@ -211,7 +211,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                ETH_ASSET_DEPOSIT.clone(),
+                *ETH_ASSET_DEPOSIT,
                 H256::from_slice(account.as_ref()),
                 H256::from_slice(token.as_ref()),
             ],
@@ -228,7 +228,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                ETH_FUEL_BLOCK_COMMITED.clone(),
+                *ETH_FUEL_BLOCK_COMMITED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
                 H256::from_low_u64_be(eth_height as u64),

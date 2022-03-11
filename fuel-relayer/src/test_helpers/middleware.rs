@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 
 #[async_trait]
 pub trait TriggerHandle: Send {
-    async fn run(&mut self, _data: &mut MockData, _trigger: TriggerType) {}
+    async fn run<'a>(&mut self, _data: &mut MockData, _trigger: TriggerType<'a>) {}
 }
 
 pub struct EmptyTriggerHand {}
@@ -47,12 +47,16 @@ pub struct MockData {
 
 impl Default for MockData {
     fn default() -> Self {
-        let mut best_block = Block::default();
-        best_block.hash = Some(
-            H256::from_str("0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6")
+        let best_block = Block {
+            hash: Some(
+                H256::from_str(
+                    "0xa1ea3121940930f7e7b54506d80717f14c5163807951624c36354202a8bffda6",
+                )
                 .unwrap(),
-        );
-        best_block.number = Some(U64::from(20i32));
+            ),
+            number: Some(U64::from(20i32)),
+            ..Default::default()
+        };
         MockData {
             best_block,
             is_syncing: SyncingStatus::IsFalse,
@@ -61,6 +65,12 @@ impl Default for MockData {
             blocks_batch: Vec::new(),
             blocks_batch_index: 0,
         }
+    }
+}
+
+impl Default for MockMiddleware {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -85,7 +95,7 @@ impl MockMiddleware {
         self.data.lock().await.logs_batch.push(logs)
     }
 
-    async fn trigger(&self, trigger: TriggerType) {
+    async fn trigger<'a>(&self, trigger: TriggerType<'a>) {
         let mut data = self.data.lock().await;
         let mut handler = self.handler.lock().await;
         handler.run(&mut data, trigger).await
@@ -103,10 +113,10 @@ pub enum MockMiddlewareError {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum TriggerType {
+pub enum TriggerType<'a> {
     Syncing,
     GetBlockNumber,
-    GetLogs(Filter),
+    GetLogs(&'a Filter),
     GetBlock(BlockId),
     GetLogFilterChanges,
     GetBlockFilterChanges,
@@ -140,7 +150,7 @@ impl JsonRpcClient for MockMiddleware {
                     .cloned()
                     .unwrap_or_default();
                 let res = serde_json::to_value(&log)?;
-                let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                let res: R = serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 println!("Passed1");
                 Ok(res)
             } else {
@@ -154,7 +164,7 @@ impl JsonRpcClient for MockMiddleware {
                     .unwrap_or_default();
 
                 let res = serde_json::to_value(&block_hashes)?;
-                let res: R = serde_json::from_value(res).map_err(|e| Self::Error::SerdeJson(e))?;
+                let res: R = serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
         } else {
@@ -198,7 +208,7 @@ impl Middleware for MockMiddleware {
 
     /// used for initial sync to get logs of already finalized diffs
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
-        self.trigger(TriggerType::GetLogs(filter.clone())).await;
+        self.trigger(TriggerType::GetLogs(filter)).await;
         Ok(Vec::new())
     }
 
@@ -208,7 +218,7 @@ impl Middleware for MockMiddleware {
         block_hash_or_number: T,
     ) -> Result<Option<Block<TxHash>>, Self::Error> {
         let block_id = block_hash_or_number.into();
-        self.trigger(TriggerType::GetBlock(block_id.clone())).await;
+        self.trigger(TriggerType::GetBlock(block_id)).await;
         // TODO change
         Ok(Some(self.data.lock().await.best_block.clone()))
     }

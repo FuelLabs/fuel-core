@@ -479,7 +479,7 @@ mod test {
         }
         #[async_trait]
         impl TriggerHandle for Handle {
-            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+            async fn run<'a>(&mut self, _: &mut MockData, trigger: TriggerType<'a>) {
                 if matches!(trigger, TriggerType::Syncing) {
                     self.i += 1;
 
@@ -489,10 +489,10 @@ mod test {
                         return;
                     }
                     if self.i == 4 {
-                        assert!(true, "Something is fishy. We should have stopped");
+                        panic!("Something is fishy. We should have stopped");
                     }
                 } else {
-                    assert!(true, "Unknown trigger received");
+                    panic!("Unknown trigger received");
                 }
             }
         }
@@ -527,7 +527,7 @@ mod test {
         }
         #[async_trait]
         impl TriggerHandle for Handle {
-            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+            async fn run<'a>(&mut self, _: &mut MockData, trigger: TriggerType<'a>) {
                 if let TriggerType::GetLogs(filter) = trigger {
                     if let FilterBlockOption::Range {
                         from_block,
@@ -595,7 +595,7 @@ mod test {
         }
         #[async_trait]
         impl TriggerHandle for Handle {
-            async fn run(&mut self, _: &mut MockData, trigger: TriggerType) {
+            async fn run<'a>(&mut self, _: &mut MockData, trigger: TriggerType<'a>) {
                 match self.i {
                     // check if eth client is in sync.
                     0 => assert_eq!(
@@ -620,10 +620,10 @@ mod test {
                                     assert_eq!(from_block, Some(BlockNumber::Number(U64([100]))));
                                     assert_eq!(to_block, Some(BlockNumber::Number(U64([102]))));
                                 }
-                                _ => assert!(true, "Expect filter block option range"),
+                                _ => panic!("Expect filter block option range"),
                             };
                         }
-                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 1", trigger),
+                        _ => panic!("wrong trigger:{:?} we expected get logs 1", trigger),
                     },
                     // get second batch of logs. for initialy sync
                     3 => match trigger {
@@ -636,10 +636,10 @@ mod test {
                                     assert_eq!(from_block, Some(BlockNumber::Number(U64([102]))));
                                     assert_eq!(to_block, Some(BlockNumber::Number(U64([104]))));
                                 }
-                                _ => assert!(true, "Expect filter block option range"),
+                                _ => panic!("Expect filter block option range"),
                             };
                         }
-                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 1", trigger),
+                        _ => panic!("wrong trigger:{:?} we expected get logs 1", trigger),
                     },
                     // update our best block
                     4 => {
@@ -668,10 +668,10 @@ mod test {
                                     assert_eq!(from_block, Some(BlockNumber::Number(U64([104]))));
                                     assert_eq!(to_block, Some(BlockNumber::Number(U64([134]))));
                                 }
-                                _ => assert!(true, "Expect filter block option range for 6"),
+                                _ => panic!("Expect filter block option range for 6"),
                             };
                         }
-                        _ => assert!(true, "wrong trigger:{:?} we expected get logs 6", trigger),
+                        _ => panic!("wrong trigger:{:?} we expected get logs 6", trigger),
                     },
                     // get best eth block to syncornize log watcher
                     7 => {
@@ -689,7 +689,7 @@ mod test {
                             "Get block hash from best block number to check that it is not changed"
                         )
                     }
-                    _ => assert!(true, "Unknown request, we should have finished until now"),
+                    _ => panic!("Unknown request, we should have finished until now"),
                 }
                 self.i += 1;
             }
