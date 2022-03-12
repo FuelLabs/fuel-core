@@ -7,7 +7,7 @@ use commands::{
 mod commands;
 
 #[derive(Debug, Parser)]
-#[clap(name = "xtask", about = "fuel-core dev builder")]
+#[clap(name = "xtask", about = "fuel-core dev builder", version)]
 pub struct Opt {
     #[clap(subcommand)]
     command: Xtask,
