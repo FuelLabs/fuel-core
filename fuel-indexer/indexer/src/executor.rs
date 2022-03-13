@@ -4,7 +4,11 @@ use crate::{IndexerError, IndexerResult, Manifest};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use wasmer::{imports, Instance, LazyInit, Memory, Module, NativeFunc, Store, WasmerEnv};
+use thiserror::Error;
+use tracing::error;
+use wasmer::{
+    imports, Instance, LazyInit, Memory, Module, NativeFunc, RuntimeError, Store, WasmerEnv,
+};
 use wasmer_engine_universal::Universal;
 
 cfg_if::cfg_if! {
@@ -21,21 +25,32 @@ cfg_if::cfg_if! {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum TxError {
+    #[error("Diesel Error {0:?}")]
+    DieselError(#[from] diesel::result::Error),
+    #[error("WASM Runtime Error {0:?}")]
+    WasmRuntimeError(#[from] RuntimeError),
+}
+
 #[derive(WasmerEnv, Clone)]
 pub struct IndexEnv {
     #[wasmer(export)]
     memory: LazyInit<Memory>,
     #[wasmer(export(name = "alloc_fn"))]
     alloc: LazyInit<NativeFunc<u32, u32>>,
+    #[wasmer(export(name = "dealloc_fn"))]
+    dealloc: LazyInit<NativeFunc<(u32, u32), ()>>,
     pub db: Arc<Mutex<Database>>,
 }
 
 impl IndexEnv {
     pub fn new(db_conn: String) -> IndexerResult<IndexEnv> {
-        let db = Arc::new(Mutex::new(Database::new(db_conn)?));
+        let db = Arc::new(Mutex::new(Database::new(&db_conn)?));
         Ok(IndexEnv {
             memory: Default::default(),
             alloc: Default::default(),
+            dealloc: Default::default(),
             db,
         })
     }
@@ -48,6 +63,7 @@ pub struct IndexExecutor {
     _module: Module,
     _store: Store,
     events: HashMap<String, Vec<String>>,
+    db: Arc<Mutex<Database>>,
 }
 
 impl IndexExecutor {
@@ -89,6 +105,7 @@ impl IndexExecutor {
             _module: module,
             _store: store,
             events,
+            db: env.db.clone(),
         })
     }
 
@@ -98,31 +115,37 @@ impl IndexExecutor {
     }
 
     /// Trigger a WASM event handler, passing in a serialized event struct.
-    pub fn trigger_event(&self, event_name: &str, bytes: Vec<u8>) -> IndexerResult<()> {
-        let alloc_fn = self
-            .instance
-            .exports
-            .get_native_function::<u32, u32>("alloc_fn")?;
-        let memory = self.instance.exports.get_memory("memory")?;
+    pub fn trigger_event(&self, event_name: &str, bytes: Vec<Vec<u8>>) -> IndexerResult<()> {
+        let mut args = Vec::with_capacity(bytes.len());
+        for arg in bytes.into_iter() {
+            args.push(ffi::WasmArg::new(&self.instance, arg)?)
+        }
+        let arg_list = ffi::WasmArgList::new(&self.instance, args.iter().collect())?;
 
         if let Some(handlers) = self.events.get(event_name) {
             for handler in handlers.iter() {
                 let fun = self
                     .instance
                     .exports
-                    .get_native_function::<(u32, u32), ()>(handler)?;
+                    .get_native_function::<(u32, u32, u32), ()>(handler)?;
 
-                let wasm_mem = alloc_fn.call(bytes.len() as u32)?;
-                let range = wasm_mem as usize..wasm_mem as usize + bytes.len();
+                self.db.lock().expect("Lock poisoned").start_transaction()?;
 
-                unsafe {
-                    // Safety: the alloc call for wasm_mem has succeeded for bytes.len()
-                    //         so we have this block of memory for copying. The fun.call() below
-                    //         will release it.
-                    memory.data_unchecked_mut()[range].copy_from_slice(&bytes);
+                let res = fun.call(arg_list.get_ptrs(), arg_list.get_lens(), arg_list.get_len());
+
+                if let Err(e) = res {
+                    error!("Indexer failed {e:?}");
+                    self.db
+                        .lock()
+                        .expect("Lock poisoned")
+                        .revert_transaction()?;
+                    return Err(IndexerError::RuntimeError(e));
+                } else {
+                    self.db
+                        .lock()
+                        .expect("Lock poisoned")
+                        .commit_transaction()?;
                 }
-
-                let _result = fun.call(wasm_mem, bytes.len() as u32)?;
             }
         }
         Ok(())
@@ -133,11 +156,30 @@ impl IndexExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use diesel::sql_types::*;
+    use diesel::{
+        prelude::PgConnection, sql_query, Connection, Queryable, QueryableByName, RunQueryDsl,
+    };
+    use fuels_abigen_macro::abigen;
+    use fuels_rs::abi_encoder::ABIEncoder;
+
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
     const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
     const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
-    const GOOD_DATA: &'static [u8] = include_bytes!("test_data/good_event.bin");
+
+    abigen!(
+        MyContract,
+        "fuel-indexer/indexer/src/test_data/my_struct.json"
+    );
+
+    #[derive(Debug, Queryable, QueryableByName)]
+    struct Thing1 {
+        #[sql_type = "BigInt"]
+        id: i64,
+        #[sql_type = "Text"]
+        account: String,
+    }
 
     #[test]
     fn test_executor() {
@@ -155,13 +197,45 @@ mod tests {
 
         let executor = executor.unwrap();
 
-        let result = executor.trigger_event("an_event_name", b"ejfiaiddiie".to_vec());
+        let result = executor.trigger_event("an_event_name", vec![b"ejfiaiddiie".to_vec()]);
         match result {
             Err(IndexerError::RuntimeError(_)) => (),
             e => panic!("Should have been a runtime error {:#?}", e),
         }
 
-        let result = executor.trigger_event("an_event_name", GOOD_DATA.to_vec());
+        let evt1 = SomeEvent {
+            id: 1020,
+            account: [0xaf; 32],
+        };
+        let evt2 = AnotherEvent {
+            id: 100,
+            hash: [0x43; 32],
+            bar: true,
+        };
+
+        let encoded = vec![
+            ABIEncoder::new()
+                .encode(&[evt1.into_token()])
+                .expect("Failed to encode"),
+            ABIEncoder::new()
+                .encode(&[evt2.into_token()])
+                .expect("Failed to encode"),
+        ];
+
+        let result = executor.trigger_event("an_event_name", encoded);
         assert!(result.is_ok());
+
+        let conn = PgConnection::establish(DATABASE_URL).expect("Postgres connection failed");
+        let data: Vec<Thing1> =
+            sql_query("select id,account from test_namespace.thing1 where id = 1020;")
+                .load(&conn)
+                .expect("Database query failed");
+
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].id, 1020);
+        assert_eq!(
+            data[0].account,
+            "afafafafafafafafafafafafafafafafafafafafafafafafafafafafafafafaf"
+        );
     }
 }

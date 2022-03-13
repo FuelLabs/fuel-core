@@ -5,10 +5,15 @@ extern crate diesel;
 extern crate alloc;
 use alloc::vec::Vec;
 
+use crate::sql_types::ColumnType;
 use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
-// serde_scale for now, can look at other options if necessary.
-use crate::sql_types::ColumnType;
+
+pub const LOG_LEVEL_ERROR: u32 = 0;
+pub const LOG_LEVEL_WARN: u32 = 1;
+pub const LOG_LEVEL_INFO: u32 = 2;
+pub const LOG_LEVEL_DEBUG: u32 = 3;
+pub const LOG_LEVEL_TRACE: u32 = 4;
 
 #[cfg(feature = "use-std")]
 use sha2::{Digest, Sha256};
@@ -21,10 +26,16 @@ pub mod sql_types;
 #[cfg(feature = "db-models")]
 pub mod db;
 
-pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, ContractId, Salt};
+pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, ContractId, Salt, Word};
 
 pub type ID = u64;
+pub type Int4 = i32;
+pub type Int8 = i64;
+pub type UInt4 = u32;
+pub type UInt8 = u64;
+pub type Timestamp = u64;
 
+// serde_scale for now, can look at other options if necessary.
 pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
     serde_scale::to_vec(obj).expect("Serialize failed")
 }
@@ -54,6 +65,11 @@ pub enum FtColumn {
     Bytes8(Bytes8),
     Bytes32(Bytes32),
     ContractId(ContractId),
+    Int4(i32),
+    Int8(i64),
+    UInt4(u32),
+    UInt8(u64),
+    Timestamp(u64),
     Salt(Salt),
 }
 
@@ -94,6 +110,31 @@ impl FtColumn {
                 let salt = Salt::try_from(&bytes[..size]).expect("Invalid slice length");
                 FtColumn::Salt(salt)
             }
+            ColumnType::Int4 => {
+                let int4 =
+                    i32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Int4(int4)
+            }
+            ColumnType::Int8 => {
+                let int8 =
+                    i64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Int8(int8)
+            }
+            ColumnType::UInt4 => {
+                let int4 =
+                    u32::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::UInt4(int4)
+            }
+            ColumnType::UInt8 => {
+                let int8 =
+                    u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::UInt8(int8)
+            }
+            ColumnType::Timestamp => {
+                let uint8 =
+                    u64::from_le_bytes(bytes[..size].try_into().expect("Invalid slice length"));
+                FtColumn::Timestamp(uint8)
+            }
             ColumnType::Blob => {
                 panic!("Blob not supported for FtColumn!");
             }
@@ -124,6 +165,21 @@ impl FtColumn {
             FtColumn::ContractId(value) => {
                 format!("'{:x}'", value)
             }
+            FtColumn::Int4(value) => {
+                format!("{}", value)
+            }
+            FtColumn::Int8(value) => {
+                format!("{}", value)
+            }
+            FtColumn::UInt4(value) => {
+                format!("{}", value)
+            }
+            FtColumn::UInt8(value) => {
+                format!("{}", value)
+            }
+            FtColumn::Timestamp(value) => {
+                format!("{}", value)
+            }
             FtColumn::Salt(value) => {
                 format!("'{:x}'", value)
             }
@@ -131,11 +187,11 @@ impl FtColumn {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "use-std"))]
 mod tests {
     use super::*;
 
-    #[cfg_attr(feature = "use-std", test)]
+    #[test]
     fn test_fragments() {
         let id = FtColumn::ID(123456);
         let addr = FtColumn::Address(Address::try_from([0x12; 32]).expect("Bad bytes"));
@@ -144,6 +200,11 @@ mod tests {
         let bytes8 = FtColumn::Bytes8(Bytes8::try_from([0x9D; 8]).expect("Bad bytes"));
         let bytes32 = FtColumn::Bytes32(Bytes32::try_from([0xEE; 32]).expect("Bad bytes"));
         let contractid = FtColumn::ContractId(ContractId::try_from([0x78; 32]).expect("Bad bytes"));
+        let int4 = FtColumn::Int4(i32::from_le_bytes([0x78; 4]));
+        let int8 = FtColumn::Int8(i64::from_le_bytes([0x78; 8]));
+        let uint4 = FtColumn::UInt4(u32::from_le_bytes([0x78; 4]));
+        let uint8 = FtColumn::UInt8(u64::from_le_bytes([0x78; 8]));
+        let uint64 = FtColumn::Timestamp(u64::from_le_bytes([0x78; 8]));
         let salt = FtColumn::Salt(Salt::try_from([0x31; 32]).expect("Bad bytes"));
 
         insta::assert_yaml_snapshot!(id.query_fragment());
@@ -154,5 +215,10 @@ mod tests {
         insta::assert_yaml_snapshot!(bytes32.query_fragment());
         insta::assert_yaml_snapshot!(contractid.query_fragment());
         insta::assert_yaml_snapshot!(salt.query_fragment());
+        insta::assert_yaml_snapshot!(int4.query_fragment());
+        insta::assert_yaml_snapshot!(int8.query_fragment());
+        insta::assert_yaml_snapshot!(uint4.query_fragment());
+        insta::assert_yaml_snapshot!(uint8.query_fragment());
+        insta::assert_yaml_snapshot!(uint64.query_fragment());
     }
 }

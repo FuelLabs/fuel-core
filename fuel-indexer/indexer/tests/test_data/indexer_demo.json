@@ -1,0 +1,44 @@
+[
+    {
+        "type":"contract",
+        "inputs":[
+            {
+                "name": "my_event",
+                "type": "struct LogEvent",
+                "components":
+                [
+                    {
+                        "name":"contract",
+                        "type":"b256"
+                    },
+                    {
+                        "name":"rega",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regb",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regc",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"regd",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"pc",
+                        "type":"u64"
+                    },
+                    {
+                        "name":"is",
+                        "type":"u64"
+                    }
+                ]
+            }
+        ],
+        "name":"takes_struct",
+        "outputs":[]
+    }
+]

@@ -5,6 +5,7 @@ pub struct Manifest {
     pub namespace: String,
     pub graphql_schema: String,
     pub wasm_module: String,
+    pub start_block: Option<u64>,
     pub handlers: Vec<Handler>,
     pub test_events: Vec<Event>,
 }
