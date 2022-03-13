@@ -127,23 +127,18 @@ impl SchemaBuilder {
                 }
                 .insert(conn)?;
             }
-        println!("TJDEBUG la-know-roote");
 
             for query in statements.iter() {
-                println!("TJDEBUG stmt {}", query);
                 sql_query(query).execute(conn)?;
             }
-        println!("TJDEBUG la-louw-roote");
 
             for type_id in type_ids {
                 type_id.insert(conn)?;
             }
-        println!("TJDEBUG louw-roote");
 
             for column in columns {
                 column.insert(conn)?;
             }
-        println!("TJDEBUG he-nu-roote");
             Ok(())
         })?;
 
@@ -259,7 +254,6 @@ pub struct Schema {
 
 impl Schema {
     pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
-        println!("TJDEBUG lode-ing?");
         let root = GraphRoot::get_latest(conn, name)?;
         let root_cols = RootColumns::list_by_id(conn, root.id)?;
         let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;

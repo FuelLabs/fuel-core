@@ -55,9 +55,7 @@ pub struct NewGraphRoot {
 impl NewGraphRoot {
     pub fn insert(self, conn: &Conn) -> QueryResult<usize> {
         use gr::graph_root::dsl::*;
-        let q = diesel::insert_into(graph_root).values(self);
-        println!("TJDEBUG here it is: {}", diesel::debug_query::<diesel::sqlite::Sqlite, _>(&q).to_string());
-        q.execute(conn)
+        diesel::insert_into(graph_root).values(self).execute(conn)
     }
 }
 
