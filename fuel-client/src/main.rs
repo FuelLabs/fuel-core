@@ -22,6 +22,7 @@ enum TransactionCommands {
 }
 
 #[derive(Parser)]
+#[clap(name = "fuel-gql-cli", about = "Fuel GraphQL Endpoint CLI", version)]
 struct CliArgs {
     #[clap(name = "endpoint", default_value = "127.0.0.1:4000", long = "endpoint")]
     endpoint: String,
