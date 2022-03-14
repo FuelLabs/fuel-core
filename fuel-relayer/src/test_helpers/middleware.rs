@@ -138,7 +138,6 @@ impl JsonRpcClient for MockMiddleware {
             let mut ser = serde_json::Serializer::new(buffer);
             params.serialize(&mut ser)?;
             let out = ser.into_inner().buffer().to_vec();
-            println!("Output:{:?}", String::from_utf8_lossy(&out));
             let parameters: Vec<U256> = serde_json::from_slice(&out)?;
             if parameters[0] == U256::zero() {
                 self.trigger(TriggerType::GetLogFilterChanges).await;
@@ -151,7 +150,6 @@ impl JsonRpcClient for MockMiddleware {
                     .unwrap_or_default();
                 let res = serde_json::to_value(&log)?;
                 let res: R = serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
-                println!("Passed1");
                 Ok(res)
             } else {
                 self.trigger(TriggerType::GetBlockFilterChanges).await;

@@ -1,31 +1,33 @@
-use fuel_relayer::{Config, Relayer, Service};
+use std::str::FromStr;
+
+use fuel_relayer::{Config, Service};
 
 use ethers_core::types::H160;
 use fuel_core_interfaces::{db::helpers::DummyDb, signer::helpers::DummySigner};
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, Mutex};
 
-use tracing::info;
 use tracing_subscriber;
 
 #[tokio::test]
 async fn main_run() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
-
-    info!("Hello world");
     let config = Config {
         eth_finality_slider: 10,
         eth_client: "wss://mainnet.infura.io/ws/v3/0954246eab5544e89ac236b668980810".into(),
-        eth_v2_contract_addresses: vec![H160::zero()],
-        eth_v2_contract_deployment: 15_000_090,
-        initial_sync_step: 1000,
+        // this is wETH ERC20 contract.
+        eth_v2_contract_addresses: vec![H160::from_str(
+            "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+        )
+        .unwrap()],
+        eth_v2_contract_deployment: 14_380_000,
+        initial_sync_step: 100,
         eth_initial_sync_refresh: std::time::Duration::from_secs(10),
     };
 
     let db = Box::new(Mutex::new(DummyDb::filled()));
-    let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
+    let (_broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
-    info!("TEST1");
-    let service = Service::new(&config, db, broadcast_rx, signer).await?;
+    let _service = Service::new(&config, db, broadcast_rx, signer).await?;
     //let sender = service.sender().clone();
 
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
