@@ -38,9 +38,3 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-
 fuel-types = { version = "0.3", features = ["serde-types", "random"] }
 rand = "0.8"
 tracing-subscriber = "0.3"
-
-
-# Example of customizing binaries in Cargo.toml.
-[[test]]
-name = "dummy_run"
-path = "test/run.rs"
