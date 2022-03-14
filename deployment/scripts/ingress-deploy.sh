@@ -13,9 +13,11 @@ if [ "${k8s_provider}" == "eks" ]; then
     mv prod-issuer.yaml prod-issuer.template
     envsubst < prod-issuer.template > prod-issuer.yaml
     rm prod-issuer.template
+    kubectl apply -f prod-issuer.yaml
     mv ingress.yaml ingress.template
     envsubst < ingress.template > ingress.yaml
     rm ingress.template
+    kubectl apply -f ingress.yaml
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
