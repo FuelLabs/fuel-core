@@ -1,17 +1,14 @@
 use fuel_relayer::{Config, Relayer, Service};
 
 use ethers_core::types::H160;
-use fuel_core_interfaces::{db::helpers::DummyDb,
-    signer::helpers::DummySigner,
-};
+use fuel_core_interfaces::{db::helpers::DummyDb, signer::helpers::DummySigner};
 use tokio::sync::{broadcast, mpsc, Mutex};
 
 use tracing::info;
 use tracing_subscriber;
 
 #[tokio::test]
-async fn main_run() -> Result<(),anyhow::Error> {
-
+async fn main_run() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
 
     info!("Hello world");
@@ -28,7 +25,7 @@ async fn main_run() -> Result<(),anyhow::Error> {
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
     info!("TEST1");
-    let service = Service::new(&config,db,broadcast_rx,signer).await?;
+    let service = Service::new(&config, db, broadcast_rx, signer).await?;
     //let sender = service.sender().clone();
 
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
