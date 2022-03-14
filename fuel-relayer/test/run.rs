@@ -6,8 +6,6 @@ use ethers_core::types::H160;
 use fuel_core_interfaces::{db::helpers::DummyDb, signer::helpers::DummySigner};
 use tokio::sync::{broadcast, Mutex};
 
-use tracing_subscriber;
-
 #[tokio::test]
 async fn main_run() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();

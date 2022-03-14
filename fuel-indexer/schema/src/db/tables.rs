@@ -1,12 +1,15 @@
 use crate::{
-    db::models::{NewColumn, TypeIds},
+    db::models::{
+        Columns, GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, RootColumns, TypeIds,
+    },
     sql_types::ColumnType,
     type_id,
 };
-use diesel::prelude::PgConnection;
 use diesel::result::QueryResult;
+use diesel::{prelude::PgConnection, sql_query, Connection, RunQueryDsl};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefinition};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
 pub struct SchemaBuilder {
@@ -15,6 +18,11 @@ pub struct SchemaBuilder {
     columns: Vec<NewColumn>,
     namespace: String,
     version: String,
+    schema: String,
+    types: HashSet<String>,
+    fields: HashMap<String, HashMap<String, String>>,
+    query: String,
+    query_fields: HashMap<String, HashMap<String, String>>,
 }
 
 impl SchemaBuilder {
@@ -26,7 +34,7 @@ impl SchemaBuilder {
         }
     }
 
-    pub fn build(mut self, schema: &str) -> Schema {
+    pub fn build(mut self, schema: &str) -> Self {
         let create = format!("CREATE SCHEMA IF NOT EXISTS {}", self.namespace);
         self.statements.push(create);
 
@@ -35,7 +43,7 @@ impl SchemaBuilder {
             Err(e) => panic!("Error parsing graphql schema {:?}", e),
         };
 
-        let root = ast
+        let query = ast
             .definitions
             .iter()
             .filter_map(|s| {
@@ -48,31 +56,81 @@ impl SchemaBuilder {
             })
             .next();
 
-        if root.is_none() {
+        if query.is_none() {
             panic!("TODO: this needs to be error type");
         }
 
-        let root = root.cloned().unwrap();
+        let query = query.cloned().unwrap();
 
         for def in ast.definitions.iter() {
             if let Definition::TypeDefinition(typ) = def {
-                self.generate_table_sql(&root, typ);
+                self.generate_table_sql(&query, typ);
             }
         }
 
+        self.query = query;
+        self.schema = schema.to_string();
+
+        self
+    }
+
+    pub fn commit_metadata(self, conn: &PgConnection) -> QueryResult<Schema> {
         let SchemaBuilder {
+            version,
             statements,
             type_ids,
             columns,
-            ..
+            namespace,
+            types,
+            fields,
+            query,
+            query_fields,
+            schema,
         } = self;
 
-        Schema {
-            root,
-            statements,
-            type_ids,
-            columns,
-        }
+        conn.transaction::<(), diesel::result::Error, _>(|| {
+            NewGraphRoot {
+                version: version.clone(),
+                schema_name: namespace.clone(),
+                query: query.clone(),
+                schema,
+            }
+            .insert(conn)?;
+
+            let latest = GraphRoot::get_latest(conn, &namespace)?;
+
+            let fields = query_fields.get(&query).expect("No query root!");
+
+            for (key, val) in fields {
+                NewRootColumns {
+                    root_id: latest.id,
+                    column_name: key.to_string(),
+                    graphql_type: val.to_string(),
+                }
+                .insert(conn)?;
+            }
+
+            for query in statements.iter() {
+                sql_query(query).execute(conn)?;
+            }
+
+            for type_id in type_ids {
+                type_id.insert(conn)?;
+            }
+
+            for column in columns {
+                column.insert(conn)?;
+            }
+            Ok(())
+        })?;
+
+        Ok(Schema {
+            version,
+            namespace,
+            query,
+            types,
+            fields,
+        })
     }
 
     fn process_type<'a>(&self, field_type: &Type<'a, String>) -> (ColumnType, bool) {
@@ -98,6 +156,7 @@ impl SchemaBuilder {
                 column_position: pos as i32,
                 column_name: f.name.to_string(),
                 column_type: typ,
+                graphql_type: f.field_type.to_string(),
                 nullable,
             };
 
@@ -110,6 +169,7 @@ impl SchemaBuilder {
             column_position: fragments.len() as i32,
             column_name: "object".to_string(),
             column_type: ColumnType::Blob,
+            graphql_type: "__".into(),
             nullable: false,
         };
 
@@ -120,9 +180,21 @@ impl SchemaBuilder {
     }
 
     fn generate_table_sql<'a>(&mut self, root: &str, typ: &TypeDefinition<'a, String>) {
+        fn map_fields(fields: &[Field<'_, String>]) -> HashMap<String, String> {
+            fields
+                .iter()
+                .map(|f| (f.name.to_string(), f.field_type.to_string()))
+                .collect()
+        }
         match typ {
             TypeDefinition::Object(o) => {
+                self.types.insert(o.name.to_string());
+                self.fields
+                    .insert(o.name.to_string(), map_fields(&o.fields));
+
                 if o.name == root {
+                    self.query_fields
+                        .insert(root.to_string(), map_fields(&o.fields));
                     return;
                 }
 
@@ -149,28 +221,67 @@ impl SchemaBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct Schema {
-    pub root: String,
-    pub statements: Vec<String>,
-    pub type_ids: Vec<TypeIds>,
-    pub columns: Vec<NewColumn>,
+    pub version: String,
+    /// Graph ID, and the DB schema this data lives in.
+    pub namespace: String,
+    /// Root Graphql type.
+    pub query: String,
+    /// List of GraphQL type names.
+    pub types: HashSet<String>,
+    /// Mapping of key/value pairs per GraphQL type.
+    pub fields: HashMap<String, HashMap<String, String>>,
 }
 
 impl Schema {
-    pub fn commit_metadata(&self, conn: &PgConnection) -> QueryResult<()> {
-        let Schema {
-            type_ids, columns, ..
-        } = self;
+    pub fn load_from_db(conn: &PgConnection, name: &str) -> QueryResult<Self> {
+        let root = GraphRoot::get_latest(conn, name)?;
+        let root_cols = RootColumns::list_by_id(conn, root.id)?;
+        let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;
 
-        for type_id in type_ids {
-            type_id.insert(conn)?;
+        let mut types = HashSet::new();
+        let mut fields = HashMap::new();
+
+        types.insert(root.query.clone());
+        fields.insert(
+            root.query.clone(),
+            root_cols
+                .into_iter()
+                .map(|c| (c.column_name, c.graphql_type))
+                .collect(),
+        );
+        for tid in typeids {
+            types.insert(tid.graphql_name.clone());
+
+            let columns = Columns::list_by_id(conn, tid.id)?;
+            fields.insert(
+                tid.graphql_name,
+                columns
+                    .into_iter()
+                    .map(|c| (c.column_name, c.graphql_type))
+                    .collect(),
+            );
         }
 
-        for column in columns {
-            column.insert(conn)?;
-        }
+        Ok(Schema {
+            version: root.version,
+            namespace: root.schema_name,
+            query: root.query,
+            types,
+            fields,
+        })
+    }
 
-        Ok(())
+    pub fn check_type(&self, type_name: &str) -> bool {
+        self.types.contains(type_name)
+    }
+
+    pub fn field_type(&self, cond: &str, name: &str) -> Option<&String> {
+        match self.fields.get(cond) {
+            Some(fieldset) => fieldset.get(name),
+            _ => None,
+        }
     }
 }
 
@@ -205,7 +316,7 @@ mod tests {
     const CREATE_THING1: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing1 (\n",
-        " id bigint not null,\n",
+        " id bigint primary key not null,\n",
         "account varchar(64) not null,\n",
         "object bytea not null",
         "\n)"
@@ -213,7 +324,7 @@ mod tests {
     const CREATE_THING2: &str = concat!(
         "CREATE TABLE IF NOT EXISTS\n",
         " test_namespace.thing2 (\n",
-        " id bigint not null,\n",
+        " id bigint primary key not null,\n",
         "account varchar(64) not null,\n",
         "hash varchar(64) not null,\n",
         "object bytea not null\n",
@@ -224,11 +335,8 @@ mod tests {
     fn test_schema_builder() {
         let sb = SchemaBuilder::new("test_namespace", "a_version_string");
 
-        let Schema {
-            root, statements, ..
-        } = sb.build(GRAPHQL_SCHEMA);
+        let SchemaBuilder { statements, .. } = sb.build(GRAPHQL_SCHEMA);
 
-        assert_eq!(root, "QueryRoot");
         assert_eq!(statements[0], CREATE_SCHEMA);
         assert_eq!(statements[1], CREATE_THING1);
         assert_eq!(statements[2], CREATE_THING2);

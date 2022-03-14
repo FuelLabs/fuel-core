@@ -1,0 +1,8 @@
+---
+source: fuel-indexer/schema/src/lib.rs
+assertion_line: 191
+expression: int8.query_fragment()
+
+---
+"8680820740569200760"
+

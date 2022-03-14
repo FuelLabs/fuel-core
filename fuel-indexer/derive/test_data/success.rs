@@ -6,6 +6,11 @@ use alloc::vec::Vec;
 use fuel_indexer::types::*;
 use fuels_core::{ParamType, Token};
 
+struct Logger;
+impl Logger {
+    pub fn info(_: &str) {}
+}
+
 struct SomeEvent {
     id: u64,
     account: Address,
@@ -51,6 +56,7 @@ fn function_one(event: SomeEvent) {
 
 fn main() {
     use fuels_core::abi_encoder::ABIEncoder;
+    use alloc::vec;
 
     let s = SomeEvent {
         id: 0,
@@ -62,6 +68,10 @@ fn main() {
     let ptr = bytes.as_mut_ptr();
     let len = bytes.len();
     core::mem::forget(bytes);
+    let mut ptrs = vec![ptr];
+    let mut lens = vec![len];
+    let ptrs = ptrs.as_mut_ptr();
+    let lens = lens.as_mut_ptr();
 
-    function_one(ptr, len);
+    function_one(ptrs, lens, 1);
 }

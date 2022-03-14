@@ -5,6 +5,12 @@ scalar Bytes4
 scalar Bytes8
 scalar Bytes32
 scalar Bytes64
+scalar Int4
+scalar Int8
+scalar UInt4
+scalar UInt8
+scalar Timestamp
+scalar Color
 scalar ContractId
 scalar Salt
 

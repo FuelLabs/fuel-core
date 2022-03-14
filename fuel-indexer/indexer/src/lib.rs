@@ -2,14 +2,18 @@ use diesel::result::Error as DieselError;
 use thiserror::Error;
 use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
 
+pub mod api;
 mod database;
 pub mod executor;
 mod ffi;
 mod manifest;
+mod service;
 
+pub use api::GraphQlApi;
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};
 pub use manifest::Manifest;
+pub use service::{IndexerConfig, IndexerService};
 
 pub type IndexerResult<T> = core::result::Result<T, IndexerError>;
 
@@ -31,8 +35,12 @@ pub enum IndexerError {
     DatabaseInitError(#[from] r2d2::Error),
     #[error("Database query error: {0:?}")]
     DatabaseQueryError(#[from] DieselError),
+    #[error("Database connection error: {0:?}")]
+    ConnectionError(#[from] diesel::ConnectionError),
     #[error("Missing handler: {0:?}")]
     MissingHandler(String),
+    #[error("Indexer transaction error {0:?}")]
+    TxError(#[from] crate::executor::TxError),
     #[error("Unknown error")]
     Unknown,
 }

@@ -9,6 +9,7 @@ lazy_static::lazy_static! {
 }
 
 #[derive(Parser, Debug)]
+#[clap(name = "fuel-core", about = "Fuel client implementation", version)]
 pub struct Opt {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,

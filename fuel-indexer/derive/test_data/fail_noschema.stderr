@@ -1,7 +1,7 @@
 error: Could not open schema file Os { code: 2, kind: NotFound, message: "No such file or directory" }
- --> test_data/fail_noschema.rs:9:1
-  |
-9 | graphql_schema!("namespace", "doesnt_exist.graphql");
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = note: this error originates in the macro `graphql_schema` (in Nightly builds, run with -Z macro-backtrace for more info)
+  --> test_data/fail_noschema.rs:15:1
+   |
+15 | graphql_schema!("namespace", "doesnt_exist.graphql");
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: this error originates in the macro `graphql_schema` (in Nightly builds, run with -Z macro-backtrace for more info)

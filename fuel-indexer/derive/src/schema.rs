@@ -293,8 +293,8 @@ pub(crate) fn process_graphql_schema(inputs: TokenStream) -> TokenStream {
     let version = const_item("VERSION", &schema_version(&text));
 
     let mut output = quote! {
-        use alloc::{vec, vec::Vec};
-        use fuel_indexer::Entity;
+        use alloc::{format, vec, vec::Vec};
+        use fuel_indexer::{Entity, Logger};
         use fuel_indexer::types::*;
         #namespace
         #version

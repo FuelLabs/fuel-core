@@ -1,0 +1,8 @@
+---
+source: fuel-indexer/schema/src/lib.rs
+assertion_line: 220
+expression: uint4.query_fragment()
+
+---
+"2021161080"
+

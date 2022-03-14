@@ -25,8 +25,8 @@ use fuel_core_interfaces::{
     signer::Signer,
 };
 
-const REPORT_PROGRESS_EVERY_N_BLOCKS : u64 = 500;
-const PROVIDER_INTERVAL : u64 = 1000;
+const REPORT_PROGRESS_EVERY_N_BLOCKS: u64 = 500;
+const PROVIDER_INTERVAL: u64 = 1000;
 ///
 pub struct Relayer {
     /// Pendning stakes/assets/withdrawals. Before they are finalized
@@ -70,7 +70,8 @@ impl Relayer {
     /// create provider that we use for communication with ethereum.
     pub async fn provider(uri: &str) -> Result<Provider<Ws>, Error> {
         let ws = Ws::connect(uri).await?;
-        let provider = Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
+        let provider =
+            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
         Ok(provider)
     }
 
@@ -149,12 +150,15 @@ impl Relayer {
         // on start of contract there is possibility of them being overlapping, so we want to skip for loop
         // with next line
         let best_finalized_block = max(last_finalized_eth_block, best_finalized_block);
-        info!("get logs from:{} to best finalized block:{}",last_finalized_eth_block,best_finalized_block);
+        info!(
+            "get logs from:{} to best finalized block:{}",
+            last_finalized_eth_block, best_finalized_block
+        );
 
         for start in (last_finalized_eth_block..best_finalized_block).step_by(step) {
             let end = min(start + step as u64, best_finalized_block);
-            if (start - last_finalized_eth_block)%REPORT_PROGRESS_EVERY_N_BLOCKS == 0 {
-                info!("geting log from:{}",start);
+            if (start - last_finalized_eth_block) % REPORT_PROGRESS_EVERY_N_BLOCKS == 0 {
+                info!("geting log from:{}", start);
             }
 
             // TODO  can be parallelized
@@ -307,7 +311,7 @@ impl Relayer {
                     if self.status == RelayerStatus::Stop {
                         return;
                     }
-                    error!("Error happened while doing initial sync:{:?}",err);
+                    error!("Error happened while doing initial sync:{:?}", err);
                     continue;
                 }
             };
