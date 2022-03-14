@@ -6,17 +6,18 @@ use ethers_core::types::H160;
 pub struct Config {
     /// number of blocks between eth blocks where deposits/validator set get finalized.
     /// Finalization is done on eth height measurement.
-    pub(crate) eth_finality_slider: u64,
+    pub eth_finality_slider: u64,
     /// ws address to ethereum client
-    pub(crate) eth_client: String,
+    pub eth_client: String,
     /// etheruem contract address. Create EthAddress into fuel_types
-    pub(crate) eth_v2_contract_addresses: Vec<H160>,
+    pub eth_v2_contract_addresses: Vec<H160>,
     /// contaract deployed on block. Block number after we can start filtering events related to fuel.
     /// It does not need to be aqurate and can be set in past before contracts are deployed.
-    pub(crate) eth_v2_contract_deployment: u64,
+    pub eth_v2_contract_deployment: u64,
     /// number of blocks that will be asked in one step, for initial sync
-    pub(crate) initial_sync_step: usize,
-    pub(crate) eth_initial_sync_refresh: Duration,
+    pub initial_sync_step: usize,
+    /// how long do we wait between calling eth client if it finished syncing
+    pub eth_initial_sync_refresh: Duration,
 }
 
 impl Config {
@@ -57,7 +58,7 @@ impl Config {
     }
 
     pub fn eth_initial_sync_refresh(&self) -> Duration {
-        self.eth_initial_sync_refresh.clone()
+        self.eth_initial_sync_refresh
     }
 }
 

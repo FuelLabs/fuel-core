@@ -12,7 +12,7 @@ use crate::{
 use futures::Future;
 use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
-use tracing::{error, trace, warn};
+use tracing::{error, info, trace, warn};
 
 use anyhow::Error;
 use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
@@ -67,7 +67,7 @@ impl Relayer {
     /// create provider that we use for communication with ethereum.
     pub async fn provider(uri: &str) -> Result<Provider<Ws>, Error> {
         let ws = Ws::connect(uri).await?;
-        let provider = Provider::new(ws);
+        let provider = Provider::new(ws).interval(std::time::Duration::from_millis(500));
         Ok(provider)
     }
 
@@ -79,16 +79,16 @@ impl Relayer {
             tokio::select! {
                 biased;
                 inner_fuel_event = self.receiver.recv() => {
-                    println!("Received fuel event");
-                    match inner_fuel_event.unwrap() {
-                        RelayerEvent::Stop=>{
+                    tracing::info!("Received event in stop handle:{:?}",inner_fuel_event);
+                    match inner_fuel_event {
+                        Some(RelayerEvent::Stop) | None =>{
                             self.status = RelayerStatus::Stop;
                             return Err(RelayerError::Stoped);
                         },
-                        RelayerEvent::GetValidatorSet {response_channel, .. } => {
+                        Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
                             let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
                         },
-                        RelayerEvent::GetStatus { response } => {
+                        Some(RelayerEvent::GetStatus { response }) => {
                             let _ = response.send(self.status);
                         },
                     }
@@ -102,6 +102,7 @@ impl Relayer {
 
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
     /// logs watcher with assurence that we didnt miss any events.
+    #[tracing::instrument(skip_all)]
     async fn initial_sync<'a, P>(
         &mut self,
         provider: &'a P,
@@ -115,6 +116,7 @@ impl Relayer {
     where
         P: Middleware<Error = ProviderError>,
     {
+        info!("initial sync");
         // loop and wait for eth client to finish syncing
         loop {
             if matches!(
@@ -126,6 +128,8 @@ impl Relayer {
             let wait = self.config.eth_initial_sync_refresh();
             self.stop_handle(|| tokio::time::sleep(wait)).await?;
         }
+
+        info!("eth client is finished syncing");
 
         let last_finalized_eth_block = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
@@ -277,6 +281,7 @@ impl Relayer {
     }
 
     /// Starting point of relayer
+    #[tracing::instrument(name = "relayer_run", skip_all)]
     pub async fn run<P>(mut self, provider: P)
     where
         P: Middleware<Error = ProviderError>,
@@ -330,6 +335,7 @@ impl Relayer {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn handle_new_block_event(&mut self, new_block: NewBlockEvent) {
         match new_block {
             NewBlockEvent::NewBlockCreated(_created_block) => {
@@ -355,6 +361,7 @@ impl Relayer {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn handle_inner_fuel_event(&mut self, inner_event: RelayerEvent) {
         match inner_event {
             RelayerEvent::Stop => {
@@ -379,6 +386,7 @@ impl Relayer {
         }
     }
 
+    #[tracing::instrument(skip(self, provider))]
     async fn handle_eth_block_hash<P>(
         &mut self,
         provider: &P,
@@ -407,6 +415,7 @@ impl Relayer {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
         // new log
         if eth_event.is_none() {
@@ -467,7 +476,7 @@ mod test {
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
         let mut config = Config::new();
         config.eth_v2_contract_deployment = 5;
-        config.eth_initial_sync_refresh = Duration::from_millis(100);
+        config.eth_initial_sync_refresh = Duration::from_millis(10);
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::new();
         middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {

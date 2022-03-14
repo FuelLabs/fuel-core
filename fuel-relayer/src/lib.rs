@@ -10,3 +10,4 @@ pub mod test_helpers;
 
 pub use config::Config;
 pub use relayer::Relayer;
+pub use service::Service;

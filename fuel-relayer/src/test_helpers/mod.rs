@@ -17,11 +17,11 @@ pub fn relayer(
     broadcast::Sender<NewBlockEvent>,
 ) {
     let db = Box::new(Mutex::new(DummyDb::filled()));
-    let (tx, rx) = mpsc::channel(10);
+    let (relayer_event_tx, relayer_event_rx) = mpsc::channel(10);
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
-    let relayer = Relayer::new(config, db, rx, broadcast_rx, signer);
-    (relayer, tx, broadcast_tx)
+    let relayer = Relayer::new(config, db, relayer_event_rx, broadcast_rx, signer);
+    (relayer, relayer_event_tx, broadcast_tx)
 }
 
 pub fn provider() -> Option<()> {
