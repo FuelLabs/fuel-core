@@ -1,0 +1,21 @@
+#!/bin/bash
+
+set -o allexport && source .env && set +o allexport 
+
+if [ "${k8s_provider}" == "eks" ]; then
+    echo " ...."
+    aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
+    cd ../ingress/${k8s_provider}
+    kubectl apply -f ingress-controller.yaml
+    helm repo add jetstack https://charts.jetstack.io
+    helm repo update
+    helm install cert-manager jetstack/cert-manager --namespace cert-manager --version v1.2.0 --create-namespace 
+    mv prod-issuer.yaml prod-issuer.template
+    envsubst < prod-issuer.template > prod-issuer.yaml
+    rm prod-issuer.template
+    mv ingress.yaml ingress.template
+    envsubst < ingress.template > ingress.yaml
+    rm ingress.template
+else
+   echo "You have inputted a non-supported kubernetes provider in your .env"
+fi

@@ -19,5 +19,5 @@ if [ "${k8s_provider}" == "eks" ]; then
               --timeout 8000s \
               --debug
 else
-   echo "You have chosen a non-supported kubernetes provider"
+   echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
