@@ -58,22 +58,22 @@ pub struct FuelBehaviour {
 }
 
 impl FuelBehaviour {
-    pub fn new(local_keypair: Keypair, config: &P2PConfig) -> Self {
+    pub fn new(local_keypair: Keypair, p2p_config: &P2PConfig) -> Self {
         let local_public_key = local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
         let discovery_config = {
             let mut discovery_config =
-                DiscoveryConfig::new(local_peer_id, config.network_name.clone());
+                DiscoveryConfig::new(local_peer_id, p2p_config.network_name.clone());
 
             discovery_config
-                .enable_mdns(config.enable_mdns)
-                .discovery_limit(config.max_peers_connected)
-                .allow_private_addresses(config.allow_private_addresses)
-                .with_bootstrap_nodes(config.bootstrap_nodes.clone())
-                .enable_random_walk(config.enable_random_walk);
+                .enable_mdns(p2p_config.enable_mdns)
+                .discovery_limit(p2p_config.max_peers_connected)
+                .allow_private_addresses(p2p_config.allow_private_addresses)
+                .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
+                .enable_random_walk(p2p_config.enable_random_walk);
 
-            if let Some(duration) = config.connection_idle_timeout {
+            if let Some(duration) = p2p_config.connection_idle_timeout {
                 discovery_config.set_connection_idle_timeout(duration);
             }
 
@@ -84,7 +84,7 @@ impl FuelBehaviour {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: gossipsub::build_gossipsub(&local_keypair),
+            gossipsub: gossipsub::build_gossipsub(&local_keypair, p2p_config),
             peer_info,
             events: VecDeque::default(),
         }

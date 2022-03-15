@@ -139,6 +139,9 @@ mod tests {
             enable_random_walk: true,
             connection_idle_timeout: Some(Duration::from_secs(120)),
             topics: vec![],
+            max_mesh_size: 12,
+            min_mesh_size: 4,
+            ideal_mesh_size: 6,
         }
     }
 

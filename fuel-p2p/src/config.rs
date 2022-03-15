@@ -20,6 +20,9 @@ pub struct P2PConfig {
     pub enable_random_walk: bool,
     pub connection_idle_timeout: Option<Duration>,
 
-    // Gossipsub topics to subscribe to
+    // `Gossipsub` related fields
     pub topics: Vec<String>,
+    pub ideal_mesh_size: usize,
+    pub min_mesh_size: usize,
+    pub max_mesh_size: usize,
 }
