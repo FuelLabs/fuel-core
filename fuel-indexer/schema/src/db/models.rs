@@ -1,8 +1,8 @@
 #[cfg(feature = "db-postgres")]
-use crate::db::schema::graph_registry as gr;
+use crate::db::pg_schema::graph_registry as gr;
 
 #[cfg(feature = "db-sqlite")]
-use crate::db::schema as gr;
+use crate::db::sqlite_schema as gr;
 
 use crate::db::Conn;
 

@@ -1,0 +1,3 @@
+[print_schema]
+file = "src/db/DB_schema.rs"
+schema = "graph_registry"

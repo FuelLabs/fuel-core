@@ -1,7 +1,4 @@
 table! {
-    use diesel::sql_types::*;
-    use crate::sql_types::*;
-
     columns (id) {
         id -> Integer,
         type_id -> BigInt,
@@ -14,9 +11,6 @@ table! {
 }
 
 table! {
-    use diesel::sql_types::*;
-    use crate::sql_types::*;
-
     graph_root (id) {
         id -> Integer,
         version -> Text,
@@ -27,9 +21,6 @@ table! {
 }
 
 table! {
-    use diesel::sql_types::*;
-    use crate::sql_types::*;
-
     root_columns (id) {
         id -> Integer,
         root_id -> Integer,
@@ -39,9 +30,6 @@ table! {
 }
 
 table! {
-    use diesel::sql_types::*;
-    use crate::sql_types::*;
-
     type_ids (id) {
         id -> BigInt,
         schema_version -> Text,

@@ -50,8 +50,8 @@ fuels-rs = { version = "0.2" }
 itertools = { version = "0.10" }
 
 [features]
-default = ["cranelift", "sqlite"]
-sqlite = ["fuel-indexer-schema/db-sqlite", "diesel_migrations/sqlite"]
-postgres = ["fuel-indexer-schema/db-postgres", "diesel_migrations/postgres"]
+default = ["cranelift"]
+db-sqlite = ["fuel-indexer-schema/db-sqlite", "diesel_migrations/sqlite"]
+db-postgres = ["fuel-indexer-schema/db-postgres", "diesel_migrations/postgres"]
 cranelift = ["wasmer-compiler-cranelift"]
 llvm = ["wasmer-compiler-llvm"]

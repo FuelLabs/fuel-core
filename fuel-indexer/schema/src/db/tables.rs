@@ -14,15 +14,15 @@ use std::collections::{HashMap, HashSet};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "db-postgres")] {
-        fn create_schema(statements: &mut Vec<String>) {
-            let create = format!("CREATE SCHEMA IF NOT EXISTS {}", self.namespace);
+        fn create_schema(statements: &mut Vec<String>, namespace: &String) {
+            let create = format!("CREATE SCHEMA IF NOT EXISTS {}", namespace);
             statements.push(create);
         }
         fn get_table_name(namespace: &String, table: String) -> String {
             format!("{}.{}", namespace, table)
         }
     } else if #[cfg(feature = "db-sqlite")] {
-        fn create_schema(_statements: &mut Vec<String>) {
+        fn create_schema(_statements: &mut Vec<String>, _namespace: &String) {
         }
         fn get_table_name(_namespace: &String, table: String) -> String {
             format!("{}", table)
@@ -54,7 +54,7 @@ impl SchemaBuilder {
     }
 
     pub fn build(mut self, schema: &str) -> Self {
-        create_schema(&mut self.statements);
+        create_schema(&mut self.statements, &self.namespace);
 
         let ast = match parse_schema::<String>(schema) {
             Ok(ast) => ast,
@@ -330,27 +330,28 @@ mod tests {
         }
     "#;
 
-    const CREATE_SCHEMA: &str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
-    const CREATE_THING1: &str = concat!(
-        "CREATE TABLE IF NOT EXISTS\n",
-        " test_namespace.thing1 (\n",
-        " id bigint primary key not null,\n",
-        "account varchar(64) not null,\n",
-        "object bytea not null",
-        "\n)"
-    );
-    const CREATE_THING2: &str = concat!(
-        "CREATE TABLE IF NOT EXISTS\n",
-        " test_namespace.thing2 (\n",
-        " id bigint primary key not null,\n",
-        "account varchar(64) not null,\n",
-        "hash varchar(64) not null,\n",
-        "object bytea not null\n",
-        ")"
-    );
-
+    #[cfg(feature = "db-postgres")]
     #[test]
     fn test_schema_builder() {
+        const CREATE_SCHEMA: &str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
+        const CREATE_THING1: &str = concat!(
+            "CREATE TABLE IF NOT EXISTS\n",
+            " test_namespace.thing1 (\n",
+            " id bigint primary key not null,\n",
+            "account varchar(64) not null,\n",
+            "object bytea not null",
+            "\n)"
+        );
+        const CREATE_THING2: &str = concat!(
+            "CREATE TABLE IF NOT EXISTS\n",
+            " test_namespace.thing2 (\n",
+            " id bigint primary key not null,\n",
+            "account varchar(64) not null,\n",
+            "hash varchar(64) not null,\n",
+            "object bytea not null\n",
+            ")"
+        );
+
         let sb = SchemaBuilder::new("test_namespace", "a_version_string");
 
         let SchemaBuilder { statements, .. } = sb.build(GRAPHQL_SCHEMA);
@@ -358,5 +359,34 @@ mod tests {
         assert_eq!(statements[0], CREATE_SCHEMA);
         assert_eq!(statements[1], CREATE_THING1);
         assert_eq!(statements[2], CREATE_THING2);
+    }
+
+    #[cfg(feature = "db-sqlite")]
+    #[test]
+    fn test_schema_builder() {
+        const CREATE_THING1: &str = concat!(
+            "CREATE TABLE IF NOT EXISTS\n",
+            " thing1 (\n",
+            " id bigint primary key not null,\n",
+            "account varchar(64) not null,\n",
+            "object bytea not null",
+            "\n)"
+        );
+        const CREATE_THING2: &str = concat!(
+            "CREATE TABLE IF NOT EXISTS\n",
+            " thing2 (\n",
+            " id bigint primary key not null,\n",
+            "account varchar(64) not null,\n",
+            "hash varchar(64) not null,\n",
+            "object bytea not null\n",
+            ")"
+        );
+
+        let sb = SchemaBuilder::new("test_namespace", "a_version_string");
+
+        let SchemaBuilder { statements, .. } = sb.build(GRAPHQL_SCHEMA);
+
+        assert_eq!(statements[0], CREATE_THING1);
+        assert_eq!(statements[1], CREATE_THING2);
     }
 }
