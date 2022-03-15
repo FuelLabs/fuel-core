@@ -65,13 +65,19 @@ jobs:
       with:
         command: clippy
         args: --verbose --all-targets
-    
-    - name: Run tests
+
+    - name: Run tests (default features)
       uses: actions-rs/cargo@v1
       with:
         command: test
         args: --verbose --all-targets
-    
+
+    - name: Run tests (no default features)
+      uses: actions-rs/cargo@v1
+      with:
+        command: test
+        args: --verbose --all-targets --no-default-features
+
     - name: Notify if Job Fails
       uses: ravsamhq/notify-slack-action@v1
       if: always() && github.ref == 'refs/heads/master'
