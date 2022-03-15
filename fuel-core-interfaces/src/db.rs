@@ -607,13 +607,7 @@ pub mod helpers {
         }
     }
 
-    /* RELAYER needs
-    Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
-    Storage<Address, u64,Error = KvStoreError> // validator set
-    Storage<u64, HashMap<Address, u64>,Error = KvStoreError> // validator set diff
-    */
-
-    // token deposit
+    // token deposit. Used by relayer.
     impl Storage<Bytes32, DepositCoin> for DummyDb {
         type Error = crate::db::KvStoreError;
 
@@ -641,7 +635,7 @@ pub mod helpers {
         }
     }
 
-    // validator set
+    // Validator set. Used by relayer.
     impl Storage<Address, u64> for DummyDb {
         type Error = crate::db::KvStoreError;
 
@@ -665,7 +659,7 @@ pub mod helpers {
         }
     }
 
-    // validator set diff
+    // Validator set diff. Used by relayer.
     impl Storage<u64, HashMap<Address, u64>> for DummyDb {
         type Error = crate::db::KvStoreError;
 

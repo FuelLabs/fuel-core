@@ -359,7 +359,7 @@ impl Relayer {
                 // 3. Sign transaction
                 // 4. Send transaction to eth client.
             }
-            NewBlockEvent::NewBlockIncluded { eth_height, .. } => {
+            NewBlockEvent::NewBlockIncluded { da_height, .. } => {
                 // assume that eth_height is checked agains parent block.
 
                 // ignore reorganization
@@ -369,7 +369,7 @@ impl Relayer {
 
                 // first if is for start of contract and first few validator blocks
                 self.current_validator_set
-                    .bump_set_to_eth_height(eth_height, &*self.db.lock().await)
+                    .bump_set_to_eth_height(da_height, &*self.db.lock().await)
                     .await
             }
         }

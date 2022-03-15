@@ -6,6 +6,6 @@ pub enum NewBlockEvent {
     NewBlockIncluded {
         height: u64,
         /// height where we are finalizing stake and token deposits.
-        eth_height: u64,
+        da_height: u64,
     },
 }
