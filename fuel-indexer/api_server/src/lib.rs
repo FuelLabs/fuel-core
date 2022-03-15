@@ -1,4 +1,4 @@
-use crate::{IndexerConfig, SchemaManager};
+use fuel_wasm_executor::{IndexerConfig, SchemaManager};
 use async_std::sync::{Arc, RwLock};
 use axum::{
     extract::{Extension, Json, Path},

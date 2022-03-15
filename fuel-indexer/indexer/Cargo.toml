@@ -9,13 +9,11 @@ publish = false
 [dependencies]
 anyhow = "1.0.53"
 async-std = "1.10.0"
-axum = "0.4"
 cfg-if = "1.0"
 diesel = { version = "1.4", features = ["serde_json"] }
-diesel_migrations = { version = "1.4", default-features = false }
-fuel-core = { version = "0.2" }
+diesel_migrations = "1.4"
 fuel-gql-client = { version = "0.2" }
-fuel-indexer-schema = { path = "../schema", default-features = false }
+fuel-indexer-schema = { path = "../schema" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-vm = { version = "0.2" }
 fuels-core = { version = "0.2" }
@@ -24,13 +22,12 @@ http = "0.2"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde-scale = "0.2"
 serde_json = { version = "1.0", features = ["raw_value"] }
+serde-scale = "0.2"
 serde_yaml = "0.8.19"
 structopt = "0.3"
 thiserror = "1.0"
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
-tokio-postgres = { version = "0.7.5", features = ["with-serde_json-1"] }
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 wasmer = "2.0"
@@ -48,9 +45,10 @@ fuel-types = { version = "0.3", features = ["serde-types"] }
 fuels-abigen-macro = { version = "0.2" }
 fuels-rs = { version = "0.2" }
 itertools = { version = "0.10" }
+serde_yaml = "0.8.19"
 
 [features]
-default = ["cranelift"]
+default = ["cranelift", "db-sqlite"]
 db-sqlite = ["fuel-indexer-schema/db-sqlite", "diesel_migrations/sqlite"]
 db-postgres = ["fuel-indexer-schema/db-postgres", "diesel_migrations/postgres"]
 cranelift = ["wasmer-compiler-cranelift"]

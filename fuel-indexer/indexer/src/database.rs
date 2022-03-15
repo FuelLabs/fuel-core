@@ -9,7 +9,8 @@ use crate::IndexerResult;
 use fuel_indexer_schema::{
     db::Conn,
     db::models::{ColumnInfo, EntityData, TypeIds},
-    db::tables::{Schema, SchemaBuilder},
+    db::tables::SchemaBuilder,
+    graphql::Schema,
     schema_version, FtColumn,
 };
 
@@ -66,19 +67,21 @@ impl SchemaManager {
         Ok(SchemaManager { pool })
     }
 
-    pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<()> {
+    pub fn new_schema(&self, name: &str, schema: &str) -> IndexerResult<Schema> {
         let connection = self.pool.get()?;
 
         // TODO: Not doing much with version, but might be useful if we
         //       do graph schema upgrades
         let version = schema_version(schema);
 
-        if !TypeIds::schema_exists(&*connection, name, &version)? {
-            let _db_schema = SchemaBuilder::new(name, &version)
+        let db_schema = if !TypeIds::schema_exists(&*connection, name, &version)? {
+            SchemaBuilder::new(name, &version)
                 .build(schema)
-                .commit_metadata(&*connection)?;
-        }
-        Ok(())
+                .commit_metadata(&*connection)?
+        } else {
+            self.load_schema(name)?
+        };
+        Ok(db_schema)
     }
 
     pub fn load_schema(&self, name: &str) -> IndexerResult<Schema> {
@@ -122,6 +125,7 @@ impl Database {
         Ok(sql_query("ROLLBACK").execute(&*self.conn)?)
     }
 
+    #[cfg(feature = "db-sqlite")]
     fn upsert_query(
         &self,
         table: &str,
@@ -129,7 +133,28 @@ impl Database {
         inserts: Vec<String>,
         updates: Vec<String>,
     ) -> String {
-        println!("TJDEBUG here??");
+        format!(
+            "INSERT INTO {}
+                ({})
+             VALUES
+                ({}, $1)
+             ON CONFLICT(id)
+             DO UPDATE SET {}",
+            table,
+            columns.join(", "),
+            inserts.join(", "),
+            updates.join(", "),
+        )
+    }
+
+    #[cfg(feature = "db-postgres")]
+    fn upsert_query(
+        &self,
+        table: &str,
+        columns: &[String],
+        inserts: Vec<String>,
+        updates: Vec<String>,
+    ) -> String {
         format!(
             "INSERT INTO {}.{}
                 ({})
@@ -145,8 +170,15 @@ impl Database {
         )
     }
 
+    #[cfg(feature = "db-sqlite")]
     fn get_query(&self, table: &str, object_id: u64) -> String {
-        println!("TJDEBUG thear");
+        format!(
+            "SELECT object from {} where id = {}", table, object_id
+        )
+    }
+
+    #[cfg(feature = "db-postgres")]
+    fn get_query(&self, table: &str, object_id: u64) -> String {
         format!(
             "SELECT object from {}.{} where id = {}",
             self.namespace, table, object_id
@@ -234,8 +266,12 @@ mod tests {
         }
     }
 
-    // TODO: need a cfg here too........
+    #[cfg(feature = "db-postgres")]
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+
+    #[cfg(feature = "db-sqlite")]
+    const DATABASE_URL: &'static str = "./src/test_data/main.db";
+
     const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
     const THING1_TYPE: u64 = 0xA21A262A00405632;
@@ -270,6 +306,7 @@ mod tests {
         let manager = SchemaManager::new(DATABASE_URL).expect("Could not create SchemaManager");
 
         let result = manager.new_schema("test_namespace", GRAPHQL_SCHEMA);
+        println!("{result:?}");
         assert!(result.is_ok());
 
         let result = manager.new_schema("test_namespace", GRAPHQL_SCHEMA);

@@ -31,6 +31,7 @@ pub enum ColumnType {
     Blob = 13,
 }
 
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
 impl ColumnType {
     pub fn to_string(self) -> String {
         match self {

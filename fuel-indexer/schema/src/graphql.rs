@@ -1,8 +1,17 @@
-use crate::db::tables::Schema;
 use graphql_parser::query as gql;
 use itertools::Itertools;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
+
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+use diesel::QueryResult;
+
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+use crate::db::{
+    Conn,
+    models::{Columns, GraphRoot, RootColumns, TypeIds}
+};
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
@@ -428,6 +437,73 @@ impl<'a> GraphqlQueryBuilder<'a> {
         Ok(fragments)
     }
 }
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Schema {
+    pub version: String,
+    /// Graph ID, and the DB schema this data lives in.
+    pub namespace: String,
+    /// Root Graphql type.
+    pub query: String,
+    /// List of GraphQL type names.
+    pub types: HashSet<String>,
+    /// Mapping of key/value pairs per GraphQL type.
+    pub fields: HashMap<String, HashMap<String, String>>,
+}
+
+#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+impl Schema {
+    pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
+        let root = GraphRoot::get_latest(conn, name)?;
+        let root_cols = RootColumns::list_by_id(conn, root.id)?;
+        let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;
+
+        let mut types = HashSet::new();
+        let mut fields = HashMap::new();
+
+        types.insert(root.query.clone());
+        fields.insert(
+            root.query.clone(),
+            root_cols
+                .into_iter()
+                .map(|c| (c.column_name, c.graphql_type))
+                .collect(),
+        );
+        for tid in typeids {
+            types.insert(tid.graphql_name.clone());
+
+            let columns = Columns::list_by_id(conn, tid.id)?;
+            fields.insert(
+                tid.graphql_name,
+                columns
+                    .into_iter()
+                    .map(|c| (c.column_name, c.graphql_type))
+                    .collect(),
+            );
+        }
+
+        Ok(Schema {
+            version: root.version,
+            namespace: root.schema_name,
+            query: root.query,
+            types,
+            fields,
+        })
+    }
+
+    pub fn check_type(&self, type_name: &str) -> bool {
+        self.types.contains(type_name)
+    }
+
+    pub fn field_type(&self, cond: &str, name: &str) -> Option<&String> {
+        match self.fields.get(cond) {
+            Some(fieldset) => fieldset.get(name),
+            _ => None,
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

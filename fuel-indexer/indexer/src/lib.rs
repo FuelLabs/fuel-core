@@ -5,14 +5,12 @@ use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
 #[cfg(all(feature = "cranelift", feature = "llvm"))]
 compile_error!("features 'cranelift' and 'llvm' are mutually exclusive");
 
-pub mod api;
 mod database;
 pub mod executor;
 mod ffi;
 mod manifest;
 mod service;
 
-pub use api::GraphQlApi;
 pub use database::SchemaManager;
 pub use executor::{IndexEnv, IndexExecutor};
 pub use manifest::Manifest;

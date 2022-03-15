@@ -4,6 +4,7 @@ use fuel_gql_client::client::{FuelClient, PageDirection, PaginatedResult, Pagina
 use fuel_tx::{Receipt, Transaction};
 use fuels_core::abi_encoder::ABIEncoder;
 use fuels_core::{Token, Tokenizable};
+use fuel_indexer_schema::graphql::Schema;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -57,10 +58,10 @@ impl IndexerService {
         graphql_schema: &str,
         wasm_bytes: impl AsRef<[u8]>,
         run_once: bool,
-    ) -> IndexerResult<()> {
+    ) -> IndexerResult<Schema> {
         let name = manifest.namespace.clone();
         let start_block = manifest.start_block;
-        let _ = self.manager.new_schema(&name, graphql_schema)?;
+        let schema = self.manager.new_schema(&name, graphql_schema)?;
         let executor = IndexExecutor::new(self.database_url.clone(), manifest, wasm_bytes)?;
 
         let kill_switch = Arc::new(AtomicBool::new(run_once));
@@ -69,7 +70,7 @@ impl IndexerService {
         info!("Registered indexer {}", name);
         self.handles.insert(name.clone(), handle);
         self.killers.insert(name, kill_switch);
-        Ok(())
+        Ok(schema)
     }
 
     pub fn stop_indexer(&mut self, executor_name: &str) {

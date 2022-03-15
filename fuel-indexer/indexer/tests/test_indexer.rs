@@ -1,13 +1,28 @@
 extern crate alloc;
 
-#[cfg(feature = "postgres")]
 mod tests {
     use fuel_core::service::{Config, FuelService};
     use fuel_gql_client::client::FuelClient;
     use fuel_vm::{consts::*, prelude::*};
     use fuel_wasm_executor::{IndexerConfig, IndexerService, Manifest};
 
-    const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+    #[cfg(feature = "db-postgres")]
+    fn database() -> String {
+        "postgres://postgres:my-secret@127.0.0.1:5432".into()
+    }
+
+    #[cfg(feature = "db-sqlite")]
+    fn database() -> String {
+        use std::path::PathBuf;
+        let manifest = env!("CARGO_MANIFEST_DIR");
+
+        let mut buf = PathBuf::from(manifest);
+        buf.push("tests/test_data/main.db");
+
+        let canonicalized = buf.canonicalize().unwrap();
+        canonicalized.into_os_string().into_string().unwrap()
+    }
+
     const GRAPHQL_SCHEMA: &'static str = include_str!("./test_data/demo_schema.graphql");
     const MANIFEST: &'static str = include_str!("./test_data/demo_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/indexer_demo.wasm");
@@ -50,7 +65,7 @@ mod tests {
 
         let config = IndexerConfig {
             fuel_node_addr: srv.bound_address,
-            database_url: DATABASE_URL.to_string(),
+            database_url: database(),
             listen_endpoint: "0.0.0.0:9999".parse().unwrap(),
         };
 

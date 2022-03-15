@@ -15,6 +15,9 @@ pub const LOG_LEVEL_INFO: u32 = 2;
 pub const LOG_LEVEL_DEBUG: u32 = 3;
 pub const LOG_LEVEL_TRACE: u32 = 4;
 
+#[cfg(all(feature = "db-sqlite", feature = "db-postgres"))]
+compile_error!("features 'db-sqlite' and 'db-postgres' are mutually exclusive");
+
 #[cfg(feature = "derive-utils")]
 use sha2::{Digest, Sha256};
 
@@ -22,6 +25,9 @@ use sha2::{Digest, Sha256};
 pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
 
 pub mod sql_types;
+
+#[cfg(feature = "graphql-types")]
+pub mod graphql;
 
 #[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
 pub mod db;

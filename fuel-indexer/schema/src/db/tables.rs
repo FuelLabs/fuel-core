@@ -1,8 +1,9 @@
 use crate::{
     db::Conn,
     db::models::{
-        Columns, GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, RootColumns, TypeIds,
+        GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, TypeIds,
     },
+    graphql::Schema,
     sql_types::ColumnType,
     type_id,
 };
@@ -18,13 +19,13 @@ cfg_if::cfg_if! {
             let create = format!("CREATE SCHEMA IF NOT EXISTS {}", namespace);
             statements.push(create);
         }
-        fn get_table_name(namespace: &String, table: String) -> String {
+        fn format_table(namespace: &String, table: &String) -> String {
             format!("{}.{}", namespace, table)
         }
     } else if #[cfg(feature = "db-sqlite")] {
         fn create_schema(_statements: &mut Vec<String>, _namespace: &String) {
         }
-        fn get_table_name(_namespace: &String, table: String) -> String {
+        fn format_table(_namespace: &String, table: &String) -> String {
             format!("{}", table)
         }
     }
@@ -129,6 +130,7 @@ impl SchemaBuilder {
             }
 
             for query in statements.iter() {
+                println!("TJDEBUG kweeerie {}", query);
                 sql_query(query).execute(conn)?;
             }
 
@@ -218,11 +220,11 @@ impl SchemaBuilder {
 
                 let type_id = type_id(&self.namespace, &o.name);
                 let columns = self.generate_columns(type_id as i64, &o.fields);
-                let table_name = get_table_name(&self.namespace, o.name.to_lowercase());
+                let table_name = o.name.to_lowercase();
 
                 let create = format!(
                     "CREATE TABLE IF NOT EXISTS\n {} (\n {}\n)",
-                    table_name, columns,
+                    format_table(&self.namespace, &table_name), columns,
                 );
 
                 self.statements.push(create);
@@ -235,70 +237,6 @@ impl SchemaBuilder {
                 });
             }
             o => panic!("Got a non-object type! {:?}", o),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Schema {
-    pub version: String,
-    /// Graph ID, and the DB schema this data lives in.
-    pub namespace: String,
-    /// Root Graphql type.
-    pub query: String,
-    /// List of GraphQL type names.
-    pub types: HashSet<String>,
-    /// Mapping of key/value pairs per GraphQL type.
-    pub fields: HashMap<String, HashMap<String, String>>,
-}
-
-impl Schema {
-    pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
-        let root = GraphRoot::get_latest(conn, name)?;
-        let root_cols = RootColumns::list_by_id(conn, root.id)?;
-        let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;
-
-        let mut types = HashSet::new();
-        let mut fields = HashMap::new();
-
-        types.insert(root.query.clone());
-        fields.insert(
-            root.query.clone(),
-            root_cols
-                .into_iter()
-                .map(|c| (c.column_name, c.graphql_type))
-                .collect(),
-        );
-        for tid in typeids {
-            types.insert(tid.graphql_name.clone());
-
-            let columns = Columns::list_by_id(conn, tid.id)?;
-            fields.insert(
-                tid.graphql_name,
-                columns
-                    .into_iter()
-                    .map(|c| (c.column_name, c.graphql_type))
-                    .collect(),
-            );
-        }
-
-        Ok(Schema {
-            version: root.version,
-            namespace: root.schema_name,
-            query: root.query,
-            types,
-            fields,
-        })
-    }
-
-    pub fn check_type(&self, type_name: &str) -> bool {
-        self.types.contains(type_name)
-    }
-
-    pub fn field_type(&self, cond: &str, name: &str) -> Option<&String> {
-        match self.fields.get(cond) {
-            Some(fieldset) => fieldset.get(name),
-            _ => None,
         }
     }
 }

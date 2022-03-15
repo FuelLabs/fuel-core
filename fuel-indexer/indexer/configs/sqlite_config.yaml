@@ -1,4 +1,4 @@
 ---
 fuel_node_addr: '127.0.0.1:30333'
-database_url: 'main.db'
+database_url: '/home/teej/fuel-core/fuel-indexer/indexer/tests/test_data/main.db'
 listen_endpoint: '127.0.0.1:29899'

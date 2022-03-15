@@ -5,6 +5,7 @@ members = [
   "fuel-client",
   "fuel-core",
   "fuel-core-interfaces",
+  "fuel-indexer/api_server",
   "fuel-indexer/derive",
   "fuel-indexer/indexer",
   "fuel-indexer/lib",

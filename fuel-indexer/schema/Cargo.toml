@@ -23,6 +23,7 @@ insta = "1.8"
 
 [features]
 default = ["fuel-types/serde-types-minimal"]
-db-postgres = ["derive-utils", "itertools", "thiserror", "diesel/postgres"]
-db-sqlite = ["derive-utils", "itertools", "thiserror", "diesel/sqlite"]
+db-postgres = ["derive-utils", "graphql-types", "itertools", "thiserror", "diesel/postgres"]
+db-sqlite = ["derive-utils", "graphql-types", "itertools", "thiserror", "diesel/sqlite"]
+graphql-types = []
 derive-utils = ["fuel-types/default", "fuel-types/serde-types"]

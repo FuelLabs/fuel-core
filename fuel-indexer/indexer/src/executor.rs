@@ -155,10 +155,12 @@ impl IndexExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SchemaManager;
     use diesel::sql_types::*;
     use diesel::{sql_query, Connection, Queryable, QueryableByName, RunQueryDsl};
     use fuels_abigen_macro::abigen;
     use fuels_rs::abi_encoder::ABIEncoder;
+    use fuel_indexer::types::db::Conn;
 
     #[cfg(feature = "postgres")]
     use diesel::prelude::PgConnection as Conn;
@@ -166,9 +168,14 @@ mod tests {
     #[cfg(feature = "sqlite")]
     use diesel::prelude::SqliteConnection as Conn;
 
-    // TODO: need a cfg here too.....
+    #[cfg(feature = "db-postgres")]
     const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+
+    #[cfg(feature = "db-sqlite")]
+    const DATABASE_URL: &'static str = "./src/test_data/main.db";
+
     const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
+    const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
     const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
     const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
 
@@ -176,6 +183,16 @@ mod tests {
         MyContract,
         "fuel-indexer/indexer/src/test_data/my_struct.json"
     );
+
+    #[cfg(feature = "db-postgres")]
+    fn table_name(namespace: &str, table: &str) -> String {
+        format!("{}.{}", namespace, table)
+    }
+
+    #[cfg(feature = "db-sqlite")]
+    fn table_name(_namespace: &str, table: &str) -> String {
+        format!("{}", table)
+    }
 
     #[derive(Debug, Queryable, QueryableByName)]
     struct Thing1 {
@@ -189,6 +206,11 @@ mod tests {
     fn test_executor() {
         let manifest: Manifest = serde_yaml::from_str(MANIFEST).expect("Bad yaml file.");
         let bad_manifest: Manifest = serde_yaml::from_str(BAD_MANIFEST).expect("Bad yaml file.");
+
+        let _ = SchemaManager::new(DATABASE_URL)
+            .expect("Could not create schema manager")
+            .new_schema("test_namespace", GRAPHQL_SCHEMA)
+            .expect("Could not generate schema");
 
         let executor = IndexExecutor::new(DATABASE_URL.to_string(), bad_manifest, WASM_BYTES);
         match executor {
@@ -231,7 +253,7 @@ mod tests {
 
         let conn = Conn::establish(DATABASE_URL).expect("Postgres connection failed");
         let data: Vec<Thing1> =
-            sql_query("select id,account from test_namespace.thing1 where id = 1020;")
+            sql_query(format!("select id,account from {} where id = 1020;", table_name("test_namespace", "thing1")))
                 .load(&conn)
                 .expect("Database query failed");
 
