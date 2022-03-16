@@ -295,8 +295,8 @@ impl RelayerDb for Database {
         } else {
             u64::MAX
         };
-        struct Wrapu64BE(pub u64);
-        impl From<Vec<u8>> for Wrapu64BE {
+        struct WrapU64Be(pub u64);
+        impl From<Vec<u8>> for WrapU64Be {
             fn from(i: Vec<u8>) -> Self {
                 use byteorder::{BigEndian, ReadBytesExt};
                 use std::io::Cursor;
@@ -305,7 +305,7 @@ impl RelayerDb for Database {
             }
         }
         let mut out = Vec::new();
-        for diff in self.iter_all::<Wrapu64BE, HashMap<Address, u64>>(
+        for diff in self.iter_all::<WrapU64Be, HashMap<Address, u64>>(
             columns::VALIDATOR_SET_DIFFS,
             None,
             Some(from_fuel_block.to_be_bytes().to_vec()),
@@ -319,7 +319,7 @@ impl RelayerDb for Database {
                     }
                     out.push((block, diff))
                 }
-                Err(_) => return out,
+                Err(err) => panic!("get_validator_diffs unexpected error:{:?}", err),
             }
         }
         out

@@ -11,7 +11,7 @@ pub struct DepositCoin {
     pub owner: Address,
     pub amount: Word,
     pub asset_id: AssetId,
-    pub eth_block_deposited: u64,
+    pub deposited_da_height: u64,
     pub fuel_block_spend: u64,
 }
 
@@ -30,7 +30,7 @@ pub trait RelayerDb:
     async fn insert_token_deposit(
         &mut self,
         deposit_nonce: Bytes32, // this is ID
-        eth_block_deposited: u64, // eth block when deposit is made
+        deposited_da_height: u64, // eth block when deposit is made
         owner: Address,       // owner
         asset_id: AssetId,
         amount: Word,
@@ -39,7 +39,7 @@ pub trait RelayerDb:
             owner,
             amount,
             asset_id,
-            eth_block_deposited,
+            deposited_da_height,
             fuel_block_spend: 0,
         };
         // TODO check what id are we going to use
@@ -121,7 +121,7 @@ pub enum RelayerError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum EthSyncedState {
+pub enum DaSyncState {
     /// relayer is syncing old state
     RelayerSyncing,
     /// fetch last N blocks to get their logs. Parse them and save them inside pending state
@@ -136,6 +136,6 @@ pub enum EthSyncedState {
 pub enum RelayerStatus {
     EthClientNotConnected,
     EthIsSyncing,
-    EthSynced(EthSyncedState),
+    EthSynced(DaSyncState),
     Stop,
 }
