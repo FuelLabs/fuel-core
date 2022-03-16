@@ -60,7 +60,7 @@ impl Relayer {
             db,
             pending: PendingEvents::new(),
             current_validator_set: CurrentValidatorSet::new(),
-            status: RelayerStatus::EthIsSyncing,
+            status: RelayerStatus::DaClientIsSyncing,
             receiver,
             new_block_event,
             _signer: signer,

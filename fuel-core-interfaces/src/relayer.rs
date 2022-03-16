@@ -134,8 +134,8 @@ pub enum DaSyncState {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RelayerStatus {
-    EthClientNotConnected,
-    EthIsSyncing,
-    EthSynced(DaSyncState),
+    DaClientNotConnected,
+    DaClientIsSyncing,
+    DaClientSynced(DaSyncState),
     Stop,
 }
