@@ -13,11 +13,11 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use std::{collections::HashMap, ops::DerefMut};
 use std::{
     fmt::{self, Formatter},
     sync::Arc,
@@ -323,6 +323,18 @@ impl RelayerDb for Database {
             }
         }
         out
+    }
+
+    async fn apply_validator_diffs(&mut self, changes: &HashMap<Address, u64>, da_height: u64) {
+        // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation.
+        let mut db = self.transaction();
+        for (address, stake) in changes {
+            let _ = Storage::<Address, u64>::insert(db.deref_mut(), address, stake);
+        }
+        db.set_validators_da_height(da_height).await;
+        if let Err(err) = db.commit() {
+            panic!("apply_validator_diffs database currupted: {:?}", err);
+        }
     }
 
     async fn get_block_height(&self) -> u64 {

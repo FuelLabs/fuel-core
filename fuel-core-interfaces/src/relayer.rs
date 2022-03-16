@@ -64,6 +64,7 @@ pub trait RelayerDb:
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
     /// to be atomic.
     async fn apply_validator_diffs(&mut self, changes: &HashMap<Address,u64>, da_height: u64) {
+        // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation
         for ( address, stake) in changes {
             let _ = Storage::<Address,u64>::insert(self,address,stake);
         }
