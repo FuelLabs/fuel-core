@@ -7,7 +7,7 @@ pub struct CurrentValidatorSet {
     /// Current validator set
     pub set: HashMap<Address, u64>,
     /// current fuel block
-    pub eth_height: u64,
+    pub da_height: u64,
 }
 
 impl Default for CurrentValidatorSet {
@@ -20,19 +20,19 @@ impl CurrentValidatorSet {
     pub fn new() -> Self {
         Self {
             set: HashMap::new(),
-            eth_height: 0,
+            da_height: 0,
         }
     }
 
     // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
-    // TODO in becomes troublesome to load and takes a lot of time, it is good to optimize
-    pub async fn load_current_validator_set(&mut self, db: &dyn RelayerDb) {
-        self.eth_height = db.get_current_validator_set_eth_height().await;
-        self.set = db.current_validator_set().await;
+    // TODO if it takes a lot of time to load it is good to optimize.
+    pub async fn load_get_validators(&mut self, db: &dyn RelayerDb) {
+        self.da_height = db.get_validators_da_height().await;
+        self.set = db.get_validators().await;
     }
 
     pub fn get_validator_set(&mut self, block_number: u64) -> Option<HashMap<Address, u64>> {
-        if self.eth_height == block_number {
+        if self.da_height == block_number {
             return Some(self.set.clone());
         }
         None
@@ -40,8 +40,8 @@ impl CurrentValidatorSet {
 
     /// new_block_diff is finality slider adjusted
     /// it supports only going up
-    pub async fn bump_set_to_eth_height(&mut self, eth_height: u64, db: &dyn RelayerDb) {
-        match self.eth_height.cmp(&eth_height) {
+    pub async fn bump_validators_to_da_height(&mut self, da_height: u64, db: &mut dyn RelayerDb) {
+        match self.da_height.cmp(&da_height) {
             std::cmp::Ordering::Less => {}
             std::cmp::Ordering::Equal => {
                 // unusual but do nothing
@@ -54,13 +54,16 @@ impl CurrentValidatorSet {
         }
 
         let diffs = db
-            .get_validator_set_diff(self.eth_height, Some(eth_height))
+            .get_validator_diffs(self.da_height, Some(da_height))
             .await;
-        for (_, diff) in diffs {
-            for (address, new_value) in diff {
-                self.set.insert(address, new_value);
-            }
-        }
-        self.eth_height = eth_height;
+        let diffs = diffs.into_iter().fold(HashMap::new(), |mut g, (_, diff)| {
+            g.extend(diff.into_iter());
+            g
+        });
+        // apply diffs to validators inside db
+        db.apply_validator_diffs(&diffs, da_height).await;
+        // apply diffs this set
+        self.set.extend(diffs);
+        self.da_height = da_height;
     }
 }

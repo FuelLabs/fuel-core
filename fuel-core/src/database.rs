@@ -263,8 +263,7 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    /// get validator set for current eth height
-    async fn current_validator_set(&self) -> HashMap<Address, u64> {
+    async fn get_validators(&self) -> HashMap<Address, u64> {
         struct WrapAddress(pub Address);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
@@ -283,8 +282,7 @@ impl RelayerDb for Database {
         out
     }
 
-    /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
-    async fn get_validator_set_diff(
+    async fn get_validator_diffs(
         &self,
         from_fuel_block: u64,
         to_fuel_block: Option<u64>,
@@ -327,46 +325,55 @@ impl RelayerDb for Database {
         out
     }
 
-    /// current best block number
     async fn get_block_height(&self) -> u64 {
-        self.get_block_height()
-            .unwrap_or_default()
-            .unwrap_or_default()
-            .0 as u64
+        match self.get_block_height() {
+            Ok(res) => {
+                return res
+                    .expect("get_eth_finalized_block value should be always present and set")
+                    .0 as u64;
+            }
+            Err(err) => {
+                panic!("get_eth_finalized_block database curruption, err:{:?}", err);
+            }
+        }
     }
 
-    /// set newest finalized eth block
-    async fn set_eth_finalized_block(&self, block: u64) {
-        let _ = self.insert(metadata::ETH_FINALIZED_BLOCK_NUMBER, METADATA, block);
+    async fn set_finalized_da_height(&self, block: u64) {
+        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT, METADATA, block) {
+            panic!("set_finalized_da_height should always succeed: {:?}", err);
+        }
     }
 
-    /// assume it is allways set sa initialization of database.
-    async fn get_eth_finalized_block(&self) -> u64 {
-        self.get(metadata::ETH_FINALIZED_BLOCK_NUMBER, METADATA)
-            .unwrap_or_default()
-            .unwrap_or_default()
+    async fn get_finalized_da_height(&self) -> u64 {
+        match self.get(metadata::FINALIZED_DA_HEIGHT, METADATA) {
+            Ok(res) => {
+                return res
+                    .expect("get_finalized_da_height value should be always present and set");
+            }
+            Err(err) => {
+                panic!("get_finalized_da_height database curruption, err:{:?}", err);
+            }
+        }
     }
 
-    /// set last finalized fuel block. In usual case this will be
-    async fn set_fuel_finalized_block(&self, block: u64) {
-        let _ = self.insert(metadata::ETH_FINALIZED_FUEL_BLOCK_NUMBER, METADATA, block);
-    }
-    /// Assume it is allways set as initialization of database.
-    async fn get_fuel_finalized_block(&self) -> u64 {
-        self.get(metadata::ETH_FINALIZED_FUEL_BLOCK_NUMBER, METADATA)
-            .unwrap_or_default()
-            .unwrap_or_default()
+    async fn set_validators_da_height(&self, block: u64) {
+        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT, METADATA, block) {
+            panic!("set_validators_da_height should always succeed: {:?}", err);
+        }
     }
 
-    /// set last finalized fuel block. In usual case this will be
-    async fn set_current_validator_set_eth_height(&self, block: u64) {
-        let _ = self.insert(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA, block);
-    }
-
-    /// Assume it is allways set as initialization of database.
-    async fn get_current_validator_set_eth_height(&self) -> u64 {
-        self.get(metadata::CURRET_VALIDATOR_SET_BLOCK, METADATA)
-            .unwrap_or_default()
-            .unwrap_or_default()
+    async fn get_validators_da_height(&self) -> u64 {
+        match self.get(metadata::VALIDATORS_DA_HEIGHT, METADATA) {
+            Ok(res) => {
+                return res
+                    .expect("get_validators_da_height value should be always present and set");
+            }
+            Err(err) => {
+                panic!(
+                    "get_validators_da_height database curruption, err:{:?}",
+                    err
+                );
+            }
+        }
     }
 }

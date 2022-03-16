@@ -5,9 +5,8 @@ use crate::state::Error;
 
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
 pub(crate) const CHAIN_HEIGHT_KEY: &[u8] = b"chain_height";
-pub(crate) const ETH_FINALIZED_BLOCK_NUMBER: &[u8] = b"eth_finalized_block_number";
-pub(crate) const ETH_FINALIZED_FUEL_BLOCK_NUMBER: &[u8] = b"eth_finalized_fuel_block_number";
-pub(crate) const CURRET_VALIDATOR_SET_BLOCK: &[u8] = b"current_validator_set";
+pub(crate) const FINALIZED_DA_HEIGHT: &[u8] = b"finalized_da_height";
+pub(crate) const VALIDATORS_DA_HEIGHT: &[u8] = b"current_validator_set";
 
 impl Database {
     pub fn init_chain_name(&self, name: String) -> Result<(), Error> {

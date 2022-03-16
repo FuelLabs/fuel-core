@@ -19,7 +19,7 @@ pub struct PendingEvents {
     /// finalized validator set
     finalized_validator_set: HashMap<Address, u64>,
     /// finalized fuel block
-    finalized_eth_height: u64,
+    finalized_da_height: u64,
 }
 
 /// Pending diff between FuelBlocks
@@ -29,7 +29,7 @@ pub struct PendingDiff {
     /// It is always monotonic and check on its limits are check in consensus and in contract.
     /// Contract needs to check that when feul block is commited that this number is more then
     /// finality period N.
-    eth_height: u64,
+    da_height: u64,
     /// Validator stake deposit and withdrawel.
     stake_diff: HashMap<Address, i64>,
     /// erc-20 pending deposit. deposit nonce.
@@ -37,9 +37,9 @@ pub struct PendingDiff {
 }
 
 impl PendingDiff {
-    pub fn new(eth_height: u64) -> Self {
+    pub fn new(da_height: u64) -> Self {
         Self {
-            eth_height,
+            da_height,
             stake_diff: HashMap::new(),
             assets_deposited: HashMap::new(),
         }
@@ -64,7 +64,7 @@ impl PendingEvents {
             pending: VecDeque::new(),
             bundled_removed_eth_events: Vec::new(),
             finalized_validator_set: HashMap::new(),
-            finalized_eth_height: 0,
+            finalized_da_height: 0,
         }
     }
 
@@ -122,12 +122,11 @@ impl PendingEvents {
             info!(target:"relayer", "Reorg happened on ethereum. Reverting {} logs",self.bundled_removed_eth_events.len());
 
             // if there is new log that is not removed it means we can revert our pending removed eth events.
-            let mut current_eth_height = 0;
-            for (eth_height, _) in std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
-            {
-                if eth_height != current_eth_height {
+            let mut current_da_height = 0;
+            for (da_height, _) in std::mem::take(&mut self.bundled_removed_eth_events).into_iter() {
+                if da_height != current_da_height {
                     self.pending.pop_back();
-                    current_eth_height = eth_height;
+                    current_da_height = da_height;
                 }
             }
         }
@@ -138,13 +137,13 @@ impl PendingEvents {
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
     /// Done
-    pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, eth_height: u64) {
+    pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
-            if front.eth_height != eth_height {
-                self.pending.push_back(PendingDiff::new(eth_height))
+            if front.da_height != da_height {
+                self.pending.push_back(PendingDiff::new(da_height))
             }
         } else {
-            self.pending.push_back(PendingDiff::new(eth_height))
+            self.pending.push_back(PendingDiff::new(da_height))
         }
         let last_diff = self.pending.back_mut().unwrap();
         match *fuel_event {
@@ -178,13 +177,13 @@ impl PendingEvents {
 
     /// Used in two places. On initial sync and when new fuel blocks is
     /// Done
-    pub async fn apply_last_validator_diff(
+    pub async fn flush_validator_diffs(
         &mut self,
         db: &mut dyn RelayerDb,
-        finalized_eth_block: u64,
+        finalized_da_height: u64,
     ) {
         while let Some(diffs) = self.pending.front() {
-            if diffs.eth_height > finalized_eth_block {
+            if diffs.da_height > finalized_da_height {
                 break;
             }
             //TODO to be paranoid, recheck events got from eth client.
@@ -197,19 +196,18 @@ impl PendingEvents {
                 stake_diff.insert(*address, *value);
             }
             // push new value for changed validators to database
-            db.insert_validator_set_diff(diffs.eth_height, &stake_diff)
+            db.insert_validators_diff(diffs.da_height, &stake_diff)
                 .await;
-            db.set_fuel_finalized_block(diffs.eth_height).await;
+            db.set_finalized_da_height(diffs.da_height).await;
 
             // push fanalized deposit to db
             for (nonce, deposit) in diffs.assets_deposited.iter() {
-                db.insert_token_deposit(*nonce, diffs.eth_height, deposit.0, deposit.1, deposit.2)
+                db.insert_token_deposit(*nonce, diffs.da_height, deposit.0, deposit.1, deposit.2)
                     .await
             }
             self.pending.pop_front();
         }
-        self.finalized_eth_height = finalized_eth_block;
-        db.set_eth_finalized_block(finalized_eth_block).await;
+        self.finalized_da_height = finalized_da_height;
     }
 }
 
@@ -351,10 +349,10 @@ mod tests {
         // apply all diffs to finalized state
         let mut db = DummyDb::filled();
 
-        pending.apply_last_validator_diff(&mut db, 5).await;
+        pending.flush_validator_diffs(&mut db, 5).await;
 
         assert_eq!(pending.pending.len(), 0, "All diffs should be flushed");
-        assert_eq!(pending.finalized_eth_height, 5, "Finalized should be 5");
+        assert_eq!(pending.finalized_da_height, 5, "Finalized should be 5");
         assert_eq!(
             pending.finalized_validator_set.get(&acc1),
             Some(&550),

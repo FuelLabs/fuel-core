@@ -24,7 +24,7 @@ pub enum EthEventLog {
     FuelBlockCommited {
         block_root: Bytes32,
         height: Word,
-        eth_height: u64,
+        da_height: u64,
     },
 }
 
@@ -129,14 +129,14 @@ impl TryFrom<&Log> for EthEventLog {
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;
-                let eth_height = <[u8; 4]>::try_from(&log.topics[3][28..])
+                let da_height = <[u8; 4]>::try_from(&log.topics[3][28..])
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;
 
                 Self::FuelBlockCommited {
                     block_root,
                     height,
-                    eth_height,
+                    da_height,
                 }
             }
 
@@ -223,7 +223,7 @@ pub mod tests {
         eth_block: u64,
         block_root: Bytes32,
         fuel_height: u32,
-        eth_height: u32,
+        da_height: u32,
     ) -> Log {
         log_default(
             eth_block,
@@ -231,7 +231,7 @@ pub mod tests {
                 *ETH_FUEL_BLOCK_COMMITED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
-                H256::from_low_u64_be(eth_height as u64),
+                H256::from_low_u64_be(da_height as u64),
             ],
             Bytes::new(),
         )
@@ -308,9 +308,9 @@ pub mod tests {
         let eth_block = rng.gen();
         let block_root = rng.gen();
         let height: u32 = rng.gen();
-        let eth_height: u32 = rng.gen();
+        let da_height: u32 = rng.gen();
 
-        let log = eth_log_fuel_block_commited(eth_block, block_root, height, eth_height);
+        let log = eth_log_fuel_block_commited(eth_block, block_root, height, da_height);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -325,7 +325,7 @@ pub mod tests {
             EthEventLog::FuelBlockCommited {
                 block_root,
                 height,
-                eth_height: eth_height as u64,
+                da_height: da_height as u64,
             },
             "Decoded log does not match data we encoded"
         );

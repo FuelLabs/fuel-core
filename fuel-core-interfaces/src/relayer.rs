@@ -47,48 +47,45 @@ pub trait RelayerDb:
         let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit_nonce,&coin);
     }
 
-    /// Asumption is that validator state is already checked in eth side, and we can blidly apply
+    /// Asumption is that validator state is already checked in da side, and we can blidly apply
     /// changed to db without checking if we have enought stake to reduce.
-    /// What needs to be done is to have validator set state and diff as saparate database values.
-    async fn insert_validator_set_diff(&mut self, eth_height: u64, stakes: &HashMap<Address, u64>) {
-        let _ = Storage::<u64,HashMap<Address,u64>>::insert(self, &eth_height,stakes);
+    /// What needs to be done is to have validator set state and diff as separate database values.
+    async fn insert_validators_diff(&mut self, da_height: u64, stakes: &HashMap<Address, u64>) {
+        let _ = Storage::<u64,HashMap<Address,u64>>::insert(self, &da_height,stakes);
     }
-
-    async fn apply_current_validator_set(&mut self, changes: HashMap<Address,u64>) {
-        for (ref address,ref stake) in changes {
-            let _ = Storage::<Address,u64>::insert(self,address,stake);
-        }
-    }
-
-    /// get validator set for current eth height
-    async fn current_validator_set(&self) -> HashMap<Address,u64>;
-
-    /// set last finalized fuel block. In usual case this will be
-    async fn set_current_validator_set_eth_height(&self, block: u64);
-    /// Assume it is allways set as initialization of database.
-    async fn get_current_validator_set_eth_height(&self) -> u64;
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
-    async fn get_validator_set_diff(
+    async fn get_validator_diffs(
             &self,
             from_fuel_block: u64,
             to_fuel_block: Option<u64>,
     ) -> Vec<(u64,HashMap<Address, u64>)>;
 
+    /// Apply validators diff to validator set and update validators_da_height. This operation needs
+    /// to be atomic.
+    async fn apply_validator_diffs(&mut self, changes: &HashMap<Address,u64>, da_height: u64) {
+        for ( address, stake) in changes {
+            let _ = Storage::<Address,u64>::insert(self,address,stake);
+        }
+        self.set_validators_da_height(da_height).await;
+    }
+
     /// current best block number
     async fn get_block_height(&self) -> u64;
 
+    /// get validator set for current eth height
+    async fn get_validators(&self) -> HashMap<Address,u64>;
 
-    /// set newest finalized eth block
-    async fn set_eth_finalized_block(&self, block: u64);
+    /// Set data availability block height that corresponds to current_validator_set
+    async fn set_validators_da_height(&self, block: u64);
 
-    /// assume it is allways set sa initialization of database.
-    async fn get_eth_finalized_block(&self) -> u64;
+    /// Assume it is allways set as initialization of database.
+    async fn get_validators_da_height(&self) -> u64;
 
     /// set last finalized fuel block. In usual case this will be
-    async fn set_fuel_finalized_block(&self, block: u64);
+    async fn set_finalized_da_height(&self, block: u64);
     /// Assume it is allways set as initialization of database.
-    async fn get_fuel_finalized_block(&self) -> u64;
+    async fn get_finalized_da_height(&self) -> u64;
 }
 
 #[derive(Debug)]
@@ -97,7 +94,7 @@ pub enum RelayerEvent {
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
-        eth_height: u64,
+        da_height: u64,
         response_channel: oneshot::Sender<Result<HashMap<Address, u64>, RelayerError>>,
     },
     GetStatus {

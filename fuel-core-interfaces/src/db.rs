@@ -693,23 +693,19 @@ pub mod helpers {
 
     #[async_trait]
     impl RelayerDb for DummyDb {
-        /// get validator set for current eth height
-        async fn current_validator_set(&self) -> HashMap<Address, u64> {
+        async fn get_validators(&self) -> HashMap<Address, u64> {
             self.data.lock().current_validator_set.clone()
         }
 
-        /// set last finalized fuel block. In usual case this will be
-        async fn set_current_validator_set_eth_height(&self, block: u64) {
+        async fn set_validators_da_height(&self, block: u64) {
             self.data.lock().current_validator_set_block = block;
         }
 
-        /// Assume it is allways set as initialization of database.
-        async fn get_current_validator_set_eth_height(&self) -> u64 {
+        async fn get_validators_da_height(&self) -> u64 {
             self.data.lock().current_validator_set_block
         }
 
-        /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
-        async fn get_validator_set_diff(
+        async fn get_validator_diffs(
             &self,
             from_fuel_block: u64,
             to_fuel_block: Option<u64>,
@@ -730,28 +726,15 @@ pub mod helpers {
             out
         }
 
-        /// current best block number
         async fn get_block_height(&self) -> u64 {
             self.data.lock().block_height
         }
 
-        /// set newest finalized eth block
-        async fn set_eth_finalized_block(&self, block: u64) {
-            self.data.lock().eth_finalized_block = block;
-        }
-
-        /// assume it is allways set sa initialization of database.
-        async fn get_eth_finalized_block(&self) -> u64 {
-            self.data.lock().eth_finalized_block
-        }
-
-        /// set last finalized fuel block. In usual case this will be
-        async fn set_fuel_finalized_block(&self, block: u64) {
+        async fn set_finalized_da_height(&self, block: u64) {
             self.data.lock().fuel_finalized_block = block;
         }
 
-        /// Assume it is allways set as initialization of database.
-        async fn get_fuel_finalized_block(&self) -> u64 {
+        async fn get_finalized_da_height(&self) -> u64 {
             self.data.lock().fuel_finalized_block
         }
     }
