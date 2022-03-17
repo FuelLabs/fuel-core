@@ -6,7 +6,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     echo " ...."
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     cd ../ingress/${k8s_provider}
-    kubectl apply -f ingress-controller.yaml
+    kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.1/deploy/static/provider/aws/deploy.yaml
     helm repo add jetstack https://charts.jetstack.io
     helm repo update
     helm install cert-manager jetstack/cert-manager --namespace cert-manager --version v1.7.1 --create-namespace 
