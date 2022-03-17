@@ -9,7 +9,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.1.1/deploy/static/provider/aws/deploy.yaml
     helm repo add jetstack https://charts.jetstack.io
     helm repo update
-    helm install cert-manager jetstack/cert-manager --namespace cert-manager --version v1.7.1 --create-namespace 
+    helm upgrade cert-manager jetstack/cert-manager --namespace cert-manager --version v1.7.1 --install --create-namespace 
     mv prod-issuer.yaml prod-issuer.template
     envsubst < prod-issuer.template > prod-issuer.yaml
     rm prod-issuer.template
