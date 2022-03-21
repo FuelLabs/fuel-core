@@ -1,5 +1,3 @@
-#[cfg(feature = "debug")]
-use super::debugger;
 use crate::model::fuel_block::TransactionCommitment;
 use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
@@ -26,6 +24,9 @@ use thiserror::Error;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpSocket;
 use tracing::{debug, warn};
+
+#[cfg(feature = "debug")]
+use fuel_debugger as debugger;
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.

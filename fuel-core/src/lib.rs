@@ -1,8 +1,6 @@
 pub mod chain_config;
 pub mod coin_query;
 pub mod database;
-#[cfg(feature = "debug")]
-pub mod debugger;
 pub mod executor;
 pub mod model;
 pub mod schema;
