@@ -13,28 +13,24 @@ spec:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
 ---
-apiVersion: v1
 kind: Service
+apiVersion: v1
 metadata:
   labels:
     app: {{ template "fuel-core.name" . }}
     chart: {{ template "fuel-core.chart" . }}
     release: {{ .Release.Name }}
     heritage: {{ .Release.Service }}
-  name: {{ template "fuel-core.name" . }}-k8s-lb
+  name: {{ template "fuel-core.name" . }}-service
 spec:
-  ports:
-    - port: {{ .Values.app.httpport }}
-      targetPort: {{ .Values.app.targetport }}
-      protocol: TCP
-      name: http
-    - port: {{ .Values.app.httpsport }}
-      targetPort: {{ .Values.app.targetport }}
-      protocol: TCP
-      name: https
+  type: NodePort
   selector:
     app: {{ template "fuel-core.name" . }}
-  type: LoadBalancer
+  ports:
+    - name: http
+      port: {{ .Values.app.httpport }}
+      protocol: TCP
+      targetPort: {{ .Values.app.targetport }}
 ---
 apiVersion: apps/v1
 kind: Deployment
