@@ -22,7 +22,7 @@ use std::{
     Into,
     From,
 )]
-pub struct BlockHeight(pub u32);
+pub struct BlockHeight(u32);
 
 impl From<BlockHeight> for Vec<u8> {
     fn from(height: BlockHeight) -> Self {

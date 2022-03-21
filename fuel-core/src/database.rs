@@ -340,9 +340,9 @@ impl RelayerDb for Database {
     async fn get_block_height(&self) -> u64 {
         match self.get_block_height() {
             Ok(res) => {
-                return res
-                    .expect("get_eth_finalized_block value should be always present and set")
-                    .0 as u64;
+                return u64::from(
+                    res.expect("get_eth_finalized_block value should be always present and set"),
+                );
             }
             Err(err) => {
                 panic!("get_eth_finalized_block database curruption, err:{:?}", err);

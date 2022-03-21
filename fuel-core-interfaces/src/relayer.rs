@@ -12,7 +12,7 @@ pub struct DepositCoin {
     pub amount: Word,
     pub asset_id: AssetId,
     pub deposited_da_height: u64,
-    pub fuel_block_spend: u64,
+    pub fuel_block_spend: Option<u64>,
 }
 
 // Database has two main functionalities, ValidatorSet and TokenDeposits.
@@ -40,7 +40,7 @@ pub trait RelayerDb:
             amount,
             asset_id,
             deposited_da_height,
-            fuel_block_spend: 0,
+            fuel_block_spend: None,
         };
         // TODO check what id are we going to use
         // depends on https://github.com/FuelLabs/fuel-specs/issues/106
