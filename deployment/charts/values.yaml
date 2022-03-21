@@ -16,6 +16,7 @@ app:
     pvname: db-volume
     mountPath: /mnt/db/
     claimname: db-volume-pv-claim
-    storageclass: gp2
-    storagerequests: 3Gi
+    storageclass: ${pvc_storage_class}
+    storagerequests: ${pvc_storage_requests}
     accessmodes: ReadWriteOnce
+
