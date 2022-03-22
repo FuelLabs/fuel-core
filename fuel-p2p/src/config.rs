@@ -19,4 +19,10 @@ pub struct P2PConfig {
     pub allow_private_addresses: bool,
     pub enable_random_walk: bool,
     pub connection_idle_timeout: Option<Duration>,
+
+    // `Gossipsub` related fields
+    pub topics: Vec<String>,
+    pub ideal_mesh_size: usize,
+    pub min_mesh_size: usize,
+    pub max_mesh_size: usize,
 }
