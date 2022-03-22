@@ -14,7 +14,7 @@ use graphql_parser::schema::{Definition, Field, SchemaDefinition, Type, TypeDefi
 use std::collections::{HashMap, HashSet};
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "db-postgres")] {
+    if #[cfg(feature = "diesel-postgres")] {
         fn create_schema(statements: &mut Vec<String>, namespace: &String) {
             let create = format!("CREATE SCHEMA IF NOT EXISTS {}", namespace);
             statements.push(create);
@@ -22,7 +22,7 @@ cfg_if::cfg_if! {
         fn format_table(namespace: &String, table: &String) -> String {
             format!("{}.{}", namespace, table)
         }
-    } else if #[cfg(feature = "db-sqlite")] {
+    } else if #[cfg(feature = "diesel-sqlite")] {
         fn create_schema(_statements: &mut Vec<String>, _namespace: &String) {
         }
         fn format_table(_namespace: &String, table: &String) -> String {
@@ -130,7 +130,6 @@ impl SchemaBuilder {
             }
 
             for query in statements.iter() {
-                println!("TJDEBUG kweeerie {}", query);
                 sql_query(query).execute(conn)?;
             }
 
@@ -268,7 +267,7 @@ mod tests {
         }
     "#;
 
-    #[cfg(feature = "db-postgres")]
+    #[cfg(feature = "diesel-postgres")]
     #[test]
     fn test_schema_builder() {
         const CREATE_SCHEMA: &str = "CREATE SCHEMA IF NOT EXISTS test_namespace";
@@ -299,7 +298,7 @@ mod tests {
         assert_eq!(statements[2], CREATE_THING2);
     }
 
-    #[cfg(feature = "db-sqlite")]
+    #[cfg(feature = "diesel-sqlite")]
     #[test]
     fn test_schema_builder() {
         const CREATE_THING1: &str = concat!(

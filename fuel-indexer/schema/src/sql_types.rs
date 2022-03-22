@@ -1,4 +1,4 @@
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use diesel::{
     backend::Backend,
     deserialize::{self, FromSql},
@@ -6,14 +6,14 @@ use diesel::{
     sql_types::Text,
 };
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use crate::db::DBBackend;
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use std::io::Write;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(any(feature = "db-postgres", feature = "db-sqlite"), derive(AsExpression, FromSqlRow))]
+#[cfg_attr(any(feature = "diesel-postgres", feature = "diesel-sqlite"), derive(AsExpression, FromSqlRow))]
 pub enum ColumnType {
     ID = 0,
     Address = 1,
@@ -31,7 +31,7 @@ pub enum ColumnType {
     Blob = 13,
 }
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl ColumnType {
     pub fn to_string(self) -> String {
         match self {
@@ -54,12 +54,12 @@ impl ColumnType {
 }
 
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl diesel::Expression for ColumnType {
     type SqlType = diesel::sql_types::Text;
 }
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl<DB: Backend> ToSql<Text, DB> for ColumnType {
     fn to_sql<W: Write>(&self, out: &mut Output<W, DB>) -> serialize::Result {
         match *self {
@@ -83,7 +83,7 @@ impl<DB: Backend> ToSql<Text, DB> for ColumnType {
 }
 
 
-#[cfg(feature = "db-postgres")]
+#[cfg(feature = "diesel-postgres")]
 impl FromSql<diesel::sql_types::Text, DBBackend> for ColumnType {
     fn from_sql(bytes: Option<&<DBBackend as Backend>::RawValue>) -> deserialize::Result<Self> {
         match not_none!(bytes) {
@@ -106,7 +106,7 @@ impl FromSql<diesel::sql_types::Text, DBBackend> for ColumnType {
     }
 }
 
-#[cfg(feature = "db-sqlite")]
+#[cfg(feature = "diesel-sqlite")]
 impl FromSql<Text, DBBackend> for ColumnType {
     fn from_sql(bytes: Option<&<DBBackend as Backend>::RawValue>) -> deserialize::Result<Self> {
         match not_none!(bytes).read_text() {

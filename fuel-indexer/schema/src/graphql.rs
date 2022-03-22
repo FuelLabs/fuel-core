@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use diesel::QueryResult;
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use crate::db::{
     Conn,
     models::{Columns, GraphRoot, RootColumns, TypeIds}
@@ -57,6 +57,16 @@ impl Filter {
     pub fn as_sql(&self, _jsonify: bool) -> String {
         format!("{} = {}", self.name, self.value)
     }
+}
+
+#[cfg(feature = "db-sqlite")]
+pub fn table_name(_schema: &str, name: &str) -> String {
+    format!("{name}")
+}
+
+#[cfg(feature = "db-postgres")]
+pub fn table_name(schema: &str, name: &str) -> String {
+    format!("{schema}.{name}")
 }
 
 #[derive(Clone, Debug)]
@@ -261,10 +271,9 @@ impl Operation {
                 let column_text = columns.join(", ");
 
                 let mut query = format!(
-                    "SELECT {} FROM {}.{}",
+                    "SELECT {} FROM {}",
                     column_text,
-                    namespace,
-                    name.to_lowercase()
+                    table_name(namespace, &name.to_lowercase())
                 );
 
                 if !filters.is_empty() {
@@ -276,7 +285,14 @@ impl Operation {
                 }
 
                 if jsonify {
-                    query = format!("SELECT row_to_json(x) as row from ({query}) x");
+                    cfg_if::cfg_if! {
+                        if #[cfg(feature = "db-postgres")] {
+                            query = format!("SELECT row_to_json(x) as row from ({query}) x");
+                        } else if #[cfg(feature = "db-sqlite")] {
+                            let column_set = columns.into_iter().map(|c| format!("'{}', {}", c, c)).join(", ");
+                            query = format!("SELECT json_group_array(json_object({column_set})) as row from ({query})");
+                        }
+                    }
                 }
 
                 queries.push(query)
@@ -452,7 +468,7 @@ pub struct Schema {
     pub fields: HashMap<String, HashMap<String, String>>,
 }
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl Schema {
     pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
         let root = GraphRoot::get_latest(conn, name)?;
@@ -491,7 +507,9 @@ impl Schema {
             fields,
         })
     }
+}
 
+impl Schema {
     pub fn check_type(&self, type_name: &str) -> bool {
         self.types.contains(type_name)
     }
@@ -510,6 +528,47 @@ mod tests {
     use super::*;
     use std::collections::HashSet;
     use std::iter::FromIterator;
+    const GOOD_QUERY: &str = r#"
+        fragment otherfrag on Thing2 {
+            id
+        }
+
+        fragment frag1 on Thing2 {
+            account
+            hash
+            ...otherfrag
+        }
+
+        query GetThing2 {
+            thing2(id: 1234) {
+                account
+                hash
+            }
+        }
+
+        query OtherQuery {
+            thing2(id: 84848) {
+                ...frag1
+            }
+        }
+
+        {
+            thing1(id: 4321) { account }
+        }
+    "#;
+
+    const BAD_QUERY: &str = r#"
+        fragment frag1 on BadType{
+            account
+        }
+
+        query GetThing2 {
+            thing2(id: 123) {
+                ...frag
+            }
+        }
+    "#;
+
 
     fn generate_schema() -> Schema {
         let t = ["Address", "Bytes32", "ID", "Thing1", "Thing2"]
@@ -547,40 +606,12 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "db-postgres")]
     #[test]
     fn test_graphql_queries() {
-        let good_query = r#"
-            fragment otherfrag on Thing2 {
-                id
-            }
-
-            fragment frag1 on Thing2 {
-                account
-                hash
-                ...otherfrag
-            }
-
-            query GetThing2 {
-                thing2(id: 1234) {
-                    account
-                    hash
-                }
-            }
-
-            query OtherQuery {
-                thing2(id: 84848) {
-                    ...frag1
-                }
-            }
-
-            {
-                thing1(id: 4321) { account }
-            }
-        "#;
-
         let schema = generate_schema();
 
-        let query = GraphqlQueryBuilder::new(&schema, good_query);
+        let query = GraphqlQueryBuilder::new(&schema, GOOD_QUERY);
         assert!(query.is_ok());
         let q = query.expect("It's ok here").build();
         assert!(q.is_ok());
@@ -607,19 +638,47 @@ mod tests {
             sql
         );
 
-        let bad_query = r#"
-            fragment frag1 on BadType{
-                account
-            }
+        let query = GraphqlQueryBuilder::new(&schema, BAD_QUERY);
+        assert!(query.is_ok());
+        match query.expect("It's ok here").build() {
+            Err(GraphqlError::UnrecognizedType(_)) => (),
+            o => panic!("Should have gotten Unrecognized type, got {:?}", o),
+        }
+    }
 
-            query GetThing2 {
-                thing2(id: 123) {
-                    ...frag
-                }
-            }
-        "#;
+    #[cfg(feature = "db-sqlite")]
+    #[test]
+    fn test_graphql_queries() {
+        let schema = generate_schema();
 
-        let query = GraphqlQueryBuilder::new(&schema, bad_query);
+        let query = GraphqlQueryBuilder::new(&schema, GOOD_QUERY);
+        assert!(query.is_ok());
+        let q = query.expect("It's ok here").build();
+        assert!(q.is_ok());
+        let q = q.expect("It's ok");
+        let sql = q.as_sql(true);
+
+        assert_eq!(
+            vec![
+                "SELECT json_group_array(json_object('account', account, 'hash', hash)) as row from (SELECT account, hash FROM thing2 WHERE id = 1234)".to_string(),
+                "SELECT json_group_array(json_object('account', account, 'hash', hash, 'id', id)) as row from (SELECT account, hash, id FROM thing2 WHERE id = 84848)".to_string(),
+                "SELECT json_group_array(json_object('account', account)) as row from (SELECT account FROM thing1 WHERE id = 4321)".to_string(),
+            ],
+            sql
+        );
+
+        let sql = q.as_sql(false);
+
+        assert_eq!(
+            vec![
+                "SELECT account, hash FROM thing2 WHERE id = 1234".to_string(),
+                "SELECT account, hash, id FROM thing2 WHERE id = 84848".to_string(),
+                "SELECT account FROM thing1 WHERE id = 4321".to_string(),
+            ],
+            sql
+        );
+
+        let query = GraphqlQueryBuilder::new(&schema, BAD_QUERY);
         assert!(query.is_ok());
         match query.expect("It's ok here").build() {
             Err(GraphqlError::UnrecognizedType(_)) => (),

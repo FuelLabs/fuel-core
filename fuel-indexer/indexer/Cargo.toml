@@ -12,6 +12,7 @@ async-std = "1.10.0"
 cfg-if = "1.0"
 diesel = { version = "1.4", features = ["serde_json"] }
 diesel_migrations = "1.4"
+fuel-core = { version = "0.2" }
 fuel-gql-client = { version = "0.2" }
 fuel-indexer-schema = { path = "../schema" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
@@ -49,7 +50,7 @@ serde_yaml = "0.8.19"
 
 [features]
 default = ["cranelift", "db-sqlite"]
-db-sqlite = ["fuel-indexer-schema/db-sqlite", "diesel_migrations/sqlite"]
-db-postgres = ["fuel-indexer-schema/db-postgres", "diesel_migrations/postgres"]
+db-sqlite = ["fuel-indexer-schema/diesel-sqlite", "diesel_migrations/sqlite"]
+db-postgres = ["fuel-indexer-schema/diesel-postgres", "diesel_migrations/postgres"]
 cranelift = ["wasmer-compiler-cranelift"]
 llvm = ["wasmer-compiler-llvm"]

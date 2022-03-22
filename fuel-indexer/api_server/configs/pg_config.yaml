@@ -1,0 +1,3 @@
+---
+listen_address: 0.0.0.0:29987
+database_url: postgres://postgres:my-secret@127.0.0.1:5432

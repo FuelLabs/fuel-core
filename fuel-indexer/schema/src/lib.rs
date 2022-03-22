@@ -1,9 +1,12 @@
 #![cfg_attr(not(feature = "derive-utils"), no_std)]
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 #[macro_use]
 extern crate diesel;
 extern crate alloc;
 use alloc::vec::Vec;
+
+#[cfg(all(feature = "diesel-sqlite", feature = "diesel-postgres"))]
+compile_error!("features 'diesel-sqlite' and 'diesel-postgres' are mutually exclusive");
 
 use crate::sql_types::ColumnType;
 use core::convert::{TryFrom, TryInto};
@@ -15,9 +18,6 @@ pub const LOG_LEVEL_INFO: u32 = 2;
 pub const LOG_LEVEL_DEBUG: u32 = 3;
 pub const LOG_LEVEL_TRACE: u32 = 4;
 
-#[cfg(all(feature = "db-sqlite", feature = "db-postgres"))]
-compile_error!("features 'db-sqlite' and 'db-postgres' are mutually exclusive");
-
 #[cfg(feature = "derive-utils")]
 use sha2::{Digest, Sha256};
 
@@ -26,10 +26,10 @@ pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
 
 pub mod sql_types;
 
-#[cfg(feature = "graphql-types")]
+#[cfg(any(feature = "db-sqlite", feature = "db-postgres"))]
 pub mod graphql;
 
-#[cfg(any(feature = "db-postgres", feature = "db-sqlite"))]
+#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 pub mod db;
 
 pub use fuel_types::{Address, AssetId, Bytes32, Bytes4, Bytes8, ContractId, Salt, Word};

@@ -152,7 +152,6 @@ impl IndexerService {
                                             let args = ABIEncoder::new()
                                                 .encode(&[token.clone()])
                                                 .expect("Bad Encoding!");
-                                            // TODO: should wrap this in a db transaction.
                                             if let Err(e) =
                                                 exec.trigger_event("an_event_name", vec![args])
                                             {

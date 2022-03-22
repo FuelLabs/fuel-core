@@ -1,32 +1,43 @@
 use anyhow::Result;
 use async_std::{fs::File, io::ReadExt, net::SocketAddr};
-use fuel_core::service::{Config, FuelService};
-use fuel_indexer_schema::graphql::Schema;
 use std::path::PathBuf;
-use async_process::Command;
+use serde::{Deserialize, Serialize};
 use structopt::StructOpt;
-use tokio::join;
-use tracing::error;
 use tracing_subscriber::filter::EnvFilter;
 
-//use crate::GraphQlApi;
+use api_server::GraphQlApi;
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ServerConfig {
+    /// API Server listen address.
+    listen_address: SocketAddr,
+    /// Where the data lives.
+    database_url: String,
+}
 
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "Indexer Service",
-    about = "Standalone binary for the fuel indexer service"
+    name = "Indexer API Service",
+    about = "Fuel indexer api"
 )]
 pub struct Args {
-    #[structopt(short, long, help = "run local test node")]
-    local: bool,
-    #[structopt(short, long, conflicts_with = "local", help = "node address")]
-    node_address: Option<SocketAddr>,
-    #[structopt(parse(from_os_str), help = "Indexer service config file")]
+    #[structopt(short, long, help = "API Server config.")]
     config: PathBuf,
-    #[structopt(short, long, parse(from_os_str), help = "Indexer service config file")]
-    manifest: PathBuf,
 }
+
+#[cfg(feature = "db-postgres")]
+fn canonicalize(url: String) -> String {
+    url
+}
+
+#[cfg(feature = "db-sqlite")]
+fn canonicalize(url: String) -> String {
+    let path = PathBuf::from(url).canonicalize().expect("Could not canonicalize path");
+    path.into_os_string().into_string().expect("Could not stringify path")
+}
+
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
@@ -41,33 +52,22 @@ pub async fn main() -> Result<()> {
         .init();
 
     let opt = Args::from_args();
-    let fuel_node_addr;
 
-    let _local_node = if opt.local {
-        let s = FuelService::new_node(Config::local_node()).await.unwrap();
-        fuel_node_addr = s.bound_address;
-        Some(s)
-    } else {
-        fuel_node_addr = opt.node_address.unwrap();
-        None
-    };
+    let mut file = File::open(opt.config).await?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).await?;
 
-    let mut child = Command::new("indexer_service")
-        .args(&[&opt.config.into_os_string().into_string().unwrap(), "--manifest", &opt.manifest.into_os_string().into_string().unwrap()])
-        .spawn()
-        .expect("Failed to start");
+    let ServerConfig {
+        listen_address,
+        database_url
+    } = serde_yaml::from_str(&contents).expect("Bad yaml file");
 
-    let mut output = String::new();
-    let mut stderr = child.stderr.take().unwrap();
-    stderr.read_to_string(&mut output);
 
-    let schema: Schema = serde_json::from_str(&output).expect("Bad schema");
-    println!("service {:?}", schema);
+    let api = GraphQlApi::new(canonicalize(database_url), listen_address);
 
-    // TODO: new config fmt...
-    //let api_handle = tokio::spawn(GraphQlApi::run(config.clone()));
+    let api_handle = tokio::spawn(api.run());
 
-    //api_handle.await?;
+    api_handle.await?;
 
     Ok(())
 }

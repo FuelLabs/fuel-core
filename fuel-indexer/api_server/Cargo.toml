@@ -10,15 +10,19 @@ anyhow = "1.0.53"
 async-process = "1.3"
 axum = "0.4"
 async-std = "1.10.0"
-fuel-core = { version = "0.2" }
-fuel-indexer-schema = { path = "../schema", features = ["graphql-types"] }
-fuel-wasm-executor = { path = "../indexer" }
+fuel-indexer-schema = { path = "../schema", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_yaml = "0.8.19"
+sqlite = "0.26"
 structopt = "0.3"
 thiserror = "1.0"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tokio-postgres = { version = "0.7.5", features = ["with-serde_json-1"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.2", features = ["env-filter"] }
+
+[features]
+default = ["db-sqlite"]
+db-postgres = ["fuel-indexer-schema/db-postgres"]
+db-sqlite = ["fuel-indexer-schema/db-sqlite"]

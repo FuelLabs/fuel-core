@@ -1,8 +1,10 @@
 use async_std::{fs::File, io::ReadExt, path::PathBuf};
+use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{IndexerConfig, IndexerService, Manifest};
 use serde::Deserialize;
 use structopt::StructOpt;
 use tracing_subscriber::EnvFilter;
+use tracing::info;
 
 
 #[derive(Debug, StructOpt)]
@@ -11,6 +13,8 @@ use tracing_subscriber::EnvFilter;
     about = "Standalone binary for the fuel indexer service"
 )]
 pub struct Args {
+    #[structopt(short, long, help = "Run a fuel node locally")]
+    local: bool,
     #[structopt(parse(from_os_str), help = "Indexer service config file")]
     config: PathBuf,
     #[structopt(short, long, parse(from_os_str), help = "Indexer service config file")]
@@ -41,7 +45,22 @@ async fn main() -> anyhow::Result<()> {
 
     let opt = Args::from_args();
 
-    let config: IndexerConfig = load_yaml(&opt.config).await?;
+    let mut config: IndexerConfig = load_yaml(&opt.config).await?;
+
+    #[cfg(feature = "db-sqlite")]
+    {
+        let canonicalized = PathBuf::from(config.database_url).canonicalize().await.expect("Could not canonicalize path");
+        config.database_url = canonicalized.into_os_string().into_string().expect("Could not stringify path");
+    }
+
+    let _local_node = if opt.local {
+        let s = FuelService::new_node(Config::local_node()).await.unwrap();
+        config.fuel_node_addr = s.bound_address;
+        Some(s)
+    } else {
+        None
+    };
+
     let mut service = IndexerService::new(config)?;
 
     let mut path = opt.manifest;
@@ -60,7 +79,7 @@ async fn main() -> anyhow::Result<()> {
     file.read_to_end(&mut bytes).await?;
     let schema = service.add_indexer(manifest, &schema, bytes, false)?;
 
-    eprintln!("{}", serde_json::to_string(&schema)?);
+    info!("Indexer schema: {schema:?}");
 
     tokio::spawn(service.run()).await?;
     Ok(())

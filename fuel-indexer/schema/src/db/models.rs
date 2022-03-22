@@ -1,7 +1,7 @@
-#[cfg(feature = "db-postgres")]
+#[cfg(feature = "diesel-postgres")]
 use crate::db::pg_schema::graph_registry as gr;
 
-#[cfg(feature = "db-sqlite")]
+#[cfg(feature = "diesel-sqlite")]
 use crate::db::sqlite_schema as gr;
 
 use crate::db::Conn;
