@@ -1,5 +1,9 @@
 extern crate alloc;
 
+#[cfg(all(
+    any(feature = "cranelift", feature = "llvm"),
+    any(feature = "db-postgres", feature = "db-sqlite")
+))]
 mod tests {
     use fuel_core::service::{Config, FuelService};
     use fuel_gql_client::client::FuelClient;

@@ -6,6 +6,10 @@ license = "BUSL-1.1"
 publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[[bin]]
+name = "indexer_service"
+required-features = ["wasm-compiler", "has-db"]
+
 [dependencies]
 anyhow = "1.0.53"
 async-std = "1.10.0"
@@ -51,7 +55,9 @@ serde_yaml = "0.8.19"
 
 [features]
 default = ["cranelift", "db-sqlite"]
-db-sqlite = ["fuel-indexer-schema/diesel-sqlite", "diesel_migrations/sqlite"]
-db-postgres = ["fuel-indexer-schema/diesel-postgres", "diesel_migrations/postgres"]
-cranelift = ["wasmer-compiler-cranelift"]
-llvm = ["wasmer-compiler-llvm"]
+db-sqlite = ["fuel-indexer-schema/diesel-sqlite", "diesel_migrations/sqlite", "has-db"]
+db-postgres = ["fuel-indexer-schema/diesel-postgres", "diesel_migrations/postgres", "has-db"]
+cranelift = ["wasmer-compiler-cranelift", "wasm-compiler"]
+llvm = ["wasmer-compiler-llvm", "wasm-compiler"]
+wasm-compiler = []
+has-db = []

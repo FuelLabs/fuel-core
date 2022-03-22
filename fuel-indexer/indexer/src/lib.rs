@@ -1,3 +1,7 @@
+#![cfg(all(
+    any(feature = "cranelift", feature = "llvm"),
+    any(feature = "db-postgres", feature = "db-sqlite")
+))]
 use diesel::result::Error as DieselError;
 use thiserror::Error;
 use wasmer::{ExportError, HostEnvInitError, InstantiationError, RuntimeError};
