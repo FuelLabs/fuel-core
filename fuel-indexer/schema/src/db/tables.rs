@@ -12,18 +12,18 @@ use std::collections::{HashMap, HashSet};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "diesel-postgres")] {
-        fn create_schema(statements: &mut Vec<String>, namespace: &String) {
+        fn create_schema(statements: &mut Vec<String>, namespace: &str) {
             let create = format!("CREATE SCHEMA IF NOT EXISTS {}", namespace);
             statements.push(create);
         }
-        fn format_table(namespace: &String, table: &String) -> String {
+        fn format_table(namespace: &str, table: &str) -> String {
             format!("{}.{}", namespace, table)
         }
     } else if #[cfg(feature = "diesel-sqlite")] {
-        fn create_schema(_statements: &mut Vec<String>, _namespace: &String) {
+        fn create_schema(_statements: &mut Vec<String>, _namespace: &str) {
         }
-        fn format_table(_namespace: &String, table: &String) -> String {
-            format!("{}", table)
+        fn format_table(_namespace: &str, table: &str) -> String {
+            table.into()
         }
     }
 }
@@ -171,7 +171,7 @@ impl SchemaBuilder {
                 type_id,
                 column_position: pos as i32,
                 column_name: f.name.to_string(),
-                column_type: typ.to_string(),
+                column_type: typ.as_string(),
                 graphql_type: f.field_type.to_string(),
                 nullable,
             };
@@ -184,7 +184,7 @@ impl SchemaBuilder {
             type_id,
             column_position: fragments.len() as i32,
             column_name: "object".to_string(),
-            column_type: ColumnType::Blob.to_string(),
+            column_type: ColumnType::Blob.as_string(),
             graphql_type: "__".into(),
             nullable: false,
         };

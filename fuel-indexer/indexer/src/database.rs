@@ -299,15 +299,15 @@ mod tests {
     }
 
     #[cfg(feature = "db-postgres")]
-    const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+    const DATABASE_URL: &str = "postgres://postgres:my-secret@127.0.0.1:5432";
 
     #[cfg(feature = "db-sqlite")]
-    const DATABASE_URL: &'static str = "./src/test_data/main.db";
+    const DATABASE_URL: &str = "./src/test_data/main.db";
 
-    const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
-    const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
+    const GRAPHQL_SCHEMA: &str = include_str!("test_data/schema.graphql");
+    const WASM_BYTES: &[u8] = include_bytes!("test_data/simple_wasm.wasm");
     const THING1_TYPE: u64 = 0xA21A262A00405632;
-    const TEST_COLUMNS: [(&'static str, i32, &'static str); 7] = [
+    const TEST_COLUMNS: [(&str, i32, &str); 7] = [
         ("thing2", 0, "id"),
         ("thing2", 1, "account"),
         ("thing2", 2, "hash"),

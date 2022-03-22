@@ -36,7 +36,7 @@ pub enum ColumnType {
 
 #[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl ColumnType {
-    pub fn to_string(self) -> String {
+    pub fn as_string(self) -> String {
         match self {
             ColumnType::ID => "ID".into(),
             ColumnType::Address => "Address".into(),

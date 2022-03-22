@@ -23,9 +23,9 @@ mod tests {
         canonicalized.into_os_string().into_string().unwrap()
     }
 
-    const GRAPHQL_SCHEMA: &'static str = include_str!("./test_data/demo_schema.graphql");
-    const MANIFEST: &'static str = include_str!("./test_data/demo_manifest.yaml");
-    const WASM_BYTES: &'static [u8] = include_bytes!("./test_data/indexer_demo.wasm");
+    const GRAPHQL_SCHEMA: &str = include_str!("./test_data/demo_schema.graphql");
+    const MANIFEST: &str = include_str!("./test_data/demo_manifest.yaml");
+    const WASM_BYTES: &[u8] = include_bytes!("./test_data/indexer_demo.wasm");
 
     fn create_log_transaction(rega: u16, regb: u16) -> Transaction {
         let script = vec![
@@ -35,8 +35,7 @@ mod tests {
             Opcode::LOG(0x11, 0x12, REG_ZERO, REG_ZERO),
             Opcode::RET(REG_ONE),
         ]
-        .iter()
-        .copied()
+        .into_iter()
         .collect::<Vec<u8>>();
 
         let gas_price = 0;

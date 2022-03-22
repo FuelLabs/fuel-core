@@ -169,15 +169,15 @@ mod tests {
     use diesel::prelude::SqliteConnection as Conn;
 
     #[cfg(feature = "db-postgres")]
-    const DATABASE_URL: &'static str = "postgres://postgres:my-secret@127.0.0.1:5432";
+    const DATABASE_URL: &str = "postgres://postgres:my-secret@127.0.0.1:5432";
 
     #[cfg(feature = "db-sqlite")]
-    const DATABASE_URL: &'static str = "./src/test_data/main.db";
+    const DATABASE_URL: &str = "./src/test_data/main.db";
 
-    const MANIFEST: &'static str = include_str!("test_data/manifest.yaml");
-    const GRAPHQL_SCHEMA: &'static str = include_str!("test_data/schema.graphql");
-    const BAD_MANIFEST: &'static str = include_str!("test_data/bad_manifest.yaml");
-    const WASM_BYTES: &'static [u8] = include_bytes!("test_data/simple_wasm.wasm");
+    const MANIFEST: &str = include_str!("test_data/manifest.yaml");
+    const GRAPHQL_SCHEMA: &str = include_str!("test_data/schema.graphql");
+    const BAD_MANIFEST: &str = include_str!("test_data/bad_manifest.yaml");
+    const WASM_BYTES: &[u8] = include_bytes!("test_data/simple_wasm.wasm");
 
     abigen!(
         MyContract,
@@ -191,7 +191,7 @@ mod tests {
 
     #[cfg(feature = "db-sqlite")]
     fn table_name(_namespace: &str, table: &str) -> String {
-        format!("{}", table)
+        table.into()
     }
 
     #[derive(Debug, Queryable, QueryableByName)]

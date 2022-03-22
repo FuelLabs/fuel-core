@@ -65,7 +65,7 @@ impl Filter {
 
 #[cfg(feature = "db-sqlite")]
 pub fn table_name(_schema: &str, name: &str) -> String {
-    format!("{name}")
+    name.into()
 }
 
 #[cfg(feature = "db-postgres")]
