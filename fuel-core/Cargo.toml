@@ -19,7 +19,7 @@ test = false
 
 [dependencies]
 anyhow = "1.0"
-async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz"] }
+async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz", "tracing"] }
 async-trait = "0.1"
 axum = { version = "0.4" }
 bincode = "1.3"
@@ -56,10 +56,10 @@ strum_macros = "0.21"
 tempfile = "3.3"
 thiserror = "1.0.26"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
-tower-http = { version = "0.2.1", features = ["set-header"] }
+tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"
 tracing = "0.1"
-tracing-subscriber = { version = "0.2", features = ["env-filter"] }
+tracing-subscriber = { version = "0.2", features = ["env-filter", "json"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
