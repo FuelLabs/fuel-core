@@ -92,11 +92,7 @@ pub struct TypeIds {
 }
 
 impl TypeIds {
-    pub fn list_by_name(
-        conn: &Conn,
-        name: &str,
-        version: &str,
-    ) -> QueryResult<Vec<TypeIds>> {
+    pub fn list_by_name(conn: &Conn, name: &str, version: &str) -> QueryResult<Vec<TypeIds>> {
         use gr::type_ids::dsl::*;
         type_ids
             .filter(schema_name.eq(name).and(schema_version.eq(version)))
@@ -204,11 +200,7 @@ pub struct ColumnInfo {
 }
 
 impl ColumnInfo {
-    pub fn get_schema(
-        conn: &Conn,
-        name: &str,
-        version: &str,
-    ) -> QueryResult<Vec<ColumnInfo>> {
+    pub fn get_schema(conn: &Conn, name: &str, version: &str) -> QueryResult<Vec<ColumnInfo>> {
         use gr::columns::dsl as cd;
         use gr::type_ids::dsl as td;
 

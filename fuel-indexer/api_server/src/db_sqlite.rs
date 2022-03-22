@@ -1,8 +1,7 @@
-use crate::{APIError, Query, graph_types, root_query, root_columns};
-use serde_json::Value;
-use std::collections::{HashSet, HashMap};
+use crate::{graph_types, root_columns, root_query, APIError, Query};
 use fuel_indexer_schema::graphql::{GraphqlQueryBuilder, Schema};
-
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 
 pub async fn load_schema(database_url: &str, name: &str) -> Result<Option<Schema>, APIError> {
     let mut types = HashSet::new();

@@ -1,7 +1,6 @@
 pub mod models;
 pub mod tables;
 
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "diesel-sqlite")] {
         pub mod sqlite_schema;

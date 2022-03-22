@@ -158,9 +158,9 @@ mod tests {
     use crate::SchemaManager;
     use diesel::sql_types::*;
     use diesel::{sql_query, Connection, Queryable, QueryableByName, RunQueryDsl};
+    use fuel_indexer::types::db::Conn;
     use fuels_abigen_macro::abigen;
     use fuels_rs::abi_encoder::ABIEncoder;
-    use fuel_indexer::types::db::Conn;
 
     #[cfg(feature = "postgres")]
     use diesel::prelude::PgConnection as Conn;
@@ -252,10 +252,12 @@ mod tests {
         assert!(result.is_ok());
 
         let conn = Conn::establish(DATABASE_URL).expect("Postgres connection failed");
-        let data: Vec<Thing1> =
-            sql_query(format!("select id,account from {} where id = 1020;", table_name("test_namespace", "thing1")))
-                .load(&conn)
-                .expect("Database query failed");
+        let data: Vec<Thing1> = sql_query(format!(
+            "select id,account from {} where id = 1020;",
+            table_name("test_namespace", "thing1")
+        ))
+        .load(&conn)
+        .expect("Database query failed");
 
         assert_eq!(data.len(), 1);
         assert_eq!(data[0].id, 1020);

@@ -1,15 +1,14 @@
-use async_std::{net::SocketAddr, sync::{Arc, RwLock}};
+use async_std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 use axum::{
     extract::{Extension, Json, Path},
     http::StatusCode,
     routing::post,
     Router,
 };
-use fuel_indexer_schema::graphql::{
-    GraphqlError,
-    Schema,
-    table_name,
-};
+use fuel_indexer_schema::graphql::{table_name, GraphqlError, Schema};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -20,14 +19,13 @@ use tracing::error;
 mod db_postgres;
 
 #[cfg(feature = "db-postgres")]
-use db_postgres::{run_query, load_schema};
+use db_postgres::{load_schema, run_query};
 
 #[cfg(feature = "db-sqlite")]
 mod db_sqlite;
 
 #[cfg(feature = "db-sqlite")]
-use db_sqlite::{run_query, load_schema};
-
+use db_sqlite::{load_schema, run_query};
 
 #[derive(Debug, Error)]
 pub enum APIError {
@@ -52,33 +50,38 @@ pub enum APIError {
 fn root_query(namespace: &str) -> String {
     let table = table_name("graph_registry", "graph_root");
 
-    format!(r#"SELECT id,version,query,schema
+    format!(
+        r#"SELECT id,version,query,schema
     FROM {table} 
     WHERE schema_name = '{namespace}'
     ORDER BY id DESC
-    LIMIT 1"#)
+    LIMIT 1"#
+    )
 }
 
 fn root_columns(root_id: &str) -> String {
     let table = table_name("graph_registry", "root_columns");
 
-    format!(r#"SELECT id,column_name,graphql_type
+    format!(
+        r#"SELECT id,column_name,graphql_type
     FROM {table}
-    WHERE root_id = {root_id}"#)
+    WHERE root_id = {root_id}"#
+    )
 }
 
 fn graph_types(name: &str, version: &str) -> String {
     let table1 = table_name("graph_registry", "type_ids");
     let table2 = table_name("graph_registry", "columns");
 
-    format!(r#"SELECT tid.graphql_name,col.column_name,col.graphql_type
+    format!(
+        r#"SELECT tid.graphql_name,col.column_name,col.graphql_type
     FROM {table1} tid
     JOIN {table2} col
     ON tid.id = col.type_id
     WHERE tid.schema_name = '{name}'
-    AND tid.schema_version = '{version}'"#)
+    AND tid.schema_version = '{version}'"#
+    )
 }
-
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Query {

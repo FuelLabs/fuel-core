@@ -13,7 +13,10 @@ use crate::db::DBBackend;
 use std::io::Write;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(any(feature = "diesel-postgres", feature = "diesel-sqlite"), derive(AsExpression, FromSqlRow))]
+#[cfg_attr(
+    any(feature = "diesel-postgres", feature = "diesel-sqlite"),
+    derive(AsExpression, FromSqlRow)
+)]
 pub enum ColumnType {
     ID = 0,
     Address = 1,
@@ -53,7 +56,6 @@ impl ColumnType {
     }
 }
 
-
 #[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 impl diesel::Expression for ColumnType {
     type SqlType = diesel::sql_types::Text;
@@ -81,7 +83,6 @@ impl<DB: Backend> ToSql<Text, DB> for ColumnType {
         Ok(IsNull::No)
     }
 }
-
 
 #[cfg(feature = "diesel-postgres")]
 impl FromSql<diesel::sql_types::Text, DBBackend> for ColumnType {

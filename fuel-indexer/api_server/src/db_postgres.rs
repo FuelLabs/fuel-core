@@ -1,9 +1,9 @@
-use crate::{APIError, Query, graph_types, root_query, root_columns};
-use tokio_postgres::{connect, types::Type, NoTls};
-use serde_json::Value;
-use std::collections::{HashSet, HashMap};
-use tracing::error;
+use crate::{graph_types, root_columns, root_query, APIError, Query};
 use fuel_indexer_schema::graphql::{GraphqlQueryBuilder, Schema};
+use serde_json::Value;
+use std::collections::{HashMap, HashSet};
+use tokio_postgres::{connect, types::Type, NoTls};
+use tracing::error;
 
 pub async fn load_schema(database_url: &str, name: &str) -> Result<Option<Schema>, APIError> {
     let (client, conn) = connect(database_url, NoTls).await?;

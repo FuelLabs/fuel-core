@@ -3,9 +3,8 @@ use fuel_core::service::{Config, FuelService};
 use fuel_wasm_executor::{IndexerConfig, IndexerService, Manifest};
 use serde::Deserialize;
 use structopt::StructOpt;
-use tracing_subscriber::EnvFilter;
 use tracing::info;
-
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -21,7 +20,6 @@ pub struct Args {
     manifest: PathBuf,
 }
 
-
 async fn load_yaml<'a, T: for<'de> Deserialize<'de>>(filename: &PathBuf) -> anyhow::Result<T> {
     let mut file = File::open(filename).await?;
     let mut contents = String::new();
@@ -29,7 +27,6 @@ async fn load_yaml<'a, T: for<'de> Deserialize<'de>>(filename: &PathBuf) -> anyh
 
     Ok(serde_yaml::from_str(&contents)?)
 }
-
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -49,8 +46,14 @@ async fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "db-sqlite")]
     {
-        let canonicalized = PathBuf::from(config.database_url).canonicalize().await.expect("Could not canonicalize path");
-        config.database_url = canonicalized.into_os_string().into_string().expect("Could not stringify path");
+        let canonicalized = PathBuf::from(config.database_url)
+            .canonicalize()
+            .await
+            .expect("Could not canonicalize path");
+        config.database_url = canonicalized
+            .into_os_string()
+            .into_string()
+            .expect("Could not stringify path");
     }
 
     let _local_node = if opt.local {

@@ -9,8 +9,8 @@ use diesel::QueryResult;
 
 #[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 use crate::db::{
+    models::{Columns, GraphRoot, RootColumns, TypeIds},
     Conn,
-    models::{Columns, GraphRoot, RootColumns, TypeIds}
 };
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
@@ -454,7 +454,6 @@ impl<'a> GraphqlQueryBuilder<'a> {
     }
 }
 
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Schema {
     pub version: String,
@@ -522,7 +521,6 @@ impl Schema {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -568,7 +566,6 @@ mod tests {
             }
         }
     "#;
-
 
     fn generate_schema() -> Schema {
         let t = ["Address", "Bytes32", "ID", "Thing1", "Thing2"]

@@ -1,8 +1,6 @@
 use crate::{
+    db::models::{GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, TypeIds},
     db::Conn,
-    db::models::{
-        GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, TypeIds,
-    },
     graphql::Schema,
     sql_types::ColumnType,
     type_id,
@@ -223,7 +221,8 @@ impl SchemaBuilder {
 
                 let create = format!(
                     "CREATE TABLE IF NOT EXISTS\n {} (\n {}\n)",
-                    format_table(&self.namespace, &table_name), columns,
+                    format_table(&self.namespace, &table_name),
+                    columns,
                 );
 
                 self.statements.push(create);

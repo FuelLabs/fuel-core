@@ -7,9 +7,9 @@ use wasmer::Instance;
 use crate::ffi;
 use crate::IndexerResult;
 use fuel_indexer_schema::{
-    db::Conn,
     db::models::{ColumnInfo, EntityData, TypeIds},
     db::tables::SchemaBuilder,
+    db::Conn,
     graphql::Schema,
     schema_version, FtColumn,
 };
@@ -172,9 +172,7 @@ impl Database {
 
     #[cfg(feature = "db-sqlite")]
     fn get_query(&self, table: &str, object_id: u64) -> String {
-        format!(
-            "SELECT object from {} where id = {}", table, object_id
-        )
+        format!("SELECT object from {} where id = {}", table, object_id)
     }
 
     #[cfg(feature = "db-postgres")]

@@ -1,12 +1,11 @@
 use anyhow::Result;
 use async_std::{fs::File, io::ReadExt, net::SocketAddr};
-use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use structopt::StructOpt;
 use tracing_subscriber::filter::EnvFilter;
 
 use api_server::GraphQlApi;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -16,12 +15,8 @@ pub struct ServerConfig {
     database_url: String,
 }
 
-
 #[derive(Debug, StructOpt)]
-#[structopt(
-    name = "Indexer API Service",
-    about = "Fuel indexer api"
-)]
+#[structopt(name = "Indexer API Service", about = "Fuel indexer api")]
 pub struct Args {
     #[structopt(short, long, help = "API Server config.")]
     config: PathBuf,
@@ -34,10 +29,13 @@ fn canonicalize(url: String) -> String {
 
 #[cfg(feature = "db-sqlite")]
 fn canonicalize(url: String) -> String {
-    let path = PathBuf::from(url).canonicalize().expect("Could not canonicalize path");
-    path.into_os_string().into_string().expect("Could not stringify path")
+    let path = PathBuf::from(url)
+        .canonicalize()
+        .expect("Could not canonicalize path");
+    path.into_os_string()
+        .into_string()
+        .expect("Could not stringify path")
 }
-
 
 #[tokio::main]
 pub async fn main() -> Result<()> {
@@ -59,9 +57,8 @@ pub async fn main() -> Result<()> {
 
     let ServerConfig {
         listen_address,
-        database_url
+        database_url,
     } = serde_yaml::from_str(&contents).expect("Bad yaml file");
-
 
     let api = GraphQlApi::new(canonicalize(database_url), listen_address);
 
