@@ -25,8 +25,8 @@ http = "0.2"
 r2d2 = "0.8"
 r2d2-diesel = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["raw_value"] }
 serde-scale = "0.2"
+serde_json = { version = "1.0", features = ["raw_value"] }
 serde_yaml = "0.8.19"
 structopt = "0.3"
 thiserror = "1.0"
