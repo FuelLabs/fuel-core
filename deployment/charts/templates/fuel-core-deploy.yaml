@@ -73,8 +73,8 @@ spec:
             - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
           env:
-            - name: {{ .Values.app.human_logging }}
-              value: "false"
+            - name: human_logging
+              value: {{ .Values.app.human_logging | quote }}
       volumes:
         - name: {{ .Values.app.volume.pvname }}
           persistentVolumeClaim:
