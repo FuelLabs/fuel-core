@@ -175,7 +175,7 @@ dependencies = [
  "async-process",
  "async-std",
  "axum",
- "fuel-indexer-schema",
+ "fuel-indexer-graphql",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -2024,20 +2024,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-indexer-graphql"
+version = "0.1.0"
+dependencies = [
+ "cfg-if 1.0.0",
+ "graphql-parser",
+ "itertools",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "fuel-indexer-schema"
 version = "0.0.0"
 dependencies = [
  "cfg-if 1.0.0",
  "diesel",
+ "fuel-indexer-graphql",
  "fuel-tx 0.6.0",
  "fuel-types 0.3.1",
  "graphql-parser",
  "insta",
- "itertools",
  "serde",
  "serde-scale",
  "sha2 0.9.9",
- "thiserror",
 ]
 
 [[package]]
@@ -2263,6 +2273,7 @@ dependencies = [
  "fuel-core 0.2.1",
  "fuel-gql-client 0.2.1",
  "fuel-indexer",
+ "fuel-indexer-graphql",
  "fuel-indexer-schema",
  "fuel-storage",
  "fuel-tx 0.2.1",

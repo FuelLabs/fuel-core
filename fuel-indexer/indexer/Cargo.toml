@@ -14,6 +14,7 @@ diesel = { version = "1.4", features = ["serde_json"] }
 diesel_migrations = "1.4"
 fuel-core = { version = "0.2" }
 fuel-gql-client = { version = "0.2" }
+fuel-indexer-graphql = { path = "../graphql" }
 fuel-indexer-schema = { path = "../schema" }
 fuel-tx = { version = "0.2", features = ["serde-types"] }
 fuel-vm = { version = "0.2" }

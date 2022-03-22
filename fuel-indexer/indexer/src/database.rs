@@ -1,13 +1,13 @@
 use core::ops::Deref;
 use diesel::{sql_query, sql_types::Binary, Connection, RunQueryDsl};
 use r2d2_diesel::ConnectionManager;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use wasmer::Instance;
 
 use crate::ffi;
 use crate::IndexerResult;
 use fuel_indexer_schema::{
-    db::models::{ColumnInfo, EntityData, TypeIds},
+    db::models::{ColumnInfo, Columns, EntityData, GraphRoot, RootColumns, TypeIds},
     db::tables::SchemaBuilder,
     db::Conn,
     graphql::Schema,
@@ -85,8 +85,42 @@ impl SchemaManager {
     }
 
     pub fn load_schema(&self, name: &str) -> IndexerResult<Schema> {
-        // TODO: might be nice to cache this data in server?
-        Ok(Schema::load_from_db(&*self.pool.get()?, name)?)
+        let conn = self.pool.get()?;
+        let root = GraphRoot::get_latest(&*conn, name)?;
+        let root_cols = RootColumns::list_by_id(&*conn, root.id)?;
+        let typeids = TypeIds::list_by_name(&*conn, &root.schema_name, &root.version)?;
+
+        let mut types = HashSet::new();
+        let mut fields = HashMap::new();
+
+        types.insert(root.query.clone());
+        fields.insert(
+            root.query.clone(),
+            root_cols
+                .into_iter()
+                .map(|c| (c.column_name, c.graphql_type))
+                .collect(),
+        );
+        for tid in typeids {
+            types.insert(tid.graphql_name.clone());
+
+            let columns = Columns::list_by_id(&*conn, tid.id)?;
+            fields.insert(
+                tid.graphql_name,
+                columns
+                    .into_iter()
+                    .map(|c| (c.column_name, c.graphql_type))
+                    .collect(),
+            );
+        }
+
+        Ok(Schema {
+            version: root.version,
+            namespace: root.schema_name,
+            query: root.query,
+            types,
+            fields,
+        })
     }
 }
 

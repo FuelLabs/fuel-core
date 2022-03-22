@@ -10,7 +10,7 @@ anyhow = "1.0.53"
 async-process = "1.3"
 axum = "0.4"
 async-std = "1.10.0"
-fuel-indexer-schema = { path = "../schema", default-features = false }
+fuel-indexer-graphql = { path = "../graphql", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_yaml = "0.8.19"
@@ -24,5 +24,5 @@ tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 
 [features]
 default = ["db-sqlite"]
-db-postgres = ["fuel-indexer-schema/db-postgres"]
-db-sqlite = ["fuel-indexer-schema/db-sqlite"]
+db-postgres = ["fuel-indexer-graphql/db-postgres"]
+db-sqlite = ["fuel-indexer-graphql/db-sqlite"]

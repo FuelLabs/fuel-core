@@ -4,15 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
-#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
-use diesel::QueryResult;
-
-#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
-use crate::db::{
-    models::{Columns, GraphRoot, RootColumns, TypeIds},
-    Conn,
-};
-
 type GraphqlResult<T> = Result<T, GraphqlError>;
 
 #[derive(Debug, Error)]
@@ -465,47 +456,6 @@ pub struct Schema {
     pub types: HashSet<String>,
     /// Mapping of key/value pairs per GraphQL type.
     pub fields: HashMap<String, HashMap<String, String>>,
-}
-
-#[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
-impl Schema {
-    pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Self> {
-        let root = GraphRoot::get_latest(conn, name)?;
-        let root_cols = RootColumns::list_by_id(conn, root.id)?;
-        let typeids = TypeIds::list_by_name(conn, &root.schema_name, &root.version)?;
-
-        let mut types = HashSet::new();
-        let mut fields = HashMap::new();
-
-        types.insert(root.query.clone());
-        fields.insert(
-            root.query.clone(),
-            root_cols
-                .into_iter()
-                .map(|c| (c.column_name, c.graphql_type))
-                .collect(),
-        );
-        for tid in typeids {
-            types.insert(tid.graphql_name.clone());
-
-            let columns = Columns::list_by_id(conn, tid.id)?;
-            fields.insert(
-                tid.graphql_name,
-                columns
-                    .into_iter()
-                    .map(|c| (c.column_name, c.graphql_type))
-                    .collect(),
-            );
-        }
-
-        Ok(Schema {
-            version: root.version,
-            namespace: root.schema_name,
-            query: root.query,
-            types,
-            fields,
-        })
-    }
 }
 
 impl Schema {

@@ -26,8 +26,8 @@ pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
 
 pub mod sql_types;
 
-#[cfg(any(feature = "db-sqlite", feature = "db-postgres"))]
-pub mod graphql;
+#[cfg(any(feature = "diesel-sqlite", feature = "diesel-postgres"))]
+pub use fuel_indexer_graphql as graphql;
 
 #[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 pub mod db;

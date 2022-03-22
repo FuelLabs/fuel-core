@@ -1,5 +1,5 @@
 use crate::{graph_types, root_columns, root_query, APIError, Query};
-use fuel_indexer_schema::graphql::{GraphqlQueryBuilder, Schema};
+use fuel_indexer_graphql::{GraphqlQueryBuilder, Schema};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 

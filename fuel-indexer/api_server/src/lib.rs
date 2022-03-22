@@ -8,7 +8,7 @@ use axum::{
     routing::post,
     Router,
 };
-use fuel_indexer_schema::graphql::{table_name, GraphqlError, Schema};
+use fuel_indexer_graphql::{table_name, GraphqlError, Schema};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
