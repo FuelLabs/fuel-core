@@ -1,10 +1,23 @@
 extern crate alloc;
 use alloc::vec::Vec;
+use serde::{Deserialize, Serialize};
 
-use fuel_indexer_schema::{
-    deserialize, serialize, FtColumn, LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR, LOG_LEVEL_INFO,
-    LOG_LEVEL_TRACE, LOG_LEVEL_WARN,
-};
+use fuel_indexer_schema::FtColumn;
+
+pub const LOG_LEVEL_ERROR: u32 = 0;
+pub const LOG_LEVEL_WARN: u32 = 1;
+pub const LOG_LEVEL_INFO: u32 = 2;
+pub const LOG_LEVEL_DEBUG: u32 = 3;
+pub const LOG_LEVEL_TRACE: u32 = 4;
+
+// serde_scale for now, can look at other options if necessary.
+pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
+    serde_scale::to_vec(obj).expect("Serialize failed")
+}
+
+pub fn deserialize<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> T {
+    serde_scale::from_slice(bytes).expect("Deserialize failed")
+}
 
 pub mod types {
     pub use fuel_indexer_schema::*;

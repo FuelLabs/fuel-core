@@ -1,9 +1,8 @@
 use crate::{
     db::models::{GraphRoot, NewColumn, NewGraphRoot, NewRootColumns, TypeIds},
     db::Conn,
-    graphql::Schema,
+    graphql::{type_id, Schema},
     sql_types::ColumnType,
-    type_id,
 };
 use diesel::result::QueryResult;
 use diesel::{sql_query, Connection, RunQueryDsl};

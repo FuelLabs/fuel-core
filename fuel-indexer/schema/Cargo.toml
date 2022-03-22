@@ -14,8 +14,6 @@ fuel-tx = { version = "0.6", default-features = false }
 fuel-types = { version = "0.3", default-features = false }
 graphql-parser = "0.3"
 serde = { version = "1.0", default-features = false, features = ["derive"] }
-serde-scale = "0.2"
-sha2 = "0.9"
 
 [dev-dependencies]
 insta = "1.8"

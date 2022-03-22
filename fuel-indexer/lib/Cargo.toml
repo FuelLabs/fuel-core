@@ -11,3 +11,5 @@ crate-type = ['rlib']
 
 [dependencies]
 fuel-indexer-schema = { path = "../schema" }
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde-scale = { version = "0.2", default-features = false, features = ["alloc"] }

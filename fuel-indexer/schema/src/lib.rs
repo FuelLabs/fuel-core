@@ -3,7 +3,6 @@
 #[macro_use]
 extern crate diesel;
 extern crate alloc;
-use alloc::vec::Vec;
 
 #[cfg(all(feature = "diesel-sqlite", feature = "diesel-postgres"))]
 compile_error!("features 'diesel-sqlite' and 'diesel-postgres' are mutually exclusive");
@@ -12,22 +11,10 @@ use crate::sql_types::ColumnType;
 use core::convert::{TryFrom, TryInto};
 use serde::{Deserialize, Serialize};
 
-pub const LOG_LEVEL_ERROR: u32 = 0;
-pub const LOG_LEVEL_WARN: u32 = 1;
-pub const LOG_LEVEL_INFO: u32 = 2;
-pub const LOG_LEVEL_DEBUG: u32 = 3;
-pub const LOG_LEVEL_TRACE: u32 = 4;
-
-#[cfg(feature = "derive-utils")]
-use sha2::{Digest, Sha256};
-
-#[cfg(feature = "derive-utils")]
-pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
-
 pub mod sql_types;
 
 #[cfg(any(feature = "diesel-sqlite", feature = "diesel-postgres"))]
-pub use fuel_indexer_graphql as graphql;
+pub use fuel_indexer_graphql::{self as graphql, schema_version};
 
 #[cfg(any(feature = "diesel-postgres", feature = "diesel-sqlite"))]
 pub mod db;
@@ -40,27 +27,6 @@ pub type Int8 = i64;
 pub type UInt4 = u32;
 pub type UInt8 = u64;
 pub type Timestamp = u64;
-
-// serde_scale for now, can look at other options if necessary.
-pub fn serialize(obj: &impl Serialize) -> Vec<u8> {
-    serde_scale::to_vec(obj).expect("Serialize failed")
-}
-
-pub fn deserialize<'a, T: Deserialize<'a>>(bytes: &'a [u8]) -> T {
-    serde_scale::from_slice(bytes).expect("Deserialize failed")
-}
-
-#[cfg(feature = "derive-utils")]
-pub fn type_id(namespace: &str, type_name: &str) -> u64 {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&Sha256::digest(format!("{}:{}", namespace, type_name).as_bytes())[..8]);
-    u64::from_le_bytes(bytes)
-}
-
-#[cfg(feature = "derive-utils")]
-pub fn schema_version(schema: &str) -> String {
-    format!("{:x}", Sha256::digest(schema.as_bytes()))
-}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum FtColumn {

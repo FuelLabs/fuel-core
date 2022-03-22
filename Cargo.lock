@@ -2005,6 +2005,8 @@ name = "fuel-indexer"
 version = "0.0.0"
 dependencies = [
  "fuel-indexer-schema",
+ "serde",
+ "serde-scale",
 ]
 
 [[package]]
@@ -2012,7 +2014,7 @@ name = "fuel-indexer-derive"
 version = "0.0.0"
 dependencies = [
  "fuel-indexer",
- "fuel-indexer-schema",
+ "fuel-indexer-graphql",
  "fuels-core",
  "graphql-parser",
  "proc-macro-error",
@@ -2031,6 +2033,7 @@ dependencies = [
  "graphql-parser",
  "itertools",
  "serde",
+ "sha2 0.9.9",
  "thiserror",
 ]
 
@@ -2046,8 +2049,6 @@ dependencies = [
  "graphql-parser",
  "insta",
  "serde",
- "serde-scale",
- "sha2 0.9.9",
 ]
 
 [[package]]
