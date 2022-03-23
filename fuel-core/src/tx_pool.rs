@@ -84,6 +84,11 @@ impl TxPool {
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
         let tx_id = tx.id();
+        let copy_tx = tx.clone();
+        let tx_arc = std::sync::Arc::new(copy_tx);
+        let mut tx_vec = Vec::new();
+        tx_vec.push(tx_arc);
+        self.fuel_txpool.insert(tx_vec).await;
         // set status to submitted
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 

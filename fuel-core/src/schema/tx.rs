@@ -41,9 +41,14 @@ impl TxQuery {
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;
+
+        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+
+        let _tx_from_mem = tx_pool.pool().find(&[key]).deref();
+        
         Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
             .map(|tx| Transaction(tx.into_owned())))
-    }
+        }
 
     async fn transactions(
         &self,
