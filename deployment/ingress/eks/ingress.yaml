@@ -18,7 +18,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: ${k8s_namespace}-service
+                name: fuel-core-service
                 port:
                   number: ${ingress_http_port}
   tls:
