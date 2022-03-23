@@ -1,6 +1,7 @@
 use super::schema;
 use crate::client::schema::ConversionError;
 use crate::client::schema::ConversionError::HexStringPrefixError;
+use core::fmt;
 use cynic::impl_scalar;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -107,6 +108,12 @@ impl FromStr for UtxoId {
 impl From<UtxoId> for fuel_tx::UtxoId {
     fn from(s: UtxoId) -> Self {
         s.0 .0
+    }
+}
+
+impl LowerHex for UtxoId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        LowerHex::fmt(&self.0 .0, f)
     }
 }
 
