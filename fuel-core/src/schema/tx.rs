@@ -49,11 +49,15 @@ impl TxQuery {
         
         let tx_from_mem = found_tx.get(0).unwrap();
 
-        let rewrapped_tx = Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone()).ok();
+        let rewrapped_tx = Some(Transaction(Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone()).ok().unwrap()));
 
-        Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
-        .map(|tx| Transaction(tx.into_owned())))
-        
+        let tx_from_storage = Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
+        .map(|tx| Transaction(tx.into_owned()));
+
+        let return_transaction =if rewrapped_tx.is_some() {rewrapped_tx} else {tx_from_storage};
+
+        Ok(return_transaction)
+
         }
 
     async fn transactions(
