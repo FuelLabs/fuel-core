@@ -11,6 +11,7 @@ use async_graphql::{
 use fuel_storage::Storage;
 use fuel_tx::Transaction as FuelTx;
 use fuel_vm::prelude::Deserializable;
+use futures::FutureExt;
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::iter;
@@ -42,9 +43,9 @@ impl TxQuery {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;
 
-        //let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
 
-        //let _tx_from_mem = tx_pool.pool().find(&[key]).deref();
+        let tx_from_mem = tx_pool.pool().find(&[key]).await.get(0).unwrap();
         
         Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
             .map(|tx| Transaction(tx.into_owned())))
