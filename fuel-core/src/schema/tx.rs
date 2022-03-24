@@ -45,10 +45,15 @@ impl TxQuery {
 
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
 
-        let tx_from_mem = tx_pool.pool().find(&[key]).await.get(0).unwrap();
+        let found_tx = tx_pool.pool().find(&[key]).await.clone();
         
+        let tx_from_mem = found_tx.get(0).unwrap();
+
+        let rewrapped_tx = Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone()).ok();
+
         Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
-            .map(|tx| Transaction(tx.into_owned())))
+        .map(|tx| Transaction(tx.into_owned())))
+        
         }
 
     async fn transactions(
