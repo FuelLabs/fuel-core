@@ -1,10 +1,20 @@
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::P2PConfig,
+    peer_info::PeerInfo,
 };
 use futures::prelude::*;
-use libp2p::{identity::Keypair, multiaddr::Protocol, swarm::SwarmEvent, Multiaddr, PeerId, Swarm};
-use std::error::Error;
+use libp2p::{
+    gossipsub::{error::PublishError, MessageId, Sha256Topic, Topic},
+    identity::Keypair,
+    multiaddr::Protocol,
+    swarm::SwarmEvent,
+    Multiaddr, PeerId, Swarm,
+};
+use std::{collections::HashMap, error::Error};
+use tracing::warn;
+
+pub type GossipTopic = Sha256Topic;
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
@@ -38,6 +48,12 @@ impl FuelP2PService {
             m
         };
 
+        // subscribe to gossipsub topics with the network name suffix
+        for topic in config.topics {
+            let t = Topic::new(format!("{}/{}", topic, config.network_name));
+            swarm.behaviour_mut().subscribe_to_topic(&t).unwrap();
+        }
+
         // start listening at the given address
         swarm.listen_on(listen_multiaddr)?;
 
@@ -45,6 +61,42 @@ impl FuelP2PService {
             swarm,
             local_peer_id,
         })
+    }
+
+    pub fn get_peer_info(&self, peer_id: PeerId) -> Option<&PeerInfo> {
+        self.swarm.behaviour().get_peer_info(&peer_id)
+    }
+
+    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
+        self.swarm.behaviour().get_peers()
+    }
+
+    pub fn subscribe_to_topic(&mut self, topic: &GossipTopic) -> bool {
+        match self.swarm.behaviour_mut().subscribe_to_topic(topic) {
+            Ok(value) => value,
+            Err(e) => {
+                warn!(target: "fuel-libp2p", "Failed to subscribe to topic: {:?} with error: {:?}", topic, e);
+                false
+            }
+        }
+    }
+
+    pub fn unsubscribe_from_topic(&mut self, topic: &GossipTopic) -> bool {
+        match self.swarm.behaviour_mut().unsubscribe_from_topic(topic) {
+            Ok(value) => value,
+            Err(e) => {
+                warn!(target: "fuel-libp2p", "Failed to unsubscribe from topic: {:?} with error: {:?}", topic, e);
+                false
+            }
+        }
+    }
+
+    pub fn publish_message(
+        &mut self,
+        topic: GossipTopic,
+        data: impl Into<Vec<u8>>,
+    ) -> Result<MessageId, PublishError> {
+        self.swarm.behaviour_mut().publish_message(topic, data)
     }
 
     pub async fn next_event(&mut self) -> FuelP2PEvent {
@@ -68,7 +120,7 @@ impl FuelP2PService {
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
     use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
-    use libp2p::identity::Keypair;
+    use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::{
         net::{IpAddr, Ipv4Addr},
         time::Duration,
@@ -86,6 +138,10 @@ mod tests {
             allow_private_addresses: true,
             enable_random_walk: true,
             connection_idle_timeout: Some(Duration::from_secs(120)),
+            topics: vec![],
+            max_mesh_size: 12,
+            min_mesh_size: 4,
+            ideal_mesh_size: 6,
         }
     }
 
@@ -222,6 +278,57 @@ mod tests {
 
                 },
                 _ = node_b.next_event() => {}
+            };
+        }
+    }
+
+    #[tokio::test]
+    async fn gossipsub_exchanges_messages() {
+        let mut p2p_config = build_p2p_config();
+        let topics = vec!["create_tx".into(), "send_tx".into()];
+        let selected_topic = Topic::new(format!("{}/{}", topics[0], p2p_config.network_name));
+        let message_to_send = "hello, node";
+
+        // Node A
+        p2p_config.tcp_port = 4008;
+        p2p_config.topics = topics.clone();
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4009;
+        p2p_config.topics = topics.clone();
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
+
+        loop {
+            tokio::select! {
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // verifies that we've got at least a single peer address to send message to
+                        if !peer_addresses.is_empty()  {
+                            node_a.publish_message(selected_topic.clone(), message_to_send).unwrap();
+                        }
+                    }
+
+                },
+                event_b = node_b.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::GossipsubMessage { topic_hash, message, .. }) = event_b {
+                        if topic_hash != selected_topic.hash() {
+                            panic!("Wrong Topic");
+                        } else if message_to_send != std::str::from_utf8(&message).unwrap() {
+                            panic!("Wrong Message")
+                        }
+                        break
+                    }
+                }
             };
         }
     }
