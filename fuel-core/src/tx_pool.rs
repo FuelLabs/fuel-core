@@ -92,16 +92,12 @@ impl TxPool {
 
         self.fuel_txpool.insert(tx_vec).await;
 
-        // set status to submitted
-        db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
-
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
         let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
         let new_block_height = current_height + 1u32.into();
 
         // Next fetch the tx from mempool
-        // TODO - Includable has been causing issues, but otherwise the returned value could just be used in the next block
         let txs_to_mine = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();
 
         println!("{:?}", txs_to_mine);
@@ -116,7 +112,7 @@ impl TxPool {
                 // TODO: compute the current merkle root of all blocks
                 prev_root: Default::default(),
             },
-            transactions: vec![tx],
+            transactions: txs_to_mine,
         };
         // immediately execute block
         self.executor
