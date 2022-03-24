@@ -84,11 +84,14 @@ impl TxPool {
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
         let tx_id = tx.id();
+
         let copy_tx = tx.clone();
         let tx_arc = std::sync::Arc::new(copy_tx);
         let mut tx_vec = Vec::new();
         tx_vec.push(tx_arc);
+
         self.fuel_txpool.insert(tx_vec).await;
+
         // set status to submitted
         db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
 
@@ -97,6 +100,11 @@ impl TxPool {
         let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
         let new_block_height = current_height + 1u32.into();
 
+        // Next fetch the tx from mempool
+        // TODO - Includable has been causing issues, but otherwise the returned value could just be used in the next block
+        let txs_to_mine = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();
+
+        println!("{:?}", txs_to_mine);
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: new_block_height,
