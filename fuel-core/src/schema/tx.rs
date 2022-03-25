@@ -11,7 +11,6 @@ use async_graphql::{
 use fuel_storage::Storage;
 use fuel_tx::Transaction as FuelTx;
 use fuel_vm::prelude::Deserializable;
-use futures::FutureExt;
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::iter;
@@ -45,20 +44,27 @@ impl TxQuery {
 
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
 
-        let found_tx = tx_pool.pool().find(&[key]).await.clone();
-        
+        let found_tx = tx_pool.pool().find(&[key]).await;
+
         let tx_from_mem = found_tx.get(0).unwrap();
 
-        let rewrapped_tx = Some(Transaction(Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone()).ok().unwrap()));
+        let rewrapped_tx = Some(Transaction(
+            Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone())
+                .ok()
+                .unwrap(),
+        ));
 
         let tx_from_storage = Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
-        .map(|tx| Transaction(tx.into_owned()));
+            .map(|tx| Transaction(tx.into_owned()));
 
-        let return_transaction =if rewrapped_tx.is_some() {rewrapped_tx} else {tx_from_storage};
+        let return_transaction = if rewrapped_tx.is_some() {
+            rewrapped_tx
+        } else {
+            tx_from_storage
+        };
 
         Ok(return_transaction)
-
-        }
+    }
 
     async fn transactions(
         &self,

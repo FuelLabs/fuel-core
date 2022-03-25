@@ -87,8 +87,7 @@ impl TxPool {
 
         let copy_tx = tx.clone();
         let tx_arc = std::sync::Arc::new(copy_tx);
-        let mut tx_vec = Vec::new();
-        tx_vec.push(tx_arc);
+        let tx_vec = vec![tx_arc];
 
         self.fuel_txpool.insert(tx_vec).await;
 
@@ -98,7 +97,13 @@ impl TxPool {
         let new_block_height = current_height + 1u32.into();
 
         // Next fetch the tx from mempool
-        let txs_to_mine = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();
+        let txs_to_mine = self
+            .fuel_txpool
+            .includable()
+            .await
+            .iter()
+            .map(|arc| Transaction::clone(&*arc))
+            .collect();
 
         println!("{:?}", txs_to_mine);
         let mut block = FuelBlock {
