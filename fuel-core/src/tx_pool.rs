@@ -105,7 +105,6 @@ impl TxPool {
             .map(|arc| Transaction::clone(&*arc))
             .collect();
 
-        println!("{:?}", txs_to_mine);
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: new_block_height,
