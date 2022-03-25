@@ -15,7 +15,7 @@ if [ "${k8s_provider}" == "eks" ]; then
               --wait \
               --timeout 8000s \
               --debug
-              --version 34.1.0
+              --version ^34
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
