@@ -13,14 +13,18 @@ use fuel_tx::{
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
     consts::REG_SP,
-    prelude::{Backtrace as FuelBacktrace, Interpreter},
+    prelude::{Backtrace as FuelBacktrace, Interpreter, ProgramState, StateTransitionRef},
 };
+#[cfg(feature = "debug")]
+use fuel_vm::state::DebugEval;
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
 };
 use thiserror::Error;
 use tracing::{debug, warn};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::net::TcpSocket;
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -88,19 +92,62 @@ impl Executor {
                 block_db_transaction.deref_mut(),
             )?;
 
+            #[cfg(feature = "debug")]
+            let mut debugger_socket = if let Some(debugger_addr) = self.config.debugger_addr {
+                debug!("Debugger starting");
+                let socket = TcpSocket::new_v4().expect("Unable to create debugger socket");
+                let stream = socket
+                    .connect(debugger_addr)
+                    .await
+                    .expect("Unable to connect to debugger");
+                let _ = stream.set_nodelay(true); // TCP_NODELAY if possible
+                Some(stream)
+            } else {
+                None
+            };
+
             // execute transaction
             // setup database view that only lives for the duration of vm execution
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
-            // execution vm
+
+            // Create VM
             let mut vm = Interpreter::with_storage(sub_db_view.clone());
-            let vm_result = vm
-                .transact(tx.clone())
-                .map_err(|error| Error::VmExecution {
+
+            // Allow the debugger, if any, to do pre-run setup
+            #[cfg(feature = "debug")]
+            if let Some(ds) = debugger_socket.as_mut() {
+                fuel_debugger::process(ds, &mut vm, None).await;
+            }
+
+            // Initiate transaction
+            let mut state = ProgramState::from(vm.transact(tx.clone()).map_err(|error| {
+                Error::VmExecution {
                     error,
                     transaction_id: tx_id,
-                })?
-                .into_owned();
+                }
+            })?);
+
+            // If the debugger is connected, catch breakpoints for it
+            #[cfg(feature = "debug")]
+            if let Some(ds) = debugger_socket.as_mut() {
+                while let Some(dbg_ref) = state.debug_ref() {
+                    let event = match dbg_ref {
+                        DebugEval::Continue => continue,
+                        DebugEval::Breakpoint(bp) => fuel_debugger::Response::Breakpoint(*bp),
+                    };
+                    fuel_debugger::process(ds, &mut vm, Some(event)).await;
+                    state = vm.resume().expect("Failed to resume");
+                }
+
+                // On termination, inform the debugger and run it one more time
+                let resp = fuel_debugger::Response::Terminated {
+                    receipts: vm.receipts().to_vec(),
+                };
+                fuel_debugger::process(ds, &mut vm, Some(resp)).await;
+            }
+
+            let vm_result = StateTransitionRef::new(state, vm.transaction(), vm.receipts());
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {
