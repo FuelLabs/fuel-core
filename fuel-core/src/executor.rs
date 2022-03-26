@@ -1355,16 +1355,14 @@ mod tests {
                 Opcode::ADDI(0x11, REG_FP, CallFrame::b_offset() as Immediate12),
                 Opcode::LW(0x11, 0x11, 0),
                 // load address to 0x12
-                Opcode::ADDI(0x12, 0x11, 32 as Immediate12),
+                Opcode::ADDI(0x12, 0x11, 32),
                 // load output index (0) to 0x13
-                Opcode::ADDI(0x13, REG_ZERO, 0 as Immediate12),
+                Opcode::ADDI(0x13, REG_ZERO, 0),
                 Opcode::TRO(0x12, 0x13, 0x10, 0x11),
                 Opcode::RET(REG_ONE),
             ]
-            .iter()
-            .copied()
-            .collect::<Vec<u8>>()
-            .into(),
+            .into_iter()
+            .collect::<Vec<u8>>(),
             &mut rng,
         );
         let (script, data_offset) = script_with_data_offset!(
