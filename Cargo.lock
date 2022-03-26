@@ -1908,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -1956,7 +1956,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "chrono",
  "clap 3.1.2",
@@ -2089,7 +2089,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "env_logger",
  "futures",
@@ -2156,8 +2156,8 @@ name = "fuel-tests"
 version = "0.0.0"
 dependencies = [
  "chrono",
- "fuel-core 0.4.2",
- "fuel-gql-client 0.4.2",
+ "fuel-core 0.5.0",
+ "fuel-gql-client 0.5.0",
  "fuel-storage",
  "fuel-tx 0.7.0",
  "fuel-types 0.3.0",
@@ -2210,7 +2210,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.4.2"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7368,7 +7368,7 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "clap 3.1.2",
- "fuel-core 0.4.2",
+ "fuel-core 0.5.0",
 ]
 
 [[package]]
