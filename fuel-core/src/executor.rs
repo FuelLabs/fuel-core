@@ -1369,11 +1369,11 @@ mod tests {
             data_offset,
             vec![
                 // set reg 0x10 to call data
-                Opcode::ADDI(0x10, REG_ZERO, (data_offset + 64) as Immediate12),
+                Opcode::MOVI(0x10, (data_offset + 64) as Immediate18),
                 // set reg 0x11 to asset id
-                Opcode::ADDI(0x11, REG_ZERO, data_offset),
+                Opcode::MOVI(0x11, data_offset),
                 // set reg 0x12 to call amount
-                Opcode::ADDI(0x12, REG_ZERO, variable_transfer_amount),
+                Opcode::MOVI(0x12, variable_transfer_amount),
                 // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
                 Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
                 Opcode::RET(REG_ONE),
