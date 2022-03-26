@@ -28,15 +28,15 @@ clap = { version = "3.1", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
 dirs = "3.0"
 env_logger = "0.9"
-fuel-asm = { version = "0.2", features = ["serde-types"] }
+fuel-asm = { version = "0.3", features = ["serde-types"] }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.4.2" }
 fuel-crypto = { version = "0.3" }
 fuel-merkle = "0.1"
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.6", features = ["serde-types"] }
+fuel-tx = { version = "0.7", features = ["serde-types"] }
 fuel-txpool = { path = "../fuel-txpool", version = "0.4.2" }
 fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = { version = "0.5", features = ["serde-types"] }
+fuel-vm = { version = "0.6", features = ["serde-types"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -64,8 +64,8 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-tx = { version = "0.6", features = ["serde-types", "builder", "internals"] }
-fuel-vm = { version = "0.5", features = ["serde-types", "random", "test-helpers"] }
+fuel-tx = { version = "0.7", features = ["serde-types", "builder", "internals"] }
+fuel-vm = { version = "0.6", features = ["serde-types", "random", "test-helpers"] }
 insta = "1.8"
 
 [features]

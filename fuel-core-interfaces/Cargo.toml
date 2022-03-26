@@ -13,11 +13,11 @@ description = "Fuel core interfaces"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-fuel-asm = "0.2"
+fuel-asm = "0.3"
 fuel-storage = "0.1"
-fuel-tx = { version = "0.6", features = ["serde-types"] }
+fuel-tx = { version = "0.7", features = ["serde-types"] }
 fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = "0.5"
+fuel-vm = "0.6"
 futures = "0.3"
 lazy_static = "1.4"
 parking_lot = "0.11"
