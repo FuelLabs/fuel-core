@@ -100,7 +100,7 @@ pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let new_block_height = current_height + 1u32.into();
 
         // Next fetch the tx from mempool
-        let arc_txs_to_include  = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();;
+        let arc_txs_to_include  = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();
 
         let mut block = FuelBlock {
             header: FuelBlockHeader {
