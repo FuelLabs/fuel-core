@@ -490,18 +490,24 @@ impl Executor {
         to: &Address,
         db: &mut Database,
     ) -> Result<(), Error> {
-        let coin = Coin {
-            owner: *to,
-            amount: *amount,
-            asset_id: *asset_id,
-            maturity: 0u32.into(),
-            status: CoinStatus::Unspent,
-            block_created: fuel_height.into(),
-        };
+        // Only insert a coin output if it has some amount.
+        // This is because variable or transfer outputs won't have any value
+        // if there's a revert or panic and shouldn't be added to the utxo set.
+        if *amount > Word::MIN {
+            let coin = Coin {
+                owner: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+                maturity: 0u32.into(),
+                status: CoinStatus::Unspent,
+                block_created: fuel_height.into(),
+            };
 
-        if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
-            return Err(Error::OutputAlreadyExists);
+            if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
+                return Err(Error::OutputAlreadyExists);
+            }
         }
+
         Ok(())
     }
 
@@ -663,9 +669,12 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_crypto::SecretKey;
+    use fuel_tx::consts::MAX_GAS_PER_TX;
     use fuel_tx::TransactionBuilder;
-    use fuel_types::{ContractId, Salt};
-    use fuel_vm::consts::{REG_ONE, REG_ZERO};
+    use fuel_types::{ContractId, Immediate12, Salt};
+    use fuel_vm::consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO};
+    use fuel_vm::prelude::{Call, CallFrame};
+    use fuel_vm::script_with_data_offset;
     use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
     use itertools::Itertools;
     use rand::prelude::StdRng;
@@ -692,7 +701,7 @@ mod tests {
 
     fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
         let salt: Salt = rng.gen();
-        let contract = fuel_vm::contract::Contract::from(contract_code);
+        let contract = fuel_vm::contract::Contract::from(contract_code.clone());
         let root = contract.root();
         let state_root = fuel_vm::contract::Contract::default_state_root();
         let contract_id = contract.id(&salt, &root, &state_root);
@@ -711,7 +720,7 @@ mod tests {
                 contract_id,
                 state_root,
             }],
-            vec![Default::default()],
+            vec![contract_code.into()],
         );
         (tx, contract_id)
     }
@@ -1326,5 +1335,146 @@ mod tests {
                 transaction_id
             }) if transaction_id == tx_id
         ));
+    }
+
+    #[tokio::test]
+    async fn outputs_with_amount_are_included_utxo_set() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let asset_id: AssetId = rng.gen();
+        let owner: Address = rng.gen();
+        let input_amount = 1000;
+        let variable_transfer_amount = 100;
+        let coin_output_amount = 150;
+
+        let (tx, contract_id) = create_contract(
+            vec![
+                // load amount of coins to 0x10
+                Opcode::ADDI(0x10, REG_FP, CallFrame::a_offset() as Immediate12),
+                Opcode::LW(0x10, 0x10, 0),
+                // load asset id to 0x11
+                Opcode::ADDI(0x11, REG_FP, CallFrame::b_offset() as Immediate12),
+                Opcode::LW(0x11, 0x11, 0),
+                // load address to 0x12
+                Opcode::ADDI(0x12, 0x11, 32),
+                // load output index (0) to 0x13
+                Opcode::ADDI(0x13, REG_ZERO, 0),
+                Opcode::TRO(0x12, 0x13, 0x10, 0x11),
+                Opcode::RET(REG_ONE),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>(),
+            &mut rng,
+        );
+        let (script, data_offset) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // set reg 0x10 to call data
+                Opcode::ADDI(0x10, REG_ZERO, (data_offset + 64) as Immediate12),
+                // set reg 0x11 to asset id
+                Opcode::ADDI(0x11, REG_ZERO, data_offset),
+                // set reg 0x12 to call amount
+                Opcode::ADDI(0x12, REG_ZERO, variable_transfer_amount),
+                // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
+                Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
+                Opcode::RET(REG_ONE),
+            ]
+        );
+
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            owner.as_ref(),
+            Call::new(
+                contract_id,
+                variable_transfer_amount as Word,
+                data_offset as Word,
+            )
+            .to_bytes()
+            .as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let tx2 = TxBuilder::new(2322)
+            .gas_limit(MAX_GAS_PER_TX)
+            .script(script)
+            .script_data(script_data)
+            .contract_input(contract_id)
+            .coin_input(asset_id, input_amount)
+            .variable_output(Default::default())
+            .coin_output(asset_id, coin_output_amount)
+            .change_output(asset_id)
+            .contract_output(&contract_id)
+            .build();
+        let tx2_id = tx2.id();
+
+        let database = Database::default();
+        let executor = Executor {
+            database: database.clone(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlock {
+            header: Default::default(),
+            transactions: vec![tx, tx2],
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        // ensure that all utxos with an amount are stored into the utxo set
+        for (idx, output) in block.transactions[1].outputs().iter().enumerate() {
+            let id = fuel_tx::UtxoId::new(tx2_id, idx as u8);
+            match output {
+                Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
+                    let maybe_utxo = Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+                    assert!(maybe_utxo.is_some());
+                    let utxo = maybe_utxo.unwrap();
+                    assert!(utxo.amount > 0)
+                }
+                _ => (),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn outputs_with_no_value_are_excluded_from_utxo_set() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let asset_id: AssetId = rng.gen();
+        let input_amount = 0;
+        let coin_output_amount = 0;
+
+        let tx = TxBuilder::new(2322)
+            .coin_input(asset_id, input_amount)
+            .variable_output(Default::default())
+            .coin_output(asset_id, coin_output_amount)
+            .change_output(asset_id)
+            .build();
+        let tx_id = tx.id();
+
+        let database = Database::default();
+        let executor = Executor {
+            database: database.clone(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlock {
+            header: Default::default(),
+            transactions: vec![tx],
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        for idx in 0..2 {
+            let id = fuel_tx::UtxoId::new(tx_id, idx);
+            let maybe_utxo = Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+            assert!(maybe_utxo.is_none());
+        }
     }
 }
