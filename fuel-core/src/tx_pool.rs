@@ -81,15 +81,18 @@ impl TxPool {
         }
     }
 
-    pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
         let tx_id = tx.id();
 
-        let copy_tx = tx.clone();
-        let tx_arc = std::sync::Arc::new(copy_tx);
+        let mut tx_to_insert = tx.clone();
+        tx_to_insert.precompute_metadata();
+
+
+        let tx_arc = std::sync::Arc::new(tx_to_insert);
         let tx_vec = vec![tx_arc];
 
-        self.fuel_txpool.insert(tx_vec).await;
+        self.fuel_txpool.insert(tx_vec).await; //.insert(tx_vec).await;
 
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
@@ -97,13 +100,7 @@ impl TxPool {
         let new_block_height = current_height + 1u32.into();
 
         // Next fetch the tx from mempool
-        let txs_to_mine = self
-            .fuel_txpool
-            .includable()
-            .await
-            .iter()
-            .map(|arc| Transaction::clone(&*arc))
-            .collect();
+        let arc_txs_to_include  = self.fuel_txpool.includable().await.iter().map(|arc| Transaction::clone(&*arc)).collect();;
 
         let mut block = FuelBlock {
             header: FuelBlockHeader {
@@ -116,7 +113,7 @@ impl TxPool {
                 // TODO: compute the current merkle root of all blocks
                 prev_root: Default::default(),
             },
-            transactions: txs_to_mine,
+            transactions: arc_txs_to_include,
         };
         // immediately execute block
         self.executor
