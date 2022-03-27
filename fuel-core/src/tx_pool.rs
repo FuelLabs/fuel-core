@@ -83,9 +83,23 @@ impl TxPool {
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
-        let tx_id = tx.id();
+        // TxPool code flows and prepare tx for execution
+        let mut tx_to_exec = tx.clone();
+        
+        tx_to_exec.precompute_metadata();
+
+        self.fuel_txpool.insert(vec![Arc::new(tx_to_exec.clone())]).await;
+
+        let includable_arc_txs = self.fuel_txpool.includable().await;
+
+        let includable_txs = includable_arc_txs.iter().map(|arc| Transaction::clone(&*arc)).collect();
+
+        let tx_id = tx_to_exec.id();
+
         // set status to submitted
-        db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
+        db.update_tx_status(&tx_id.clone(), TransactionStatus::Submitted { time: Utc::now() })?;
+
+        self.fuel_txpool.remove(&[tx_id]).await;
 
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
@@ -103,7 +117,7 @@ impl TxPool {
                 // TODO: compute the current merkle root of all blocks
                 prev_root: Default::default(),
             },
-            transactions: vec![tx],
+            transactions: includable_txs,
         };
         // immediately execute block
         self.executor
