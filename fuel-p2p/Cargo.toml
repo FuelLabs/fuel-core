@@ -13,12 +13,16 @@ description = "Fuel client networking"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1.52"
+bincode = "2.0.0-rc.1"
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
 libp2p = "0.41"
 sha2 = "0.9"
+tokio = { version= "1.17", features = ["sync"] }
 tracing = "0.1"
+rand = "0.8.5"
 
 [dev-dependencies]
 env_logger = "0.9"

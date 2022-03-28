@@ -25,4 +25,8 @@ pub struct P2PConfig {
     pub ideal_mesh_size: usize,
     pub min_mesh_size: usize,
     pub max_mesh_size: usize,
+
+    // RequestResponse related fields
+    pub set_request_timeout: Option<Duration>,
+    pub set_connection_keep_alive: Option<Duration>,
 }

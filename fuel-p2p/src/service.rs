@@ -2,16 +2,22 @@ use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::P2PConfig,
     peer_info::PeerInfo,
+    request_response::messages::{
+        ReqResNetworkError, RequestError, RequestMessage, ResponseError, ResponseMessage,
+    },
 };
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{error::PublishError, MessageId, Sha256Topic, Topic},
     identity::Keypair,
     multiaddr::Protocol,
+    request_response::RequestId,
     swarm::SwarmEvent,
     Multiaddr, PeerId, Swarm,
 };
+use rand::Rng;
 use std::{collections::HashMap, error::Error};
+use tokio::sync::oneshot;
 use tracing::warn;
 
 pub type GossipTopic = Sha256Topic;
@@ -25,11 +31,11 @@ pub struct FuelP2PService {
     swarm: Swarm<FuelBehaviour>,
 }
 
-// todo: add other network events
 #[derive(Debug)]
 pub enum FuelP2PEvent {
     Behaviour(FuelBehaviourEvent),
     NewListenAddr(Multiaddr),
+    RequestMessage(RequestMessage),
 }
 
 impl FuelP2PService {
@@ -108,11 +114,46 @@ impl FuelP2PService {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     return FuelP2PEvent::NewListenAddr(address)
                 }
-                _ => {
-                    // todo: handle other necessary events
-                }
+                _ => {}
             }
         }
+    }
+
+    /// Sends RequestMessage to a peer
+    /// If the peer is not defined it will pick one at random
+    pub fn send_request_msg(
+        &mut self,
+        peer_id: Option<PeerId>,
+        message_request: RequestMessage,
+        tx_channel: oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>,
+    ) -> Result<RequestId, RequestError> {
+        let peer_id = match peer_id {
+            Some(peer_id) => peer_id,
+            _ => {
+                let connected_peers = self.get_peers();
+                if connected_peers.is_empty() {
+                    return Err(RequestError::NoPeersConnected);
+                }
+                let rand_index = rand::thread_rng().gen_range(0..connected_peers.len());
+                *connected_peers.keys().nth(rand_index).unwrap()
+            }
+        };
+
+        Ok(self
+            .swarm
+            .behaviour_mut()
+            .send_request_msg(message_request, peer_id, tx_channel))
+    }
+
+    /// Sends ResponseMessage to a peer that requested the data
+    pub fn send_response_msg(
+        &mut self,
+        request_id: RequestId,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseError> {
+        self.swarm
+            .behaviour_mut()
+            .send_response_msg(request_id, message)
     }
 }
 
@@ -142,6 +183,8 @@ mod tests {
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,
+            set_request_timeout: None,
+            set_connection_keep_alive: None,
         }
     }
 
