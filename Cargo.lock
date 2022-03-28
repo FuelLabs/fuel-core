@@ -1891,7 +1891,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
- "bincode",
+ "bincode 1.3.3",
  "chrono",
  "derive_more",
  "dirs 3.0.2",
