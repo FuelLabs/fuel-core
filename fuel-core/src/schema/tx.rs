@@ -47,15 +47,7 @@ impl TxQuery {
         let found_tx = tx_pool.pool().find(&[key]).await;
 
         if let Some(transaction) = found_tx.get(0) {
-            let tx_from_mem = found_tx.get(0).unwrap();
-
-            let rewrapped_tx = Some(Transaction(
-                Arc::try_unwrap(tx_from_mem.as_ref().unwrap().clone())
-                    .ok()
-                    .unwrap(),
-            ));
-
-            Ok(rewrapped_tx)
+            Ok(Transaction((&transaction).clone()))
         } else {
             Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
                 .map(|tx| Transaction(tx.into_owned())))
