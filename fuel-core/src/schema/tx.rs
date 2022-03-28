@@ -46,9 +46,7 @@ impl TxQuery {
 
         let found_tx = tx_pool.pool().find(&[key]).await;
 
-        if found_tx.get(0).is_some()
-            && Arc::try_unwrap(found_tx.get(0).unwrap().as_ref().unwrap().clone()).is_ok()
-        {
+        if let Some(transaction) = found_tx.get(0) {
             let tx_from_mem = found_tx.get(0).unwrap();
 
             let rewrapped_tx = Some(Transaction(
