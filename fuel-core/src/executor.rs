@@ -17,14 +17,15 @@ use fuel_vm::{
 };
 #[cfg(feature = "debug")]
 use fuel_vm::state::DebugEval;
+#[cfg(feature = "debug")]
+use std::net::TcpStream;
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
 };
 use thiserror::Error;
 use tracing::{debug, warn};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpSocket;
+
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -95,11 +96,8 @@ impl Executor {
             #[cfg(feature = "debug")]
             let mut debugger_socket = if let Some(debugger_addr) = self.config.debugger_addr {
                 debug!("Debugger starting");
-                let socket = TcpSocket::new_v4().expect("Unable to create debugger socket");
-                let stream = socket
-                    .connect(debugger_addr)
-                    .await
-                    .expect("Unable to connect to debugger");
+                let stream = TcpStream::connect(debugger_addr)
+                    .expect("Unable to connect to the debugger");
                 let _ = stream.set_nodelay(true); // TCP_NODELAY if possible
                 Some(stream)
             } else {
@@ -117,7 +115,7 @@ impl Executor {
             // Allow the debugger, if any, to do pre-run setup
             #[cfg(feature = "debug")]
             if let Some(ds) = debugger_socket.as_mut() {
-                fuel_debugger::process(ds, &mut vm, None).await;
+                fuel_debugger::process(ds, &mut vm, None);
             }
 
             // Initiate transaction
@@ -136,7 +134,7 @@ impl Executor {
                         DebugEval::Continue => continue,
                         DebugEval::Breakpoint(bp) => fuel_debugger::Response::Breakpoint(*bp),
                     };
-                    fuel_debugger::process(ds, &mut vm, Some(event)).await;
+                    fuel_debugger::process(ds, &mut vm, Some(event));
                     state = vm.resume().expect("Failed to resume");
                 }
 
@@ -144,7 +142,7 @@ impl Executor {
                 let resp = fuel_debugger::Response::Terminated {
                     receipts: vm.receipts().to_vec(),
                 };
-                fuel_debugger::process(ds, &mut vm, Some(resp)).await;
+                fuel_debugger::process(ds, &mut vm, Some(resp));
             }
 
             let vm_result = StateTransitionRef::new(state, vm.transaction(), vm.receipts());
