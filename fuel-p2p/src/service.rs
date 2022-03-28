@@ -164,6 +164,7 @@ mod tests {
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::{
         net::{IpAddr, Ipv4Addr},
+        process::exit,
         time::Duration,
     };
 
@@ -370,6 +371,61 @@ mod tests {
                             panic!("Wrong Message")
                         }
                         break
+                    }
+                }
+            };
+        }
+    }
+
+    #[tokio::test]
+    async fn request_response_works() {
+        use crate::request_response::messages::{RequestMessage, ResponseMessage};
+        use tokio::sync::oneshot;
+
+        let mut p2p_config = build_p2p_config();
+
+        // Node A
+        p2p_config.tcp_port = 4010;
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4011;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
+
+        loop {
+            tokio::select! {
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // verifies that we've got at least a single peer address to request messsage from
+                        if !peer_addresses.is_empty() {
+                            // Simulating Oneshot channel from the NetworkOrchestrator
+                            let (tx, rx) = oneshot::channel();
+                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx).is_ok());
+
+                            tokio::spawn(async move {
+                                // Simulating NetworkOrchestrator receving a message from Node B, exit cleanly
+                                if rx.await.is_ok() {
+                                    exit(0);
+                                }
+                            });
+                        }
+                    }
+
+                },
+                event_b = node_b.next_event() => {
+                    // Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = event_b {
+                        // Simulating NetworkOrchestrator preparing the response and sending it to the Node A
+                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock);
                     }
                 }
             };
