@@ -15,7 +15,6 @@ pub const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 // todo: this will be defined once Request & Response Messages are clearly defined
 const MAX_REQUEST_SIZE: usize = std::mem::size_of::<RequestMessage>();
 const MAX_RESPONSE_SIZE: usize = std::mem::size_of::<ResponseMessage>();
-const BINCODE_STANDARD_CONFIG: bincode::config::Configuration = bincode::config::standard();
 
 #[derive(Debug, Clone)]
 pub struct MessageExchangeProtocol;
@@ -47,8 +46,8 @@ impl RequestResponseCodec for MessageExchangeCodec {
     {
         let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
 
-        match bincode::decode_from_slice(&encoded_data, BINCODE_STANDARD_CONFIG) {
-            Ok((decoded_data, _)) => Ok(decoded_data),
+        match bincode::deserialize(&encoded_data) {
+            Ok(decoded_data) => Ok(decoded_data),
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
     }
@@ -63,8 +62,8 @@ impl RequestResponseCodec for MessageExchangeCodec {
     {
         let encoded_data = read_length_prefixed(socket, MAX_RESPONSE_SIZE).await?;
 
-        match bincode::decode_from_slice(&encoded_data, BINCODE_STANDARD_CONFIG) {
-            Ok((decoded_data, _)) => Ok(decoded_data),
+        match bincode::deserialize(&encoded_data) {
+            Ok(decoded_data) => Ok(decoded_data),
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
     }
@@ -78,7 +77,7 @@ impl RequestResponseCodec for MessageExchangeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::encode_to_vec(req, BINCODE_STANDARD_CONFIG) {
+        match bincode::serialize(&req) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;
@@ -98,7 +97,7 @@ impl RequestResponseCodec for MessageExchangeCodec {
     where
         T: futures::AsyncWrite + Unpin + Send,
     {
-        match bincode::encode_to_vec(res, BINCODE_STANDARD_CONFIG) {
+        match bincode::serialize(&res) {
             Ok(encoded_data) => {
                 write_length_prefixed(socket, encoded_data).await?;
                 socket.close().await?;

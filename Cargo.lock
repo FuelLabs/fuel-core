@@ -621,24 +621,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bincode"
-version = "2.0.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f609ceb2c41b0d0277314a789ef0e7eb14593d5485f7c67320bed3924ebb1b33"
-dependencies = [
- "bincode_derive",
-]
-
-[[package]]
-name = "bincode_derive"
-version = "2.0.0-rc.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "913287a8f3e00db4c7ae1b87e9b9b8cebd6b89217eaadfc281fa5c897da35dc3"
-dependencies = [
- "virtue",
-]
-
-[[package]]
 name = "bindgen"
 version = "0.59.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1891,7 +1873,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
- "bincode 1.3.3",
+ "bincode",
  "chrono",
  "derive_more",
  "dirs 3.0.2",
@@ -1933,7 +1915,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
- "bincode 1.3.3",
+ "bincode",
  "chrono",
  "clap 3.1.2",
  "derive_more",
@@ -2110,13 +2092,14 @@ name = "fuel-p2p"
 version = "0.5.0"
 dependencies = [
  "async-trait",
- "bincode 2.0.0-rc.1",
+ "bincode",
  "env_logger",
  "futures",
  "futures-timer",
  "ip_network",
  "libp2p",
  "rand 0.8.5",
+ "serde",
  "sha2 0.9.9",
  "tokio",
  "tracing",
@@ -6840,12 +6823,6 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
-
-[[package]]
-name = "virtue"
-version = "0.0.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "757cfbfe0d17ee6f22fe97e536d463047d451b47cf9d11e2b7d1398b0ef274dd"
 
 [[package]]
 name = "void"

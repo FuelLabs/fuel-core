@@ -1,12 +1,12 @@
-use bincode::{Decode, Encode};
 use libp2p::request_response::OutboundFailure;
+use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum RequestMessage {
     RequestBlock,
 }
 
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub enum ResponseMessage {
     ResponseBlock,
 }
