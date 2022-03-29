@@ -5,8 +5,8 @@ members = [
   "fuel-client",
   "fuel-core",
   "fuel-core-interfaces",
-  "fuel-indexer/graphql",
   "fuel-indexer/derive",
+  "fuel-indexer/graphql",
   "fuel-indexer/indexer",
   "fuel-indexer/lib",
   "fuel-indexer/schema",
@@ -14,9 +14,6 @@ members = [
   "fuel-txpool",
   "fuel-p2p",
   "xtask",
-]
-exclude = [
-  "fuel-indexer/api_server",
 ]
 
 [profile.release]
