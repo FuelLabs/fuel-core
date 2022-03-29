@@ -83,32 +83,46 @@ impl TxPool {
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
-        // TxPool code flows and prepare tx for execution
+
         let mut tx_to_exec = tx.clone();
 
-        if tx_to_exec.metadata().is_none() {
-            tx_to_exec.precompute_metadata();
-        }
+        let mut includable_txs: Vec<Transaction>;
 
-        self.fuel_txpool
-            .insert(vec![Arc::new(tx_to_exec.clone())])
-            .await;
+        if self.executor.config.utxo_validation {
+            if tx_to_exec.metadata().is_none() {
+                tx_to_exec.precompute_metadata();
+            }
+    
+            let results = self.fuel_txpool
+                .insert(vec![Arc::new(tx_to_exec.clone())])
+                .await;
 
-        let includable_arc_txs = self.fuel_txpool.includable().await;
+            /*
+            // Error handling a WIP, just saving for now
+            if results.get(0).unwrap().is_err() {
+                // Wrong crate to take errors from
+                let failed_with = results.get(0).unwrap().map_err(Error::Execution); //err().unwrap();            
+                
+                return Ok(failed_with);
+            
+            }
+            */
+    
+            let includable_arc_txs = self.fuel_txpool.includable().await;
+    
+            includable_txs = includable_arc_txs
+                .iter()
+                .map(|arc| Transaction::clone(&*arc))
+                .collect();
 
-        let mut includable_txs: Vec<Transaction> = includable_arc_txs
-            .iter()
-            .map(|arc| Transaction::clone(&*arc))
-            .collect();
-
-        if includable_txs.is_empty() {
-            // Ideally this fallback would be avoided, but includable fails
-            // in some edge cases, which I would usually fix in the same PR
-            // but until fuel_txpool is more widely integrated
-            println!("{:?}", tx_to_exec);
-
+            for included_tx in includable_arc_txs {
+                self.fuel_txpool.remove(&[included_tx.id()]).await;
+            }
+    
+        } else {
             includable_txs = vec![tx];
         }
+
 
         let tx_id = tx_to_exec.id();
 
@@ -117,10 +131,6 @@ impl TxPool {
             &tx_id.clone(),
             TransactionStatus::Submitted { time: Utc::now() },
         )?;
-
-        for included_tx in includable_arc_txs {
-            self.fuel_txpool.remove(&[included_tx.id()]).await;
-        }
 
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
