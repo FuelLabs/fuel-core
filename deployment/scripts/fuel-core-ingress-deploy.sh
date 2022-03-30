@@ -16,11 +16,11 @@ if [ "${k8s_provider}" == "eks" ]; then
     envsubst < prod-issuer.template > prod-issuer.yaml
     rm prod-issuer.template
     kubectl apply -f prod-issuer.yaml
-    mv ingress.yaml ingress.template
-    envsubst < ingress.template > ingress.yaml
-    rm ingress.template
-    echo "Deploying ingress to ${TF_VAR_eks_cluster_name} ...."
-    kubectl apply -f ingress.yaml
+    mv fuel-core-ingress.yaml fuel-core-ingress.template
+    envsubst < fuel-core-ingress.template > fuel-core-ingress.yaml
+    rm fuel-core-ingress.template
+    echo "Deploying fuel-core ingress to ${TF_VAR_eks_cluster_name} ...."
+    kubectl apply -f fuel-core-ingress.yaml
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
