@@ -29,6 +29,8 @@ pub struct P2PConfig {
     pub max_mesh_size: usize,
 
     // RequestResponse related fields
+    /// Sets the timeout for inbound and outbound requests.
     pub set_request_timeout: Option<Duration>,
+    /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Option<Duration>,
 }

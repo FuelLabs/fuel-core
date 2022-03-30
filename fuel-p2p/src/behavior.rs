@@ -72,14 +72,14 @@ pub struct FuelBehaviour {
     /// Once the ResponseMessage is received from the p2p Network
     /// It will send it to the NetworkOrchestrator via its unique Sender
     #[behaviour(ignore)]
-    outgoing_requests_table:
+    pub(super) outbound_requests_table:
         HashMap<RequestId, oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>>,
 
-    /// Holds the ResponseChannel(s) for the incoming requests from the p2p Network
+    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the ResponseMessage is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel
     #[behaviour(ignore)]
-    incoming_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
+    pub(super) inbound_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
 
     /// Double-ended queue of FuelBehaviour Events
     #[behaviour(ignore)]
@@ -111,7 +111,7 @@ impl FuelBehaviour {
 
         let peer_info = PeerInfoBehaviour::new(local_public_key);
 
-        let msg_exchange_protocol =
+        let req_res_protocol =
             std::iter::once((MessageExchangeBincodeProtocol, ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
@@ -125,7 +125,7 @@ impl FuelBehaviour {
 
         let request_response = RequestResponse::new(
             MessageExchangeBincodeCodec {},
-            msg_exchange_protocol,
+            req_res_protocol,
             req_res_config,
         );
 
@@ -135,8 +135,8 @@ impl FuelBehaviour {
             peer_info,
             request_response,
 
-            outgoing_requests_table: HashMap::default(),
-            incoming_requests_table: HashMap::default(),
+            outbound_requests_table: HashMap::default(),
+            inbound_requests_table: HashMap::default(),
             events: VecDeque::default(),
         }
     }
@@ -175,7 +175,7 @@ impl FuelBehaviour {
             .request_response
             .send_request(&peer_id, message_request);
 
-        self.outgoing_requests_table.insert(request_id, tx_channel);
+        self.outbound_requests_table.insert(request_id, tx_channel);
 
         request_id
     }
@@ -185,7 +185,7 @@ impl FuelBehaviour {
         request_id: RequestId,
         message: ResponseMessage,
     ) -> Result<(), ResponseError> {
-        if let Some(channel) = self.incoming_requests_table.remove(&request_id) {
+        if let Some(channel) = self.inbound_requests_table.remove(&request_id) {
             if let Err(e) = self.request_response.send_response(channel, message) {
                 debug!(
                     "Failed to send ResponseMessage with error: {:?} for {:?}",
@@ -284,7 +284,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseM
                     channel,
                     request_id,
                 } => {
-                    self.incoming_requests_table.insert(request_id, channel);
+                    self.inbound_requests_table.insert(request_id, channel);
                     self.events.push_back(FuelBehaviourEvent::RequestMessage {
                         request_id,
                         request_message: request,
@@ -294,7 +294,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseM
                     request_id,
                     response,
                 } => {
-                    if let Some(tx) = self.outgoing_requests_table.remove(&request_id) {
+                    if let Some(tx) = self.outbound_requests_table.remove(&request_id) {
                         if tx.send(Ok(response)).is_err() {
                             debug!("Failed to send through the channel for {:?}", request_id);
                         }
@@ -323,7 +323,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseM
                     peer, request_id, error
                 );
 
-                if let Some(tx) = self.outgoing_requests_table.remove(&request_id) {
+                if let Some(tx) = self.outbound_requests_table.remove(&request_id) {
                     if tx.send(Err(error.into())).is_err() {
                         debug!("Failed to send through the channel for {:?}", request_id);
                     }

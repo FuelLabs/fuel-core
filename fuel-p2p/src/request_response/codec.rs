@@ -13,8 +13,9 @@ use std::io;
 pub const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 /// Max Size in Bytes of the messages
 // todo: this will be defined once Request & Response Messages are clearly defined
-const MAX_REQUEST_SIZE: usize = std::mem::size_of::<RequestMessage>();
-const MAX_RESPONSE_SIZE: usize = std::mem::size_of::<ResponseMessage>();
+// it should be the biggest field of respective enum
+const MAX_REQUEST_SIZE: usize = 100;
+const MAX_RESPONSE_SIZE: usize = 100;
 
 #[derive(Debug, Clone)]
 pub struct MessageExchangeBincodeProtocol;

@@ -160,12 +160,17 @@ impl FuelP2PService {
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
+    use crate::request_response::messages::{RequestMessage, ResponseMessage};
+    use crate::{
+        config::P2PConfig, peer_info::PeerInfo, request_response::messages::ReqResNetworkError,
+        service::FuelP2PEvent,
+    };
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::{
         net::{IpAddr, Ipv4Addr},
         time::Duration,
     };
+    use tokio::sync::{mpsc, oneshot};
 
     /// helper function for building default testing config
     fn build_p2p_config() -> P2PConfig {
@@ -378,9 +383,6 @@ mod tests {
 
     #[tokio::test]
     async fn request_response_works() {
-        use crate::request_response::messages::{RequestMessage, ResponseMessage};
-        use tokio::sync::oneshot;
-
         let mut p2p_config = build_p2p_config();
 
         // Node A
@@ -398,12 +400,13 @@ mod tests {
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
-        let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
+        let (tx_test_end, mut rx_test_end) = mpsc::channel(1);
 
         loop {
             tokio::select! {
-                _ = rx_test_end.recv() => {
+                message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
+                    assert_eq!(message_sent, Some(true), "Message not received successfully!");
                     break;
                 }
                 event_a = node_a.next_event() => {
@@ -419,10 +422,8 @@ mod tests {
                             let tx_test_end = tx_test_end.clone();
                             tokio::spawn(async move {
                                 // 4. Simulating NetworkOrchestrator receving a message from Node B
-                                if rx_orchestrator.await.is_ok() {
-                                    // send signal to end the test
-                                    let _ = tx_test_end.send(()).await;
-                                }
+                                let message_sent = matches!(rx_orchestrator.await, Ok(Ok(_)));
+                                tx_test_end.send(message_sent).await
                             });
                         }
                     }
@@ -431,10 +432,77 @@ mod tests {
                 event_b = node_b.next_event() => {
                     // 2. Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = event_b {
-                        // 3. Simulating NetworkOrchestrator preparing the response and sending it to the Node A
                         let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock);
                     }
                 }
+            };
+        }
+    }
+
+    #[tokio::test]
+    async fn req_res_outbound_timeout_works() {
+        let mut p2p_config = build_p2p_config();
+
+        // Node A
+        p2p_config.tcp_port = 4012;
+        // setup request timeout to 0 in order for the Request to fail
+        p2p_config.set_request_timeout = Some(Duration::from_secs(0));
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4013;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
+
+        let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
+
+        loop {
+            tokio::select! {
+                _ = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    // 4. there should be ZERO pending outbound requests in the table
+                    // after the Outbound Request Failed with Timeout
+                    assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 0);
+                    break;
+                }
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // 0. verifies that we've got at least a single peer address to request messsage from
+                        if !peer_addresses.is_empty() {
+                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+
+                            // 2a. there should be ZERO pending outbound requests in the table
+                            assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 0);
+
+                            // Request successfully sent
+                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+
+                            // 2b. there should be ONE pending outbound requests in the table
+                            assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 1);
+
+                            let tx_test_end = tx_test_end.clone();
+
+                            tokio::spawn(async move {
+                                // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
+                                if let Ok(Err(ReqResNetworkError::Timeout)) = rx_orchestrator.await {
+                                    let _ = tx_test_end.send(()).await;
+                                }
+                            });
+                        }
+                    }
+
+                },
+                // will not receive the request at all
+                _ = node_b.next_event() => {}
             };
         }
     }
