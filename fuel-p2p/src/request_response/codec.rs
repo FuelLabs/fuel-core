@@ -17,22 +17,27 @@ const MAX_REQUEST_SIZE: usize = std::mem::size_of::<RequestMessage>();
 const MAX_RESPONSE_SIZE: usize = std::mem::size_of::<ResponseMessage>();
 
 #[derive(Debug, Clone)]
-pub struct MessageExchangeProtocol;
+pub struct MessageExchangeBincodeProtocol;
 
-impl ProtocolName for MessageExchangeProtocol {
+impl ProtocolName for MessageExchangeBincodeProtocol {
     fn protocol_name(&self) -> &[u8] {
         REQUEST_RESPONSE_PROTOCOL_ID
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct MessageExchangeCodec {}
+pub struct MessageExchangeBincodeCodec {}
 
-// Since Bincode does not support async reads or writes out of the box
-// We prefix Request & Response Messages with the length of the data in bytes
+/// Since Bincode does not support async reads or writes out of the box
+/// We prefix Request & Response Messages with the length of the data in bytes
+/// We expect the substream to be properly closed when response channel is dropped.
+/// Since the request protocol used here expects a response, the sender considers this
+/// early close as a protocol violation which results in the connection being closed.
+/// If the substream were not properly closed when dropped, the sender would instead
+/// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for MessageExchangeCodec {
-    type Protocol = MessageExchangeProtocol;
+impl RequestResponseCodec for MessageExchangeBincodeCodec {
+    type Protocol = MessageExchangeBincodeProtocol;
     type Request = RequestMessage;
     type Response = ResponseMessage;
 

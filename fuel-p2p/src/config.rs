@@ -1,6 +1,8 @@
 use libp2p::{Multiaddr, PeerId};
 use std::{net::IpAddr, time::Duration};
 
+pub const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
+
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
     /// Name of the Network

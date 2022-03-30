@@ -1,10 +1,10 @@
 use crate::{
-    config::P2PConfig,
+    config::{P2PConfig, REQ_RES_TIMEOUT},
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     gossipsub,
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
     request_response::{
-        codec::{MessageExchangeCodec, MessageExchangeProtocol},
+        codec::{MessageExchangeBincodeCodec, MessageExchangeBincodeProtocol},
         messages::{ReqResNetworkError, RequestMessage, ResponseError, ResponseMessage},
     },
     service::GossipTopic,
@@ -27,7 +27,6 @@ use libp2p::{
 use std::{
     collections::{HashMap, VecDeque},
     task::{Context, Poll},
-    time::Duration,
 };
 use tokio::sync::oneshot;
 use tracing::debug;
@@ -67,7 +66,7 @@ pub struct FuelBehaviour {
     gossipsub: Gossipsub,
 
     /// RequestResponse protocol
-    request_response: RequestResponse<MessageExchangeCodec>,
+    request_response: RequestResponse<MessageExchangeBincodeCodec>,
 
     /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
     /// Once the ResponseMessage is received from the p2p Network
@@ -113,22 +112,19 @@ impl FuelBehaviour {
         let peer_info = PeerInfoBehaviour::new(local_public_key);
 
         let msg_exchange_protocol =
-            std::iter::once((MessageExchangeProtocol, ProtocolSupport::Full));
+            std::iter::once((MessageExchangeBincodeProtocol, ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
-        req_res_config.set_request_timeout(
-            p2p_config
-                .set_request_timeout
-                .unwrap_or(Duration::from_secs(20)),
-        );
+        req_res_config
+            .set_request_timeout(p2p_config.set_request_timeout.unwrap_or(REQ_RES_TIMEOUT));
         req_res_config.set_connection_keep_alive(
             p2p_config
                 .set_connection_keep_alive
-                .unwrap_or(Duration::from_secs(20)),
+                .unwrap_or(REQ_RES_TIMEOUT),
         );
 
         let request_response = RequestResponse::new(
-            MessageExchangeCodec {},
+            MessageExchangeBincodeCodec {},
             msg_exchange_protocol,
             req_res_config,
         );
