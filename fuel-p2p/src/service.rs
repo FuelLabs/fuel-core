@@ -464,13 +464,6 @@ mod tests {
 
         loop {
             tokio::select! {
-                _ = rx_test_end.recv() => {
-                    // we received a signal to end the test
-                    // 4. there should be ZERO pending outbound requests in the table
-                    // after the Outbound Request Failed with Timeout
-                    assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 0);
-                    break;
-                }
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
                         let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
@@ -481,13 +474,13 @@ mod tests {
                             let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
                             // 2a. there should be ZERO pending outbound requests in the table
-                            assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 0);
+                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
 
                             // Request successfully sent
                             assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
 
                             // 2b. there should be ONE pending outbound requests in the table
-                            assert_eq!(node_a.swarm.behaviour().outbound_requests_table.len(), 1);
+                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
 
                             let tx_test_end = tx_test_end.clone();
 
@@ -500,6 +493,13 @@ mod tests {
                         }
                     }
 
+                },
+                _ = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    // 4. there should be ZERO pending outbound requests in the table
+                    // after the Outbound Request Failed with Timeout
+                    assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
+                    break;
                 },
                 // will not receive the request at all
                 _ = node_b.next_event() => {}

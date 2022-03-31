@@ -72,14 +72,14 @@ pub struct FuelBehaviour {
     /// Once the ResponseMessage is received from the p2p Network
     /// It will send it to the NetworkOrchestrator via its unique Sender
     #[behaviour(ignore)]
-    pub(super) outbound_requests_table:
+    outbound_requests_table:
         HashMap<RequestId, oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>>,
 
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
     /// Once the ResponseMessage is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel
     #[behaviour(ignore)]
-    pub(super) inbound_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
+    inbound_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
 
     /// Double-ended queue of FuelBehaviour Events
     #[behaviour(ignore)]
@@ -216,6 +216,15 @@ impl FuelBehaviour {
             Some(event) => Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)),
             _ => Poll::Pending,
         }
+    }
+
+    /// Getter for outbound_requests_table
+    /// Used only in testing in `service.rs`
+    #[allow(dead_code)]
+    pub(super) fn get_outbound_requests_table(
+        &self,
+    ) -> &HashMap<RequestId, oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>> {
+        &self.outbound_requests_table
     }
 }
 
