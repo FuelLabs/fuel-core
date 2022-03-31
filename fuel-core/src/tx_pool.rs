@@ -37,6 +37,8 @@ pub enum Error {
     Database(Box<dyn StdError>),
     #[error("unexpected block execution error {0:?}")]
     Execution(crate::executor::Error),
+    #[error("Tx is invalid, insertion failed {0:?}")]
+    String(String),
 }
 
 impl From<KvStoreError> for Error {
@@ -97,16 +99,13 @@ impl TxPool {
                 .insert(vec![Arc::new(tx_to_exec.clone())])
                 .await;
 
-            /*
             // Error handling a WIP, just saving for now
             if results.get(0).unwrap().is_err() {
-                // Wrong crate to take errors from
-                let failed_with = results.get(0).unwrap().map_err(Error::Execution); //err().unwrap();            
-                
-                return Ok(failed_with);
-            
+                // Return error if tx failed to insert
+                let failed_with = results.get(0).unwrap().as_ref().err().unwrap().to_string();
+
+                return Err(Error::String(failed_with));
             }
-            */
     
             let includable_arc_txs = self.fuel_txpool.includable().await;
     
