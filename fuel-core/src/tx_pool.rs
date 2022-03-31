@@ -88,7 +88,7 @@ impl TxPool {
 
         let mut tx_to_exec = tx.clone();
 
-        let mut includable_txs: Vec<Transaction>;
+        let includable_txs: Vec<Transaction>;
 
         if self.executor.config.utxo_validation {
             if tx_to_exec.metadata().is_none() {
