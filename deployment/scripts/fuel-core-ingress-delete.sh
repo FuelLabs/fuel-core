@@ -11,8 +11,8 @@ if [ "${k8s_provider}" == "eks" ]; then
     echo "Deleting cert-manager helm chart on ${TF_VAR_eks_cluster_name} ...."
     helm delete cert-manager --namespace cert-manager
     kubectl delete -f prod-issuer.yaml
-    echo "Deleting ingress on ${TF_VAR_eks_cluster_name} ...."
-    kubectl delete -f ingress.yaml
+    echo "Deleting fuel-core ingress on ${TF_VAR_eks_cluster_name} ...."
+    kubectl delete -f fuel-core-ingress.yaml
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
