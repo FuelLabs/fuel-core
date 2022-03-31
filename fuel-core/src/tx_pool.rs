@@ -94,8 +94,9 @@ impl TxPool {
             if tx_to_exec.metadata().is_none() {
                 tx_to_exec.precompute_metadata();
             }
-    
-            let results = self.fuel_txpool
+
+            let results = self
+                .fuel_txpool
                 .insert(vec![Arc::new(tx_to_exec.clone())])
                 .await;
 
@@ -106,9 +107,9 @@ impl TxPool {
 
                 return Err(Error::String(failed_with));
             }
-    
+
             let includable_arc_txs = self.fuel_txpool.includable().await;
-    
+
             includable_txs = includable_arc_txs
                 .iter()
                 .map(|arc| Transaction::clone(&*arc))
@@ -117,11 +118,9 @@ impl TxPool {
             for included_tx in includable_arc_txs {
                 self.fuel_txpool.remove(&[included_tx.id()]).await;
             }
-    
         } else {
             includable_txs = vec![tx];
         }
-
 
         let tx_id = tx_to_exec.id();
 
