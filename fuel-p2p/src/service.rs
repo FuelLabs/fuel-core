@@ -2,16 +2,22 @@ use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::P2PConfig,
     peer_info::PeerInfo,
+    request_response::messages::{
+        ReqResNetworkError, RequestError, RequestMessage, ResponseError, ResponseMessage,
+    },
 };
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{error::PublishError, MessageId, Sha256Topic, Topic},
     identity::Keypair,
     multiaddr::Protocol,
+    request_response::RequestId,
     swarm::SwarmEvent,
     Multiaddr, PeerId, Swarm,
 };
+use rand::Rng;
 use std::{collections::HashMap, error::Error};
+use tokio::sync::oneshot;
 use tracing::warn;
 
 pub type GossipTopic = Sha256Topic;
@@ -25,11 +31,11 @@ pub struct FuelP2PService {
     swarm: Swarm<FuelBehaviour>,
 }
 
-// todo: add other network events
 #[derive(Debug)]
 pub enum FuelP2PEvent {
     Behaviour(FuelBehaviourEvent),
     NewListenAddr(Multiaddr),
+    RequestMessage(RequestMessage),
 }
 
 impl FuelP2PService {
@@ -108,23 +114,63 @@ impl FuelP2PService {
                 SwarmEvent::NewListenAddr { address, .. } => {
                     return FuelP2PEvent::NewListenAddr(address)
                 }
-                _ => {
-                    // todo: handle other necessary events
-                }
+                _ => {}
             }
         }
+    }
+
+    /// Sends RequestMessage to a peer
+    /// If the peer is not defined it will pick one at random
+    pub fn send_request_msg(
+        &mut self,
+        peer_id: Option<PeerId>,
+        message_request: RequestMessage,
+        tx_channel: oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>,
+    ) -> Result<RequestId, RequestError> {
+        let peer_id = match peer_id {
+            Some(peer_id) => peer_id,
+            _ => {
+                let connected_peers = self.get_peers();
+                if connected_peers.is_empty() {
+                    return Err(RequestError::NoPeersConnected);
+                }
+                let rand_index = rand::thread_rng().gen_range(0..connected_peers.len());
+                *connected_peers.keys().nth(rand_index).unwrap()
+            }
+        };
+
+        Ok(self
+            .swarm
+            .behaviour_mut()
+            .send_request_msg(message_request, peer_id, tx_channel))
+    }
+
+    /// Sends ResponseMessage to a peer that requested the data
+    pub fn send_response_msg(
+        &mut self,
+        request_id: RequestId,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseError> {
+        self.swarm
+            .behaviour_mut()
+            .send_response_msg(request_id, message)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
+    use crate::request_response::messages::{RequestMessage, ResponseMessage};
+    use crate::{
+        config::P2PConfig, peer_info::PeerInfo, request_response::messages::ReqResNetworkError,
+        service::FuelP2PEvent,
+    };
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::{
         net::{IpAddr, Ipv4Addr},
         time::Duration,
     };
+    use tokio::sync::{mpsc, oneshot};
 
     /// helper function for building default testing config
     fn build_p2p_config() -> P2PConfig {
@@ -142,6 +188,8 @@ mod tests {
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,
+            set_request_timeout: None,
+            set_connection_keep_alive: None,
         }
     }
 
@@ -329,6 +377,132 @@ mod tests {
                         break
                     }
                 }
+            };
+        }
+    }
+
+    #[tokio::test]
+    async fn request_response_works() {
+        let mut p2p_config = build_p2p_config();
+
+        // Node A
+        p2p_config.tcp_port = 4010;
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4011;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
+
+        let (tx_test_end, mut rx_test_end) = mpsc::channel(1);
+
+        loop {
+            tokio::select! {
+                message_sent = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    assert_eq!(message_sent, Some(true), "Message not received successfully!");
+                    break;
+                }
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // 0. verifies that we've got at least a single peer address to request messsage from
+                        if !peer_addresses.is_empty() {
+                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+
+                            let tx_test_end = tx_test_end.clone();
+                            tokio::spawn(async move {
+                                // 4. Simulating NetworkOrchestrator receving a message from Node B
+                                let message_sent = matches!(rx_orchestrator.await, Ok(Ok(_)));
+                                tx_test_end.send(message_sent).await
+                            });
+                        }
+                    }
+
+                },
+                event_b = node_b.next_event() => {
+                    // 2. Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = event_b {
+                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock);
+                    }
+                }
+            };
+        }
+    }
+
+    #[tokio::test]
+    async fn req_res_outbound_timeout_works() {
+        let mut p2p_config = build_p2p_config();
+
+        // Node A
+        p2p_config.tcp_port = 4012;
+        // setup request timeout to 0 in order for the Request to fail
+        p2p_config.set_request_timeout = Some(Duration::from_secs(0));
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4013;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
+
+        let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
+
+        loop {
+            tokio::select! {
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+
+                        // 0. verifies that we've got at least a single peer address to request messsage from
+                        if !peer_addresses.is_empty() {
+                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+
+                            // 2a. there should be ZERO pending outbound requests in the table
+                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
+
+                            // Request successfully sent
+                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+
+                            // 2b. there should be ONE pending outbound requests in the table
+                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
+
+                            let tx_test_end = tx_test_end.clone();
+
+                            tokio::spawn(async move {
+                                // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
+                                if let Ok(Err(ReqResNetworkError::Timeout)) = rx_orchestrator.await {
+                                    let _ = tx_test_end.send(()).await;
+                                }
+                            });
+                        }
+                    }
+
+                },
+                _ = rx_test_end.recv() => {
+                    // we received a signal to end the test
+                    // 4. there should be ZERO pending outbound requests in the table
+                    // after the Outbound Request Failed with Timeout
+                    assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
+                    break;
+                },
+                // will not receive the request at all
+                _ = node_b.next_event() => {}
             };
         }
     }

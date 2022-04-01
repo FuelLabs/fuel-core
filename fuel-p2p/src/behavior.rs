@@ -1,8 +1,12 @@
 use crate::{
-    config::P2PConfig,
+    config::{P2PConfig, REQ_RES_TIMEOUT},
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     gossipsub,
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
+    request_response::{
+        codec::{MessageExchangeBincodeCodec, MessageExchangeBincodeProtocol},
+        messages::{ReqResNetworkError, RequestMessage, ResponseError, ResponseMessage},
+    },
     service::GossipTopic,
 };
 use libp2p::{
@@ -11,6 +15,10 @@ use libp2p::{
         Gossipsub, GossipsubEvent, MessageId, TopicHash,
     },
     identity::Keypair,
+    request_response::{
+        ProtocolSupport, RequestId, RequestResponse, RequestResponseConfig, RequestResponseEvent,
+        RequestResponseMessage, ResponseChannel,
+    },
     swarm::{
         NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
@@ -20,10 +28,10 @@ use std::{
     collections::{HashMap, VecDeque},
     task::{Context, Poll},
 };
+use tokio::sync::oneshot;
+use tracing::debug;
 
-// todo: define which events outside world is intersted in
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum FuelBehaviourEvent {
     PeerConnected(PeerId),
     PeerDisconnected(PeerId),
@@ -33,6 +41,10 @@ pub enum FuelBehaviourEvent {
         peer_id: PeerId,
         topic_hash: TopicHash,
         message: Vec<u8>,
+    },
+    RequestMessage {
+        request_id: RequestId,
+        request_message: RequestMessage,
     },
 }
 
@@ -50,9 +62,26 @@ pub struct FuelBehaviour {
     /// Identify and periodically ping nodes
     peer_info: PeerInfoBehaviour,
 
-    /// message propagation for p2p
+    /// Message propagation for p2p
     gossipsub: Gossipsub,
 
+    /// RequestResponse protocol
+    request_response: RequestResponse<MessageExchangeBincodeCodec>,
+
+    /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
+    /// Once the ResponseMessage is received from the p2p Network
+    /// It will send it to the NetworkOrchestrator via its unique Sender
+    #[behaviour(ignore)]
+    outbound_requests_table:
+        HashMap<RequestId, oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>>,
+
+    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
+    /// Once the ResponseMessage is prepared by the NetworkOrchestrator
+    /// It will send it to the specified Peer via its unique ResponseChannel
+    #[behaviour(ignore)]
+    inbound_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
+
+    /// Double-ended queue of FuelBehaviour Events
     #[behaviour(ignore)]
     events: VecDeque<FuelBehaviourEvent>,
 }
@@ -82,10 +111,32 @@ impl FuelBehaviour {
 
         let peer_info = PeerInfoBehaviour::new(local_public_key);
 
+        let req_res_protocol =
+            std::iter::once((MessageExchangeBincodeProtocol, ProtocolSupport::Full));
+
+        let mut req_res_config = RequestResponseConfig::default();
+        req_res_config
+            .set_request_timeout(p2p_config.set_request_timeout.unwrap_or(REQ_RES_TIMEOUT));
+        req_res_config.set_connection_keep_alive(
+            p2p_config
+                .set_connection_keep_alive
+                .unwrap_or(REQ_RES_TIMEOUT),
+        );
+
+        let request_response = RequestResponse::new(
+            MessageExchangeBincodeCodec {},
+            req_res_protocol,
+            req_res_config,
+        );
+
         Self {
             discovery: discovery_config.finish(),
             gossipsub: gossipsub::build_gossipsub(&local_keypair, p2p_config),
             peer_info,
+            request_response,
+
+            outbound_requests_table: HashMap::default(),
+            inbound_requests_table: HashMap::default(),
             events: VecDeque::default(),
         }
     }
@@ -114,6 +165,42 @@ impl FuelBehaviour {
         self.gossipsub.unsubscribe(topic)
     }
 
+    pub fn send_request_msg(
+        &mut self,
+        message_request: RequestMessage,
+        peer_id: PeerId,
+        tx_channel: oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>,
+    ) -> RequestId {
+        let request_id = self
+            .request_response
+            .send_request(&peer_id, message_request);
+
+        self.outbound_requests_table.insert(request_id, tx_channel);
+
+        request_id
+    }
+
+    pub fn send_response_msg(
+        &mut self,
+        request_id: RequestId,
+        message: ResponseMessage,
+    ) -> Result<(), ResponseError> {
+        if let Some(channel) = self.inbound_requests_table.remove(&request_id) {
+            if let Err(e) = self.request_response.send_response(channel, message) {
+                debug!(
+                    "Failed to send ResponseMessage with error: {:?} for {:?}",
+                    e, request_id
+                );
+                return Err(ResponseError::SendingResponseFailed);
+            }
+        } else {
+            debug!("ResponseChannel for {:?} does not exist!", request_id);
+            return Err(ResponseError::ResponseChannelDoesNotExist);
+        }
+
+        Ok(())
+    }
+
     // report events to the swarm
     fn poll(
         &mut self,
@@ -129,6 +216,15 @@ impl FuelBehaviour {
             Some(event) => Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)),
             _ => Poll::Pending,
         }
+    }
+
+    /// Getter for outbound_requests_table
+    /// Used only in testing in `service.rs`
+    #[allow(dead_code)]
+    pub(super) fn get_outbound_requests_table(
+        &self,
+    ) -> &HashMap<RequestId, oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>> {
+        &self.outbound_requests_table
     }
 }
 
@@ -182,6 +278,67 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
                 topic_hash: message.topic,
                 message: message.data,
             })
+        }
+    }
+}
+
+impl NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseMessage>>
+    for FuelBehaviour
+{
+    fn inject_event(&mut self, event: RequestResponseEvent<RequestMessage, ResponseMessage>) {
+        match event {
+            RequestResponseEvent::Message { message, .. } => match message {
+                RequestResponseMessage::Request {
+                    request,
+                    channel,
+                    request_id,
+                } => {
+                    self.inbound_requests_table.insert(request_id, channel);
+                    self.events.push_back(FuelBehaviourEvent::RequestMessage {
+                        request_id,
+                        request_message: request,
+                    })
+                }
+                RequestResponseMessage::Response {
+                    request_id,
+                    response,
+                } => {
+                    if let Some(tx) = self.outbound_requests_table.remove(&request_id) {
+                        if tx.send(Ok(response)).is_err() {
+                            debug!("Failed to send through the channel for {:?}", request_id);
+                        }
+                    } else {
+                        debug!("Send channel not found for {:?}", request_id);
+                    }
+                }
+            },
+            RequestResponseEvent::InboundFailure {
+                peer,
+                error,
+                request_id,
+            } => {
+                debug!(
+                    "RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}",
+                    peer, request_id, error
+                );
+            }
+            RequestResponseEvent::OutboundFailure {
+                peer,
+                error,
+                request_id,
+            } => {
+                debug!(
+                    "RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}",
+                    peer, request_id, error
+                );
+
+                if let Some(tx) = self.outbound_requests_table.remove(&request_id) {
+                    if tx.send(Err(error.into())).is_err() {
+                        debug!("Failed to send through the channel for {:?}", request_id);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 }
