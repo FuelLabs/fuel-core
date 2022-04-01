@@ -95,18 +95,11 @@ impl TxPool {
                 tx_to_exec.precompute_metadata();
             }
 
-            let results = self
-                .fuel_txpool
+            self.fuel_txpool
                 .insert(vec![Arc::new(tx_to_exec.clone())])
-                .await;
-
-            // Error handling a WIP, just saving for now
-            if results.get(0).unwrap().is_err() {
-                // Return error if tx failed to insert
-                let failed_with = results.get(0).unwrap().as_ref().err().unwrap().to_string();
-
-                return Err(Error::String(failed_with));
-            }
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
 
             let includable_arc_txs = self.fuel_txpool.includable().await;
 
