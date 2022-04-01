@@ -38,7 +38,7 @@ pub enum Error {
     #[error("unexpected block execution error {0:?}")]
     Execution(crate::executor::Error),
     #[error("Tx is invalid, insertion failed {0:?}")]
-    Other(#[from] anyhow::Result),
+    Other(#[from] anyhow::Error),
 }
 
 impl From<KvStoreError> for Error {
