@@ -142,9 +142,16 @@ async fn submit_utxo_verified_tx() {
         .unwrap()
         .transaction;
 
-    let transaction_result = client.transaction_status(&ret_tx.id().to_string()).await.ok().unwrap();
+    let transaction_result = client
+        .transaction_status(&ret_tx.id().to_string())
+        .await
+        .ok()
+        .unwrap();
 
-    assert!(matches!( transaction_result, TransactionStatus::Success{ .. }));
+    assert!(matches!(
+        transaction_result,
+        TransactionStatus::Success { .. }
+    ));
 }
 
 #[tokio::test]
