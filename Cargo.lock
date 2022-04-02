@@ -2091,12 +2091,15 @@ dependencies = [
 name = "fuel-p2p"
 version = "0.5.0"
 dependencies = [
+ "async-trait",
+ "bincode",
  "env_logger",
  "futures",
  "futures-timer",
  "ip_network",
  "libp2p",
  "rand 0.8.5",
+ "serde",
  "sha2 0.9.9",
  "tokio",
  "tracing",
