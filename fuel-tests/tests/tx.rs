@@ -142,13 +142,8 @@ async fn submit_utxo_verified_tx() {
         .unwrap()
         .transaction;
 
-    let transparent_transaction = client
-        .transparent_transaction(&format!("{:#x}", ret_tx.id()))
-        .await
-        .unwrap()
-        .expect("expected some value");
-
-    assert_eq!(tx.id(), transparent_transaction.id());
+    let transaction_result = client.transaction_status(&ret_tx.id().to_string()).await;
+    assert!(transaction_result.is_ok());
 }
 
 #[tokio::test]
