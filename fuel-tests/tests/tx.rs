@@ -132,7 +132,7 @@ async fn submit_utxo_verified_tx() {
     let client = FuelClient::from(srv.bound_address);
 
     let tx = Transaction::default();
-    
+
     let id = client.submit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
@@ -142,8 +142,6 @@ async fn submit_utxo_verified_tx() {
         .unwrap()
         .transaction;
     assert_eq!(tx.id(), ret_tx.id());
-
-    
 }
 
 #[tokio::test]
