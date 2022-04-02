@@ -157,8 +157,6 @@ async fn submit_utxo_verified_tx() {
             let block_exists = client.block(&block_id).await.unwrap();
 
             assert!(block_exists.is_some());
-
-            ()
         }
 
         assert!(matches!(
