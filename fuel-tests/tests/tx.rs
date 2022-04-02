@@ -122,6 +122,31 @@ async fn submit() {
 }
 
 #[tokio::test]
+async fn submit_utxo_verified_tx() {
+    let config = Config {
+        utxo_validation: true,
+        ..Config::local_node()
+    };
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let tx = Transaction::default();
+    
+    let id = client.submit(&tx).await.unwrap();
+    // verify that the tx returned from the api matches the submitted tx
+    let ret_tx = client
+        .transaction(&id.0.to_string())
+        .await
+        .unwrap()
+        .unwrap()
+        .transaction;
+    assert_eq!(tx.id(), ret_tx.id());
+
+    
+}
+
+#[tokio::test]
 async fn receipts() {
     let transaction = fuel_tx::Transaction::default();
     let id = transaction.id();
