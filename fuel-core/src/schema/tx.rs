@@ -37,7 +37,7 @@ impl TxQuery {
     async fn transaction(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "id of the transaction")] id: TransactionId,
+        #[graphql(desc = "Id of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;
@@ -253,7 +253,7 @@ pub struct TxMutation;
 
 #[Object]
 impl TxMutation {
-    /// dry-run the transaction using a fork of current state, no changes are committed.
+    /// Executes a dry-run of the transaction using a fork of current state, no changes are committed.
     async fn dry_run(
         &self,
         ctx: &Context<'_>,
