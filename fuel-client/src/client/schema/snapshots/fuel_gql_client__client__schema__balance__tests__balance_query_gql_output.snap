@@ -1,0 +1,14 @@
+---
+source: fuel-client/src/client/schema/balance.rs
+assertion_line: 122
+expression: operation.query
+
+---
+query Query($_0: Address!, $_1: AssetId!) {
+  balance(owner: $_0, assetId: $_1) {
+    owner
+    amount
+    assetId
+  }
+}
+

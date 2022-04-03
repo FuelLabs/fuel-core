@@ -11,6 +11,7 @@ pub mod schema;
 pub mod types;
 
 use schema::{
+    balance::BalanceArgs,
     block::BlockByIdArgs,
     coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
     contract::{Contract, ContractByIdArgs},
@@ -299,6 +300,30 @@ impl FuelClient {
             schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
         let contract = self.query(query).await?.contract;
         Ok(contract)
+    }
+
+    pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {
+        let owner: schema::Address = owner.parse()?;
+        let asset_id: schema::AssetId = match asset_id {
+            Some(asset_id) => asset_id.parse()?,
+            None => schema::AssetId::default(),
+        };
+        let query = schema::balance::BalanceQuery::build(BalanceArgs { owner, asset_id });
+        let balance = self.query(query).await?.balance;
+        Ok(balance.amount.into())
+    }
+
+    // Retrieve a page of balances by their owner
+    pub async fn balances(
+        &self,
+        owner: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::balance::Balance, String>> {
+        let owner: schema::Address = owner.parse()?;
+        let query = schema::balance::BalancesQuery::build(&(owner, request).into());
+
+        let balances = self.query(query).await?.balances.into();
+        Ok(balances)
     }
 }
 
