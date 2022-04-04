@@ -64,8 +64,8 @@ impl BlockQuery {
     async fn block(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "id of the block")] id: Option<BlockId>,
-        #[graphql(desc = "height of the block")] height: Option<U64>,
+        #[graphql(desc = "ID of the block")] id: Option<BlockId>,
+        #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
         let db = ctx.data_unchecked::<Database>();
         let id = match (id, height) {
@@ -83,10 +83,10 @@ impl BlockQuery {
                     ));
                 } else {
                     db.get_block_id(height.try_into()?)?
-                        .ok_or("block height non-existent")?
+                        .ok_or("Block height non-existent")?
                 }
             }
-            (None, None) => return Err(async_graphql::Error::new("missing either id or height")),
+            (None, None) => return Err(async_graphql::Error::new("Missing either id or height")),
         };
 
         let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &id)?
