@@ -64,7 +64,7 @@ impl BlockQuery {
     async fn block(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "Id of the block")] id: Option<BlockId>,
+        #[graphql(desc = "ID of the block")] id: Option<BlockId>,
         #[graphql(desc = "Height of the block")] height: Option<U64>,
     ) -> async_graphql::Result<Option<Block>> {
         let db = ctx.data_unchecked::<Database>();

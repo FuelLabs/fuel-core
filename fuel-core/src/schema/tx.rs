@@ -37,7 +37,7 @@ impl TxQuery {
     async fn transaction(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "The id of the transaction")] id: TransactionId,
+        #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;

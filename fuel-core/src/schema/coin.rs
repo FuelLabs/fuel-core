@@ -69,7 +69,7 @@ impl CoinQuery {
     async fn coin(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "The utxo_id of the coin")] utxo_id: UtxoId,
+        #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let utxo_id = utxo_id.0;
         let db = ctx.data_unchecked::<Database>().clone();
