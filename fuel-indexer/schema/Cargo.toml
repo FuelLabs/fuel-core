@@ -26,4 +26,4 @@ diesel-postgres = ["derive-utils", "diesel/postgres", "diesel/serde_json", "db-p
 diesel-sqlite = ["derive-utils", "diesel/sqlite", "diesel/serde_json", "db-sqlite", "itertools", "sha2", "thiserror" ]
 db-postgres = []
 db-sqlite = []
-derive-utils = ["fuel-types/default", "fuel-types/serde-types"]
+derive-utils = ["fuel-types/default", "fuel-types/serde-types", "sha2"]

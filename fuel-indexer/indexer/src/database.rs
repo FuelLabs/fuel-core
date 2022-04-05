@@ -10,8 +10,8 @@ use fuel_indexer_schema::{
     db::models::{ColumnInfo, EntityData, TypeIds},
     db::tables::SchemaBuilder,
     db::Conn,
-    graphql::{schema_version, Schema},
-    FtColumn,
+    graphql::Schema,
+    schema_version, FtColumn,
 };
 
 type ConnectionPool = r2d2::Pool<ConnectionManager<Conn>>;

@@ -4,6 +4,10 @@
 extern crate diesel;
 extern crate alloc;
 
+use alloc::{format, string::String};
+#[cfg(feature = "derive-utils")]
+use sha2::{Digest, Sha256};
+
 #[cfg(all(feature = "diesel-sqlite", feature = "diesel-postgres"))]
 compile_error!("features 'diesel-sqlite' and 'diesel-postgres' are mutually exclusive");
 
@@ -27,6 +31,18 @@ pub type Int8 = i64;
 pub type UInt4 = u32;
 pub type UInt8 = u64;
 pub type Timestamp = u64;
+
+pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
+
+pub fn type_id(namespace: &str, type_name: &str) -> u64 {
+    let mut bytes = [0u8; 8];
+    bytes.copy_from_slice(&Sha256::digest(format!("{}:{}", namespace, type_name).as_bytes())[..8]);
+    u64::from_le_bytes(bytes)
+}
+
+pub fn schema_version(schema: &str) -> String {
+    format!("{:x}", Sha256::digest(schema.as_bytes()))
+}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum FtColumn {

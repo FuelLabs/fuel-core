@@ -3,23 +3,10 @@ use diesel::QueryResult;
 use graphql_parser::query as gql;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 
 type GraphqlResult<T> = Result<T, GraphqlError>;
-
-pub const BASE_SCHEMA: &str = include_str!("./base.graphql");
-
-pub fn type_id(namespace: &str, type_name: &str) -> u64 {
-    let mut bytes = [0u8; 8];
-    bytes.copy_from_slice(&Sha256::digest(format!("{}:{}", namespace, type_name).as_bytes())[..8]);
-    u64::from_le_bytes(bytes)
-}
-
-pub fn schema_version(schema: &str) -> String {
-    format!("{:x}", Sha256::digest(schema.as_bytes()))
-}
 
 #[derive(Debug, Error)]
 pub enum GraphqlError {
