@@ -1,6 +1,6 @@
 use crate::db::{models::*, Conn};
-use graphql_parser::query as gql;
 use diesel::QueryResult;
+use graphql_parser::query as gql;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

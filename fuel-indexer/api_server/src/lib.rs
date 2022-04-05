@@ -8,9 +8,9 @@ use axum::{
     routing::post,
     Router,
 };
-use diesel::{Connection, RunQueryDsl, QueryableByName};
 use diesel::sql_types::Text;
-use fuel_indexer_schema::graphql::{GraphqlQueryBuilder, GraphqlError, Schema};
+use diesel::{Connection, QueryableByName, RunQueryDsl};
+use fuel_indexer_schema::graphql::{GraphqlError, GraphqlQueryBuilder, Schema};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ cfg_if::cfg_if! {
 #[derive(QueryableByName)]
 pub struct Answer {
     #[sql_type = "Text"]
-    row: String
+    row: String,
 }
 
 #[derive(Debug, Error)]
@@ -117,12 +117,10 @@ impl GraphQlApi {
     }
 }
 
-
 pub async fn load_schema(database_url: &str, name: &str) -> Result<Option<Schema>, APIError> {
     let conn = Conn::establish(database_url)?;
     Ok(Some(Schema::load_from_db(&conn, name)?))
 }
-
 
 pub async fn run_query(
     query: Query,
@@ -140,9 +138,7 @@ pub async fn run_query(
             let row: Value = serde_json::from_str(&ans.row)?;
             Ok(row)
         }
-        Err(diesel::result::Error::NotFound) => {
-            Ok(Value::Null)
-        }
+        Err(diesel::result::Error::NotFound) => Ok(Value::Null),
         Err(e) => {
             error!("Error querying database");
             Err(e.into())
