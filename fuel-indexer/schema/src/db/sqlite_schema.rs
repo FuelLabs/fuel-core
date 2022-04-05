@@ -42,4 +42,9 @@ table! {
 joinable!(columns -> type_ids (type_id));
 joinable!(root_columns -> graph_root (root_id));
 
-allow_tables_to_appear_in_same_query!(columns, graph_root, root_columns, type_ids,);
+allow_tables_to_appear_in_same_query!(
+    columns,
+    graph_root,
+    root_columns,
+    type_ids,
+);

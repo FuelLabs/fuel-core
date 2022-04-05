@@ -8,33 +8,37 @@ use axum::{
     routing::post,
     Router,
 };
-use fuel_indexer_graphql::{table_name, GraphqlError, Schema};
+use diesel::{Connection, RunQueryDsl, QueryableByName};
+use diesel::sql_types::Text;
+use fuel_indexer_schema::graphql::{GraphqlQueryBuilder, GraphqlError, Schema};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use thiserror::Error;
 use tracing::error;
 
-#[cfg(feature = "db-postgres")]
-mod db_postgres;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "db-sqlite")] {
+        pub use diesel::prelude::SqliteConnection as Conn;
+        pub use diesel::sqlite::Sqlite as DBBackend;
+    } else if #[cfg(feature = "db-postgres")] {
+        pub use diesel::prelude::PgConnection as Conn;
+        pub use diesel::pg::Pg as DBBackend;
+    }
+}
 
-#[cfg(feature = "db-postgres")]
-use db_postgres::{load_schema, run_query};
-
-#[cfg(feature = "db-sqlite")]
-mod db_sqlite;
-
-#[cfg(feature = "db-sqlite")]
-use db_sqlite::{load_schema, run_query};
+#[derive(QueryableByName)]
+pub struct Answer {
+    #[sql_type = "Text"]
+    row: String
+}
 
 #[derive(Debug, Error)]
 pub enum APIError {
-    #[cfg(feature = "db-sqlite")]
-    #[error("Sqlite error {0:?}")]
-    SqliteError(#[from] sqlite::Error),
-    #[cfg(feature = "db-postgres")]
-    #[error("Postgres error {0:?}")]
-    PostgresError(#[from] tokio_postgres::Error),
+    #[error("Diesel error {0:?}")]
+    DieselError(#[from] diesel::result::Error),
+    #[error("Diesel connection error {0:?}")]
+    DieselConnectionError(#[from] diesel::result::ConnectionError),
     #[error("Query builder error {0:?}")]
     GraphqlError(#[from] GraphqlError),
     #[error("Malformed query")]
@@ -45,42 +49,6 @@ pub enum APIError {
     SerdeError(#[from] serde_json::Error),
     #[error("Graph Not Found.")]
     GraphNotFound,
-}
-
-fn root_query(namespace: &str) -> String {
-    let table = table_name("graph_registry", "graph_root");
-
-    format!(
-        r#"SELECT id,version,query,schema
-    FROM {table} 
-    WHERE schema_name = '{namespace}'
-    ORDER BY id DESC
-    LIMIT 1"#
-    )
-}
-
-fn root_columns(root_id: &str) -> String {
-    let table = table_name("graph_registry", "root_columns");
-
-    format!(
-        r#"SELECT id,column_name,graphql_type
-    FROM {table}
-    WHERE root_id = {root_id}"#
-    )
-}
-
-fn graph_types(name: &str, version: &str) -> String {
-    let table1 = table_name("graph_registry", "type_ids");
-    let table2 = table_name("graph_registry", "columns");
-
-    format!(
-        r#"SELECT tid.graphql_name,col.column_name,col.graphql_type
-    FROM {table1} tid
-    JOIN {table2} col
-    ON tid.id = col.type_id
-    WHERE tid.schema_name = '{name}'
-    AND tid.schema_version = '{version}'"#
-    )
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -146,5 +114,38 @@ impl GraphQlApi {
             .serve(app.into_make_service())
             .await
             .expect("Service failed to start");
+    }
+}
+
+
+pub async fn load_schema(database_url: &str, name: &str) -> Result<Option<Schema>, APIError> {
+    let conn = Conn::establish(database_url)?;
+    Ok(Some(Schema::load_from_db(&conn, name)?))
+}
+
+
+pub async fn run_query(
+    query: Query,
+    schema: &Schema,
+    database_url: String,
+) -> Result<Value, APIError> {
+    let conn = Conn::establish(&database_url)?;
+    let builder = GraphqlQueryBuilder::new(&schema, &query.query)?;
+    let query = builder.build()?;
+
+    let queries = query.as_sql(true).join(";\n");
+
+    match diesel::sql_query(queries).get_result::<Answer>(&conn) {
+        Ok(ans) => {
+            let row: Value = serde_json::from_str(&ans.row)?;
+            Ok(row)
+        }
+        Err(diesel::result::Error::NotFound) => {
+            Ok(Value::Null)
+        }
+        Err(e) => {
+            error!("Error querying database");
+            Err(e.into())
+        }
     }
 }

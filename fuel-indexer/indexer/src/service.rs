@@ -1,7 +1,7 @@
 use crate::{IndexExecutor, IndexerResult, Manifest, SchemaManager};
 use async_std::sync::Arc;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginatedResult, PaginationRequest};
-use fuel_indexer_graphql::Schema;
+use fuel_indexer_schema::graphql::Schema;
 use fuel_tx::{Receipt, Transaction};
 use fuels_core::abi_encoder::ABIEncoder;
 use fuels_core::{Token, Tokenizable};

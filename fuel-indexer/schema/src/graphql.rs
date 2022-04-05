@@ -1,4 +1,6 @@
+use crate::db::{models::*, Conn};
 use graphql_parser::query as gql;
+use diesel::QueryResult;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -481,6 +483,44 @@ impl Schema {
             Some(fieldset) => fieldset.get(name),
             _ => None,
         }
+    }
+
+    pub fn load_from_db(conn: &Conn, name: &str) -> QueryResult<Schema> {
+        let root = GraphRoot::get_latest(&*conn, name)?;
+        let root_cols = RootColumns::list_by_id(&*conn, root.id)?;
+        let typeids = TypeIds::list_by_name(&*conn, &root.schema_name, &root.version)?;
+
+        let mut types = HashSet::new();
+        let mut fields = HashMap::new();
+
+        types.insert(root.query.clone());
+        fields.insert(
+            root.query.clone(),
+            root_cols
+                .into_iter()
+                .map(|c| (c.column_name, c.graphql_type))
+                .collect(),
+        );
+        for tid in typeids {
+            types.insert(tid.graphql_name.clone());
+
+            let columns = Columns::list_by_id(&*conn, tid.id)?;
+            fields.insert(
+                tid.graphql_name,
+                columns
+                    .into_iter()
+                    .map(|c| (c.column_name, c.graphql_type))
+                    .collect(),
+            );
+        }
+
+        Ok(Schema {
+            version: root.version,
+            namespace: root.schema_name,
+            query: root.query,
+            types,
+            fields,
+        })
     }
 }
 

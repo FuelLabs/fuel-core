@@ -10,7 +10,7 @@ publish = false
 proc-macro = true
 
 [dependencies]
-fuel-indexer-graphql = { path = "../graphql" }
+fuel-indexer-schema = { path = "../schema" }
 graphql-parser = "0.3"
 proc-macro-error = "1.0"
 proc-macro2 = "1.0"

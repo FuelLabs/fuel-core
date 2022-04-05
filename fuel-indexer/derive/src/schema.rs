@@ -1,4 +1,4 @@
-use fuel_indexer_graphql::{schema_version, type_id, BASE_SCHEMA};
+use fuel_indexer_schema::graphql::{schema_version, type_id, BASE_SCHEMA};
 use graphql_parser::parse_schema;
 use graphql_parser::schema::{Definition, Document, Field, SchemaDefinition, Type, TypeDefinition};
 use proc_macro::TokenStream;

@@ -9,17 +9,21 @@ publish = false
 [dependencies]
 cfg-if = "1.0"
 diesel = { version = "1.4", optional = true }
-fuel-indexer-graphql = { path = "../graphql" }
 fuel-tx = { version = "0.6", default-features = false }
 fuel-types = { version = "0.3", default-features = false }
 graphql-parser = "0.3"
+itertools = { version = "0.10", optional = true }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
+sha2 = { version = "0.10", optional = true }
+thiserror = { version = "1.0", optional = true }
 
 [dev-dependencies]
 insta = "1.8"
 
 [features]
 default = ["fuel-types/serde-types-minimal"]
-diesel-postgres = ["derive-utils", "diesel/postgres", "diesel/serde_json" ]
-diesel-sqlite = ["derive-utils", "diesel/sqlite", "diesel/serde_json" ]
+diesel-postgres = ["derive-utils", "diesel/postgres", "diesel/serde_json", "db-postgres", "itertools", "sha2", "thiserror" ]
+diesel-sqlite = ["derive-utils", "diesel/sqlite", "diesel/serde_json", "db-sqlite", "itertools", "sha2", "thiserror" ]
+db-postgres = []
+db-sqlite = []
 derive-utils = ["fuel-types/default", "fuel-types/serde-types"]
