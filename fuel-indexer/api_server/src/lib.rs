@@ -128,7 +128,7 @@ pub async fn run_query(
     database_url: String,
 ) -> Result<Value, APIError> {
     let conn = Conn::establish(&database_url)?;
-    let builder = GraphqlQueryBuilder::new(&schema, &query.query)?;
+    let builder = GraphqlQueryBuilder::new(schema, &query.query)?;
     let query = builder.build()?;
 
     let queries = query.as_sql(true).join(";\n");
