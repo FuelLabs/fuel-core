@@ -77,11 +77,11 @@ type CoinEdge {
 }
 input CoinFilterInput {
 	"""
-	address of the owner
+	Address of the owner
 	"""
 	owner: Address!
 	"""
-	asset ID of the coins
+	Asset ID of the coins
 	"""
 	assetId: AssetId
 }
@@ -144,11 +144,11 @@ type Mutation {
 	reset(id: ID!): Boolean!
 	execute(id: ID!, op: String!): Boolean!
 	"""
-	dry-run the transaction using a fork of current state, no changes are committed.
+	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
 	"""
 	dryRun(tx: HexString!): [Receipt!]!
 	"""
-	Submits transaction to the pool
+	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
 }
@@ -243,11 +243,11 @@ enum ReturnType {
 scalar Salt
 input SpendQueryElementInput {
 	"""
-	asset ID of the coins
+	Asset ID of the coins
 	"""
 	assetId: AssetId!
 	"""
-	address of the owner
+	Address of the owner
 	"""
 	amount: U64!
 }

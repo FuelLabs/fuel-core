@@ -8,6 +8,7 @@ use fuel_core::{
 };
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -119,6 +120,50 @@ async fn submit() {
         .unwrap()
         .transaction;
     assert_eq!(tx.id(), ret_tx.id());
+}
+
+#[tokio::test]
+async fn submit_utxo_verified_tx() {
+    let config = Config {
+        utxo_validation: true,
+        ..Config::local_node()
+    };
+
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let transactions = (1..10 + 1)
+        .into_iter()
+        .map(|i| TxBuilder::new(2322u64).gas_limit(i * 1000).build())
+        .collect_vec();
+
+    for tx in transactions {
+        let id = client.submit(&tx).await.unwrap();
+        // verify that the tx returned from the api matches the submitted tx
+        let ret_tx = client
+            .transaction(&id.0.to_string())
+            .await
+            .unwrap()
+            .unwrap()
+            .transaction;
+
+        let transaction_result = client
+            .transaction_status(&ret_tx.id().to_string())
+            .await
+            .ok()
+            .unwrap();
+
+        if let TransactionStatus::Success { block_id, .. } = transaction_result.clone() {
+            let block_exists = client.block(&block_id).await.unwrap();
+
+            assert!(block_exists.is_some());
+        }
+
+        assert!(matches!(
+            transaction_result,
+            TransactionStatus::Success { .. }
+        ));
+    }
 }
 
 #[tokio::test]

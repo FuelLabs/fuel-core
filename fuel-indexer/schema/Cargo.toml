@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 cfg-if = "1.0"
 diesel = { version = "1.4", optional = true }
-fuel-tx = { version = "0.6", default-features = false }
+fuel-tx = { version = "0.7", default-features = false }
 fuel-types = { version = "0.3", default-features = false }
 graphql-parser = "0.3"
 itertools = { version = "0.10", optional = true }

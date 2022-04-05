@@ -14,6 +14,8 @@ rm state.template
 
 terraform init
 
+echo "Creating or updating k8s cluster now"
+
 terraform apply -auto-approve
 
 

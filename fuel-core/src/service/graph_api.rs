@@ -2,7 +2,9 @@ use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
 use crate::service::Config;
 use crate::tx_pool::TxPool;
-use async_graphql::{http::playground_source, http::GraphQLPlaygroundConfig, Request, Response};
+use async_graphql::{
+    extensions::Tracing, http::playground_source, http::GraphQLPlaygroundConfig, Request, Response,
+};
 use axum::routing::{get, post};
 use axum::{
     extract::Extension,
@@ -22,7 +24,7 @@ use std::{
     sync::Arc,
 };
 use tokio::task::JoinHandle;
-use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
 
 /// Spawns the api server for this node
@@ -33,13 +35,14 @@ pub async fn start_server(
 ) -> Result<(SocketAddr, JoinHandle<Result<(), crate::service::Error>>), std::io::Error> {
     let network_addr = config.addr;
     let schema = build_schema().data(db).data(tx_pool).data(config);
-    let schema = dap::init(schema).finish();
+    let schema = dap::init(schema).extension(Tracing).finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
         .route("/health", get(health))
         .layer(Extension(schema))
+        .layer(TraceLayer::new_for_http())
         .layer(SetResponseHeaderLayer::<_>::overriding(
             ACCESS_CONTROL_ALLOW_ORIGIN,
             HeaderValue::from_static("*"),

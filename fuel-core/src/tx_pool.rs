@@ -37,6 +37,8 @@ pub enum Error {
     Database(Box<dyn StdError>),
     #[error("unexpected block execution error {0:?}")]
     Execution(crate::executor::Error),
+    #[error("Tx is invalid, insertion failed {0:?}")]
+    Other(#[from] anyhow::Error),
 }
 
 impl From<KvStoreError> for Error {
@@ -83,9 +85,43 @@ impl TxPool {
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
         let db = self.db.clone();
-        let tx_id = tx.id();
+
+        let mut tx_to_exec = tx.clone();
+
+        let includable_txs: Vec<Transaction>;
+
+        if self.executor.config.utxo_validation {
+            if tx_to_exec.metadata().is_none() {
+                tx_to_exec.precompute_metadata();
+            }
+
+            self.fuel_txpool
+                .insert(vec![Arc::new(tx_to_exec.clone())])
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let includable_arc_txs = self.fuel_txpool.includable().await;
+
+            includable_txs = includable_arc_txs
+                .iter()
+                .map(|arc| Transaction::clone(&*arc))
+                .collect();
+
+            for included_tx in includable_arc_txs {
+                self.fuel_txpool.remove(&[included_tx.id()]).await;
+            }
+        } else {
+            includable_txs = vec![tx];
+        }
+
+        let tx_id = tx_to_exec.id();
+
         // set status to submitted
-        db.update_tx_status(&tx_id, TransactionStatus::Submitted { time: Utc::now() })?;
+        db.update_tx_status(
+            &tx_id.clone(),
+            TransactionStatus::Submitted { time: Utc::now() },
+        )?;
 
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
@@ -103,7 +139,7 @@ impl TxPool {
                 // TODO: compute the current merkle root of all blocks
                 prev_root: Default::default(),
             },
-            transactions: vec![tx],
+            transactions: includable_txs,
         };
         // immediately execute block
         self.executor
