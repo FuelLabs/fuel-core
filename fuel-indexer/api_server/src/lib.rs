@@ -11,7 +11,7 @@ use axum::{
 };
 use diesel::sql_types::Text;
 use diesel::{Connection, QueryableByName, RunQueryDsl};
-use fuel_indexer_schema::{GraphqlError, GraphqlQueryBuilder, Schema};
+use fuel_indexer_schema::graphql::{GraphqlError, GraphqlQueryBuilder, Schema};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
