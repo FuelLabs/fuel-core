@@ -47,17 +47,17 @@ impl Coin {
 
 #[derive(InputObject)]
 struct CoinFilterInput {
-    /// address of the owner
+    /// Address of the owner
     owner: Address,
-    /// asset ID of the coins
+    /// Asset ID of the coins
     asset_id: Option<AssetId>,
 }
 
 #[derive(InputObject)]
 struct SpendQueryElementInput {
-    /// asset ID of the coins
+    /// Asset ID of the coins
     asset_id: AssetId,
-    /// address of the owner
+    /// Address of the owner
     amount: U64,
 }
 
@@ -69,7 +69,7 @@ impl CoinQuery {
     async fn coin(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "utxo_id of the coin")] utxo_id: UtxoId,
+        #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let utxo_id = utxo_id.0;
         let db = ctx.data_unchecked::<Database>().clone();

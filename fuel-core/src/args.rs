@@ -1,5 +1,6 @@
 use clap::Parser;
 use fuel_core::service::{Config, DbType, VMConfig};
+use std::str::FromStr;
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
@@ -7,6 +8,9 @@ use tracing_subscriber::filter::EnvFilter;
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
 }
+
+pub const LOG_FILTER: &str = "RUST_LOG";
+pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 #[derive(Parser, Debug)]
 #[clap(name = "fuel-core", about = "Fuel client implementation", version)]
@@ -44,15 +48,34 @@ pub struct Opt {
 
 impl Opt {
     pub fn exec(self) -> io::Result<Config> {
-        let filter = match env::var_os("RUST_LOG") {
+        let filter = match env::var_os(LOG_FILTER) {
             Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
             None => EnvFilter::new("info"),
         };
 
-        tracing_subscriber::fmt::Subscriber::builder()
+        let human_logging = env::var_os(HUMAN_LOGGING)
+            .map(|s| {
+                bool::from_str(s.to_str().unwrap())
+                    .expect("Expected `true` or `false` to be provided for `HUMAN_LOGGING`")
+            })
+            .unwrap_or(true);
+
+        let sub = tracing_subscriber::fmt::Subscriber::builder()
             .with_writer(std::io::stderr)
-            .with_env_filter(filter)
-            .init();
+            .with_env_filter(filter);
+
+        if human_logging {
+            // use pretty logs
+            sub.pretty().init();
+        } else {
+            // use machine parseable structured logs
+            sub
+                // disable terminal colors
+                .with_ansi(false)
+                // use json
+                .json()
+                .init();
+        }
 
         let Opt {
             ip,
