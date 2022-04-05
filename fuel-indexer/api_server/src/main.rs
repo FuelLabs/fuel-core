@@ -34,10 +34,6 @@ cfg_if::cfg_if! {
                 .into_string()
                 .expect("Could not stringify path")
         }
-    } else {
-        fn canonicalize(url: String) -> String {
-            url
-        }
     }
 }
 
