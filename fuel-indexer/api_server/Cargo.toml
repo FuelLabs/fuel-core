@@ -24,5 +24,6 @@ tracing-subscriber = { version = "0.2", features = ["env-filter"] }
 
 [features]
 default = ["db-sqlite"]
-db-postgres = ["fuel-indexer-schema/diesel-postgres"]
-db-sqlite = ["fuel-indexer-schema/diesel-sqlite"]
+db-postgres = ["fuel-indexer-schema/diesel-postgres", "has-db"]
+db-sqlite = ["fuel-indexer-schema/diesel-sqlite", "has-db"]
+has-db = []
