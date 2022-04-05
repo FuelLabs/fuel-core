@@ -1,25 +1,3 @@
-use anyhow::Result;
-use async_std::{fs::File, io::ReadExt, net::SocketAddr};
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use structopt::StructOpt;
-use tracing_subscriber::filter::EnvFilter;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ServerConfig {
-    /// API Server listen address.
-    listen_address: SocketAddr,
-    /// Where the data lives.
-    database_url: String,
-}
-
-#[derive(Debug, StructOpt)]
-#[structopt(name = "Indexer API Service", about = "Fuel indexer api")]
-pub struct Args {
-    #[structopt(short, long, help = "API Server config.")]
-    config: PathBuf,
-}
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "db-postgres")] {
         fn canonicalize(url: String) -> String {
@@ -39,7 +17,30 @@ cfg_if::cfg_if! {
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "has-db")] {
+        use anyhow::Result;
         use api_server::GraphQlApi;
+        use async_std::{fs::File, io::ReadExt, net::SocketAddr};
+        use serde::{Deserialize, Serialize};
+        use std::path::PathBuf;
+        use structopt::StructOpt;
+        use tracing_subscriber::filter::EnvFilter;
+
+        #[derive(Debug, Serialize, Deserialize)]
+        pub struct ServerConfig {
+            /// API Server listen address.
+            listen_address: SocketAddr,
+            /// Where the data lives.
+            database_url: String,
+        }
+
+        #[derive(Debug, StructOpt)]
+        #[structopt(name = "Indexer API Service", about = "Fuel indexer api")]
+        pub struct Args {
+            #[structopt(short, long, help = "API Server config.")]
+            config: PathBuf,
+        }
+
+
         #[tokio::main]
         pub async fn main() -> Result<()> {
             let filter = match std::env::var_os("RUST_LOG") {
@@ -73,9 +74,8 @@ cfg_if::cfg_if! {
         }
     } else {
         #[tokio::main]
-        pub async fn main() -> Result<()> {
+        pub async fn main() {
             println!("HI! No DB, so I'm kinda useless!");
-            Ok(())
         }
     }
 }
