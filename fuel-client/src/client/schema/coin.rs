@@ -128,22 +128,15 @@ pub struct CoinsToSpendArgs {
     excluded_ids: Option<Vec<UtxoId>>,
 }
 
-impl
-    From<(
-        Address,
-        Vec<SpendQueryElementInput>,
-        Option<i32>,
-        Option<Vec<UtxoId>>,
-    )> for CoinsToSpendArgs
-{
-    fn from(
-        r: (
-            Address,
-            Vec<SpendQueryElementInput>,
-            Option<i32>,
-            Option<Vec<UtxoId>>,
-        ),
-    ) -> Self {
+pub(crate) type CoinsToSpendArgsTuple = (
+    Address,
+    Vec<SpendQueryElementInput>,
+    Option<i32>,
+    Option<Vec<UtxoId>>,
+);
+
+impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
+    fn from(r: CoinsToSpendArgsTuple) -> Self {
         CoinsToSpendArgs {
             owner: r.0,
             spend_query: r.1,
