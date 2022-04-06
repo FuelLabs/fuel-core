@@ -146,11 +146,9 @@ pub fn random_improve(
 
             // Filter excluded coins
             coin_ids.retain(|&id| {
-                if let Some(excluded_ids) = excluded_ids {
-                    !excluded_ids.contains(&id)
-                } else {
-                    true
-                }
+                excluded_ids
+                    .map(|excluded_ids| !excluded_ids.contains(&id))
+                    .unwrap_or(true)
             });
 
             let coins: Vec<(UtxoId, Coin)> = coin_ids
