@@ -284,7 +284,7 @@ impl FuelClient {
             })
             .try_collect()?;
         let excluded_ids: Option<Vec<schema::UtxoId>> = excluded_ids
-            .map(|ids| ids.into_iter().map(UtxoId::from_str).try_collect())
+            .map(|ids| ids.into_iter().map(schema::UtxoId::from_str).try_collect())
             .transpose()?;
         let query = schema::coin::CoinsToSpendQuery::build(
             &(owner, spend_query, max_inputs, excluded_ids).into(),
