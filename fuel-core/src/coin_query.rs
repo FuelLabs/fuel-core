@@ -39,6 +39,7 @@ pub fn largest_first(
     db: &Database,
     spend_query: &SpendQuery,
     max_inputs: u8,
+    excluded_ids: Option<&Vec<UtxoId>>,
 ) -> Result<Vec<(UtxoId, Coin)>, CoinQueryError> {
     // Merge elements with the same (owner, asset_id)
     let spend_query: Vec<SpendQueryElement> = spend_query
@@ -59,9 +60,16 @@ pub fn largest_first(
 
     for (owner, asset_id, amount) in spend_query {
         let coins_of_asset_id: Vec<(UtxoId, Coin)> = {
-            let coin_ids: Vec<UtxoId> = db
+            let mut coin_ids: Vec<UtxoId> = db
                 .owned_coins_by_asset_id(owner, asset_id, None, None)
                 .try_collect()?;
+
+            // Filter excluded coins
+            coin_ids.retain(|&id| {
+                excluded_ids
+                    .map(|excluded_ids| !excluded_ids.contains(&id))
+                    .unwrap_or(true)
+            });
 
             let mut coins: Vec<(UtxoId, Coin)> = coin_ids
                 .into_iter()
@@ -110,6 +118,7 @@ pub fn random_improve(
     db: &Database,
     spend_query: &SpendQuery,
     max_inputs: u8,
+    excluded_ids: Option<&Vec<UtxoId>>,
 ) -> Result<Vec<(UtxoId, Coin)>, CoinQueryError> {
     // Merge elements with the same (owner, asset_id)
     let spend_query: Vec<SpendQueryElement> = spend_query
@@ -131,9 +140,16 @@ pub fn random_improve(
     let mut coins_by_asset_id: Vec<Vec<(UtxoId, Coin)>> = spend_query
         .iter()
         .map(|(owner, asset_id, _)| -> Result<_, CoinQueryError> {
-            let coin_ids: Vec<UtxoId> = db
+            let mut coin_ids: Vec<UtxoId> = db
                 .owned_coins_by_asset_id(*owner, *asset_id, None, None)
                 .try_collect()?;
+
+            // Filter excluded coins
+            coin_ids.retain(|&id| {
+                excluded_ids
+                    .map(|excluded_ids| !excluded_ids.contains(&id))
+                    .unwrap_or(true)
+            });
 
             let coins: Vec<(UtxoId, Coin)> = coin_ids
                 .into_iter()
@@ -164,7 +180,7 @@ pub fn random_improve(
 
             // Fallback to largest_first if we can't fit more coins
             if coins.len() >= max_inputs as usize {
-                return largest_first(db, &spend_query, max_inputs);
+                return largest_first(db, &spend_query, max_inputs, excluded_ids);
             }
 
             // Error if we don't have more coins
@@ -247,6 +263,8 @@ pub fn random_improve(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicU8, Ordering};
+
     use assert_matches::assert_matches;
     use fuel_asm::Word;
     use fuel_tx::{Address, Bytes32};
@@ -255,29 +273,26 @@ mod tests {
 
     use super::*;
 
-    fn gen_test_db(owner: Address, asset_ids: &[AssetId]) -> Database {
+    static COIN_INDEX: AtomicU8 = AtomicU8::new(0);
+    fn make_coin(owner: Address, amount: Word, asset_id: AssetId) -> (UtxoId, Coin) {
+        let index = COIN_INDEX.fetch_add(1, Ordering::SeqCst);
+        let utxo_id = UtxoId::new(Bytes32::from([0u8; 32]), index);
+        let coin = Coin {
+            owner,
+            amount,
+            asset_id,
+            maturity: Default::default(),
+            status: CoinStatus::Unspent,
+            block_created: Default::default(),
+        };
+        (utxo_id, coin)
+    }
+
+    fn gen_test_db(coins: &[(UtxoId, Coin)]) -> Database {
         let mut db = Database::default();
 
-        let coins: Vec<(UtxoId, Coin)> = asset_ids
-            .iter()
-            .flat_map(|asset_id| {
-                (0..5usize).map(move |i| Coin {
-                    owner,
-                    amount: (i + 1) as Word,
-                    asset_id: *asset_id,
-                    maturity: Default::default(),
-                    status: CoinStatus::Unspent,
-                    block_created: Default::default(),
-                })
-            })
-            .enumerate()
-            .map(|(i, coin)| {
-                let utxo_id = UtxoId::new(Bytes32::from([0u8; 32]), i as u8);
-                (utxo_id, coin)
-            })
-            .collect();
         for (id, coin) in coins {
-            Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
+            Storage::<UtxoId, Coin>::insert(&mut db, id, coin).unwrap();
         }
 
         db
@@ -288,11 +303,19 @@ mod tests {
         // Setup
         let owner = Address::default();
         let asset_ids = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
-        let db = gen_test_db(owner, &asset_ids);
+        let coins: Vec<(UtxoId, Coin)> = (0..5usize)
+            .flat_map(|i| {
+                [
+                    make_coin(owner, (i + 1) as Word, asset_ids[0]),
+                    make_coin(owner, (i + 1) as Word, asset_ids[1]),
+                ]
+            })
+            .collect();
+        let db = gen_test_db(&coins);
         let query = |spend_query: &[SpendQueryElement],
                      max_inputs: u8|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
-            let coins = largest_first(&db, spend_query, max_inputs);
+            let coins = largest_first(&db, spend_query, max_inputs, None);
 
             // Transform result for convenience
             coins.map(|coins| {
@@ -362,11 +385,19 @@ mod tests {
         // Setup
         let owner = Address::default();
         let asset_ids = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
-        let db = gen_test_db(owner, &asset_ids);
+        let coins: Vec<(UtxoId, Coin)> = (0..5usize)
+            .flat_map(|i| {
+                [
+                    make_coin(owner, (i + 1) as Word, asset_ids[0]),
+                    make_coin(owner, (i + 1) as Word, asset_ids[1]),
+                ]
+            })
+            .collect();
+        let db = gen_test_db(&coins);
         let query = |spend_query: &[SpendQueryElement],
                      max_inputs: u8|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
-            let coins = random_improve(&db, spend_query, max_inputs);
+            let coins = random_improve(&db, spend_query, max_inputs, None);
 
             // Transform result for convenience
             coins.map(|coins| {
@@ -453,5 +484,86 @@ mod tests {
         // Query with too small max_inputs
         let coins = query(&[(owner, asset_ids[0], 6)], 1);
         assert_matches!(coins, Err(CoinQueryError::NotEnoughInputs));
+    }
+
+    #[test]
+    fn exclusion() {
+        // Setup
+        let owner = Address::default();
+        let asset_ids = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
+        let coins: Vec<(UtxoId, Coin)> = (0..5usize)
+            .flat_map(|i| {
+                [
+                    make_coin(owner, (i + 1) as Word, asset_ids[0]),
+                    make_coin(owner, (i + 1) as Word, asset_ids[1]),
+                ]
+            })
+            .collect();
+        let db = gen_test_db(&coins);
+        let query = |spend_query: &[SpendQueryElement],
+                     max_inputs: u8,
+                     excluded_ids: Option<&Vec<UtxoId>>|
+         -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
+            let coins = random_improve(&db, spend_query, max_inputs, excluded_ids);
+
+            // Transform result for convenience
+            coins.map(|coins| {
+                coins
+                    .into_iter()
+                    .map(|coin| (coin.1.asset_id, coin.1.amount))
+                    .sorted_by_key(|(asset_id, amount)| {
+                        (
+                            asset_ids.iter().position(|c| c == asset_id).unwrap(),
+                            Reverse(*amount),
+                        )
+                    })
+                    .collect()
+            })
+        };
+
+        // Exclude largest coin IDs
+        let excluded_ids = coins
+            .into_iter()
+            .filter(|(_, coin)| coin.amount == 5)
+            .map(|(utxo_id, _)| utxo_id)
+            .collect();
+
+        // Query some amounts, including higher than the owner's balance
+        for amount in 0..20 {
+            let coins = query(
+                &[(owner, asset_ids[0], amount)],
+                u8::MAX,
+                Some(&excluded_ids),
+            );
+
+            // Transform result for convenience
+            let coins = coins.map(|coins| {
+                coins
+                    .into_iter()
+                    .map(|(asset_id, amount)| {
+                        // Check the asset ID before we drop it
+                        assert_eq!(asset_id, asset_ids[0]);
+
+                        amount
+                    })
+                    .collect::<Vec<u64>>()
+            });
+
+            match amount {
+                // This should return nothing
+                0 => assert_matches!(coins, Ok(coins) if coins.is_empty()),
+                // This range should...
+                1..=4 => {
+                    // ...satisfy the amount
+                    assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
+                    // ...and add more for dust management
+                    // TODO: Implement the test
+                }
+                // This range should return all coins
+                5..=10 => assert_matches!(coins, Ok(coins) if coins == vec![ 4, 3, 2, 1]),
+                // Asking for more than the owner's balance should error
+                _ => assert_matches!(coins, Err(CoinQueryError::NotEnoughCoins)),
+            };
+        }
     }
 }

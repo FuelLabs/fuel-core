@@ -241,7 +241,7 @@ async fn coins_to_spend() {
 
     // empty spend_query
     let coins = client
-        .coins_to_spend(format!("{:#x}", owner).as_str(), vec![], None)
+        .coins_to_spend(format!("{:#x}", owner).as_str(), vec![], None, None)
         .await
         .unwrap();
     assert!(coins.is_empty());
@@ -254,6 +254,7 @@ async fn coins_to_spend() {
                 (format!("{:#x}", asset_id_a).as_str(), 1),
                 (format!("{:#x}", asset_id_b).as_str(), 1),
             ],
+            None,
             None,
         )
         .await
@@ -269,10 +270,30 @@ async fn coins_to_spend() {
                 (format!("{:#x}", asset_id_b).as_str(), 300),
             ],
             None,
+            None,
         )
         .await
         .unwrap();
     assert_eq!(coins.len(), 6);
+
+    // spend_query for 1 a and 1 b, but with all coins excluded
+    let all_coin_ids = coins
+        .iter()
+        .map(|c| format!("{:#x}", c.utxo_id))
+        .collect::<Vec<String>>();
+    let all_coin_ids = all_coin_ids.iter().map(String::as_str).collect();
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![
+                (format!("{:#x}", asset_id_a).as_str(), 1),
+                (format!("{:#x}", asset_id_b).as_str(), 1),
+            ],
+            None,
+            Some(all_coin_ids),
+        )
+        .await;
+    assert!(coins.is_err());
 
     // not enough coins
     let coins = client
@@ -282,6 +303,7 @@ async fn coins_to_spend() {
                 (format!("{:#x}", asset_id_a).as_str(), 301),
                 (format!("{:#x}", asset_id_b).as_str(), 301),
             ],
+            None,
             None,
         )
         .await;
@@ -296,6 +318,7 @@ async fn coins_to_spend() {
                 (format!("{:#x}", asset_id_b).as_str(), 300),
             ],
             5.into(),
+            None,
         )
         .await;
     assert!(coins.is_err());
