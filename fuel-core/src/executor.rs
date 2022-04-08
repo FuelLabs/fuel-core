@@ -11,12 +11,12 @@ use fuel_tx::{
     Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId, ValidationError,
 };
 use fuel_types::{bytes::SerializableVec, ContractId};
+#[cfg(feature = "debug")]
+use fuel_vm::state::DebugEval;
 use fuel_vm::{
     consts::REG_SP,
     prelude::{Backtrace as FuelBacktrace, Interpreter, ProgramState, StateTransitionRef},
 };
-#[cfg(feature = "debug")]
-use fuel_vm::state::DebugEval;
 #[cfg(feature = "debug")]
 use std::net::TcpStream;
 use std::{
@@ -25,7 +25,6 @@ use std::{
 };
 use thiserror::Error;
 use tracing::{debug, warn};
-
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
@@ -96,8 +95,8 @@ impl Executor {
             #[cfg(feature = "debug")]
             let mut debugger_socket = if let Some(debugger_addr) = self.config.debugger_addr {
                 debug!("Debugger starting");
-                let stream = TcpStream::connect(debugger_addr)
-                    .expect("Unable to connect to the debugger");
+                let stream =
+                    TcpStream::connect(debugger_addr).expect("Unable to connect to the debugger");
                 let _ = stream.set_nodelay(true); // TCP_NODELAY if possible
                 Some(stream)
             } else {
@@ -111,6 +110,14 @@ impl Executor {
 
             // Create VM
             let mut vm = Interpreter::with_storage(sub_db_view.clone());
+
+            // TODO: move behind a command line switch
+            #[cfg(feature = "profiling")]
+            let output = {
+                let output = crate::profiling::ProfilingOutput::default();
+                vm = vm.with_profiling(Box::new(output.clone()));
+                output
+            };
 
             // Allow the debugger, if any, to do pre-run setup
             #[cfg(feature = "debug")]
@@ -206,6 +213,19 @@ impl Executor {
                 vm_result.receipts(),
                 block_db_transaction.deref_mut(),
             )?;
+
+            // write profile to disk
+            // TODO: move behind a command line switch
+            #[cfg(feature = "profiling")]
+            {
+                let guard = output.data.lock().unwrap();
+                let profiling_data = guard
+                    .as_ref()
+                    .expect("Profile data was requested but not recorded");
+                let json_data = serde_json::to_vec(&profiling_data).expect("Serialization failed");
+                std::fs::write("profile_xyz.json", json_data)
+                    .expect("Couldn't write profile data to disk");
+            }
 
             let status = if vm_result.should_revert() {
                 self.log_backtrace(&vm, vm_result.receipts());
