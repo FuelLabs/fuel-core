@@ -1,7 +1,7 @@
+pub use super::BlockHeight;
 use chrono::{DateTime, TimeZone, Utc};
 use fuel_crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Transaction};
-pub use super::BlockHeight;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]

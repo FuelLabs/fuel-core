@@ -646,10 +646,9 @@ pub mod helpers {
 
     impl TxPoolDb for DummyDB {
         fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-            //Ok(None)
             Ok(self
                 .coins
-                .get(&utxo_id)
+                .get(utxo_id)
                 .map(|coin| coin.clone().as_ref().clone()))
         }
 

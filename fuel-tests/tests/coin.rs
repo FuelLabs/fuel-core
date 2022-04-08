@@ -5,7 +5,7 @@ use fuel_core::{
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{
-    schema::coin::CoinStatus as SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
+    schema::coin::SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use fuel_storage::Storage;
 use fuel_tx::{AssetId, UtxoId};

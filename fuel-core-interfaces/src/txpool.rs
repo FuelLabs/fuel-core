@@ -19,8 +19,7 @@ pub trait TxPoolDb:
     + Sync
 {
     fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        Storage::<UtxoId, Coin>::get(self, &utxo_id)
-            .map(|t| t.map(|t|t.as_ref().clone()))
+        Storage::<UtxoId, Coin>::get(self, utxo_id).map(|t| t.map(|t| t.as_ref().clone()))
     }
 
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {

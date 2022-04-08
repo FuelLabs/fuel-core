@@ -166,12 +166,12 @@ pub struct Coin {
     pub utxo_id: UtxoId,
     pub maturity: U64,
     pub owner: Address,
-    pub status: CoinStatus,
+    pub status: SchemaCoinStatus,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug, PartialEq)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub enum CoinStatus {
+pub enum SchemaCoinStatus {
     Unspent,
     Spent,
 }

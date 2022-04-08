@@ -1,6 +1,6 @@
 use crate::coin_query::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
-use crate::model::{Coin as CoinModel, LocalCoinStatus};
+use crate::model::{Coin as CoinModel, SchemaCoinStatus};
 use crate::schema::scalars::{Address, AssetId, UtxoId, U64};
 use crate::state::IterDirection;
 use async_graphql::InputObject;
@@ -37,7 +37,7 @@ impl Coin {
         self.1.maturity.into()
     }
 
-    async fn status(&self) -> LocalCoinStatus {
+    async fn status(&self) -> SchemaCoinStatus {
         self.1.status.into()
     }
 
