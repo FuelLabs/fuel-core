@@ -18,12 +18,19 @@ bincode = "1.3"
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
-libp2p = "0.41"
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.9"
 tokio = { version= "1.17", features = ["sync"] }
 tracing = "0.1"
+
+[dependencies.libp2p]
+version = "0.43"
+features = [
+    "dns-tokio", "gossipsub", "identify", "kad", "mdns", "mplex", "noise", 
+    "ping", "request-response", "secp256k1", "tcp-tokio", "yamux", 
+]
+default-features = false
 
 [dev-dependencies]
 env_logger = "0.9"
