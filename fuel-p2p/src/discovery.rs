@@ -11,8 +11,8 @@ use libp2p::{
     mdns::MdnsEvent,
     multiaddr::Protocol,
     swarm::{
-        DialError, IntoProtocolsHandler, NetworkBehaviour, NetworkBehaviourAction, PollParameters,
-        ProtocolsHandler,
+        ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
+        NetworkBehaviourAction, PollParameters,
     },
     Multiaddr, PeerId,
 };
@@ -82,11 +82,11 @@ impl DiscoveryBehaviour {
 }
 
 impl NetworkBehaviour for DiscoveryBehaviour {
-    type ProtocolsHandler = KademliaHandlerProto<QueryId>;
+    type ConnectionHandler = KademliaHandlerProto<QueryId>;
     type OutEvent = DiscoveryEvent;
 
     // Initializes new handler on a new opened connection
-    fn new_handler(&mut self) -> Self::ProtocolsHandler {
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
         // in our case we just return KademliaHandlerProto
         self.kademlia.new_handler()
     }
@@ -96,7 +96,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         peer_id: PeerId,
         connection: ConnectionId,
-        event: <<Self::ProtocolsHandler as IntoProtocolsHandler>::Handler as ProtocolsHandler>::OutEvent,
+        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
         self.kademlia.inject_event(peer_id, connection, event);
     }
@@ -106,7 +106,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ProtocolsHandler>> {
+    ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(next_event) = self.events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event));
         }
@@ -251,6 +251,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
         failed_addresses: Option<&Vec<Multiaddr>>,
+        other_established: usize,
     ) {
         self.connected_peers_count += 1;
 
@@ -259,34 +260,35 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             connection_id,
             endpoint,
             failed_addresses,
-        )
-    }
+            other_established,
+        );
 
-    fn inject_connected(&mut self, peer_id: &PeerId) {
         let addresses = self.addresses_of_peer(peer_id);
 
         self.events
             .push_back(DiscoveryEvent::Connected(*peer_id, addresses));
-        self.kademlia.inject_connected(peer_id);
         trace!("Connected to a peer {:?}", peer_id);
     }
 
     fn inject_connection_closed(
         &mut self,
-        _peer_id: &PeerId,
-        _connection_id: &ConnectionId,
-        _connection_point: &ConnectedPoint,
-        _handler: <Self::ProtocolsHandler as IntoProtocolsHandler>::Handler,
+        peer_id: &PeerId,
+        connection_id: &ConnectionId,
+        connection_point: &ConnectedPoint,
+        handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
+        other_established: usize,
     ) {
         self.connected_peers_count -= 1;
-        // no need to pass it to kademlia.inject_connection_closed() since it does nothing
-    }
+        self.kademlia.inject_connection_closed(
+            peer_id,
+            connection_id,
+            connection_point,
+            handler,
+            other_established,
+        );
 
-    fn inject_disconnected(&mut self, peer_id: &PeerId) {
         self.events
             .push_back(DiscoveryEvent::Disconnected(*peer_id));
-
-        self.kademlia.inject_disconnected(peer_id)
     }
 
     fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
@@ -300,7 +302,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
     fn inject_dial_failure(
         &mut self,
         peer_id: Option<PeerId>,
-        handler: Self::ProtocolsHandler,
+        handler: Self::ConnectionHandler,
         err: &DialError,
     ) {
         self.kademlia.inject_dial_failure(peer_id, handler, err)
