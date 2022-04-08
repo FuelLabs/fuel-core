@@ -47,17 +47,17 @@ impl Coin {
 
 #[derive(InputObject)]
 struct CoinFilterInput {
-    /// address of the owner
+    /// Address of the owner
     owner: Address,
-    /// asset ID of the coins
+    /// Asset ID of the coins
     asset_id: Option<AssetId>,
 }
 
 #[derive(InputObject)]
 struct SpendQueryElementInput {
-    /// asset ID of the coins
+    /// Asset ID of the coins
     asset_id: AssetId,
-    /// address of the owner
+    /// Address of the owner
     amount: U64,
 }
 
@@ -69,7 +69,7 @@ impl CoinQuery {
     async fn coin(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "utxo_id of the coin")] utxo_id: UtxoId,
+        #[graphql(desc = "The ID of the coin")] utxo_id: UtxoId,
     ) -> async_graphql::Result<Option<Coin>> {
         let utxo_id = utxo_id.0;
         let db = ctx.data_unchecked::<Database>().clone();
@@ -184,6 +184,9 @@ impl CoinQuery {
             SpendQueryElementInput,
         >,
         #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u8>,
+        #[graphql(desc = "The max number of utxos that can be used")] excluded_ids: Option<
+            Vec<UtxoId>,
+        >,
     ) -> async_graphql::Result<Vec<Coin>> {
         let owner: fuel_tx::Address = owner.0;
         let spend_query: Vec<SpendQueryElement> = spend_query
@@ -191,10 +194,12 @@ impl CoinQuery {
             .map(|e| (owner, e.asset_id.0, e.amount.0))
             .collect();
         let max_inputs: u8 = max_inputs.unwrap_or(MAX_INPUTS);
+        let excluded_ids: Option<Vec<fuel_tx::UtxoId>> =
+            excluded_ids.map(|ids| ids.into_iter().map(|id| id.0).collect());
 
         let db = ctx.data_unchecked::<Database>();
 
-        let coins = random_improve(db, &spend_query, max_inputs)?
+        let coins = random_improve(db, &spend_query, max_inputs, excluded_ids.as_ref())?
             .into_iter()
             .map(|(id, coin)| Coin(id, coin))
             .collect();

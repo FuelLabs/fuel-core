@@ -124,14 +124,24 @@ pub struct CoinsToSpendArgs {
     spend_query: Vec<SpendQueryElementInput>,
     /// The max number of utxos that can be used
     max_inputs: Option<i32>,
+    /// A list of UtxoIds to exlude from the selection
+    excluded_ids: Option<Vec<UtxoId>>,
 }
 
-impl From<(Address, Vec<SpendQueryElementInput>, Option<i32>)> for CoinsToSpendArgs {
-    fn from(r: (Address, Vec<SpendQueryElementInput>, Option<i32>)) -> Self {
+pub(crate) type CoinsToSpendArgsTuple = (
+    Address,
+    Vec<SpendQueryElementInput>,
+    Option<i32>,
+    Option<Vec<UtxoId>>,
+);
+
+impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
+    fn from(r: CoinsToSpendArgsTuple) -> Self {
         CoinsToSpendArgs {
             owner: r.0,
             spend_query: r.1,
             max_inputs: r.2,
+            excluded_ids: r.3,
         }
     }
 }
@@ -143,7 +153,7 @@ impl From<(Address, Vec<SpendQueryElementInput>, Option<i32>)> for CoinsToSpendA
     argument_struct = "CoinsToSpendArgs"
 )]
 pub struct CoinsToSpendQuery {
-    #[arguments(owner = &args.owner, spend_query = &args.spend_query, max_inputs = &args.max_inputs)]
+    #[arguments(owner = &args.owner, spend_query = &args.spend_query, max_inputs = &args.max_inputs, excluded_ids = &args.excluded_ids)]
     pub coins_to_spend: Vec<Coin>,
 }
 

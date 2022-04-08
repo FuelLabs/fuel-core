@@ -14,4 +14,6 @@ rm state.template
 
 terraform init
 
+echo "Deleting k8s cluster now"
+
 terraform destroy -auto-approve

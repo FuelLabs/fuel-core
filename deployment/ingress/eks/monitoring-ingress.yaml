@@ -1,27 +1,24 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: ${k8s_namespace}-ingress
-  namespace: ${k8s_namespace}
+  name: monitoring-ingress
+  namespace: monitoring
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/rewrite-target: /
     cert-manager.io/cluster-issuer: "letsencrypt-prod" 
     kubernetes.io/ingress.class: "nginx"
 spec:
   rules:
-    - host: ${ingress_dns}
+    - host: ${grafana_ingress_dns}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: fuel-core-service
+                name: kube-prometheus-grafana 
                 port:
-                  number: ${ingress_http_port}
+                  number: 80
   tls:
     - hosts:
-        - ${ingress_dns}
+        - ${grafana_ingress_dns}
       secretName: letsencrypt-prod
