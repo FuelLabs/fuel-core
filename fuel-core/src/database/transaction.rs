@@ -3,7 +3,7 @@ use crate::{
         columns::{TRANSACTIONS, TRANSACTIONS_BY_OWNER_BLOCK_IDX, TRANSACTION_STATUS},
         Database, KvStoreError,
     },
-    model::fuel_block::BlockHeight,
+    model::BlockHeight,
     state::{Error, IterDirection},
     tx_pool::TransactionStatus,
 };

@@ -1,7 +1,7 @@
 use fuel_core::{
     chain_config::{CoinConfig, StateConfig},
     database::Database,
-    model::coin::{Coin, CoinStatus},
+    model::{Coin, CoinStatus},
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{

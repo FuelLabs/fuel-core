@@ -1,6 +1,6 @@
 use crate::chain_config::{ChainConfig, ContractConfig, StateConfig};
 use crate::database::Database;
-use crate::model::coin::{Coin, CoinStatus};
+use crate::model::{Coin, CoinStatus};
 use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
 use fuel_tx::UtxoId;
@@ -252,7 +252,7 @@ pub enum Error {
 mod tests {
     use super::*;
     use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
-    use crate::model::fuel_block::BlockHeight;
+    use crate::model::BlockHeight;
     use fuel_asm::Opcode;
     use fuel_types::{Address, AssetId, Word};
     use itertools::Itertools;

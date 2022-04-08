@@ -1,5 +1,5 @@
 use crate::database::{Database, KvStoreError};
-use crate::model::coin::{Coin, CoinStatus};
+use crate::model::{Coin, CoinStatus};
 use crate::state::{self};
 use fuel_storage::Storage;
 use fuel_tx::{Address, AssetId, UtxoId};
@@ -269,7 +269,7 @@ mod tests {
     use fuel_asm::Word;
     use fuel_tx::{Address, Bytes32};
 
-    use crate::model::coin::CoinStatus;
+    use crate::model::CoinStatus;
 
     use super::*;
 

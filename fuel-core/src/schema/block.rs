@@ -5,7 +5,7 @@ use crate::schema::{
 };
 use crate::{
     database::KvStoreError,
-    model::fuel_block::{BlockHeight, FuelBlockDb},
+    model::{BlockHeight, FuelBlockDb},
     state::IterDirection,
 };
 use async_graphql::{

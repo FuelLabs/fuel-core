@@ -5,7 +5,7 @@ use std::sync::Arc;
 use fuel_tx::{ContractId, UtxoId};
 use thiserror::Error;
 
-use crate::db::{Error as DbStateError, KvStoreError};
+use crate::{db::{Error as DbStateError, KvStoreError}, models::Coin};
 use fuel_storage::Storage;
 use fuel_tx::Bytes32;
 use fuel_vm::prelude::Contract;
@@ -16,6 +16,12 @@ pub trait TxPoolDb:
     + Send
     + Sync
 {
+    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Arc<Coin>>, KvStoreError> {
+        // Storage::<Bytes32, Transaction>::get(self, &tx_hash)
+        //     .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))
+        Ok(None)
+    }
+
     fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
         Storage::<Bytes32, Transaction>::get(self, &tx_hash)
             .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))

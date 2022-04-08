@@ -3,7 +3,7 @@ use crate::{
         columns::{self, OWNED_COINS},
         Database, KvStoreError,
     },
-    model::coin::Coin,
+    model::Coin,
     state::{Error, IterDirection},
 };
 use fuel_storage::Storage;
