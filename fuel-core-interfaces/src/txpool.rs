@@ -5,26 +5,22 @@ use std::sync::Arc;
 use fuel_tx::{ContractId, UtxoId};
 use thiserror::Error;
 
-use crate::{db::{Error as DbStateError, KvStoreError}, models::Coin};
+use crate::{
+    db::{Error as DbStateError, KvStoreError},
+    models::Coin,
+};
 use fuel_storage::Storage;
-use fuel_tx::Bytes32;
 use fuel_vm::prelude::Contract;
 
 pub trait TxPoolDb:
-    Storage<Bytes32, Transaction, Error = KvStoreError>
+    Storage<UtxoId, Coin, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
     + Send
     + Sync
 {
-    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Arc<Coin>>, KvStoreError> {
-        // Storage::<Bytes32, Transaction>::get(self, &tx_hash)
-        //     .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))
-        Ok(None)
-    }
-
-    fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
-        Storage::<Bytes32, Transaction>::get(self, &tx_hash)
-            .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))
+    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
+        Storage::<UtxoId, Coin>::get(self, &utxo_id)
+            .map(|t| t.map(|t|t.as_ref().clone()))
     }
 
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
@@ -109,7 +105,9 @@ pub enum Error {
     #[error("Transaction is not inserted. ContractId is already taken {0:?}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
     #[error("Transaction is not inserted. UTXO is not existing: {0:?}")]
-    NotInsertedInputTxNotExisting(TxId),
+    NotInsertedInputUtxoIdNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO is spent: {0:?}")]
+    NotInsertedInputUtxoIdSpent(UtxoId),
     #[error(
         "Transaction is not inserted. UTXO requires Contract input {0:?} that is priced lower"
     )]

@@ -183,7 +183,7 @@ pub mod tests {
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }");
     }
 
     #[tokio::test]
@@ -218,7 +218,7 @@ pub mod tests {
 
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010",);
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }",);
     }
 
     #[tokio::test]

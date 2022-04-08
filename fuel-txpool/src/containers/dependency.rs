@@ -1,5 +1,8 @@
 use crate::{types::*, Error};
-use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_interfaces::{
+    models::{Coin, CoinStatus},
+    txpool::TxPoolDb,
+};
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 
@@ -95,6 +98,33 @@ impl Dependency {
                     }
                 }
             }
+        }
+    }
+
+    fn check_if_coin_input_can_spend_db_coin(coin: &Coin, input: &Input) -> anyhow::Result<()> {
+        match input {
+            Input::Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                ..
+            } => {
+                if *owner != coin.owner {
+                    return Err(Error::NotInsertedIoWrongOwner.into());
+                }
+                if *amount != coin.amount {
+                    return Err(Error::NotInsertedIoWrongAmount.into());
+                }
+                if *asset_id != coin.asset_id {
+                    return Err(Error::NotInsertedIoWrongAssetId.into());
+                }
+                if coin.status == CoinStatus::Spent {
+                    return Err(Error::NotInsertedInputUtxoIdSpent(*utxo_id).into());
+                }
+                Ok(())
+            }
+            _ => panic!("Use it only for coin output check"),
         }
     }
 
@@ -219,28 +249,15 @@ impl Dependency {
                             } else {
                                 if state.depth == 0 {
                                     //this means it is loaded from db. Get tx to compare output.
-                                    let db_tx = db.transaction(*utxo_id.tx_id())?;
-                                    let output = if let Some(ref db_tx) = db_tx {
-                                        if let Some(output) =
-                                            db_tx.outputs().get(utxo_id.output_index() as usize)
-                                        {
-                                            output
-                                        } else {
-                                            // output out of bound
-                                            return Err(Error::NotInsertedOutputNotExisting(
-                                                *utxo_id,
-                                            )
-                                            .into());
-                                        }
-                                    } else {
-                                        return Err(Error::NotInsertedInputTxNotExisting(
-                                            *utxo_id.tx_id(),
+                                    let db_coin = db.utxo(utxo_id)?;
+                                    if db_coin.is_none() {
+                                        return Err(Error::NotInsertedInputUtxoIdNotExisting(
+                                            *utxo_id,
                                         )
                                         .into());
-                                    };
-                                    Self::check_if_coin_input_can_spend_output(
-                                        output, input, true,
-                                    )?;
+                                    }
+                                    let coin = db_coin.unwrap();
+                                    Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                                 } else {
                                     // tx output is in pool
                                     let output_tx = txs.get(utxo_id.tx_id()).unwrap();
@@ -257,32 +274,20 @@ impl Dependency {
                         // if coin is not spend, it will be spend later down the line
                     } else {
                         // fetch from db and check if tx exist.
-                        if let Some(db_tx) = db.transaction(*utxo_id.tx_id())? {
-                            if let Some(output) =
-                                db_tx.outputs().get(utxo_id.output_index() as usize)
-                            {
-                                // add depth
-                                max_depth = core::cmp::max(1, max_depth);
-                                // do all checks that we can do
-                                Self::check_if_coin_input_can_spend_output(output, input, true)?;
-                                // insert it as spend coin.
-                                // check for double spend should be done before transaction is received.
-                                db_coins.insert(
-                                    *utxo_id,
-                                    CoinState {
-                                        is_spend_by: Some(tx.id() as TxId),
-                                        depth: 0,
-                                    },
-                                );
-                            } else {
-                                // output out of bound
-                                return Err(Error::NotInsertedOutputNotExisting(*utxo_id).into());
-                            }
-                        } else {
-                            return Err(
-                                Error::NotInsertedInputTxNotExisting(*utxo_id.tx_id()).into()
-                            );
+                        let db_coin = db.utxo(utxo_id)?;
+                        if db_coin.is_none() {
+                            return Err(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id).into());
                         }
+                        let coin = db_coin.unwrap();
+                        Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                        max_depth = core::cmp::max(1, max_depth);
+                        db_coins.insert(
+                            *utxo_id,
+                            CoinState {
+                                is_spend_by: Some(tx.id() as TxId),
+                                depth: 0,
+                            },
+                        );
                     }
 
                     // yey we got our coin
