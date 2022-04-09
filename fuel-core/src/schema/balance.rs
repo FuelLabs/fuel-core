@@ -1,7 +1,7 @@
 use crate::database::{Database, KvStoreError};
 use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{Address, AssetId, U64};
-use crate::state::IterDirection;
+use crate::state::{Error, IterDirection};
 use async_graphql::InputObject;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
@@ -50,30 +50,35 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Balance> {
         let db = ctx.data_unchecked::<Database>();
 
-        let coin_ids: Vec<fuel_tx::UtxoId> =
-            db.owned_coins(owner.into(), None, None).try_collect()?;
-        let mut coins: Vec<(fuel_tx::UtxoId, CoinModel)> = coin_ids
-            .into_iter()
-            .map(|id| {
+        let balance = db
+            .owned_coins(owner.into(), None, None)
+            .map(|res| -> Result<_, Error> {
+                let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
                     .transpose()
                     .ok_or(KvStoreError::NotFound)?
-                    .map(|coin| (id, coin.into_owned()))
+                    .map_err(Into::into)
             })
-            .try_collect()?;
-        coins.retain(|(_, coin)| coin.status == CoinStatus::Unspent);
+            .filter_ok(|coin| {
+                coin.status == CoinStatus::Unspent && coin.asset_id == asset_id.into()
+            })
+            .try_fold(
+                Balance {
+                    owner: owner.into(),
+                    amount: 0u64,
+                    asset_id: asset_id.into(),
+                },
+                |mut balance, res| -> Result<_, Error> {
+                    let coin = res?;
 
-        let sum_amount = coins
-            .iter()
-            .filter(|(_, coin)| coin.asset_id == asset_id.into())
-            .map(|(_, coin)| coin.amount)
-            .sum();
+                    // Increase the balance
+                    balance.amount += coin.amount;
 
-        Ok(Balance {
-            owner: owner.into(),
-            amount: sum_amount,
-            asset_id: asset_id.into(),
-        })
+                    Ok(balance)
+                },
+            )?;
+
+        Ok(balance)
     }
 
     async fn balances(
@@ -87,34 +92,42 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>();
 
-        let coin_ids: Vec<fuel_tx::UtxoId> = db
+        let balances = db
             .owned_coins(filter.owner.into(), None, None)
-            .try_collect()?;
-        let mut coins: Vec<(fuel_tx::UtxoId, CoinModel)> = coin_ids
-            .into_iter()
-            .map(|id| {
+            .map(|res| -> Result<_, Error> {
+                let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
                     .transpose()
                     .ok_or(KvStoreError::NotFound)?
-                    .map(|coin| (id, coin.into_owned()))
+                    .map_err(Into::into)
             })
-            .try_collect()?;
-        coins.retain(|(_, coin)| coin.status == CoinStatus::Unspent);
+            .filter_ok(|coin| coin.status == CoinStatus::Unspent)
+            .try_fold(
+                vec![] as Vec<Balance>,
+                |mut balances, res| -> Result<_, Error> {
+                    let coin = res?;
 
-        let balances = coins
-            .iter()
-            .group_by(|(_, coin)| coin.asset_id)
-            .into_iter()
-            .map(|(asset_id, coins)| {
-                let sum_amount = coins.map(|(_, coin)| coin.amount).sum();
+                    // Get or create the balance for the asset
+                    let balance = if let Some(i) =
+                        balances.iter().position(|b| b.asset_id == coin.asset_id)
+                    {
+                        &mut balances[i]
+                    } else {
+                        let balance = Balance {
+                            owner: filter.owner.into(),
+                            amount: 0,
+                            asset_id: coin.asset_id,
+                        };
+                        balances.push(balance);
+                        balances.last_mut().unwrap()
+                    };
 
-                Balance {
-                    owner: filter.owner.into(),
-                    amount: sum_amount,
-                    asset_id,
-                }
-            })
-            .collect::<Vec<Balance>>();
+                    // Increase the balance
+                    balance.amount += coin.amount;
+
+                    Ok(balances)
+                },
+            )?;
 
         query(
             after,
