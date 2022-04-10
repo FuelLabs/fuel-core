@@ -5,7 +5,7 @@ use fuel_core::{
     service::{Config, FuelService},
 };
 use fuel_gql_client::client::{
-    schema::coin::SchemaCoinStatus, FuelClient, PageDirection, PaginationRequest,
+    schema::coin::CoinStatus as SchemeCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use fuel_storage::Storage;
 use fuel_tx::{AssetId, UtxoId};
@@ -198,7 +198,7 @@ async fn only_unspent_coins() {
     assert!(coins
         .results
         .into_iter()
-        .all(|c| c.status == SchemaCoinStatus::Unspent));
+        .all(|c| c.status == SchemeCoinStatus::Unspent));
 }
 
 #[tokio::test]

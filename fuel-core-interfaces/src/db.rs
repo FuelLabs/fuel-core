@@ -130,7 +130,7 @@ pub mod helpers {
     pub struct DummyDB {
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
-        pub coins: HashMap<UtxoId, Arc<Coin>>,
+        pub coins: HashMap<UtxoId, Coin>,
         pub contract: HashSet<ContractId>,
     }
 
@@ -551,7 +551,7 @@ pub mod helpers {
                         },
                         _ => continue,
                     };
-                    coins.insert(utxo_id, Arc::new(coin));
+                    coins.insert(utxo_id, coin);
                 }
             }
 
@@ -646,10 +646,7 @@ pub mod helpers {
 
     impl TxPoolDb for DummyDB {
         fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-            Ok(self
-                .coins
-                .get(utxo_id)
-                .map(|coin| coin.clone().as_ref().clone()))
+            Ok(self.coins.get(utxo_id).cloned())
         }
 
         fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {

@@ -19,7 +19,7 @@ test = false
 
 [dependencies]
 anyhow = "1.0"
-async-graphql = { version = "=2.9", features = [
+async-graphql = { version = "2.9", features = [
     "chrono",
     "chrono-tz",
     "tracing",

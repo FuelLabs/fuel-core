@@ -49,7 +49,7 @@ type Coin {
 	amount: U64!
 	assetId: AssetId!
 	maturity: U64!
-	status: SchemaCoinStatus!
+	status: CoinStatus!
 	blockCreated: U64!
 }
 type CoinConnection {
@@ -89,6 +89,10 @@ type CoinOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
+}
+enum CoinStatus {
+	UNSPENT
+	SPENT
 }
 type Contract {
 	id: ContractId!
@@ -237,10 +241,6 @@ enum ReturnType {
 	REVERT
 }
 scalar Salt
-enum SchemaCoinStatus {
-	UNSPENT
-	SPENT
-}
 input SpendQueryElementInput {
 	"""
 	Asset ID of the coins
