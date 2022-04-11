@@ -47,13 +47,14 @@ pub struct P2PConfig {
 }
 
 /// Transport for libp2p communication:
-/// tokio's TCP/IP
+/// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub async fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let tcp = libp2p::tcp::TokioTcpConfig::new().nodelay(true);
-        libp2p::dns::TokioDnsConfig::system(tcp).expect("Failed to build transport")
+        let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
+        let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
+        libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
     };
 
     let auth_config = {
