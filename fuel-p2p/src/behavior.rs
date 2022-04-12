@@ -209,7 +209,7 @@ impl FuelBehaviour {
     ) -> Poll<
         NetworkBehaviourAction<
             <Self as NetworkBehaviour>::OutEvent,
-            <Self as NetworkBehaviour>::ProtocolsHandler,
+            <Self as NetworkBehaviour>::ConnectionHandler,
         >,
     > {
         match self.events.pop_front() {
