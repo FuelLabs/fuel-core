@@ -54,6 +54,22 @@ impl TxQuery {
         }
     }
 
+    async fn dependent_transactions(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "Locates all dependent transactions")] id: TransactionId,
+    ) -> async_graphql::Result<Option<Vec<Transaction>>> {
+
+        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+
+        let found_tx = tx_pool.dependent_transactions(id).await.unwrap(); // TODO Fix this ugly unwrap
+
+        // Converts from Transaction enum to type, similar naming makes this confusing though
+        let returnable_txs = found_tx.into_iter().map(|tx| Transaction(tx)).collect();
+
+        Ok(Some(returnable_txs))
+    }
+    
     async fn transactions(
         &self,
         ctx: &Context<'_>,

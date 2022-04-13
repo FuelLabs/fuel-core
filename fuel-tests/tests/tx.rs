@@ -123,6 +123,35 @@ async fn submit() {
 }
 
 #[tokio::test]
+async fn dependent_tx() {
+
+
+    let config = Arc::new(Config::default());
+    let db = DummyDB::filled();
+
+    let tx1_hash = *TX_ID1;
+    let tx5_hash = *TX_ID5;
+    let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+    let tx5 = Arc::new(DummyDB::dummy_tx(tx5_hash));
+    let mut txpool = TxPool::new(config);
+
+    let out = txpool.insert(tx1, &db).await;
+    assert!(out.is_ok(), "Tx1 should be Ok:{:?}", out);
+    let out = txpool.insert(tx5, &db).await;
+    assert!(out.is_ok(), "Tx5 should be Ok:{:?}", out);
+
+
+    /*
+        I expect that the transaction id I'm searching from is included in the response.
+        I expect that transactions with overlapping txo inputs and outputs will
+        form an ordered priority list based on their dependencies and then by gas price.
+    */
+
+    let is_sorted = dependent_txs.unwrap().unwrap().transaction;
+    assert_eq!(is_sorted.id(), id.0);
+}
+
+#[tokio::test]
 async fn submit_utxo_verified_tx() {
     let config = Config {
         utxo_validation: true,
