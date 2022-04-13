@@ -13,6 +13,7 @@ use thiserror::Error;
 
 pub use primitives::*;
 
+pub mod balance;
 pub mod block;
 pub mod chain;
 pub mod coin;
