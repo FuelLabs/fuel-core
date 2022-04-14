@@ -9,14 +9,14 @@ use crate::{database::Database, schema::block::Block};
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::db::KvStoreError;
-use fuel_storage::Storage;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_interfaces::txpool::TxPool;
-use fuel_types::bytes::SerializableVec;
+use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_storage::Storage;
 use fuel_txpool::Config;
-use std::sync::Arc;
 use fuel_txpool::TxPoolService;
+use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
+use std::sync::Arc;
 
 pub struct ProgramState {
     return_type: ReturnType,

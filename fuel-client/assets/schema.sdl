@@ -222,7 +222,6 @@ type Query {
 	chain: ChainInfo!
 	version: String!
 	transaction(id: TransactionId!): Transaction
-	dependentTransactions(id: TransactionId!): [Transaction!]
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
 	"""

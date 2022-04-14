@@ -1,7 +1,6 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::{ExecutionMode, Executor};
 use crate::model::fuel_block::{FuelBlock, FuelBlockHeader};
-use crate::schema::scalars::TransactionId;
 use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
@@ -148,14 +147,6 @@ impl TxPool {
             .await
             .map_err(Error::Execution)?;
         Ok(tx_id)
-    }
-
-    pub async fn dependent_transactions(&self, tx_id: TransactionId) -> Result<Vec<Transaction>, Error> {
-        let dependent_txs =self.fuel_txpool.find_dependent(&[tx_id.0]).await.clone();
-
-        let returnable_txs = dependent_txs.into_iter().map(|transaction| Transaction::clone(&*transaction)).collect();
-
-        Ok(returnable_txs)
     }
 
     pub async fn run_tx(&self, tx: Transaction) -> Result<Vec<Receipt>, Error> {
