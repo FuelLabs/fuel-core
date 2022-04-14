@@ -160,17 +160,6 @@ impl FuelClient {
         Ok(transaction.map(|tx| tx.try_into()).transpose()?)
     }
 
-    pub async fn dependent_transactions(
-        &self,
-        id: &str,
-    ) -> io::Result<Option<TransactionResponse>> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
-
-        let transaction = self.query(query).await?.transaction;
-
-        Ok(transaction.map(|tx| tx.try_into()).transpose()?)
-    }
-
     /// Get the status of a transaction
     pub async fn transaction_status(&self, id: &str) -> io::Result<TransactionStatus> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
