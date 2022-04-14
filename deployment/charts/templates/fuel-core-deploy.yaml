@@ -13,6 +13,14 @@ spec:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-chainspec-configmap
+data:
+  chainspec.json: |-
+{{ .Files.Get .Values.app.config.chainspec | indent 4 }}
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -79,3 +87,6 @@ spec:
         - name: {{ .Values.app.volume.pvname }}
           persistentVolumeClaim:
             claimName: {{ .Values.app.volume.claimname }}
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-chainspec-configmap
