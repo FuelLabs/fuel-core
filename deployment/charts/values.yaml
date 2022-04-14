@@ -13,8 +13,6 @@ app:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
     pullPolicy: Always
-  config:
-    chainspec: ${chain_spec_file}
   volume: 
     pvname: db-volume
     mountPath: /mnt/db/

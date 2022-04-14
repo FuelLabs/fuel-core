@@ -19,7 +19,7 @@ metadata:
   name: {{ .Release.Name }}-chainspec-configmap
 data:
   chainspec.json: |-
-{{ .Files.Get .Values.app.config.chainspec | indent 4 }}
+{{ .Files.Get "chainspec.json" | indent 4 }}
 ---
 kind: Service
 apiVersion: v1
