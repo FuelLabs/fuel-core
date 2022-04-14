@@ -25,18 +25,6 @@ pub struct TransactionQuery {
     pub transaction: Option<OpaqueTransaction>,
 }
 
-/// Retrieves the transaction in opaque form
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    argument_struct = "TxIdArgs"
-)]
-pub struct DependentTransactionsQuery {
-    #[arguments(id = &args.id)]
-    pub dependent_transactions: Option<Vec<OpaqueTransaction>>,
-}
-
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",

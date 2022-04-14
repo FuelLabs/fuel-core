@@ -224,13 +224,9 @@ impl Transaction {
 
         let txpool = TxPoolService::new(tx_pooldb, Arc::new(Config::default()));
 
-        let self_id = self.0.id();
+        let transaction_in_pool = txpool.find(&[self.0.id()]).await;
 
-        let do_i_exist = txpool.find(&[self_id]).await;
-
-        let result = do_i_exist.get(0).unwrap().is_some();
-
-        if result {
+        if  transaction_in_pool.get(0).and_then(|y| y.as_ref()).is_some() {
             // TODO, fix this part where submitted time is lied about
             let time = chrono::Utc::now();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
