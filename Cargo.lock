@@ -2198,9 +2198,11 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "fuel-core 0.5.0",
+ "fuel-core-interfaces",
  "fuel-gql-client 0.5.0",
  "fuel-storage",
  "fuel-tx 0.7.0",
+ "fuel-txpool",
  "fuel-types 0.3.0",
  "fuel-vm 0.6.0",
  "insta",

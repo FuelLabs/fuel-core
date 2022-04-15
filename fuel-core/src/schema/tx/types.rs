@@ -4,19 +4,16 @@ use super::receipt::Receipt;
 use crate::model::fuel_block::FuelBlockDb;
 use crate::schema::contract::Contract;
 use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
+use crate::schema::tx::Arc;
 use crate::tx_pool::TransactionStatus as TxStatus;
+use crate::tx_pool::TxPool;
 use crate::{database::Database, schema::block::Block};
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::txpool::TxPool;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_storage::Storage;
-use fuel_txpool::Config;
-use fuel_txpool::TxPoolService;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
-use std::sync::Arc;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -220,17 +217,13 @@ impl Transaction {
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
 
-        let tx_pooldb = Box::new(db.clone()) as Box<dyn TxPoolDb>;
-
-        let txpool = TxPoolService::new(tx_pooldb, Arc::new(Config::default()));
+        let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
 
         let transaction_in_pool = txpool.find(&[self.0.id()]).await;
 
-        if transaction_in_pool
-            .get(0)
-            .and_then(|tx| tx.as_ref())
-            .is_some()
+        if transaction_in_pool.get(0).unwrap().is_some() && db.get_tx_status(&self.0.id()).is_err()
         {
+            println!("{:?}", db.get_tx_status(&self.0.id())?);
             // TODO, fix this part where submitted time is lied about
             let time = chrono::Utc::now();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))

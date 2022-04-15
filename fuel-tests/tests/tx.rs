@@ -6,13 +6,19 @@ use fuel_core::{
     executor::Executor,
     service::{Config, FuelService},
 };
+use fuel_core_interfaces::db::helpers::*;
+use fuel_core_interfaces::txpool::TxPool;
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_tx::Transaction;
+use fuel_txpool::Config as TxPoolConfig;
+use fuel_txpool::TxPoolService;
 use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::io;
+use std::sync::Arc;
 
 #[test]
 fn basic_script_snapshot() {
@@ -155,7 +161,6 @@ async fn submit_utxo_verified_tx() {
 
         if let TransactionStatus::Success { block_id, .. } = transaction_result.clone() {
             let block_exists = client.block(&block_id).await.unwrap();
-
             assert!(block_exists.is_some());
         }
 
@@ -163,6 +168,23 @@ async fn submit_utxo_verified_tx() {
             transaction_result,
             TransactionStatus::Success { .. }
         ));
+    }
+}
+
+#[tokio::test]
+async fn test_tx_status_submitted() {
+    let config = Arc::new(TxPoolConfig::default());
+    let db = Box::new(DummyDB::filled());
+
+    let new_pool = TxPoolService::new(db, config);
+
+    let transactions = (1..10 + 1)
+        .into_iter()
+        .map(|i| TxBuilder::new(2322u64).gas_limit(i * 1000).build())
+        .collect_vec();
+
+    for tx in transactions {
+        let result = new_pool.insert(vec![Arc::new(tx)]).await;
     }
 }
 
