@@ -6,7 +6,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     echo "Updating your kube context locally ...."
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     echo "Copying chainspec into deployment context..."
-    cp ${chain_spec_file} ../charts/chainspec.json
+    cp chainspec/${chain_spec_file} ../charts/chainspec.json
     cd ../charts
     mv values.yaml values.template 
     envsubst < values.template > values.yaml
