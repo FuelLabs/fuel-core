@@ -1,6 +1,8 @@
 use crate::model::fuel_block::BlockHeight;
 use core::fmt;
-use serde::{Deserializer, Serializer};
+use fuel_types::bytes::WORD_SIZE;
+use fuel_types::Word;
+use serde::{de::Error, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
 use std::convert::TryFrom;
 
@@ -17,12 +19,24 @@ impl SerializeAs<u64> for HexNumber {
     }
 }
 
-impl<'de> DeserializeAs<'de, u64> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<u64, D::Error>
+impl<'de> DeserializeAs<'de, Word> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<Word, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(u64::from_be_bytes(serde_hex::deserialize(deserializer)?))
+        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+        if bytes.len() < WORD_SIZE {
+            // pad bytes to correct length
+            bytes = (0..WORD_SIZE - bytes.len())
+                .map(|_| 0u8)
+                .chain(bytes.into_iter())
+                .collect();
+        } else if bytes.len() > WORD_SIZE {
+            return Err(D::Error::custom(""));
+        }
+        Ok(Word::from_be_bytes(
+            bytes.try_into().expect("byte lengths checked"),
+        ))
     }
 }
 
