@@ -13,7 +13,9 @@ pub struct ChainInfo;
 impl ChainInfo {
     async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
         let db = ctx.data_unchecked::<Database>().clone();
-        let name = db.get_chain_name()?.unwrap_or(DEFAULT_NAME.to_string());
+        let name = db
+            .get_chain_name()?
+            .unwrap_or_else(|| DEFAULT_NAME.to_string());
         Ok(name)
     }
 

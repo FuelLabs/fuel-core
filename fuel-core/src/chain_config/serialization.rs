@@ -25,14 +25,18 @@ impl<'de> DeserializeAs<'de, Word> for HexNumber {
         D: Deserializer<'de>,
     {
         let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
-        if bytes.len() < WORD_SIZE {
-            // pad bytes to correct length
-            bytes = (0..WORD_SIZE - bytes.len())
-                .map(|_| 0u8)
-                .chain(bytes.into_iter())
-                .collect();
-        } else if bytes.len() > WORD_SIZE {
-            return Err(D::Error::custom(""));
+        match bytes.len() {
+            len if len > WORD_SIZE => {
+                return Err(D::Error::custom(""));
+            }
+            len if len < WORD_SIZE => {
+                // pad if length < word size
+                bytes = (0..WORD_SIZE - len)
+                    .map(|_| 0u8)
+                    .chain(bytes.into_iter())
+                    .collect();
+            }
+            _ => {}
         }
         Ok(Word::from_be_bytes(
             bytes.try_into().expect("byte lengths checked"),
