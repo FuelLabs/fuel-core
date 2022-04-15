@@ -7,3 +7,6 @@ pub mod schema;
 pub mod service;
 pub mod state;
 pub mod tx_pool;
+
+#[cfg(test)]
+pub mod test_utils;
