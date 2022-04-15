@@ -65,6 +65,7 @@ pub struct FuelService {
 
 impl FuelService {
     /// Create a fuel node instance from service config
+    #[tracing::instrument(skip(config))]
     pub async fn new_node(config: Config) -> Result<Self, std::io::Error> {
         // initialize database
         let database = match config.database_type {
