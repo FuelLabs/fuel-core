@@ -6,7 +6,7 @@ use std::convert::TryInto;
 #[tokio::test]
 async fn start_session() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
+    let client = FuelClient::from(Some(srv.bound_address));
 
     let session = client.start_session().await.unwrap();
     let session_p = client.start_session().await.unwrap();
