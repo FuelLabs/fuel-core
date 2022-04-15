@@ -34,7 +34,7 @@ pub struct MessageExchangeBincodeCodec {}
 /// We expect the substream to be properly closed when response channel is dropped.
 /// Since the request protocol used here expects a response, the sender considers this
 /// early close as a protocol violation which results in the connection being closed.
-/// If the substream were not properly closed when dropped, the sender would instead
+/// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
 impl RequestResponseCodec for MessageExchangeBincodeCodec {

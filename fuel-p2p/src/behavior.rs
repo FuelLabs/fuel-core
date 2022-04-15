@@ -1,7 +1,7 @@
 use crate::{
     config::{P2PConfig, REQ_RES_TIMEOUT},
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
-    gossipsub,
+    gossipsub::{self, messages::GossipsubMessage as FuelGossipsubMessage},
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
     request_response::{
         codec::{MessageExchangeBincodeCodec, MessageExchangeBincodeProtocol},
@@ -29,7 +29,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::sync::oneshot;
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -40,7 +40,7 @@ pub enum FuelBehaviourEvent {
     GossipsubMessage {
         peer_id: PeerId,
         topic_hash: TopicHash,
-        message: Vec<u8>,
+        message: FuelGossipsubMessage,
     },
     RequestMessage {
         request_id: RequestId,
@@ -273,11 +273,18 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
             message_id: _,
         } = message
         {
-            self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
-                peer_id: propagation_source,
-                topic_hash: message.topic,
-                message: message.data,
-            })
+            match FuelGossipsubMessage::decode(&message.data) {
+                Ok(decoded_message) => {
+                    self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
+                        peer_id: propagation_source,
+                        topic_hash: message.topic,
+                        message: decoded_message,
+                    })
+                }
+                Err(err) => {
+                    warn!(target: "fuel-libp2p", "Failed to decode a message: {:?} with error: {:?}", &message.data, err);
+                }
+            }
         }
     }
 }
