@@ -74,7 +74,7 @@ spec:
             - "--db-path"
             - "{{ .Values.app.volume.mountPath }}"
             - "--chain"
-            - "./mnt/config/chainspec.json"
+            - "/mnt/config/chainspec.json"
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
