@@ -35,8 +35,7 @@ impl FromStr for FuelClient {
     }
 }
 
-impl From<net::SocketAddr> for FuelClient
-{
+impl From<net::SocketAddr> for FuelClient {
     fn from(socket: net::SocketAddr) -> Self {
         let url = format!("http://{}/graphql", socket)
             .as_str()
@@ -47,12 +46,11 @@ impl From<net::SocketAddr> for FuelClient
     }
 }
 
-impl From<Option<net::SocketAddr>> for FuelClient
-{
+impl From<Option<net::SocketAddr>> for FuelClient {
     fn from(option: Option<net::SocketAddr>) -> Self {
         match option {
             Some(url) => return FuelClient::from(url),
-            None => panic!("Url is missing!")
+            None => panic!("Url is missing!"),
         }
     }
 }
