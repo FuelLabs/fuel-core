@@ -37,7 +37,7 @@ impl FromStr for FuelClient {
             Err(anyhow!("Url is missing /graphql path".to_string()))
         } else {
             Ok(Self {
-                url: surf::Url::parse(&str)?,
+                url: surf::Url::parse(str)?,
             })
         }
     }
