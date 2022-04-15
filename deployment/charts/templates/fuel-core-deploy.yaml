@@ -64,9 +64,8 @@ spec:
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
-          command: ["exec"]
+          command: ["./fuel-core"]
           args:
-            - "./fuel-core"
             - "--ip"
             - "0.0.0.0"
             - "--port"
