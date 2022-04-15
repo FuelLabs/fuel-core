@@ -2051,6 +2051,7 @@ dependencies = [
 name = "fuel-gql-client"
 version = "0.5.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "clap 3.1.2",
  "cynic",

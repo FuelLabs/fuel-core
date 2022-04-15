@@ -10,6 +10,7 @@ use std::{
 pub mod schema;
 pub mod types;
 
+use anyhow::anyhow;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
@@ -28,10 +29,17 @@ pub struct FuelClient {
 }
 
 impl FromStr for FuelClient {
-    type Err = net::AddrParseError;
+    type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        str.parse().map(|s: net::SocketAddr| s.into())
+        // lightweight url verification
+        if !str.contains("/graphql") {
+            Err(anyhow!("Url is missing /graphql path".to_string()))
+        } else {
+            Ok(Self {
+                url: surf::Url::parse(str)?,
+            })
+        }
     }
 }
 
@@ -50,7 +58,7 @@ where
 }
 
 impl FuelClient {
-    pub fn new(url: impl AsRef<str>) -> Result<Self, net::AddrParseError> {
+    pub fn new(url: impl AsRef<str>) -> Result<Self, anyhow::Error> {
         Self::from_str(url.as_ref())
     }
 

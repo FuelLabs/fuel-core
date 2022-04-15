@@ -15,6 +15,7 @@ name = "fuel-gql-cli"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "0.14", features = ["surf"] }
