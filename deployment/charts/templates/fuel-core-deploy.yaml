@@ -64,6 +64,17 @@ spec:
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          command: ["exec"]
+          args:
+            - "./fuel-core"
+            - "--ip"
+            - "0.0.0.0"
+            - "--port"
+            - "4000"
+            - "--db-path"
+            - "{{ .Values.app.volume.mountPath }}"
+            - "--chain"
+            - "./mnt/config/chainspec.json"
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
@@ -80,6 +91,8 @@ spec:
           volumeMounts:
             - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
+            - name: config
+              mountPath: "/mnt/config"
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
