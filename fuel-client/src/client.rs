@@ -48,10 +48,11 @@ impl From<net::SocketAddr> for FuelClient {
 
 impl From<Option<net::SocketAddr>> for FuelClient {
     fn from(option: Option<net::SocketAddr>) -> Self {
-        match option {
-            Some(url) => return FuelClient::from(url),
+        let client = match option {
+            Some(url) => FuelClient::from(url),
             None => panic!("Url is missing!"),
-        }
+        };
+        client
     }
 }
 
