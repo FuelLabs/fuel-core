@@ -241,6 +241,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       
+      - name: Deploy Fuel-Core Developer Environment
+        uses: peter-evans/repository-dispatch@v2
+        if: github.event.inputs.delete-infra == 'true'
+        with:
+          token: ${{ secrets.REPO_TOKEN }} # Personal Access Token to trigger repository_dispatch actions
+          repository: FuelLabs/fuel-deployment
+          event-type: deploy-fuel-core-dev
+          client-payload: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "k8s-type": "${{ env.K8S }}" }'
+        env:
+          CONFIG: "fuel-dev1"
+          K8S: "eks"
+          ENV: "fueldevsway.env"
+          
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always()
