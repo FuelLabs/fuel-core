@@ -263,8 +263,6 @@ impl DapMutation {
     ) -> async_graphql::Result<self::gql_types::RunResult> {
         trace!("Spawning a new VM instance");
 
-        dbg!(&tx_json);
-
         let tx: Transaction = serde_json::from_str(&tx_json)
             .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
 
