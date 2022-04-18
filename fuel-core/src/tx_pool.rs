@@ -141,13 +141,11 @@ impl TxPool {
             },
             transactions: includable_txs,
         };
-
         // immediately execute block
         self.executor
             .execute(&mut block, ExecutionMode::Production)
             .await
             .map_err(Error::Execution)?;
-
         Ok(tx_id)
     }
 
