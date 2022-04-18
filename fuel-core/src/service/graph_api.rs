@@ -20,6 +20,7 @@ use axum::{
 };
 use serde_json::json;
 use std::{
+    fs,
     net::{SocketAddr, TcpListener},
     sync::Arc,
 };
@@ -34,8 +35,13 @@ pub async fn start_server(
     tx_pool: Arc<TxPool>,
 ) -> Result<(SocketAddr, JoinHandle<Result<(), crate::service::Error>>), std::io::Error> {
     let network_addr = config.addr;
+    let dump_schema = config.dump_schema.clone();
     let schema = build_schema().data(db).data(tx_pool).data(config);
     let schema = dap::init(schema).extension(Tracing).finish();
+
+    if let Some(path) = dump_schema.as_ref() {
+        fs::write(path, schema.sdl())?;
+    }
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))

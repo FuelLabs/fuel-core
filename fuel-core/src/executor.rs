@@ -11,14 +11,10 @@ use fuel_tx::{
     Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId, ValidationError,
 };
 use fuel_types::{bytes::SerializableVec, ContractId};
-#[cfg(feature = "debug")]
-use fuel_vm::state::DebugEval;
 use fuel_vm::{
     consts::REG_SP,
     prelude::{Backtrace as FuelBacktrace, Interpreter, ProgramState, StateTransitionRef},
 };
-#[cfg(feature = "debug")]
-use std::net::TcpStream;
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
@@ -92,17 +88,6 @@ impl Executor {
                 block_db_transaction.deref_mut(),
             )?;
 
-            #[cfg(feature = "debug")]
-            let mut debugger_socket = if let Some(debugger_addr) = self.config.debugger_addr {
-                debug!("Debugger starting");
-                let stream =
-                    TcpStream::connect(debugger_addr).expect("Unable to connect to the debugger");
-                let _ = stream.set_nodelay(true); // TCP_NODELAY if possible
-                Some(stream)
-            } else {
-                None
-            };
-
             // execute transaction
             // setup database view that only lives for the duration of vm execution
             let mut sub_block_db_commit = block_db_transaction.transaction();
@@ -119,38 +104,13 @@ impl Executor {
                 output
             };
 
-            // Allow the debugger, if any, to do pre-run setup
-            #[cfg(feature = "debug")]
-            if let Some(ds) = debugger_socket.as_mut() {
-                fuel_debugger::process(ds, &mut vm, None);
-            }
-
             // Initiate transaction
-            let mut state = ProgramState::from(vm.transact(tx.clone()).map_err(|error| {
+            let state = ProgramState::from(vm.transact(tx.clone()).map_err(|error| {
                 Error::VmExecution {
                     error,
                     transaction_id: tx_id,
                 }
             })?);
-
-            // If the debugger is connected, catch breakpoints for it
-            #[cfg(feature = "debug")]
-            if let Some(ds) = debugger_socket.as_mut() {
-                while let Some(dbg_ref) = state.debug_ref() {
-                    let event = match dbg_ref {
-                        DebugEval::Continue => continue,
-                        DebugEval::Breakpoint(bp) => fuel_debugger::Response::Breakpoint(*bp),
-                    };
-                    fuel_debugger::process(ds, &mut vm, Some(event));
-                    state = vm.resume().expect("Failed to resume");
-                }
-
-                // On termination, inform the debugger and run it one more time
-                let resp = fuel_debugger::Response::Terminated {
-                    receipts: vm.receipts().to_vec(),
-                };
-                fuel_debugger::process(ds, &mut vm, Some(resp));
-            }
 
             let vm_result = StateTransitionRef::new(state, vm.transaction(), vm.receipts());
 

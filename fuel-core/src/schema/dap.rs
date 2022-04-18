@@ -193,6 +193,24 @@ impl DapMutation {
         Ok(result)
     }
 
+    async fn set_single_stepping(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+        enable: bool,
+    ) -> async_graphql::Result<bool> {
+        trace!("Set single stepping to {} for VM {:?}", enable, id);
+
+        let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        vm.set_single_stepping(enable);
+        Ok(enable)
+    }
+
     async fn set_breakpoint(
         &self,
         ctx: &Context<'_>,
@@ -202,7 +220,11 @@ impl DapMutation {
         trace!("Continue exectuon of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked.vm.get_mut(&id).expect("TODO: error: VM not found");
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
         vm.set_breakpoint(breakpoint.into());
         Ok(true)
     }
@@ -217,13 +239,18 @@ impl DapMutation {
 
         dbg!(&tx_json);
 
-        let tx: Transaction = serde_json::from_str(&tx_json).expect("TODO: error: invalid json");
+        let tx: Transaction = serde_json::from_str(&tx_json)
+            .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked.vm.get_mut(&id).expect("TODO: error: VM not found");
-        let state_ref = vm.transact(tx).expect("TODO: error: transact");
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        // TODO: persist result on success
+        let state_ref = vm
+            .transact(tx)
+            .map_err(|err| async_graphql::Error::new(format!("Fransaction failed: {err:?}")))?;
 
         let dbgref = state_ref.state().debug_ref();
 
@@ -247,12 +274,22 @@ impl DapMutation {
         trace!("Continue exectuon of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-        let vm = locked.vm.get_mut(&id).expect("TODO: error: VM not found");
-        let state = vm.resume().expect("Failed to resume");
-
-        dbg!(state);
-
-        // TODO: persist result on success
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let state = match vm.resume() {
+            Ok(state) => state,
+            // The transaction was already completed earlier, so it cannot be resumed
+            Err(fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+                return Ok(self::gql_types::RunResult {
+                    state: self::gql_types::RunState::Completed,
+                    breakpoint: None,
+                })
+            }
+            // The transaction was already completed earlier, so it cannot be resumed
+            Err(err) => return Err(async_graphql::Error::new(format!("VM error: {err:?}"))),
+        };
 
         let dbgref = state.debug_ref();
 
@@ -318,13 +355,13 @@ mod gql_types {
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
-        contract: ContractId,
+        contract: [u8; 32],
         pc: Word,
     }
     impl From<&FuelBreakpoint> for Breakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
-                contract: bp.contract().into(),
+                contract: **bp.contract(),
                 pc: bp.pc(),
             }
         }
