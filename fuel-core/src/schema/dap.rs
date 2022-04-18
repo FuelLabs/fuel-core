@@ -424,6 +424,8 @@ mod gql_types {
         }
     }
 
+    /// A separate `Breakpoint` type to be used as an output, as a single
+    /// type cannot act as both input and output type in async-graphql
     #[derive(Debug, Clone, Copy, SimpleObject)]
     pub struct OutputBreakpoint {
         contract: OutputContractId,
