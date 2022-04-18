@@ -193,6 +193,19 @@ impl DapMutation {
         Ok(result)
     }
 
+    #[cfg(not(feature = "debug"))]
+    async fn set_single_stepping(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+        _enable: bool,
+    ) -> async_graphql::Result<bool> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
     async fn set_single_stepping(
         &self,
         ctx: &Context<'_>,
@@ -211,6 +224,19 @@ impl DapMutation {
         Ok(enable)
     }
 
+    #[cfg(not(feature = "debug"))]
+    async fn set_breakpoint(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+        _breakpoint: self::gql_types::Breakpoint,
+    ) -> async_graphql::Result<bool> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
     async fn set_breakpoint(
         &self,
         ctx: &Context<'_>,
@@ -252,20 +278,43 @@ impl DapMutation {
             .transact(tx)
             .map_err(|err| async_graphql::Error::new(format!("Fransaction failed: {err:?}")))?;
 
-        let dbgref = state_ref.state().debug_ref();
+        #[cfg(feature = "debug")]
+        {
+            let dbgref = state_ref.state().debug_ref();
+            Ok(self::gql_types::RunResult {
+                state: match dbgref {
+                    Some(_) => self::gql_types::RunState::Breakpoint,
+                    None => self::gql_types::RunState::Completed,
+                },
+                breakpoint: dbgref.and_then(|d| match d {
+                    DebugEval::Continue => None,
+                    DebugEval::Breakpoint(bp) => Some(bp.into()),
+                }),
+            })
+        }
 
-        Ok(self::gql_types::RunResult {
-            state: match dbgref {
-                Some(_) => self::gql_types::RunState::Breakpoint,
-                None => self::gql_types::RunState::Completed,
-            },
-            breakpoint: dbgref.and_then(|d| match d {
-                DebugEval::Continue => None,
-                DebugEval::Breakpoint(bp) => Some(bp.into()),
-            }),
-        })
+        #[cfg(not(feature = "debug"))]
+        {
+            let _ = state_ref;
+            Ok(self::gql_types::RunResult {
+                state: self::gql_types::RunState::Completed,
+                breakpoint: None,
+            })
+        }
     }
 
+    #[cfg(not(feature = "debug"))]
+    async fn continue_tx(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+    ) -> async_graphql::Result<self::gql_types::RunResult> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
     async fn continue_tx(
         &self,
         ctx: &Context<'_>,
@@ -311,6 +360,7 @@ mod gql_types {
     use async_graphql::*;
 
     use fuel_types::Word;
+    #[cfg(feature = "debug")]
     use fuel_vm::prelude::Breakpoint as FuelBreakpoint;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, InputObject)]
@@ -358,6 +408,8 @@ mod gql_types {
         contract: [u8; 32],
         pc: Word,
     }
+
+    #[cfg(feature = "debug")]
     impl From<&FuelBreakpoint> for Breakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
@@ -366,6 +418,8 @@ mod gql_types {
             }
         }
     }
+
+    #[cfg(feature = "debug")]
     impl From<Breakpoint> for FuelBreakpoint {
         fn from(bp: Breakpoint) -> Self {
             Self::new(bp.contract.into(), bp.pc)
@@ -377,6 +431,8 @@ mod gql_types {
         contract: OutputContractId,
         pc: Word,
     }
+
+    #[cfg(feature = "debug")]
     impl From<&FuelBreakpoint> for OutputBreakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
@@ -385,6 +441,8 @@ mod gql_types {
             }
         }
     }
+
+    #[cfg(feature = "debug")]
     impl From<OutputBreakpoint> for FuelBreakpoint {
         fn from(bp: OutputBreakpoint) -> Self {
             Self::new(bp.contract.into(), bp.pc)

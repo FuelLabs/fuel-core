@@ -26,7 +26,6 @@ pub mod graph_api;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: net::SocketAddr,
-    pub dump_schema: Option<PathBuf>,
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
@@ -40,7 +39,6 @@ impl Config {
     pub fn local_node() -> Self {
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            dump_schema: None,
             database_path: Default::default(),
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
