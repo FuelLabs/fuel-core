@@ -223,7 +223,6 @@ impl Transaction {
 
         if transaction_in_pool.get(0).unwrap().is_some() && db.get_tx_status(&self.0.id()).is_err()
         {
-            println!("{:?}", db.get_tx_status(&self.0.id())?);
             // TODO, fix this part where submitted time is lied about
             let time = chrono::Utc::now();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
