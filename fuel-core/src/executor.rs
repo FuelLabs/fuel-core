@@ -174,19 +174,6 @@ impl Executor {
                 block_db_transaction.deref_mut(),
             )?;
 
-            // write profile to disk
-            // TODO: move behind a command line switch
-            #[cfg(feature = "profiling")]
-            {
-                let guard = output.data.lock().unwrap();
-                let profiling_data = guard
-                    .as_ref()
-                    .expect("Profile data was requested but not recorded");
-                let json_data = serde_json::to_vec(&profiling_data).expect("Serialization failed");
-                std::fs::write("profile_xyz.json", json_data)
-                    .expect("Couldn't write profile data to disk");
-            }
-
             let status = if vm_result.should_revert() {
                 self.log_backtrace(&vm, vm_result.receipts());
                 // get reason for revert

@@ -88,5 +88,5 @@ insta = "1.8"
 [features]
 default = ["rocksdb", "debug"]
 debug = ["fuel-vm/debug"]
-profiling = ["fuel-vm/serde", "fuel-vm/profile-gas", "fuel-vm/profile-trace"]
+profiling = ["fuel-vm/serde", "fuel-vm/profile-gas"]
 test-helpers = []
