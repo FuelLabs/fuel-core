@@ -26,13 +26,6 @@ pub struct Opt {
     #[clap(long = "port", default_value = "4000")]
     pub port: u16,
 
-    /// If specified, transactions are not executed immediately when received.
-    /// Instead, a TCP socket to the given address is opened, and a remote debugger
-    /// listening to that port can then be used to control the program execution.
-    #[cfg(feature = "debug")]
-    #[clap(long)]
-    pub debugger_addr: Option<net::SocketAddr>,
-
     /// Export GraphQL schema to a file
     #[clap(long = "dump-schema", parse(from_os_str))]
     pub dump_schema: Option<PathBuf>,
@@ -108,8 +101,6 @@ impl Opt {
         let Opt {
             ip,
             port,
-            #[cfg(feature = "debug")]
-            debugger_addr,
             dump_schema,
             database_path,
             database_type,
@@ -124,8 +115,6 @@ impl Opt {
 
         Ok(Config {
             addr,
-            #[cfg(feature = "debug")]
-            debugger_addr,
             dump_schema,
             database_path,
             database_type,

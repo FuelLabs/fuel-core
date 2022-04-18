@@ -13,7 +13,7 @@ use fuel_tx::{
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
     consts::REG_SP,
-    prelude::{Backtrace as FuelBacktrace, Interpreter, ProgramState, StateTransitionRef},
+    prelude::{Backtrace as FuelBacktrace, Interpreter},
 };
 use std::{
     error::Error as StdError,
@@ -92,27 +92,15 @@ impl Executor {
             // setup database view that only lives for the duration of vm execution
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
-
-            // Create VM
+            // execution vm
             let mut vm = Interpreter::with_storage(sub_db_view.clone());
-
-            // TODO: move behind a command line switch
-            #[cfg(feature = "profiling")]
-            let output = {
-                let output = crate::profiling::ProfilingOutput::default();
-                vm = vm.with_profiling(Box::new(output.clone()));
-                output
-            };
-
-            // Initiate transaction
-            let state = ProgramState::from(vm.transact(tx.clone()).map_err(|error| {
-                Error::VmExecution {
+            let vm_result = vm
+                .transact(tx.clone())
+                .map_err(|error| Error::VmExecution {
                     error,
                     transaction_id: tx_id,
-                }
-            })?);
-
-            let vm_result = StateTransitionRef::new(state, vm.transaction(), vm.receipts());
+                })?
+                .into_owned();
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {
