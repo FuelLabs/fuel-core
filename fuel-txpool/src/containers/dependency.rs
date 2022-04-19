@@ -469,8 +469,9 @@ impl Dependency {
                     // call removal on every tx;
                     for rem_tx in state.used_by.iter() {
                         let rem_tx = txs.get(rem_tx).expect("Tx should be present in txs");
-                        removed_tx
-                            .extend(self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()));
+                        removed_tx.extend(
+                            self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                        );
                     }
                 } else {
                     panic!("Contract state should be present when removing child");
