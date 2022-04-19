@@ -216,7 +216,7 @@ Then re-run the fuel-core-deploy script.
 
 ## Deploying Fuel Ingress on k8s
 
-In order to serve external HTTP and/or HTTPS traffic, provide load balancing, and SSL termination to your newly deployed fuel-core pod, an Ingress [ingress-definition][ingress-def] k8s object must be deployed.
+In order to serve external HTTP and/or HTTPS traffic, provide load balancing, and SSL termination to your newly deployed fuel-core pod, an [ingress][ingress-def] k8s object must be deployed.
 
 Before deploying your fuel ingress, you must select a 'fuel_core_ingress_dns' env that will serve as the DNS address for external access of your fuel-core application. The DNS address must be in a DNS domain that you currently own and have access to.
 
@@ -263,7 +263,9 @@ In order to access the grafana dashboard, you can will need to run:
 kubectl port-forward svc/kube-prometheus-grafana 3001:80 -n monitoring
 ```
 
-You can then access the grafana dashboard via localhost:3001. For grafana, the default username is 'admin' and password is 'prom-operator',
+You can then access the grafana dashboard via localhost:3001. 
+
+For grafana console access, the default username is 'admin' and password is 'prom-operator',
 
 If you want to access the grafana dashboard from a custom DNS address, you need to select 'grafana_ingress_dns' env that is a custom DNS address available in your owned DNS domain.
 
