@@ -166,6 +166,17 @@ async fn submit_utxo_verified_tx() {
     }
 }
 
+#[ignore]
+#[tokio::test]
+async fn transaction_status_submitted() {
+    // This test should ensure a transaction's status is Submitted while it is in the mempool
+    // This test should also ensure a transaction's time of submission is correct in the returned status
+    // Currently blocked until https://github.com/FuelLabs/fuel-core/issues/50 is resolved
+    // as execution must be seperate from submission for a tx to persist inside of the txpool
+    // Merge with the submit_utxo_verified_tx test once utxo_verification is the default
+    todo!();
+}
+
 #[tokio::test]
 async fn receipts() {
     let transaction = fuel_tx::Transaction::default();
