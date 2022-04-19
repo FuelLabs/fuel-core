@@ -263,12 +263,10 @@ pub fn random_improve(
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::*;
     use assert_matches::assert_matches;
     use fuel_asm::Word;
     use fuel_tx::Address;
-
-    use crate::model::CoinStatus;
-    use crate::test_utils::*;
 
     use super::*;
 
