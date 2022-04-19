@@ -159,6 +159,7 @@ async fn submit_utxo_verified_tx() {
             assert!(block_exists.is_some());
         }
 
+        // Once https://github.com/FuelLabs/fuel-core/issues/50 is resolved this should rely on the Submitted Status rather than Success
         assert!(matches!(
             transaction_result,
             TransactionStatus::Success { .. }
