@@ -62,7 +62,9 @@ impl TxPool for TxPoolService {
         for hash in hashes {
             res.push(pool.txs().get(hash).cloned());
         }
-        res
+        res.into_iter()
+            .map(|tx| tx.map(|tx| tx.tx().clone()))
+            .collect()
     }
 
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
@@ -71,8 +73,9 @@ impl TxPool for TxPoolService {
         {
             let pool = self.txpool.read().await;
             for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash).cloned() {
-                    pool.dependency().find_dependent(tx, &mut seen, pool.txs());
+                if let Some(tx) = pool.txs().get(hash) {
+                    pool.dependency()
+                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
                 }
             }
         }
