@@ -6,7 +6,7 @@ use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Enum, InputObject, Object,
 };
-use fuel_core_interfaces::models::{Coin as CoinModel, CoinStatus as CoinStatusModel};
+use fuel_core_interfaces::model::{Coin as CoinModel, CoinStatus as CoinStatusModel};
 use fuel_storage::Storage;
 use fuel_tx::consts::MAX_INPUTS;
 use itertools::Itertools;

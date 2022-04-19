@@ -1,4 +1,4 @@
-use crate::models::BlockHeight;
+use crate::model::BlockHeight;
 #[cfg(graphql)]
 use async_graphql::Enum;
 

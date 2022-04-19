@@ -1,3 +1,3 @@
 pub mod db;
-pub mod models;
+pub mod model;
 pub mod txpool;

@@ -111,7 +111,7 @@ impl TxPool {
 pub mod tests {
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::{db::helpers::*, models::CoinStatus};
+    use fuel_core_interfaces::{db::helpers::*, model::CoinStatus};
     use fuel_tx::UtxoId;
     use std::cmp::Reverse;
 

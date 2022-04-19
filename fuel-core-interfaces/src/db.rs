@@ -121,7 +121,7 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        models::{BlockHeight, Coin, CoinStatus},
+        model::{BlockHeight, Coin, CoinStatus},
         txpool::TxPoolDb,
     };
 

@@ -1,4 +1,4 @@
-pub use fuel_core_interfaces::models::{
+pub use fuel_core_interfaces::model::{
     BlockHeight, Coin, CoinStatus, FuelBlock, FuelBlockDb, FuelBlockHeader,
 };
 

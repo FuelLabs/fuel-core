@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::{
     db::{Error as DbStateError, KvStoreError},
-    models::Coin,
+    model::Coin,
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract;

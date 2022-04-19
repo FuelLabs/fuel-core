@@ -1,10 +1,11 @@
 use crate::{types::*, Error};
 use fuel_core_interfaces::{
-    models::{Coin, CoinStatus},
+    model::{Coin, CoinStatus},
     txpool::TxPoolDb,
 };
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
+use anyhow::anyhow;
 
 /// Check and hold dependency between inputs and outputs. Be mindful
 /// about depth of connection
@@ -124,7 +125,7 @@ impl Dependency {
                 }
                 Ok(())
             }
-            _ => panic!("Use it only for coin output check"),
+            _ => Err(anyhow!("Use it only for coin output check")),
         }
     }
 
@@ -201,7 +202,7 @@ impl Dependency {
                 }
             };
         } else {
-            panic!("Use it only for coin output check");
+            return Err(anyhow!("Use it only for coin output check"));
         }
         Ok(())
     }
@@ -249,14 +250,9 @@ impl Dependency {
                             } else {
                                 if state.depth == 0 {
                                     //this means it is loaded from db. Get tx to compare output.
-                                    let db_coin = db.utxo(utxo_id)?;
-                                    if db_coin.is_none() {
-                                        return Err(Error::NotInsertedInputUtxoIdNotExisting(
-                                            *utxo_id,
-                                        )
-                                        .into());
-                                    }
-                                    let coin = db_coin.unwrap();
+                                    let coin = db.utxo(utxo_id)?.ok_or(
+                                        Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
+                                    )?;
                                     Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                                 } else {
                                     // tx output is in pool
@@ -274,11 +270,10 @@ impl Dependency {
                         // if coin is not spend, it will be spend later down the line
                     } else {
                         // fetch from db and check if tx exist.
-                        let db_coin = db.utxo(utxo_id)?;
-                        if db_coin.is_none() {
-                            return Err(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id).into());
-                        }
-                        let coin = db_coin.unwrap();
+                        let coin = db
+                            .utxo(utxo_id)?
+                            .ok_or(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id))?;
+
                         Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                         max_depth = core::cmp::max(1, max_depth);
                         db_coins.insert(
