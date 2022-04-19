@@ -1,8 +1,8 @@
 use chrono::{TimeZone, Utc};
 use fuel_core::database::Database;
-use fuel_core::model::fuel_block::FuelBlockHeader;
+use fuel_core::model::FuelBlockHeader;
 use fuel_core::{
-    model::fuel_block::FuelBlockDb,
+    model::FuelBlockDb,
     schema::scalars::BlockId,
     service::{Config, FuelService},
 };

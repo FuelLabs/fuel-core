@@ -111,7 +111,8 @@ impl TxPool {
 pub mod tests {
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::db::helpers::*;
+    use fuel_core_interfaces::{db::helpers::*, model::CoinStatus};
+    use fuel_tx::UtxoId;
     use std::cmp::Reverse;
 
     #[tokio::test]
@@ -183,7 +184,7 @@ pub mod tests {
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }");
     }
 
     #[tokio::test]
@@ -218,7 +219,28 @@ pub mod tests {
 
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010",);
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }",);
+    }
+
+    #[tokio::test]
+    async fn tx1_try_to_use_spend_coin() {
+        let config = Arc::new(Config::default());
+        let mut db = DummyDB::filled();
+
+        // mark utxo as spend
+        db.coins
+            .get_mut(&UtxoId::new(*TX_ID_DB1, 0))
+            .unwrap()
+            .status = CoinStatus::Spent;
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_err(), "Tx1 should be error");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is spent: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000000, output_index: 0 }",);
     }
 
     #[tokio::test]

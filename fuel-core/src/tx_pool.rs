@@ -1,6 +1,6 @@
 use crate::database::{Database, KvStoreError};
 use crate::executor::{ExecutionMode, Executor};
-use crate::model::fuel_block::{FuelBlock, FuelBlockHeader};
+use crate::model::{FuelBlock, FuelBlockHeader};
 use crate::service::Config;
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};

@@ -13,14 +13,18 @@ description = "Fuel core interfaces"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
+chrono = "0.4"
+derive_more = { version = "0.99" }
 fuel-asm = "0.3"
+fuel-crypto = { version = "0.4", default-features = false }
 fuel-storage = "0.1"
-fuel-tx = { version = "0.7", features = ["serde-types"] }
-fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = "0.6"
+fuel-tx = { version = "0.7", default-features = false }
+fuel-types = { version = "0.3", default-features = false }
+fuel-vm = { version = "0.6", default-features = false }
 futures = "0.3"
 lazy_static = "1.4"
-parking_lot = "0.11"
+parking_lot = "0.12"
+serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }
 
@@ -28,3 +32,4 @@ tokio = { version = "1.14", features = ["full"] }
 
 [features]
 test_helpers = []
+serde-types = ["serde", "fuel-tx/serde-types", "fuel-types/serde-types", "fuel-vm/serde-types"]

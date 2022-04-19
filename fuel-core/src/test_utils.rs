@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::model::coin::{Coin, CoinStatus};
+use crate::model::{Coin, CoinStatus};
 use fuel_asm::Word;
 use fuel_storage::Storage;
 use fuel_tx::{Address, AssetId, Bytes32, UtxoId};

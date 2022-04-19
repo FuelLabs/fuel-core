@@ -1,4 +1,4 @@
-use crate::model::fuel_block::BlockHeight;
+use crate::model::BlockHeight;
 use core::fmt;
 use serde::{Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
