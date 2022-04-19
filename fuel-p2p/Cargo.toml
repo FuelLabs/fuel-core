@@ -9,7 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-p2p", "networking"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client networking"
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -25,7 +24,7 @@ libp2p = { version = "0.43", default-features = false, features = [
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.9"
-tokio = { version= "1.17", features = ["sync"] }
+tokio = { version = "1.17", features = ["sync"] }
 tracing = "0.1"
 
 [dev-dependencies]

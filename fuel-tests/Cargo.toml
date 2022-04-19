@@ -23,7 +23,7 @@ fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-storage = "0.1"
 fuel-tx = { version = "0.7", features = ["serde-types"] }
 fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = { version = "0.6", features = ["serde-types", "random"] }
+fuel-vm = { version = "0.6", features = ["serde-types", "random","test-helpers"] }
 insta = "1.8"
 itertools = "0.10"
 rand = "0.8"

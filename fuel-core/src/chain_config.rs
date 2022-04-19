@@ -1,5 +1,5 @@
 use self::serialization::{HexNumber, HexType};
-use crate::model::fuel_block::BlockHeight;
+use crate::model::BlockHeight;
 use fuel_types::{Address, AssetId, Bytes32, Salt};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};

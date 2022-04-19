@@ -1,6 +1,6 @@
 use chrono::Utc;
 use fuel_core::executor::ExecutionMode;
-use fuel_core::model::fuel_block::{FuelBlock, FuelBlockHeader};
+use fuel_core::model::{FuelBlock, FuelBlockHeader};
 use fuel_core::{
     database::Database,
     executor::Executor,

@@ -1,9 +1,6 @@
 use crate::{
     database::{transaction::TransactionIndex, Database, KvStoreError},
-    model::{
-        coin::{Coin, CoinStatus},
-        fuel_block::{BlockHeight, FuelBlock, FuelBlockDb},
-    },
+    model::{BlockHeight, Coin, CoinStatus, FuelBlock, FuelBlockDb},
     service::Config,
     tx_pool::TransactionStatus,
 };
@@ -665,7 +662,7 @@ impl From<crate::state::Error> for Error {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::fuel_block::FuelBlockHeader;
+    use crate::model::FuelBlockHeader;
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_crypto::SecretKey;
