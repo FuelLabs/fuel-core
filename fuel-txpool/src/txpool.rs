@@ -1,4 +1,5 @@
 use crate::containers::dependency::Dependency;
+use crate::containers::info::TxInfo;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
 use fuel_core_interfaces::txpool::TxPoolDb;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
-    by_hash: HashMap<TxId, ArcTx>,
+    by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_dependency: Dependency,
     config: Arc<Config>,
@@ -23,7 +24,7 @@ impl TxPool {
             by_dependency: Dependency::new(max_depth),
         }
     }
-    pub fn txs(&self) -> &HashMap<TxId, ArcTx> {
+    pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
 
@@ -53,7 +54,7 @@ impl TxPool {
         }
         // check and insert dependency
         let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
-        self.by_hash.insert(tx.id(), tx.clone());
+        self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
         // if some transaction were removed so we dont need to check limit
@@ -101,7 +102,7 @@ impl TxPool {
             self.by_gas_price.remove(tx);
             return self
                 .by_dependency
-                .recursively_remove_all_dependencies(&self.by_hash, tx.clone());
+                .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
         }
         Vec::new()
     }

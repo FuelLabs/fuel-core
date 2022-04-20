@@ -2271,6 +2271,7 @@ version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "fuel-core-interfaces",
  "fuel-tx 0.7.0",
  "fuel-types 0.3.0",
