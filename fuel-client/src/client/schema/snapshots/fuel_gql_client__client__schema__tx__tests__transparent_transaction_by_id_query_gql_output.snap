@@ -1,8 +1,6 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 271
 expression: operation.query
-
 ---
 query Query($_0: TransactionId!) {
   transaction(id: $_0) {
@@ -101,8 +99,8 @@ query Query($_0: TransactionId!) {
     }
     witnesses
     receipts {
-      a
-      b
+      param1
+      param2
       amount
       assetId
       gas
