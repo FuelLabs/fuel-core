@@ -1,5 +1,39 @@
 scalar Address
 scalar AssetId
+type Balance {
+	owner: Address!
+	amount: U64!
+	assetId: AssetId!
+}
+type BalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge]
+}
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+input BalanceFilterInput {
+	"""
+	Filter coins based on the `owner` field
+	"""
+	owner: Address!
+}
 type Block {
 	id: BlockId!
 	height: U64!
@@ -181,6 +215,8 @@ type ProgramState {
 type Query {
 	register(id: ID!, register: U64!): U64!
 	memory(id: ID!, start: U64!, size: U64!): String!
+	balance(owner: Address!, assetId: AssetId!): Balance!
+	balances(filter: BalanceFilterInput!, first: Int, after: String, last: Int, before: String): BalanceConnection!
 	block(id: BlockId, height: U64): Block
 	blocks(first: Int, after: String, last: Int, before: String): BlockConnection!
 	chain: ChainInfo!

@@ -123,6 +123,7 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
+        model::{BlockHeight, Coin, CoinStatus},
         relayer::{DepositCoin, RelayerDb},
         txpool::TxPoolDb,
     };
@@ -132,6 +133,7 @@ pub mod helpers {
     pub struct DummyDb {
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
+        pub coins: HashMap<UtxoId, Coin>,
         pub contract: HashSet<ContractId>,
         pub deposit_coin: HashMap<Bytes32, DepositCoin>,
         // relayer relayer
@@ -529,10 +531,58 @@ pub mod helpers {
                 eth_finalized_block: 0,
                 fuel_finalized_block: 0,
             };
+            let block_created = BlockHeight::from(0u64);
+            let mut coins = HashMap::new();
+            for tx in txs.iter() {
+                for (output_index, output) in tx.outputs().iter().enumerate() {
+                    let utxo_id = UtxoId::new(tx.id(), output_index as u8);
+                    let coin = match output {
+                        Output::Coin {
+                            amount,
+                            asset_id,
+                            to,
+                        } => Coin {
+                            owner: *to,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                            maturity: 0u32.into(),
+                            status: CoinStatus::Unspent,
+                            block_created,
+                        },
+                        Output::Change {
+                            to,
+                            asset_id,
+                            amount,
+                        } => Coin {
+                            owner: *to,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                            maturity: 0u32.into(),
+                            status: CoinStatus::Unspent,
+                            block_created,
+                        },
+                        Output::Variable {
+                            to,
+                            asset_id,
+                            amount,
+                        } => Coin {
+                            owner: *to,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                            maturity: 0u32.into(),
+                            status: CoinStatus::Unspent,
+                            block_created,
+                        },
+                        _ => continue,
+                    };
+                    coins.insert(utxo_id, coin);
+                }
+            }
 
             Self {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
+                coins,
                 contract: HashSet::new(),
                 deposit_coin: HashMap::new(),
                 data: Arc::new(Mutex::new(data)),
@@ -541,6 +591,29 @@ pub mod helpers {
 
         pub fn tx(&self, n: usize) -> Arc<Transaction> {
             self.tx.get(self.tx_hashes.get(n).unwrap()).unwrap().clone()
+        }
+    }
+
+    impl Storage<UtxoId, Coin> for DummyDb {
+        type Error = KvStoreError;
+
+        fn insert(&mut self, _key: &UtxoId, _value: &Coin) -> Result<Option<Coin>, Self::Error> {
+            unreachable!()
+        }
+
+        fn remove(&mut self, _key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &UtxoId,
+        ) -> Result<Option<std::borrow::Cow<'a, Coin>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &UtxoId) -> Result<bool, Self::Error> {
+            unreachable!()
         }
     }
 
@@ -598,8 +671,8 @@ pub mod helpers {
     }
 
     impl TxPoolDb for DummyDb {
-        fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
-            Ok(self.tx.get(&tx_hash).cloned())
+        fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
+            Ok(self.coins.get(utxo_id).cloned())
         }
 
         fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {

@@ -1,6 +1,6 @@
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
-    config::P2PConfig,
+    config::{build_transport, P2PConfig},
     peer_info::PeerInfo,
     request_response::messages::{
         ReqResNetworkError, RequestError, RequestMessage, ResponseError, ResponseMessage,
@@ -43,7 +43,7 @@ impl FuelP2PService {
         let local_peer_id = PeerId::from(local_keypair.public());
 
         // configure and build P2P Serivce
-        let transport = libp2p::development_transport(local_keypair.clone()).await?;
+        let transport = build_transport(local_keypair.clone()).await;
         let behaviour = FuelBehaviour::new(local_keypair, &config);
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
@@ -336,6 +336,7 @@ mod tests {
         let topics = vec!["create_tx".into(), "send_tx".into()];
         let selected_topic = Topic::new(format!("{}/{}", topics[0], p2p_config.network_name));
         let message_to_send = "hello, node";
+        let mut message_sent = false;
 
         // Node A
         p2p_config.tcp_port = 4008;
@@ -361,7 +362,8 @@ mod tests {
                         let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
 
                         // verifies that we've got at least a single peer address to send message to
-                        if !peer_addresses.is_empty()  {
+                        if !peer_addresses.is_empty() && !message_sent  {
+                            message_sent = true;
                             node_a.publish_message(selected_topic.clone(), message_to_send).unwrap();
                         }
                     }
@@ -462,6 +464,9 @@ mod tests {
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
 
+        // track the request sent in order to aviod duplicate sending
+        let mut request_sent = false;
+
         loop {
             tokio::select! {
                 event_a = node_a.next_event() => {
@@ -469,7 +474,9 @@ mod tests {
                         let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
 
                         // 0. verifies that we've got at least a single peer address to request messsage from
-                        if !peer_addresses.is_empty() {
+                        if !peer_addresses.is_empty() && !request_sent {
+                            request_sent = true;
+
                             // 1. Simulating Oneshot channel from the NetworkOrchestrator
                             let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 

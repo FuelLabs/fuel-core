@@ -1,6 +1,6 @@
 use crate::database::columns::METADATA;
 use crate::database::Database;
-use crate::model::fuel_block::BlockHeight;
+use crate::model::BlockHeight;
 use crate::state::Error;
 
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";

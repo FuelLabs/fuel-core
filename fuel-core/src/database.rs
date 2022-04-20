@@ -1,7 +1,7 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::fuel_block::FuelBlockDb;
+use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
@@ -276,7 +276,7 @@ impl RelayerDb for Database {
                 Ok((address, stake)) => {
                     out.insert(address.0, stake);
                 }
-                Err(_) => return out,
+                Err(err) => panic!("Database internal error:{:?}", err),
             }
         }
         out

@@ -5,20 +5,21 @@ use std::sync::Arc;
 use fuel_tx::{ContractId, UtxoId};
 use thiserror::Error;
 
-use crate::db::{Error as DbStateError, KvStoreError};
+use crate::{
+    db::{Error as DbStateError, KvStoreError},
+    model::Coin,
+};
 use fuel_storage::Storage;
-use fuel_tx::Bytes32;
 use fuel_vm::prelude::Contract;
 
 pub trait TxPoolDb:
-    Storage<Bytes32, Transaction, Error = KvStoreError>
+    Storage<UtxoId, Coin, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
     + Send
     + Sync
 {
-    fn transaction(&self, tx_hash: TxId) -> Result<Option<Arc<Transaction>>, KvStoreError> {
-        Storage::<Bytes32, Transaction>::get(self, &tx_hash)
-            .map(|t| t.map(|t| Arc::new(t.as_ref().clone())))
+    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
+        Storage::<UtxoId, Coin>::get(self, utxo_id).map(|t| t.map(|t| t.as_ref().clone()))
     }
 
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
@@ -48,8 +49,11 @@ pub trait TxPool: Send + Sync {
     async fn insert(&self, tx: Vec<Arc<Transaction>>)
         -> Vec<anyhow::Result<Vec<Arc<Transaction>>>>;
 
-    /// find all tx by its hash
+    /// find all tx by their hash
     async fn find(&self, hashes: &[TxId]) -> Vec<Option<Arc<Transaction>>>;
+
+    /// find one tx by its hash
+    async fn find_one(&self, hash: &TxId) -> Option<Arc<Transaction>>;
 
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
     async fn find_dependent(&self, hashes: &[TxId]) -> Vec<Arc<Transaction>>;
@@ -103,7 +107,9 @@ pub enum Error {
     #[error("Transaction is not inserted. ContractId is already taken {0:?}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
     #[error("Transaction is not inserted. UTXO is not existing: {0:?}")]
-    NotInsertedInputTxNotExisting(TxId),
+    NotInsertedInputUtxoIdNotExisting(UtxoId),
+    #[error("Transaction is not inserted. UTXO is spent: {0:?}")]
+    NotInsertedInputUtxoIdSpent(UtxoId),
     #[error(
         "Transaction is not inserted. UTXO requires Contract input {0:?} that is priced lower"
     )]

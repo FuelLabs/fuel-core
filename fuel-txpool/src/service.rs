@@ -60,9 +60,18 @@ impl TxPool for TxPoolService {
         let mut res = Vec::with_capacity(hashes.len());
         let pool = self.txpool.read().await;
         for hash in hashes {
-            res.push(pool.txs().get(hash).cloned());
+            res.push(pool.txs().get(hash).map(|info| info.tx().clone()));
         }
         res
+    }
+
+    async fn find_one(&self, hash: &TxId) -> Option<ArcTx> {
+        self.txpool
+            .read()
+            .await
+            .txs()
+            .get(hash)
+            .map(|info| info.tx().clone())
     }
 
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
@@ -71,8 +80,9 @@ impl TxPool for TxPoolService {
         {
             let pool = self.txpool.read().await;
             for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash).cloned() {
-                    pool.dependency().find_dependent(tx, &mut seen, pool.txs());
+                if let Some(tx) = pool.txs().get(hash) {
+                    pool.dependency()
+                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
                 }
             }
         }
