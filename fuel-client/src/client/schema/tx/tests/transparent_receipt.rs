@@ -7,8 +7,8 @@ use fuel_types::Word;
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Receipt {
-    pub a: Option<U64>,
-    pub b: Option<U64>,
+    pub param1: Option<U64>,
+    pub param2: Option<U64>,
     pub amount: Option<U64>,
     pub asset_id: Option<AssetId>,
     pub gas: Option<U64>,
@@ -75,13 +75,13 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .gas
                     .ok_or_else(|| MissingField("gas".to_string()))?
                     .into(),
-                a: schema
-                    .a
-                    .ok_or_else(|| MissingField("a".to_string()))?
+                param1: schema
+                    .param1
+                    .ok_or_else(|| MissingField("param1".to_string()))?
                     .into(),
-                b: schema
-                    .b
-                    .ok_or_else(|| MissingField("b".to_string()))?
+                param2: schema
+                    .param2
+                    .ok_or_else(|| MissingField("param2".to_string()))?
                     .into(),
                 pc: schema
                     .pc

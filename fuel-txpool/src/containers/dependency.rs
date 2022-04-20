@@ -7,6 +7,8 @@ use fuel_core_interfaces::{
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 
+use super::info::TxInfo;
+
 /// Check and hold dependency between inputs and outputs. Be mindful
 /// about depth of connection
 #[derive(Debug, Clone)]
@@ -54,7 +56,7 @@ impl Dependency {
         &self,
         tx: ArcTx,
         seen: &mut HashMap<TxId, ArcTx>,
-        txs: &HashMap<TxId, ArcTx>,
+        txs: &HashMap<TxId, TxInfo>,
     ) {
         // for every input aggregate UtxoId and check if it is inside
         let mut check = vec![tx.id()];
@@ -65,7 +67,7 @@ impl Dependency {
                 is_new = true;
                 let parent = txs.get(&parent_txhash).expect("To have tx in txpool");
                 parent_tx = Some(parent.clone());
-                parent.clone()
+                parent.tx().clone()
             });
             // for every input check if tx_id is inside seen. if not, check coins/contract map.
             if let Some(parent_tx) = parent_tx {
@@ -213,7 +215,7 @@ impl Dependency {
     #[allow(clippy::type_complexity)]
     fn check_for_colision<'a>(
         &'a self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<(
@@ -355,7 +357,7 @@ impl Dependency {
     /// return list of transactions that are removed from txpool
     pub async fn insert<'a>(
         &'a mut self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
@@ -367,7 +369,7 @@ impl Dependency {
             let collided = txs
                 .get(&collided)
                 .expect("Collided should be present in txpool");
-            removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.clone()));
+            removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.tx().clone()));
         }
 
         // iterate over all inputs and spend parent coins/contracts
@@ -437,7 +439,7 @@ impl Dependency {
 
     pub fn recursively_remove_all_dependencies<'a>(
         &'a mut self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         tx: ArcTx,
     ) -> Vec<ArcTx> {
         let mut removed_tx = vec![tx.clone()];
@@ -467,8 +469,9 @@ impl Dependency {
                     // call removal on every tx;
                     for rem_tx in state.used_by.iter() {
                         let rem_tx = txs.get(rem_tx).expect("Tx should be present in txs");
-                        removed_tx
-                            .extend(self.recursively_remove_all_dependencies(txs, rem_tx.clone()));
+                        removed_tx.extend(
+                            self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                        );
                     }
                 } else {
                     panic!("Contract state should be present when removing child");
@@ -487,7 +490,7 @@ impl Dependency {
                 {
                     let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
                     removed_tx
-                        .extend(self.recursively_remove_all_dependencies(txs, rem_tx.clone()));
+                        .extend(self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()));
                 }
                 // remove it from dependency
                 self.coins.remove(&utxo);

@@ -49,8 +49,11 @@ pub trait TxPool: Send + Sync {
     async fn insert(&self, tx: Vec<Arc<Transaction>>)
         -> Vec<anyhow::Result<Vec<Arc<Transaction>>>>;
 
-    /// find all tx by its hash
+    /// find all tx by their hash
     async fn find(&self, hashes: &[TxId]) -> Vec<Option<Arc<Transaction>>>;
+
+    /// find one tx by its hash
+    async fn find_one(&self, hash: &TxId) -> Option<Arc<Transaction>>;
 
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
     async fn find_dependent(&self, hashes: &[TxId]) -> Vec<Arc<Transaction>>;
