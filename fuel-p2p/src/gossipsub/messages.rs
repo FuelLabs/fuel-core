@@ -8,17 +8,13 @@ pub enum GossipsubMessage {
 }
 
 impl GossipsubMessage {
-    pub fn encode(&self) -> Result<Vec<u8>, io::Error> {
-        match bincode::serialize(&self) {
-            Ok(encoded_data) => Ok(encoded_data),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+    pub fn encode<T: serde::Serializer<Ok = ()>>(&self, serializer: T) -> Result<(), io::Error> {
+        serde::Serialize::serialize(self, serializer)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
-    pub fn decode(encoded_data: &[u8]) -> Result<Self, io::Error> {
-        match bincode::deserialize(encoded_data) {
-            Ok(decoded_data) => Ok(decoded_data),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+    pub fn decode<'a, T: serde::Deserializer<'a>>(deserializer: T) -> Result<Self, io::Error> {
+        serde::Deserialize::deserialize(deserializer)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }

@@ -273,7 +273,10 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
             message_id: _,
         } = message
         {
-            match FuelGossipsubMessage::decode(&message.data) {
+            match FuelGossipsubMessage::decode(&mut bincode::Deserializer::from_slice(
+                &message.data,
+                bincode::options(),
+            )) {
                 Ok(decoded_message) => {
                     self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
                         peer_id: propagation_source,

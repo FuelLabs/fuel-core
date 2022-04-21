@@ -103,8 +103,11 @@ impl FuelP2PService {
         topic: GossipTopic,
         message: FuelGossipsubMessage,
     ) -> Result<MessageId, PublishError> {
-        match message.encode() {
-            Ok(encoded_data) => self
+        let mut encoded_data = vec![];
+        let mut serializer = bincode::Serializer::new(&mut encoded_data, bincode::options());
+
+        match message.encode(&mut serializer) {
+            Ok(_) => self
                 .swarm
                 .behaviour_mut()
                 .publish_message(topic, encoded_data),
