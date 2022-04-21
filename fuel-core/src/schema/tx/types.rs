@@ -14,6 +14,7 @@ use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
+use fuel_txpool::TxPoolService;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -219,9 +220,9 @@ impl Transaction {
 
         let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
 
-        let transaction_in_pool = txpool.find(&[self.0.id()]).await;
+        let transaction_in_pool = txpool.find_one(&self.0.id()).await;
 
-        if transaction_in_pool.get(0).unwrap().is_some() && db.get_tx_status(&self.0.id()).is_err()
+        if transaction_in_pool.is_some() && db.get_tx_status(&self.0.id()).is_err()
         {
             // TODO, fix this part where submitted time is lied about
             let time = chrono::Utc::now();
