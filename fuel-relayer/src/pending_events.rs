@@ -11,7 +11,7 @@ pub struct PendingEvents {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     /// it contains every fuel block and its span
     pending: VecDeque<PendingDiff>,
-    /// This is litlle bit hacky but because we relate validator staking with fuel commit block and not on eth block
+    /// This is little bit hacky but because we relate validator staking with fuel commit block and not on eth block
     /// we need to be sure that we are taking proper order of those transactions
     /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
     /// I checked this with infura endpoint.
