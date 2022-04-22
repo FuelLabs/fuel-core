@@ -89,7 +89,6 @@ impl PendingEvents {
     }
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
-    /// Done
     fn bundle_removed_events(&mut self, event: EthEventLog, eth_block: u64) {
         // agregate all removed events before reverting them.
         // check if we have pending block for removal
