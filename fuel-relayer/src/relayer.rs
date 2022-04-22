@@ -27,7 +27,6 @@ use fuel_core_interfaces::{
 
 const REPORT_PROGRESS_EVERY_N_BLOCKS: u64 = 500;
 const PROVIDER_INTERVAL: u64 = 1000;
-///
 pub struct Relayer {
     /// Pendning stakes/assets/withdrawals. Before they are finalized
     pending: PendingEvents,
