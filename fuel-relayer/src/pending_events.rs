@@ -8,7 +8,7 @@ use tracing::info;
 use crate::log::EthEventLog;
 
 pub struct PendingEvents {
-    /// Pendning stakes/assets/withdrawals. Before they are finalized
+    /// Pending stakes/assets/withdrawals. Before they are finalized
     /// it contains every fuel block and its span
     pending: VecDeque<PendingDiff>,
     /// This is litlle bit hacky but because we relate validator staking with fuel commit block and not on eth block
