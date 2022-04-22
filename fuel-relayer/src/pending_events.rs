@@ -110,7 +110,6 @@ impl PendingEvents {
     }
 
     /// Handle eth log events
-    /// Done
     pub async fn handle_eth_log(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
         if removed {
             self.bundle_removed_events(event, eth_block);
@@ -135,7 +134,6 @@ impl PendingEvents {
 
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
-    /// Done
     pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
@@ -175,7 +173,6 @@ impl PendingEvents {
     }
 
     /// Used in two places. On initial sync and when new fuel blocks is
-    /// Done
     pub async fn flush_validator_diffs(
         &mut self,
         db: &mut dyn RelayerDb,
@@ -199,7 +196,7 @@ impl PendingEvents {
                 .await;
             db.set_finalized_da_height(diffs.da_height).await;
 
-            // push fanalized deposit to db
+            // push finalized deposit to db
             for (nonce, deposit) in diffs.assets_deposited.iter() {
                 db.insert_token_deposit(*nonce, diffs.da_height, deposit.0, deposit.1, deposit.2)
                     .await
