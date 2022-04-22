@@ -1,13 +1,13 @@
 use crate::{types::*, Error};
 use anyhow::anyhow;
+use fuel_core_interfaces::info::ArcTx;
+use fuel_core_interfaces::info::TxInfo;
 use fuel_core_interfaces::{
     model::{Coin, CoinStatus},
     txpool::TxPoolDb,
 };
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
-
-use super::info::TxInfo;
 
 /// Check and hold dependency between inputs and outputs. Be mindful
 /// about depth of connection

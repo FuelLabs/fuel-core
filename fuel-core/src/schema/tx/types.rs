@@ -12,7 +12,6 @@ use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
-use fuel_txpool::TxPoolService;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
 
@@ -224,7 +223,7 @@ impl Transaction {
 
         if transaction_in_pool.is_some() && db.get_tx_status(&self.0.id()).is_err() {
             // TODO, fix this part where submitted time is lied about
-            let time = chrono::Utc::now();
+            let time = transaction_in_pool.unwrap().submited_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
             let status = db.get_tx_status(&self.0.id())?;
