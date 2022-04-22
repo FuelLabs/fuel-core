@@ -1,5 +1,5 @@
 pub mod config;
-pub mod log;
+pub(crate) mod log;
 pub mod pending_events;
 pub mod relayer;
 pub mod service;
