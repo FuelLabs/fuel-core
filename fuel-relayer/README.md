@@ -100,7 +100,7 @@ For passive sync we are using ethereum pubsub protocol to get `logs` event: http
 
 ### Database:
 
-We are adding three colums:
+The relayer utlizes the following columns:
 * Validator set diff: mapping of fuel_block and hashmap of diffs for finalized new stakes.
 * Validator set: mapping of validator address to its current stakes.
 * Deposits: mapping of deposit_nonce to token deposits.
