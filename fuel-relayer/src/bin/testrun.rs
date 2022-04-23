@@ -26,7 +26,6 @@ async fn main() -> Result<(), anyhow::Error> {
     let (_broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
     let _service = Service::new(&config, db, broadcast_rx, signer).await?;
-    //let sender = service.sender().clone();
 
     tokio::time::sleep(std::time::Duration::from_secs(1000)).await;
     Ok(())

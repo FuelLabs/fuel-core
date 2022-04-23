@@ -8,10 +8,10 @@ use tracing::info;
 use crate::log::EthEventLog;
 
 pub struct PendingEvents {
-    /// Pendning stakes/assets/withdrawals. Before they are finalized
+    /// Pending stakes/assets/withdrawals. Before they are finalized
     /// it contains every fuel block and its span
     pending: VecDeque<PendingDiff>,
-    /// This is litlle bit hacky but because we relate validator staking with fuel commit block and not on eth block
+    /// This is little bit hacky but because we relate validator staking with fuel commit block and not on eth block
     /// we need to be sure that we are taking proper order of those transactions
     /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
     /// I checked this with infura endpoint.
@@ -89,7 +89,6 @@ impl PendingEvents {
     }
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
-    /// Done
     fn bundle_removed_events(&mut self, event: EthEventLog, eth_block: u64) {
         // agregate all removed events before reverting them.
         // check if we have pending block for removal
@@ -134,7 +133,6 @@ impl PendingEvents {
 
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
-    /// Done
     pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
@@ -174,7 +172,6 @@ impl PendingEvents {
     }
 
     /// Used in two places. On initial sync and when new fuel blocks is
-    /// Done
     pub async fn commit_diffs(
         &mut self,
         db: &mut dyn RelayerDb,
@@ -198,7 +195,7 @@ impl PendingEvents {
                 .await;
             db.set_finalized_da_height(diffs.da_height).await;
 
-            // push fanalized deposit to db
+            // push finalized deposit to db
             for (nonce, deposit) in diffs.assets_deposited.iter() {
                 db.insert_token_deposit(*nonce, diffs.da_height, deposit.0, deposit.1, deposit.2)
                     .await

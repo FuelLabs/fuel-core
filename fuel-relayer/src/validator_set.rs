@@ -7,7 +7,7 @@ use tracing::warn;
 pub struct CurrentValidatorSet {
     /// Current validator set
     pub set: HashMap<Address, u64>,
-    /// current fuel block
+    /// Current DA block
     pub da_height: u64,
 }
 

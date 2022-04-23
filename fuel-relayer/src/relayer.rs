@@ -27,9 +27,8 @@ use fuel_core_interfaces::{
 
 const REPORT_PROGRESS_EVERY_N_BLOCKS: u64 = 500;
 const PROVIDER_INTERVAL: u64 = 1000;
-///
 pub struct Relayer {
-    /// Pendning stakes/assets/withdrawals. Before they are finalized
+    /// Pending stakes/assets/withdrawals. Before they are finalized
     pending: PendingEvents,
     /// Current validator set
     current_validator_set: CurrentValidatorSet,
@@ -83,7 +82,7 @@ impl Relayer {
             tokio::select! {
                 biased;
                 inner_fuel_event = self.receiver.recv() => {
-                    tracing::info!("Received event in stop handle:{:?}",inner_fuel_event);
+                    tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
                     match inner_fuel_event {
                         Some(RelayerEvent::Stop) | None =>{
                             self.status = RelayerStatus::Stop;
