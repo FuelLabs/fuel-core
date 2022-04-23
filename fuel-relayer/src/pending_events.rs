@@ -96,7 +96,6 @@ impl PendingEvents {
         if let Some((last_eth_block, list)) = self.bundled_removed_eth_events.last_mut() {
             // check if last pending block is same as log event that we received.
             if *last_eth_block == eth_block {
-                // just push it
                 list.push(event)
             } else {
                 // if block number differs just push new block.
@@ -111,7 +110,6 @@ impl PendingEvents {
     }
 
     /// Handle eth log events
-    /// Done
     pub async fn handle_eth_log(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
         if removed {
             self.bundle_removed_events(event, eth_block);
@@ -177,7 +175,7 @@ impl PendingEvents {
 
     /// Used in two places. On initial sync and when new fuel blocks is
     /// Done
-    pub async fn flush_validator_diffs(
+    pub async fn commit_diffs(
         &mut self,
         db: &mut dyn RelayerDb,
         finalized_da_height: u64,
@@ -349,7 +347,7 @@ mod tests {
         // apply all diffs to finalized state
         let mut db = DummyDb::filled();
 
-        pending.flush_validator_diffs(&mut db, 5).await;
+        pending.commit_diffs(&mut db, 5).await;
 
         assert_eq!(pending.pending.len(), 0, "All diffs should be flushed");
         assert_eq!(pending.finalized_da_height, 5, "Finalized should be 5");

@@ -16,7 +16,7 @@ pub fn relayer(
     mpsc::Sender<RelayerEvent>,
     broadcast::Sender<NewBlockEvent>,
 ) {
-    let db = Box::new(Mutex::new(DummyDb::filled()));
+    let db = Box::new(DummyDb::filled());
     let (relayer_event_tx, relayer_event_rx) = mpsc::channel(10);
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});

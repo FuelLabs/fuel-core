@@ -5,7 +5,6 @@ use fuel_core_interfaces::{
     relayer::{RelayerDb, RelayerEvent},
     signer::Signer,
 };
-use tokio::sync::Mutex;
 use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
@@ -19,7 +18,7 @@ pub struct Service {
 impl Service {
     pub async fn new(
         config: &Config,
-        db: Box<Mutex<dyn RelayerDb>>,
+        db: Box<dyn RelayerDb>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
     ) -> Result<Self, anyhow::Error> {

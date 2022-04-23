@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use fuel_storage::Storage;
 use fuel_types::{Address, AssetId, Bytes32, Word};
-use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
 pub struct DepositCoin {
     pub owner: Address,
     pub amount: Word,
@@ -111,7 +112,7 @@ use crate::db::KvStoreError;
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RelayerError {
     #[error("Temp stopped")]
-    Stoped,
+    Stopped,
     #[error("Temp ProviderError")]
     ProviderError,
     #[error("Validator Set not returned, waiting for eth client sync")]

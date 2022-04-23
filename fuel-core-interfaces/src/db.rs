@@ -131,12 +131,7 @@ pub mod helpers {
     use super::*;
     #[derive(Clone, Debug)]
     pub struct DummyDb {
-        pub tx_hashes: Vec<TxId>,
-        pub tx: HashMap<TxId, Arc<Transaction>>,
-        pub coins: HashMap<UtxoId, Coin>,
-        pub contract: HashSet<ContractId>,
-        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
-        // relayer relayer
+        /// wrapped data.
         pub data: Arc<Mutex<Data>>,
     }
 
@@ -148,6 +143,11 @@ pub mod helpers {
         pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
         pub eth_finalized_block: u64,
         pub fuel_finalized_block: u64,
+        pub tx_hashes: Vec<TxId>,
+        pub tx: HashMap<TxId, Arc<Transaction>>,
+        pub coins: HashMap<UtxoId, Coin>,
+        pub contract: HashSet<ContractId>,
+        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
     }
 
     impl DummyDb {
@@ -523,14 +523,6 @@ pub mod helpers {
                 ));
             }
 
-            let data = Data {
-                block_height: 0,
-                current_validator_set: HashMap::new(),
-                current_validator_set_block: 0,
-                validator_set_diff: BTreeMap::new(),
-                eth_finalized_block: 0,
-                fuel_finalized_block: 0,
-            };
             let block_created = BlockHeight::from(0u64);
             let mut coins = HashMap::new();
             for tx in txs.iter() {
@@ -579,18 +571,28 @@ pub mod helpers {
                 }
             }
 
-            Self {
+            let data = Data {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 coins,
                 contract: HashSet::new(),
                 deposit_coin: HashMap::new(),
+                block_height: 0,
+                current_validator_set: HashMap::new(),
+                current_validator_set_block: 0,
+                validator_set_diff: BTreeMap::new(),
+                eth_finalized_block: 0,
+                fuel_finalized_block: 0,
+            };
+
+            Self {
                 data: Arc::new(Mutex::new(data)),
             }
         }
 
         pub fn tx(&self, n: usize) -> Arc<Transaction> {
-            self.tx.get(self.tx_hashes.get(n).unwrap()).unwrap().clone()
+            let data = self.data.lock();
+            data.tx.get(data.tx_hashes.get(n).unwrap()).unwrap().clone()
         }
     }
 
@@ -672,11 +674,11 @@ pub mod helpers {
 
     impl TxPoolDb for DummyDb {
         fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-            Ok(self.coins.get(utxo_id).cloned())
+            Ok(self.data.lock().coins.get(utxo_id).cloned())
         }
 
         fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {
-            Ok(self.contract.get(&contract_id).is_some())
+            Ok(self.data.lock().contract.get(&contract_id).is_some())
         }
     }
 
@@ -689,7 +691,7 @@ pub mod helpers {
             key: &Bytes32,
             value: &DepositCoin,
         ) -> Result<Option<DepositCoin>, Self::Error> {
-            Ok(self.deposit_coin.insert(*key, value.clone()))
+            Ok(self.data.lock().deposit_coin.insert(*key, value.clone()))
         }
 
         fn remove(&mut self, _key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {

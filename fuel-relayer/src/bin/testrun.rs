@@ -4,10 +4,10 @@ use fuel_relayer::{Config, Service};
 
 use ethers_core::types::H160;
 use fuel_core_interfaces::{db::helpers::DummyDb, signer::helpers::DummySigner};
-use tokio::sync::{broadcast, Mutex};
+use tokio::sync::broadcast;
 
-#[tokio::test]
-async fn main_run() -> Result<(), anyhow::Error> {
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
     let config = Config {
         eth_finality_slider: 10,
@@ -22,7 +22,7 @@ async fn main_run() -> Result<(), anyhow::Error> {
         eth_initial_sync_refresh: std::time::Duration::from_secs(10),
     };
 
-    let db = Box::new(Mutex::new(DummyDb::filled()));
+    let db = Box::new(DummyDb::filled());
     let (_broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
     let _service = Service::new(&config, db, broadcast_rx, signer).await?;

@@ -226,16 +226,16 @@ pub mod tests {
     #[tokio::test]
     async fn tx1_try_to_use_spend_coin() {
         let config = Arc::new(Config::default());
-        let mut db = DummyDB::filled();
+        let db = DummyDb::filled();
 
         // mark utxo as spend
-        db.coins
+        db.data.lock().coins
             .get_mut(&UtxoId::new(*TX_ID_DB1, 0))
             .unwrap()
             .status = CoinStatus::Spent;
 
         let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
 
         let mut txpool = TxPool::new(config);
 

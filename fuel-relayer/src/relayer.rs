@@ -34,7 +34,7 @@ pub struct Relayer {
     /// Current validator set
     current_validator_set: CurrentValidatorSet,
     /// db connector to apply stake and token deposit
-    db: Box<Mutex<dyn RelayerDb>>,
+    db: Box<dyn RelayerDb>,
     /// Relayer Configuration
     config: Config,
     /// state of relayer
@@ -50,7 +50,7 @@ pub struct Relayer {
 impl Relayer {
     pub fn new(
         config: Config,
-        db: Box<Mutex<dyn RelayerDb>>,
+        db: Box<dyn RelayerDb>,
         receiver: mpsc::Receiver<RelayerEvent>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
@@ -87,7 +87,7 @@ impl Relayer {
                     match inner_fuel_event {
                         Some(RelayerEvent::Stop) | None =>{
                             self.status = RelayerStatus::Stop;
-                            return Err(RelayerError::Stoped);
+                            return Err(RelayerError::Stopped);
                         },
                         Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
                             let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
@@ -137,7 +137,7 @@ impl Relayer {
 
         let last_finalized_da_height = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
-            self.db.lock().await.get_finalized_da_height().await,
+            self.db.get_finalized_da_height().await,
         );
         // should be allways more then last finalized_da_heights
 
@@ -186,7 +186,7 @@ impl Relayer {
             while self.pending.len() > 1 {
                 // we are sending dummy eth block bcs we are sure that it is finalized
                 self.pending
-                    .flush_validator_diffs(&mut *self.db.lock().await, best_finalized_block)
+                    .commit_diffs(self.db.as_mut(), best_finalized_block)
                     .await;
             }
         }
@@ -200,7 +200,7 @@ impl Relayer {
             while self.pending.len() > 1 {
                 // we are sending dummy eth block num bcs we are sure that it is finalized
                 self.pending
-                    .flush_validator_diffs(&mut *self.db.lock().await, best_finalized_block)
+                    .commit_diffs(self.db.as_mut(), best_finalized_block)
                     .await;
             }
             self.pending.pop_back().unwrap()
@@ -286,7 +286,7 @@ impl Relayer {
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
         let finalized_da_height = best_block.as_u64() - self.config.eth_finality_slider();
         self.pending
-            .flush_validator_diffs(&mut *self.db.lock().await, finalized_da_height)
+            .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
 
         watchers.ok_or_else(|| RelayerError::ProviderError.into())
@@ -300,7 +300,7 @@ impl Relayer {
     {
         //let mut this = self;
         self.current_validator_set
-            .load_get_validators(&*self.db.lock().await)
+            .load_get_validators(self.db.as_mut())
             .await;
 
         loop {
@@ -331,6 +331,7 @@ impl Relayer {
                         match new_block {
                             Err(e) => {
                                 error!("Unexpected error happened in relayer new block event receiver:{}",e);
+                                self.status = RelayerStatus::Stop;
                                 return;
                             },
                             Ok(new_block) => {
@@ -366,7 +367,7 @@ impl Relayer {
                 // if we are lagging over data availability events.
 
                 self.current_validator_set
-                    .bump_validators_to_da_height(da_height, &mut *self.db.lock().await)
+                    .bump_validators_to_da_height(da_height, self.db.as_mut())
                     .await
             }
         }
@@ -418,7 +419,7 @@ impl Relayer {
                 // TODO probably can ask logs for this perticular block few times to be sure that all logs are
                 // in place
                 self.pending
-                    .flush_validator_diffs(&mut *self.db.lock().await, finalized_block_height)
+                    .commit_diffs(self.db.as_mut(), finalized_block_height)
                     .await;
             }
         }
@@ -460,7 +461,7 @@ impl Relayer {
         // apply pending eth diffs
         let finalized_da_height = block_number - self.config.eth_finality_slider;
         self.pending
-            .flush_validator_diffs(&mut *self.db.lock().await, finalized_da_height)
+            .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
     }
 }

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_tx::Address;
+use tracing::warn;
 
 pub struct CurrentValidatorSet {
     /// Current validator set
@@ -49,6 +50,7 @@ impl CurrentValidatorSet {
             }
             std::cmp::Ordering::Greater => {
                 // if curent block is greater then new included block there is some problem.
+                warn!("curent height {:?} is greater then new height {:?} there is some problem",self.da_height, da_height);
                 return;
             }
         }
