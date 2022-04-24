@@ -126,15 +126,15 @@ You will need to customize the following environment variables as needed (for va
 | grafana_ingress_dns            |  fuel-core-ingress-deploy | the custom dns address for the grafana ingress                                                    | 
 | pvc_storage_class              |  fuel-core-deploy         | Storage class for the persistent volume                                                           | 
 | pvc_storage_requests           |  fuel-core-deploy         | Th size of the request for the persistent volume                                                  |
-| TF_VAR_environment             |  create-k8s (all)         | environment name                                                                                  |
-| TF_VAR_region                  |  create-k8s (aws)         | AWS region where you plan to deploy your EKS cluster e.g. us-east-1                               |
-| TF_VAR_account_id              |  create-k8s (aws)         | AWS account id                                                                                    |
-| TF_state_bucket                |  create-k8s (aws)         | the s3 bucket to store the deployed terraform state                                               |
-| TF_state_bucket_key            |  create-k8s (aws)         | the s3 key to save the deployed terraform state.tf                                                |
-| TF_VAR_vpc_cidr_block          |  create-k8s (aws)         | AWS vpc cidr block                                                                                |
-| TF_VAR_azs                     |  create-k8s (aws)         | A list of regional availability zones for the AWS vpc subnets                                     |
-| TF_VAR_public_subnets          |  create-k8s (aws)         | A list of cidr blocks for AWS public subnets                                                      |
-| TF_VAR_private_subnets         |  create-k8s (aws)         | A list of cidr blocks for AWS private subnets                                                     | 
+| TF_VAR_aws_environment         |  create-k8s (all)         | environment name                                                                                  |
+| TF_VAR_aws_region              |  create-k8s (aws)         | AWS region where you plan to deploy your EKS cluster e.g. us-east-1                               |
+| TF_VAR_aws_account_id          |  create-k8s (aws)         | AWS account id                                                                                    |
+| TF_state_s3_bucket             |  create-k8s (aws)         | the s3 bucket to store the deployed terraform state                                               |
+| TF_state_s3_bucket_key         |  create-k8s (aws)         | the s3 key to save the deployed terraform state.tf                                                |
+| TF_VAR_aws_vpc_cidr_block      |  create-k8s (aws)         | AWS vpc cidr block                                                                                |
+| TF_VAR_aws_azs                 |  create-k8s (aws)         | A list of regional availability zones for the AWS vpc subnets                                     |
+| TF_VAR_aws_public_subnets      |  create-k8s (aws)         | A list of cidr blocks for AWS public subnets                                                      |
+| TF_VAR_aws_private_subnets     |  create-k8s (aws)         | A list of cidr blocks for AWS private subnets                                                     | 
 | TF_VAR_eks_cluster_name        |  create-k8s (aws)         | EKS cluster name                                                                                  |
 | TF_VAR_eks_cluster_version     |  create-k8s (aws)         | EKS cluster version, possible options: 1.18.16, 1.19.8, 1.20.7, 1.21.2                            |
 | TF_VAR_eks_node_groupname      |  create-k8s (aws)         | EKS worker node group name                                                                        |
