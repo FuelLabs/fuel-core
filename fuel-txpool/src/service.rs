@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::Error;
 use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl};
 use async_trait::async_trait;
-use fuel_core_interfaces::info::{ArcTx, TxInfo};
+use fuel_core_interfaces::model::{ArcTx, TxInfo};
 use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDb};
 use std::collections::HashMap;
 use tokio::sync::RwLock;

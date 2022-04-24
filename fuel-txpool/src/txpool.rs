@@ -1,8 +1,7 @@
 use crate::containers::dependency::Dependency;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
-use fuel_core_interfaces::info::ArcTx;
-use fuel_core_interfaces::info::TxInfo;
+use fuel_core_interfaces::model::{ArcTx, TxInfo};
 use fuel_core_interfaces::txpool::TxPoolDb;
 use std::collections::HashMap;
 use std::sync::Arc;

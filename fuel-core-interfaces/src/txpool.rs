@@ -7,8 +7,8 @@ use thiserror::Error;
 
 use crate::{
     db::{Error as DbStateError, KvStoreError},
-    info::TxInfo,
     model::Coin,
+    model::TxInfo,
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract;

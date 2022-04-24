@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::Error;
 use async_trait::async_trait;
-use fuel_core_interfaces::info::ArcTx;
+use fuel_core_interfaces::model::ArcTx;
 use fuel_core_interfaces::txpool::Subscriber;
 use parking_lot::RwLock;
 
