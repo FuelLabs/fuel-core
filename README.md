@@ -15,23 +15,23 @@ If you are interested in contributing to Fuel, see our [CONTRIBUTING.md](CONTRIB
 
 ##### System Requirements
 
-There are several system requirements including llvm, clang and postgres.
+There are several system requirements including clang & llvm.
 
 ###### MacOS
 ```bash
 brew update
-brew install openssl cmake llvm libpq postgresql
+brew install openssl cmake llvm
 ```
 
 ###### Debian
 ```bash
 apt update
-apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm libpq-dev
+apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm
 ```
 
 ###### Arch
 ```bash 
-pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs postgresql-libs
+pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs
 export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
 export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
 ```
