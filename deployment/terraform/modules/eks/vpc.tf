@@ -10,7 +10,7 @@ locals {
     "kubernetes.io/role/elb" = "1"
   }
   environment_tag = {
-    Environment = var.environment
+    Environment = var.aws_environment
   }
 }
 
@@ -18,13 +18,13 @@ module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "3.11.0"
 
-  name = var.environment
-  cidr = var.vpc_cidr_block
+  name = var.aws_environment
+  cidr = var.aws_vpc_cidr_block
 
-  azs                 = var.azs
-  public_subnets      = var.public_subnets
+  azs                 = var.aws_azs
+  public_subnets      = var.aws_public_subnets
   public_subnet_tags  = local.public_subnet_eks_tag
-  private_subnets     = var.private_subnets
+  private_subnets     = var.aws_private_subnets
   private_subnet_tags = local.private_subnet_eks_tag
 
   enable_nat_gateway = true
