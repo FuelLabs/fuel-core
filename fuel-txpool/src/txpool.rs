@@ -98,8 +98,8 @@ impl TxPool {
 
     /// remove transaction from pool needed on user demand. Low priority
     pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcTx> {
-        if let Some(tx) = self.by_hash.get(tx_id) {
-            self.by_gas_price.remove(tx);
+        if let Some(tx) = self.by_hash.remove(tx_id) {
+            self.by_gas_price.remove(tx.tx());
             return self
                 .by_dependency
                 .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
