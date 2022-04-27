@@ -8,6 +8,7 @@ use thiserror::Error;
 use crate::{
     db::{Error as DbStateError, KvStoreError},
     model::Coin,
+    model::TxInfo,
 };
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract;
@@ -50,10 +51,10 @@ pub trait TxPool: Send + Sync {
         -> Vec<anyhow::Result<Vec<Arc<Transaction>>>>;
 
     /// find all tx by their hash
-    async fn find(&self, hashes: &[TxId]) -> Vec<Option<Arc<Transaction>>>;
+    async fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>>;
 
     /// find one tx by its hash
-    async fn find_one(&self, hash: &TxId) -> Option<Arc<Transaction>>;
+    async fn find_one(&self, hash: &TxId) -> Option<TxInfo>;
 
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
     async fn find_dependent(&self, hashes: &[TxId]) -> Vec<Arc<Transaction>>;

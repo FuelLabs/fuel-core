@@ -5,6 +5,7 @@ use crate::model::FuelBlockDb;
 use crate::schema::contract::Contract;
 use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
 use crate::tx_pool::TransactionStatus as TxStatus;
+use crate::tx_pool::TxPool;
 use crate::{database::Database, schema::block::Block};
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
@@ -12,6 +13,7 @@ use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
+use std::sync::Arc;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -214,8 +216,18 @@ impl Transaction {
 
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
-        let status = db.get_tx_status(&self.0.id())?;
-        Ok(status.map(Into::into))
+
+        let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
+
+        let transaction_in_pool = txpool.find_one(&self.0.id()).await;
+
+        if transaction_in_pool.is_some() {
+            let time = transaction_in_pool.unwrap().submited_time();
+            Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+        } else {
+            let status = db.get_tx_status(&self.0.id())?;
+            Ok(status.map(Into::into))
+        }
     }
 
     async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Vec<Receipt>>> {
