@@ -227,6 +227,7 @@ jobs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
+      - cargo-publish-dry-run
       - cargo-test
       - cargo-test-no-default-features
     if: github.event_name == 'release' && github.event.action == 'published'
@@ -281,6 +282,7 @@ jobs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
+      - cargo-publish-dry-run
       - cargo-test
       - cargo-test-no-default-features
     if: github.ref == 'refs/heads/master'
