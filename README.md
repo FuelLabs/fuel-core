@@ -26,7 +26,7 @@ brew install openssl cmake llvm
 ###### Debian
 ```bash
 apt update
-apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm lld
+apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm
 ```
 
 ###### Arch
