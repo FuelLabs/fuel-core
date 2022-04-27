@@ -221,7 +221,7 @@ impl Transaction {
 
         let transaction_in_pool = txpool.find_one(&self.0.id()).await;
 
-        if transaction_in_pool.is_some() && db.get_tx_status(&self.0.id()).is_err() {
+        if transaction_in_pool.is_some() {
             let time = transaction_in_pool.unwrap().submited_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
