@@ -131,39 +131,6 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
-  cargo-publish-dry-run:
-    needs: cancel-previous-runs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - uses: Swatinem/rust-cache@v1
-      - name: Run fuel-core Cargo Publish dry-run
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: -p fuel-core --dry-run
-      - name: Run fuel-client Cargo Publish dry-run
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: -p fuel-gql-client --dry-run
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
   cargo-test:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
@@ -227,7 +194,6 @@ jobs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
-      - cargo-publish-dry-run
       - cargo-test
       - cargo-test-no-default-features
     if: github.event_name == 'release' && github.event.action == 'published'
@@ -282,7 +248,6 @@ jobs:
       - cargo-fmt-check
       - cargo-clippy
       - cargo-check
-      - cargo-publish-dry-run
       - cargo-test
       - cargo-test-no-default-features
     if: github.ref == 'refs/heads/master'
