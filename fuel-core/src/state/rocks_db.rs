@@ -129,7 +129,12 @@ impl KeyValueStore for RocksDb {
     }
 
     fn exists(&self, key: &[u8], column: ColumnId) -> crate::state::Result<bool> {
-        Ok(self.db.key_may_exist_cf(&self.cf(column), key))
+        // use pinnable mem ref to avoid memcpy of values associated with the key
+        // since we're just checking for the existence of the key
+        self.db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map(|v| v.is_some())
     }
 
     fn iter_all(
