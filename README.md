@@ -20,7 +20,7 @@ There are several system requirements including clang & llvm.
 ###### MacOS
 ```bash
 brew update
-brew install cmake llvm michaeleisel/zld/zld
+brew install cmake michaeleisel/zld/zld
 ```
 
 ###### Debian
