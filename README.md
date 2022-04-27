@@ -20,20 +20,24 @@ There are several system requirements including clang & llvm.
 ###### MacOS
 ```bash
 brew update
-brew install openssl cmake llvm
+brew install cmake llvm michaeleisel/zld/zld
 ```
 
 ###### Debian
 ```bash
 apt update
-apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm
+apt install -y cmake pkg-config git gcc build-essential git clang libclang-dev lld
 ```
 
 ###### Arch
 ```bash 
-pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs
-export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
-export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
+pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang lld
+```
+
+###### Windows
+```
+cargo install -f cargo-binutils
+rustup component add llvm-tools-preview
 ```
 
 ## Building 
