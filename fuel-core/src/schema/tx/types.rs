@@ -4,7 +4,6 @@ use super::receipt::Receipt;
 use crate::model::FuelBlockDb;
 use crate::schema::contract::Contract;
 use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
-use crate::schema::tx::Arc;
 use crate::tx_pool::TransactionStatus as TxStatus;
 use crate::tx_pool::TxPool;
 use crate::{database::Database, schema::block::Block};
@@ -14,6 +13,7 @@ use fuel_core_interfaces::db::KvStoreError;
 use fuel_storage::Storage;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
+use std::sync::Arc;
 
 pub struct ProgramState {
     return_type: ReturnType,
