@@ -27,7 +27,7 @@ COPY . .
 RUN cargo build --release -p fuel-core
 
 # Stage 2: Run
-FROM debian:bullseye-slim as run
+FROM ubuntu:22.04 as run
 
 ARG IP=0.0.0.0
 ARG PORT=4000
