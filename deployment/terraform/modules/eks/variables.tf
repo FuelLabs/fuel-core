@@ -1,17 +1,17 @@
-# General
-variable "environment" {
+# AWS General
+variable "aws_environment" {
   type = string
 }
 
-variable "account_id" {
+variable "aws_account_id" {
   type = string
 }
 
-variable "region" {
+variable "aws_region" {
   type = string
 }
 
-# EKS
+# AWS EKS
 variable "eks_cluster_name" {
   type = string
 }
@@ -52,19 +52,19 @@ variable "eks_capacity_type" {
   type = string
 }
 
-variable "azs" {
+variable "aws_azs" {
   type = list(string)
 }
 
-variable "private_subnets" {
+variable "aws_private_subnets" {
   type = list(string)
 }
 
-variable "public_subnets" {
+variable "aws_public_subnets" {
   type = list(string)
 }
 
-variable "vpc_cidr_block" {
+variable "aws_vpc_cidr_block" {
   type = string
 }
 

@@ -1,73 +1,10 @@
+pub use super::BlockHeight;
 use chrono::{DateTime, TimeZone, Utc};
-use derive_more::{Add, Display, From, Into};
 use fuel_crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Transaction};
-use serde::{Deserialize, Serialize};
-use std::{
-    array::TryFromSliceError,
-    convert::{TryFrom, TryInto},
-};
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    PartialOrd,
-    Deserialize,
-    Serialize,
-    Add,
-    Display,
-    Into,
-    From,
-)]
-pub struct BlockHeight(u32);
-
-impl From<BlockHeight> for Vec<u8> {
-    fn from(height: BlockHeight) -> Self {
-        height.0.to_be_bytes().to_vec()
-    }
-}
-
-impl From<u64> for BlockHeight {
-    fn from(height: u64) -> Self {
-        Self(height as u32)
-    }
-}
-
-impl From<BlockHeight> for u64 {
-    fn from(b: BlockHeight) -> Self {
-        b.0 as u64
-    }
-}
-
-impl TryFrom<Vec<u8>> for BlockHeight {
-    type Error = TryFromSliceError;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        let block_height_bytes: [u8; 4] = value.as_slice().try_into()?;
-        Ok(BlockHeight(u32::from_be_bytes(block_height_bytes)))
-    }
-}
-
-impl From<usize> for BlockHeight {
-    fn from(n: usize) -> Self {
-        BlockHeight(n as u32)
-    }
-}
-
-impl BlockHeight {
-    pub(crate) fn to_bytes(self) -> [u8; 4] {
-        self.0.to_be_bytes()
-    }
-
-    pub(crate) fn to_usize(self) -> usize {
-        self.0 as usize
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockHeader {
     /// Fuel block height.
     pub height: BlockHeight,
@@ -119,7 +56,8 @@ impl Default for FuelBlockHeader {
 }
 
 /// The compact representation of a block used in the database
-#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockDb {
     pub headers: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
@@ -132,7 +70,8 @@ impl FuelBlockDb {
 }
 
 /// Fuel block with all transaction data included
-#[derive(Clone, Debug, Deserialize, Default, Serialize)]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlock {
     pub header: FuelBlockHeader,
     pub transactions: Vec<Transaction>,

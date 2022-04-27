@@ -1,5 +1,5 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::model::fuel_block::{BlockHeight, FuelBlockDb};
+use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;

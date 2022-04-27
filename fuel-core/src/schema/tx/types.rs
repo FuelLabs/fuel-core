@@ -1,7 +1,7 @@
 use super::input::Input;
 use super::output::Output;
 use super::receipt::Receipt;
-use crate::model::fuel_block::FuelBlockDb;
+use crate::model::FuelBlockDb;
 use crate::schema::contract::Contract;
 use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
 use crate::tx_pool::TransactionStatus as TxStatus;

@@ -1,10 +1,12 @@
-use crate::model::fuel_block::BlockHeight;
+use crate::model::BlockHeight;
+#[cfg(graphql)]
 use async_graphql::Enum;
+
 use fuel_asm::Word;
 use fuel_tx::{Address, AssetId};
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
 pub struct Coin {
     pub owner: Address,
     pub amount: Word,
@@ -14,7 +16,8 @@ pub struct Coin {
     pub block_created: BlockHeight,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq, Serialize, Deserialize, Enum)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum CoinStatus {
     Unspent,
     Spent,

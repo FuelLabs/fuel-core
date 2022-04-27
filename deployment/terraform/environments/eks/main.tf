@@ -1,17 +1,17 @@
-# General
-variable "environment" {
+# AWS General
+variable "aws_environment" {
   type = string
 }
 
-variable "account_id" {
+variable "aws_account_id" {
   type = string
 }
 
-variable "region" {
+variable "aws_region" {
   type = string
 }
 
-# EKS
+# AWS EKS
 variable "eks_cluster_name" {
   type = string
 }
@@ -52,19 +52,19 @@ variable "eks_capacity_type" {
   type = string
 }
 
-variable "azs" {
+variable "aws_azs" {
   type = list(string)
 }
 
-variable "private_subnets" {
+variable "aws_private_subnets" {
   type = list(string)
 }
 
-variable "public_subnets" {
+variable "aws_public_subnets" {
   type = list(string)
 }
 
-variable "vpc_cidr_block" {
+variable "aws_vpc_cidr_block" {
   type = string
 }
 
@@ -76,19 +76,16 @@ variable "ec2_ssh_key" {
 module "fuel-core-aws-deploy" {
   source = "../../modules/eks"
 
-    # Environment
-  
-  environment = var.environment
-
   # AWS
-  region              = var.region
-  account_id          = var.account_id
+  aws_environment             = var.aws_environment
+  aws_region                  = var.aws_region
+  aws_account_id              = var.aws_account_id
 
   # Networking
-  vpc_cidr_block      = var.vpc_cidr_block  
-  azs                 = var.azs
-  public_subnets      = var.public_subnets
-  private_subnets     = var.private_subnets
+  aws_vpc_cidr_block          = var.aws_vpc_cidr_block  
+  aws_azs                     = var.aws_azs
+  aws_public_subnets          = var.aws_public_subnets
+  aws_private_subnets         = var.aws_private_subnets
 
   # EKS
   eks_cluster_name          = var.eks_cluster_name 

@@ -1,5 +1,5 @@
 use crate::database::{Database, KvStoreError};
-use crate::model::coin::{Coin, CoinStatus};
+use crate::model::{Coin, CoinStatus};
 use crate::state::{self};
 use fuel_storage::Storage;
 use fuel_tx::{Address, AssetId, UtxoId};
@@ -263,11 +263,10 @@ pub fn random_improve(
 
 #[cfg(test)]
 mod tests {
+    use crate::test_utils::*;
     use assert_matches::assert_matches;
     use fuel_asm::Word;
     use fuel_tx::Address;
-
-    use crate::test_utils::*;
 
     use super::*;
 

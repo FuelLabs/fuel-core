@@ -3,6 +3,7 @@ use crate::client::schema::ConversionError;
 use crate::client::schema::ConversionError::HexStringPrefixError;
 use core::fmt;
 use cynic::impl_scalar;
+use fuel_tx::InstructionResult;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter, LowerHex};
@@ -193,5 +194,11 @@ impl<'de> Deserialize<'de> for U64 {
 impl From<usize> for U64 {
     fn from(i: usize) -> Self {
         U64(i as u64)
+    }
+}
+
+impl From<U64> for InstructionResult {
+    fn from(s: U64) -> Self {
+        s.0.into()
     }
 }

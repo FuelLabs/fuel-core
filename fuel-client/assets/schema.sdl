@@ -242,8 +242,8 @@ type Receipt {
 	amount: U64
 	assetId: AssetId
 	gas: U64
-	a: U64
-	b: U64
+	param1: U64
+	param2: U64
 	val: U64
 	ptr: U64
 	digest: Bytes32

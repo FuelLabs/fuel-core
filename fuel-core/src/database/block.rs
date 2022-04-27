@@ -1,6 +1,6 @@
 use crate::{
     database::{columns::BLOCKS, columns::BLOCK_IDS, Database, KvStoreError},
-    model::fuel_block::{BlockHeight, FuelBlockDb},
+    model::{BlockHeight, FuelBlockDb},
     state::{Error, IterDirection},
 };
 use fuel_storage::Storage;
