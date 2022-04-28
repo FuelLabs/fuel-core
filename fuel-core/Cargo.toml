@@ -67,7 +67,7 @@ tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "ansi"] }
+tracing-subscriber = { version = "0.3", features = ["ansi", "env-filter", "json"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
