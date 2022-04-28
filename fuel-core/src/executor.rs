@@ -600,7 +600,7 @@ impl From<crate::database::KvStoreError> for TransactionValidityError {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Transaction id was already used: {0:#x}")]
+    #[error("Transaction id was already used: {0:#x} -> maybe use load_sway_contract_with_salt?")]
     TransactionIdCollision(Bytes32),
     #[error("output already exists")]
     OutputAlreadyExists,
