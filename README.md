@@ -26,7 +26,7 @@ brew install cmake
 ###### Debian
 ```bash
 apt update
-apt install -y cmake pkg-config git gcc build-essential git clang libclang-dev
+apt install -y cmake pkg-config gcc build-essential git clang libclang-dev
 ```
 
 ###### Arch
