@@ -74,10 +74,12 @@ spec:
             - "{{ .Values.app.volume.mountPath }}"
             - "--chain"
             - "/mnt/config/chainspec.json"
+          {{- if .Values.app.utxo_validation }}
             - "--utxo-validation"
-            - "{{ .Values.app.utxo_validation }}"
+          {{- end}}
+          {{- if .Values.app.vm_backtrace }}
             - "--vm-backtrace"
-            - "{{ .Values.app.vm_backtrace }}"
+          {{- end}}
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
