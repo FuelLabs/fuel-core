@@ -66,12 +66,17 @@ impl Opt {
 
         if human_logging {
             // use pretty logs
-            sub.pretty().init();
+            sub.with_ansi(true)
+                .with_level(true)
+                .with_line_number(true)
+                .init();
         } else {
             // use machine parseable structured logs
             sub
                 // disable terminal colors
                 .with_ansi(false)
+                .with_level(true)
+                .with_line_number(true)
                 // use json
                 .json()
                 .init();

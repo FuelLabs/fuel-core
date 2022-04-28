@@ -9,6 +9,8 @@ app:
   httpsport: 443
   targetport: 4000
   human_logging: false
+  utxo_validation: true
+  vm_backtrace: true
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}

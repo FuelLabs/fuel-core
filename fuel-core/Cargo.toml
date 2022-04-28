@@ -38,7 +38,7 @@ fuel-asm = { version = "0.4", features = ["serde-types"] }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.6.1", features = [
     "serde-types",
 ] }
-fuel-crypto = { version = "0.4" }
+fuel-crypto = { version = "0.4", features = ["random"] }
 fuel-merkle = "0.1"
 fuel-storage = { version = "0.1" }
 fuel-tx = { version = "0.9", features = ["serde-types"] }
@@ -67,7 +67,7 @@ tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"
 tracing = "0.1"
-tracing-subscriber = { version = "0.2", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["ansi", "env-filter", "json"] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]

@@ -1,0 +1,16 @@
+{
+  "chain_name": "Testnet",
+  "block_production": "Instant",
+  "parent_network": {
+    "type": "LocalTest"
+  },
+  "initial_state": {
+    "coins": [
+      {
+        "owner": "0xf1e92c42b90934aa6372e30bc568a326f6e66a1a0288595e6e3fbd392a4f3e6e",
+        "amount": "0x04000000000000",
+        "asset_id": "0x0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ]
+  }
+}

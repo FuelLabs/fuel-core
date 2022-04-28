@@ -1,6 +1,8 @@
 use crate::model::BlockHeight;
 use core::fmt;
-use serde::{Deserializer, Serializer};
+use fuel_types::bytes::WORD_SIZE;
+use fuel_types::Word;
+use serde::{de::Error, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
 use std::convert::TryFrom;
 
@@ -17,12 +19,32 @@ impl SerializeAs<u64> for HexNumber {
     }
 }
 
-impl<'de> DeserializeAs<'de, u64> for HexNumber {
-    fn deserialize_as<D>(deserializer: D) -> Result<u64, D::Error>
+impl<'de> DeserializeAs<'de, Word> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<Word, D::Error>
     where
         D: Deserializer<'de>,
     {
-        Ok(u64::from_be_bytes(serde_hex::deserialize(deserializer)?))
+        let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
+        match bytes.len() {
+            len if len > WORD_SIZE => {
+                return Err(D::Error::custom(format!(
+                    "value cant exceed {} bytes",
+                    WORD_SIZE
+                )));
+            }
+            len if len < WORD_SIZE => {
+                // pad if length < word size
+                bytes = (0..WORD_SIZE - len)
+                    .map(|_| 0u8)
+                    .chain(bytes.into_iter())
+                    .collect();
+            }
+            _ => {}
+        }
+        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
+        Ok(Word::from_be_bytes(
+            bytes.try_into().expect("byte lengths checked"),
+        ))
     }
 }
 
