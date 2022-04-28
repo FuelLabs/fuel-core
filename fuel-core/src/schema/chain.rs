@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::model::fuel_block::FuelBlockDb;
+use crate::model::FuelBlockDb;
 use crate::schema::block::Block;
 use crate::schema::scalars::U64;
 use async_graphql::{Context, Object};

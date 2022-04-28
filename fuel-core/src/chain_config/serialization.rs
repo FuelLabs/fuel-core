@@ -1,4 +1,4 @@
-use crate::model::fuel_block::BlockHeight;
+use crate::model::BlockHeight;
 use core::fmt;
 use fuel_types::bytes::WORD_SIZE;
 use fuel_types::Word;

@@ -1,5 +1,9 @@
 use crate::{types::*, Error};
-use fuel_core_interfaces::txpool::TxPoolDb;
+use anyhow::anyhow;
+use fuel_core_interfaces::{
+    model::{ArcTx, Coin, CoinStatus, TxInfo},
+    txpool::TxPoolDb,
+};
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 
@@ -50,7 +54,7 @@ impl Dependency {
         &self,
         tx: ArcTx,
         seen: &mut HashMap<TxId, ArcTx>,
-        txs: &HashMap<TxId, ArcTx>,
+        txs: &HashMap<TxId, TxInfo>,
     ) {
         // for every input aggregate UtxoId and check if it is inside
         let mut check = vec![tx.id()];
@@ -61,7 +65,7 @@ impl Dependency {
                 is_new = true;
                 let parent = txs.get(&parent_txhash).expect("To have tx in txpool");
                 parent_tx = Some(parent.clone());
-                parent.clone()
+                parent.tx().clone()
             });
             // for every input check if tx_id is inside seen. if not, check coins/contract map.
             if let Some(parent_tx) = parent_tx {
@@ -95,6 +99,33 @@ impl Dependency {
                     }
                 }
             }
+        }
+    }
+
+    fn check_if_coin_input_can_spend_db_coin(coin: &Coin, input: &Input) -> anyhow::Result<()> {
+        match input {
+            Input::Coin {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                ..
+            } => {
+                if *owner != coin.owner {
+                    return Err(Error::NotInsertedIoWrongOwner.into());
+                }
+                if *amount != coin.amount {
+                    return Err(Error::NotInsertedIoWrongAmount.into());
+                }
+                if *asset_id != coin.asset_id {
+                    return Err(Error::NotInsertedIoWrongAssetId.into());
+                }
+                if coin.status == CoinStatus::Spent {
+                    return Err(Error::NotInsertedInputUtxoIdSpent(*utxo_id).into());
+                }
+                Ok(())
+            }
+            _ => Err(anyhow!("Use it only for coin output check")),
         }
     }
 
@@ -171,7 +202,7 @@ impl Dependency {
                 }
             };
         } else {
-            panic!("Use it only for coin output check");
+            return Err(anyhow!("Use it only for coin output check"));
         }
         Ok(())
     }
@@ -182,7 +213,7 @@ impl Dependency {
     #[allow(clippy::type_complexity)]
     fn check_for_colision<'a>(
         &'a self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<(
@@ -219,28 +250,10 @@ impl Dependency {
                             } else {
                                 if state.depth == 0 {
                                     //this means it is loaded from db. Get tx to compare output.
-                                    let db_tx = db.transaction(*utxo_id.tx_id())?;
-                                    let output = if let Some(ref db_tx) = db_tx {
-                                        if let Some(output) =
-                                            db_tx.outputs().get(utxo_id.output_index() as usize)
-                                        {
-                                            output
-                                        } else {
-                                            // output out of bound
-                                            return Err(Error::NotInsertedOutputNotExisting(
-                                                *utxo_id,
-                                            )
-                                            .into());
-                                        }
-                                    } else {
-                                        return Err(Error::NotInsertedInputTxNotExisting(
-                                            *utxo_id.tx_id(),
-                                        )
-                                        .into());
-                                    };
-                                    Self::check_if_coin_input_can_spend_output(
-                                        output, input, true,
+                                    let coin = db.utxo(utxo_id)?.ok_or(
+                                        Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
                                     )?;
+                                    Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                                 } else {
                                     // tx output is in pool
                                     let output_tx = txs.get(utxo_id.tx_id()).unwrap();
@@ -257,32 +270,19 @@ impl Dependency {
                         // if coin is not spend, it will be spend later down the line
                     } else {
                         // fetch from db and check if tx exist.
-                        if let Some(db_tx) = db.transaction(*utxo_id.tx_id())? {
-                            if let Some(output) =
-                                db_tx.outputs().get(utxo_id.output_index() as usize)
-                            {
-                                // add depth
-                                max_depth = core::cmp::max(1, max_depth);
-                                // do all checks that we can do
-                                Self::check_if_coin_input_can_spend_output(output, input, true)?;
-                                // insert it as spend coin.
-                                // check for double spend should be done before transaction is received.
-                                db_coins.insert(
-                                    *utxo_id,
-                                    CoinState {
-                                        is_spend_by: Some(tx.id() as TxId),
-                                        depth: 0,
-                                    },
-                                );
-                            } else {
-                                // output out of bound
-                                return Err(Error::NotInsertedOutputNotExisting(*utxo_id).into());
-                            }
-                        } else {
-                            return Err(
-                                Error::NotInsertedInputTxNotExisting(*utxo_id.tx_id()).into()
-                            );
-                        }
+                        let coin = db
+                            .utxo(utxo_id)?
+                            .ok_or(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id))?;
+
+                        Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                        max_depth = core::cmp::max(1, max_depth);
+                        db_coins.insert(
+                            *utxo_id,
+                            CoinState {
+                                is_spend_by: Some(tx.id() as TxId),
+                                depth: 0,
+                            },
+                        );
                     }
 
                     // yey we got our coin
@@ -355,7 +355,7 @@ impl Dependency {
     /// return list of transactions that are removed from txpool
     pub async fn insert<'a>(
         &'a mut self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
@@ -367,7 +367,7 @@ impl Dependency {
             let collided = txs
                 .get(&collided)
                 .expect("Collided should be present in txpool");
-            removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.clone()));
+            removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.tx().clone()));
         }
 
         // iterate over all inputs and spend parent coins/contracts
@@ -437,7 +437,7 @@ impl Dependency {
 
     pub fn recursively_remove_all_dependencies<'a>(
         &'a mut self,
-        txs: &'a HashMap<TxId, ArcTx>,
+        txs: &'a HashMap<TxId, TxInfo>,
         tx: ArcTx,
     ) -> Vec<ArcTx> {
         let mut removed_tx = vec![tx.clone()];
@@ -467,8 +467,9 @@ impl Dependency {
                     // call removal on every tx;
                     for rem_tx in state.used_by.iter() {
                         let rem_tx = txs.get(rem_tx).expect("Tx should be present in txs");
-                        removed_tx
-                            .extend(self.recursively_remove_all_dependencies(txs, rem_tx.clone()));
+                        removed_tx.extend(
+                            self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                        );
                     }
                 } else {
                     panic!("Contract state should be present when removing child");
@@ -487,7 +488,7 @@ impl Dependency {
                 {
                     let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
                     removed_tx
-                        .extend(self.recursively_remove_all_dependencies(txs, rem_tx.clone()));
+                        .extend(self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()));
                 }
                 // remove it from dependency
                 self.coins.remove(&utxo);

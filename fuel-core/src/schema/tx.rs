@@ -1,5 +1,5 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::model::fuel_block::{BlockHeight, FuelBlockDb};
+use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;
@@ -47,7 +47,7 @@ impl TxQuery {
         let found_tx = tx_pool.pool().find(&[key]).await;
 
         if let Some(Some(transaction)) = found_tx.get(0) {
-            Ok(Some(Transaction((transaction.deref()).clone())))
+            Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
             Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
                 .map(|tx| Transaction(tx.into_owned())))

@@ -1,16 +1,22 @@
 use crate::coin_query::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
-use crate::model::coin::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{Address, AssetId, UtxoId, U64};
 use crate::state::IterDirection;
-use async_graphql::InputObject;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
-    Context, Object,
+    Context, Enum, InputObject, Object,
 };
+use fuel_core_interfaces::model::{Coin as CoinModel, CoinStatus as CoinStatusModel};
 use fuel_storage::Storage;
 use fuel_tx::consts::MAX_INPUTS;
 use itertools::Itertools;
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "CoinStatusModel")]
+pub enum CoinStatus {
+    Unspent,
+    Spent,
+}
 
 pub struct Coin(fuel_tx::UtxoId, CoinModel);
 
@@ -37,7 +43,7 @@ impl Coin {
     }
 
     async fn status(&self) -> CoinStatus {
-        self.1.status
+        self.1.status.into()
     }
 
     async fn block_created(&self) -> U64 {
@@ -161,7 +167,7 @@ impl CoinQuery {
                 }
 
                 // filter coins by status
-                coins.retain(|coin| coin.1.status == CoinStatus::Unspent);
+                coins.retain(|coin| coin.1.status == CoinStatusModel::Unspent);
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= coins.len());

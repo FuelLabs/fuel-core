@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use crate::Error;
 use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl};
-use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDb};
-
 use async_trait::async_trait;
+use fuel_core_interfaces::model::{ArcTx, TxInfo};
+use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDb};
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 
@@ -56,7 +56,7 @@ impl TxPool for TxPoolService {
     }
 
     /// find all tx by its hash
-    async fn find(&self, hashes: &[TxId]) -> Vec<Option<ArcTx>> {
+    async fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
         let mut res = Vec::with_capacity(hashes.len());
         let pool = self.txpool.read().await;
         for hash in hashes {
@@ -65,14 +65,19 @@ impl TxPool for TxPoolService {
         res
     }
 
+    async fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
+        self.txpool.read().await.txs().get(hash).cloned()
+    }
+
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
     async fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcTx> {
         let mut seen = HashMap::new();
         {
             let pool = self.txpool.read().await;
             for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash).cloned() {
-                    pool.dependency().find_dependent(tx, &mut seen, pool.txs());
+                if let Some(tx) = pool.txs().get(hash) {
+                    pool.dependency()
+                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
                 }
             }
         }

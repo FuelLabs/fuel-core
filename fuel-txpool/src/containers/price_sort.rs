@@ -1,4 +1,5 @@
 use crate::types::*;
+use fuel_core_interfaces::model::ArcTx;
 use std::{cmp, collections::BTreeMap};
 
 #[derive(Debug, Clone)]

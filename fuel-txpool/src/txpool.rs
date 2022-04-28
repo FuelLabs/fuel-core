@@ -1,13 +1,14 @@
 use crate::containers::dependency::Dependency;
 use crate::Error;
 use crate::{containers::price_sort::PriceSort, types::*, Config};
+use fuel_core_interfaces::model::{ArcTx, TxInfo};
 use fuel_core_interfaces::txpool::TxPoolDb;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
-    by_hash: HashMap<TxId, ArcTx>,
+    by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_dependency: Dependency,
     config: Arc<Config>,
@@ -23,7 +24,7 @@ impl TxPool {
             by_dependency: Dependency::new(max_depth),
         }
     }
-    pub fn txs(&self) -> &HashMap<TxId, ArcTx> {
+    pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
         &self.by_hash
     }
 
@@ -53,7 +54,7 @@ impl TxPool {
         }
         // check and insert dependency
         let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
-        self.by_hash.insert(tx.id(), tx.clone());
+        self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
         // if some transaction were removed so we dont need to check limit
@@ -97,11 +98,11 @@ impl TxPool {
 
     /// remove transaction from pool needed on user demand. Low priority
     pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcTx> {
-        if let Some(tx) = self.by_hash.get(tx_id) {
-            self.by_gas_price.remove(tx);
+        if let Some(tx) = self.by_hash.remove(tx_id) {
+            self.by_gas_price.remove(tx.tx());
             return self
                 .by_dependency
-                .recursively_remove_all_dependencies(&self.by_hash, tx.clone());
+                .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
         }
         Vec::new()
     }
@@ -111,7 +112,8 @@ impl TxPool {
 pub mod tests {
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::db::helpers::*;
+    use fuel_core_interfaces::{db::helpers::*, model::CoinStatus};
+    use fuel_tx::UtxoId;
     use std::cmp::Reverse;
 
     #[tokio::test]
@@ -183,7 +185,7 @@ pub mod tests {
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }");
     }
 
     #[tokio::test]
@@ -218,7 +220,28 @@ pub mod tests {
 
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x0000000000000000000000000000000000000000000000000000000000000010",);
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }",);
+    }
+
+    #[tokio::test]
+    async fn tx1_try_to_use_spend_coin() {
+        let config = Arc::new(Config::default());
+        let mut db = DummyDB::filled();
+
+        // mark utxo as spend
+        db.coins
+            .get_mut(&UtxoId::new(*TX_ID_DB1, 0))
+            .unwrap()
+            .status = CoinStatus::Spent;
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_err(), "Tx1 should be error");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is spent: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000000, output_index: 0 }",);
     }
 
     #[tokio::test]

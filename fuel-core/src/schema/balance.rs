@@ -1,5 +1,5 @@
 use crate::database::{Database, KvStoreError};
-use crate::model::coin::{Coin as CoinModel, CoinStatus};
+use crate::model::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{Address, AssetId, U64};
 use crate::state::{Error, IterDirection};
 use async_graphql::InputObject;

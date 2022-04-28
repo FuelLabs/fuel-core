@@ -1,7 +1,7 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-use crate::model::fuel_block::FuelBlockDb;
+use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{

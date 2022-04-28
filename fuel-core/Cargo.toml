@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core"
-version = "0.5.0"
+version = "0.6.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -19,7 +19,13 @@ test = false
 
 [dependencies]
 anyhow = "1.0"
-async-graphql = { version = "=2.9", features = ["chrono", "chrono-tz", "tracing"] }
+# This needs to be pinned as newer versions are incompatible with fuel-core.
+# We're waiting for the following resolution: https://github.com/FuelLabs/fuel-core/pull/260#issuecomment-1102435692
+async-graphql = { version = "=2.9", features = [
+    "chrono",
+    "chrono-tz",
+    "tracing",
+] }
 async-trait = "0.1"
 axum = { version = "0.4" }
 bincode = "1.3"
@@ -28,15 +34,17 @@ clap = { version = "3.1", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
 dirs = "3.0"
 env_logger = "0.9"
-fuel-asm = { version = "0.3", features = ["serde-types"] }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.5.0" }
-fuel-crypto = { version = "0.3", features = ["random"] }
+fuel-asm = { version = "0.4", features = ["serde-types"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.6.1", features = [
+    "serde-types",
+] }
+fuel-crypto = { version = "0.4", features = ["random"] }
 fuel-merkle = "0.1"
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.7", features = ["serde-types"] }
-fuel-txpool = { path = "../fuel-txpool", version = "0.5.0" }
+fuel-tx = { version = "0.9", features = ["serde-types"] }
+fuel-txpool = { path = "../fuel-txpool", version = "0.6.1" }
 fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = { version = "0.6", features = ["serde-types"] }
+fuel-vm = { version = "0.8", features = ["serde-types"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -64,8 +72,16 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-tx = { version = "0.7", features = ["serde-types", "builder", "internals"] }
-fuel-vm = { version = "0.6", features = ["serde-types", "random", "test-helpers"] }
+fuel-tx = { version = "0.9", features = [
+    "serde-types",
+    "builder",
+    "internals",
+] }
+fuel-vm = { version = "0.8", features = [
+    "serde-types",
+    "random",
+    "test-helpers",
+] }
 insta = "1.8"
 
 [features]
