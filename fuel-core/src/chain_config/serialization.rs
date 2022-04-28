@@ -27,7 +27,10 @@ impl<'de> DeserializeAs<'de, Word> for HexNumber {
         let mut bytes: Vec<u8> = serde_hex::deserialize(deserializer)?;
         match bytes.len() {
             len if len > WORD_SIZE => {
-                return Err(D::Error::custom(""));
+                return Err(D::Error::custom(format!(
+                    "value cant exceed {} bytes",
+                    WORD_SIZE
+                )));
             }
             len if len < WORD_SIZE => {
                 // pad if length < word size
