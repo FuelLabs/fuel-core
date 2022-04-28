@@ -169,6 +169,7 @@ impl FuelService {
     fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // initialize contract state
         if let Some(contracts) = &state.contracts {
+            let mut generated_output_index = 0;
             for contract_config in contracts {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
@@ -182,6 +183,12 @@ impl FuelService {
                     &contract_id,
                     &(salt, root),
                 )?;
+                let _ = Storage::<ContractId, UtxoId>::insert(
+                    db,
+                    &contract_id,
+                    &UtxoId::new(Default::default(), generated_output_index),
+                )?;
+                generated_output_index += 1;
                 Self::init_contract_state(db, &contract_id, contract_config)?;
                 Self::init_contract_balance(db, &contract_id, contract_config)?;
             }

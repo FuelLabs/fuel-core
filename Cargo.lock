@@ -1593,6 +1593,7 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "fuel-core",
+ "fuel-crypto",
  "fuel-gql-client",
  "fuel-storage",
  "fuel-tx",
