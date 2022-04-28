@@ -41,6 +41,7 @@ impl<'de> DeserializeAs<'de, Word> for HexNumber {
             }
             _ => {}
         }
+        // We've already verified the bytes.len == WORD_SIZE, force the conversion here.
         Ok(Word::from_be_bytes(
             bytes.try_into().expect("byte lengths checked"),
         ))
