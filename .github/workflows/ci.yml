@@ -95,11 +95,7 @@ jobs:
     # Only do this job if publishing a release
     needs:
       - lint-toml-files
-      - cargo-fmt-check
-      - cargo-clippy
-      - cargo-check
-      - cargo-test
-      - cargo-test-no-default-features
+      - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -149,11 +145,7 @@ jobs:
   build-publish-master-image:
     needs:
       - lint-toml-files
-      - cargo-fmt-check
-      - cargo-clippy
-      - cargo-check
-      - cargo-test
-      - cargo-test-no-default-features
+      - cargo-verifications
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
