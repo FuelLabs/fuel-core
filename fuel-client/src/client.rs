@@ -32,14 +32,9 @@ impl FromStr for FuelClient {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        // lightweight url verification
-        if !str.contains("/graphql") {
-            Err(anyhow!("Url is missing /graphql path".to_string()))
-        } else {
-            Ok(Self {
-                url: surf::Url::parse(str)?,
-            })
-        }
+        let mut url = surf::Url::parse(str)?;
+        url.set_path("/graphql");
+        Ok(Self { url })
     }
 }
 
@@ -48,12 +43,10 @@ where
     S: Into<net::SocketAddr>,
 {
     fn from(socket: S) -> Self {
-        let url = format!("http://{}/graphql", socket.into())
+        format!("http://{}", socket.into())
             .as_str()
             .parse()
-            .unwrap();
-
-        Self { url }
+            .unwrap()
     }
 }
 
