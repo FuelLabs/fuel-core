@@ -1,16 +1,6 @@
 use cynic::{http::SurfExt, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
-use std::{
-    convert::TryInto,
-    io, net,
-    str::{self, FromStr},
-};
-
-pub mod schema;
-pub mod types;
-
-use anyhow::anyhow;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
@@ -19,9 +9,18 @@ use schema::{
     tx::{TxArg, TxIdArgs},
     Bytes, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs, TransactionId,
 };
-pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
-use std::io::ErrorKind;
+use std::{
+    convert::TryInto,
+    io::{self, ErrorKind},
+    net,
+    str::{self, FromStr},
+};
 use types::{TransactionResponse, TransactionStatus};
+
+pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
+
+pub mod schema;
+pub mod types;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
