@@ -145,6 +145,7 @@ impl FuelService {
             for coin in coins {
                 let utxo_id = UtxoId::new(
                     coin.tx_id.unwrap_or_default(),
+                    // TODO: come up with utxo id scheme if there are > 255 coins with default tx id
                     coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
                         generated_output_index += 1;
                         generated_output_index
@@ -169,8 +170,7 @@ impl FuelService {
     fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // initialize contract state
         if let Some(contracts) = &state.contracts {
-            let mut generated_output_index = 0;
-            for contract_config in contracts {
+            for (generated_output_index, contract_config) in contracts.iter().enumerate() {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
@@ -186,9 +186,9 @@ impl FuelService {
                 let _ = Storage::<ContractId, UtxoId>::insert(
                     db,
                     &contract_id,
-                    &UtxoId::new(Default::default(), generated_output_index),
+                    // TODO: come up with utxo id scheme if there are > 255 genesis contracts
+                    &UtxoId::new(Default::default(), generated_output_index as u8),
                 )?;
-                generated_output_index += 1;
                 Self::init_contract_state(db, &contract_id, contract_config)?;
                 Self::init_contract_balance(db, &contract_id, contract_config)?;
             }

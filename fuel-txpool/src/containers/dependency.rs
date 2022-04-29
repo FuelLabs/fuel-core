@@ -473,7 +473,7 @@ impl Dependency {
                 }
                 Output::ContractCreated { contract_id, .. } => {
                     // remove any other pending txs that depend on our yet to be created contract
-                    if let Some(contract) = self.contracts.remove(&contract_id) {
+                    if let Some(contract) = self.contracts.remove(contract_id) {
                         for spend_by in contract
                             .used_by
                             .into_iter()
