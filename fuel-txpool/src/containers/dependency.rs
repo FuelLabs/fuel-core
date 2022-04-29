@@ -6,6 +6,7 @@ use fuel_core_interfaces::{
 };
 use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
+use tracing::warn;
 
 /// Check and hold dependency between inputs and outputs. Be mindful
 /// about depth of connection
@@ -50,7 +51,7 @@ impl Dependency {
 
     /// find all dependent Transactions that are inside txpool.
     /// Does not check db. They can be sorted by gasPrice to get order of dependency
-    pub fn find_dependent(
+    pub(crate) fn find_dependent(
         &self,
         tx: ArcTx,
         seen: &mut HashMap<TxId, ArcTx>,
@@ -246,6 +247,8 @@ impl Dependency {
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
                             if txpool_tx.gas_price() > tx.gas_price() {
+                                // TODO: should we consider the value of all dependant txs to avoid
+                                //       large graphs being cancellable by single tx with a slightly higher gas price?
                                 return Err(Error::NotInsertedCollision(*spend_by, *utxo_id).into());
                             } else {
                                 if state.depth == 0 {
@@ -341,8 +344,8 @@ impl Dependency {
                     }
                     // if we are prices more, mark current contract origin for removal.
                     let origin = contract.origin.expect(
-                            "Only contract without origin are the ones that are inside DB. And we check depth for that, so we are okay to just unwrap
-                        ");
+                        "Only contract without origin are the ones that are inside DB. And we check depth for that, so we are okay to just unwrap"
+                        );
                     collided.push(*origin.tx_id());
                 }
             }
@@ -351,9 +354,10 @@ impl Dependency {
 
         Ok((max_depth, db_coins, db_contracts, collided))
     }
+
     /// insert tx inside dependency
     /// return list of transactions that are removed from txpool
-    pub async fn insert<'a>(
+    pub(crate) async fn insert<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
@@ -435,75 +439,72 @@ impl Dependency {
         Ok(removed_tx)
     }
 
-    pub fn recursively_remove_all_dependencies<'a>(
+    /// Remove all pending txs that depend on the outputs of the provided tx
+    pub(crate) fn recursively_remove_all_dependencies<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
         tx: ArcTx,
     ) -> Vec<ArcTx> {
-        let mut removed_tx = vec![tx.clone()];
+        let mut removed_transactions = vec![tx.clone()];
+        let id = tx.id();
 
-        // for all outputs recursivly call removal
+        // recursively remove all transactions dependant on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
-            // get contract_id or none if it is coin
-            let is_contract = match output {
-                Output::Coin { .. }
-                | Output::Withdrawal { .. }
-                | Output::Change { .. }
-                | Output::Variable { .. } => None,
-                Output::Contract { input_index, .. } => {
-                    if let Input::Contract { contract_id, .. } = tx.inputs()[*input_index as usize]
-                    {
-                        Some(contract_id)
+            match output {
+                Output::Withdrawal { .. } | Output::Contract { .. } => {
+                    // no other transactions can depend on these types of outputs
+                }
+                Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
+                    // remove transactions that depend on this coin output
+                    let utxo = UtxoId::new(tx.id(), index as u8);
+                    if let Some(state) = self.coins.remove(&utxo).map(|c| c.is_spend_by) {
+                        // there may or may not be any dependents for this coin output
+                        if let Some(spend_by) = state {
+                            let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
+                            removed_transactions.extend(
+                                self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                            );
+                        }
                     } else {
-                        panic!("InputIndex for contract should be always correct");
+                        // this shouldn't happen since the output belongs to this unique transaction,
+                        // no other resources should remove this coin state except this transaction.
+                        warn!("expected a coin state to be associated with {:?}", &utxo);
                     }
                 }
-                Output::ContractCreated { contract_id, .. } => Some(*contract_id),
+                Output::ContractCreated { contract_id, .. } => {
+                    // remove any other pending txs that depend on our yet to be created contract
+                    if let Some(contract) = self.contracts.remove(&contract_id) {
+                        for spend_by in contract
+                            .used_by
+                            .into_iter()
+                            // skip the current tx
+                            .filter(|used_by| used_by != &id)
+                        {
+                            let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
+                            removed_transactions.extend(
+                                self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                            );
+                        }
+                    }
+                }
             };
-            // remove contract childrens.
-            if let Some(ref contract_id) = is_contract {
-                let state = self.contracts.get(contract_id).cloned();
-                if let Some(state) = state {
-                    // call removal on every tx;
-                    for rem_tx in state.used_by.iter() {
-                        let rem_tx = txs.get(rem_tx).expect("Tx should be present in txs");
-                        removed_tx.extend(
-                            self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
-                        );
-                    }
-                } else {
-                    panic!("Contract state should be present when removing child");
-                }
-                // remove it from dependency
-                self.contracts.remove(contract_id);
-            } else {
-                // remove user of this coin.
-                let utxo = UtxoId::new(tx.id(), index as u8);
-                // call childrens.
-                if let Some(spend_by) = self
-                    .coins
-                    .get(&utxo)
-                    .expect("Coin should be present when removing child")
-                    .is_spend_by
-                {
-                    let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
-                    removed_tx
-                        .extend(self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()));
-                }
-                // remove it from dependency
-                self.coins.remove(&utxo);
-            }
         }
 
-        // set all inputs as unspend.
+        // remove this transaction as a dependency of its' inputs.
         for input in tx.inputs() {
             match input {
                 Input::Coin { utxo_id, .. } => {
+                    // Input coin cases
+                    // 1. coin state was already removed if parent tx was also removed, no cleanup required.
+                    // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
+                    // 3. coin state can be removed if this is a database coin, as no other txs are involved.
                     let mut rem_coin = false;
-                    {
-                        let state = self.coins.get_mut(utxo_id).expect("Coin should be present");
-                        state.is_spend_by = None;
-                        if state.depth == 0 {
+                    if let Some(state) = self.coins.get_mut(utxo_id) {
+                        if state.depth != 0 {
+                            // case 2
+                            state.is_spend_by = None;
+                        } else {
+                            // case 3
                             rem_coin = true;
                         }
                     }
@@ -512,15 +513,15 @@ impl Dependency {
                     }
                 }
                 Input::Contract { contract_id, .. } => {
-                    // remove from contract
+                    // Input contract cases
+                    // 1. contract state no longer exists because the parent tx that created the
+                    //    contract was already removed from the graph
+                    // 2. contract state exists and this tx needs to be removed as a user of it.
+                    // 2.a. contract state can be removed if this is the last tx to use it.
                     let mut rem_contract = false;
-                    {
-                        let state = self
-                            .contracts
-                            .get_mut(contract_id)
-                            .expect("Contract should be present");
+                    if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.remove(&tx.id());
-                        // if contract list is empty, remove contract from dependency.
+                        // if contract list is empty, flag contract state for removal.
                         if state.used_by.is_empty() {
                             rem_contract = true;
                         }
@@ -532,7 +533,7 @@ impl Dependency {
             }
         }
 
-        removed_tx
+        removed_transactions
     }
 }
 
