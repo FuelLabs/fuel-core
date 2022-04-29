@@ -28,6 +28,13 @@ pub struct CoinState {
     depth: usize,
 }
 
+impl CoinState {
+    /// Indicates whether coin exists in the database
+    pub fn is_in_database(&self) -> bool {
+        self.depth == 0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ContractState {
     /// is Utxo spend as other Tx input
@@ -38,6 +45,13 @@ pub struct ContractState {
     origin: Option<UtxoId>,
     /// gas_price. We can probably derive this from Tx
     gas_price: GasPrice,
+}
+
+impl ContractState {
+    /// Indicates whether the contract exists in the database
+    pub fn is_in_database(&self) -> bool {
+        self.depth == 0
+    }
 }
 
 impl Dependency {
@@ -78,8 +92,7 @@ impl Dependency {
                                 .coins
                                 .get(utxo_id)
                                 .expect("to find coin inside spend tx");
-                            // if depth is not zero it means tx is inside txpool. Zero == db utxo
-                            if state.depth != 0 {
+                            if !state.is_in_database() {
                                 check.push(*utxo_id.tx_id());
                             }
                         }
@@ -89,7 +102,7 @@ impl Dependency {
                                 .get(contract_id)
                                 .expect("Expect to find contract in dependency");
 
-                            if state.depth != 0 {
+                            if !state.is_in_database() {
                                 let origin = state
                                     .origin
                                     .as_ref()
@@ -247,11 +260,9 @@ impl Dependency {
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
                             if txpool_tx.gas_price() > tx.gas_price() {
-                                // TODO: should we consider the value of all dependant txs to avoid
-                                //       large graphs being cancellable by single tx with a slightly higher gas price?
                                 return Err(Error::NotInsertedCollision(*spend_by, *utxo_id).into());
                             } else {
-                                if state.depth == 0 {
+                                if state.is_in_database() {
                                     //this means it is loaded from db. Get tx to compare output.
                                     let coin = db.utxo(utxo_id)?.ok_or(
                                         Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
@@ -333,8 +344,7 @@ impl Dependency {
             if let Output::ContractCreated { contract_id, .. } = output {
                 if let Some(contract) = self.contracts.get(contract_id) {
                     // we have a collision :(
-                    if contract.depth == 0 {
-                        // if depth is zero it means it is contract from db
+                    if contract.is_in_database() {
                         return Err(Error::NotInsertedContractIdAlreadyTaken(*contract_id).into());
                     }
                     // check who is priced more
@@ -446,9 +456,8 @@ impl Dependency {
         tx: ArcTx,
     ) -> Vec<ArcTx> {
         let mut removed_transactions = vec![tx.clone()];
-        let id = tx.id();
 
-        // recursively remove all transactions dependant on the outputs of the current tx
+        // recursively remove all transactions that depend on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
                 Output::Withdrawal { .. } | Output::Contract { .. } => {
@@ -474,12 +483,7 @@ impl Dependency {
                 Output::ContractCreated { contract_id, .. } => {
                     // remove any other pending txs that depend on our yet to be created contract
                     if let Some(contract) = self.contracts.remove(contract_id) {
-                        for spend_by in contract
-                            .used_by
-                            .into_iter()
-                            // skip the current tx
-                            .filter(|used_by| used_by != &id)
-                        {
+                        for spend_by in contract.used_by {
                             let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
                             removed_transactions.extend(
                                 self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
@@ -500,7 +504,7 @@ impl Dependency {
                     // 3. coin state can be removed if this is a database coin, as no other txs are involved.
                     let mut rem_coin = false;
                     if let Some(state) = self.coins.get_mut(utxo_id) {
-                        if state.depth != 0 {
+                        if !state.is_in_database() {
                             // case 2
                             state.is_spend_by = None;
                         } else {
@@ -517,12 +521,13 @@ impl Dependency {
                     // 1. contract state no longer exists because the parent tx that created the
                     //    contract was already removed from the graph
                     // 2. contract state exists and this tx needs to be removed as a user of it.
-                    // 2.a. contract state can be removed if this is the last tx to use it.
+                    // 2.a. contract state can be removed if it's from the database and this is the
+                    //      last tx to use it, since no other txs are involved.
                     let mut rem_contract = false;
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.remove(&tx.id());
-                        // if contract list is empty, flag contract state for removal.
-                        if state.used_by.is_empty() {
+                        // if contract list is empty and is in db, flag contract state for removal.
+                        if state.used_by.is_empty() && state.is_in_database() {
                             rem_contract = true;
                         }
                     }
