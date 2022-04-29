@@ -50,46 +50,33 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
-  cargo-fmt-check:
+  cargo-verifications:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - name: Check Formatting
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all --verbose -- --check
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  cargo-clippy:
-    needs: cancel-previous-runs
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - command: fmt
+            args: --all --verbose -- --check
+          - command: clippy
+            args: --all-targets --all-features
+          - command: check
+            args: --all-targets --all-features
+          - command: test
+            args: --all-targets --all-features
+          - command: test
+            args: --all-targets --no-default-features
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v1
-      - name: Check Clippy Linter
+      - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
-          command: clippy
-          args: --all-features --all-targets -- -D warnings
+          command: ${{ matrix.command }}
+          args: ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always() && github.ref == 'refs/heads/master'
@@ -102,100 +89,13 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  cargo-check:
-    needs: cancel-previous-runs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - uses: Swatinem/rust-cache@v1
-      - name: Run Cargo Check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-          args: --verbose
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  cargo-test:
-    needs: cancel-previous-runs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - uses: Swatinem/rust-cache@v1
-      - name: Run Cargo Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --verbose --workspace --all-targets --all-features
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-
-  cargo-test-no-default-features:
-    needs: cancel-previous-runs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-      - uses: Swatinem/rust-cache@v1
-      - name: Run Cargo Test without default features
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --verbose --workspace --all-targets --all-features --no-default-features
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+          RUSTFLAGS: -D warnings
 
   publish:
     # Only do this job if publishing a release
     needs:
       - lint-toml-files
-      - cargo-fmt-check
-      - cargo-clippy
-      - cargo-check
-      - cargo-test
-      - cargo-test-no-default-features
+      - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -245,11 +145,7 @@ jobs:
   build-publish-master-image:
     needs:
       - lint-toml-files
-      - cargo-fmt-check
-      - cargo-clippy
-      - cargo-check
-      - cargo-test
-      - cargo-test-no-default-features
+      - cargo-verifications
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
