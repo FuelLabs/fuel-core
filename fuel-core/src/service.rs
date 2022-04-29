@@ -5,8 +5,10 @@ use crate::tx_pool::TxPool;
 use fuel_storage::{MerkleStorage, Storage};
 use fuel_tx::UtxoId;
 use fuel_types::{AssetId, Bytes32, ContractId, Salt, Word};
+use fuel_vm::consts::WORD_SIZE;
 use fuel_vm::prelude::Contract;
 pub use graph_api::start_server;
+use itertools::Itertools;
 #[cfg(feature = "rocksdb")]
 use std::io::ErrorKind;
 use std::{
@@ -140,14 +142,24 @@ impl FuelService {
     /// initialize coins
     fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
-        let mut generated_output_index = 0;
+        let mut generated_output_index: u64 = 0;
         if let Some(coins) = &state.coins {
             for coin in coins {
                 let utxo_id = UtxoId::new(
-                    coin.tx_id.unwrap_or_default(),
+                    // generated transaction id([0..[out_index/255]])
+                    coin.tx_id.unwrap_or_else(|| {
+                        Bytes32::try_from(
+                            (0..(Bytes32::LEN - WORD_SIZE))
+                                .map(|_| 0u8)
+                                .chain((generated_output_index / 255).to_be_bytes().into_iter())
+                                .collect_vec()
+                                .as_slice(),
+                        )
+                        .expect("Incorrect genesis transaction id byte length")
+                    }),
                     coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
                         generated_output_index += 1;
-                        generated_output_index
+                        (generated_output_index % 255) as u8
                     }),
                 );
 
@@ -169,7 +181,7 @@ impl FuelService {
     fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<(), std::io::Error> {
         // initialize contract state
         if let Some(contracts) = &state.contracts {
-            for contract_config in contracts {
+            for (generated_output_index, contract_config) in contracts.iter().enumerate() {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
@@ -181,6 +193,26 @@ impl FuelService {
                     db,
                     &contract_id,
                     &(salt, root),
+                )?;
+                let _ = Storage::<ContractId, UtxoId>::insert(
+                    db,
+                    &contract_id,
+                    &UtxoId::new(
+                        // generated transaction id([0..[out_index/255]])
+                        Bytes32::try_from(
+                            (0..(Bytes32::LEN - WORD_SIZE))
+                                .map(|_| 0u8)
+                                .chain(
+                                    (generated_output_index as u64 / 255)
+                                        .to_be_bytes()
+                                        .into_iter(),
+                                )
+                                .collect_vec()
+                                .as_slice(),
+                        )
+                        .expect("Incorrect genesis transaction id byte length"),
+                        generated_output_index as u8,
+                    ),
                 )?;
                 Self::init_contract_state(db, &contract_id, contract_config)?;
                 Self::init_contract_balance(db, &contract_id, contract_config)?;

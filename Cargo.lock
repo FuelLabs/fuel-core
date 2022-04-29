@@ -1593,6 +1593,7 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "fuel-core",
+ "fuel-crypto",
  "fuel-gql-client",
  "fuel-storage",
  "fuel-tx",
@@ -1632,6 +1633,7 @@ dependencies = [
  "parking_lot 0.11.2",
  "thiserror",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
