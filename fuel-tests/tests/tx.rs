@@ -143,34 +143,37 @@ async fn submit_utxo_verified_tx() {
         .into_iter()
         .map(|i| {
             let secret = SecretKey::random(&mut rng);
-            TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].iter().copied().collect(), vec![])
-                .gas_limit(100)
-                .add_unsigned_coin_input(
-                    rng.gen(),
-                    &secret,
-                    100 + i,
-                    Default::default(),
-                    0,
-                    vec![],
-                    vec![],
-                )
-                .add_input(Input::Contract {
-                    utxo_id: Default::default(),
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
-                    contract_id: contract_id.clone(),
-                })
-                .add_output(Output::Change {
-                    amount: 0,
-                    asset_id: Default::default(),
-                    to: rng.gen(),
-                })
-                .add_output(Output::Contract {
-                    input_index: 1,
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
-                })
-                .finalize()
+            TransactionBuilder::script(
+                Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+                vec![],
+            )
+            .gas_limit(100)
+            .add_unsigned_coin_input(
+                rng.gen(),
+                &secret,
+                100 + i,
+                Default::default(),
+                0,
+                vec![],
+                vec![],
+            )
+            .add_input(Input::Contract {
+                utxo_id: Default::default(),
+                balance_root: Default::default(),
+                state_root: Default::default(),
+                contract_id,
+            })
+            .add_output(Output::Change {
+                amount: 0,
+                asset_id: Default::default(),
+                to: rng.gen(),
+            })
+            .add_output(Output::Contract {
+                input_index: 1,
+                balance_root: Default::default(),
+                state_root: Default::default(),
+            })
+            .finalize()
         })
         .collect_vec();
 
