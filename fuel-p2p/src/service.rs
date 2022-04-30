@@ -1,3 +1,4 @@
+use crate::codecs::bincode::BincodeCodec;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::{build_transport, P2PConfig},
@@ -29,7 +30,7 @@ pub struct FuelP2PService {
     /// Store the local peer id
     pub local_peer_id: PeerId,
     /// Swarm handler for FuelBehaviour
-    swarm: Swarm<FuelBehaviour>,
+    swarm: Swarm<FuelBehaviour<BincodeCodec>>,
 }
 
 #[derive(Debug)]
@@ -45,7 +46,7 @@ impl FuelP2PService {
 
         // configure and build P2P Serivce
         let transport = build_transport(local_keypair.clone()).await;
-        let behaviour = FuelBehaviour::new(local_keypair, &config);
+        let behaviour = FuelBehaviour::new(local_keypair, &config, BincodeCodec {});
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
         // set up node's address to listen on
@@ -103,16 +104,7 @@ impl FuelP2PService {
         topic: GossipTopic,
         message: FuelGossipsubMessage,
     ) -> Result<MessageId, PublishError> {
-        let mut encoded_data = vec![];
-        let mut serializer = bincode::Serializer::new(&mut encoded_data, bincode::options());
-
-        match message.encode(&mut serializer) {
-            Ok(_) => self
-                .swarm
-                .behaviour_mut()
-                .publish_message(topic, encoded_data),
-            Err(e) => Err(PublishError::TransformFailed(e)),
-        }
+        self.swarm.behaviour_mut().publish_message(topic, message)
     }
 
     pub async fn next_event(&mut self) -> FuelP2PEvent {
