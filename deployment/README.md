@@ -43,12 +43,12 @@ Before proceeding make sure to have these software packages installed on your ma
 
 4) [gettext][gettext-cli]: Install gettext for your OS
 
-4) AWS (for EKS only):
+5) AWS (for EKS deployment only):
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
 
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
-- IAM user with AWS access keys with following IAM access:
+- IAM user(s) with AWS access keys with following IAM access:
 ```json
 {
     "Version": "2012-10-17",
@@ -155,16 +155,24 @@ Notes:
 
 ### k8s Cluster Deployment
 
-Once your env file is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh] to deploy the k8s cluster to your cloud provider:
+Once your env file is updated with your parameters, then run the [create-k8s.sh][create-k8s-sh] to create, deploy, update, and/or setup the k8s cluster to your cloud provider:
 
 ```bash
 ./create-k8s.sh
 ```
 The script will read the "k8s_provider" from the env file and then terraform will automatically create the k8s cluster.
 
+Note:
+
+- During the create-k8s script run, please do not interrupt your terminal as terraform is deploying your infrastructure. 
+
+If you stop the script somehow, terraform may lock the state of configuration.
+
+- If you have deployed an AWS EKS cluster, post creation of the EKS cluster make sure the proper IAM users have access to the EKS cluster via the [aws-auth][add-users-aws-auth] configmap to run the other deployment scripts.
+
 ### k8s Cluster Delete
 
-If you need to tear down your k8s cluster, just run the [delete-k8s.sh][delete-k8s-sh] script:
+If you need to tear down your entire k8s cluster, just run the [delete-k8s.sh][delete-k8s-sh] script:
 
 ```bash
 ./delete-k8s.sh
@@ -224,7 +232,7 @@ Additionally 'fuel_core_ingress_http_port' env parameter must be selected for th
 
 In order to support SSL certificate creation for your custom ingress DNS, you must select an 'letsencrypt_email' env which is an email address you have access to renew your letsencrypt certificate when needed. [Certificate manager][cert-manager] is used to issue the custom certificate via letsnencrypt 
 
-For the creation of the fuel ingress, the [NGINX Ingress Controller][ingress-controller] is deployed via [fuel-core-ingress-deploy][fuel-core-ingress-deploy] script:
+For fuel ingress is deployed via [fuel-core-ingress-deploy][fuel-core-ingress-deploy] script:
 
 ```bash
   ./fuel-core-ingress-deploy.sh
@@ -250,12 +258,7 @@ If you need to cleanup your existing ingress resource, run the [fuel-core-ingres
 
 [Prometheus][prometheus] and [Grafana][grafana] are used for monitoring and visualization of the k8s cluster and fuel-core deployment(s) metrics.
 
-
-The prometheus-grafana stack is deployed to the monitoring namespace via [monitoring-deploy][monitoring-deploy] script:
-
-```bash
-  ./monitoring-deploy.sh
-```
+The prometheus-grafana stack is deployed to the monitoring namespace via create-k8s script:
 
 In order to access the grafana dashboard, you can will need to run:
 
@@ -269,12 +272,6 @@ For grafana console access, the default username is 'admin' and password is 'pro
 
 If you want to access the grafana dashboard from a custom DNS address, you need to select 'grafana_ingress_dns' env that is a custom DNS address available in your owned DNS domain.
 
-Once that env is selected, you can run [monitoring-ingress-deploy][monitoring-ingress-deploy] script:
-
-```bash
-  ./monitoring-ingress-deploy.sh
-```
-
 Check that the grafana ingress is setup via:
 
 ```bash
@@ -286,6 +283,7 @@ monitoring-ingress   <none>   monitoring.example.com   xxxxxx.elb.us-east-1.amaz
 
 Then create a DNS record based on that ADDRESS value in your DNS registrar.
 
+[add-users-aws-auth]: https://docs.aws.amazon.com/eks/latest/userguide/add-user-role.html
 [aws-cli]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 [aws-eks]: https://aws.amazon.com/eks/
 [cert-manager]: https://cert-manager.io/docs/configuration/acme/
