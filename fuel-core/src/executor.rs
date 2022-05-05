@@ -613,6 +613,7 @@ impl From<crate::database::KvStoreError> for TransactionValidityError {
 }
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     #[error("Transaction id was already used: {0:#x}")]
     TransactionIdCollision(Bytes32),
