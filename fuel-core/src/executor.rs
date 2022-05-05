@@ -65,6 +65,8 @@ impl Executor {
             }
 
             if self.config.utxo_validation {
+                // validate transaction has at least one coin
+                self.verify_tx_has_at_least_one_coin(tx)?;
                 // validate utxos exist and maturity is properly set
                 self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
                 // validate transaction signature
@@ -261,6 +263,18 @@ impl Executor {
                 }
                 Input::Contract { .. } => {}
             }
+        }
+
+        Ok(())
+    }
+
+    /// Verify the transaction has at least one coin.
+    ///
+    /// TODO: This verification really belongs in fuel-tx, and can be removed once
+    ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
+    fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
+        if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
+            return Err(Error::NoCoinInput);
         }
 
         Ok(())
@@ -630,6 +644,8 @@ pub enum Error {
     InvalidTransactionRoot,
     #[error("The amount of charged fees is invalid")]
     InvalidFeeAmount,
+    #[error("The transaction must have at least one coin input type")]
+    NoCoinInput,
     #[error("Block id is invalid")]
     InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
@@ -1076,6 +1092,34 @@ mod tests {
             .await;
 
         assert!(matches!(verify_result, Err(Error::InvalidTransactionRoot)))
+    }
+
+    // invalidate a block if a tx is missing at least one coin input
+    #[tokio::test]
+    async fn executor_invalidates_missing_coin_input() {
+        let tx = TxBuilder::new(2322u64).build();
+
+        let executor = Executor {
+            database: Database::default(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        let mut block = FuelBlock {
+            header: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let err = executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .err()
+            .unwrap();
+
+        // assert block failed to validate when transaction didn't contain any coin inputs
+        assert!(matches!(err, Error::NoCoinInput));
     }
 
     #[tokio::test]
