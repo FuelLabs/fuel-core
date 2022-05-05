@@ -229,7 +229,9 @@ pub mod tests {
         let db = DummyDb::filled();
 
         // mark utxo as spend
-        db.data.lock().coins
+        db.data
+            .lock()
+            .coins
             .get_mut(&UtxoId::new(*TX_ID_DB1, 0))
             .unwrap()
             .status = CoinStatus::Spent;

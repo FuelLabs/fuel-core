@@ -35,7 +35,7 @@ Example of sliding window:
 
 There are few rules that `da_height` (da as data avalibility) need to follow and can be enforced with v2 contract:
 * Last block `da_height` needs to be smaller number then current one.
-* `da_height` shoudn't be greater then `best_eth_block`-`finalization_slider`
+* `da_height` shoudn't be greater then `best_da_block`-`finalization_slider`
 
 In most cases for fuel block `da_height` can be calculated as `current_da_height-1`
 

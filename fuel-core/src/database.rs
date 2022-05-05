@@ -284,14 +284,14 @@ impl RelayerDb for Database {
 
     async fn get_validator_diffs(
         &self,
-        from_fuel_block: u64,
-        to_fuel_block: Option<u64>,
+        from_da_height: u64,
+        to_da_height: Option<u64>,
     ) -> Vec<(u64, HashMap<Address, u64>)> {
-        let to_fuel_block = if let Some(to_fuel_block) = to_fuel_block {
-            if from_fuel_block > to_fuel_block {
+        let to_da_height = if let Some(to_da_height) = to_da_height {
+            if from_da_height > to_da_height {
                 return Vec::new();
             }
-            to_fuel_block
+            to_da_height
         } else {
             u64::MAX
         };
@@ -308,13 +308,13 @@ impl RelayerDb for Database {
         for diff in self.iter_all::<WrapU64Be, HashMap<Address, u64>>(
             columns::VALIDATOR_SET_DIFFS,
             None,
-            Some(from_fuel_block.to_be_bytes().to_vec()),
+            Some(from_da_height.to_be_bytes().to_vec()),
             None,
         ) {
             match diff {
                 Ok((key, diff)) => {
                     let block = key.0;
-                    if block >= to_fuel_block {
+                    if block >= to_da_height {
                         return out;
                     }
                     out.push((block, diff))
@@ -341,11 +341,11 @@ impl RelayerDb for Database {
         match self.get_block_height() {
             Ok(res) => {
                 return u64::from(
-                    res.expect("get_eth_finalized_block value should be always present and set"),
+                    res.expect("get_block_height value should be always present and set"),
                 );
             }
             Err(err) => {
-                panic!("get_eth_finalized_block database curruption, err:{:?}", err);
+                panic!("get_block_height database curruption, err:{:?}", err);
             }
         }
     }

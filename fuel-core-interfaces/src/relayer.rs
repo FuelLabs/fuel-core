@@ -5,7 +5,6 @@ use fuel_storage::Storage;
 use fuel_types::{Address, AssetId, Bytes32, Word};
 use tokio::sync::oneshot;
 
-
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct DepositCoin {
@@ -58,8 +57,8 @@ pub trait RelayerDb:
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
     async fn get_validator_diffs(
             &self,
-            from_fuel_block: u64,
-            to_fuel_block: Option<u64>,
+            from_da_height: u64,
+            to_da_height: Option<u64>,
     ) -> Vec<(u64,HashMap<Address, u64>)>;
 
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
@@ -84,8 +83,9 @@ pub trait RelayerDb:
     /// Assume it is allways set as initialization of database.
     async fn get_validators_da_height(&self) -> u64;
 
-    /// set last finalized fuel block. In usual case this will be
+    /// set finalized da height that represent last block from da layer that got finalized.
     async fn set_finalized_da_height(&self, block: u64);
+
     /// Assume it is allways set as initialization of database.
     async fn get_finalized_da_height(&self) -> u64;
 }

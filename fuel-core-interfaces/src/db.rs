@@ -141,7 +141,7 @@ pub mod helpers {
         pub current_validator_set: HashMap<Address, u64>,
         pub current_validator_set_block: u64,
         pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
-        pub eth_finalized_block: u64,
+        pub da_finalized_block: u64,
         pub fuel_finalized_block: u64,
         pub tx_hashes: Vec<TxId>,
         pub tx: HashMap<TxId, Arc<Transaction>>,
@@ -581,7 +581,7 @@ pub mod helpers {
                 current_validator_set: HashMap::new(),
                 current_validator_set_block: 0,
                 validator_set_diff: BTreeMap::new(),
-                eth_finalized_block: 0,
+                da_finalized_block: 0,
                 fuel_finalized_block: 0,
             };
 
@@ -782,17 +782,17 @@ pub mod helpers {
 
         async fn get_validator_diffs(
             &self,
-            from_fuel_block: u64,
-            to_fuel_block: Option<u64>,
+            from_da_height: u64,
+            to_da_height: Option<u64>,
         ) -> Vec<(u64, HashMap<Address, u64>)> {
             let mut out = Vec::new();
             let diffs = &self.data.lock().validator_set_diff;
             // in BTreeMap iteration are done on sorted items.
             for (block, diff) in diffs {
-                if from_fuel_block >= *block {
+                if from_da_height >= *block {
                     out.push((*block, diff.clone()))
                 }
-                if let Some(end_block) = to_fuel_block {
+                if let Some(end_block) = to_da_height {
                     if end_block < *block {
                         break;
                     }

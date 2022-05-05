@@ -10,7 +10,6 @@ use crate::{
     Config,
 };
 use futures::Future;
-use tokio::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, trace, warn};
 

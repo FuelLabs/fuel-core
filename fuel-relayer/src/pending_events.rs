@@ -172,11 +172,7 @@ impl PendingEvents {
     }
 
     /// Used in two places. On initial sync and when new fuel blocks is
-    pub async fn commit_diffs(
-        &mut self,
-        db: &mut dyn RelayerDb,
-        finalized_da_height: u64,
-    ) {
+    pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
         while let Some(diffs) = self.pending.front() {
             if diffs.da_height > finalized_da_height {
                 break;

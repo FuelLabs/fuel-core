@@ -50,7 +50,10 @@ impl CurrentValidatorSet {
             }
             std::cmp::Ordering::Greater => {
                 // if curent block is greater then new included block there is some problem.
-                warn!("curent height {:?} is greater then new height {:?} there is some problem",self.da_height, da_height);
+                warn!(
+                    "curent height {:?} is greater then new height {:?} there is some problem",
+                    self.da_height, da_height
+                );
                 return;
             }
         }
