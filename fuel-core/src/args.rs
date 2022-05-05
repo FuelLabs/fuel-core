@@ -13,7 +13,12 @@ pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 #[derive(Parser, Debug)]
-#[clap(name = "fuel-core", about = "Fuel client implementation", version)]
+#[clap(
+    name = "fuel-core",
+    about = "Fuel client implementation",
+    version,
+    rename_all = "kebab-case"
+)]
 pub struct Opt {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
@@ -36,14 +41,28 @@ pub struct Opt {
     #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
-    /// Specify if backtraces are going to be traced in logs (Default false)
+    /// Enable logging of backtraces from vm errors
     #[clap(long = "vm-backtrace")]
     pub vm_backtrace: bool,
 
-    /// Enable/disable full utxo stateful validation
+    /// Enable full utxo stateful validation
     /// disabled by default until downstream consumers stabilize
     #[clap(long = "utxo-validation")]
     pub utxo_validation: bool,
+
+    /// The minimum allowed gas price
+    #[clap(long = "min-gas-price")]
+    pub min_gas_price: u64,
+    /// The minimum allowed byte price
+    #[clap(long = "min-byte-price")]
+    pub min_byte_price: u64,
+    /// If non-zero, the tx pool will require the byte price to be
+    /// at least this fraction of the gas price, `byte_price >= gas_price / gas_per_byte`.
+    /// This protects against front-runners attempting to manipulating a high gas price on
+    /// transactions that don't incur any execution costs, since the tx pool only
+    /// prioritizes gas prices.
+    #[clap(long = "min-gas-per-byte")]
+    pub min_gas_per_byte: u64,
 }
 
 impl Opt {
@@ -90,6 +109,9 @@ impl Opt {
             chain_config,
             vm_backtrace,
             utxo_validation,
+            min_gas_price,
+            min_byte_price,
+            min_gas_per_byte,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -102,6 +124,12 @@ impl Opt {
             utxo_validation,
             vm: VMConfig {
                 backtrace: vm_backtrace,
+            },
+            tx_pool_config: fuel_txpool::Config {
+                min_gas_price,
+                min_byte_price,
+                min_gas_per_byte,
+                ..Default::default()
             },
         })
     }

@@ -86,6 +86,7 @@ pub trait TxPool: Send + Sync {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
+#[non_exhaustive]
 pub enum Error {
     #[error("Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
@@ -93,6 +94,10 @@ pub enum Error {
     NotInsertedLimitHit,
     #[error("TxPool required that transaction contains metadata")]
     NoMetadata,
+    #[error("Transaction is not inserted. The gas price is too low.")]
+    NotInsertedGasPriceTooLow,
+    #[error("Transaction is not inserted. The byte price is too low.")]
+    NotInsertedBytePriceTooLow,
     #[error(
         "Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}"
     )]
