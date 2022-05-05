@@ -1,4 +1,5 @@
 mod behavior;
+mod codecs;
 pub mod config;
 mod discovery;
 mod gossipsub;

@@ -1,6 +1,8 @@
+use crate::codecs::bincode::BincodeCodec;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::{build_transport, P2PConfig},
+    gossipsub::messages::GossipsubMessage as FuelGossipsubMessage,
     peer_info::PeerInfo,
     request_response::messages::{
         ReqResNetworkError, RequestError, RequestMessage, ResponseError, ResponseMessage,
@@ -28,7 +30,7 @@ pub struct FuelP2PService {
     /// Store the local peer id
     pub local_peer_id: PeerId,
     /// Swarm handler for FuelBehaviour
-    swarm: Swarm<FuelBehaviour>,
+    swarm: Swarm<FuelBehaviour<BincodeCodec>>,
 }
 
 #[derive(Debug)]
@@ -44,7 +46,7 @@ impl FuelP2PService {
 
         // configure and build P2P Serivce
         let transport = build_transport(local_keypair.clone()).await;
-        let behaviour = FuelBehaviour::new(local_keypair, &config);
+        let behaviour = FuelBehaviour::new(local_keypair, &config, BincodeCodec);
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
         // set up node's address to listen on
@@ -100,9 +102,9 @@ impl FuelP2PService {
     pub fn publish_message(
         &mut self,
         topic: GossipTopic,
-        data: impl Into<Vec<u8>>,
+        message: FuelGossipsubMessage,
     ) -> Result<MessageId, PublishError> {
-        self.swarm.behaviour_mut().publish_message(topic, data)
+        self.swarm.behaviour_mut().publish_message(topic, message)
     }
 
     pub async fn next_event(&mut self) -> FuelP2PEvent {
@@ -332,10 +334,11 @@ mod tests {
 
     #[tokio::test]
     async fn gossipsub_exchanges_messages() {
+        use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
+
         let mut p2p_config = build_p2p_config();
         let topics = vec!["create_tx".into(), "send_tx".into()];
         let selected_topic = Topic::new(format!("{}/{}", topics[0], p2p_config.network_name));
-        let message_to_send = "hello, node";
         let mut message_sent = false;
 
         // Node A
@@ -364,7 +367,7 @@ mod tests {
                         // verifies that we've got at least a single peer address to send message to
                         if !peer_addresses.is_empty() && !message_sent  {
                             message_sent = true;
-                            node_a.publish_message(selected_topic.clone(), message_to_send).unwrap();
+                            node_a.publish_message(selected_topic.clone(), FuelGossipsubMessage::BroadcastNewTx).unwrap();
                         }
                     }
 
@@ -373,7 +376,7 @@ mod tests {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::GossipsubMessage { topic_hash, message, .. }) = event_b {
                         if topic_hash != selected_topic.hash() {
                             panic!("Wrong Topic");
-                        } else if message_to_send != std::str::from_utf8(&message).unwrap() {
+                        } else if FuelGossipsubMessage::BroadcastNewTx != message {
                             panic!("Wrong Message")
                         }
                         break

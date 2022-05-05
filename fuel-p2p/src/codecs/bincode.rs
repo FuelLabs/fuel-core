@@ -1,4 +1,11 @@
-use super::messages::{RequestMessage, ResponseMessage};
+use super::{GossipsubCodec, NetworkCodec};
+use crate::{
+    gossipsub::messages::GossipsubMessage,
+    request_response::messages::{
+        RequestMessage, ResponseMessage, MAX_REQUEST_SIZE, MAX_RESPONSE_SIZE,
+        REQUEST_RESPONSE_PROTOCOL_ID,
+    },
+};
 use async_trait::async_trait;
 use futures::{AsyncRead, AsyncWriteExt};
 use libp2p::{
@@ -10,34 +17,18 @@ use libp2p::{
 };
 use std::io;
 
-pub const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
-/// Max Size in Bytes of the messages
-// todo: this will be defined once Request & Response Messages are clearly defined
-// it should be the biggest field of respective enum
-const MAX_REQUEST_SIZE: usize = 100;
-const MAX_RESPONSE_SIZE: usize = 100;
-
 #[derive(Debug, Clone)]
-pub struct MessageExchangeBincodeProtocol;
-
-impl ProtocolName for MessageExchangeBincodeProtocol {
-    fn protocol_name(&self) -> &[u8] {
-        REQUEST_RESPONSE_PROTOCOL_ID
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct MessageExchangeBincodeCodec {}
+pub struct BincodeCodec;
 
 /// Since Bincode does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
 /// We expect the substream to be properly closed when response channel is dropped.
 /// Since the request protocol used here expects a response, the sender considers this
 /// early close as a protocol violation which results in the connection being closed.
-/// If the substream were not properly closed when dropped, the sender would instead
+/// If the substream was not properly closed when dropped, the sender would instead
 /// run into a timeout waiting for the response.
 #[async_trait]
-impl RequestResponseCodec for MessageExchangeBincodeCodec {
+impl RequestResponseCodec for BincodeCodec {
     type Protocol = MessageExchangeBincodeProtocol;
     type Request = RequestMessage;
     type Response = ResponseMessage;
@@ -112,5 +103,33 @@ impl RequestResponseCodec for MessageExchangeBincodeCodec {
             }
             Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
         }
+    }
+}
+
+impl GossipsubCodec for BincodeCodec {
+    type Message = GossipsubMessage;
+
+    fn encode(&self, data: Self::Message) -> Result<Vec<u8>, io::Error> {
+        bincode::serialize(&data).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn decode(&self, encoded_data: &[u8]) -> Result<Self::Message, io::Error> {
+        bincode::deserialize(encoded_data)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+}
+
+impl NetworkCodec for BincodeCodec {
+    fn get_req_res_protocol(&self) -> <Self as RequestResponseCodec>::Protocol {
+        MessageExchangeBincodeProtocol {}
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageExchangeBincodeProtocol;
+
+impl ProtocolName for MessageExchangeBincodeProtocol {
+    fn protocol_name(&self) -> &[u8] {
+        REQUEST_RESPONSE_PROTOCOL_ID
     }
 }
