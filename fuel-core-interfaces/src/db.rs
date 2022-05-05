@@ -137,16 +137,25 @@ pub mod helpers {
 
     #[derive(Clone, Debug)]
     pub struct Data {
+        /// variable for best fuel block height
         pub block_height: u64,
+        /// variable for current validator set height, at height our validator set is
+        pub current_validator_set_height: u64,
+        /// variable for finalized data layer height
+        pub finalized_da_height: u64,
+        /// Used for Storage<Address, Stake>
         pub current_validator_set: HashMap<Address, u64>,
-        pub current_validator_set_block: u64,
+        /// Used for Storage<u64, HashMap<Address, u64>>
         pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
-        pub da_finalized_block: u64,
-        pub fuel_finalized_block: u64,
+        /// indexed TxId's.
         pub tx_hashes: Vec<TxId>,
+        /// Dummy transactions
         pub tx: HashMap<TxId, Arc<Transaction>>,
+        /// Dummy coins
         pub coins: HashMap<UtxoId, Coin>,
+        /// Dummy contracts
         pub contract: HashSet<ContractId>,
+        /// Dummy deposit coins.
         pub deposit_coin: HashMap<Bytes32, DepositCoin>,
     }
 
@@ -579,10 +588,9 @@ pub mod helpers {
                 deposit_coin: HashMap::new(),
                 block_height: 0,
                 current_validator_set: HashMap::new(),
-                current_validator_set_block: 0,
+                current_validator_set_height: 0,
                 validator_set_diff: BTreeMap::new(),
-                da_finalized_block: 0,
-                fuel_finalized_block: 0,
+                finalized_da_height: 0,
             };
 
             Self {
@@ -773,11 +781,11 @@ pub mod helpers {
         }
 
         async fn set_validators_da_height(&self, block: u64) {
-            self.data.lock().current_validator_set_block = block;
+            self.data.lock().current_validator_set_height = block;
         }
 
         async fn get_validators_da_height(&self) -> u64 {
-            self.data.lock().current_validator_set_block
+            self.data.lock().current_validator_set_height
         }
 
         async fn get_validator_diffs(
@@ -805,12 +813,12 @@ pub mod helpers {
             self.data.lock().block_height
         }
 
-        async fn set_finalized_da_height(&self, block: u64) {
-            self.data.lock().fuel_finalized_block = block;
+        async fn set_finalized_da_height(&self, height: u64) {
+            self.data.lock().finalized_da_height = height;
         }
 
         async fn get_finalized_da_height(&self) -> u64 {
-            self.data.lock().fuel_finalized_block
+            self.data.lock().finalized_da_height
         }
     }
 }

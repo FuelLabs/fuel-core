@@ -5,7 +5,7 @@ use fuel_core_interfaces::{
     block_importer::NewBlockEvent, db::helpers::DummyDb, relayer::RelayerEvent,
     signer::helpers::DummySigner,
 };
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc};
 
 use crate::{Config, Relayer};
 

@@ -20,7 +20,7 @@ impl TxPoolService {
         Self {
             txpool: RwLock::new(TxPoolImpl::new(config)),
             db,
-            subs: MultiSubscriber::new(),
+            subs: MultiSubscriber::default(),
         }
     }
 }

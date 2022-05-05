@@ -19,7 +19,7 @@ pub struct MemoryTransactionView {
 impl MemoryTransactionView {
     pub fn new(source: DataSource) -> Self {
         Self {
-            view_layer: MemoryStore::new(),
+            view_layer: MemoryStore::default(),
             changes: Default::default(),
             data_source: source,
         }
@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn get_returns_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
@@ -180,7 +180,7 @@ mod tests {
     #[test]
     fn get_returns_from_data_store_when_key_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
@@ -193,7 +193,7 @@ mod tests {
     #[test]
     fn get_does_not_fetch_from_datastore_if_intentionally_deleted_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn can_insert_value_into_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let _ = view.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]);
         // test
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn delete_value_from_view_returns_value() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
@@ -238,7 +238,7 @@ mod tests {
     #[test]
     fn delete_returns_datastore_value_when_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn delete_does_not_return_datastore_value_when_deleted_twice() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
@@ -270,7 +270,7 @@ mod tests {
     #[test]
     fn exists_checks_view_values() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn exists_checks_data_store_when_not_in_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn exists_doesnt_check_data_store_after_intentional_removal_from_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
@@ -314,7 +314,7 @@ mod tests {
     #[test]
     fn commit_applies_puts() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store.clone());
         let key = vec![0xA, 0xB, 0xC];
         view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn commit_applies_deletes() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
         store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn transaction_commit_is_applied_if_successful() {
-        let mut store = Arc::new(MemoryStore::new());
+        let mut store = Arc::new(MemoryStore::default());
 
         let key = vec![0xA, 0xB, 0xC];
         store
@@ -357,7 +357,7 @@ mod tests {
 
     #[test]
     fn transaction_commit_is_not_applied_if_aborted() {
-        let mut store = Arc::new(MemoryStore::new());
+        let mut store = Arc::new(MemoryStore::default());
 
         let _ = store.transaction(|store| {
             store.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]).unwrap();
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn iter_all_is_sorted_across_source_and_view() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
             store.put(vec![i], 0, vec![1]).unwrap();
         });
@@ -392,7 +392,7 @@ mod tests {
     #[test]
     fn iter_all_is_reversible() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
             store.put(vec![i], 0, vec![1]).unwrap();
         });
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn iter_all_overrides_data_source_keys() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
             store.put(vec![i], 0, vec![0xA]).unwrap();
         });
@@ -437,7 +437,7 @@ mod tests {
     #[test]
     fn iter_all_hides_deleted_data_source_keys() {
         // setup
-        let store = Arc::new(MemoryStore::new());
+        let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
             store.put(vec![i], 0, vec![0xA]).unwrap();
         });

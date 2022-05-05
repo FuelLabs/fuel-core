@@ -1,6 +1,12 @@
+use ethers_core::types::{H160, H256};
 use std::{str::FromStr, time::Duration};
 
-use ethers_core::types::H160;
+lazy_static::lazy_static! {
+    pub static ref ETH_ASSET_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap();
+    pub static ref ETH_VALIDATOR_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000002").unwrap();
+    pub static ref ETH_VALIDATOR_WITHDRAWAL : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000003").unwrap();
+    pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000004").unwrap();
+}
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -20,8 +26,8 @@ pub struct Config {
     pub eth_initial_sync_refresh: Duration,
 }
 
-impl Config {
-    pub fn new() -> Self {
+impl Default for Config {
+    fn default() -> Self {
         Self {
             eth_finality_slider: 64,
             eth_client: String::from(
@@ -36,7 +42,9 @@ impl Config {
             eth_initial_sync_refresh: Duration::from_secs(5),
         }
     }
+}
 
+impl Config {
     pub fn eth_v2_contract_deployment(&self) -> u64 {
         self.eth_v2_contract_deployment
     }
@@ -59,11 +67,5 @@ impl Config {
 
     pub fn eth_initial_sync_refresh(&self) -> Duration {
         self.eth_initial_sync_refresh
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self::new()
     }
 }

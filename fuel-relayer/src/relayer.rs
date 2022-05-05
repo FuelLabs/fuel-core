@@ -56,8 +56,8 @@ impl Relayer {
         Self {
             config,
             db,
-            pending: PendingEvents::new(),
-            current_validator_set: CurrentValidatorSet::new(),
+            pending: PendingEvents::default(),
+            current_validator_set: CurrentValidatorSet::default(),
             status: RelayerStatus::DaClientIsSyncing,
             receiver,
             new_block_event,
@@ -351,7 +351,7 @@ impl Relayer {
     #[tracing::instrument(skip(self))]
     async fn handle_new_block_event(&mut self, new_block: NewBlockEvent) {
         match new_block {
-            NewBlockEvent::NewBlockCreated(_created_block) => {
+            NewBlockEvent::NewBlockCreated { .. } => {
                 // TODO:
                 // 1. compress block for eth contract.
                 // 2. Create eth transaction.
@@ -484,11 +484,11 @@ mod test {
 
     #[tokio::test]
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
-        let mut config = Config::new();
+        let mut config = Config::default();
         config.eth_v2_contract_deployment = 5;
         config.eth_initial_sync_refresh = Duration::from_millis(10);
         let (relayer, event, _) = relayer(config);
-        let middle = MockMiddleware::new();
+        let middle = MockMiddleware::default();
         middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {
             starting_block: U256::zero(),
             current_block: U256::zero(),
@@ -528,14 +528,14 @@ mod test {
 
     #[tokio::test]
     pub async fn sync_first_n_finalized_blocks() {
-        let mut config = Config::new();
+        let mut config = Config::default();
         // start from block 1
         config.eth_v2_contract_deployment = 100;
         config.eth_finality_slider = 30;
         // make 2 steps of 2 blocks
         config.initial_sync_step = 2;
         let (relayer, event, _) = relayer(config);
-        let middle = MockMiddleware::new();
+        let middle = MockMiddleware::default();
         {
             let mut data = middle.data.lock().await;
             // eth finished syncing
@@ -586,14 +586,14 @@ mod test {
 
     #[tokio::test]
     pub async fn initial_sync() {
-        let mut config = Config::new();
+        let mut config = Config::default();
         // start from block 1
         config.eth_v2_contract_deployment = 100;
         config.eth_finality_slider = 30;
         // make 2 steps of 2 blocks
         config.initial_sync_step = 2;
         let (relayer, event, _) = relayer(config);
-        let middle = MockMiddleware::new();
+        let middle = MockMiddleware::default();
         {
             let mut data = middle.data.lock().await;
             // eth finished syncing

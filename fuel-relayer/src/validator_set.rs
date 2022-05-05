@@ -4,6 +4,7 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_tx::Address;
 use tracing::warn;
 
+#[derive(Default)]
 pub struct CurrentValidatorSet {
     /// Current validator set
     pub set: HashMap<Address, u64>,
@@ -11,20 +12,7 @@ pub struct CurrentValidatorSet {
     pub da_height: u64,
 }
 
-impl Default for CurrentValidatorSet {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl CurrentValidatorSet {
-    pub fn new() -> Self {
-        Self {
-            set: HashMap::new(),
-            da_height: 0,
-        }
-    }
-
     // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
     // TODO if it takes a lot of time to load it is good to optimize.
     pub async fn load_get_validators(&mut self, db: &dyn RelayerDb) {

@@ -14,11 +14,13 @@ pub enum MdnsWrapper {
     Disabled,
 }
 
-impl MdnsWrapper {
-    pub fn new() -> Self {
+impl Default for MdnsWrapper {
+    fn default() -> Self {
         MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
     }
+}
 
+impl MdnsWrapper {
     pub fn disabled() -> Self {
         MdnsWrapper::Disabled
     }

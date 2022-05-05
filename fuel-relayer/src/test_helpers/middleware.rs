@@ -70,17 +70,8 @@ impl Default for MockData {
 
 impl Default for MockMiddleware {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MockMiddleware {
-    pub async fn trigger_handle(&self, trigger_handle: Box<dyn TriggerHandle>) {
-        *self.handler.lock().await = trigger_handle;
-    }
-    /// Instantiates the nonce manager with a 0 nonce. The `address` should be the
-    /// address which you'll be sending transactions from
-    pub fn new() -> Self {
+        // Instantiates the nonce manager with a 0 nonce. The `address` should be the
+        // address which you'll be sending transactions from
         let mut s = Self {
             inner: Box::new(None),
             data: Arc::new(Mutex::new(MockData::default())),
@@ -89,6 +80,12 @@ impl MockMiddleware {
         let sc = s.clone();
         s.inner = Box::new(Some(Provider::new(sc)));
         s
+    }
+}
+
+impl MockMiddleware {
+    pub async fn trigger_handle(&self, trigger_handle: Box<dyn TriggerHandle>) {
+        *self.handler.lock().await = trigger_handle;
     }
 
     pub async fn insert_log_batch(&mut self, logs: Vec<Log>) {

@@ -7,6 +7,7 @@ use tracing::info;
 
 use crate::log::EthEventLog;
 
+#[derive(Default)]
 pub struct PendingEvents {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     /// it contains every fuel block and its span
@@ -23,7 +24,7 @@ pub struct PendingEvents {
 }
 
 /// Pending diff between FuelBlocks
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct PendingDiff {
     /// eth block number, It represent until when we are taking stakes and token deposits.
     /// It is always monotonic and check on its limits are check in consensus and in contract.
@@ -52,22 +53,7 @@ impl PendingDiff {
     }
 }
 
-impl Default for PendingEvents {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl PendingEvents {
-    pub fn new() -> Self {
-        Self {
-            pending: VecDeque::new(),
-            bundled_removed_eth_events: Vec::new(),
-            finalized_validator_set: HashMap::new(),
-            finalized_da_height: 0,
-        }
-    }
-
     pub fn len(&self) -> usize {
         self.pending.len()
     }
@@ -218,7 +204,7 @@ mod tests {
         let nonce2 = Bytes32::from([3; 32]);
         let nonce3 = Bytes32::from([4; 32]);
 
-        let mut pending = PendingEvents::new();
+        let mut pending = PendingEvents::default();
 
         let deposit1 =
             EthEventLog::try_from(&eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1)).unwrap();
@@ -254,7 +240,7 @@ mod tests {
         let acc1 = Address::from([1; 32]);
         let acc2 = Address::from([2; 32]);
 
-        let mut pending = PendingEvents::new();
+        let mut pending = PendingEvents::default();
 
         let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1)).unwrap();
         let deposit2 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 20)).unwrap();
@@ -297,7 +283,7 @@ mod tests {
         let acc1 = Address::from([1; 32]);
         let acc2 = Address::from([2; 32]);
 
-        let mut pending = PendingEvents::new();
+        let mut pending = PendingEvents::default();
 
         let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1000)).unwrap();
         let deposit2 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 300)).unwrap();

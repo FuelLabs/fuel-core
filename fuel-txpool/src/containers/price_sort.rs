@@ -1,19 +1,13 @@
 use crate::types::*;
 use std::{cmp, collections::BTreeMap};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct PriceSort {
     /// all transactions sorted by min/max value
     pub sort: BTreeMap<PriceSortKey, ArcTx>,
 }
 
 impl PriceSort {
-    pub fn new() -> Self {
-        Self {
-            sort: BTreeMap::new(),
-        }
-    }
-
     pub fn remove(&mut self, tx: &ArcTx) {
         self.sort.remove(&PriceSortKey::new(tx));
     }
@@ -33,12 +27,6 @@ impl PriceSort {
 
     pub fn insert(&mut self, tx: &ArcTx) {
         self.sort.insert(PriceSortKey::new(tx), tx.clone());
-    }
-}
-
-impl Default for PriceSort {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

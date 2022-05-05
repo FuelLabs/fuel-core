@@ -1,7 +1,7 @@
-use std::str::FromStr;
-
-use ethers_core::types::{Log, H256};
+use ethers_core::types::Log;
 use fuel_types::{Address, AssetId, Bytes32, Word};
+
+use crate::config;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
@@ -28,14 +28,6 @@ pub enum EthEventLog {
     },
 }
 
-lazy_static::lazy_static! {
-    pub static ref ETH_ASSET_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap();
-    pub static ref ETH_VALIDATOR_DEPOSIT : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000002").unwrap();
-    pub static ref ETH_VALIDATOR_WITHDRAWAL : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000003").unwrap();
-    pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000004").unwrap();
-
-}
-
 // block_number(32bits) | amount(256bits) | depositNonce(256bits)
 const ASSET_DEPOSIT_DATA_LEN: usize = 4 + 32 + 32;
 
@@ -49,7 +41,7 @@ impl TryFrom<&Log> for EthEventLog {
 
         // TODO extract event name-hashes as static with proper values.
         let log = match log.topics[0] {
-            n if n == *ETH_ASSET_DEPOSIT => {
+            n if n == *config::ETH_ASSET_DEPOSIT => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for AssetDeposit");
                 }
@@ -82,7 +74,7 @@ impl TryFrom<&Log> for EthEventLog {
                     deposit_nonce,
                 }
             }
-            n if n == *ETH_VALIDATOR_DEPOSIT => {
+            n if n == *config::ETH_VALIDATOR_DEPOSIT => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorDeposit");
                 }
@@ -99,7 +91,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::ValidatorDeposit { depositor, deposit }
             }
-            n if n == *ETH_VALIDATOR_WITHDRAWAL => {
+            n if n == *config::ETH_VALIDATOR_WITHDRAWAL => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorWithdrawal");
                 }
@@ -119,7 +111,7 @@ impl TryFrom<&Log> for EthEventLog {
                     withdrawal,
                 }
             }
-            n if n == *ETH_FUEL_BLOCK_COMMITED => {
+            n if n == *config::ETH_FUEL_BLOCK_COMMITED => {
                 if log.topics.len() != 4 {
                     return Err("Malformed topics for FuelBlockCommited");
                 }
@@ -152,22 +144,17 @@ pub mod tests {
 
     use bytes::{Bytes, BytesMut};
     use ethers_core::types::{Bytes as EthersBytes, H160, H256, U64};
-
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
     use super::*;
-
-    pub fn log_remove(mut log: Log) -> Log {
-        log.removed = Some(true);
-        log
-    }
+    use crate::config;
 
     pub fn eth_log_validator_deposit(eth_block: u64, depositor: Address, deposit: Word) -> Log {
         log_default(
             eth_block,
             vec![
-                *ETH_VALIDATOR_DEPOSIT,
+                *config::ETH_VALIDATOR_DEPOSIT,
                 H256::from_slice(depositor.as_ref()),
                 H256::from_low_u64_be(deposit),
             ],
@@ -183,7 +170,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *ETH_VALIDATOR_WITHDRAWAL,
+                *config::ETH_VALIDATOR_WITHDRAWAL,
                 H256::from_slice(withdrawer.as_ref()),
                 H256::from_low_u64_be(withdrawal),
             ],
@@ -211,7 +198,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *ETH_ASSET_DEPOSIT,
+                *config::ETH_ASSET_DEPOSIT,
                 H256::from_slice(account.as_ref()),
                 H256::from_slice(token.as_ref()),
             ],
@@ -228,7 +215,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *ETH_FUEL_BLOCK_COMMITED,
+                *config::ETH_FUEL_BLOCK_COMMITED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
                 H256::from_low_u64_be(da_height as u64),
