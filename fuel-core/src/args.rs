@@ -51,17 +51,17 @@ pub struct Opt {
     pub utxo_validation: bool,
 
     /// The minimum allowed gas price
-    #[clap(long = "min-gas-price")]
+    #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
     /// The minimum allowed byte price
-    #[clap(long = "min-byte-price")]
+    #[clap(long = "min-byte-price", default_value = "0")]
     pub min_byte_price: u64,
     /// If non-zero, the tx pool will require the byte price to be
     /// at least this fraction of the gas price, `byte_price >= gas_price / gas_per_byte`.
     /// This protects against front-runners attempting to manipulating a high gas price on
     /// transactions that don't incur any execution costs, since the tx pool only
     /// prioritizes gas prices.
-    #[clap(long = "min-gas-per-byte")]
+    #[clap(long = "min-gas-per-byte", default_value = "0")]
     pub min_gas_per_byte: u64,
 }
 
