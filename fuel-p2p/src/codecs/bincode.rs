@@ -18,7 +18,7 @@ use libp2p::{
 use std::io;
 
 #[derive(Debug, Clone)]
-pub struct BincodeCodec {}
+pub struct BincodeCodec;
 
 /// Since Bincode does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
