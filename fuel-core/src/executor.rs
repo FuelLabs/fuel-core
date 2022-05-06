@@ -274,10 +274,10 @@ impl Executor {
     ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
     fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
         if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
-            Err(TransactionValidityError::NoCoinInput(tx.id()))?;
+            Err(TransactionValidityError::NoCoinInput(tx.id()).into())
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Mark inputs as spent
