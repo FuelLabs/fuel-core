@@ -1,4 +1,0 @@
----
-fuel_node_addr: '127.0.0.1:30333'
-database_url: 'postgres://postgres:my-secret@127.0.0.1:5432'
-listen_endpoint: '127.0.0.1:29899'

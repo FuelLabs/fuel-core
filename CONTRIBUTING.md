@@ -18,9 +18,7 @@ To build Fuel Core you'll need to at least have the following installed:
 
  * `git` - version control
  * [`rustup`](https://rustup.rs/) - Rust installer and toolchain manager
- * OpenSSL - Standard system libraries for networking
- * Postgres - Used for indexing on-chain data
- * [`llvm` and `clang`](http://releases.llvm.org/download.html) - Used to generate bindings for different platforms (WASM) and build native libraries (required for rocksdb).
+ * [`clang`](http://releases.llvm.org/download.html) - Used to build system libraries (required for rocksdb).
 
 See the [README.md](README.md#system-requirements) for platform specific setup steps.
 

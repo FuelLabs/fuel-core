@@ -484,9 +484,11 @@ mod test {
 
     #[tokio::test]
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
-        let mut config = Config::default();
-        config.eth_v2_contract_deployment = 5;
-        config.eth_initial_sync_refresh = Duration::from_millis(10);
+        let config = Config {
+            eth_v2_contract_deployment: 5,
+            eth_initial_sync_refresh: Duration::from_millis(10),
+            ..Default::default()
+        };
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::default();
         middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {
@@ -528,12 +530,12 @@ mod test {
 
     #[tokio::test]
     pub async fn sync_first_n_finalized_blocks() {
-        let mut config = Config::default();
-        // start from block 1
-        config.eth_v2_contract_deployment = 100;
-        config.eth_finality_period = 30;
-        // make 2 steps of 2 blocks
-        config.initial_sync_step = 2;
+        let config = Config {
+            eth_v2_contract_deployment: 100, // start from block 1
+            eth_finality_period: 30,
+            initial_sync_step: 2, // make 2 steps of 2 blocks
+            ..Default::default()
+        };
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::default();
         {
@@ -586,12 +588,12 @@ mod test {
 
     #[tokio::test]
     pub async fn initial_sync() {
-        let mut config = Config::default();
-        // start from block 1
-        config.eth_v2_contract_deployment = 100;
-        config.eth_finality_period = 30;
-        // make 2 steps of 2 blocks
-        config.initial_sync_step = 2;
+        let config = Config {
+            eth_v2_contract_deployment: 100, // start from block 1
+            eth_finality_period: 30,
+            initial_sync_step: 2, // make 2 steps of 2 blocks
+            ..Default::default()
+        };
         let (relayer, event, _) = relayer(config);
         let middle = MockMiddleware::default();
         {

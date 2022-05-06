@@ -11,8 +11,12 @@ pub struct ChainInfo;
 
 #[Object]
 impl ChainInfo {
-    async fn name(&self) -> String {
-        DEFAULT_NAME.into()
+    async fn name(&self, ctx: &Context<'_>) -> async_graphql::Result<String> {
+        let db = ctx.data_unchecked::<Database>().clone();
+        let name = db
+            .get_chain_name()?
+            .unwrap_or_else(|| DEFAULT_NAME.to_string());
+        Ok(name)
     }
 
     async fn latest_block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {

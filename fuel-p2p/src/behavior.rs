@@ -1,11 +1,11 @@
 use crate::{
+    codecs::NetworkCodec,
     config::{P2PConfig, REQ_RES_TIMEOUT},
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
-    gossipsub,
+    gossipsub::{self, messages::GossipsubMessage as FuelGossipsubMessage},
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
-    request_response::{
-        codec::{MessageExchangeBincodeCodec, MessageExchangeBincodeProtocol},
-        messages::{ReqResNetworkError, RequestMessage, ResponseError, ResponseMessage},
+    request_response::messages::{
+        ReqResNetworkError, RequestMessage, ResponseError, ResponseMessage,
     },
     service::GossipTopic,
 };
@@ -29,7 +29,7 @@ use std::{
     task::{Context, Poll},
 };
 use tokio::sync::oneshot;
-use tracing::debug;
+use tracing::{debug, warn};
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -40,7 +40,7 @@ pub enum FuelBehaviourEvent {
     GossipsubMessage {
         peer_id: PeerId,
         topic_hash: TopicHash,
-        message: Vec<u8>,
+        message: FuelGossipsubMessage,
     },
     RequestMessage {
         request_id: RequestId,
@@ -55,7 +55,7 @@ pub enum FuelBehaviourEvent {
     poll_method = "poll",
     event_process = true
 )]
-pub struct FuelBehaviour {
+pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
 
@@ -66,7 +66,7 @@ pub struct FuelBehaviour {
     gossipsub: Gossipsub,
 
     /// RequestResponse protocol
-    request_response: RequestResponse<MessageExchangeBincodeCodec>,
+    request_response: RequestResponse<Codec>,
 
     /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
     /// Once the ResponseMessage is received from the p2p Network
@@ -84,10 +84,14 @@ pub struct FuelBehaviour {
     /// Double-ended queue of FuelBehaviour Events
     #[behaviour(ignore)]
     events: VecDeque<FuelBehaviourEvent>,
+
+    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages
+    #[behaviour(ignore)]
+    codec: Codec,
 }
 
-impl FuelBehaviour {
-    pub fn new(local_keypair: Keypair, p2p_config: &P2PConfig) -> Self {
+impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
+    pub fn new(local_keypair: Keypair, p2p_config: &P2PConfig, codec: Codec) -> Self {
         let local_public_key = local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -112,7 +116,7 @@ impl FuelBehaviour {
         let peer_info = PeerInfoBehaviour::new(local_public_key);
 
         let req_res_protocol =
-            std::iter::once((MessageExchangeBincodeProtocol, ProtocolSupport::Full));
+            std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
         req_res_config
@@ -123,11 +127,8 @@ impl FuelBehaviour {
                 .unwrap_or(REQ_RES_TIMEOUT),
         );
 
-        let request_response = RequestResponse::new(
-            MessageExchangeBincodeCodec {},
-            req_res_protocol,
-            req_res_config,
-        );
+        let request_response =
+            RequestResponse::new(codec.clone(), req_res_protocol, req_res_config);
 
         Self {
             discovery: discovery_config.finish(),
@@ -138,6 +139,7 @@ impl FuelBehaviour {
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             events: VecDeque::default(),
+            codec,
         }
     }
 
@@ -152,9 +154,12 @@ impl FuelBehaviour {
     pub fn publish_message(
         &mut self,
         topic: GossipTopic,
-        data: impl Into<Vec<u8>>,
+        message: FuelGossipsubMessage,
     ) -> Result<MessageId, PublishError> {
-        self.gossipsub.publish(topic, data)
+        match self.codec.encode(message) {
+            Ok(encoded_data) => self.gossipsub.publish(topic, encoded_data),
+            Err(e) => Err(PublishError::TransformFailed(e)),
+        }
     }
 
     pub fn subscribe_to_topic(&mut self, topic: &GossipTopic) -> Result<bool, SubscriptionError> {
@@ -186,11 +191,12 @@ impl FuelBehaviour {
         message: ResponseMessage,
     ) -> Result<(), ResponseError> {
         if let Some(channel) = self.inbound_requests_table.remove(&request_id) {
-            if let Err(e) = self.request_response.send_response(channel, message) {
-                debug!(
-                    "Failed to send ResponseMessage with error: {:?} for {:?}",
-                    e, request_id
-                );
+            if self
+                .request_response
+                .send_response(channel, message)
+                .is_err()
+            {
+                debug!("Failed to send ResponseMessage for {:?}", request_id);
                 return Err(ResponseError::SendingResponseFailed);
             }
         } else {
@@ -228,7 +234,7 @@ impl FuelBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour<Codec> {
     fn inject_event(&mut self, event: DiscoveryEvent) {
         match event {
             DiscoveryEvent::Connected(peer_id, addresses) => {
@@ -246,7 +252,7 @@ impl NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBehaviour {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBehaviour<Codec> {
     fn inject_event(&mut self, event: PeerInfoEvent) {
         match event {
             PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
@@ -265,7 +271,7 @@ impl NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour<Codec> {
     fn inject_event(&mut self, message: GossipsubEvent) {
         if let GossipsubEvent::Message {
             propagation_source,
@@ -273,17 +279,25 @@ impl NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour {
             message_id: _,
         } = message
         {
-            self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
-                peer_id: propagation_source,
-                topic_hash: message.topic,
-                message: message.data,
-            })
+            match self.codec.decode(&message.data) {
+                Ok(decoded_message) => {
+                    self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
+                        peer_id: propagation_source,
+                        topic_hash: message.topic,
+                        message: decoded_message,
+                    })
+                }
+                Err(err) => {
+                    warn!(target: "fuel-libp2p", "Failed to decode a message: {:?} with error: {:?}", &message.data, err);
+                }
+            }
         }
     }
 }
 
-impl NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseMessage>>
-    for FuelBehaviour
+impl<Codec: NetworkCodec>
+    NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseMessage>>
+    for FuelBehaviour<Codec>
 {
     fn inject_event(&mut self, event: RequestResponseEvent<RequestMessage, ResponseMessage>) {
         match event {

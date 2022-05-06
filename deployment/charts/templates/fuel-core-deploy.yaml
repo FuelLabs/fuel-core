@@ -13,6 +13,14 @@ spec:
       storage: {{ .Values.app.volume.storagerequests }}
   storageClassName: {{ .Values.app.volume.storageclass }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-chainspec-configmap
+data:
+  chainspec.json: |-
+{{ .Files.Get "chainspec.json" | indent 4 }}
+---
 kind: Service
 apiVersion: v1
 metadata:
@@ -56,6 +64,22 @@ spec:
       containers:
         - name: {{ .Values.app.name }}
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          command: ["./fuel-core"]
+          args:
+            - "--ip"
+            - "0.0.0.0"
+            - "--port"
+            - "4000"
+            - "--db-path"
+            - "{{ .Values.app.volume.mountPath }}"
+            - "--chain"
+            - "/mnt/config/chainspec.json"
+          {{- if .Values.app.utxo_validation }}
+            - "--utxo-validation"
+          {{- end}}
+          {{- if .Values.app.vm_backtrace }}
+            - "--vm-backtrace"
+          {{- end}}
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
@@ -72,6 +96,8 @@ spec:
           volumeMounts:
             - name: {{ .Values.app.volume.pvname }}
               mountPath: "{{ .Values.app.volume.mountPath }}"
+            - name: config
+              mountPath: "/mnt/config"
           env:
             - name: HUMAN_LOGGING
               value: {{ .Values.app.human_logging | quote }}
@@ -79,3 +105,6 @@ spec:
         - name: {{ .Values.app.volume.pvname }}
           persistentVolumeClaim:
             claimName: {{ .Values.app.volume.claimname }}
+        - name: config
+          configMap:
+            name: {{ .Release.Name }}-chainspec-configmap

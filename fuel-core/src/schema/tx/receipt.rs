@@ -66,11 +66,11 @@ impl Receipt {
     async fn gas(&self) -> Option<U64> {
         self.0.gas().map(Into::into)
     }
-    async fn a(&self) -> Option<U64> {
-        self.0.a().map(Into::into)
+    async fn param1(&self) -> Option<U64> {
+        self.0.param1().map(Into::into)
     }
-    async fn b(&self) -> Option<U64> {
-        self.0.b().map(Into::into)
+    async fn param2(&self) -> Option<U64> {
+        self.0.param2().map(Into::into)
     }
     async fn val(&self) -> Option<U64> {
         self.0.val().map(Into::into)
@@ -82,7 +82,7 @@ impl Receipt {
         self.0.digest().copied().map(Into::into)
     }
     async fn reason(&self) -> Option<U64> {
-        self.0.reason().map(Into::into)
+        self.0.reason().map(|r| U64(r.into()))
     }
     async fn ra(&self) -> Option<U64> {
         self.0.ra().map(Into::into)
