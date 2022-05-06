@@ -8,7 +8,7 @@ use fuel_asm::Word;
 use fuel_merkle::{binary::MerkleTree, common::StorageMap};
 use fuel_storage::Storage;
 use fuel_tx::{
-    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId, ValidationError,
+    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId, ValidationError,
 };
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
@@ -252,13 +252,13 @@ impl Executor {
                 Input::Coin { utxo_id, .. } => {
                     if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
-                            return Err(TransactionValidityError::CoinAlreadySpent);
+                            return Err(TransactionValidityError::CoinAlreadySpent(*utxo_id));
                         }
                         if block_height < coin.block_created + coin.maturity {
-                            return Err(TransactionValidityError::CoinHasNotMatured);
+                            return Err(TransactionValidityError::CoinHasNotMatured(*utxo_id));
                         }
                     } else {
-                        return Err(TransactionValidityError::CoinDoesntExist);
+                        return Err(TransactionValidityError::CoinDoesntExist(*utxo_id));
                     }
                 }
                 Input::Contract { .. } => {}
@@ -274,7 +274,7 @@ impl Executor {
     ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
     fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
         if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
-            Err(TransactionValidityError::NoCoinInput)?;
+            Err(TransactionValidityError::NoCoinInput(tx.id()))?;
         }
 
         Ok(())
@@ -295,7 +295,7 @@ impl Executor {
                 let block_created = if self.config.utxo_validation {
                     Storage::<UtxoId, Coin>::get(db, utxo_id)?
                         .ok_or(Error::TransactionValidity(
-                            TransactionValidityError::CoinDoesntExist,
+                            TransactionValidityError::CoinDoesntExist(*utxo_id),
                         ))?
                         .block_created
                 } else {
@@ -594,15 +594,15 @@ impl Executor {
 #[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]
-    CoinAlreadySpent,
+    CoinAlreadySpent(UtxoId),
     #[error("Coin has not yet reached maturity")]
-    CoinHasNotMatured,
+    CoinHasNotMatured(UtxoId),
     #[error("The specified coin doesn't exist")]
-    CoinDoesntExist,
+    CoinDoesntExist(UtxoId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("The transaction must have at least one coin input type")]
-    NoCoinInput,
+    #[error("The transaction must have at least one coin input type: {0:#x}")]
+    NoCoinInput(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
@@ -924,7 +924,7 @@ mod tests {
         assert!(matches!(
             produce_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent
+                TransactionValidityError::CoinAlreadySpent(_)
             ))
         ));
 
@@ -934,7 +934,7 @@ mod tests {
         assert!(matches!(
             verify_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent
+                TransactionValidityError::CoinAlreadySpent(_)
             ))
         ));
     }
@@ -989,7 +989,7 @@ mod tests {
         assert!(matches!(
             produce_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist
+                TransactionValidityError::CoinDoesntExist(_)
             ))
         ));
 
@@ -999,7 +999,7 @@ mod tests {
         assert!(matches!(
             verify_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist
+                TransactionValidityError::CoinDoesntExist(_)
             ))
         ));
     }
@@ -1100,6 +1100,7 @@ mod tests {
     #[tokio::test]
     async fn executor_invalidates_missing_coin_input() {
         let tx = TxBuilder::new(2322u64).build();
+        let tx_id = tx.id();
 
         let executor = Executor {
             database: Database::default(),
@@ -1123,7 +1124,7 @@ mod tests {
         // assert block failed to validate when transaction didn't contain any coin inputs
         assert!(matches!(
             err,
-            Error::TransactionValidity(TransactionValidityError::NoCoinInput)
+            Error::TransactionValidity(TransactionValidityError::NoCoinInput(id)) if id == tx_id
         ));
     }
 
