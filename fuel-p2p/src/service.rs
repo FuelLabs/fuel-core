@@ -544,24 +544,55 @@ mod tests {
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 
-        let mut previously_connected = false;
+        enum ConnectionFlow {
+            Initial,
+            Connected,
+            Disconnecting,
+            Disconnected,
+            ConnectedAgain,
+        }
+
+        let mut conn_flow = ConnectionFlow::Initial;
 
         loop {
             tokio::select! {
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        if !previously_connected {
-                            // 1. PeerInfoUpdated happens for the 1st time - we drop the connection
-                            let _ = node_a.swarm.disconnect_peer_id(peer_id);
-                            previously_connected = true;
-                        } else {
-                            // 2. PeerInfoUpdated happens for the 2nd time - we are once again connected
-                            assert!(node_a.swarm.is_connected(&peer_id));
-                            break;
+                        match conn_flow {
+                            ConnectionFlow::Connected => {
+                                // 1. PeerInfoUpdated happens for the 1st time - we drop the connection
+                                let _ = node_a.swarm.disconnect_peer_id(peer_id);
+                                conn_flow = ConnectionFlow::Disconnecting;
+                            },
+                            ConnectionFlow::ConnectedAgain => {
+                                // 2. PeerInfoUpdated happens for the 2nd time - we are once again connected
+                                assert!(node_a.swarm.is_connected(&peer_id));
+                                break;
+                            },
+                            _ => {}
                         }
                     }
                 },
-                _ = node_b.next_event() => {}
+                event_b = node_b.next_event() => {
+                    if let FuelP2PEvent::Behaviour(event) = event_b {
+                        match event {
+                            FuelBehaviourEvent::PeerConnected(_) => {
+                                match conn_flow {
+                                    ConnectionFlow::Initial => conn_flow = ConnectionFlow::Connected,
+                                    ConnectionFlow::Disconnected => conn_flow = ConnectionFlow::ConnectedAgain,
+                                    _ => {}
+                                }
+                            }
+                            FuelBehaviourEvent::PeerDisconnected(_) => {
+                                match conn_flow {
+                                    // conn_flow should be ConnectionFlow::Disconnecting
+                                    // but the disconnect might happen at any point so we handle any case
+                                    _ => conn_flow = ConnectionFlow::Disconnected,
+                                }
+                            },
+                            _ => {}
+                    }
+                }}
             };
         }
     }
