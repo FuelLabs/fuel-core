@@ -16,7 +16,7 @@ pub struct TxPoolService {
 }
 
 impl TxPoolService {
-    pub fn new(db: Box<dyn TxPoolDb>, config: Arc<Config>) -> Self {
+    pub fn new(db: Box<dyn TxPoolDb>, config: Config) -> Self {
         Self {
             txpool: RwLock::new(TxPoolImpl::new(config)),
             db,
@@ -136,7 +136,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_filter_by_negative() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = Box::new(DummyDB::filled());
 
         let tx1_hash = *TX_ID1;
@@ -158,7 +158,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_find() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = Box::new(DummyDB::filled());
 
         let tx1_hash = *TX_ID1;
@@ -183,7 +183,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = Box::new(DummyDB::filled());
 
         struct Subs {
