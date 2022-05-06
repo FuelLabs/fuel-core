@@ -45,8 +45,6 @@ impl TxPool {
         self.verify_tx_min_gas_price(&tx)?;
         // verify byte price is at least the minimum
         self.verify_tx_min_byte_price(&tx)?;
-        // verify the byte price is at least some configured multiple of the gas price
-        self.verify_tx_min_byte_price_ratio(&tx)?;
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into());
@@ -132,16 +130,6 @@ impl TxPool {
         if tx.byte_price() < self.config.min_byte_price {
             return Err(Error::NotInsertedBytePriceTooLow);
         }
-        Ok(())
-    }
-
-    fn verify_tx_min_byte_price_ratio(&mut self, tx: &Transaction) -> Result<(), Error> {
-        if self.config.max_gas_per_byte_price > 0
-            && tx.byte_price() * self.config.max_gas_per_byte_price < tx.gas_price()
-        {
-            return Err(Error::NotInsertedBytePriceTooLow);
-        }
-
         Ok(())
     }
 }
@@ -548,45 +536,6 @@ pub mod tests {
     async fn tx_below_min_byte_price_is_not_insertable() {
         let config = Config {
             min_byte_price: TX1_BYTE_PRICE + 1,
-            ..Config::default()
-        };
-        let db = DummyDB::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-
-        let mut txpool = TxPool::new(config);
-
-        let err = txpool.insert(tx1, &db).await.err().unwrap();
-        assert!(matches!(
-            err.root_cause().downcast_ref::<Error>().unwrap(),
-            Error::NotInsertedBytePriceTooLow
-        ));
-    }
-
-    #[tokio::test]
-    async fn tx_byte_price_above_max_gas_per_byte_ratio_is_insertable() {
-        let config = Config {
-            max_gas_per_byte_price: 2,
-            ..Config::default()
-        };
-        let db = DummyDB::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
-
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-    }
-
-    #[tokio::test]
-    async fn tx_byte_price_below_max_gas_per_byte_ratio_is_not_insertable() {
-        // require byte_price >= gas_price
-        // since tx1 byte_price is 5, and gas_price is 10, this will return a BytePriceTooLow error
-        let config = Config {
-            max_gas_per_byte_price: 1,
             ..Config::default()
         };
         let db = DummyDB::filled();
