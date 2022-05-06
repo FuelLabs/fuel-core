@@ -123,7 +123,7 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        model::{BlockHeight, Coin, CoinStatus},
+        model::{BlockHeight, Coin, CoinStatus, DaBlockHeight},
         relayer::{DepositCoin, RelayerDb},
         txpool::TxPoolDb,
     };
@@ -145,7 +145,7 @@ pub mod helpers {
         pub finalized_da_height: u64,
         /// Used for Storage<Address, Stake>
         pub current_validator_set: HashMap<Address, u64>,
-        /// Used for Storage<u64, HashMap<Address, u64>>
+        /// Used for Storage<DaBlockHeight, HashMap<Address, u64>>
         pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
         /// indexed TxId's.
         pub tx_hashes: Vec<TxId>,
@@ -743,12 +743,12 @@ pub mod helpers {
     }
 
     // Validator set diff. Used by relayer.
-    impl Storage<u64, HashMap<Address, u64>> for DummyDb {
+    impl Storage<DaBlockHeight, HashMap<Address, u64>> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
-            key: &u64,
+            key: &DaBlockHeight,
             value: &HashMap<Address, u64>,
         ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
             Ok(self
@@ -758,18 +758,21 @@ pub mod helpers {
                 .insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &u64) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
+        fn remove(
+            &mut self,
+            _key: &DaBlockHeight,
+        ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
             unreachable!()
         }
 
         fn get<'a>(
             &'a self,
-            _key: &u64,
+            _key: &DaBlockHeight,
         ) -> Result<Option<std::borrow::Cow<'a, HashMap<Address, u64>>>, Self::Error> {
             unreachable!()
         }
 
-        fn contains_key(&self, _key: &u64) -> Result<bool, Self::Error> {
+        fn contains_key(&self, _key: &DaBlockHeight) -> Result<bool, Self::Error> {
             unreachable!()
         }
     }

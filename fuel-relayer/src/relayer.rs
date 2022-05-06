@@ -140,7 +140,7 @@ impl Relayer {
         // should be allways more then last finalized_da_heights
 
         let best_finalized_block =
-            provider.get_block_number().await?.as_u64() - self.config.eth_finality_slider();
+            provider.get_block_number().await?.as_u64() - self.config.eth_finality_period();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.config.initial_sync_step(); // do some stats on optimal value
@@ -282,7 +282,7 @@ impl Relayer {
         }
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
-        let finalized_da_height = best_block.as_u64() - self.config.eth_finality_slider();
+        let finalized_da_height = best_block.as_u64() - self.config.eth_finality_period();
         self.pending
             .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
@@ -412,7 +412,7 @@ impl Relayer {
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(block_height) = block.number {
                 let finalized_block_height =
-                    block_height.as_u64() - self.config.eth_finality_slider();
+                    block_height.as_u64() - self.config.eth_finality_period();
 
                 // TODO probably can ask logs for this perticular block few times to be sure that all logs are
                 // in place
@@ -457,7 +457,7 @@ impl Relayer {
             .await;
 
         // apply pending eth diffs
-        let finalized_da_height = block_number - self.config.eth_finality_slider;
+        let finalized_da_height = block_number - self.config.eth_finality_period;
         self.pending
             .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
@@ -531,7 +531,7 @@ mod test {
         let mut config = Config::default();
         // start from block 1
         config.eth_v2_contract_deployment = 100;
-        config.eth_finality_slider = 30;
+        config.eth_finality_period = 30;
         // make 2 steps of 2 blocks
         config.initial_sync_step = 2;
         let (relayer, event, _) = relayer(config);
@@ -589,7 +589,7 @@ mod test {
         let mut config = Config::default();
         // start from block 1
         config.eth_v2_contract_deployment = 100;
-        config.eth_finality_slider = 30;
+        config.eth_finality_period = 30;
         // make 2 steps of 2 blocks
         config.initial_sync_step = 2;
         let (relayer, event, _) = relayer(config);

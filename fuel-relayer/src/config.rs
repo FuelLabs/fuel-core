@@ -12,7 +12,7 @@ lazy_static::lazy_static! {
 pub struct Config {
     /// number of blocks between eth blocks where deposits/validator set get finalized.
     /// Finalization is done on eth height measurement.
-    pub eth_finality_slider: u64,
+    pub eth_finality_period: u64,
     /// ws address to ethereum client
     pub eth_client: String,
     /// etheruem contract address. Create EthAddress into fuel_types
@@ -29,7 +29,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            eth_finality_slider: 64,
+            eth_finality_period: 64,
             eth_client: String::from(
                 "wss://mainnet.infura.io/ws/v3/0954246eab5544e89ac236b668980810",
             ),
@@ -53,8 +53,8 @@ impl Config {
         &self.eth_v2_contract_addresses
     }
 
-    pub fn eth_finality_slider(&self) -> u64 {
-        self.eth_finality_slider
+    pub fn eth_finality_period(&self) -> u64 {
+        self.eth_finality_period
     }
 
     pub fn eth_client(&self) -> &str {

@@ -10,7 +10,7 @@ use tokio::sync::broadcast;
 async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
     let config = Config {
-        eth_finality_slider: 10,
+        eth_finality_period: 10,
         eth_client: "wss://mainnet.infura.io/ws/v3/0954246eab5544e89ac236b668980810".into(),
         // this is wETH ERC20 contract.
         eth_v2_contract_addresses: vec![H160::from_str(
