@@ -274,7 +274,7 @@ impl Executor {
     ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
     fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
         if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
-            return Err(Error::NoCoinInput);
+            Err(TransactionValidityError::NoCoinInput)?;
         }
 
         Ok(())
@@ -591,6 +591,7 @@ impl Executor {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]
     CoinAlreadySpent,
@@ -600,6 +601,8 @@ pub enum TransactionValidityError {
     CoinDoesntExist,
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
+    #[error("The transaction must have at least one coin input type")]
+    NoCoinInput,
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
@@ -645,8 +648,6 @@ pub enum Error {
     InvalidTransactionRoot,
     #[error("The amount of charged fees is invalid")]
     InvalidFeeAmount,
-    #[error("The transaction must have at least one coin input type")]
-    NoCoinInput,
     #[error("Block id is invalid")]
     InvalidBlockId,
     #[error("No matching utxo for contract id ${0:#x}")]
@@ -1120,7 +1121,10 @@ mod tests {
             .unwrap();
 
         // assert block failed to validate when transaction didn't contain any coin inputs
-        assert!(matches!(err, Error::NoCoinInput));
+        assert!(matches!(
+            err,
+            Error::TransactionValidity(TransactionValidityError::NoCoinInput)
+        ));
     }
 
     #[tokio::test]
