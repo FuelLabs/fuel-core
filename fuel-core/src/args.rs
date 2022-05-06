@@ -57,12 +57,12 @@ pub struct Opt {
     #[clap(long = "min-byte-price", default_value = "0")]
     pub min_byte_price: u64,
     /// If non-zero, the tx pool will require the byte price to be
-    /// at least this fraction of the gas price, `byte_price >= gas_price / gas_per_byte`.
+    /// at least this fraction of the gas price, `byte_price >= gas_price / max_gas_per_byte`.
     /// This protects against front-runners attempting to manipulating a high gas price on
     /// transactions that don't incur any execution costs, since the tx pool only
     /// prioritizes gas prices.
-    #[clap(long = "min-gas-per-byte", default_value = "0")]
-    pub min_gas_per_byte: u64,
+    #[clap(long = "max-gas-per-byte-price", default_value = "0")]
+    pub max_gas_per_byte_price: u64,
 }
 
 impl Opt {
@@ -111,7 +111,7 @@ impl Opt {
             utxo_validation,
             min_gas_price,
             min_byte_price,
-            min_gas_per_byte,
+            max_gas_per_byte_price,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -128,7 +128,7 @@ impl Opt {
             tx_pool_config: fuel_txpool::Config {
                 min_gas_price,
                 min_byte_price,
-                min_gas_per_byte,
+                max_gas_per_byte_price,
                 ..Default::default()
             },
         })

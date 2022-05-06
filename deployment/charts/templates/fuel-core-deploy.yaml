@@ -84,7 +84,7 @@ spec:
             - "{{ .Values.app.min_gas_price }}"
             - "--min-byte-price"
             - "{{ .Values.app.min_byte_price }}"
-            - "--min-gas-per_byte"
+            - "--max-gas-per-byte-price"
             - "{{ .Values.app.min_gas_per_byte }}"
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}

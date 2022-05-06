@@ -136,8 +136,8 @@ impl TxPool {
     }
 
     fn verify_tx_min_byte_price_ratio(&mut self, tx: &Transaction) -> Result<(), Error> {
-        if self.config.min_gas_per_byte > 0
-            && tx.byte_price() * self.config.min_gas_per_byte < tx.gas_price()
+        if self.config.max_gas_per_byte_price > 0
+            && tx.byte_price() * self.config.max_gas_per_byte_price < tx.gas_price()
         {
             return Err(Error::NotInsertedBytePriceTooLow);
         }
@@ -565,9 +565,9 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn tx_byte_price_above_min_gas_per_byte_ratio_is_insertable() {
+    async fn tx_byte_price_above_max_gas_per_byte_ratio_is_insertable() {
         let config = Config {
-            min_gas_per_byte: 2,
+            max_gas_per_byte_price: 2,
             ..Config::default()
         };
         let db = DummyDB::filled();
@@ -582,11 +582,11 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn tx_byte_price_below_min_gas_per_byte_ratio_is_not_insertable() {
+    async fn tx_byte_price_below_max_gas_per_byte_ratio_is_not_insertable() {
         // require byte_price >= gas_price
         // since tx1 byte_price is 5, and gas_price is 10, this will return a BytePriceTooLow error
         let config = Config {
-            min_gas_per_byte: 1,
+            max_gas_per_byte_price: 1,
             ..Config::default()
         };
         let db = DummyDB::filled();
