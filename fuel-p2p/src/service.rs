@@ -584,11 +584,9 @@ mod tests {
                                 }
                             }
                             FuelBehaviourEvent::PeerDisconnected(_) => {
-                                match conn_flow {
-                                    // conn_flow should be ConnectionFlow::Disconnecting
-                                    // but the disconnect might happen at any point so we handle any case
-                                    _ => conn_flow = ConnectionFlow::Disconnected,
-                                }
+                                // conn_flow should be ConnectionFlow::Disconnecting
+                                // but the disconnect might happen at any point so we handle any case
+                                conn_flow = ConnectionFlow::Disconnected;
                             },
                             _ => {}
                     }
