@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit # abort on nonzero exitstatus
+set -o nounset # abort on unbound variable
+
 set -o allexport && source .env && set +o allexport 
 
 if [ "${k8s_provider}" == "eks" ]; then

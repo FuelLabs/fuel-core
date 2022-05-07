@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -o errexit # abort on nonzero exitstatus
+set -o nounset # abort on unbound variable
+
 echo "This script is to delete existing k8s cluster"
 
 set -o allexport && source .env && set +o allexport 
