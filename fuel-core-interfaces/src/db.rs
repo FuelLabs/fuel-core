@@ -67,6 +67,8 @@ pub mod helpers {
     use lazy_static::lazy_static;
 
     // constants
+    pub const TX1_GAS_PRICE: u64 = 10u64;
+    pub const TX1_BYTE_PRICE: u64 = 5u64;
     lazy_static! {
         pub static ref TX_ID_DB1: TxId =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -146,9 +148,9 @@ pub mod helpers {
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
             let tx1 = Transaction::Script {
-                gas_price: 10,
+                gas_price: TX1_GAS_PRICE,
                 gas_limit: 1_000_000,
-                byte_price: 10,
+                byte_price: TX1_BYTE_PRICE,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,

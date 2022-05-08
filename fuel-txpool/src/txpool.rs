@@ -1,27 +1,30 @@
-use crate::containers::dependency::Dependency;
-use crate::containers::info::TxInfo;
-use crate::Error;
-use crate::{containers::price_sort::PriceSort, types::*, Config};
-use fuel_core_interfaces::txpool::TxPoolDb;
+use crate::{
+    containers::{dependency::Dependency, price_sort::PriceSort},
+    types::*,
+    Config, Error,
+};
+use fuel_core_interfaces::{
+    model::{ArcTx, TxInfo},
+    txpool::TxPoolDb,
+};
 use std::collections::HashMap;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
     by_hash: HashMap<TxId, TxInfo>,
     by_gas_price: PriceSort,
     by_dependency: Dependency,
-    config: Arc<Config>,
+    config: Config,
 }
 
 impl TxPool {
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(config: Config) -> Self {
         let max_depth = config.max_depth;
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
-            config,
             by_dependency: Dependency::new(max_depth),
+            config,
         }
     }
     pub fn txs(&self) -> &HashMap<TxId, TxInfo> {
@@ -37,6 +40,11 @@ impl TxPool {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into());
         }
+
+        // verify gas price is at least the minimum
+        self.verify_tx_min_gas_price(&tx)?;
+        // verify byte price is at least the minimum
+        self.verify_tx_min_byte_price(&tx)?;
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into());
@@ -98,13 +106,31 @@ impl TxPool {
 
     /// remove transaction from pool needed on user demand. Low priority
     pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcTx> {
-        if let Some(tx) = self.by_hash.get(tx_id) {
-            self.by_gas_price.remove(tx);
-            return self
+        if let Some(tx) = self.by_hash.remove(tx_id) {
+            let removed = self
                 .by_dependency
                 .recursively_remove_all_dependencies(&self.by_hash, tx.tx().clone());
+            for remove in removed.iter() {
+                self.by_gas_price.remove(remove);
+                self.by_hash.remove(&remove.id());
+            }
+            return removed;
         }
         Vec::new()
+    }
+
+    fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
+        if tx.gas_price() < self.config.min_gas_price {
+            return Err(Error::NotInsertedGasPriceTooLow);
+        }
+        Ok(())
+    }
+
+    fn verify_tx_min_byte_price(&mut self, tx: &Transaction) -> Result<(), Error> {
+        if tx.byte_price() < self.config.min_byte_price {
+            return Err(Error::NotInsertedBytePriceTooLow);
+        }
+        Ok(())
     }
 }
 
@@ -115,10 +141,11 @@ pub mod tests {
     use fuel_core_interfaces::{db::helpers::*, model::CoinStatus};
     use fuel_tx::UtxoId;
     use std::cmp::Reverse;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn simple_insertion() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -131,7 +158,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn simple_dependency_tx1_tx2() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -149,7 +176,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn faulty_t2_collided_on_contract_id_from_tx1() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -170,7 +197,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn fails_to_insert_tx2_with_missing_utxo_dependency_on_faulty_tx1() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_faulty_hash = *TX_ID_FAULTY1;
@@ -190,7 +217,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn not_inserted_known_tx() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1 = *TX_ID1;
@@ -210,7 +237,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn try_to_insert_tx2_missing_utxo() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx2_hash = *TX_ID2;
@@ -225,7 +252,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx1_try_to_use_spend_coin() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let mut db = DummyDB::filled();
 
         // mark utxo as spend
@@ -246,7 +273,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -268,7 +295,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn underpriced_tx1_not_included_coin_colision() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -288,7 +315,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn overpriced_tx5_contract_input_not_inserted() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -311,7 +338,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn dependent_tx5_contract_input_inserted() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -328,7 +355,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -354,10 +381,11 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_limit_hit() {
-        let config = Arc::new(Config {
+        let config = Config {
             max_tx: 1,
             max_depth: 10,
-        });
+            ..Default::default()
+        };
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -375,10 +403,11 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx2_depth_hit() {
-        let config = Arc::new(Config {
+        let config = Config {
             max_tx: 10,
             max_depth: 1,
-        });
+            ..Default::default()
+        };
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -396,7 +425,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn sorted_out_tx1_2_4() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -424,7 +453,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn find_dependent_tx1_tx2() {
-        let config = Arc::new(Config::default());
+        let config = Config::default();
         let db = DummyDB::filled();
 
         let tx1_hash = *TX_ID1;
@@ -447,5 +476,79 @@ pub mod tests {
         assert_eq!(list.len(), 2, "We should have two items");
         assert_eq!(list[0].id(), tx1_hash, "Tx1 should be first.");
         assert_eq!(list[1].id(), tx2_hash, "Tx2 should be second.");
+    }
+
+    #[tokio::test]
+    async fn tx_at_least_min_gas_price_is_insertable() {
+        let config = Config {
+            min_gas_price: TX1_GAS_PRICE,
+            ..Config::default()
+        };
+        let db = DummyDB::filled();
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+    }
+
+    #[tokio::test]
+    async fn tx_below_min_gas_price_is_not_insertable() {
+        let config = Config {
+            min_gas_price: TX1_GAS_PRICE + 1,
+            ..Config::default()
+        };
+        let db = DummyDB::filled();
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let err = txpool.insert(tx1, &db).await.err().unwrap();
+        assert!(matches!(
+            err.root_cause().downcast_ref::<Error>().unwrap(),
+            Error::NotInsertedGasPriceTooLow
+        ));
+    }
+
+    #[tokio::test]
+    async fn tx_above_min_byte_price_is_insertable() {
+        let config = Config {
+            min_byte_price: TX1_BYTE_PRICE,
+            ..Config::default()
+        };
+        let db = DummyDB::filled();
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let out = txpool.insert(tx1, &db).await;
+        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+    }
+
+    #[tokio::test]
+    async fn tx_below_min_byte_price_is_not_insertable() {
+        let config = Config {
+            min_byte_price: TX1_BYTE_PRICE + 1,
+            ..Config::default()
+        };
+        let db = DummyDB::filled();
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDB::dummy_tx(tx1_hash));
+
+        let mut txpool = TxPool::new(config);
+
+        let err = txpool.insert(tx1, &db).await.err().unwrap();
+        assert!(matches!(
+            err.root_cause().downcast_ref::<Error>().unwrap(),
+            Error::NotInsertedBytePriceTooLow
+        ));
     }
 }

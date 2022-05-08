@@ -2,6 +2,8 @@ use self::serialization::{HexNumber, HexType};
 use crate::model::BlockHeight;
 use fuel_types::{Address, AssetId, Bytes32, Salt};
 use itertools::Itertools;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
 use std::{io::ErrorKind, path::PathBuf, str::FromStr};
@@ -23,16 +25,28 @@ pub struct ChainConfig {
 
 impl ChainConfig {
     pub fn local_testnet() -> Self {
-        // endow 10 mock accounts with an initial balance
-        let initial_coins = (1..10)
-            .map(|idx| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                block_created: None,
-                maturity: None,
-                owner: Address::new([idx; 32]),
-                amount: TESTNET_INITIAL_BALANCE,
-                asset_id: Default::default(),
+        // endow some preset accounts with an initial balance
+        tracing::info!("Initial Accounts");
+        let mut rng = StdRng::seed_from_u64(10);
+        let initial_coins = (0..5)
+            .map(|_| {
+                let secret = fuel_crypto::SecretKey::random(&mut rng);
+                let address = Address::from(*secret.public_key().hash());
+                tracing::info!(
+                    "PrivateKey({:#x}), Address({:#x}), Balance({})",
+                    secret,
+                    address,
+                    TESTNET_INITIAL_BALANCE
+                );
+                CoinConfig {
+                    tx_id: None,
+                    output_index: None,
+                    block_created: None,
+                    maturity: None,
+                    owner: address,
+                    amount: TESTNET_INITIAL_BALANCE,
+                    asset_id: Default::default(),
+                }
             })
             .collect_vec();
 
@@ -58,8 +72,15 @@ impl FromStr for ChainConfig {
                 // Attempt to load chain config from path
                 let path = PathBuf::from(s.to_string());
                 let contents = std::fs::read(path)?;
-                serde_json::from_slice(&contents)
-                    .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))
+                serde_json::from_slice(&contents).map_err(|e| {
+                    std::io::Error::new(
+                        ErrorKind::InvalidData,
+                        anyhow::Error::new(e).context(format!(
+                            "an error occurred while loading the chain config file {}",
+                            s
+                        )),
+                    )
+                })
             }
         }
     }

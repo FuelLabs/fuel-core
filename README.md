@@ -15,25 +15,23 @@ If you are interested in contributing to Fuel, see our [CONTRIBUTING.md](CONTRIB
 
 ##### System Requirements
 
-There are several system requirements including clang & llvm.
+There are several system requirements including clang.
 
 ###### MacOS
 ```bash
 brew update
-brew install openssl cmake llvm
+brew install cmake
 ```
 
 ###### Debian
 ```bash
 apt update
-apt install -y cmake pkg-config libssl-dev git gcc build-essential git clang libclang-dev llvm
+apt install -y cmake pkg-config build-essential git clang libclang-dev
 ```
 
 ###### Arch
 ```bash 
-pacman -Syu --needed --noconfirm cmake gcc openssl-1.0 pkgconf git clang llvm11 llvm11-libs
-export OPENSSL_LIB_DIR="/usr/lib/openssl-1.0";
-export OPENSSL_INCLUDE_DIR="/usr/include/openssl-1.0"
+pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
 ```
 
 ## Building 

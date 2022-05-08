@@ -1,8 +1,0 @@
-bases:
-- ../../base
-namePrefix: example-
-images:
-- name: fuel-core
-  # change the path to the image
-  newName: fuel-core
-  

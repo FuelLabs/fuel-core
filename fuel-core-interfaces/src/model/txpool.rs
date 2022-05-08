@@ -1,7 +1,10 @@
 use std::ops::Deref;
 
-use crate::types::ArcTx;
 use chrono::{DateTime, Utc};
+use fuel_tx::Transaction;
+use std::sync::Arc;
+
+pub type ArcTx = Arc<Transaction>;
 
 #[derive(Debug, Clone)]
 pub struct TxInfo {

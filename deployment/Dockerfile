@@ -7,7 +7,6 @@ RUN apt-get update && \
     lld \
     clang \
     libclang-dev \
-    libssl-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

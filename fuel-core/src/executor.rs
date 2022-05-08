@@ -8,7 +8,7 @@ use fuel_asm::Word;
 use fuel_merkle::{binary::MerkleTree, common::StorageMap};
 use fuel_storage::Storage;
 use fuel_tx::{
-    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, UtxoId, ValidationError,
+    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId, ValidationError,
 };
 use fuel_types::{bytes::SerializableVec, ContractId};
 use fuel_vm::{
@@ -65,6 +65,8 @@ impl Executor {
             }
 
             if self.config.utxo_validation {
+                // validate transaction has at least one coin
+                self.verify_tx_has_at_least_one_coin(tx)?;
                 // validate utxos exist and maturity is properly set
                 self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
                 // validate transaction signature
@@ -250,13 +252,13 @@ impl Executor {
                 Input::Coin { utxo_id, .. } => {
                     if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
-                            return Err(TransactionValidityError::CoinAlreadySpent);
+                            return Err(TransactionValidityError::CoinAlreadySpent(*utxo_id));
                         }
                         if block_height < coin.block_created + coin.maturity {
-                            return Err(TransactionValidityError::CoinHasNotMatured);
+                            return Err(TransactionValidityError::CoinHasNotMatured(*utxo_id));
                         }
                     } else {
-                        return Err(TransactionValidityError::CoinDoesntExist);
+                        return Err(TransactionValidityError::CoinDoesntExist(*utxo_id));
                     }
                 }
                 Input::Contract { .. } => {}
@@ -264,6 +266,18 @@ impl Executor {
         }
 
         Ok(())
+    }
+
+    /// Verify the transaction has at least one coin.
+    ///
+    /// TODO: This verification really belongs in fuel-tx, and can be removed once
+    ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
+    fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
+        if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
+            Err(TransactionValidityError::NoCoinInput(tx.id()).into())
+        } else {
+            Ok(())
+        }
     }
 
     /// Mark inputs as spent
@@ -281,7 +295,7 @@ impl Executor {
                 let block_created = if self.config.utxo_validation {
                     Storage::<UtxoId, Coin>::get(db, utxo_id)?
                         .ok_or(Error::TransactionValidity(
-                            TransactionValidityError::CoinDoesntExist,
+                            TransactionValidityError::CoinDoesntExist(*utxo_id),
                         ))?
                         .block_created
                 } else {
@@ -577,15 +591,18 @@ impl Executor {
 }
 
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum TransactionValidityError {
     #[error("Coin input was already spent")]
-    CoinAlreadySpent,
+    CoinAlreadySpent(UtxoId),
     #[error("Coin has not yet reached maturity")]
-    CoinHasNotMatured,
+    CoinHasNotMatured(UtxoId),
     #[error("The specified coin doesn't exist")]
-    CoinDoesntExist,
+    CoinDoesntExist(UtxoId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
+    #[error("The transaction must have at least one coin input type: {0:#x}")]
+    NoCoinInput(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
@@ -599,6 +616,7 @@ impl From<crate::database::KvStoreError> for TransactionValidityError {
 }
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     #[error("Transaction id was already used: {0:#x}")]
     TransactionIdCollision(Bytes32),
@@ -906,7 +924,7 @@ mod tests {
         assert!(matches!(
             produce_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent
+                TransactionValidityError::CoinAlreadySpent(_)
             ))
         ));
 
@@ -916,7 +934,7 @@ mod tests {
         assert!(matches!(
             verify_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinAlreadySpent
+                TransactionValidityError::CoinAlreadySpent(_)
             ))
         ));
     }
@@ -971,7 +989,7 @@ mod tests {
         assert!(matches!(
             produce_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist
+                TransactionValidityError::CoinDoesntExist(_)
             ))
         ));
 
@@ -981,7 +999,7 @@ mod tests {
         assert!(matches!(
             verify_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist
+                TransactionValidityError::CoinDoesntExist(_)
             ))
         ));
     }
@@ -1076,6 +1094,38 @@ mod tests {
             .await;
 
         assert!(matches!(verify_result, Err(Error::InvalidTransactionRoot)))
+    }
+
+    // invalidate a block if a tx is missing at least one coin input
+    #[tokio::test]
+    async fn executor_invalidates_missing_coin_input() {
+        let tx = TxBuilder::new(2322u64).build();
+        let tx_id = tx.id();
+
+        let executor = Executor {
+            database: Database::default(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        let mut block = FuelBlock {
+            header: Default::default(),
+            transactions: vec![tx],
+        };
+
+        let err = executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .err()
+            .unwrap();
+
+        // assert block failed to validate when transaction didn't contain any coin inputs
+        assert!(matches!(
+            err,
+            Error::TransactionValidity(TransactionValidityError::NoCoinInput(id)) if id == tx_id
+        ));
     }
 
     #[tokio::test]
