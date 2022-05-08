@@ -2,6 +2,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      deploy-dev-env:
+        description: "Flag to deploy to Dev environment"
+        type: boolean
+        required: false
   push:
     branches:
       - master
@@ -44,10 +49,10 @@ jobs:
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+          footer: ""
+          notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
@@ -84,10 +89,10 @@ jobs:
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+          footer: ""
+          notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
           RUSTFLAGS: -D warnings
@@ -119,7 +124,7 @@ jobs:
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
-      
+
       - name: Verify helm chart version
         run: |
           ./.github/workflows/scripts/verify_chart_version.sh
@@ -129,17 +134,17 @@ jobs:
         with:
           publish-delay: 30000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      
+
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always()
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+          footer: ""
+          notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
 
@@ -156,7 +161,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-            
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
@@ -201,33 +206,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # deploy images from master branch to dev environment
-      - name: Deploy Fuel-Core Developer Environment
-        uses: peter-evans/repository-dispatch@v2
-        if: github.event.inputs.delete-infra == 'true'
-        with:
-          token: ${{ secrets.REPO_TOKEN }} # Personal Access Token to trigger repository_dispatch actions
-          repository: FuelLabs/fuel-deployment
-          event-type: deploy-fuel-core-dev
-          client-payload: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "k8s-type": "${{ env.K8S }}" }'
-        env:
-          CONFIG: "fuel-dev1"
-          K8S: "eks"
-          ENV: "fueldevsway.env"
-
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always()
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+          footer: ""
+          notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
-      
+
   build-publish-release-image:
     # Build & Publish Docker Image Per Fuel-Core Release
     needs: publish
@@ -239,7 +230,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-            
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
@@ -251,14 +242,14 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-      
+
       - name: Log in to the ghcr.io registry
         uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
-    
+
       - name: Build and push the image to ghcr.io
         uses: docker/build-push-action@v2
         with:
@@ -276,9 +267,29 @@ jobs:
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: '{workflow} has {status_message}'
-          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
-          footer: ''
-          notify_when: 'failure'
+          notification_title: "{workflow} has {status_message}"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+          footer: ""
+          notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.ACTION_MONITORING_SLACK }}
+
+  deploy:
+    # Deploy Latest Fuel-Core Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy Fuel-Core Developer Environment
+        uses: peter-evans/repository-dispatch@v2
+        if: github.event.inputs.deploy-dev-env == 'true'
+        with:
+          # Personal Access Token to trigger repository_dispatch actions
+          token: ${{ secrets.REPO_TOKEN }}
+          repository: FuelLabs/fuel-deployment
+          event-type: deploy-fuel-core-dev
+          client-payload: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+        env:
+          CONFIG: "fuel-dev1"
+          K8S: "eks"
+          ENV: "fueldevsway.env"
+          DELETE_INFRA: true
