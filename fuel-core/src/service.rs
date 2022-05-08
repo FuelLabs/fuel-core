@@ -32,6 +32,7 @@ pub struct Config {
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
     pub vm: VMConfig,
+    pub tx_pool_config: fuel_txpool::Config,
 }
 
 impl Config {
@@ -43,6 +44,7 @@ impl Config {
             chain_conf: ChainConfig::local_testnet(),
             vm: Default::default(),
             utxo_validation: false,
+            tx_pool_config: Default::default(),
         }
     }
 }

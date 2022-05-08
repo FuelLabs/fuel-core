@@ -315,14 +315,14 @@ mod tests {
             tokio::select! {
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        let PeerInfo { peer_addresses, latest_ping, client_version, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
-
-                        // Exits after it verifies that:
-                        // 1. Peer Addresses are known
-                        // 2. Client Version is known
-                        // 3. Node has been pinged and responded with success
-                        if !peer_addresses.is_empty() && client_version.is_some() && latest_ping.is_some() {
-                            break;
+                        if let Some(PeerInfo { peer_addresses, latest_ping, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                            // Exits after it verifies that:
+                            // 1. Peer Addresses are known
+                            // 2. Client Version is known
+                            // 3. Node has been pinged and responded with success
+                            if !peer_addresses.is_empty() && client_version.is_some() && latest_ping.is_some() {
+                                break;
+                            }
                         }
                     }
 
@@ -362,12 +362,12 @@ mod tests {
             tokio::select! {
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
-
-                        // verifies that we've got at least a single peer address to send message to
-                        if !peer_addresses.is_empty() && !message_sent  {
-                            message_sent = true;
-                            node_a.publish_message(selected_topic.clone(), FuelGossipsubMessage::BroadcastNewTx).unwrap();
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                            // verifies that we've got at least a single peer address to send message to
+                            if !peer_addresses.is_empty() && !message_sent  {
+                                message_sent = true;
+                                node_a.publish_message(selected_topic.clone(), FuelGossipsubMessage::BroadcastNewTx).unwrap();
+                            }
                         }
                     }
 
@@ -416,20 +416,20 @@ mod tests {
                 }
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                            // 0. verifies that we've got at least a single peer address to request messsage from
+                            if !peer_addresses.is_empty() {
+                                // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
 
-                        // 0. verifies that we've got at least a single peer address to request messsage from
-                        if !peer_addresses.is_empty() {
-                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
-                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
-
-                            let tx_test_end = tx_test_end.clone();
-                            tokio::spawn(async move {
-                                // 4. Simulating NetworkOrchestrator receving a message from Node B
-                                let message_sent = matches!(rx_orchestrator.await, Ok(Ok(_)));
-                                tx_test_end.send(message_sent).await
-                            });
+                                let tx_test_end = tx_test_end.clone();
+                                tokio::spawn(async move {
+                                    // 4. Simulating NetworkOrchestrator receving a message from Node B
+                                    let message_sent = matches!(rx_orchestrator.await, Ok(Ok(_)));
+                                    tx_test_end.send(message_sent).await
+                                });
+                            }
                         }
                     }
 
@@ -474,32 +474,32 @@ mod tests {
             tokio::select! {
                 event_a = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        let PeerInfo { peer_addresses, .. } = node_a.swarm.behaviour().get_peer_info(&peer_id).unwrap();
+                        if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
+                            // 0. verifies that we've got at least a single peer address to request messsage from
+                            if !peer_addresses.is_empty() && !request_sent {
+                                request_sent = true;
 
-                        // 0. verifies that we've got at least a single peer address to request messsage from
-                        if !peer_addresses.is_empty() && !request_sent {
-                            request_sent = true;
+                                // 1. Simulating Oneshot channel from the NetworkOrchestrator
+                                let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
-                            // 1. Simulating Oneshot channel from the NetworkOrchestrator
-                            let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
+                                // 2a. there should be ZERO pending outbound requests in the table
+                                assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
 
-                            // 2a. there should be ZERO pending outbound requests in the table
-                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
+                                // Request successfully sent
+                                assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
 
-                            // Request successfully sent
-                            assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+                                // 2b. there should be ONE pending outbound requests in the table
+                                assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
 
-                            // 2b. there should be ONE pending outbound requests in the table
-                            assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
+                                let tx_test_end = tx_test_end.clone();
 
-                            let tx_test_end = tx_test_end.clone();
-
-                            tokio::spawn(async move {
-                                // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
-                                if let Ok(Err(ReqResNetworkError::Timeout)) = rx_orchestrator.await {
-                                    let _ = tx_test_end.send(()).await;
-                                }
-                            });
+                                tokio::spawn(async move {
+                                    // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
+                                    if let Ok(Err(ReqResNetworkError::Timeout)) = rx_orchestrator.await {
+                                        let _ = tx_test_end.send(()).await;
+                                    }
+                                });
+                            }
                         }
                     }
 
@@ -513,6 +513,84 @@ mod tests {
                 },
                 // will not receive the request at all
                 _ = node_b.next_event() => {}
+            };
+        }
+    }
+
+    /// This test is mainly our 'sanity check' for other tests.
+    /// A peer could drop a connection while performing the tests
+    /// yet we can rely on the connection being re-established and continue the tests.
+    /// 1. Two Nodes A & B connect to each other
+    /// 2. Node A while receiving PeerInfoUpdated(Node_B) disconnects from Node B
+    /// 3. Since we didn't ban the peer - nor do we have any other peers in the network
+    /// Node A and Node B will establish the connection again.
+    /// 4. Node A receives PeerInfoUpdated(Node_B) again -
+    /// signaling it can continue executing test logic where it stopped previously.
+    #[tokio::test]
+    async fn peer_reconnects_after_disconnect() {
+        // Node A
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4014;
+        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+
+        let node_a_address = match node_a.next_event().await {
+            FuelP2PEvent::NewListenAddr(address) => Some(address),
+            _ => None,
+        };
+
+        // Node B
+        let mut p2p_config = build_p2p_config();
+        p2p_config.tcp_port = 4015;
+        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        let mut node_b = build_fuel_p2p_service(p2p_config).await;
+
+        enum ConnectionFlow {
+            Initial,
+            Connected,
+            Disconnecting,
+            Disconnected,
+            ConnectedAgain,
+        }
+
+        let mut conn_flow = ConnectionFlow::Initial;
+
+        loop {
+            tokio::select! {
+                event_a = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                        match conn_flow {
+                            ConnectionFlow::Connected => {
+                                // 1. PeerInfoUpdated happens for the 1st time - we drop the connection
+                                let _ = node_a.swarm.disconnect_peer_id(peer_id);
+                                conn_flow = ConnectionFlow::Disconnecting;
+                            },
+                            ConnectionFlow::ConnectedAgain => {
+                                // 2. PeerInfoUpdated happens for the 2nd time - we are once again connected
+                                assert!(node_a.swarm.is_connected(&peer_id));
+                                break;
+                            },
+                            _ => {}
+                        }
+                    }
+                },
+                event_b = node_b.next_event() => {
+                    if let FuelP2PEvent::Behaviour(event) = event_b {
+                        match event {
+                            FuelBehaviourEvent::PeerConnected(_) => {
+                                match conn_flow {
+                                    ConnectionFlow::Initial => conn_flow = ConnectionFlow::Connected,
+                                    ConnectionFlow::Disconnected => conn_flow = ConnectionFlow::ConnectedAgain,
+                                    _ => {}
+                                }
+                            }
+                            FuelBehaviourEvent::PeerDisconnected(_) => {
+                                // conn_flow should be ConnectionFlow::Disconnecting
+                                // but the disconnect might happen at any point so we handle any case
+                                conn_flow = ConnectionFlow::Disconnected;
+                            },
+                            _ => {}
+                    }
+                }}
             };
         }
     }

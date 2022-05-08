@@ -8,6 +8,7 @@ use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
 use fuel_txpool::{Config as TxPoolConfig, TxPoolService};
 use fuel_vm::prelude::{ProgramState, Transaction};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
 use std::sync::Arc;
@@ -72,7 +73,7 @@ impl TxPool {
             database: database.clone(),
             config,
         };
-        let config = Arc::new(TxPoolConfig::default());
+        let config = TxPoolConfig::default();
         TxPool {
             executor,
             db: database.clone(),
@@ -101,16 +102,16 @@ impl TxPool {
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let includable_arc_txs = self.fuel_txpool.includable().await;
-
-            includable_txs = includable_arc_txs
-                .iter()
-                .map(|arc| Transaction::clone(&*arc))
+            includable_txs = self
+                .fuel_txpool
+                .includable()
+                .await
+                .into_iter()
+                .map(|tx| (&*tx).clone())
                 .collect();
 
-            for included_tx in includable_arc_txs {
-                self.fuel_txpool.remove(&[included_tx.id()]).await;
-            }
+            let included_tx_ids = includable_txs.iter().map(|tx| tx.id()).collect_vec();
+            self.fuel_txpool.remove(&included_tx_ids).await;
         } else {
             includable_txs = vec![tx];
         }
