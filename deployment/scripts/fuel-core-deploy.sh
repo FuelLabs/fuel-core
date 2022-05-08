@@ -23,7 +23,7 @@ if [ "${k8s_provider}" == "eks" ]; then
               --wait \
               --timeout 8000s \
               --debug
-    kubectl rollout status deployment/fuel-core-k8s --namespace k8s_namespace 
+    kubectl rollout status deployment/fuel-core-k8s --namespace ${k8s_namespace} 
     
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
