@@ -6,7 +6,7 @@ use std::{
 use ethers_core::types::H160;
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    primitive_types::SealedFuelBlock,
+    model::SealedFuelBlock,
     relayer::{RelayerDb, StakingDiff},
 };
 use fuel_tx::{Address, AssetId, Bytes32};

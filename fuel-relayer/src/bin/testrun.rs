@@ -14,7 +14,7 @@ use fuel_core_interfaces::{
 };
 use fuel_tx::{Address, Bytes32};
 use std::sync::Arc;
-use tokio::sync::{broadcast};
+use tokio::sync::broadcast;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -38,9 +38,9 @@ async fn main() -> Result<(), anyhow::Error> {
             //H160::from_str("0x38426b72293b3946b0BCe1E5653f60B126C49072").unwrap(), // burnAction
             //H160::from_str("0x5c9EB4773e6C5f7E0058bF6976325E09f16b9488").unwrap(), // leaderSelection
             H160::from_str("0x422E1022369AcC085EeDF5E0Af1Db09363953451").unwrap(), // validatorSet
-                                                                                   //H160::from_str("0x85604e4A5151B6b22Ed9AdAAD39b33cfd52504b6").unwrap(), // challengeManager
-                                                                                   //H160::from_str("0x20c2C873408018cf631EEe44893C57f623c25e50").unwrap(), // transactionSerializationLib
-                                                                                   //H160::from_str("0x7671DA4F13f2E116dCe3cDF7498349089BF2Dceb").unwrap(), // signed
+            //H160::from_str("0x85604e4A5151B6b22Ed9AdAAD39b33cfd52504b6").unwrap(), // challengeManager
+            //H160::from_str("0x20c2C873408018cf631EEe44893C57f623c25e50").unwrap(), // transactionSerializationLib
+            //H160::from_str("0x7671DA4F13f2E116dCe3cDF7498349089BF2Dceb").unwrap(), // signed
         ],
 
         eth_v2_contract_deployment: 0,

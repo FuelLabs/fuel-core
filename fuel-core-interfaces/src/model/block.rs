@@ -1,7 +1,9 @@
 pub use super::BlockHeight;
 use chrono::{DateTime, TimeZone, Utc};
+use core::ops::Deref;
 use fuel_crypto::Hasher;
-use fuel_tx::{Address, Bytes32, Transaction};
+use fuel_tx::{Address, AssetId, Bytes32, Transaction};
+use fuel_types::Word;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
@@ -87,5 +89,54 @@ impl FuelBlock {
             headers: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
+    }
+
+    /* BIG TODO FOR FUNCTIONS BELLOW */
+
+    pub fn transaction_data_lenght(&self) -> usize {
+        self.transactions.len() * 100
+    }
+
+    pub fn transaction_data_hash(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+
+    pub fn validator_set_hash(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+
+    pub fn transaction_sum(&self) -> usize {
+        0
+    }
+
+    pub fn withdrawals(&self) -> Vec<(Address, Word, AssetId)> {
+        vec![]
+    }
+
+    pub fn withdrawals_root(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+}
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+pub struct FuelBlockConsensus {
+    pub required_stake: u64,
+    pub validators: Vec<Address>,
+    pub stakes: Vec<u64>,
+    pub signatures: Vec<Bytes32>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+pub struct SealedFuelBlock {
+    pub block: FuelBlock,
+    pub consensus: FuelBlockConsensus,
+}
+
+impl Deref for SealedFuelBlock {
+    type Target = FuelBlock;
+
+    fn deref(&self) -> &FuelBlock {
+        &self.block
     }
 }

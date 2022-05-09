@@ -14,7 +14,7 @@ use ethers_middleware::{
 use ethers_providers::Middleware;
 use fuel_tx::Bytes32;
 
-use fuel_core_interfaces::primitive_types::{BlockHeight, SealedFuelBlock};
+use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock};
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use ethers_signers::{LocalWallet, Signer};
@@ -69,8 +69,8 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
     let block = BlockHeader {
         producer: H160::from_slice(fuel_block.header.producer.as_ref()),
         previous_block_root: <[u8; 32]>::try_from(fuel_block.id()).unwrap(),
-        height: fuel_block.header.height.0,
-        block_number: fuel_block.header.number.0, // TODO
+        height: fuel_block.header.height.into(),
+        block_number: fuel_block.header.number.into(), // TODO
         digest_root: [0; 32],
         digest_hash: [0; 32],
         digest_length: 0,
@@ -375,7 +375,7 @@ impl BlockCommit {
         let calldata = {
             let contract = ContractAbi::new(self.contract_address, provider.clone());
             let event = contract.commit_block(
-                block.header.height.0,
+                block.header.height.into(),
                 <[u8; 32]>::try_from(block.id()).unwrap(),
                 wrapped_block,
                 wrapped_parent,
