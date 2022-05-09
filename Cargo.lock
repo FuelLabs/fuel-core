@@ -2172,6 +2172,7 @@ dependencies = [
  "fuel-gql-client",
  "fuel-storage",
  "fuel-tx",
+ "fuel-txpool",
  "fuel-types",
  "fuel-vm",
  "insta",

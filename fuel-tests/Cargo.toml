@@ -23,6 +23,7 @@ fuel-crypto = { version = "0.4", features = ["random"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-storage = "0.1"
 fuel-tx = { version = "0.9", features = ["serde-types", "builder", "internals"] }
+fuel-txpool = { path = "../fuel-txpool" }
 fuel-types = { version = "0.3", features = ["serde-types"] }
 fuel-vm = { version = "0.8", features = ["serde-types", "random","test-helpers"] }
 insta = "1.8"

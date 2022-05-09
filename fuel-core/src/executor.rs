@@ -355,7 +355,7 @@ impl Executor {
                 .checked_add(gas_fees)
                 .ok_or(Error::FeeOverflow)?;
             gas.checked_sub(total_gas_required)
-                .ok_or(Error::InsufficientGas {
+                .ok_or(Error::InsufficientFeeAmount {
                     provided: gas,
                     required: total_gas_required,
                 })?;
@@ -623,7 +623,7 @@ pub enum Error {
     #[error("output already exists")]
     OutputAlreadyExists,
     #[error("Transaction doesn't include enough value to pay for gas: {provided} < {required}")]
-    InsufficientGas { provided: Word, required: Word },
+    InsufficientFeeAmount { provided: Word, required: Word },
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
     #[error("Invalid transaction: {0}")]
@@ -809,7 +809,7 @@ mod tests {
             .await;
         assert!(matches!(
             produce_result,
-            Err(Error::InsufficientGas { required, .. }) if required == gas_limit
+            Err(Error::InsufficientFeeAmount { required, .. }) if required == gas_limit
         ));
 
         let verify_result = verifier
@@ -817,7 +817,7 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
-            Err(Error::InsufficientGas {required, ..}) if required == gas_limit
+            Err(Error::InsufficientFeeAmount {required, ..}) if required == gas_limit
         ))
     }
 
