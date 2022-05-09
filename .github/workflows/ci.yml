@@ -146,7 +146,7 @@ jobs:
     needs:
       - lint-toml-files
       - cargo-verifications
-      - publish
+      - publish-crates
 
     if: always()
     runs-on: ubuntu-latest
