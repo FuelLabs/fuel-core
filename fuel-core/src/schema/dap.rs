@@ -365,11 +365,6 @@ mod gql_types {
     pub struct ContractId {
         value: [u8; 32],
     }
-    impl From<&fuel_types::ContractId> for ContractId {
-        fn from(id: &fuel_types::ContractId) -> Self {
-            Self { value: **id }
-        }
-    }
     impl From<fuel_types::ContractId> for ContractId {
         fn from(id: fuel_types::ContractId) -> Self {
             Self { value: *id }
@@ -385,11 +380,6 @@ mod gql_types {
     pub struct OutputContractId {
         value: [u8; 32],
     }
-    impl From<&fuel_types::ContractId> for OutputContractId {
-        fn from(id: &fuel_types::ContractId) -> Self {
-            Self { value: **id }
-        }
-    }
     impl From<fuel_types::ContractId> for OutputContractId {
         fn from(id: fuel_types::ContractId) -> Self {
             Self { value: *id }
@@ -403,7 +393,7 @@ mod gql_types {
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
-        contract: [u8; 32],
+        contract: ContractId,
         pc: Word,
     }
 
@@ -411,7 +401,7 @@ mod gql_types {
     impl From<&FuelBreakpoint> for Breakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
-                contract: **bp.contract(),
+                contract: (*bp.contract()).into(),
                 pc: bp.pc(),
             }
         }
@@ -436,7 +426,7 @@ mod gql_types {
     impl From<&FuelBreakpoint> for OutputBreakpoint {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
-                contract: bp.contract().into(),
+                contract: (*bp.contract()).into(),
                 pc: bp.pc(),
             }
         }
@@ -451,7 +441,9 @@ mod gql_types {
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
     pub enum RunState {
+        /// All breakpoints have been processed, and the program has terminated
         Completed,
+        /// Stopped on a breakpoint
         Breakpoint,
     }
 
