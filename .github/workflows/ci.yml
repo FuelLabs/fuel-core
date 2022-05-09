@@ -72,6 +72,8 @@ jobs:
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@v1
+        with:
+          key: "${{ matrix.command }} ${{ matrix.args }}"
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
