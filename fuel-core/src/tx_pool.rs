@@ -79,7 +79,7 @@ impl TxPool {
             db: database.clone(),
             fuel_txpool: Box::new(TxPoolService::new(
                 Box::new(database) as Box<dyn TxPoolDb>,
-                config.tx_pool_config.clone(),
+                config.tx_pool_config,
             )),
         }
     }
