@@ -148,7 +148,7 @@ impl TestSetupBuilder {
         let contract_id = contract.id(&salt.clone(), &root, &Contract::default_state_root());
 
         self.contracts.insert(
-            contract_id.clone(),
+            contract_id,
             ContractConfig {
                 code,
                 salt,
