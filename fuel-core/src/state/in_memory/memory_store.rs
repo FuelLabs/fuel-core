@@ -10,14 +10,6 @@ pub struct MemoryStore {
     inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
-impl MemoryStore {
-    pub fn new() -> Self {
-        Self {
-            inner: Mutex::new(HashMap::<Vec<u8>, Vec<u8>>::new()),
-        }
-    }
-}
-
 impl KeyValueStore for MemoryStore {
     fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
         Ok(self

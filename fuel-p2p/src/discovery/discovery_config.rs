@@ -105,7 +105,7 @@ impl DiscoveryConfig {
 
         // mdns setup
         let mdns = if self.with_mdns {
-            MdnsWrapper::new()
+            MdnsWrapper::default()
         } else {
             MdnsWrapper::disabled()
         };
