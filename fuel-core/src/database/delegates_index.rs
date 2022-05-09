@@ -3,22 +3,25 @@ use fuel_storage::Storage;
 use fuel_types::Address;
 use std::borrow::Cow;
 
-impl Storage<Address, (u64, Option<Address>)> for Database {
+/// Delegate Index it maps delegateAddress with list of da block where delegation happened. so that we
+/// can access those changes
+impl Storage<Address, Vec<u64>> for Database {
     type Error = KvStoreError;
 
     fn insert(
         &mut self,
         key: &Address,
-        value: &(u64, Option<Address>),
-    ) -> Result<Option<(u64, Option<Address>)>, KvStoreError> {
-        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, *value).map_err(Into::into)
+        value: &Vec<u64>,
+    ) -> Result<Option<Vec<u64>>, KvStoreError> {
+        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, value.clone())
+            .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<(u64, Option<Address>)>, KvStoreError> {
+    fn remove(&mut self, key: &Address) -> Result<Option<Vec<u64>>, KvStoreError> {
         Database::remove(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 
-    fn get(&self, key: &Address) -> Result<Option<Cow<(u64, Option<Address>)>>, KvStoreError> {
+    fn get(&self, key: &Address) -> Result<Option<Cow<Vec<u64>>>, KvStoreError> {
         Database::get(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 

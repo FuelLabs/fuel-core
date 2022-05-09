@@ -1,5 +1,6 @@
 use std::{
     cmp::{max, min},
+    sync::Arc,
     time::Duration,
 };
 
@@ -16,13 +17,14 @@ use tracing::{error, info, trace, warn};
 use anyhow::Error;
 use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{
-    FilterWatcher, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
+    FilterWatcher, Http, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
 };
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
     signer::Signer,
 };
+use url::Url;
 
 const REPORT_PROGRESS_EVERY_N_BLOCKS: u64 = 500;
 const PROVIDER_INTERVAL: u64 = 1000;
@@ -46,17 +48,27 @@ pub struct Relayer {
 }
 
 impl Relayer {
-    pub fn new(
+    pub async fn new(
         config: Config,
         db: Box<dyn RelayerDb>,
         receiver: mpsc::Receiver<RelayerEvent>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
     ) -> Self {
+        let private_key =
+            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap();
+
+        let pending = PendingEvents::new(
+            config.eth_chain_id,
+            config.eth_v2_block_commit_contract,
+            private_key,
+        );
+
         Self {
             config,
             db,
-            pending: PendingEvents::default(),
+            pending,
             current_validator_set: CurrentValidatorSet::default(),
             status: RelayerStatus::DaClientIsSyncing,
             receiver,
@@ -68,6 +80,14 @@ impl Relayer {
     /// create provider that we use for communication with ethereum.
     pub async fn provider(uri: &str) -> Result<Provider<Ws>, Error> {
         let ws = Ws::connect(uri).await?;
+        let provider =
+            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
+        Ok(provider)
+    }
+
+    pub fn provider_http(uri: &str) -> Result<Provider<Http>, Error> {
+        let url = Url::parse(uri).unwrap();
+        let ws = Http::new(url);
         let provider =
             Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
         Ok(provider)
@@ -110,6 +130,7 @@ impl Relayer {
         provider: &'a P,
     ) -> Result<
         (
+            u64,
             FilterWatcher<'a, P::Provider, TxHash>,
             FilterWatcher<'a, P::Provider, Log>,
         ),
@@ -239,7 +260,7 @@ impl Relayer {
                 let fuel_event = EthEventLog::try_from(&eth_event);
                 if let Err(err) = fuel_event {
                     // not formated event from contract
-                    error!(target:"relayer", "Eth Event not formated properly in inital sync:{}",err);
+                    error!(target:"relayer", "Eth Event not formated properly in inital sync:{} log:{:?}",err,eth_event);
                     // just skip it for now.
                     continue;
                 }
@@ -287,33 +308,39 @@ impl Relayer {
             .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
 
-        watchers.ok_or_else(|| RelayerError::ProviderError.into())
+        watchers
+            .map(|(w1, w2)| (best_block.as_u64(), w1, w2))
+            .ok_or_else(|| RelayerError::ProviderError.into())
     }
 
     /// Starting point of relayer
     #[tracing::instrument(name = "relayer_run", skip_all)]
-    pub async fn run<P>(mut self, provider: P)
+    pub async fn run<P>(mut self, provider: Arc<P>)
     where
-        P: Middleware<Error = ProviderError>,
+        P: Middleware<Error = ProviderError> + 'static,
     {
-        //let mut this = self;
+        //let mut this = self; h
         self.current_validator_set
             .load_get_validators(self.db.as_mut())
             .await;
 
         loop {
             // initial sync
-            let (mut blocks_watcher, mut logs_watcher) = match self.initial_sync(&provider).await {
-                Ok(watcher) => watcher,
-                Err(err) => {
-                    if self.status == RelayerStatus::Stop {
-                        return;
+            let (best_block, mut blocks_watcher, mut logs_watcher) =
+                match self.initial_sync(&provider).await {
+                    Ok(watcher) => watcher,
+                    Err(err) => {
+                        if self.status == RelayerStatus::Stop {
+                            return;
+                        }
+                        error!("Error happened while doing initial sync:{:?}", err);
+                        continue;
                     }
-                    error!("Error happened while doing initial sync:{:?}", err);
-                    continue;
-                }
-            };
-            info!("Initial syncing finished. Continue to active sync.");
+                };
+            info!(
+                "Initial syncing finished on block {:?}. Continue to active sync.",
+                best_block
+            );
             loop {
                 tokio::select! {
                     inner_fuel_event = self.receiver.recv() => {
@@ -333,7 +360,7 @@ impl Relayer {
                                 return;
                             },
                             Ok(new_block) => {
-                                self.handle_new_block_event(new_block).await
+                                self.handle_new_block_event(new_block,&provider).await
                             },
                         }
                     }
@@ -349,26 +376,29 @@ impl Relayer {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn handle_new_block_event(&mut self, new_block: NewBlockEvent) {
-        match new_block {
-            NewBlockEvent::NewBlockCreated { .. } => {
-                // TODO:
-                // 1. compress block for eth contract.
-                // 2. Create eth transaction.
-                // 3. Sign transaction
-                // 4. Send transaction to eth client.
+    async fn handle_new_block_event<P>(&mut self, new_block: NewBlockEvent, provider: &Arc<P>)
+    where
+        P: Middleware<Error = ProviderError> + 'static,
+    {
+        let height = match new_block {
+            NewBlockEvent::NewBlockCreated(created_block) => {
+                self.pending
+                    .handle_created_fuel_block(&created_block, provider)
+                    .await;
+                u64::from(created_block.header.number)
             }
-            NewBlockEvent::NewBlockIncluded { da_height, .. } => {
+            NewBlockEvent::NewBlockIncluded(new_block) => {
                 // assume that da_height is checked agains parent block.
 
                 // TODO handle lagging here. compare current_db_height and finalized_db_height and send error notification
-                // if we are lagging over data availability events.
-
-                self.current_validator_set
-                    .bump_validators_to_da_height(da_height, self.db.as_mut())
-                    .await
+                // if we are lagging over data availability event
+                self.pending.handle_fuel_block(&new_block);
+                u64::from(new_block.header.number)
             }
-        }
+        };
+        self.current_validator_set
+            .bump_validators_to_da_height(u64::from(height), self.db.as_mut())
+            .await;
     }
 
     #[tracing::instrument(skip(self))]
@@ -396,7 +426,7 @@ impl Relayer {
         }
     }
 
-    #[tracing::instrument(skip(self, provider))]
+    #[tracing::instrument(skip(self, provider, new_eth_block_hash))]
     async fn handle_eth_block_hash<P>(
         &mut self,
         provider: &P,
@@ -425,7 +455,7 @@ impl Relayer {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, eth_event))]
     async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
         // new log
         if eth_event.is_none() {
@@ -444,11 +474,7 @@ impl Relayer {
             error!(target:"relayer", "Block number not found in eth log");
             return;
         }
-        if eth_event.removed.is_none() {
-            error!(target:"relayer", "Remove not found in eth log");
-            return;
-        }
-        let removed = eth_event.removed.unwrap();
+        let removed = eth_event.removed.unwrap_or(false);
         let block_number = eth_event.block_number.unwrap().as_u64();
         let fuel_event = fuel_event.unwrap();
 
@@ -467,7 +493,7 @@ impl Relayer {
 #[cfg(test)]
 mod test {
 
-    use std::time::Duration;
+    use std::{sync::Arc, time::Duration};
 
     use async_trait::async_trait;
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
@@ -489,7 +515,7 @@ mod test {
             eth_initial_sync_refresh: Duration::from_millis(10),
             ..Default::default()
         };
-        let (relayer, event, _) = relayer(config);
+        let (relayer, event, _) = relayer(config).await;
         let middle = MockMiddleware::default();
         middle.data.lock().await.is_syncing = SyncingStatus::IsSyncing {
             starting_block: U256::zero(),
@@ -525,7 +551,7 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle).await;
+        relayer.run(Arc::new(middle)).await;
     }
 
     #[tokio::test]
@@ -536,7 +562,7 @@ mod test {
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
         };
-        let (relayer, event, _) = relayer(config);
+        let (relayer, event, _) = relayer(config).await;
         let middle = MockMiddleware::default();
         {
             let mut data = middle.data.lock().await;
@@ -583,7 +609,7 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle).await;
+        relayer.run(Arc::new(middle)).await;
     }
 
     #[tokio::test]
@@ -594,7 +620,7 @@ mod test {
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
         };
-        let (relayer, event, _) = relayer(config);
+        let (relayer, event, _) = relayer(config).await;
         let middle = MockMiddleware::default();
         {
             let mut data = middle.data.lock().await;
@@ -605,11 +631,7 @@ mod test {
 
             data.best_block.number = Some(U64([134]));
             data.logs_batch = vec![
-                vec![log::tests::eth_log_validator_deposit(
-                    136,
-                    Address::zeroed(),
-                    10,
-                )], //Log::]
+                vec![log::tests::eth_log_deposit(136, Address::zeroed(), 10)], //Log::]
             ];
             data.blocks_batch = vec![vec![H256::zero()]];
         }
@@ -722,6 +744,6 @@ mod test {
             .trigger_handle(Box::new(Handle { i: 0, event }))
             .await;
 
-        relayer.run(middle).await;
+        relayer.run(Arc::new(middle)).await;
     }
 }

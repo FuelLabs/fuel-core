@@ -1,13 +1,20 @@
-use std::collections::{HashMap, VecDeque};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
-use fuel_core_interfaces::relayer::RelayerDb;
+use ethers_core::types::H160;
+use ethers_providers::Middleware;
+use fuel_core_interfaces::{
+    primitive_types::SealedFuelBlock,
+    relayer::{RelayerDb, StakingDiff},
+};
 use fuel_tx::{Address, AssetId, Bytes32};
 use fuel_types::Word;
 use tracing::info;
 
-use crate::log::EthEventLog;
+use crate::{block_commit::BlockCommit, log::EthEventLog};
 
-#[derive(Default)]
 pub struct PendingEvents {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     /// it contains every fuel block and its span
@@ -17,10 +24,10 @@ pub struct PendingEvents {
     /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
     /// I checked this with infura endpoint.
     bundled_removed_eth_events: Vec<(u64, Vec<EthEventLog>)>,
-    /// finalized validator set
-    finalized_validator_set: HashMap<Address, u64>,
     /// finalized fuel block
     finalized_da_height: u64,
+    /// Pending block handling
+    block_commit: BlockCommit,
 }
 
 /// Pending diff between FuelBlocks
@@ -30,30 +37,37 @@ pub struct PendingDiff {
     /// It is always monotonic and check on its limits are check in consensus and in contract.
     /// Contract needs to check that when feul block is commited that this number is more then
     /// finality period N.
-    da_height: u64,
+    pub da_height: u64,
     /// Validator stake deposit and withdrawel.
-    stake_diff: HashMap<Address, i64>,
-    /// erc-20 pending deposit. deposit nonce.
-    assets_deposited: HashMap<Bytes32, (Address, AssetId, Word)>,
+    pub validators: HashMap<Address, Option<Address>>,
+    // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
+    pub delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
+    /// erc-20 pending deposit.
+    pub assets: HashMap<Bytes32, (Address, AssetId, Word)>,
 }
 
 impl PendingDiff {
     pub fn new(da_height: u64) -> Self {
         Self {
             da_height,
-            stake_diff: HashMap::new(),
-            assets_deposited: HashMap::new(),
+            validators: HashMap::new(),
+            delegations: HashMap::new(),
+            assets: HashMap::new(),
         }
-    }
-    pub fn stake_diff(&self) -> &HashMap<Address, i64> {
-        &self.stake_diff
-    }
-    pub fn assets_deposited(&self) -> &HashMap<Bytes32, (Address, AssetId, Word)> {
-        &self.assets_deposited
     }
 }
 
 impl PendingEvents {
+    pub fn new(chain_id: u64, contract_address: H160, private_key: Vec<u8>) -> Self {
+        let block_commit = BlockCommit::new(chain_id, contract_address, private_key);
+        Self {
+            block_commit,
+            pending: VecDeque::new(),
+            bundled_removed_eth_events: Vec::new(),
+            finalized_da_height: 0,
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.pending.len()
     }
@@ -94,24 +108,60 @@ impl PendingEvents {
         }
     }
 
+    /// propagate new fuel block to block_commit
+    pub fn handle_fuel_block(&mut self, block: &Arc<SealedFuelBlock>) {
+        self.block_commit.new_fuel_block(block.clone())
+    }
+
+    /// propagate new created fuel block to block_commit
+    pub async fn handle_created_fuel_block<P>(
+        &mut self,
+        block: &Arc<SealedFuelBlock>,
+        provider: &Arc<P>,
+    ) where
+        P: Middleware + 'static,
+    {
+        self.block_commit
+            .created_block(block.clone(), provider)
+            .await;
+    }
+
     /// Handle eth log events
     pub async fn handle_eth_log(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
+        info!("handle eth log:{:?}", event);
+        // bundle removed events and return
         if removed {
             self.bundle_removed_events(event, eth_block);
             return;
         }
         // apply all reverted event
         if !self.bundled_removed_eth_events.is_empty() {
-            info!(target:"relayer", "Reorg happened on ethereum. Reverting {} logs",self.bundled_removed_eth_events.len());
+            info!(
+                "Reorg happened on ethereum. Reverting {} logs",
+                self.bundled_removed_eth_events.len()
+            );
 
-            // if there is new log that is not removed it means we can revert our pending removed eth events.
-            let mut current_da_height = 0;
-            for (da_height, _) in std::mem::take(&mut self.bundled_removed_eth_events).into_iter() {
-                if da_height != current_da_height {
-                    self.pending.pop_back();
-                    current_da_height = da_height;
+            let mut lowest_removed_da_height = u64::MAX;
+
+            for (da_height, events) in
+                std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
+            {
+                lowest_removed_da_height = u64::min(lowest_removed_da_height, da_height);
+                // mark all removed pending block commits as reverted.
+                for event in events {
+                    if let EthEventLog::FuelBlockCommited { block_root, height } = event {
+                        self.block_commit.block_reverted(
+                            block_root,
+                            height.into(),
+                            da_height.into(),
+                        );
+                    }
                 }
             }
+            // remove all blocks that were reverted. In best case those blocks heights and events are going
+            // to be reinserted in append eth events.
+            self.pending
+                .retain(|diff| diff.da_height < lowest_removed_da_height);
         }
         // apply new event to pending queue
         self.append_eth_events(&event, eth_block).await;
@@ -128,7 +178,7 @@ impl PendingEvents {
             self.pending.push_back(PendingDiff::new(da_height))
         }
         let last_diff = self.pending.back_mut().unwrap();
-        match *fuel_event {
+        match fuel_event {
             EthEventLog::AssetDeposit {
                 account,
                 token,
@@ -137,53 +187,88 @@ impl PendingEvents {
                 ..
             } => {
                 last_diff
-                    .assets_deposited
-                    .insert(deposit_nonce, (account, token, amount));
+                    .assets
+                    .insert(*deposit_nonce, (*account, *token, *amount));
             }
-            EthEventLog::ValidatorDeposit { depositor, deposit } => {
-                // overflow is not possible
-                *last_diff.stake_diff.entry(depositor).or_insert(0) += deposit as i64;
+            EthEventLog::Deposit { .. } => {
+                // do nothing. This is only related to contract, only possible usage for this is as
+                // additional information for user.
             }
-            EthEventLog::ValidatorWithdrawal {
-                withdrawer,
-                withdrawal,
+            EthEventLog::Withdrawal { withdrawer, .. } => {
+                last_diff.delegations.insert(*withdrawer, None);
+            }
+            EthEventLog::Delegation {
+                delegator,
+                delegates,
+                amounts,
             } => {
-                // underflow should not be possible and it should be restrained by contract
-                *last_diff.stake_diff.entry(withdrawer).or_insert(0) -= withdrawal as i64;
+                let delegates: HashMap<_, _> = delegates
+                    .iter()
+                    .zip(amounts.iter())
+                    .map(|(f, s)| (*f, *s))
+                    .collect();
+                last_diff.delegations.insert(*delegator, Some(delegates));
             }
-            EthEventLog::FuelBlockCommited { .. } => {
-                // TODO do nothing? or maybe update some state as BlockCommitSeen, BlockCommitFinalized, etc.
+            // Done
+            EthEventLog::ValidatorRegistration {
+                staking_key,
+                consensus_key,
+            } => {
+                last_diff
+                    .validators
+                    .insert(*staking_key, Some(*consensus_key));
+            }
+            // Done
+            EthEventLog::ValidatorUnregistration { staking_key } => {
+                last_diff.validators.insert(*staking_key, None);
+            }
+            EthEventLog::FuelBlockCommited { height, block_root } => {
+                self.block_commit.block_commited(
+                    *block_root,
+                    height.clone().into(),
+                    da_height.clone().into(),
+                );
             }
         }
     }
 
     /// Used in two places. On initial sync and when new fuel blocks is
-    pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
-        while let Some(diffs) = self.pending.front() {
-            if diffs.da_height > finalized_da_height {
+    pub async fn commit_diffs(
+        &mut self,
+        db: &mut dyn RelayerDb,
+        finalized_da_height: u64,
+    ) {
+        while let Some(diff) = self.pending.front() {
+            if diff.da_height > finalized_da_height {
                 break;
             }
+            info!("flush eth log:{:?} diff:{:?}", diff.da_height, diff);
             //TODO to be paranoid, recheck events got from eth client.
-            let mut stake_diff = HashMap::new();
-            // apply diff to validator_set
-            for (address, diff) in &diffs.stake_diff {
-                let value = self.finalized_validator_set.entry(*address).or_insert(0);
-                // we are okay to cast it, we dont expect that big of number to exist.
-                *value = ((*value as i64) + diff) as u64;
-                stake_diff.insert(*address, *value);
-            }
-            // push new value for changed validators to database
-            db.insert_validators_diff(diffs.da_height, &stake_diff)
-                .await;
-            db.set_finalized_da_height(diffs.da_height).await;
 
-            // push finalized deposit to db
-            for (nonce, deposit) in diffs.assets_deposited.iter() {
-                db.insert_token_deposit(*nonce, diffs.da_height, deposit.0, deposit.1, deposit.2)
+            // apply staking diffs
+            db.insert_staking_diff(
+                diff.da_height,
+                &StakingDiff::new(diff.validators.clone(), diff.delegations.clone()),
+            )
+            .await;
+
+            // append index of delegator so that we cross reference earliest delegation set
+            for (delegate, _) in diff.delegations.iter() {
+                db.append_delegate_index(delegate, diff.da_height).await;
+            }
+
+            // push finalized assets to db
+            for (nonce, deposit) in diff.assets.iter() {
+                db.insert_token_deposit(*nonce, diff.da_height, deposit.0, deposit.1, deposit.2)
                     .await
             }
+
+            // insert height index into delegations.
+            db.set_finalized_da_height(diff.da_height).await;
+
             self.pending.pop_front();
         }
+        self.block_commit.new_da_block(finalized_da_height.into());
         self.finalized_da_height = finalized_da_height;
     }
 }
@@ -193,7 +278,6 @@ mod tests {
 
     use super::*;
     use crate::log::tests::*;
-    use fuel_core_interfaces::db::helpers::DummyDb;
     use fuel_types::Address;
 
     #[tokio::test]
@@ -204,14 +288,22 @@ mod tests {
         let nonce2 = Bytes32::from([3; 32]);
         let nonce3 = Bytes32::from([4; 32]);
 
-        let mut pending = PendingEvents::default();
+        let mut pending = PendingEvents::new(
+            0,
+            H160::zero(),
+            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap(),
+        );
 
         let deposit1 =
-            EthEventLog::try_from(&eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1)).unwrap();
+            EthEventLog::try_from(&eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1, 0))
+                .unwrap();
         let deposit2 =
-            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2)).unwrap();
+            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2, 0))
+                .unwrap();
         let deposit3 =
-            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3)).unwrap();
+            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3, 0))
+                .unwrap();
 
         pending.handle_eth_log(deposit1, 0, false).await;
         pending.handle_eth_log(deposit2, 1, false).await;
@@ -219,28 +311,34 @@ mod tests {
         let diff1 = pending.pending[0].clone();
         let diff2 = pending.pending[1].clone();
         assert_eq!(
-            diff1.assets_deposited.get(&nonce1),
+            diff1.assets.get(&nonce1),
             Some(&(acc1, token1, 10)),
             "Deposit 1 not valid"
         );
         assert_eq!(
-            diff2.assets_deposited.get(&nonce2),
+            diff2.assets.get(&nonce2),
             Some(&(acc1, token1, 20)),
             "Deposit 2 not valid"
         );
         assert_eq!(
-            diff2.assets_deposited.get(&nonce3),
+            diff2.assets.get(&nonce3),
             Some(&(acc1, token1, 40)),
             "Deposit 3 not valid"
         );
     }
 
+    /*
     #[tokio::test]
     pub async fn check_validator_set_deposits_on_multiple_eth_blocks() {
         let acc1 = Address::from([1; 32]);
         let acc2 = Address::from([2; 32]);
 
-        let mut pending = PendingEvents::default();
+        let mut pending = PendingEvents::new(
+            0,
+            H160::zero(),
+            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap(),
+        );
 
         let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1)).unwrap();
         let deposit2 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 20)).unwrap();
@@ -283,7 +381,12 @@ mod tests {
         let acc1 = Address::from([1; 32]);
         let acc2 = Address::from([2; 32]);
 
-        let mut pending = PendingEvents::default();
+        let mut pending = PendingEvents::new(
+            0,
+            H160::zero(),
+            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap(),
+        );
 
         let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1000)).unwrap();
         let deposit2 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 300)).unwrap();
@@ -348,5 +451,5 @@ mod tests {
         assert_eq!(diffs.get(&1).unwrap().get(&acc1), Some(&600));
         assert_eq!(diffs.get(&1).unwrap().get(&acc2), Some(&50));
         assert_eq!(diffs.get(&2).unwrap().get(&acc1), Some(&550));
-    }
+    } */
 }

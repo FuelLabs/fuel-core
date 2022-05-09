@@ -1,5 +1,25 @@
 use ethers_core::types::Log;
 use fuel_types::{Address, AssetId, Bytes32, Word};
+use tracing::{info, trace};
+
+/* What database tables do we need to have:
+
+Delegation: DelagatorAddress -> Map of Validators->Amounts
+    Map needed when new Delegation or Withdrawal is received so that we know what stake we need to decrease.
+
+Withdrawal: Do same as first part of delegation. if there is delegation before hand, remove it.
+
+Validator Registration:
+Validator Unregistration: Remove it from validator set and from database
+
+* Validator table: ValAddress -> stake,ConsensusAddress
+* Delegator table: DelAddress -> [ValAddress,stake]
+
+DiffTable for every da block encompasing changes for validator and delegator
+* set of delegation changes: OldDelegationSet and new one delegationAddress->Map[ValAddress,Stake]
+* Validator changes consensus_key and registration/unregistration
+
+*/
 
 use crate::config;
 
@@ -8,33 +28,52 @@ pub enum EthEventLog {
     AssetDeposit {
         account: Address,
         token: AssetId,
-        block_number: u32,
         amount: Word,
+        precision_factor: u8,
+        block_number: u32,
         deposit_nonce: Bytes32,
     },
-    ValidatorDeposit {
-        depositor: Address,
-        deposit: Word,
+    // save it in validator set
+    ValidatorRegistration {
+        staking_key: Address,
+        consensus_key: Address,
     },
-    //ValidatorDelagated, Simon mentioned it in chat but there is no events in current contract.
-    ValidatorWithdrawal {
-        withdrawer: Address,
-        withdrawal: Word,
+    // remove it from validator set
+    ValidatorUnregistration {
+        staking_key: Address,
+    },
+    // do nothing. maybe used it for stats or info data.
+    Deposit {
+        depositor: Address, // It is H160 address for ethereum
+        amount: Word,
+    },
+    // remove all delegations
+    Withdrawal {
+        withdrawer: Address, // it is H160 address for ethereum
+        amount: Word,
+    },
+    // remove old delegations, delegate to new validators.
+    Delegation {
+        delegator: Address, // it is H160 address of deposit
+        delegates: Vec<Address>,
+        amounts: Vec<u64>,
     },
     FuelBlockCommited {
         block_root: Bytes32,
         height: Word,
-        da_height: u64,
     },
 }
 
-// block_number(32bits) | amount(256bits) | depositNonce(256bits)
-const ASSET_DEPOSIT_DATA_LEN: usize = 4 + 32 + 32;
+
+/// block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
+/// data is packet as three 256bit values
+const ASSET_DEPOSIT_DATA_LEN: usize = 32 + 32 + 32;
 
 impl TryFrom<&Log> for EthEventLog {
     type Error = &'static str;
 
     fn try_from(log: &Log) -> Result<Self, Self::Error> {
+        trace!("Received log:{:?}", log);
         if log.topics.is_empty() {
             return Err("Topic list is empty");
         }
@@ -42,77 +81,115 @@ impl TryFrom<&Log> for EthEventLog {
         // TODO extract event name-hashes as static with proper values.
         let log = match log.topics[0] {
             n if n == *config::ETH_ASSET_DEPOSIT => {
-                if log.topics.len() != 3 {
+                if log.topics.len() != 4 {
                     return Err("Malformed topics for AssetDeposit");
                 }
                 let account = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
                 let token = unsafe { AssetId::from_slice_unchecked(log.topics[2].as_ref()) };
-                // data is contains: block_number(32bits) | amount(256bits) | depositNonce(256bits)
-                let data = &log.data.0;
-                if data.len() != ASSET_DEPOSIT_DATA_LEN {
-                    return Err("Malformed data length for AssetDeposit");
-                }
-                if !data[4..28].iter().all(|&b| b == 0) {
+
+                // TODO check to minimize this into something resonable as in u64.
+                if !log.topics[3][..24].iter().all(|&b| b == 0) {
                     return Err("Malformed amount for AssetDeposit. Amount bigger then u64");
                 }
-
-                let block_number = <[u8; 4]>::try_from(&data[..4])
-                    .map(u32::from_be_bytes)
-                    .expect("We have checked slice bounds");
-
-                let amount = <[u8; 8]>::try_from(&data[28..36])
+                let amount = <[u8; 8]>::try_from(&log.topics[3][24..])
                     .map(u64::from_be_bytes)
                     .expect("We have checked slice bounds");
 
-                let deposit_nonce = unsafe { Bytes32::from_slice_unchecked(&data[36..]) };
+                // data is contains: block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
+                let data = &log.data.0;
+                println!("DATA LEN:{}",data.len());
+                if data.len() != ASSET_DEPOSIT_DATA_LEN {
+                    info!("data len:{}", data.len());
+                    return Err("Malformed data length for AssetDeposit: {}");
+                }
+                if !data[..28].iter().all(|&b| b == 0) {
+                    return Err("Malformed amount for AssetDeposit. Amount bigger then u64");
+                }
+
+                let block_number = <[u8; 4]>::try_from(&data[28..32])
+                    .map(u32::from_be_bytes)
+                    .expect("We have checked slice bounds");
+
+                if !data[32..63].iter().all(|&b| b == 0) {
+                    return Err("Malformed amount for AssetDeposit. Amount bigger then u64");
+                }
+
+                let precision_factor = data[63];
+
+                let deposit_nonce = unsafe { Bytes32::from_slice_unchecked(&data[64..]) };
 
                 Self::AssetDeposit {
                     block_number,
                     account,
-                    token,
                     amount,
+                    token,
+                    precision_factor,
                     deposit_nonce,
                 }
             }
-            n if n == *config::ETH_VALIDATOR_DEPOSIT => {
+            n if n == *config::ETH_VALIDATOR_REGISTRATION => {
                 if log.topics.len() != 3 {
-                    return Err("Malformed topics for ValidatorDeposit");
+                    return Err("Malformed topics for ValidatorRegistration");
                 }
-                // Safety: Casting between same sized structures. It is okay not to check size.
-                let depositor = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let staking_key = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let consensus_key =
+                    unsafe { Address::from_slice_unchecked(log.topics[2].as_ref()) };
 
-                let deposit = log.topics[2].as_ref();
-                if !deposit[..24].iter().all(|&b| b == 0) {
-                    return Err("Malformed deposit for ValidatorDeposit. deposit bigger then u64");
+                Self::ValidatorRegistration {
+                    staking_key,
+                    consensus_key,
                 }
-                let deposit = <[u8; 8]>::try_from(&deposit[24..])
-                    .map(u64::from_be_bytes)
-                    .expect("We have checked slice bounds");
-
-                Self::ValidatorDeposit { depositor, deposit }
             }
-            n if n == *config::ETH_VALIDATOR_WITHDRAWAL => {
-                if log.topics.len() != 3 {
-                    return Err("Malformed topics for ValidatorWithdrawal");
+            n if n == *config::ETH_VALIDATOR_UNREGISTRATION => {
+                if log.topics.len() != 2 {
+                    return Err("Malformed topics for ValidatorUnregistration");
                 }
-                // Safety: Casting between same sized structures. It is okay not to check size.
-                let withdrawer = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let staking_key = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
 
-                let withdrawal = log.topics[2].as_ref();
-                if !withdrawal[..24].iter().all(|&b| b == 0) {
-                    return Err("Malformed deposit for ValidatorDeposit. deposit bigger then u64");
+                Self::ValidatorUnregistration { staking_key }
+            }
+            n if n == *config::ETH_DEPOSIT => {
+                if log.topics.len() != 3 {
+                    return Err("Malformed topics for ValidatorRegistration");
                 }
-                let withdrawal = <[u8; 8]>::try_from(&withdrawal[24..])
+                let depositor = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
+
+                let amount = <[u8; 8]>::try_from(&amount[24..])
                     .map(u64::from_be_bytes)
                     .expect("We have checked slice bounds");
 
-                Self::ValidatorWithdrawal {
-                    withdrawer,
-                    withdrawal,
+                Self::Deposit { depositor, amount }
+            }
+            n if n == *config::ETH_WITHDRAWAL => {
+                if log.topics.len() != 3 {
+                    return Err("Malformed topics for ValidatorRegistration");
+                }
+                let withdrawer = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
+
+                let amount = <[u8; 8]>::try_from(&amount[24..])
+                    .map(u64::from_be_bytes)
+                    .expect("We have checked slice bounds");
+
+                Self::Withdrawal { withdrawer, amount }
+            }
+            n if n == *config::ETH_DELEGATION => {
+                // TODO
+                if log.topics.len() != 2 {
+                    return Err("Malformed topics for ValidatorRegistration");
+                }
+                let delegator = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                //let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
+
+                Self::Delegation {
+                    delegator,
+                    delegates: Vec::new(),
+                    amounts: Vec::new(),
                 }
             }
             n if n == *config::ETH_FUEL_BLOCK_COMMITED => {
-                if log.topics.len() != 4 {
+                if log.topics.len() != 3 {
                     return Err("Malformed topics for FuelBlockCommited");
                 }
                 // Safety: Casting between same sized structures. It is okay not to check size.
@@ -121,17 +198,10 @@ impl TryFrom<&Log> for EthEventLog {
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;
-                let da_height = <[u8; 4]>::try_from(&log.topics[3][28..])
-                    .map(u32::from_be_bytes)
-                    .expect("Slice bounds are predefined") as u64;
 
-                Self::FuelBlockCommited {
-                    block_root,
-                    height,
-                    da_height,
-                }
+                Self::FuelBlockCommited { block_root, height }
             }
-
+            n if n == *config::ETH_ASSET_WITHDRAWAL => return Err("AssetWithdrawal is not parsed for now"),
             _ => return Err("Unknown event"),
         };
 
@@ -150,29 +220,69 @@ pub mod tests {
     use super::*;
     use crate::config;
 
-    pub fn eth_log_validator_deposit(eth_block: u64, depositor: Address, deposit: Word) -> Log {
+    pub fn eth_log_validator_registration(
+        eth_block: u64,
+        staking_key: Address,
+        consensus_key: Address,
+    ) -> Log {
         log_default(
             eth_block,
             vec![
-                *config::ETH_VALIDATOR_DEPOSIT,
-                H256::from_slice(depositor.as_ref()),
-                H256::from_low_u64_be(deposit),
+                *config::ETH_VALIDATOR_REGISTRATION,
+                H256::from_slice(staking_key.as_ref()),
+                H256::from_slice(consensus_key.as_ref()),
             ],
             Bytes::new(),
         )
     }
 
-    pub fn eth_log_validator_withdrawal(
+    pub fn eth_log_validator_unregistration(eth_block: u64, staking_key: Address) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                *config::ETH_VALIDATOR_UNREGISTRATION,
+                H256::from_slice(staking_key.as_ref()),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    pub fn eth_log_deposit(eth_block: u64, depositor: Address, amount: Word) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                *config::ETH_DEPOSIT,
+                H256::from_slice(depositor.as_ref()),
+                H256::from_low_u64_be(amount),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    pub fn eth_log_withdrawal(eth_block: u64, withdrawer: Address, amount: Word) -> Log {
+        log_default(
+            eth_block,
+            vec![
+                *config::ETH_WITHDRAWAL,
+                H256::from_slice(withdrawer.as_ref()),
+                H256::from_low_u64_be(amount),
+            ],
+            Bytes::new(),
+        )
+    }
+
+    pub fn eth_log_delegation(
         eth_block: u64,
-        withdrawer: Address,
-        withdrawal: Word,
+        delegator: Address,
+        _delegates: Vec<Bytes32>,
+        _amounts: Vec<u64>,
     ) -> Log {
         log_default(
             eth_block,
             vec![
-                *config::ETH_VALIDATOR_WITHDRAWAL,
-                H256::from_slice(withdrawer.as_ref()),
-                H256::from_low_u64_be(withdrawal),
+                *config::ETH_DELEGATION,
+                H256::from_slice(delegator.as_ref()),
+                //TODO
             ],
             Bytes::new(),
         )
@@ -185,22 +295,24 @@ pub mod tests {
         block_number: u32,
         amount: Word,
         deposit_nonce: Bytes32,
+        precision_factor: u8,
     ) -> Log {
-        //block_number(32bits) | amount(256bits) | depositNonce(256bits)
-        // 4+32+32
+        //block_number(32bits) | precision_factor(256bits) | depositNonce(256bits)
+        // 32+32+32
         let mut b = BytesMut::new();
-        b.resize(68, 0);
+        b.resize(ASSET_DEPOSIT_DATA_LEN, 0);
         //let mut b: [u8; 68] = [0; 68];
-        b[..4].copy_from_slice(&block_number.to_be_bytes());
+        b[28..32].copy_from_slice(&block_number.to_be_bytes());
         // 4..28 are zeroes
-        b[28..36].copy_from_slice(&amount.to_be_bytes());
-        b[36..68].copy_from_slice(deposit_nonce.as_ref());
+        b[63] = precision_factor;
+        b[64..96].copy_from_slice(deposit_nonce.as_ref());
         log_default(
             eth_block,
             vec![
                 *config::ETH_ASSET_DEPOSIT,
                 H256::from_slice(account.as_ref()),
                 H256::from_slice(token.as_ref()),
+                H256::from_low_u64_be(amount),
             ],
             b.freeze(),
         )
@@ -210,18 +322,18 @@ pub mod tests {
         eth_block: u64,
         block_root: Bytes32,
         fuel_height: u32,
-        da_height: u32,
     ) -> Log {
-        log_default(
+        let t = log_default(
             eth_block,
             vec![
                 *config::ETH_FUEL_BLOCK_COMMITED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
-                H256::from_low_u64_be(da_height as u64),
             ],
             Bytes::new(),
-        )
+        );
+        println!("print topics: {:?}",t.topics);
+        t
     }
 
     fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
@@ -241,13 +353,12 @@ pub mod tests {
     }
 
     #[test]
-    fn eth_event_validator_withdrawal_try_from_log() {
+    fn eth_event_validator_unregistration_try_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block = rng.gen();
-        let withdrawer = rng.gen();
-        let withdrawal = rng.gen();
+        let staking_key = rng.gen();
 
-        let log = eth_log_validator_withdrawal(eth_block, withdrawer, withdrawal);
+        let log = eth_log_validator_unregistration(eth_block, staking_key);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -258,22 +369,45 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::ValidatorWithdrawal {
-                withdrawer,
-                withdrawal
+            EthEventLog::ValidatorUnregistration { staking_key },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_validator_registration_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let staking_key = rng.gen();
+        let consensus_key = rng.gen();
+
+        let log = eth_log_validator_registration(eth_block, staking_key, consensus_key);
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::ValidatorRegistration {
+                staking_key,
+                consensus_key
             },
             "Decoded log does not match data we encoded"
         );
     }
 
     #[test]
-    fn eth_event_validator_deposit_try_from_log() {
+    fn eth_event_withdrawal_try_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block = rng.gen();
-        let depositor = rng.gen();
-        let deposit = rng.gen();
+        let withdrawer = rng.gen();
+        let amount = rng.gen();
 
-        let log = eth_log_validator_deposit(eth_block, depositor, deposit);
+        let log = eth_log_withdrawal(eth_block, withdrawer, amount);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -284,7 +418,57 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::ValidatorDeposit { depositor, deposit },
+            EthEventLog::Withdrawal { withdrawer, amount },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_deposit_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let depositor = rng.gen();
+        let amount = rng.gen();
+
+        let log = eth_log_deposit(eth_block, depositor, amount);
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::Deposit { depositor, amount },
+            "Decoded log does not match data we encoded"
+        );
+    }
+
+    #[test]
+    fn eth_event_delegate_try_from_log() {
+        let rng = &mut StdRng::seed_from_u64(2322u64);
+        let eth_block = rng.gen();
+        let delegator = rng.gen();
+
+        // TODO
+        let log = eth_log_delegation(eth_block, delegator, Vec::new(), Vec::new());
+        assert_eq!(
+            Some(U64([eth_block])),
+            log.block_number,
+            "Block number not set"
+        );
+        let fuel_log = EthEventLog::try_from(&log);
+        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
+
+        assert_eq!(
+            fuel_log.unwrap(),
+            EthEventLog::Delegation {
+                delegator,
+                delegates: Vec::new(),
+                amounts: Vec::new()
+            },
             "Decoded log does not match data we encoded"
         );
     }
@@ -295,9 +479,8 @@ pub mod tests {
         let eth_block = rng.gen();
         let block_root = rng.gen();
         let height: u32 = rng.gen();
-        let da_height: u32 = rng.gen();
 
-        let log = eth_log_fuel_block_commited(eth_block, block_root, height, da_height);
+        let log = eth_log_fuel_block_commited(eth_block, block_root, height);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -309,11 +492,7 @@ pub mod tests {
         let height = height as u64;
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::FuelBlockCommited {
-                block_root,
-                height,
-                da_height: da_height as u64,
-            },
+            EthEventLog::FuelBlockCommited { block_root, height },
             "Decoded log does not match data we encoded"
         );
     }
@@ -327,6 +506,7 @@ pub mod tests {
         let block_number: u32 = rng.gen();
         let amount = rng.gen();
         let deposit_nonce = rng.gen();
+        let precision_factor = rng.gen();
 
         let log = eth_log_asset_deposit(
             eth_block,
@@ -335,6 +515,7 @@ pub mod tests {
             block_number,
             amount,
             deposit_nonce,
+            precision_factor,
         );
         assert_eq!(
             Some(U64([eth_block])),
@@ -350,6 +531,7 @@ pub mod tests {
                 account,
                 token,
                 block_number,
+                precision_factor,
                 amount,
                 deposit_nonce
             },

@@ -2136,15 +2136,20 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "chrono",
  "env_logger",
+ "ethers-contract",
  "ethers-core",
  "ethers-middleware",
  "ethers-providers",
+ "ethers-signers",
  "features",
  "fuel-core-interfaces",
+ "fuel-crypto",
  "fuel-tx",
  "fuel-types",
  "futures",
+ "hex",
  "lazy_static",
  "parking_lot 0.12.0",
  "rand 0.8.5",
@@ -2154,6 +2159,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]

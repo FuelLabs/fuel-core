@@ -9,7 +9,7 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
@@ -32,14 +32,15 @@ pub mod block;
 pub mod code_root;
 pub mod coin;
 pub mod contracts;
+pub mod delegates_index;
 pub mod deposit_coin;
 pub mod metadata;
 mod receipts;
+pub mod staking_diffs;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
 pub mod validator_set;
-pub mod validator_set_diffs;
 
 // Crude way to invalidate incompatible databases,
 // can be used to perform migrations in the future.
@@ -65,12 +66,16 @@ pub mod columns {
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
     pub const TOKEN_DEPOSITS: u32 = 14;
+    /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
-    pub const VALIDATOR_SET_DIFFS: u32 = 16;
+    /// contain diff between da blocks it contains new registeres consensus key and new delegate sets.
+    pub const STAKING_DIFFS: u32 = 16;
+    /// Maps delegate address with validator_set_diff index where last delegate change happened
+    pub const DELEGATES_INDEX: u32 = 17;
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 17;
+    pub const COLUMN_NUM: u32 = 18;
 }
 
 #[derive(Clone, Debug)]
@@ -263,7 +268,7 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(&self) -> HashMap<Address, u64> {
+    async fn get_validators(&self) -> HashMap<Address, (u64, Option<Address>)> {
         struct WrapAddress(pub Address);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
@@ -271,7 +276,12 @@ impl RelayerDb for Database {
             }
         }
         let mut out = HashMap::new();
-        for diff in self.iter_all::<WrapAddress, u64>(columns::VALIDATOR_SET, None, None, None) {
+        for diff in self.iter_all::<WrapAddress, (u64, Option<Address>)>(
+            columns::VALIDATOR_SET,
+            None,
+            None,
+            None,
+        ) {
             match diff {
                 Ok((address, stake)) => {
                     out.insert(address.0, stake);
@@ -282,11 +292,11 @@ impl RelayerDb for Database {
         out
     }
 
-    async fn get_validator_diffs(
+    async fn get_staking_diff(
         &self,
         from_da_height: u64,
         to_da_height: Option<u64>,
-    ) -> Vec<(u64, HashMap<Address, u64>)> {
+    ) -> Vec<(u64, StakingDiff)> {
         let to_da_height = if let Some(to_da_height) = to_da_height {
             if from_da_height > to_da_height {
                 return Vec::new();
@@ -305,8 +315,8 @@ impl RelayerDb for Database {
             }
         }
         let mut out = Vec::new();
-        for diff in self.iter_all::<WrapU64Be, HashMap<Address, u64>>(
-            columns::VALIDATOR_SET_DIFFS,
+        for diff in self.iter_all::<WrapU64Be, StakingDiff>(
+            columns::STAKING_DIFFS,
             None,
             Some(from_da_height.to_be_bytes().to_vec()),
             None,
@@ -325,11 +335,17 @@ impl RelayerDb for Database {
         out
     }
 
-    async fn apply_validator_diffs(&mut self, changes: &HashMap<Address, u64>, da_height: u64) {
-        // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation.
+    async fn apply_validator_diffs(
+        &mut self,
+        da_height: u64,
+        changes: &HashMap<Address, (u64, Option<Address>)>,
+    ) {
+        // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
         let mut db = self.transaction();
+        // TODO
         for (address, stake) in changes {
-            let _ = Storage::<Address, u64>::insert(db.deref_mut(), address, stake);
+            let _ =
+                Storage::<Address, (u64, Option<Address>)>::insert(db.deref_mut(), address, stake);
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {

@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use crate::Config;
 use crate::Relayer;
+use ethers_providers::{Middleware, ProviderError};
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDb, RelayerEvent},
@@ -16,15 +19,19 @@ pub struct Service {
 }
 
 impl Service {
-    pub async fn new(
+    pub async fn new<P>(
         config: &Config,
         db: Box<dyn RelayerDb>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
         signer: Box<dyn Signer + Send>,
-    ) -> Result<Self, anyhow::Error> {
+        provider: Arc<P>,
+    ) -> Result<Self, anyhow::Error>
+    where
+        P: Middleware<Error = ProviderError> + 'static,
+    {
         let (sender, receiver) = mpsc::channel(100);
-        let relayer = Relayer::new(config.clone(), db, receiver, new_block_event, signer);
-        let provider = Relayer::provider(config.eth_client()).await?;
+        let relayer = Relayer::new(config.clone(), db, receiver, new_block_event, signer).await;
+
         let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider)));
         Ok(Self { sender, stop_join })
     }

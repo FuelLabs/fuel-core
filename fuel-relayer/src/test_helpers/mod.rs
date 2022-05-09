@@ -9,7 +9,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::{Config, Relayer};
 
-pub fn relayer(
+pub async fn relayer(
     config: Config,
 ) -> (
     Relayer,
@@ -20,7 +20,7 @@ pub fn relayer(
     let (relayer_event_tx, relayer_event_rx) = mpsc::channel(10);
     let (broadcast_tx, broadcast_rx) = broadcast::channel(100);
     let signer = Box::new(DummySigner {});
-    let relayer = Relayer::new(config, db, relayer_event_rx, broadcast_rx, signer);
+    let relayer = Relayer::new(config, db, relayer_event_rx, broadcast_rx, signer).await;
     (relayer, relayer_event_tx, broadcast_tx)
 }
 
