@@ -125,7 +125,7 @@ async fn submit() {
 }
 
 #[tokio::test]
-async fn submit_utxo_verified_tx() {
+async fn submit_utxo_verified_tx_with_min_gas_price() {
     let mut rng = StdRng::seed_from_u64(2322);
 
     let test_contract_code = vec![];
@@ -148,10 +148,12 @@ async fn submit_utxo_verified_tx() {
                 vec![],
             )
             .gas_limit(100)
+            .gas_price(1)
+            .byte_price(1)
             .add_unsigned_coin_input(
                 rng.gen(),
                 &secret,
-                100 + i,
+                1000 + i,
                 Default::default(),
                 0,
                 vec![],
@@ -207,6 +209,11 @@ async fn submit_utxo_verified_tx() {
 
     let config = Config {
         utxo_validation: true,
+        tx_pool_config: fuel_txpool::Config {
+            min_byte_price: 1,
+            min_gas_price: 1,
+            ..Default::default()
+        },
         chain_conf: ChainConfig {
             initial_state: Some(StateConfig {
                 coins: Some(genesis_coins),
