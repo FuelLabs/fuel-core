@@ -64,7 +64,9 @@ impl From<KvStoreError> for InterpreterError {
 #[cfg(any(test, feature = "test_helpers"))]
 pub mod helpers {
 
+    use async_trait::async_trait;
     use lazy_static::lazy_static;
+    use parking_lot::Mutex;
 
     // constants
     pub const TX1_GAS_PRICE: u64 = 10u64;
@@ -112,7 +114,7 @@ pub mod helpers {
     //const DB_TX1_HASH: TxId = 0x0000.into();
 
     use core::str::FromStr;
-    use std::sync::Arc;
+    use std::{collections::BTreeMap, sync::Arc};
 
     use fuel_asm::Opcode;
     use fuel_storage::Storage;
@@ -123,20 +125,43 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        model::{BlockHeight, Coin, CoinStatus},
+        model::{BlockHeight, Coin, CoinStatus, DaBlockHeight},
+        relayer::{DepositCoin, RelayerDb},
         txpool::TxPoolDb,
     };
 
     use super::*;
     #[derive(Clone, Debug)]
-    pub struct DummyDB {
-        pub tx_hashes: Vec<TxId>,
-        pub tx: HashMap<TxId, Arc<Transaction>>,
-        pub coins: HashMap<UtxoId, Coin>,
-        pub contract: HashSet<ContractId>,
+    pub struct DummyDb {
+        /// wrapped data.
+        pub data: Arc<Mutex<Data>>,
     }
 
-    impl DummyDB {
+    #[derive(Clone, Debug)]
+    pub struct Data {
+        /// variable for best fuel block height
+        pub block_height: u64,
+        /// variable for current validator set height, at height our validator set is
+        pub current_validator_set_height: u64,
+        /// variable for finalized data layer height
+        pub finalized_da_height: u64,
+        /// Used for Storage<Address, Stake>
+        pub current_validator_set: HashMap<Address, u64>,
+        /// Used for Storage<DaBlockHeight, HashMap<Address, u64>>
+        pub validator_set_diff: BTreeMap<u64, HashMap<Address, u64>>,
+        /// indexed TxId's.
+        pub tx_hashes: Vec<TxId>,
+        /// Dummy transactions
+        pub tx: HashMap<TxId, Arc<Transaction>>,
+        /// Dummy coins
+        pub coins: HashMap<UtxoId, Coin>,
+        /// Dummy contracts
+        pub contract: HashSet<ContractId>,
+        /// Dummy deposit coins.
+        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
+    }
+
+    impl DummyDb {
         ///
         pub fn dummy_tx(txhash: TxId) -> Transaction {
             // One transfer tx1 depends on db
@@ -557,20 +582,31 @@ pub mod helpers {
                 }
             }
 
-            Self {
+            let data = Data {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 coins,
                 contract: HashSet::new(),
+                deposit_coin: HashMap::new(),
+                block_height: 0,
+                current_validator_set: HashMap::new(),
+                current_validator_set_height: 0,
+                validator_set_diff: BTreeMap::new(),
+                finalized_da_height: 0,
+            };
+
+            Self {
+                data: Arc::new(Mutex::new(data)),
             }
         }
 
         pub fn tx(&self, n: usize) -> Arc<Transaction> {
-            self.tx.get(self.tx_hashes.get(n).unwrap()).unwrap().clone()
+            let data = self.data.lock();
+            data.tx.get(data.tx_hashes.get(n).unwrap()).unwrap().clone()
         }
     }
 
-    impl Storage<UtxoId, Coin> for DummyDB {
+    impl Storage<UtxoId, Coin> for DummyDb {
         type Error = KvStoreError;
 
         fn insert(&mut self, _key: &UtxoId, _value: &Coin) -> Result<Option<Coin>, Self::Error> {
@@ -593,7 +629,7 @@ pub mod helpers {
         }
     }
 
-    impl Storage<Bytes32, Transaction> for DummyDB {
+    impl Storage<Bytes32, Transaction> for DummyDb {
         type Error = KvStoreError;
 
         fn insert(
@@ -619,7 +655,7 @@ pub mod helpers {
             unreachable!()
         }
     }
-    impl Storage<ContractId, Contract> for DummyDB {
+    impl Storage<ContractId, Contract> for DummyDb {
         type Error = crate::db::Error;
 
         fn insert(
@@ -646,13 +682,148 @@ pub mod helpers {
         }
     }
 
-    impl TxPoolDb for DummyDB {
+    impl TxPoolDb for DummyDb {
         fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-            Ok(self.coins.get(utxo_id).cloned())
+            Ok(self.data.lock().coins.get(utxo_id).cloned())
         }
 
         fn contract_exist(&self, contract_id: ContractId) -> Result<bool, Error> {
-            Ok(self.contract.get(&contract_id).is_some())
+            Ok(self.data.lock().contract.get(&contract_id).is_some())
+        }
+    }
+
+    // token deposit. Used by relayer.
+    impl Storage<Bytes32, DepositCoin> for DummyDb {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(
+            &mut self,
+            key: &Bytes32,
+            value: &DepositCoin,
+        ) -> Result<Option<DepositCoin>, Self::Error> {
+            Ok(self.data.lock().deposit_coin.insert(*key, value.clone()))
+        }
+
+        fn remove(&mut self, _key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &Bytes32,
+        ) -> Result<Option<std::borrow::Cow<'a, DepositCoin>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &Bytes32) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    // Validator set. Used by relayer.
+    impl Storage<Address, u64> for DummyDb {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(&mut self, key: &Address, value: &u64) -> Result<Option<u64>, Self::Error> {
+            Ok(self.data.lock().current_validator_set.insert(*key, *value))
+        }
+
+        fn remove(&mut self, _key: &Address) -> Result<Option<u64>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &Address,
+        ) -> Result<Option<std::borrow::Cow<'a, u64>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &Address) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    // Validator set diff. Used by relayer.
+    impl Storage<DaBlockHeight, HashMap<Address, u64>> for DummyDb {
+        type Error = crate::db::KvStoreError;
+
+        fn insert(
+            &mut self,
+            key: &DaBlockHeight,
+            value: &HashMap<Address, u64>,
+        ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
+            Ok(self
+                .data
+                .lock()
+                .validator_set_diff
+                .insert(*key, value.clone()))
+        }
+
+        fn remove(
+            &mut self,
+            _key: &DaBlockHeight,
+        ) -> Result<Option<HashMap<Address, u64>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn get<'a>(
+            &'a self,
+            _key: &DaBlockHeight,
+        ) -> Result<Option<std::borrow::Cow<'a, HashMap<Address, u64>>>, Self::Error> {
+            unreachable!()
+        }
+
+        fn contains_key(&self, _key: &DaBlockHeight) -> Result<bool, Self::Error> {
+            unreachable!()
+        }
+    }
+
+    #[async_trait]
+    impl RelayerDb for DummyDb {
+        async fn get_validators(&self) -> HashMap<Address, u64> {
+            self.data.lock().current_validator_set.clone()
+        }
+
+        async fn set_validators_da_height(&self, block: u64) {
+            self.data.lock().current_validator_set_height = block;
+        }
+
+        async fn get_validators_da_height(&self) -> u64 {
+            self.data.lock().current_validator_set_height
+        }
+
+        async fn get_validator_diffs(
+            &self,
+            from_da_height: u64,
+            to_da_height: Option<u64>,
+        ) -> Vec<(u64, HashMap<Address, u64>)> {
+            let mut out = Vec::new();
+            let diffs = &self.data.lock().validator_set_diff;
+            // in BTreeMap iteration are done on sorted items.
+            for (block, diff) in diffs {
+                if from_da_height >= *block {
+                    out.push((*block, diff.clone()))
+                }
+                if let Some(end_block) = to_da_height {
+                    if end_block < *block {
+                        break;
+                    }
+                }
+            }
+            out
+        }
+
+        async fn get_block_height(&self) -> u64 {
+            self.data.lock().block_height
+        }
+
+        async fn set_finalized_da_height(&self, height: u64) {
+            self.data.lock().finalized_da_height = height;
+        }
+
+        async fn get_finalized_da_height(&self) -> u64 {
+            self.data.lock().finalized_da_height
         }
     }
 }

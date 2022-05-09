@@ -7,30 +7,39 @@ use crate::state::rocks_db::RocksDb;
 use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
+use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
+use std::fmt::Debug;
+use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
+use std::{collections::HashMap, ops::DerefMut};
 use std::{
-    fmt::{self, Debug, Formatter},
-    marker::Send,
+    fmt::{self, Formatter},
     sync::Arc,
 };
 #[cfg(feature = "rocksdb")]
 use tempfile::TempDir;
+
+use self::columns::METADATA;
 
 pub mod balances;
 pub mod block;
 pub mod code_root;
 pub mod coin;
 pub mod contracts;
+pub mod deposit_coin;
 pub mod metadata;
 mod receipts;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
+pub mod validator_set;
+pub mod validator_set_diffs;
 
 // Crude way to invalidate incompatible databases,
 // can be used to perform migrations in the future.
@@ -55,10 +64,13 @@ pub mod columns {
     pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
+    pub const TOKEN_DEPOSITS: u32 = 14;
+    pub const VALIDATOR_SET: u32 = 15;
+    pub const VALIDATOR_SET_DIFFS: u32 = 16;
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 14;
+    pub const COLUMN_NUM: u32 = 17;
 }
 
 #[derive(Clone, Debug)]
@@ -246,5 +258,134 @@ impl InterpreterStorage for Database {
         let id = self.block_hash(height.into())?;
         let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
         Ok(block.headers.producer)
+    }
+}
+
+#[async_trait]
+impl RelayerDb for Database {
+    async fn get_validators(&self) -> HashMap<Address, u64> {
+        struct WrapAddress(pub Address);
+        impl From<Vec<u8>> for WrapAddress {
+            fn from(i: Vec<u8>) -> Self {
+                Self(Address::try_from(i.as_ref()).unwrap())
+            }
+        }
+        let mut out = HashMap::new();
+        for diff in self.iter_all::<WrapAddress, u64>(columns::VALIDATOR_SET, None, None, None) {
+            match diff {
+                Ok((address, stake)) => {
+                    out.insert(address.0, stake);
+                }
+                Err(err) => panic!("Database internal error:{:?}", err),
+            }
+        }
+        out
+    }
+
+    async fn get_validator_diffs(
+        &self,
+        from_da_height: u64,
+        to_da_height: Option<u64>,
+    ) -> Vec<(u64, HashMap<Address, u64>)> {
+        let to_da_height = if let Some(to_da_height) = to_da_height {
+            if from_da_height > to_da_height {
+                return Vec::new();
+            }
+            to_da_height
+        } else {
+            u64::MAX
+        };
+        struct WrapU64Be(pub u64);
+        impl From<Vec<u8>> for WrapU64Be {
+            fn from(i: Vec<u8>) -> Self {
+                use byteorder::{BigEndian, ReadBytesExt};
+                use std::io::Cursor;
+                let mut i = Cursor::new(i);
+                Self(i.read_u64::<BigEndian>().unwrap_or_default())
+            }
+        }
+        let mut out = Vec::new();
+        for diff in self.iter_all::<WrapU64Be, HashMap<Address, u64>>(
+            columns::VALIDATOR_SET_DIFFS,
+            None,
+            Some(from_da_height.to_be_bytes().to_vec()),
+            None,
+        ) {
+            match diff {
+                Ok((key, diff)) => {
+                    let block = key.0;
+                    if block >= to_da_height {
+                        return out;
+                    }
+                    out.push((block, diff))
+                }
+                Err(err) => panic!("get_validator_diffs unexpected error:{:?}", err),
+            }
+        }
+        out
+    }
+
+    async fn apply_validator_diffs(&mut self, changes: &HashMap<Address, u64>, da_height: u64) {
+        // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation.
+        let mut db = self.transaction();
+        for (address, stake) in changes {
+            let _ = Storage::<Address, u64>::insert(db.deref_mut(), address, stake);
+        }
+        db.set_validators_da_height(da_height).await;
+        if let Err(err) = db.commit() {
+            panic!("apply_validator_diffs database currupted: {:?}", err);
+        }
+    }
+
+    async fn get_block_height(&self) -> u64 {
+        match self.get_block_height() {
+            Ok(res) => {
+                return u64::from(
+                    res.expect("get_block_height value should be always present and set"),
+                );
+            }
+            Err(err) => {
+                panic!("get_block_height database curruption, err:{:?}", err);
+            }
+        }
+    }
+
+    async fn set_finalized_da_height(&self, block: u64) {
+        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT, METADATA, block) {
+            panic!("set_finalized_da_height should always succeed: {:?}", err);
+        }
+    }
+
+    async fn get_finalized_da_height(&self) -> u64 {
+        match self.get(metadata::FINALIZED_DA_HEIGHT, METADATA) {
+            Ok(res) => {
+                return res
+                    .expect("get_finalized_da_height value should be always present and set");
+            }
+            Err(err) => {
+                panic!("get_finalized_da_height database curruption, err:{:?}", err);
+            }
+        }
+    }
+
+    async fn set_validators_da_height(&self, block: u64) {
+        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT, METADATA, block) {
+            panic!("set_validators_da_height should always succeed: {:?}", err);
+        }
+    }
+
+    async fn get_validators_da_height(&self) -> u64 {
+        match self.get(metadata::VALIDATORS_DA_HEIGHT, METADATA) {
+            Ok(res) => {
+                return res
+                    .expect("get_validators_da_height value should be always present and set");
+            }
+            Err(err) => {
+                panic!(
+                    "get_validators_da_height database curruption, err:{:?}",
+                    err
+                );
+            }
+        }
     }
 }

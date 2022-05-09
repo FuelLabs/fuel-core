@@ -29,6 +29,7 @@ async-graphql = { version = "=2.9", features = [
 async-trait = "0.1"
 axum = { version = "0.4" }
 bincode = "1.3"
+byteorder = "1.4.3"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["env", "derive"] }
 derive_more = { version = "0.99" }

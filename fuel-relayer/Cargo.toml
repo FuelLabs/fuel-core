@@ -1,0 +1,51 @@
+[package]
+name = "fuel-relayer"
+version = "0.0.0"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Fuel Relayer"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+async-trait = "0.1"
+bytes = "1.1"
+env_logger = "0.9"
+ethers-core = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-core", default-features = false }
+ethers-middleware = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-middleware", default-features = false }
+ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", package = "ethers-providers", default-features = false, features = [
+    "ws",
+    "rustls",
+] }
+features = "0.10"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.6.3" }
+fuel-tx = { version = "0.9", features = ["serde-types"] }
+fuel-types = { version = "0.3", features = ["serde-types"] }
+futures = "0.3"
+lazy_static = "1.4"
+parking_lot = "0.12"
+serde = "1.0"
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.15", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3.9"
+
+[dev-dependencies]
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.6.3", features = [
+    "test_helpers",
+] }
+fuel-types = { version = "0.3", features = ["serde-types", "random"] }
+rand = "0.8"
+tracing-subscriber = "0.3"
+
+[features]
+test-helpers = ["fuel-core-interfaces/test_helpers"]
+
+# Example of customizing binaries in Cargo.toml.
+[[bin]]
+name = "testrun"
+test = true
+bench = false
+required-features = ["test-helpers"]
