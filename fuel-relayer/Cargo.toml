@@ -46,6 +46,7 @@ test-helpers = ["fuel-core-interfaces/test_helpers"]
 # Example of customizing binaries in Cargo.toml.
 [[bin]]
 name = "testrun"
+path = "src/bin/testrun.rs"
 test = true
 bench = false
 required-features = ["test-helpers"]
