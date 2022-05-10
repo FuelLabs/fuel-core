@@ -10,6 +10,9 @@ if [ "${k8s_provider}" == "eks" ]; then
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     cd ../ingress/${k8s_provider}
     echo "Deleting fuel-core ingress on ${TF_VAR_eks_cluster_name} ...."
+    mv fuel-core-ingress.yaml fuel-core-ingress.template
+    envsubst < fuel-core-ingress.template > fuel-core-ingress.yaml
+    rm fuel-core-ingress.template
     kubectl delete -f fuel-core-ingress.yaml
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"

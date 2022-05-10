@@ -24,4 +24,4 @@ spec:
   tls:
     - hosts:
         - ${fuel_core_ingress_dns}
-      secretName: letsencrypt-prod
+      secretName: ${fuel_core_ingress_secret}
