@@ -33,8 +33,8 @@ pub struct PendingEvents {
 /// Pending diff between FuelBlocks
 #[derive(Clone, Debug, Default)]
 pub struct PendingDiff {
-    /// eth block number, It represent until when we are taking stakes and token deposits.
-    /// It is always monotonic and check on its limits are check in consensus and in contract.
+    /// eth block number, It represent height until when we are taking stakes and token deposits.
+    /// It is always monotonic and check on its limits are checked in consensus and in contract.
     /// Contract needs to check that when feul block is commited that this number is more then
     /// finality period N.
     pub da_height: u64,
@@ -238,6 +238,7 @@ impl PendingEvents {
         db: &mut dyn RelayerDb,
         finalized_da_height: u64,
     ) {
+
         while let Some(diff) = self.pending.front() {
             if diff.da_height > finalized_da_height {
                 break;
@@ -253,9 +254,9 @@ impl PendingEvents {
             .await;
 
             // append index of delegator so that we cross reference earliest delegation set
-            for (delegate, _) in diff.delegations.iter() {
-                db.append_delegate_index(delegate, diff.da_height).await;
-            }
+            //for (delegate, _) in diff.delegations.iter() {
+            //    db.append_delegate_index(delegate, diff.da_height).await;
+            //}
 
             // push finalized assets to db
             for (nonce, deposit) in diff.assets.iter() {
@@ -266,8 +267,10 @@ impl PendingEvents {
             // insert height index into delegations.
             db.set_finalized_da_height(diff.da_height).await;
 
+            // remove pending diff 
             self.pending.pop_front();
         }
+
         self.block_commit.new_da_block(finalized_da_height.into());
         self.finalized_da_height = finalized_da_height;
     }

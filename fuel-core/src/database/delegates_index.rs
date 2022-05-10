@@ -1,27 +1,28 @@
 use crate::database::{columns, Database, KvStoreError};
+use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_storage::Storage;
 use fuel_types::Address;
 use std::borrow::Cow;
 
-/// Delegate Index it maps delegateAddress with list of da block where delegation happened. so that we
+/// Delegate Index maps delegateAddress with list of da block where delegation happened. so that we
 /// can access those changes
-impl Storage<Address, Vec<u64>> for Database {
+impl Storage<Address, Vec<DaBlockHeight>> for Database {
     type Error = KvStoreError;
 
     fn insert(
         &mut self,
         key: &Address,
-        value: &Vec<u64>,
-    ) -> Result<Option<Vec<u64>>, KvStoreError> {
+        value: &Vec<DaBlockHeight>,
+    ) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
         Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, value.clone())
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<Vec<u64>>, KvStoreError> {
+    fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
         Database::remove(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 
-    fn get(&self, key: &Address) -> Result<Option<Cow<Vec<u64>>>, KvStoreError> {
+    fn get(&self, key: &Address) -> Result<Option<Cow<Vec<DaBlockHeight>>>, KvStoreError> {
         Database::get(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 

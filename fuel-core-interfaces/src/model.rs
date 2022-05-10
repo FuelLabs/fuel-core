@@ -9,3 +9,4 @@ pub use coin::{Coin, CoinStatus};
 pub use txpool::{ArcTx, TxInfo};
 
 pub type DaBlockHeight = u64;
+pub type ValidatorStake = u64;

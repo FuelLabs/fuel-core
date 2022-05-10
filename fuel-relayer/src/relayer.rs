@@ -21,8 +21,8 @@ use ethers_providers::{
 };
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
+    model::DaBlockHeight,
     relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
-    signer::Signer,
 };
 use url::Url;
 
@@ -40,20 +40,17 @@ pub struct Relayer {
     /// state of relayer
     status: RelayerStatus,
     /// new fuel block notifier.
-    receiver: mpsc::Receiver<RelayerEvent>,
+    requests: mpsc::Receiver<RelayerEvent>,
     /// Notification of new block event
-    new_block_event: broadcast::Receiver<NewBlockEvent>,
-    /// Service for signing of arbitrary hash
-    _signer: Box<dyn Signer + Send>,
+    fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
 }
 
 impl Relayer {
     pub async fn new(
         config: Config,
         db: Box<dyn RelayerDb>,
-        receiver: mpsc::Receiver<RelayerEvent>,
-        new_block_event: broadcast::Receiver<NewBlockEvent>,
-        signer: Box<dyn Signer + Send>,
+        requests: mpsc::Receiver<RelayerEvent>,
+        fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
     ) -> Self {
         let private_key =
             hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
@@ -71,9 +68,8 @@ impl Relayer {
             pending,
             current_validator_set: CurrentValidatorSet::default(),
             status: RelayerStatus::DaClientIsSyncing,
-            receiver,
-            new_block_event,
-            _signer: signer,
+            requests,
+            fuel_block_importer,
         }
     }
 
@@ -100,7 +96,7 @@ impl Relayer {
         loop {
             tokio::select! {
                 biased;
-                inner_fuel_event = self.receiver.recv() => {
+                inner_fuel_event = self.requests.recv() => {
                     tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
                     match inner_fuel_event {
                         Some(RelayerEvent::Stop) | None =>{
@@ -199,31 +195,23 @@ impl Relayer {
                     .append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
                     .await;
             }
-            // if there is more then two items in pending list flush first one.
-            // Having two elements in this stage means that full fuel block is already processed and
-            // we dont have reverts to dispute that.
-            while self.pending.len() > 1 {
-                // we are sending dummy eth block bcs we are sure that it is finalized
-                self.pending
-                    .commit_diffs(self.db.as_mut(), best_finalized_block)
-                    .await;
-            }
+            // we are sending dummy eth block bcs we are sure that it is finalized
+            self.pending.commit_diffs(self.db.as_mut(), end).await;
+
+            self.current_validator_set
+                .bump_validators_to_da_height(end, self.db.as_mut())
+                .await;
         }
 
-        // if there is no diffs it means we are at start of contract creating
-        let last_diff = if self.pending.is_empty() {
-            // set fuel num to zero and contract creating eth.
-            PendingDiff::new(0)
-        } else {
-            // apply all pending changed.
-            while self.pending.len() > 1 {
-                // we are sending dummy eth block num bcs we are sure that it is finalized
-                self.pending
-                    .commit_diffs(self.db.as_mut(), best_finalized_block)
-                    .await;
-            }
-            self.pending.pop_back().unwrap()
-        };
+        // apply all pending changed.
+        // we are sending dummy eth block num bcs we are sure that it is finalized
+        //     self.pending
+        //         .commit_diffs(self.db.as_mut(), best_finalized_block)
+        //         .await;
+
+        // self.current_validator_set
+        //     .bump_validators_to_da_height(last_diff.da_height, self.db.as_mut())
+        //     .await;
 
         // TODO probably not needed now. but after some time we will need to do sync to best block here.
         // it depends on how much time it is needed to tranverse first part of this function
@@ -237,7 +225,7 @@ impl Relayer {
         loop {
             // 1. get best block and its hash sync over it, and push it over
             self.pending.clear();
-            self.pending.push_back(last_diff.clone());
+            //sself.pending.push_back(last_diff.clone());
 
             best_block = self.stop_handle(|| provider.get_block_number()).await??;
             // there is not get block latest from ethers so we need to do it in two steps to get hash
@@ -299,13 +287,15 @@ impl Relayer {
             // If not the same, stop listening to events and do 2,3,4 steps again.
             // empty pending and do overlaping sync again.
             // Assume this will not happen very often.
-            self.pending.clear();
         }
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
         let finalized_da_height = best_block.as_u64() - self.config.eth_finality_period();
         self.pending
             .commit_diffs(self.db.as_mut(), finalized_da_height)
+            .await;
+        self.current_validator_set
+            .bump_validators_to_da_height(finalized_da_height, self.db.as_mut())
             .await;
 
         watchers
@@ -341,9 +331,10 @@ impl Relayer {
                 "Initial syncing finished on block {:?}. Continue to active sync.",
                 best_block
             );
+
             loop {
                 tokio::select! {
-                    inner_fuel_event = self.receiver.recv() => {
+                    inner_fuel_event = self.requests.recv() => {
                         if inner_fuel_event.is_none() {
                             error!("Inner fuel notification broke and returned err");
                             self.status = RelayerStatus::Stop;
@@ -352,15 +343,15 @@ impl Relayer {
                         self.handle_inner_fuel_event(inner_fuel_event.unwrap()).await;
                     }
 
-                    new_block = self.new_block_event.recv() => {
+                    new_block = self.fuel_block_importer.recv() => {
                         match new_block {
                             Err(e) => {
-                                error!("Unexpected error happened in relayer new block event receiver:{}",e);
+                                error!("Unexpected error happened in relayer new block event requests:{}",e);
                                 self.status = RelayerStatus::Stop;
                                 return;
                             },
                             Ok(new_block) => {
-                                self.handle_new_block_event(new_block,&provider).await
+                                self.handle_fuel_block_importer(new_block,&provider).await
                             },
                         }
                     }
@@ -376,7 +367,7 @@ impl Relayer {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn handle_new_block_event<P>(&mut self, new_block: NewBlockEvent, provider: &Arc<P>)
+    async fn handle_fuel_block_importer<P>(&mut self, new_block: NewBlockEvent, provider: &Arc<P>)
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
@@ -440,14 +431,14 @@ impl Relayer {
         }
         let block_hash = new_eth_block_hash.unwrap();
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
-            if let Some(block_height) = block.number {
-                let finalized_block_height =
-                    block_height.as_u64() - self.config.eth_finality_period();
+            if let Some(da_height) = block.number {
+                let finalized_da_height = da_height.as_u64() - self.config.eth_finality_period();
 
-                // TODO probably can ask logs for this perticular block few times to be sure that all logs are
-                // in place
                 self.pending
-                    .commit_diffs(self.db.as_mut(), finalized_block_height)
+                    .commit_diffs(self.db.as_mut(), finalized_da_height)
+                    .await;
+                self.current_validator_set
+                    .bump_validators_to_da_height(finalized_da_height, self.db.as_mut())
                     .await;
             }
         }
@@ -458,13 +449,14 @@ impl Relayer {
     #[tracing::instrument(skip(self, eth_event))]
     async fn handle_eth_log(&mut self, eth_event: Option<Log>) {
         // new log
-        if eth_event.is_none() {
+        let eth_event = if let Some(eth_event) = eth_event {
+            eth_event
+        } else {
             // TODO make proper reconnect options.
             warn!("We broke something. Set state to not eth not connected and do retry");
             return;
-        }
-        let eth_event = eth_event.unwrap();
-        trace!(target:"relayer", "got new log:{:?}", eth_event.block_hash);
+        };
+        trace!(target:"relayer", "got new log from block:{:?}", eth_event.block_hash);
         let fuel_event = EthEventLog::try_from(&eth_event);
         if let Err(err) = fuel_event {
             warn!(target:"relayer", "Eth Event not formated properly:{}",err);

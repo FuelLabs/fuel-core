@@ -9,6 +9,7 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
+use fuel_core_interfaces::model::ValidatorStake;
 use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
@@ -338,14 +339,14 @@ impl RelayerDb for Database {
     async fn apply_validator_diffs(
         &mut self,
         da_height: u64,
-        changes: &HashMap<Address, (u64, Option<Address>)>,
+        changes: &HashMap<Address, (ValidatorStake, Option<Address>)>,
     ) {
         // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
             let _ =
-                Storage::<Address, (u64, Option<Address>)>::insert(db.deref_mut(), address, stake);
+                Storage::<Address, (ValidatorStake, Option<Address>)>::insert(db.deref_mut(), address, stake);
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {

@@ -1,13 +1,19 @@
 use std::collections::{hash_map::Entry, HashMap};
 
-use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_interfaces::{
+    model::{DaBlockHeight, ValidatorStake},
+    relayer::RelayerDb,
+};
 use fuel_tx::Address;
 use tracing::{error, info};
 
+/// It contains list of Validators and its stake and consensus public key.
+/// We dont expect big number of validators in that sense we are okey to have it all in memory
+/// Data availability height (da_height) represent snapshot in moment when set is seen.
 #[derive(Default)]
 pub struct CurrentValidatorSet {
     /// Current validator set
-    pub set: HashMap<Address, (u64, Option<Address>)>,
+    pub set: HashMap<Address, (ValidatorStake, Option<Address>)>,
     /// current fuel block
     pub da_height: u64,
 }
@@ -22,9 +28,10 @@ impl CurrentValidatorSet {
 
     pub fn get_validator_set(
         &mut self,
-        block_number: u64,
+        da_height: u64,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
-        if self.da_height == block_number {
+        // TODO apply down drift
+        if self.da_height == da_height {
             return Some(self.set.clone());
         }
         None
@@ -32,7 +39,11 @@ impl CurrentValidatorSet {
 
     /// new_block_diff is finality slider adjusted
     /// it supports only going up
-    pub async fn bump_validators_to_da_height(&mut self, da_height: u64, db: &mut dyn RelayerDb) {
+    pub async fn bump_validators_to_da_height(
+        &mut self,
+        da_height: DaBlockHeight,
+        db: &mut dyn RelayerDb,
+    ) {
         match self.da_height.cmp(&da_height) {
             std::cmp::Ordering::Less => {}
             std::cmp::Ordering::Equal => {
@@ -50,7 +61,7 @@ impl CurrentValidatorSet {
             }
         }
 
-        let mut validators: HashMap<Address, (u64, Option<Address>)> = HashMap::new();
+        let mut validators: HashMap<Address, (ValidatorStake, Option<Address>)> = HashMap::new();
         // get staking diffs.
         let diffs = db.get_staking_diff(self.da_height, Some(da_height)).await;
         let mut delegates_cache: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
@@ -71,6 +82,7 @@ impl CurrentValidatorSet {
                         validators
                             .entry(*validator)
                             .or_insert_with(|| self.set.get(validator).cloned().unwrap_or_default())
+                            // increate stake
                             .0 += *stake;
                     }
                 }
@@ -100,6 +112,7 @@ impl CurrentValidatorSet {
                             .or_insert_with(|| {
                                 self.set.get(&validator).cloned().unwrap_or_default()
                             })
+                            // decrease undelegated stake
                             .0 -= old_stake;
                     }
                 }

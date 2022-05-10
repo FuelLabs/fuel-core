@@ -23,14 +23,13 @@ impl Service {
         config: &Config,
         db: Box<dyn RelayerDb>,
         new_block_event: broadcast::Receiver<NewBlockEvent>,
-        signer: Box<dyn Signer + Send>,
         provider: Arc<P>,
     ) -> Result<Self, anyhow::Error>
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
         let (sender, receiver) = mpsc::channel(100);
-        let relayer = Relayer::new(config.clone(), db, receiver, new_block_event, signer).await;
+        let relayer = Relayer::new(config.clone(), db, receiver, new_block_event).await;
 
         let stop_join = Some(tokio::spawn(Relayer::run(relayer, provider)));
         Ok(Self { sender, stop_join })

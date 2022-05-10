@@ -22,13 +22,13 @@ pub struct StakingDiff {
     /// unregistration happens
     pub validators: HashMap<Address, Option<Address>>,
     /// in one da block register changes for all delegation and how they delegation changes.
-    pub delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
+    pub delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
 }
 
 impl StakingDiff {
     pub fn new(
         validators: HashMap<Address, Option<Address>>,
-        delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
+        delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
     ) -> Self {
         Self {
             validators,
@@ -49,6 +49,7 @@ pub trait RelayerDb:
     + Send
     + Sync
 {
+
     /// deposit token to database. Token deposits are not revertable
     async fn insert_token_deposit(
         &mut self,
@@ -75,6 +76,10 @@ pub trait RelayerDb:
         let _ = Storage::<u64,StakingDiff>::insert(self, &da_height,stakes);
     }
 
+    /// Query delegate index to find list of blocks that delegation changed
+    /// iterate over list of indexed to find height that is less and closest to da_height
+    /// Query that block StakeDiff to find actual delegation change.
+    /// TODO not needed
     async fn get_last_delegation(&mut self,delegate: &Address, da_height: u64) ->  Option<HashMap<Address,u64>> {
         // get delegate index
         let delegate_index = Storage::<Address,Vec<u64>>::get(self,delegate).expect("Expect to get data without problem")?;
@@ -117,10 +122,10 @@ pub trait RelayerDb:
 
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
     /// to be atomic.
-    async fn apply_validator_diffs(&mut self, da_height: u64, changes: &HashMap<Address,(u64,Option<Address>)>) {
+    async fn apply_validator_diffs(&mut self, da_height: u64, changes: &HashMap<Address,(ValidatorStake,Option<Address>)>) {
         // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation
         for ( address, stake) in changes {
-            let _ = Storage::<Address,(u64,Option<Address>)>::insert(self,address,stake);
+            let _ = Storage::<Address,(ValidatorStake,Option<Address>)>::insert(self,address,stake);
         }
         self.set_validators_da_height(da_height).await;
     }
@@ -152,7 +157,7 @@ pub enum RelayerEvent {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
         da_height: u64,
         response_channel:
-            oneshot::Sender<Result<HashMap<Address, (u64, Option<Address>)>, RelayerError>>,
+            oneshot::Sender<Result<HashMap<Address, (ValidatorStake, Option<Address>)>, RelayerError>>,
     },
     GetStatus {
         response: oneshot::Sender<RelayerStatus>,
@@ -162,7 +167,7 @@ pub enum RelayerEvent {
 
 pub use thiserror::Error;
 
-use crate::db::KvStoreError;
+use crate::{db::KvStoreError, model::ValidatorStake};
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RelayerError {

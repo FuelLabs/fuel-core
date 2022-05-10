@@ -114,3 +114,19 @@ There is timeframe of few eth blocks where current leader can broadcast block to
 In case that leader does not commit fuel block next leader will have ability to do it for him as bundle block commit, in that case bonus reward will go to second leader that has spend additional gas to push this change to ethereum network.
 
 Github discussion on fuel sync with L1: https://github.com/FuelLabs/fuel-specs/issues/285
+
+
+Important inputs and their handling:
+* 1, fuel_block_importer
+  * 1.1 Block included
+  * 1.2 Block created
+* 2, Requests from fuel
+  * 2.1 Stop -> mark status as stop and stop the main loop
+  * 2.2 GetValidatorSet for requested da_height.
+    * 2.2.2 Drift if needed, requested validator set is always close to highest best, but it can drift in dynamics of the system. Have ability to apply past staking diffs (TODO) 
+* 3, Eth Log received
+  * 3.1 Handle bundle of fuel commits.
+* 4, Eth Block hash received
+  * 4.1 Request block to get its number
+  * 4.2 Iterate over pending VecDequeue and commit finalized blocks to db.
+  * 4.3 Apply diff to validator_set
