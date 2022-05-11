@@ -6,7 +6,6 @@ use ethers_providers::{Middleware, ProviderError};
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDb, RelayerEvent},
-    signer::Signer,
 };
 use tokio::{
     sync::{broadcast, mpsc},

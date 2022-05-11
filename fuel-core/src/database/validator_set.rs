@@ -15,11 +15,17 @@ impl Storage<Address, (ValidatorStake, Option<Address>)> for Database {
         Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, *value).map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<(ValidatorStake, Option<Address>)>, KvStoreError> {
+    fn remove(
+        &mut self,
+        key: &Address,
+    ) -> Result<Option<(ValidatorStake, Option<Address>)>, KvStoreError> {
         Database::remove(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 
-    fn get(&self, key: &Address) -> Result<Option<Cow<(ValidatorStake, Option<Address>)>>, KvStoreError> {
+    fn get(
+        &self,
+        key: &Address,
+    ) -> Result<Option<Cow<(ValidatorStake, Option<Address>)>>, KvStoreError> {
         Database::get(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 

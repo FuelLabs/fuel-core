@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use fuel_storage::Storage;
@@ -131,7 +131,9 @@ pub trait RelayerDb:
     }
 
     /// current best block number
-    async fn get_block_height(&self) -> u64;
+    async fn get_chain_height(&self) -> BlockHeight;
+
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>>;
 
     /// get validator set for current eth height
     async fn get_validators(&self) -> HashMap<Address,(u64,Option<Address>)>;
@@ -147,6 +149,15 @@ pub trait RelayerDb:
 
     /// Assume it is allways set as initialization of database.
     async fn get_finalized_da_height(&self) -> u64;
+
+    /// Until blocks gets commited to da layer it is expected for it to still contains consensus
+    /// votes and be saved in database until commitment is send to da layer and finalization pariod passes.
+    /// In case that commited_finalized_fuel_height is zero we need to return genesis block.
+    async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight;
+
+    /// Set last commited finalized fuel height this means we are safe to remove consensus votes from db
+    /// as from this moment they are not needed any more 
+    async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight);
 }
 
 #[derive(Debug)]
@@ -156,8 +167,9 @@ pub enum RelayerEvent {
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
         da_height: u64,
-        response_channel:
-            oneshot::Sender<Result<HashMap<Address, (ValidatorStake, Option<Address>)>, RelayerError>>,
+        response_channel: oneshot::Sender<
+            Result<HashMap<Address, (ValidatorStake, Option<Address>)>, RelayerError>,
+        >,
     },
     GetStatus {
         response: oneshot::Sender<RelayerStatus>,
@@ -167,7 +179,10 @@ pub enum RelayerEvent {
 
 pub use thiserror::Error;
 
-use crate::{db::KvStoreError, model::ValidatorStake};
+use crate::{
+    db::KvStoreError,
+    model::{BlockHeight, SealedFuelBlock, ValidatorStake},
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RelayerError {

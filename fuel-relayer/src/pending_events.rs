@@ -6,12 +6,12 @@ use std::{
 use ethers_core::types::H160;
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    model::SealedFuelBlock,
+    model::{BlockHeight, SealedFuelBlock},
     relayer::{RelayerDb, StakingDiff},
 };
 use fuel_tx::{Address, AssetId, Bytes32};
 use fuel_types::Word;
-use tracing::info;
+use tracing::{info, error};
 
 use crate::{block_commit::BlockCommit, log::EthEventLog};
 
@@ -58,8 +58,18 @@ impl PendingDiff {
 }
 
 impl PendingEvents {
-    pub fn new(chain_id: u64, contract_address: H160, private_key: Vec<u8>) -> Self {
-        let block_commit = BlockCommit::new(chain_id, contract_address, private_key);
+    pub fn new(
+        chain_id: u64,
+        contract_address: H160,
+        private_key: Vec<u8>,
+        last_commited_finalized_fuel_height: BlockHeight,
+    ) -> Self {
+        let block_commit = BlockCommit::new(
+            chain_id,
+            contract_address,
+            private_key,
+            last_commited_finalized_fuel_height,
+        );
         Self {
             block_commit,
             pending: VecDeque::new(),
@@ -117,12 +127,13 @@ impl PendingEvents {
     pub async fn handle_created_fuel_block<P>(
         &mut self,
         block: &Arc<SealedFuelBlock>,
+        db: &mut dyn RelayerDb,
         provider: &Arc<P>,
     ) where
         P: Middleware + 'static,
     {
         self.block_commit
-            .created_block(block.clone(), provider)
+            .created_block(block.clone(), db, provider)
             .await;
     }
 
@@ -150,7 +161,7 @@ impl PendingEvents {
                 // mark all removed pending block commits as reverted.
                 for event in events {
                     if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.block_commit.block_reverted(
+                        self.block_commit.block_commit_reverted(
                             block_root,
                             height.into(),
                             da_height.into(),
@@ -233,12 +244,11 @@ impl PendingEvents {
     }
 
     /// Used in two places. On initial sync and when new fuel blocks is
-    pub async fn commit_diffs(
-        &mut self,
-        db: &mut dyn RelayerDb,
-        finalized_da_height: u64,
-    ) {
-
+    pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
+        if self.finalized_da_height >= finalized_da_height {
+            error!("We received finalized height {} but we already have {}", finalized_da_height, self.finalized_da_height);
+            return;
+        }
         while let Some(diff) = self.pending.front() {
             if diff.da_height > finalized_da_height {
                 break;
@@ -267,11 +277,16 @@ impl PendingEvents {
             // insert height index into delegations.
             db.set_finalized_da_height(diff.da_height).await;
 
-            // remove pending diff 
+            // remove pending diff
             self.pending.pop_front();
         }
 
         self.block_commit.new_da_block(finalized_da_height.into());
+
+        db.set_last_commited_finalized_fuel_height(
+            self.block_commit.last_commited_finalized_fuel_height(),
+        )
+        .await;
         self.finalized_da_height = finalized_da_height;
     }
 }
@@ -296,6 +311,7 @@ mod tests {
             H160::zero(),
             hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap(),
+            BlockHeight::from(0u64),
         );
 
         let deposit1 =

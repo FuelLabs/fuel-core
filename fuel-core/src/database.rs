@@ -9,7 +9,7 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::model::ValidatorStake;
+use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock, ValidatorStake};
 use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
@@ -345,8 +345,11 @@ impl RelayerDb for Database {
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
-            let _ =
-                Storage::<Address, (ValidatorStake, Option<Address>)>::insert(db.deref_mut(), address, stake);
+            let _ = Storage::<Address, (ValidatorStake, Option<Address>)>::insert(
+                db.deref_mut(),
+                address,
+                stake,
+            );
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {
@@ -354,27 +357,28 @@ impl RelayerDb for Database {
         }
     }
 
-    async fn get_block_height(&self) -> u64 {
+    async fn get_chain_height(&self) -> BlockHeight {
         match self.get_block_height() {
-            Ok(res) => {
-                return u64::from(
-                    res.expect("get_block_height value should be always present and set"),
-                );
-            }
+            Ok(res) => res.expect("get_block_height value should be always present and set"),
             Err(err) => {
                 panic!("get_block_height database curruption, err:{:?}", err);
             }
         }
     }
 
+    async fn get_sealed_block(&self, _height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+        // TODO
+        Some(Arc::new(SealedFuelBlock::default()))
+    }
+
     async fn set_finalized_da_height(&self, block: u64) {
-        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT, METADATA, block) {
+        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA, block) {
             panic!("set_finalized_da_height should always succeed: {:?}", err);
         }
     }
 
     async fn get_finalized_da_height(&self) -> u64 {
-        match self.get(metadata::FINALIZED_DA_HEIGHT, METADATA) {
+        match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
                 return res
                     .expect("get_finalized_da_height value should be always present and set");
@@ -386,13 +390,13 @@ impl RelayerDb for Database {
     }
 
     async fn set_validators_da_height(&self, block: u64) {
-        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT, METADATA, block) {
+        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA, block) {
             panic!("set_validators_da_height should always succeed: {:?}", err);
         }
     }
 
     async fn get_validators_da_height(&self) -> u64 {
-        match self.get(metadata::VALIDATORS_DA_HEIGHT, METADATA) {
+        match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
                 return res
                     .expect("get_validators_da_height value should be always present and set");
@@ -403,6 +407,34 @@ impl RelayerDb for Database {
                     err
                 );
             }
+        }
+    }
+
+    async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight {
+        match self.get(metadata::LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY, METADATA) {
+            Ok(res) => {
+                return res
+                    .expect("set_last_commited_finalized_fuel_height value should be always present and set");
+            }
+            Err(err) => {
+                panic!(
+                    "set_last_commited_finalized_fuel_height database curruption, err:{:?}",
+                    err
+                );
+            }
+        }
+    }
+
+    async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
+        if let Err(err) = self.insert(
+            metadata::LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY,
+            METADATA,
+            block_height,
+        ) {
+            panic!(
+                "set_last_commited_finalized_fuel_height should always succeed: {:?}",
+                err
+            );
         }
     }
 }

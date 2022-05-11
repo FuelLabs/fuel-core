@@ -129,4 +129,4 @@ Important inputs and their handling:
 * 4, Eth Block hash received
   * 4.1 Request block to get its number
   * 4.2 Iterate over pending VecDequeue and commit finalized blocks to db.
-  * 4.3 Apply diff to validator_set
+  * 4.3 Apply diff to validator_set (seems done)

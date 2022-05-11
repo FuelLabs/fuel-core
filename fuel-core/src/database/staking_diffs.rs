@@ -1,5 +1,5 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::{relayer::StakingDiff, model::DaBlockHeight};
+use fuel_core_interfaces::{model::DaBlockHeight, relayer::StakingDiff};
 use fuel_storage::Storage;
 use std::borrow::Cow;
 

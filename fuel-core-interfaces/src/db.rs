@@ -125,7 +125,7 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        model::{BlockHeight, Coin, CoinStatus},
+        model::{BlockHeight, Coin, CoinStatus, SealedFuelBlock},
         relayer::{DepositCoin, RelayerDb, StakingDiff},
         txpool::TxPoolDb,
     };
@@ -142,9 +142,10 @@ pub mod helpers {
         /// Used for Storage<Address, (u64, Option<Address>)>
         pub current_validators: HashMap<Address, (u64, Option<Address>)>,
         pub staking_diffs: BTreeMap<u64, StakingDiff>,
+        pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
         pub delegator_index: BTreeMap<Address, Vec<u64>>,
         /// variable for best fuel block height
-        pub block_height: u64,
+        pub chain_height: BlockHeight,
         pub finalized_da_height: u64,
         /// variable for current validators height, at height our validator set is
         pub current_validators_height: u64,
@@ -157,9 +158,15 @@ pub mod helpers {
         pub contract: HashSet<ContractId>,
         /// Dummy deposit coins.
         pub deposit_coin: HashMap<Bytes32, DepositCoin>,
+        /// variable for last commited and finalized fuel height
+        pub last_commited_finalized_fuel_height: BlockHeight,
     }
 
     impl DummyDb {
+        pub fn insert_sealed_block(&self, sealed_block: Arc<SealedFuelBlock>) {
+            self.data.lock().sealed_blocks
+                .insert(sealed_block.header.height, sealed_block);
+        }
         ///
         pub fn dummy_tx(txhash: TxId) -> Transaction {
             // One transfer tx1 depends on db
@@ -586,12 +593,14 @@ pub mod helpers {
                 coins,
                 contract: HashSet::new(),
                 deposit_coin: HashMap::new(),
-                block_height: 0,
+                chain_height: BlockHeight::from(0u64),
                 current_validators_height: 0,
                 finalized_da_height: 0,
+                sealed_blocks: HashMap::new(),
                 current_validators: HashMap::new(),
                 staking_diffs: BTreeMap::new(),
                 delegator_index: BTreeMap::new(),
+                last_commited_finalized_fuel_height: BlockHeight::from(0u64),
             };
 
             Self {
@@ -860,8 +869,12 @@ pub mod helpers {
             out
         }
 
-        async fn get_block_height(&self) -> u64 {
-            self.data.lock().block_height
+        async fn get_chain_height(&self) -> BlockHeight {
+            self.data.lock().chain_height
+        }
+
+        async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+            self.data.lock().sealed_blocks.get(&height).cloned()
         }
 
         async fn set_finalized_da_height(&self, height: u64) {
@@ -870,6 +883,14 @@ pub mod helpers {
 
         async fn get_finalized_da_height(&self) -> u64 {
             self.data.lock().finalized_da_height
+        }
+
+        async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight {
+            self.data.lock().last_commited_finalized_fuel_height
+        }
+
+        async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
+            self.data.lock().last_commited_finalized_fuel_height = block_height;
         }
     }
 }

@@ -64,7 +64,6 @@ pub enum EthEventLog {
     },
 }
 
-
 /// block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
 /// data is packet as three 256bit values
 const ASSET_DEPOSIT_DATA_LEN: usize = 32 + 32 + 32;
@@ -97,7 +96,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 // data is contains: block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
                 let data = &log.data.0;
-                println!("DATA LEN:{}",data.len());
+                println!("DATA LEN:{}", data.len());
                 if data.len() != ASSET_DEPOSIT_DATA_LEN {
                     info!("data len:{}", data.len());
                     return Err("Malformed data length for AssetDeposit: {}");
@@ -201,7 +200,9 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::FuelBlockCommited { block_root, height }
             }
-            n if n == *config::ETH_ASSET_WITHDRAWAL => return Err("AssetWithdrawal is not parsed for now"),
+            n if n == *config::ETH_ASSET_WITHDRAWAL => {
+                return Err("AssetWithdrawal is not parsed for now")
+            }
             _ => return Err("Unknown event"),
         };
 
@@ -332,7 +333,7 @@ pub mod tests {
             ],
             Bytes::new(),
         );
-        println!("print topics: {:?}",t.topics);
+        println!("print topics: {:?}", t.topics);
         t
     }
 

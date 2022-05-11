@@ -57,6 +57,7 @@ impl CurrentValidatorSet {
                     "curent height {:?} is greater then new height {:?} there is some problem",
                     self.da_height, da_height
                 );
+                //panic!("TEST");
                 return;
             }
         }

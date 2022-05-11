@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::Arc};
+use std::{cmp::max, collections::VecDeque, sync::Arc};
 
 use anyhow::Error;
 use ethers_contract::*;
@@ -14,51 +14,44 @@ use ethers_middleware::{
 use ethers_providers::Middleware;
 use fuel_tx::Bytes32;
 
-use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock};
+use fuel_core_interfaces::{
+    model::{BlockHeight, SealedFuelBlock},
+    relayer::RelayerDb,
+};
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use ethers_signers::{LocalWallet, Signer};
-use tracing::error;
+use tracing::{error, trace, info};
 
 abigen!(ContractAbi, "abi/fuel.json");
 
 pub struct BlockCommit {
     signer: LocalWallet,
     contract_address: H160,
-    pending_blocks: VecDeque<PendingBlock>,
-    last_finalized_block_commit: Option<Arc<SealedFuelBlock>>,
+    // Pending block commits seen on DA layer and waiting to be finalized
+    pending_block_commits: VecDeque<PendingBlock>,
+    // Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
+    chain_height: BlockHeight,
+    // Last known commited and finalized fuel height that is known by client.
+    last_commited_finalized_fuel_height: BlockHeight,
 }
 
 pub struct PendingBlock {
-    pub fuel_block: Option<Arc<SealedFuelBlock>>,
     pub reverted: bool,
-    pub da_height: Option<BlockHeight>,
+    pub da_height: BlockHeight,
     pub block_height: BlockHeight,
     pub block_root: Bytes32, //is this block hash?
 }
 
 impl PendingBlock {
-    pub fn new_fuel_block(fuel_block: Arc<SealedFuelBlock>) -> Self {
-        let block_height = fuel_block.header.height;
-        let block_root = fuel_block.header.id();
-        Self {
-            fuel_block: Some(fuel_block.clone()),
-            reverted: false,
-            da_height: None,
-            block_height,
-            block_root,
-        }
-    }
-
     pub fn new_commited_block(
         da_height: BlockHeight,
         block_height: BlockHeight,
         block_root: Bytes32,
     ) -> Self {
         Self {
-            fuel_block: None,
             reverted: false,
-            da_height: Some(da_height),
+            da_height: da_height,
             block_height,
             block_root,
         }
@@ -90,7 +83,12 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
 
 impl BlockCommit {
     /// Pending blocks at least finalization number of blocks.
-    pub fn new(chain_id: u64, contract_address: H160, private_key: Vec<u8>) -> Self {
+    pub fn new(
+        chain_id: u64,
+        contract_address: H160,
+        private_key: Vec<u8>,
+        last_commited_finalized_fuel_height: BlockHeight,
+    ) -> Self {
         // it is some random key for now
         let sk = SigningKey::from_bytes(&private_key).unwrap();
         let signer: LocalWallet = sk.into();
@@ -99,52 +97,46 @@ impl BlockCommit {
         Self {
             signer,
             contract_address,
-            pending_blocks: VecDeque::new(),
-            last_finalized_block_commit: None,
+            chain_height: BlockHeight::from(10u64), // TODO
+            pending_block_commits: VecDeque::new(),
+            last_commited_finalized_fuel_height,
         }
+    }
+
+    pub fn last_commited_finalized_fuel_height(&self) -> BlockHeight {
+        self.last_commited_finalized_fuel_height
     }
 
     /// Discard block from pending queue that got finalized.
-    /// return last finalized block comit hash if there is one.
-    pub fn new_da_block(
-        &mut self,
-        finalized_da_height: BlockHeight,
-    ) -> Option<(BlockHeight, Bytes32)> {
-        let mut last_commited_block = None;
+    /// return last finalized block commit hash and height if there is one.
+    pub fn new_da_block(&mut self, finalized_da_height: BlockHeight) {
         // iterate over all pending blocks and finalize some
-        self.pending_blocks.retain(|block| {
-            if let Some(da_height) = block.da_height {
-                if da_height <= finalized_da_height {
-                    last_commited_block = if let Some((height, _)) = last_commited_block {
-                        // if there is better finalized block, use it.
-                        if block.block_height > height {
-                            Some((block.block_height, block.block_root))
-                        } else {
-                            last_commited_block
-                        }
-                    } else {
-                        Some((block.block_height, block.block_root))
-                    };
+        self.pending_block_commits.retain(|block| {
+            if block.da_height <= finalized_da_height {
+                self.last_commited_finalized_fuel_height = BlockHeight::from(max(
+                    u64::from(block.block_height),
+                    u64::from(self.last_commited_finalized_fuel_height),
+                ));
 
-                    // remove it from pending
-                    return false;
-                }
+                // remove it from pending
+                return false;
             }
             return true;
         });
-        return last_commited_block;
     }
 
-    /// Append new fuel block into pending queue.
+    /// new sealed fuel block received update chain_height
     pub fn new_fuel_block(&mut self, block: Arc<SealedFuelBlock>) {
-        if self.pending_blocks.is_empty() {
+        self.chain_height = block.block.header.height;
+        /* TODO remove
+        if self.pending_block_commits.is_empty() {
             // pending block queue is empty, add new block at front
-            self.pending_blocks
+            self.pending_block_commits
                 .push_front(PendingBlock::new_fuel_block(block));
             return;
         }
-        let front_height = u64::from(self.pending_blocks.front().unwrap().block_height);
-        let back_height = u64::from(self.pending_blocks.back().unwrap().block_height);
+        let front_height = u64::from(self.pending_block_commits.front().unwrap().block_height);
+        let back_height = u64::from(self.pending_block_commits.back().unwrap().block_height);
         let block_height = u64::from(block.header.height);
         if block_height < back_height {
             // do nothing this block height was already commited and finalized on contract side.
@@ -152,7 +144,7 @@ impl BlockCommit {
             // expected thing to happen
             if block_height == front_height + 1 {
                 // happy path
-                self.pending_blocks
+                self.pending_block_commits
                     .push_front(PendingBlock::new_fuel_block(block));
             } else {
                 panic!("Something unexpected happened. New Fuel Blocks are always increased by one, it cants jump numbers");
@@ -163,7 +155,7 @@ impl BlockCommit {
             // either way if this happens save it inside pending queue, it is maybe just a lag.
 
             // find block place and insert it. It iterates from the front to the back
-            for pending in self.pending_blocks.iter_mut() {
+            for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == block.header.height {
                     pending.fuel_block = Some(block);
                     //TODO for missmatch of hash
@@ -171,6 +163,7 @@ impl BlockCommit {
                 }
             }
         }
+         */
     }
 
     /// Handle commited block from contract.
@@ -180,27 +173,35 @@ impl BlockCommit {
         height: BlockHeight,
         da_height: BlockHeight,
     ) {
-        if self.pending_blocks.is_empty() {
-            // no pending blocks, add one
-            self.pending_blocks
+        if self.pending_block_commits.is_empty() {
+            // no pending commits, add one
+            self.pending_block_commits
                 .push_front(PendingBlock::new_commited_block(
                     da_height, height, block_root,
                 ));
             return;
         }
 
-        let heightu64 = u64::from(height);
-        let front_height = u64::from(self.pending_blocks.front().unwrap().block_height);
-        let back_height = u64::from(self.pending_blocks.back().unwrap().block_height);
+        let front_height = self.pending_block_commits.front().unwrap().block_height;
+        let back_height = self.pending_block_commits.back().unwrap().block_height;
 
-        if heightu64 < back_height {
-            // ignore block that are not inside pending queue.
-            panic!("Commited block is lower height then current lowest pending block.");
-        } else if heightu64 > front_height {
-            // fuel consensu is lagging and we received block commit before fuel block
-            // push it into pending_block
-            if heightu64 == front_height + 1 {
-                self.pending_blocks
+        if height < back_height {
+            // This case means that we somehow skipped block commit and didnt receive it in expected order.
+            panic!(
+                "Commited block {} is lower then current lowest pending block {}.",
+                height, back_height
+            );
+        } else if height > front_height {
+            // check if we are lagging agains da layer
+            if self.chain_height < height {
+                error!(
+                    "Our chain height: {} is lower then da layer height {}",
+                    self.chain_height, height
+                );
+            }
+            // new block received. Happy path
+            if height == front_height + BlockHeight::from(1u64) {
+                self.pending_block_commits
                     .push_front(PendingBlock::new_commited_block(
                         da_height, height, block_root,
                     ));
@@ -209,10 +210,11 @@ impl BlockCommit {
                 panic!("Something unexpected happened. New Fuel commits are always increased by one, it cants jump numbers ")
             }
         } else {
-            // happy path. iterate over pending blocks and set it as commited.
-            for pending in self.pending_blocks.iter_mut() {
+            // happens if reverted commit is again visible
+            // iterate over pending blocks and set reverted commit as commited.
+            for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
-                    pending.da_height = Some(da_height);
+                    pending.da_height = da_height;
                     pending.reverted = false;
                     pending.block_height = height;
                     pending.block_root = block_root;
@@ -223,7 +225,7 @@ impl BlockCommit {
     }
 
     /// Handle revert of block commit from contract.
-    pub fn block_reverted(
+    pub fn block_commit_reverted(
         &mut self,
         block_root: Bytes32,
         height: BlockHeight,
@@ -231,24 +233,25 @@ impl BlockCommit {
     ) {
         // re-add block from bundle to be send to contract
         // handle commited block from contract, remove it from bundle
-        if self.pending_blocks.is_empty() {
+        if self.pending_block_commits.is_empty() {
             // nothing to revert
             return;
         }
 
-        let heightu64 = u64::from(height);
-        let front_height = u64::from(self.pending_blocks.front().unwrap().block_height);
-        let back_height = u64::from(self.pending_blocks.back().unwrap().block_height);
+        let front_height = self.pending_block_commits.front().unwrap().block_height;
+        let back_height = self.pending_block_commits.back().unwrap().block_height;
 
-        if heightu64 < back_height {
+        if height < back_height {
             // ignore block that are not inside pending queue.
-        } else if heightu64 > front_height {
+            error!("All pending block commits should be present in block queue. height:{} last_known:{}"
+            ,height,back_height);
+        } else if height > front_height {
             error!("Something unexpected happened.Reverted block commits are not something found in the future.");
         } else {
             // happy path. iterate over pending blocks and set it as commited.
-            for pending in self.pending_blocks.iter_mut() {
+            for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height > height {
-                    pending.da_height = Some(da_height);
+                    pending.da_height = da_height;
                     pending.reverted = true;
                     pending.block_height = height;
                     pending.block_root = block_root;
@@ -258,82 +261,55 @@ impl BlockCommit {
     }
 
     /// When new block is created by this client, bundle all not commited blocks and send it to contract.
-    pub async fn created_block<P>(&mut self, block: Arc<SealedFuelBlock>, provider: &Arc<P>)
-    where
+    pub async fn created_block<P>(
+        &mut self,
+        block: Arc<SealedFuelBlock>,
+        db: &mut dyn RelayerDb,
+        provider: &Arc<P>,
+    ) where
         P: Middleware + 'static,
     {
+        info!("Handle new created_block {}",block.header.height);
         self.new_fuel_block(block.clone());
-        // bundle all blocks and send it to contract
-        // assume that this is current greatest block and do bundle on it.
-        // Assumption is made that we as elected leader have all previous blocks and have ability to
-        // create new block in chain.
-        let mut bundle = Vec::new();
-        let mut iter = self.pending_blocks.iter_mut();
-        while let Some(pending) = iter.next() {
-            if pending.da_height.is_some() && pending.reverted == false {
-                // we can assume that all blocks are there as we were not be able to
-                // become leader of the round
-                if let Some(pending) = pending.fuel_block.as_ref() {
-                    bundle.push(pending.clone());
-                } else {
-                    error!("All fuel blocks should be present as we are in leader round.");
-                    return;
-                }
-            } else {
+
+        // if queue is empty check last_finalized_commited fuel block and send all newest ones that we know about.
+        let mut from_height = self.last_commited_finalized_fuel_height;
+        //get blocks range that start from last pending queue item that is not reverted and goes to current block.
+        for pending in self.pending_block_commits.iter() {
+            if pending.reverted != false {
+                from_height = pending.block_height;
                 break;
             }
         }
-        // we need one more parent that is already commited
-        bundle.push(if let Some(last_parent) = iter.next() {
-            if let Some(pending) = last_parent.fuel_block.as_ref() {
-                pending.clone()
+
+        info!("Bundle from:{}, to:{}",from_height,block.header.height);
+
+        let mut bundle = Vec::new();
+        for height in from_height.as_usize()..=block.header.height.as_usize()+1 {
+            if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
+                bundle.push(sealed_block.clone());
             } else {
-                // TODO use last_finalized_block_commit if there is no last block inside pendings.
-                // this can happen if there is there is stop and no new block are commited in last finalization period.
-                let _ = self.last_finalized_block_commit;
-                return;
+                panic!("All not commited blocks should have its seal and blocks inside db");
             }
-        } else {
-            //todo!()
-            // test
-            error!("We dont have parent block to send it to block commit");
-            return
-        });
+        }
+        bundle.push(block.clone());
 
-        bundle.reverse();
+        let mut parent = bundle.pop().unwrap();
 
-        let _ = self
-            .commit_fuel_block(block.as_ref(), block.as_ref(), provider)
-            .await;
-
-        // TODO implement bundle send for testing this can be one by one send.
-    }
-
-    pub async fn current_block_commit<P>(
-        &self,
-        provider: &'static P,
-    ) -> Result<(BlockHeight, Bytes32), anyhow::Error>
-    where
-        P: Middleware,
-    {
-        let provider = Arc::new(provider);
-        let contract = ContractAbi::new(self.contract_address, provider);
-
-        let block_hash = contract
-            .s_current_block_id()
-            .call()
-            .await
-            .map_err(anyhow::Error::msg)?;
-
-        // TODO get current block commit
-
-        Ok((BlockHeight::from(0u64), Bytes32::try_from(block_hash)?))
+        for block in bundle.into_iter() {
+            info!("Bundle send pair {}:{} of blocks:",parent.header.height, block.header.height);
+            if let Err(error) =  self.commit_fuel_block(&parent, &block, provider).await {
+                error!("Commit fuel block failed: {}",error);
+                break
+            }
+            parent = block;
+        }
     }
 
     pub async fn commit_fuel_block<P>(
         &self,
-        block: &SealedFuelBlock,
         parent: &SealedFuelBlock,
+        block: &SealedFuelBlock,
         provider: &Arc<P>,
     ) -> Result<(), Error>
     where
@@ -399,8 +375,8 @@ impl BlockCommit {
 
         // Use EthGasStation as the gas oracle
         // TODO check how this is going to be done in testnet.
-        let gas_oracle = EthGasStation::new(None);
-        let provider = GasOracleMiddleware::new(provider, gas_oracle);
+        //let gas_oracle = EthGasStation::new(None);
+        //let provider = GasOracleMiddleware::new(provider, gas_oracle);
 
         // Manage nonces locally
         let provider = NonceManagerMiddleware::new(provider, address);
@@ -408,7 +384,7 @@ impl BlockCommit {
         // craft the tx
         let tx = TransactionRequest::new()
             .from(address)
-            .to(self.contract_address)
+            .to(self.contract_address).gas_price(20000000001u64)
             .data(calldata);
         let _ = provider.send_transaction(tx, None).await?;
         Ok(())

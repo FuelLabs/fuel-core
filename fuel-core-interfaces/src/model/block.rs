@@ -117,7 +117,7 @@ impl FuelBlock {
         Bytes32::zeroed()
     }
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockConsensus {
     pub required_stake: u64,
@@ -126,7 +126,7 @@ pub struct FuelBlockConsensus {
     pub signatures: Vec<Bytes32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct SealedFuelBlock {
     pub block: FuelBlock,
