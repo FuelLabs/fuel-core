@@ -1,6 +1,6 @@
 [package]
 name = "fuel-p2p"
-version = "0.6.3"
+version = "0.6.4"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies", "network-programming"]
 edition = "2021"
