@@ -544,6 +544,7 @@ mod tests {
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 
+        #[derive(Debug)]
         enum ConnectionFlow {
             Initial,
             Connected,
@@ -590,7 +591,17 @@ mod tests {
                             },
                             _ => {}
                     }
-                }}
+                }},
+                _ = tokio::time::sleep(Duration::from_secs(60 * 2)) => {
+                    // Two Minutes passed
+                    // Try connecting manually
+                    let _ = node_b.swarm.dial(node_a_address.clone().unwrap());
+                },
+                _ = tokio::time::sleep(Duration::from_secs(60 * 4)) => {
+                    // Four Minutes passed
+                    // Fail the test
+                    panic!("{}", format!("Test timed out! conn_flow current state was {:?}", conn_flow));
+                },
             };
         }
     }
