@@ -128,16 +128,13 @@ impl TxQuery {
                         }
                     })
                     .skip(if tx_id.is_some() { 1 } else { 0 })
-                    .take(records_to_fetch);
+                    .take(records_to_fetch + 1);
 
-                let mut txs: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
+                let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
 
-                if direction == IterDirection::Reverse {
-                    txs.reverse()
-                }
-
-                let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = txs
+                let mut txs: Vec<(Cow<FuelTx>, &BlockHeight)> = tx_ids
                     .iter()
+                    .take(records_to_fetch)
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
                         let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, tx_id)
                             .transpose()
@@ -147,8 +144,12 @@ impl TxQuery {
                     })
                     .try_collect()?;
 
+                if direction == IterDirection::Reverse {
+                    txs.reverse()
+                }
+
                 let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= txs.len());
+                    Connection::new(started.is_some(), records_to_fetch < tx_ids.len());
 
                 connection.append(txs.into_iter().map(|(tx, block_height)| {
                     Edge::new(
