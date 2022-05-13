@@ -97,7 +97,7 @@ pub trait RelayerDb:
         // get staking diff
         let staking_diff = Storage::<u64,StakingDiff>::get(self, &last_da_height).expect("Expect to get data without problem")?;
 
-        staking_diff.delegations.get(delegate).cloned().flatten()
+        staking_diff.delegations.get(delegate).unwrap().clone()
     }
 
     async fn append_delegate_index(&mut self, delegate: &Address, da_height: u64) {
@@ -160,6 +160,8 @@ pub trait RelayerDb:
     async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight);
 }
 
+pub type ValidatorSet = HashMap<Address, (ValidatorStake, Option<Address>)>;
+
 #[derive(Debug)]
 pub enum RelayerEvent {
     //expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
@@ -167,9 +169,7 @@ pub enum RelayerEvent {
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
         da_height: u64,
-        response_channel: oneshot::Sender<
-            Result<HashMap<Address, (ValidatorStake, Option<Address>)>, RelayerError>,
-        >,
+        response_channel: oneshot::Sender<Result<ValidatorSet, RelayerError>>,
     },
     GetStatus {
         response: oneshot::Sender<RelayerStatus>,

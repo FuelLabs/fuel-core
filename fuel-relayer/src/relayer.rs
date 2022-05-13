@@ -5,10 +5,7 @@ use std::{
 };
 
 use crate::{
-    log::EthEventLog,
-    pending_events::{PendingDiff, PendingEvents},
-    validator_set::CurrentValidatorSet,
-    Config,
+    log::EthEventLog, pending_events::PendingEvents, validator_set::CurrentValidatorSet, Config,
 };
 use futures::Future;
 use tokio::sync::{broadcast, mpsc};
@@ -21,7 +18,6 @@ use ethers_providers::{
 };
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
-    model::DaBlockHeight,
     relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
 };
 use url::Url;
@@ -53,7 +49,7 @@ impl Relayer {
         fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
     ) -> Self {
         let private_key =
-            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
                 .unwrap();
 
         let last_commited_finalized_fuel_height =
@@ -359,30 +355,25 @@ impl Relayer {
         }
     }
 
-    #[tracing::instrument(skip(self, provider))]
+    #[tracing::instrument(fields(block.h=new_block.height().as_usize(), block.id=new_block.id().to_string().as_str()),skip(self, new_block, provider))]
     async fn handle_fuel_block_importer<P>(&mut self, new_block: NewBlockEvent, provider: &Arc<P>)
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
         match new_block {
-            NewBlockEvent::NewBlockCreated(created_block) => {
-
+            NewBlockEvent::Created(created_block) => {
                 trace!("received new fuel block created event");
                 self.pending
                     .handle_created_fuel_block(&created_block, self.db.as_mut(), provider)
                     .await;
-                
-                //u64::from(created_block.header.number)
             }
-            NewBlockEvent::NewBlockIncluded(new_block) => {
-
+            NewBlockEvent::Included(new_block) => {
                 trace!("received new fuel block included event");
                 // assume that da_height is checked agains parent block.
 
                 // TODO handle lagging here. compare current_db_height and finalized_db_height and send error notification
                 // if we are lagging over data availability event
                 self.pending.handle_fuel_block(&new_block);
-                //u64::from(new_block.header.number)
             }
         }
     }
@@ -422,7 +413,7 @@ impl Relayer {
             return Ok(());
         }
         let block_hash = new_eth_block_hash.unwrap();
-        trace!("Received new block hash:{:x?}",block_hash);
+        trace!("Received new block hash:{:x?}", block_hash);
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
                 let finalized_da_height = da_height.as_u64() - self.config.eth_finality_period();
@@ -434,10 +425,13 @@ impl Relayer {
                     .bump_validators_to_da_height(finalized_da_height, self.db.as_mut())
                     .await;
             } else {
-                error!("Received block hash does not have block number:block: {:?}", block);
+                error!(
+                    "Received block hash does not have block number:block: {:?}",
+                    block
+                );
             }
         } else {
-            error!("received block hash does not exist:{}",block_hash);
+            error!("received block hash does not exist:{}", block_hash);
         }
 
         Ok(())

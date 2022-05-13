@@ -96,7 +96,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 // data is contains: block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
                 let data = &log.data.0;
-                println!("DATA LEN:{}", data.len());
+
                 if data.len() != ASSET_DEPOSIT_DATA_LEN {
                     info!("data len:{}", data.len());
                     return Err("Malformed data length for AssetDeposit: {}");

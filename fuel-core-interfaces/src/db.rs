@@ -164,7 +164,9 @@ pub mod helpers {
 
     impl DummyDb {
         pub fn insert_sealed_block(&self, sealed_block: Arc<SealedFuelBlock>) {
-            self.data.lock().sealed_blocks
+            self.data
+                .lock()
+                .sealed_blocks
                 .insert(sealed_block.header.height, sealed_block);
         }
         ///
@@ -874,6 +876,7 @@ pub mod helpers {
         }
 
         async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+            println!("Asked for block:{}", height);
             self.data.lock().sealed_blocks.get(&height).cloned()
         }
 

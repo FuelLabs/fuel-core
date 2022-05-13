@@ -11,7 +11,7 @@ use fuel_core_interfaces::{
 };
 use fuel_tx::{Address, AssetId, Bytes32};
 use fuel_types::Word;
-use tracing::{info, error};
+use tracing::{error, info};
 
 use crate::{block_commit::BlockCommit, log::EthEventLog};
 
@@ -236,8 +236,8 @@ impl PendingEvents {
             EthEventLog::FuelBlockCommited { height, block_root } => {
                 self.block_commit.block_commited(
                     *block_root,
-                    height.clone().into(),
-                    da_height.clone().into(),
+                    (*height).into(),
+                    da_height.into(),
                 );
             }
         }
@@ -246,7 +246,10 @@ impl PendingEvents {
     /// Used in two places. On initial sync and when new fuel blocks is
     pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
         if self.finalized_da_height >= finalized_da_height {
-            error!("We received finalized height {} but we already have {}", finalized_da_height, self.finalized_da_height);
+            error!(
+                "We received finalized height {} but we already have {}",
+                finalized_da_height, self.finalized_da_height
+            );
             return;
         }
         while let Some(diff) = self.pending.front() {

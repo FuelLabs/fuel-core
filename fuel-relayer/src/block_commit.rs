@@ -8,7 +8,6 @@ use ethers_core::{
 };
 use ethers_middleware::{
     gas_escalator::{Frequency, GasEscalatorMiddleware, GeometricGasPrice},
-    gas_oracle::{EthGasStation, GasOracleMiddleware},
     NonceManagerMiddleware, SignerMiddleware,
 };
 use ethers_providers::Middleware;
@@ -21,7 +20,7 @@ use fuel_core_interfaces::{
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use ethers_signers::{LocalWallet, Signer};
-use tracing::{error, trace, info};
+use tracing::{error, info};
 
 abigen!(ContractAbi, "abi/fuel.json");
 
@@ -51,7 +50,7 @@ impl PendingBlock {
     ) -> Self {
         Self {
             reverted: false,
-            da_height: da_height,
+            da_height,
             block_height,
             block_root,
         }
@@ -60,7 +59,7 @@ impl PendingBlock {
 
 pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
     let block = BlockHeader {
-        producer: H160::from_slice(fuel_block.header.producer.as_ref()),
+        producer: H160::from_slice(&fuel_block.header.producer.as_ref()[12..]),
         previous_block_root: <[u8; 32]>::try_from(fuel_block.id()).unwrap(),
         height: fuel_block.header.height.into(),
         block_number: fuel_block.header.number.into(), // TODO
@@ -118,10 +117,10 @@ impl BlockCommit {
                     u64::from(self.last_commited_finalized_fuel_height),
                 ));
 
-                // remove it from pending
-                return false;
+                false
+            } else {
+                true
             }
-            return true;
         });
     }
 
@@ -205,7 +204,6 @@ impl BlockCommit {
                     .push_front(PendingBlock::new_commited_block(
                         da_height, height, block_root,
                     ));
-                return;
             } else {
                 panic!("Something unexpected happened. New Fuel commits are always increased by one, it cants jump numbers ")
             }
@@ -269,38 +267,44 @@ impl BlockCommit {
     ) where
         P: Middleware + 'static,
     {
-        info!("Handle new created_block {}",block.header.height);
+        info!("Handle new created_block {}", block.header.height);
         self.new_fuel_block(block.clone());
 
         // if queue is empty check last_finalized_commited fuel block and send all newest ones that we know about.
         let mut from_height = self.last_commited_finalized_fuel_height;
         //get blocks range that start from last pending queue item that is not reverted and goes to current block.
         for pending in self.pending_block_commits.iter() {
-            if pending.reverted != false {
+            if !pending.reverted {
                 from_height = pending.block_height;
                 break;
             }
         }
 
-        info!("Bundle from:{}, to:{}",from_height,block.header.height);
-
+        info!("Bundle from:{}, to:{}", from_height, block.header.height);
+        let mut parent = if let Some(parent) = db.get_sealed_block(from_height).await {
+            parent
+        } else {
+            panic!("Parent should be present:{}", from_height);
+        };
+        //.expect("This block should be present as we couldn't create new block");
+        from_height = from_height + BlockHeight::from(1u64);
         let mut bundle = Vec::new();
-        for height in from_height.as_usize()..=block.header.height.as_usize()+1 {
+        for height in from_height.as_usize()..=block.header.height.as_usize() {
             if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
                 bundle.push(sealed_block.clone());
             } else {
                 panic!("All not commited blocks should have its seal and blocks inside db");
             }
         }
-        bundle.push(block.clone());
-
-        let mut parent = bundle.pop().unwrap();
 
         for block in bundle.into_iter() {
-            info!("Bundle send pair {}:{} of blocks:",parent.header.height, block.header.height);
-            if let Err(error) =  self.commit_fuel_block(&parent, &block, provider).await {
-                error!("Commit fuel block failed: {}",error);
-                break
+            info!(
+                "Bundle send pair {}:{} of blocks:",
+                parent.header.height, block.header.height
+            );
+            if let Err(error) = self.commit_fuel_block(&parent, &block, provider).await {
+                error!("Commit fuel block failed: {}", error);
+                break;
             }
             parent = block;
         }
@@ -384,7 +388,8 @@ impl BlockCommit {
         // craft the tx
         let tx = TransactionRequest::new()
             .from(address)
-            .to(self.contract_address).gas_price(20000000001u64)
+            .to(self.contract_address)
+            .gas_price(20000000001u64)
             .data(calldata);
         let _ = provider.send_transaction(tx, None).await?;
         Ok(())
