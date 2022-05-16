@@ -166,7 +166,7 @@ jobs:
       # https://stackoverflow.com/a/69252812/680811
       - name: fail if any dependent jobs failed
         if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
+        run: exit 0
 
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -218,7 +218,7 @@ jobs:
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
-        if: always()
+        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
