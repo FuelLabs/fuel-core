@@ -22,10 +22,29 @@ use std::{
 use thiserror::Error;
 use tracing::{debug, warn};
 
+use fuel_vm::prelude::{InterpreterError, ProgramState};
+use fuel_vm::profiler::{ProfileReceiver, ProfilingData};
 ///! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
+use std::sync::{Arc, Mutex};
+
+#[derive(Clone)]
+struct ProfilingOutput {
+    data: Arc<Mutex<Option<ProfilingData>>>,
+}
+
+impl ProfileReceiver for ProfilingOutput {
+    fn on_transaction(
+        &mut self,
+        _state: &Result<ProgramState, InterpreterError>,
+        data: &ProfilingData,
+    ) {
+        let mut guard = self.data.lock().unwrap();
+        *guard = Some(data.clone());
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionMode {
@@ -93,7 +112,13 @@ impl Executor {
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
             // execution vm
-            let mut vm = Interpreter::with_storage(sub_db_view.clone());
+
+            let output = ProfilingOutput {
+                data: Arc::new(Mutex::new(None)),
+            };
+
+            let mut vm = Interpreter::with_storage(sub_db_view.clone())
+                .with_profiling(Box::new(output.clone()));
             let vm_result = vm
                 .transact(tx.clone())
                 .map_err(|error| Error::VmExecution {
@@ -101,6 +126,13 @@ impl Executor {
                     transaction_id: tx_id,
                 })?
                 .into_owned();
+
+            {
+                let guard = output.data.lock().unwrap();
+                let data = guard.as_ref().unwrap().clone();
+                let profile = serde_json::to_string(&data).unwrap();
+                std::fs::write("coverage_profile.json", &profile).unwrap();
+            }
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {
