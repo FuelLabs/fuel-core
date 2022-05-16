@@ -43,6 +43,8 @@ impl From<BlockConnection> for PaginatedResult<Block, String> {
     fn from(conn: BlockConnection) -> Self {
         PaginatedResult {
             cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
             results: conn
                 .edges
                 .unwrap_or_default()
