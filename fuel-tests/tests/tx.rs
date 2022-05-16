@@ -236,6 +236,16 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx1, tx2, tx3]);
+    // Check pagination state for first page
+    assert!(response.has_next_page);
+    assert!(!response.has_previous_page);
+
+    // Query for second page 2 with last given cursor: [4,5]
+    let page_request_middle_page = PaginationRequest {
+        cursor: response.cursor.clone(),
+        results: 2,
+        direction: PageDirection::Forward,
+    };
 
     // Query backwards from last given cursor [3]: [1,2]
     let page_request_backwards = PaginationRequest {
@@ -251,6 +261,18 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
+    let response = client.transactions(page_request_middle_page).await.unwrap();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
+    assert_eq!(transactions, &[tx4, tx5]);
+    // Check pagination state for middle page
+    // it should have next and previous page
+    assert!(response.has_next_page);
+    assert!(response.has_previous_page);
+
     let response = client.transactions(page_request_backwards).await.unwrap();
     let transactions = &response
         .results
@@ -258,6 +280,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx1, tx2]);
+    // Check pagination state for last page
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 
     let response = client.transactions(page_request_forwards).await.unwrap();
     let transactions = &response
@@ -266,6 +291,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx4, tx5, tx6]);
+    // Check pagination state for last page
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 }
 
 #[tokio::test]

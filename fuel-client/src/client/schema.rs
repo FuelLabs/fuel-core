@@ -175,6 +175,8 @@ impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
 pub struct PaginatedResult<T, C> {
     pub cursor: Option<C>,
     pub results: Vec<T>,
+    pub has_next_page: bool,
+    pub has_previous_page: bool,
 }
 
 #[derive(Error, Debug)]
