@@ -1,12 +1,14 @@
-use super::input::Input;
-use super::output::Output;
-use super::receipt::Receipt;
-use crate::model::FuelBlockDb;
-use crate::schema::contract::Contract;
-use crate::schema::scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64};
-use crate::tx_pool::TransactionStatus as TxStatus;
-use crate::tx_pool::TxPool;
-use crate::{database::Database, schema::block::Block};
+use super::{input::Input, output::Output, receipt::Receipt};
+use crate::{
+    database::Database,
+    model::FuelBlockDb,
+    schema::{
+        block::Block,
+        contract::Contract,
+        scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
+    },
+    tx_pool::{TransactionStatus as TxStatus, TxPool},
+};
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::db::KvStoreError;
@@ -260,6 +262,15 @@ impl Transaction {
                 bytecode_witness_index,
                 ..
             } => Some(bytecode_witness_index),
+        }
+    }
+
+    async fn bytecode_length(&self) -> Option<U64> {
+        match self.0 {
+            fuel_tx::Transaction::Script { .. } => None,
+            fuel_tx::Transaction::Create {
+                bytecode_length, ..
+            } => Some(bytecode_length.into()),
         }
     }
 

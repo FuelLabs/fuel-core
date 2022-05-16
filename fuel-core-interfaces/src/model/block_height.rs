@@ -4,7 +4,7 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd, Add, Display, Into, From)]
 pub struct BlockHeight(u32);
 

@@ -4,7 +4,7 @@ use fuel_crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Transaction};
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockHeader {
     /// Fuel block height.
     pub height: BlockHeight,
@@ -57,7 +57,7 @@ impl Default for FuelBlockHeader {
 
 /// The compact representation of a block used in the database
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockDb {
     pub headers: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
@@ -71,7 +71,7 @@ impl FuelBlockDb {
 
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlock {
     pub header: FuelBlockHeader,
     pub transactions: Vec<Transaction>,

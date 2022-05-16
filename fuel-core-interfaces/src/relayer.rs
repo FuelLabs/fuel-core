@@ -5,7 +5,7 @@ use fuel_storage::Storage;
 use fuel_types::{Address, AssetId, Bytes32, Word};
 use tokio::sync::oneshot;
 
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct DepositCoin {
     pub owner: Address,

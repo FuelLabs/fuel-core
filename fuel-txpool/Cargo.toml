@@ -15,8 +15,8 @@ anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.6.4" }
-fuel-tx = { version = "0.9", features = ["serde-types"] }
-fuel-types = { version = "0.3", features = ["serde-types"] }
+fuel-tx = { version = "0.10", features = ["serde"] }
+fuel-types = { version = "0.5", features = ["serde"] }
 futures = "0.3"
 parking_lot = "0.11"
 thiserror = "1.0"

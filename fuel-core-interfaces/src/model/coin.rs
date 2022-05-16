@@ -5,7 +5,7 @@ use async_graphql::Enum;
 use fuel_asm::Word;
 use fuel_tx::{Address, AssetId};
 
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct Coin {
     pub owner: Address,
@@ -16,7 +16,7 @@ pub struct Coin {
     pub block_created: BlockHeight,
 }
 
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum CoinStatus {
     Unspent,
