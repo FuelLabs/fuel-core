@@ -259,8 +259,8 @@ async fn get_transactions() {
         .collect_vec();
     assert_eq!(transactions, &[tx1, tx2]);
     // Check pagination state to query or not next/previous
-    assert_eq!(response.has_next_page, false);
-    assert_eq!(response.has_previous_page, true);
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 
     let response = client.transactions(page_request_forwards).await.unwrap();
     let transactions = &response
@@ -269,8 +269,8 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx4, tx5, tx6]);
-    assert_eq!(response.has_next_page, false);
-    assert_eq!(response.has_previous_page, true);
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 }
 
 #[tokio::test]
