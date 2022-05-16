@@ -125,8 +125,8 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        model::{BlockHeight, Coin, CoinStatus, SealedFuelBlock},
-        relayer::{DepositCoin, RelayerDb, StakingDiff},
+        model::{BlockHeight, Coin, CoinStatus, DepositCoin, SealedFuelBlock},
+        relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
     };
 
@@ -876,7 +876,6 @@ pub mod helpers {
         }
 
         async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
-            println!("Asked for block:{}", height);
             self.data.lock().sealed_blocks.get(&height).cloned()
         }
 

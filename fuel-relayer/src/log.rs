@@ -1,4 +1,5 @@
 use ethers_core::types::Log;
+use fuel_core_interfaces::model::DepositCoin;
 use fuel_types::{Address, AssetId, Bytes32, Word};
 use tracing::{info, trace};
 
@@ -24,15 +25,31 @@ DiffTable for every da block encompasing changes for validator and delegator
 use crate::config;
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct AssetDepositLog {
+    pub account: Address,
+    pub token: AssetId,
+    pub amount: Word,
+    pub precision_factor: u8,
+    pub block_number: u32,
+    pub deposit_nonce: Bytes32,
+}
+
+impl Into<DepositCoin> for &AssetDepositLog {
+    fn into(self) -> DepositCoin {
+        DepositCoin {
+            owner: self.account,
+            amount: self.amount,
+            asset_id: self.token, // TODO should this be hash of token_id and precision factor
+            nonce: self.deposit_nonce,
+            deposited_da_height: self.block_number as u64,
+            fuel_block_spend: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
-    AssetDeposit {
-        account: Address,
-        token: AssetId,
-        amount: Word,
-        precision_factor: u8,
-        block_number: u32,
-        deposit_nonce: Bytes32,
-    },
+    AssetDeposit(AssetDepositLog),
     // save it in validator set
     ValidatorRegistration {
         staking_key: Address,
@@ -117,14 +134,14 @@ impl TryFrom<&Log> for EthEventLog {
 
                 let deposit_nonce = unsafe { Bytes32::from_slice_unchecked(&data[64..]) };
 
-                Self::AssetDeposit {
+                Self::AssetDeposit(AssetDepositLog {
                     block_number,
                     account,
                     amount,
                     token,
                     precision_factor,
                     deposit_nonce,
-                }
+                })
             }
             n if n == *config::ETH_VALIDATOR_REGISTRATION => {
                 if log.topics.len() != 3 {
@@ -528,14 +545,14 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::AssetDeposit {
+            EthEventLog::AssetDeposit(AssetDepositLog {
                 account,
                 token,
                 block_number,
                 precision_factor,
                 amount,
                 deposit_nonce
-            },
+            }),
             "Decoded log does not match data we encoded"
         );
     }

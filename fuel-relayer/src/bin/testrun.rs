@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use chrono::{TimeZone, Utc};
+use chrono::Utc;
 use fuel_relayer::{Config, Relayer, Service};
 
 use ethers_core::types::H160;
@@ -8,9 +8,7 @@ use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     db::helpers::DummyDb,
     model::{BlockHeight, FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock},
-    signer::helpers::DummySigner,
 };
-use fuel_tx::{Address, Bytes32};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
@@ -22,40 +20,41 @@ async fn main() -> Result<(), anyhow::Error> {
         eth_finality_period: 10,
         eth_client: "http://127.0.0.1:8545/".into(),
         eth_chain_id: 1,
-        eth_v2_block_commit_contract: H160::from_str("0x4Fe74afc07623f082e7e592735e5b81F461A04a5")
+        eth_v2_block_commit_contract: H160::from_str("0x2CfFBF63dB3fF10d614B5c93Eedd6E804D5b26ef")
             .unwrap(),
         // this is wETH ERC20 contract.
         eth_v2_contract_addresses: vec![
             //H160::from_str("0x717833d2641218aAE81a7cB0A2E92E629a2aec0b").unwrap(), //merkle tree
             //H160::from_str("0x9fb707017Ce7fc0AdE7a7c9FEFB247C4531Ae54a").unwrap(), //binaryMerkleTreeLib
             //H160::from_str("0xa7923c6206c43743eE235A9260A96545a8285c86").unwrap(), // merkleSumTreeLib
-            H160::from_str("0x4Fe74afc07623f082e7e592735e5b81F461A04a5").unwrap(), // fuel
+            H160::from_str("0x2CfFBF63dB3fF10d614B5c93Eedd6E804D5b26ef").unwrap(), // fuel
             //H160::from_str("0x0A3A435C7762b988e8e28606DE04576d0e345DfD").unwrap(), // token
             //H160::from_str("0x0a9EA8C31E48Dc2Af4A7eB211ecDACC4d5865437").unwrap(), // fuelToken
             //H160::from_str("0x4822F3071088668cd98ae64d5B1CC3A3eBfA2344").unwrap(), // guard
             //H160::from_str("0x38426b72293b3946b0BCe1E5653f60B126C49072").unwrap(), // burnAction
             //H160::from_str("0x5c9EB4773e6C5f7E0058bF6976325E09f16b9488").unwrap(), // leaderSelection
-            H160::from_str("0x0886d4825e5e26eafeAACfc30913D380d75b715B").unwrap(), // validatorSet
+            H160::from_str("0x7a2F694cE981e354036189D25FEfCC53F43354d4").unwrap(), // validatorSet
                                                                                    //H160::from_str("0x85604e4A5151B6b22Ed9AdAAD39b33cfd52504b6").unwrap(), // challengeManager
                                                                                    //H160::from_str("0x20c2C873408018cf631EEe44893C57f623c25e50").unwrap(), // transactionSerializationLib
                                                                                    //H160::from_str("0x7671DA4F13f2E116dCe3cDF7498349089BF2Dceb").unwrap(), // signed
         ],
         /*
         Creating Typechain artifacts in directory typechain for target ethers-v5
-        sparseMerkleTreeLib: 0xbB4924c080dF19b45662C9680cE8E6E9ee77e21F
-        binaryMerkleTreeLib: 0xD2FDb55eE3710d59d9ED7AF13B479E344CC48C39
-        merkleSumTreeLib: 0x5A00870C511ECEf2BeDaD4b31F3029F675B3CDeF
-        fuel: 0x8026C45c8B9eFe4143E0bA0935961B8C81ab3588
-        token: 0x86da2df0Ce4ead61E15336D8fb7B7323C5d22202
-        fuelToken: 0xFDc8b4a3007349ebDB2406bf32e6A3F814c61522
-        guard: 0x0768aa59d7fFE416407f9F50eFFB78F70Cc8b42d
-        burnAuction: 0xBBeA7A62A3841985100Bbc00D71Bb15191d7760d
-        leaderSelection: 0xF7C859E12616a2E2DCA98873877739E25b6D618A
-        validatorSet: 0xF106981FC821F66264Bb1D1af6E2d1D87fb16163
-        challengeManager: 0x57298092055D84261347447aC553651D0DC8A32d
-        transactionSerializationLib: 0x3C79D68150C41f40897A2e63a78aA96b3A5f48cf
+        Successfully generated Typechain artifacts!
+        sparseMerkleTreeLib: 0x93aA8245018d568a477A0a92526ca79D18e5eA96
+        binaryMerkleTreeLib: 0xCD9A625c19788E630F0A70CD8243bD8e020bb9a6
+        merkleSumTreeLib: 0xc599Bba784bDADbC9096A6c65Cd88f8124c91d7c
+        fuel: 0x65080A1442A6F02B99923e004832709827B56D08
+        token: 0x7B9ae63edf186356781Efcd804cb0a1C17761098
+        fuelToken: 0xedd5BF6F8a6F9f312331F4F11C0A4Ff2512FB810
+        guard: 0x21e337432160c2a2756FDbC1e86f26b4C3EF79c7
+        burnAuction: 0xDa59722Bae2d8FAe4DcB804327c661d2696C2516
+        leaderSelection: 0xe0C8C6C43e299783E59A26E6f1e56E5B1acc6cA7
+        validatorSet: 0x57BCFa6e06947cbDc4c0A8D627D2e8f44F0277d8
+        challengeManager: 0x027e900Ce0543431E7691795Ac2fA37ed2151a2b
+        transactionSerializationLib: 0x488490184b37A26E493c6de2c2792585cbB82862
         Initial token amount:  1000000.0
-         */
+                 */
         eth_v2_contract_deployment: 0,
         initial_sync_step: 100,
         eth_initial_sync_refresh: std::time::Duration::from_secs(10),
@@ -64,13 +63,9 @@ async fn main() -> Result<(), anyhow::Error> {
     let block = SealedFuelBlock {
         block: FuelBlock {
             header: FuelBlockHeader {
-                height: BlockHeight::from(0u64),
                 number: BlockHeight::from(10u64),
-                parent_hash: Bytes32::zeroed(),
-                prev_root: Bytes32::zeroed(),
-                transactions_root: Bytes32::zeroed(),
-                time: Utc.ymd(2018, 1, 26).and_hms_micro(18, 30, 9, 453_829),
-                producer: Address::zeroed(),
+                time: Utc::now(),
+                ..Default::default()
             },
             transactions: Vec::new(),
         },

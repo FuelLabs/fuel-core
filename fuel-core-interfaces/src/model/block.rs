@@ -27,10 +27,21 @@ pub struct FuelBlockHeader {
     pub time: DateTime<Utc>,
     /// The block producer public key
     pub producer: Address,
+    /// Header Metadata
+    pub metadata: Option<HeaderMetadata>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+pub struct HeaderMetadata {
+    id: Bytes32,
 }
 
 impl FuelBlockHeader {
-    pub fn id(&self) -> Bytes32 {
+    pub fn recalculate_metadata(&mut self) {
+        self.metadata = Some(HeaderMetadata { id: self.hash() });
+    }
+    fn hash(&self) -> Bytes32 {
         let mut hasher = Hasher::default();
         hasher.input(&self.height.to_bytes()[..]);
         hasher.input(&self.number.to_bytes()[..]);
@@ -41,18 +52,27 @@ impl FuelBlockHeader {
         hasher.input(self.producer.as_ref());
         hasher.digest()
     }
+
+    pub fn id(&self) -> Bytes32 {
+        if let Some(ref metadata) = self.metadata {
+            metadata.id
+        } else {
+            self.hash()
+        }
+    }
 }
 
 impl Default for FuelBlockHeader {
     fn default() -> Self {
         Self {
-            height: 0u32.into(),
-            number: 0u32.into(),
-            parent_hash: Default::default(),
             time: Utc.timestamp(0, 0),
-            producer: Default::default(),
-            transactions_root: Default::default(),
-            prev_root: Default::default(),
+            height: BlockHeight::default(),
+            number: BlockHeight::default(),
+            parent_hash: Bytes32::default(),
+            prev_root: Bytes32::default(),
+            transactions_root: Bytes32::default(),
+            producer: Address::default(),
+            metadata: None,
         }
     }
 }

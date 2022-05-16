@@ -192,7 +192,7 @@ impl Relayer {
                 }
                 let fuel_event = fuel_event.unwrap();
                 self.pending
-                    .append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
+                    .append_eth_events(fuel_event, eth_event.block_number.unwrap().as_u64())
                     .await;
             }
             // we are sending dummy eth block bcs we are sure that it is finalized
@@ -244,7 +244,7 @@ impl Relayer {
                 }
                 let fuel_event = fuel_event.unwrap();
                 self.pending
-                    .append_eth_events(&fuel_event, eth_event.block_number.unwrap().as_u64())
+                    .append_eth_events(fuel_event, eth_event.block_number.unwrap().as_u64())
                     .await;
             }
 

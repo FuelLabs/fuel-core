@@ -20,7 +20,7 @@ use fuel_core_interfaces::{
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use ethers_signers::{LocalWallet, Signer};
-use tracing::{error, info};
+use tracing::{error, info, warn, debug};
 
 abigen!(ContractAbi, "abi/fuel.json");
 
@@ -73,7 +73,7 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
         validator_set_hash: <[u8; 32]>::try_from(fuel_block.validator_set_hash().as_ref()).unwrap(),
         required_stake: fuel_block.consensus.required_stake.into(),
         withdrawals_root: <[u8; 32]>::try_from(fuel_block.withdrawals_root().as_ref()).unwrap(),
-        transactions_data_length: fuel_block.transaction_data_lenght() as u32,
+        transactions_data_length: 0,
         transaction_hash: <[u8; 32]>::try_from(fuel_block.transaction_data_hash().as_ref())
             .unwrap(),
     };
@@ -125,44 +125,8 @@ impl BlockCommit {
     }
 
     /// new sealed fuel block received update chain_height
-    pub fn new_fuel_block(&mut self, block: Arc<SealedFuelBlock>) {
-        self.chain_height = block.block.header.height;
-        /* TODO remove
-        if self.pending_block_commits.is_empty() {
-            // pending block queue is empty, add new block at front
-            self.pending_block_commits
-                .push_front(PendingBlock::new_fuel_block(block));
-            return;
-        }
-        let front_height = u64::from(self.pending_block_commits.front().unwrap().block_height);
-        let back_height = u64::from(self.pending_block_commits.back().unwrap().block_height);
-        let block_height = u64::from(block.header.height);
-        if block_height < back_height {
-            // do nothing this block height was already commited and finalized on contract side.
-        } else if block_height > front_height {
-            // expected thing to happen
-            if block_height == front_height + 1 {
-                // happy path
-                self.pending_block_commits
-                    .push_front(PendingBlock::new_fuel_block(block));
-            } else {
-                panic!("Something unexpected happened. New Fuel Blocks are always increased by one, it cants jump numbers");
-            }
-        } else {
-            // case where block is already commited on contract side but it is not finalized
-            // on fuel side, maybe we didnt get enought consensus votes or there are network problems.
-            // either way if this happens save it inside pending queue, it is maybe just a lag.
-
-            // find block place and insert it. It iterates from the front to the back
-            for pending in self.pending_block_commits.iter_mut() {
-                if pending.block_height == block.header.height {
-                    pending.fuel_block = Some(block);
-                    //TODO for missmatch of hash
-                    break;
-                }
-            }
-        }
-         */
+    pub fn set_chain_height(&mut self, height: BlockHeight) {
+        self.chain_height = height;
     }
 
     /// Handle commited block from contract.
@@ -267,8 +231,8 @@ impl BlockCommit {
     ) where
         P: Middleware + 'static,
     {
-        info!("Handle new created_block {}", block.header.height);
-        self.new_fuel_block(block.clone());
+        debug!("Handle new created_block {}", block.header.height);
+        self.set_chain_height(block.header.height);
 
         // if queue is empty check last_finalized_commited fuel block and send all newest ones that we know about.
         let mut from_height = self.last_commited_finalized_fuel_height;
@@ -280,7 +244,7 @@ impl BlockCommit {
             }
         }
 
-        info!("Bundle from:{}, to:{}", from_height, block.header.height);
+        debug!("Bundle from:{}, to:{}", from_height, block.header.height);
         let mut parent = if let Some(parent) = db.get_sealed_block(from_height).await {
             parent
         } else {
@@ -303,7 +267,7 @@ impl BlockCommit {
                 parent.header.height, block.header.height
             );
             if let Err(error) = self.commit_fuel_block(&parent, &block, provider).await {
-                error!("Commit fuel block failed: {}", error);
+                warn!("Commit fuel block failed: {}", error);
                 break;
             }
             parent = block;

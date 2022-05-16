@@ -9,11 +9,13 @@ use fuel_core_interfaces::{
     model::{BlockHeight, SealedFuelBlock},
     relayer::{RelayerDb, StakingDiff},
 };
-use fuel_tx::{Address, AssetId, Bytes32};
-use fuel_types::Word;
+use fuel_tx::{Address, Bytes32};
 use tracing::{error, info};
 
-use crate::{block_commit::BlockCommit, log::EthEventLog};
+use crate::{
+    block_commit::BlockCommit,
+    log::{AssetDepositLog, EthEventLog},
+};
 
 pub struct PendingEvents {
     /// Pending stakes/assets/withdrawals. Before they are finalized
@@ -43,7 +45,7 @@ pub struct PendingDiff {
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
     /// erc-20 pending deposit.
-    pub assets: HashMap<Bytes32, (Address, AssetId, Word)>,
+    pub assets: HashMap<Bytes32, AssetDepositLog>,
 }
 
 impl PendingDiff {
@@ -120,7 +122,7 @@ impl PendingEvents {
 
     /// propagate new fuel block to block_commit
     pub fn handle_fuel_block(&mut self, block: &Arc<SealedFuelBlock>) {
-        self.block_commit.new_fuel_block(block.clone())
+        self.block_commit.set_chain_height(block.header.height)
     }
 
     /// propagate new created fuel block to block_commit
@@ -175,12 +177,12 @@ impl PendingEvents {
                 .retain(|diff| diff.da_height < lowest_removed_da_height);
         }
         // apply new event to pending queue
-        self.append_eth_events(&event, eth_block).await;
+        self.append_eth_events(event, eth_block).await;
     }
 
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
-    pub async fn append_eth_events(&mut self, fuel_event: &EthEventLog, da_height: u64) {
+    pub async fn append_eth_events(&mut self, fuel_event: EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
                 self.pending.push_back(PendingDiff::new(da_height))
@@ -190,23 +192,15 @@ impl PendingEvents {
         }
         let last_diff = self.pending.back_mut().unwrap();
         match fuel_event {
-            EthEventLog::AssetDeposit {
-                account,
-                token,
-                amount,
-                deposit_nonce,
-                ..
-            } => {
-                last_diff
-                    .assets
-                    .insert(*deposit_nonce, (*account, *token, *amount));
+            EthEventLog::AssetDeposit(deposit) => {
+                last_diff.assets.insert(deposit.deposit_nonce, deposit);
             }
             EthEventLog::Deposit { .. } => {
-                // do nothing. This is only related to contract, only possible usage for this is as
-                // additional information for user.
+                // It is fine to do nothing. This is only related to contract,
+                // only possible usage for this is as additional information for user.
             }
             EthEventLog::Withdrawal { withdrawer, .. } => {
-                last_diff.delegations.insert(*withdrawer, None);
+                last_diff.delegations.insert(withdrawer, None);
             }
             EthEventLog::Delegation {
                 delegator,
@@ -218,27 +212,22 @@ impl PendingEvents {
                     .zip(amounts.iter())
                     .map(|(f, s)| (*f, *s))
                     .collect();
-                last_diff.delegations.insert(*delegator, Some(delegates));
+                last_diff.delegations.insert(delegator, Some(delegates));
             }
-            // Done
             EthEventLog::ValidatorRegistration {
                 staking_key,
                 consensus_key,
             } => {
                 last_diff
                     .validators
-                    .insert(*staking_key, Some(*consensus_key));
+                    .insert(staking_key, Some(consensus_key));
             }
-            // Done
             EthEventLog::ValidatorUnregistration { staking_key } => {
-                last_diff.validators.insert(*staking_key, None);
+                last_diff.validators.insert(staking_key, None);
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
-                self.block_commit.block_commited(
-                    *block_root,
-                    (*height).into(),
-                    da_height.into(),
-                );
+                self.block_commit
+                    .block_commited(block_root, (height).into(), da_height.into());
             }
         }
     }
@@ -252,7 +241,7 @@ impl PendingEvents {
             );
             return;
         }
-        while let Some(diff) = self.pending.front() {
+        while let Some(diff) = self.pending.front_mut() {
             if diff.da_height > finalized_da_height {
                 break;
             }
@@ -267,14 +256,13 @@ impl PendingEvents {
             .await;
 
             // append index of delegator so that we cross reference earliest delegation set
-            //for (delegate, _) in diff.delegations.iter() {
-            //    db.append_delegate_index(delegate, diff.da_height).await;
-            //}
+            for (delegate, _) in diff.delegations.iter() {
+                db.append_delegate_index(delegate, diff.da_height).await;
+            }
 
             // push finalized assets to db
-            for (nonce, deposit) in diff.assets.iter() {
-                db.insert_token_deposit(*nonce, diff.da_height, deposit.0, deposit.1, deposit.2)
-                    .await
+            for (_, deposit) in diff.assets.iter() {
+                db.insert_coin_deposit(deposit.into()).await
             }
 
             // insert height index into delegations.
@@ -299,7 +287,7 @@ mod tests {
 
     use super::*;
     use crate::log::tests::*;
-    use fuel_types::Address;
+    use fuel_types::{Address, AssetId};
 
     #[tokio::test]
     pub async fn check_token_deposits_on_multiple_eth_blocks() {
@@ -317,36 +305,41 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let deposit1 =
-            EthEventLog::try_from(&eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1, 0))
-                .unwrap();
-        let deposit2 =
-            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2, 0))
-                .unwrap();
-        let deposit3 =
-            EthEventLog::try_from(&eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3, 0))
-                .unwrap();
+        let deposit1 = eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1, 0);
+        let deposit2 = eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2, 0);
+        let deposit3 = eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3, 0);
 
-        pending.handle_eth_log(deposit1, 0, false).await;
-        pending.handle_eth_log(deposit2, 1, false).await;
-        pending.handle_eth_log(deposit3, 1, false).await;
+        let deposit1 = EthEventLog::try_from(&deposit1).unwrap();
+        let deposit2 = EthEventLog::try_from(&deposit2).unwrap();
+        let deposit3 = EthEventLog::try_from(&deposit3).unwrap();
+
+        pending.handle_eth_log(deposit1.clone(), 0, false).await;
+        pending.handle_eth_log(deposit2.clone(), 1, false).await;
+        pending.handle_eth_log(deposit3.clone(), 1, false).await;
         let diff1 = pending.pending[0].clone();
         let diff2 = pending.pending[1].clone();
-        assert_eq!(
-            diff1.assets.get(&nonce1),
-            Some(&(acc1, token1, 10)),
-            "Deposit 1 not valid"
-        );
-        assert_eq!(
-            diff2.assets.get(&nonce2),
-            Some(&(acc1, token1, 20)),
-            "Deposit 2 not valid"
-        );
-        assert_eq!(
-            diff2.assets.get(&nonce3),
-            Some(&(acc1, token1, 40)),
-            "Deposit 3 not valid"
-        );
+
+        if let EthEventLog::AssetDeposit(deposit) = &deposit1 {
+            assert_eq!(
+                diff1.assets.get(&nonce1),
+                Some(deposit),
+                "Deposit 1 not valid"
+            );
+        }
+        if let EthEventLog::AssetDeposit(deposit) = &deposit2 {
+            assert_eq!(
+                diff2.assets.get(&nonce2),
+                Some(deposit),
+                "Deposit 2 not valid"
+            );
+        }
+        if let EthEventLog::AssetDeposit(deposit) = &deposit3 {
+            assert_eq!(
+                diff2.assets.get(&nonce3),
+                Some(deposit),
+                "Deposit 3 not valid"
+            );
+        }
     }
 
     /*

@@ -2,18 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use fuel_storage::Storage;
-use fuel_types::{Address, AssetId, Bytes32, Word};
+use fuel_types::{Address, Bytes32};
 use tokio::sync::oneshot;
-
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
-pub struct DepositCoin {
-    pub owner: Address,
-    pub amount: Word,
-    pub asset_id: AssetId,
-    pub deposited_da_height: u64,
-    pub fuel_block_spend: Option<u64>,
-}
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
@@ -51,24 +41,11 @@ pub trait RelayerDb:
 {
 
     /// deposit token to database. Token deposits are not revertable
-    async fn insert_token_deposit(
+    async fn insert_coin_deposit(
         &mut self,
-        deposit_nonce: Bytes32, // this is ID
-        deposited_da_height: u64, // eth block when deposit is made
-        owner: Address,       // owner
-        asset_id: AssetId,
-        amount: Word,
+        deposit: DepositCoin,
     ) {
-        let coin = DepositCoin {
-            owner,
-            amount,
-            asset_id,
-            deposited_da_height,
-            fuel_block_spend: None,
-        };
-        // TODO check what id are we going to use
-        // depends on https://github.com/FuelLabs/fuel-specs/issues/106
-        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit_nonce,&coin);
+        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit.id(),&deposit);
     }
 
     /// Insert difference make on staking in this particular DA height.
@@ -181,7 +158,7 @@ pub use thiserror::Error;
 
 use crate::{
     db::KvStoreError,
-    model::{BlockHeight, SealedFuelBlock, ValidatorStake},
+    model::{BlockHeight, SealedFuelBlock, ValidatorStake, DepositCoin},
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
