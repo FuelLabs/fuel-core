@@ -56,6 +56,8 @@ impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, Str
 
         Ok(PaginatedResult {
             cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
             results: results?,
         })
     }

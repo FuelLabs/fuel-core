@@ -82,6 +82,8 @@ pub struct BalanceConnection {
 impl From<BalanceConnection> for PaginatedResult<Balance, String> {
     fn from(conn: BalanceConnection) -> Self {
         PaginatedResult {
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
             cursor: conn.page_info.end_cursor,
             results: conn
                 .edges
