@@ -218,7 +218,7 @@ jobs:
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
-        if: always()
+        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
