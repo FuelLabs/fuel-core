@@ -212,7 +212,7 @@ pub mod tests {
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }");
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x000000000000000000000000000000000000000000000000000000000000001000");
     }
 
     #[tokio::test]
@@ -247,7 +247,7 @@ pub mod tests {
 
         let out = txpool.insert(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000010, output_index: 0 }",);
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x000000000000000000000000000000000000000000000000000000000000001000",);
     }
 
     #[tokio::test]
@@ -270,7 +270,7 @@ pub mod tests {
 
         let out = txpool.insert(tx1, &db).await;
         assert!(out.is_err(), "Tx1 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is spent: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000000, output_index: 0 }",);
+        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is spent: 0x000000000000000000000000000000000000000000000000000000000000000000",);
     }
 
     #[tokio::test]
@@ -312,7 +312,7 @@ pub mod tests {
         let out = txpool.insert(tx1, &db).await;
         assert!(out.is_err(), "Tx1 should be ERR");
         let err = out.err().unwrap();
-        assert_eq!(err.to_string(),"Transaction is not inserted. More priced tx 0x0000000000000000000000000000000000000000000000000000000000000012 already spend this UTXO output: UtxoId { tx_id: 0x0000000000000000000000000000000000000000000000000000000000000000, output_index: 0 }", "Tx1 should not be included:{:?}",err);
+        assert_eq!(err.to_string(),"Transaction is not inserted. More priced tx 0x0000000000000000000000000000000000000000000000000000000000000012 already spend this UTXO output: 0x000000000000000000000000000000000000000000000000000000000000000000", "Tx1 should not be included:{:?}",err);
     }
 
     #[tokio::test]

@@ -313,6 +313,7 @@ type Transaction {
 	script: HexString
 	scriptData: HexString
 	bytecodeWitnessIndex: Int
+	bytecodeLength: U64
 	salt: Salt
 	staticContracts: [Contract!]
 	storageSlots: [HexString!]

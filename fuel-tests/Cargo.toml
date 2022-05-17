@@ -19,13 +19,13 @@ harness = true
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-features = false }
-fuel-crypto = { version = "0.4", features = ["random"] }
+fuel-crypto = { version = "0.5", features = ["random"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-storage = "0.1"
-fuel-tx = { version = "0.9", features = ["serde-types", "builder", "internals"] }
+fuel-tx = { version = "0.10", features = ["serde", "builder", "internals"] }
 fuel-txpool = { path = "../fuel-txpool" }
-fuel-types = { version = "0.3", features = ["serde-types"] }
-fuel-vm = { version = "0.8", features = ["serde-types", "random","test-helpers"] }
+fuel-types = { version = "0.5", features = ["serde"] }
+fuel-vm = { version = "0.9", features = ["serde", "random","test-helpers"] }
 insta = "1.8"
 itertools = "0.10"
 rand = "0.8"
