@@ -9,24 +9,26 @@ use tracing::{error, info};
 
 /// It contains list of Validators and its stake and consensus public key.
 /// We dont expect big number of validators in that sense we are okey to have it all in memory
-/// Data availability height (da_height) represent snapshot in moment when set is seen.
+/// for fast access. Data availability height (da_height) represent snapshot height that set represent.
+/// Validator Set is same as it is inside database.
 #[derive(Default)]
-pub struct CurrentValidatorSet {
-    /// Current validator set
+pub struct Validators {
+    /// Validator set
     pub set: HashMap<Address, (ValidatorStake, Option<Address>)>,
-    /// current fuel block
+    /// Da height
     pub da_height: u64,
 }
 
-impl CurrentValidatorSet {
+impl Validators {
     // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
     // TODO if it takes a lot of time to load it is good to optimize.
-    pub async fn load_get_validators(&mut self, db: &dyn RelayerDb) {
+    pub async fn load(&mut self, db: &dyn RelayerDb) {
         self.da_height = db.get_validators_da_height().await;
         self.set = db.get_validators().await;
     }
 
-    pub fn get_validator_set(
+    /// Get validator set
+    pub async fn get(
         &mut self,
         da_height: u64,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
@@ -39,7 +41,7 @@ impl CurrentValidatorSet {
 
     /// new_block_diff is finality slider adjusted
     /// it supports only going up
-    pub async fn bump_validators_to_da_height(
+    pub async fn bump_set_to_da_height(
         &mut self,
         da_height: DaBlockHeight,
         db: &mut dyn RelayerDb,
@@ -48,25 +50,22 @@ impl CurrentValidatorSet {
             std::cmp::Ordering::Less => {}
             std::cmp::Ordering::Equal => {
                 // unusual but do nothing
-                info!("Already on same validator set height");
+                info!("Already on same validator set height {da_height}");
                 return;
             }
             std::cmp::Ordering::Greater => {
-                // if curent block is greater then new included block there is some problem.
-                error!(
-                    "curent height {:?} is greater then new height {:?} there is some problem",
-                    self.da_height, da_height
-                );
-                //panic!("TEST");
+                // happens when initiating watch for ganache new blocks, it buffers few old blocks and sends them over.
+                let current_height = self.da_height;
+                error!("curent height {current_height} is greater then new height {da_height}");
                 return;
             }
         }
 
-        let mut validators: HashMap<Address, (ValidatorStake, Option<Address>)> = HashMap::new();
+        let mut validators = HashMap::new();
         // get staking diffs.
         let diffs = db.get_staking_diff(self.da_height, Some(da_height)).await;
-        let mut delegates_cache: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
-        for (diff_height, diff) in diffs {
+        let mut delegates_cached: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
+        for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key
             for (validator, consensus_key) in diff.validators {
                 validators
@@ -76,38 +75,36 @@ impl CurrentValidatorSet {
             }
 
             // for every delegates, cache it and if it is not in cache query db's delegates_index for earlier delegate set.
-            for (delegator, delegation) in diff.delegations.iter() {
+            for (delegator, delegation) in diff.delegations.into_iter() {
                 // add new delegation stake.
-                if let Some(delegation) = delegation {
+                if let Some(ref delegation) = delegation {
                     for (validator, stake) in delegation {
                         validators
                             .entry(*validator)
                             .or_insert_with(|| self.set.get(validator).cloned().unwrap_or_default())
                             // increate stake
-                            .0 += *stake;
+                            .0 += stake;
                     }
                 }
 
                 // get old delegation
-                let old_delegation = match delegates_cache.entry(*delegator) {
+                let old_delegation = match delegates_cached.entry(delegator) {
                     Entry::Vacant(entry) => {
-                        let old_delegation = db.get_last_delegation(delegator, diff_height).await;
-                        entry.insert(delegation.clone());
+                        let old_delegation = db.get_last_delegation(&delegator, diff_height).await;
+                        entry.insert(delegation);
                         old_delegation
                     }
                     Entry::Occupied(ref mut entry) => {
                         let old_delegation = entry.get_mut();
                         let ret = std::mem::take(old_delegation);
-                        *old_delegation = delegation.clone();
+                        *old_delegation = delegation;
                         ret
                     }
                 };
 
-                // remove old delegation stake if exist
+                // deduce old delegation stake if exist
                 if let Some(old_delegations) = old_delegation {
-                    // remove old delegations
                     for (validator, old_stake) in old_delegations.into_iter() {
-                        // it is okey to cast u64 stake to i64, stake is not going to be that big.
                         validators
                             .entry(validator)
                             .or_insert_with(|| {

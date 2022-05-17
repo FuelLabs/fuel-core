@@ -14,7 +14,6 @@ pub struct DepositCoin {
 }
 
 impl DepositCoin {
-    
     /// TODO check what id are we going to use
     /// depends on https://github.com/FuelLabs/fuel-specs/issues/106
     pub fn id(&self) -> Bytes32 {

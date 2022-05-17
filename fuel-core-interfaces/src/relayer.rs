@@ -158,7 +158,7 @@ pub use thiserror::Error;
 
 use crate::{
     db::KvStoreError,
-    model::{BlockHeight, SealedFuelBlock, ValidatorStake, DepositCoin},
+    model::{BlockHeight, DepositCoin, SealedFuelBlock, ValidatorStake},
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]

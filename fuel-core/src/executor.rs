@@ -1218,7 +1218,7 @@ mod tests {
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: 6u64.into(),
-                .. Default::default()
+                ..Default::default()
             },
             transactions: vec![tx],
         };

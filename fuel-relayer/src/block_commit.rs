@@ -20,7 +20,7 @@ use fuel_core_interfaces::{
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use ethers_signers::{LocalWallet, Signer};
-use tracing::{error, info, warn, debug};
+use tracing::{debug, error, info, warn};
 
 abigen!(ContractAbi, "abi/fuel.json");
 

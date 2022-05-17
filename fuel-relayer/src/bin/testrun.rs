@@ -17,7 +17,7 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing_subscriber::fmt::init();
 
     let config = Config {
-        eth_finality_period: 10,
+        da_finalization: 10,
         eth_client: "http://127.0.0.1:8545/".into(),
         eth_chain_id: 1,
         eth_v2_block_commit_contract: H160::from_str("0x2CfFBF63dB3fF10d614B5c93Eedd6E804D5b26ef")

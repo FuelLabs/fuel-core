@@ -1,28 +1,8 @@
+use crate::config;
 use ethers_core::types::Log;
 use fuel_core_interfaces::model::DepositCoin;
 use fuel_types::{Address, AssetId, Bytes32, Word};
-use tracing::{info, trace};
-
-/* What database tables do we need to have:
-
-Delegation: DelagatorAddress -> Map of Validators->Amounts
-    Map needed when new Delegation or Withdrawal is received so that we know what stake we need to decrease.
-
-Withdrawal: Do same as first part of delegation. if there is delegation before hand, remove it.
-
-Validator Registration:
-Validator Unregistration: Remove it from validator set and from database
-
-* Validator table: ValAddress -> stake,ConsensusAddress
-* Delegator table: DelAddress -> [ValAddress,stake]
-
-DiffTable for every da block encompasing changes for validator and delegator
-* set of delegation changes: OldDelegationSet and new one delegationAddress->Map[ValAddress,Stake]
-* Validator changes consensus_key and registration/unregistration
-
-*/
-
-use crate::config;
+use tracing::info;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssetDepositLog {
@@ -34,14 +14,14 @@ pub struct AssetDepositLog {
     pub deposit_nonce: Bytes32,
 }
 
-impl Into<DepositCoin> for &AssetDepositLog {
-    fn into(self) -> DepositCoin {
-        DepositCoin {
-            owner: self.account,
-            amount: self.amount,
-            asset_id: self.token, // TODO should this be hash of token_id and precision factor
-            nonce: self.deposit_nonce,
-            deposited_da_height: self.block_number as u64,
+impl From<&AssetDepositLog> for DepositCoin {
+    fn from(asset: &AssetDepositLog) -> Self {
+        Self {
+            owner: asset.account,
+            amount: asset.amount,
+            asset_id: asset.token, // TODO should this be hash of token_id and precision factor
+            nonce: asset.deposit_nonce,
+            deposited_da_height: asset.block_number as u64,
             fuel_block_spend: None,
         }
     }
@@ -61,17 +41,17 @@ pub enum EthEventLog {
     },
     // do nothing. maybe used it for stats or info data.
     Deposit {
-        depositor: Address, // It is H160 address for ethereum
+        depositor: Address, // It is 24bytes address from ethereum
         amount: Word,
     },
     // remove all delegations
     Withdrawal {
-        withdrawer: Address, // it is H160 address for ethereum
+        withdrawer: Address, // It is 24bytes address from ethereum
         amount: Word,
     },
     // remove old delegations, delegate to new validators.
     Delegation {
-        delegator: Address, // it is H160 address of deposit
+        delegator: Address, // It is 24bytes address from ethereum
         delegates: Vec<Address>,
         amounts: Vec<u64>,
     },
@@ -79,22 +59,21 @@ pub enum EthEventLog {
         block_root: Bytes32,
         height: Word,
     },
+    Unknown,
 }
 
 /// block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
-/// data is packet as three 256bit values
+/// data is packet as three 256bit/32bytes values
 const ASSET_DEPOSIT_DATA_LEN: usize = 32 + 32 + 32;
 
 impl TryFrom<&Log> for EthEventLog {
     type Error = &'static str;
 
     fn try_from(log: &Log) -> Result<Self, Self::Error> {
-        trace!("Received log:{:?}", log);
         if log.topics.is_empty() {
             return Err("Topic list is empty");
         }
 
-        // TODO extract event name-hashes as static with proper values.
         let log = match log.topics[0] {
             n if n == *config::ETH_ASSET_DEPOSIT => {
                 if log.topics.len() != 4 {
@@ -217,10 +196,10 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::FuelBlockCommited { block_root, height }
             }
-            n if n == *config::ETH_ASSET_WITHDRAWAL => {
+            /*n if n == *config::ETH_ASSET_WITHDRAWAL => {
                 return Err("AssetWithdrawal is not parsed for now")
-            }
-            _ => return Err("Unknown event"),
+            }*/
+            _ => Self::Unknown,
         };
 
         Ok(log)

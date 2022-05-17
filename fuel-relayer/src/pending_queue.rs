@@ -3,43 +3,37 @@ use std::{
     sync::Arc,
 };
 
-use ethers_core::types::H160;
+use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    model::{BlockHeight, SealedFuelBlock},
+    model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
     relayer::{RelayerDb, StakingDiff},
 };
 use fuel_tx::{Address, Bytes32};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::{
     block_commit::BlockCommit,
     log::{AssetDepositLog, EthEventLog},
 };
 
-pub struct PendingEvents {
+pub struct PendingQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized
-    /// it contains every fuel block and its span
-    pending: VecDeque<PendingDiff>,
-    /// This is little bit hacky but because we relate validator staking with fuel commit block and not on eth block
-    /// we need to be sure that we are taking proper order of those transactions
-    /// Revert are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
-    /// I checked this with infura endpoint.
-    bundled_removed_eth_events: Vec<(u64, Vec<EthEventLog>)>,
+    pending: VecDeque<DaBlockDiff>,
+    /// Revert on eth are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
+    /// So when applying multiple block reverts it is good to mind the order.
+    bundled_removed_eth_events: Vec<(DaBlockHeight, Vec<EthEventLog>)>,
     /// finalized fuel block
-    finalized_da_height: u64,
+    finalized_da_height: DaBlockHeight,
     /// Pending block handling
     block_commit: BlockCommit,
 }
 
 /// Pending diff between FuelBlocks
 #[derive(Clone, Debug, Default)]
-pub struct PendingDiff {
-    /// eth block number, It represent height until when we are taking stakes and token deposits.
-    /// It is always monotonic and check on its limits are checked in consensus and in contract.
-    /// Contract needs to check that when feul block is commited that this number is more then
-    /// finality period N.
-    pub da_height: u64,
+pub struct DaBlockDiff {
+    /// da block height
+    pub da_height: DaBlockHeight,
     /// Validator stake deposit and withdrawel.
     pub validators: HashMap<Address, Option<Address>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
@@ -48,7 +42,7 @@ pub struct PendingDiff {
     pub assets: HashMap<Bytes32, AssetDepositLog>,
 }
 
-impl PendingDiff {
+impl DaBlockDiff {
     pub fn new(da_height: u64) -> Self {
         Self {
             da_height,
@@ -59,7 +53,7 @@ impl PendingDiff {
     }
 }
 
-impl PendingEvents {
+impl PendingQueue {
     pub fn new(
         chain_id: u64,
         contract_address: H160,
@@ -80,24 +74,8 @@ impl PendingEvents {
         }
     }
 
-    pub fn len(&self) -> usize {
-        self.pending.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.pending.is_empty()
-    }
-
-    pub fn pop_back(&mut self) -> Option<PendingDiff> {
-        self.pending.pop_back()
-    }
-
     pub fn clear(&mut self) {
         self.pending.clear()
-    }
-
-    pub fn push_back(&mut self, pending: PendingDiff) {
-        self.pending.push_back(pending)
     }
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
@@ -180,15 +158,30 @@ impl PendingEvents {
         self.append_eth_events(event, eth_block).await;
     }
 
+    pub async fn append_eth_logs(&mut self, logs: Vec<Log>) {
+        for eth_event in logs {
+            let fuel_event = EthEventLog::try_from(&eth_event);
+            if let Err(err) = fuel_event {
+                // not formated event from contract
+                // just skip it for now.
+                warn!("Event casting error:{err} for log: {:?}", eth_event);
+                continue;
+            }
+            let fuel_event = fuel_event.unwrap();
+            self.append_eth_events(fuel_event, eth_event.block_number.unwrap().as_u64())
+                .await;
+        }
+    }
+
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
     pub async fn append_eth_events(&mut self, fuel_event: EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
-                self.pending.push_back(PendingDiff::new(da_height))
+                self.pending.push_back(DaBlockDiff::new(da_height))
             }
         } else {
-            self.pending.push_back(PendingDiff::new(da_height))
+            self.pending.push_back(DaBlockDiff::new(da_height))
         }
         let last_diff = self.pending.back_mut().unwrap();
         match fuel_event {
@@ -229,6 +222,7 @@ impl PendingEvents {
                 self.block_commit
                     .block_commited(block_root, (height).into(), da_height.into());
             }
+            EthEventLog::Unknown => (),
         }
     }
 
@@ -297,7 +291,7 @@ mod tests {
         let nonce2 = Bytes32::from([3; 32]);
         let nonce3 = Bytes32::from([4; 32]);
 
-        let mut pending = PendingEvents::new(
+        let mut pending = PendingQueue::new(
             0,
             H160::zero(),
             hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")

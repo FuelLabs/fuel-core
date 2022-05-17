@@ -133,10 +133,9 @@ impl TxPool {
             header: FuelBlockHeader {
                 height: new_block_height,
                 parent_hash: current_hash,
-                .. Default::default()
+                ..Default::default()
             },
             transactions: includable_txs,
-            .. Default::default()
         };
         // immediately execute block
         self.executor

@@ -40,7 +40,7 @@ async fn block_connection_first_5() {
             headers: FuelBlockHeader {
                 height: i.into(),
                 time: Utc.timestamp(i.into(), 0),
-                .. Default::default()
+                ..Default::default()
             },
             transactions: vec![],
         })
@@ -85,7 +85,7 @@ async fn block_connection_last_5() {
             headers: FuelBlockHeader {
                 height: i.into(),
                 time: Utc.timestamp(i.into(), 0),
-                .. Default::default()
+                ..Default::default()
             },
             transactions: vec![],
         })
