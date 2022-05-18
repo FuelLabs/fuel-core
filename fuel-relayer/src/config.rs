@@ -20,6 +20,8 @@ lazy_static::lazy_static! {
     pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872").unwrap();
 }
 
+pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: u64 = 1000;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     /// number of da blocks between after which deposits/stakes/validators become finalized

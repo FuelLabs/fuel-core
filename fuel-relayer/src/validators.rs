@@ -56,7 +56,7 @@ impl Validators {
             std::cmp::Ordering::Greater => {
                 // happens when initiating watch for ganache new blocks, it buffers few old blocks and sends them over.
                 let current_height = self.da_height;
-                error!("curent height {current_height} is greater then new height {da_height}");
+                error!("current height {current_height} is greater then new height {da_height}");
                 return;
             }
         }

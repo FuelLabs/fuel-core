@@ -4,24 +4,21 @@ use std::{
     time::Duration,
 };
 
-use crate::{log::EthEventLog, pending_queue::PendingQueue, validators::Validators, Config};
-use futures::Future;
+use crate::{
+    config, log::EthEventLog, pending_queue::PendingQueue, validators::Validators, Config,
+};
 use tokio::sync::{broadcast, mpsc};
-use tracing::{error, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use anyhow::Error;
 use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
-use ethers_providers::{
-    FilterWatcher, Http, Middleware, Provider, ProviderError, StreamExt, SyncingStatus, Ws,
-};
+use ethers_providers::{FilterWatcher, Middleware, ProviderError, StreamExt, SyncingStatus};
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
+    model::DaBlockHeight,
     relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
 };
-use url::Url;
 
-const REPORT_PROGRESS_EVERY_N_BLOCKS: u64 = 500;
-const PROVIDER_INTERVAL: u64 = 1000;
 pub struct Relayer {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     pending: PendingQueue,
@@ -39,17 +36,42 @@ pub struct Relayer {
     fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
 }
 
+macro_rules! handle_interrupt {
+    ($relayer:ident, $x:expr) => {
+        loop {
+            tokio::select! {
+                biased;
+                inner_fuel_event = $relayer.requests.recv() => {
+                    tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
+                    match inner_fuel_event {
+                        Some(RelayerEvent::Stop) | None =>{
+                            $relayer.status = RelayerStatus::Stop;
+                            break Err(RelayerError::Stopped);
+                        },
+                        Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
+                            let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
+                        },
+                        Some(RelayerEvent::GetStatus { response }) => {
+                            let _ = response.send($relayer.status);
+                        },
+                    }
+                }
+                o = $x => {
+                    break Ok(o)
+                }
+            }
+        }
+    };
+}
+
 impl Relayer {
     pub async fn new(
         config: Config,
+        private_key: &[u8],
         db: Box<dyn RelayerDb>,
         requests: mpsc::Receiver<RelayerEvent>,
         fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
     ) -> Self {
-        let private_key =
-            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
-                .unwrap();
-
         let last_commited_finalized_fuel_height =
             db.get_last_commited_finalized_fuel_height().await;
 
@@ -71,51 +93,6 @@ impl Relayer {
         }
     }
 
-    /// create provider that we use for communication with ethereum.
-    pub async fn provider(uri: &str) -> Result<Provider<Ws>, Error> {
-        let ws = Ws::connect(uri).await?;
-        let provider =
-            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
-        Ok(provider)
-    }
-
-    pub fn provider_http(uri: &str) -> Result<Provider<Http>, Error> {
-        let url = Url::parse(uri).unwrap();
-        let ws = Http::new(url);
-        let provider =
-            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
-        Ok(provider)
-    }
-
-    async fn stop_handle<T: Future>(
-        &mut self,
-        handle: impl Fn() -> T,
-    ) -> Result<T::Output, RelayerError> {
-        loop {
-            tokio::select! {
-                biased;
-                inner_fuel_event = self.requests.recv() => {
-                    tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
-                    match inner_fuel_event {
-                        Some(RelayerEvent::Stop) | None =>{
-                            self.status = RelayerStatus::Stop;
-                            return Err(RelayerError::Stopped);
-                        },
-                        Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
-                            let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
-                        },
-                        Some(RelayerEvent::GetStatus { response }) => {
-                            let _ = response.send(self.status);
-                        },
-                    }
-                }
-                o = handle() => {
-                    return Ok(o)
-                }
-            }
-        }
-    }
-
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
     /// logs watcher with assurence that we didnt miss any events.
     #[tracing::instrument(skip_all)]
@@ -124,7 +101,7 @@ impl Relayer {
         provider: &'a P,
     ) -> Result<
         (
-            u64,
+            DaBlockHeight,
             FilterWatcher<'a, P::Provider, TxHash>,
             FilterWatcher<'a, P::Provider, Log>,
         ),
@@ -137,16 +114,16 @@ impl Relayer {
         // loop and wait for eth client to finish syncing
         loop {
             if matches!(
-                self.stop_handle(|| provider.syncing()).await??,
+                handle_interrupt!(self, provider.syncing())??,
                 SyncingStatus::IsFalse
             ) {
                 break;
             }
             let wait = self.config.eth_initial_sync_refresh();
-            self.stop_handle(|| tokio::time::sleep(wait)).await?;
+            handle_interrupt!(self, tokio::time::sleep(wait))?;
         }
 
-        info!("eth client is synced");
+        info!("da client is synced");
 
         let last_finalized_da_height = std::cmp::max(
             self.config.eth_v2_contract_deployment(),
@@ -170,8 +147,10 @@ impl Relayer {
 
         for start in (last_finalized_da_height..best_finalized_block).step_by(step) {
             let end = min(start + step as u64, best_finalized_block);
-            if (start - last_finalized_da_height) % REPORT_PROGRESS_EVERY_N_BLOCKS == 0 {
-                info!("geting log from:{}", start);
+            if (start - last_finalized_da_height) % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
+                == 0
+            {
+                info!("geting log from height:{}", start);
             }
 
             // TODO  can be parallelized
@@ -179,7 +158,7 @@ impl Relayer {
                 .from_block(start)
                 .to_block(end)
                 .address(ValueOrArray::Array(contracts.clone()));
-            let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
+            let logs = handle_interrupt!(self, provider.get_logs(&filter))??;
             self.pending.append_eth_logs(logs).await;
 
             // we are sending dummy eth block bcs we are sure that it is finalized
@@ -204,12 +183,10 @@ impl Relayer {
             self.pending.clear();
             //sself.pending.push_back(last_diff.clone());
 
-            best_block = self.stop_handle(|| provider.get_block_number()).await??;
+            best_block = handle_interrupt!(self, provider.get_block_number())??;
             // there is not get block latest from ethers so we need to do it in two steps to get hash
 
-            let block = self
-                .stop_handle(|| provider.get_block(best_block))
-                .await??
+            let block = handle_interrupt!(self, provider.get_block(best_block))??
                 .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?;
             let best_block_hash = block.hash.unwrap(); // it is okay to unwrap
 
@@ -219,27 +196,23 @@ impl Relayer {
                 .to_block(best_block)
                 .address(ValueOrArray::Array(contracts.clone()));
 
-            let logs = self.stop_handle(|| provider.get_logs(&filter)).await??;
+            let logs = handle_interrupt!(self, provider.get_logs(&filter))??;
             self.pending.append_eth_logs(logs).await;
 
             // 3. Start listening to eth events
             let eth_log_filter = Filter::new().address(ValueOrArray::Array(contracts.clone()));
             watchers = Some((
-                self.stop_handle(|| provider.watch_blocks()).await??,
-                self.stop_handle(|| provider.watch(&eth_log_filter))
-                    .await??,
+                handle_interrupt!(self, provider.watch_blocks())??,
+                handle_interrupt!(self, provider.watch(&eth_log_filter))??,
             ));
 
-            //let t = watcher.as_mut().expect(()).next().await;
             // sleep for 50ms just to be sure that our watcher is registered and started receiving events
             tokio::time::sleep(Duration::from_millis(50)).await;
 
             // 4. Check if our LastIncludedEthBlock is same as BestEthBlock
             if best_block == provider.get_block_number().await?
                 && best_block_hash
-                    == self
-                        .stop_handle(|| provider.get_block(best_block))
-                        .await??
+                    == handle_interrupt!(self, provider.get_block(best_block))??
                         .ok_or(RelayerError::InitialSyncAskedForUnknownBlock)?
                         .hash
                         .unwrap()
@@ -268,28 +241,37 @@ impl Relayer {
     }
 
     /// Starting point of relayer
-    #[tracing::instrument(name = "relayer", skip_all)]
+    #[tracing::instrument(name = "main", skip_all)]
     pub async fn run<P>(mut self, provider: Arc<P>)
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
         self.validators.load(self.db.as_mut()).await;
 
+        let mut number_of_tries = 10;
         let (best_block, mut da_blocks_watcher, mut logs_watcher) = loop {
-            // initial sync
             match self.initial_sync(&provider).await {
                 Ok(watcher) => break watcher,
                 Err(err) => {
                     if self.status == RelayerStatus::Stop {
                         return;
                     }
-                    error!("Error happened while doing initial sync:{:?}", err);
+                    if number_of_tries == 0 {
+                        self.status = RelayerStatus::Stop;
+                        error!(
+                            "Stopping relayer as there are errors on initial sync: {:?}",
+                            err
+                        );
+                        return;
+                    }
+                    error!("Initial sync error:{:?}", err);
+                    info!("Number of tries:{:?}", number_of_tries);
+                    number_of_tries -= 1;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             };
         };
-
-        info!("Initial syncing finished on block {best_block}. Continue to active sync.",);
-
+        info!("Initial syncing finished on block {best_block}. Continue to passive sync.");
         loop {
             tokio::select! {
                 inner_fuel_event = self.requests.recv() => {
@@ -340,17 +322,13 @@ impl Relayer {
     {
         match new_block {
             NewBlockEvent::Created(created_block) => {
-                trace!("received new fuel block created event");
+                debug!("received new fuel block created event");
                 self.pending
                     .handle_created_fuel_block(&created_block, self.db.as_mut(), provider)
                     .await;
             }
             NewBlockEvent::Included(new_block) => {
-                trace!("received new fuel block included event");
-                // assume that da_height is checked agains parent block.
-
-                // TODO handle lagging here. compare current_db_height and finalized_db_height and send error notification
-                // if we are lagging over data availability event
+                debug!("received new fuel block included event");
                 self.pending.handle_fuel_block(&new_block);
             }
         }

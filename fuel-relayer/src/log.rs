@@ -196,9 +196,6 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::FuelBlockCommited { block_root, height }
             }
-            /*n if n == *config::ETH_ASSET_WITHDRAWAL => {
-                return Err("AssetWithdrawal is not parsed for now")
-            }*/
             _ => Self::Unknown,
         };
 

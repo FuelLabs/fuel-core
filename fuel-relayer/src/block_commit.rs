@@ -85,11 +85,11 @@ impl BlockCommit {
     pub fn new(
         chain_id: u64,
         contract_address: H160,
-        private_key: Vec<u8>,
+        private_key: &[u8],
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
         // it is some random key for now
-        let sk = SigningKey::from_bytes(&private_key).unwrap();
+        let sk = SigningKey::from_bytes(private_key).unwrap();
         let signer: LocalWallet = sk.into();
         let signer = signer.with_chain_id(chain_id);
 
