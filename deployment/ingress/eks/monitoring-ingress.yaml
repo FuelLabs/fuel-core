@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" 
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  rules:
+    - host: ${grafana_ingress_dns}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kube-prometheus-grafana 
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - ${grafana_ingress_dns}
+      secretName: letsencrypt-prod
