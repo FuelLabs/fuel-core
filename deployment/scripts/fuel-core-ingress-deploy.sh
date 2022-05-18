@@ -11,7 +11,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     cd ../../
     git clone -b master https://github.com/FuelLabs/infrastructure.git
-    cd infrastructure/deployment/ingress/${k8s_provider}
+    cd infrastructure/k8s-deployment/ingress/${k8s_provider}
     echo "Deploying fuel-core ingress to ${TF_VAR_eks_cluster_name} ...."
     mv fuel-core-ingress.yaml fuel-core-ingress.template
     envsubst < fuel-core-ingress.template > fuel-core-ingress.yaml

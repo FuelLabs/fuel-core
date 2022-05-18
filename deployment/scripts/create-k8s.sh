@@ -11,7 +11,7 @@ cd ../../
 
 git clone -b master https://github.com/FuelLabs/infrastructure.git
 
-cd infrastructure/deployment/terraform/environments/${k8s_provider}
+cd infrastructure/k8s-deployment/terraform/environments/${k8s_provider}
 
 mv state.tf state.template
 
