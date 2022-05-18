@@ -7,7 +7,11 @@ echo "This script is to delete existing k8s cluster"
 
 set -o allexport && source .env && set +o allexport 
 
-cd ../terraform/environments/${k8s_provider}
+cd ../../
+
+git clone -b master https://github.com/FuelLabs/infrastructure.git
+
+cd infrastructure/deployment/terraform/environments/${k8s_provider}
 
 mv state.tf state.template
 

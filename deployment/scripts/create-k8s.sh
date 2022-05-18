@@ -7,7 +7,11 @@ echo "This script is to create a new or update existing k8s cluster ...."
 
 set -o allexport && source .env && set +o allexport 
 
-cd ../terraform/environments/${k8s_provider}
+cd ../../
+
+git clone -b master https://github.com/FuelLabs/infrastructure.git
+
+cd infrastructure/deployment/terraform/environments/${k8s_provider}
 
 mv state.tf state.template
 
@@ -29,7 +33,7 @@ echo "Now setting up your k8s cluster ..."
 if [ "${k8s_provider}" == "eks" ]; then
     echo "Updating your kube context locally ....."
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
-    cd ../ingress/${k8s_provider}
+    cd ../../../ingress/${k8s_provider}
     echo "Deploying cert-manager helm chart to ${TF_VAR_eks_cluster_name} ...."
     helm repo add jetstack https://charts.jetstack.io
     helm repo update

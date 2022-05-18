@@ -8,7 +8,9 @@ set -o allexport && source .env && set +o allexport
 if [ "${k8s_provider}" == "eks" ]; then
     echo "Updating your kube context locally ...."
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
-    cd ../ingress/${k8s_provider}
+    cd ../../
+    git clone -b master https://github.com/FuelLabs/infrastructure.git
+    cd infrastructure/deployment/ingress/${k8s_provider}
     echo "Deleting fuel-core ingress on ${TF_VAR_eks_cluster_name} ...."
     mv fuel-core-ingress.yaml fuel-core-ingress.template
     envsubst < fuel-core-ingress.template > fuel-core-ingress.yaml
