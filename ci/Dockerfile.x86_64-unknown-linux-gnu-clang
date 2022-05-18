@@ -1,4 +1,7 @@
 FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main
 
-RUN apt-get update && \
-    apt-get install --assume-yes clang-8 libclang-8-dev
+RUN yum -y update && \
+    yum -y install centos-release-scl && \
+    yum-config-manager --enable rhel-server-rhscl-7-rpms && \
+    yum -y install llvm-toolset-7.0 && \
+    scl enable llvm-toolset-7.0 bash
