@@ -1,5 +1,5 @@
 [target.aarch64-unknown-linux-gnu]
-image = "linux-aarch64:latest"
+image = "linux-aarch64"
 
 [target.x86_64-unknown-linux-gnu]
 image = "linux-x86_64"
