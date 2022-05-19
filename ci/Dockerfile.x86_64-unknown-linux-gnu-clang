@@ -1,15 +1,9 @@
 FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main
 
 RUN yum -y update && \
-    yum -y install centos-release-scl wget && \
-    yum-config-manager --enable rhel-server-rhscl-7-rpms && \
+    yum -y install centos-release-scl && \
     yum-config-manager --enable rhel-server-rhscl-8-rpms && \
-    cd /etc/pki/rpm-gpg && \
-    cd - && \
-    wget -O RPM-GPG-KEY-redhat-devel https://www.redhat.com/security/data/a5787476.txt && \
-    rpm --import RPM-GPG-KEY-redhat-devel
-
-RUN yum -y install llvm-toolset-7.0
+    yum -y install llvm-toolset-7.0
 
 COPY centos-entrypoint /usr/bin/entrypoint.sh
 RUN chmod +x /usr/bin/entrypoint.sh
