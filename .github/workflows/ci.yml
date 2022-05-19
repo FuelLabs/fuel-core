@@ -265,11 +265,8 @@ jobs:
             platform: darwin-arm
             target: aarch64-apple-darwin
     steps:
-      - name: Checkout sources
+      - name: Checkout repository
         uses: actions/checkout@v2
-        with:
-          repository: 'FuelLabs/fuel-core'
-          ref: 'cross-compiling'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
