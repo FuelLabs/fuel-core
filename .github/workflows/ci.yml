@@ -230,3 +230,150 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  publish-fuel-core-binary:
+    name: Release fuel-core binaries
+    runs-on: ${{ matrix.job.os }}
+    # Only do this job if publishing a release
+    needs:
+      - lint-toml-files
+      - cargo-verifications
+    if: github.event_name == 'release' && github.event.action == 'published'
+    strategy:
+      matrix:
+        job:
+          - os: ubuntu-latest
+            platform: linux
+            target: x86_64-unknown-linux-gnu
+            cross_image: x86_64-linux-gnu
+          - os: ubuntu-latest
+            platform: linux
+            target: x86_64-unknown-linux-musl
+            cross_image: x86_64-linux-musl
+          - os: ubuntu-latest
+            platform: linux-arm
+            target: aarch64-unknown-linux-gnu
+            cross_image: aarch64-linux-gnu
+          - os: ubuntu-latest
+            platform: linux-arm
+            target: aarch64-unknown-linux-musl
+            cross_image: aarch64-linux-musl
+          - os: macos-latest
+            platform: darwin
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            platform: darwin-arm
+            target: aarch64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+
+      - name: Setup custom cross env ${{ matrix.job.cross_image }}
+        if: matrix.job.cross_image
+        uses: docker/build-push-action@v2
+        with:
+          context: ci
+          file: ci/Dockerfile.${{ matrix.job.target }}-clang
+          tags: ${{ matrix.job.cross_image }}:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install packages (macOS)
+        if: matrix.job.os == 'macos-latest'
+        run: |
+          ci/macos-install-packages.sh
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: ${{ matrix.job.target }}
+          override: true
+
+      - uses: Swatinem/rust-cache@v1
+        with:
+          cache-on-failure: true
+          key: "${{ matrix.job.target }}"
+
+      - name: Install cross
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cross
+          cache-key: "${{ matrix.job.target }}"
+
+      - name: Build fuel-core
+        run: |
+          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+
+      - name: Strip release binary linux x86_64
+        if: matrix.job.platform == 'linux'
+        run: strip "target/${{ matrix.job.target }}/release/fuel-core"
+
+      - name: Strip release binary aarch64-linux-gnu
+        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          docker run --rm -v \
+          "$PWD/target:/target:Z" \
+          aarch64-linux-gnu:latest \
+          aarch64-linux-gnu-strip \
+          /target/aarch64-unknown-linux-gnu/release/fuel-core
+
+      - name: Strip release binary aarch64-linux-musl
+        if: matrix.job.target == 'aarch64-unknown-linux-musl'
+        run: |
+          docker run --rm -v \
+          "$PWD/target:/target:Z" \
+          aarch64-linux-musl:latest \
+          aarch64-linux-musl-strip \
+          /target/aarch64-unknown-linux-musl/release/fuel-core
+
+      - name: Strip release binary mac
+        if: matrix.job.os == 'mac-os'
+        run: strip -x "target/${{ matrix.job.target }}/release/fuel-core"
+
+      - name: Prepare Binary Artifact
+        env:
+          PLATFORM_NAME: ${{ matrix.job.platform }}
+          TARGET: ${{ matrix.job.target }}
+        run: |
+          # trim refs/tags/ prefix
+          FUEL_CORE_VERSION="${GITHUB_REF#refs/tags/}"
+          # optionally trim v from tag prefix
+          FUEL_CORE_VERSION="${FUEL_CORE_VERSION#v}"
+          echo "version is: $FUEL_CORE_VERSION"
+          # setup artifact filename
+          ARTIFACT="fuel-core-$FUEL_CORE_VERSION-${{ env.TARGET }}"
+          ZIP_FILE_NAME="$ARTIFACT.tar.gz"
+          echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
+          # create zip file
+          mkdir -pv "$ARTIFACT"
+          cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
+          tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
+
+      - name: Upload Binary Artifact
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./${{ env.ZIP_FILE_NAME }}
+          asset_name: ${{ env.ZIP_FILE_NAME }}
+          asset_content_type: application/gzip
+
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@v1
+        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
