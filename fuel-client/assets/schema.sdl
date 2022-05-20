@@ -131,6 +131,7 @@ enum CoinStatus {
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
+	salt: Salt!
 }
 type ContractCreated {
 	contract: Contract!

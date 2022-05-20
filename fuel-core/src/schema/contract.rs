@@ -1,6 +1,5 @@
 use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::ContractId;
-use crate::schema::scalars::HexString;
+use crate::schema::scalars::{ContractId, AssetId, U64, HexString, Salt};
 use async_graphql::{Context, Object};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
@@ -26,6 +25,18 @@ impl Contract {
             .into_owned();
         Ok(HexString(contract.into()))
     }
+    async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
+        let contract_id = self.0;
+
+        let db = ctx.data_unchecked::<Database>().clone();
+        let salt = fuel_vm::storage::InterpreterStorage::storage_contract_root(&db, &contract_id)
+            .unwrap()
+            .expect("Contract does not exist");
+
+        let cleaned_salt: Salt = salt.clone().0.into();
+
+        Ok(cleaned_salt)
+    }
 }
 
 #[derive(Default)]
@@ -47,5 +58,36 @@ impl ContractQuery {
         }
         let contract = Contract(id);
         Ok(Some(contract))
+    }
+}
+
+#[derive(Default)]
+pub struct ContractBalanceQuery;
+
+#[Object]
+impl ContractBalanceQuery {
+    async fn contract_balance(
+        &self,
+        ctx: &Context<'_>,
+        contract: ContractId,
+        asset: AssetId,
+    ) -> async_graphql::Result<U64> {
+        let contract_id: fuel_types::ContractId = contract.0;
+
+        let db = ctx.data_unchecked::<Database>().clone();
+
+        let asset_id: fuel_types::AssetId = asset.into();
+
+        let balance = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+            &db,
+            &contract_id,
+            &asset_id,
+        )
+        .unwrap()
+        .expect("Contract does not exist");
+
+        let final_balance: U64 = balance.into();
+
+        Ok(final_balance)
     }
 }
