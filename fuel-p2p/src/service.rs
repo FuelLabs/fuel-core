@@ -192,8 +192,8 @@ mod tests {
             ideal_mesh_size: 6,
             set_request_timeout: None,
             set_connection_keep_alive: None,
-            info_interval: Duration::from_secs(3),
-            identify_interval: Duration::from_secs(5),
+            info_interval: Some(Duration::from_secs(3)),
+            identify_interval: Some(Duration::from_secs(5)),
         }
     }
 

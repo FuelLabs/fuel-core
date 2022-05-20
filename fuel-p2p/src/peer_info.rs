@@ -66,14 +66,20 @@ impl PeerInfoBehaviour {
     pub fn new(local_public_key: PublicKey, config: &P2PConfig) -> Self {
         let identify = {
             let identify_config = IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
-            let identify_config = identify_config.with_interval(config.identify_interval);
-            Identify::new(identify_config)
+            if let Some(interval) = config.identify_interval {
+                Identify::new(identify_config.with_interval(interval))
+            } else {
+                Identify::new(identify_config)
+            }
         };
 
         let ping = {
             let ping_config = PingConfig::new();
-            let ping_config = ping_config.with_interval(config.info_interval);
-            Ping::new(ping_config)
+            if let Some(interval) = config.identify_interval {
+                Ping::new(ping_config.with_interval(interval))
+            } else {
+                Ping::new(ping_config)
+            }
         };
 
         Self {

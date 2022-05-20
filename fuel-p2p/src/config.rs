@@ -36,10 +36,10 @@ pub struct P2PConfig {
     // `PeerInfo` fields
     /// The interval at which identification requests are sent to
     /// the remote on established connections after the first request
-    pub identify_interval: Duration,
+    pub identify_interval: Option<Duration>,
     /// The duration between the last successful outbound or inbound ping
     /// and the next outbound ping
-    pub info_interval: Duration,
+    pub info_interval: Option<Duration>,
 
     // `Gossipsub` related fields
     pub topics: Vec<String>,
