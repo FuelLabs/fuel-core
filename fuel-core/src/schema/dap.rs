@@ -243,7 +243,7 @@ impl DapMutation {
         id: ID,
         breakpoint: self::gql_types::Breakpoint,
     ) -> async_graphql::Result<bool> {
-        trace!("Continue exectuon of VM {:?}", id);
+        trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let vm = locked
@@ -318,7 +318,7 @@ impl DapMutation {
         ctx: &Context<'_>,
         id: ID,
     ) -> async_graphql::Result<self::gql_types::RunResult> {
-        trace!("Continue exectuon of VM {:?}", id);
+        trace!("Continue execution of VM {:?}", id);
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
         let vm = locked
