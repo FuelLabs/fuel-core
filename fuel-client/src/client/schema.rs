@@ -112,6 +112,93 @@ pub struct Memory {
     pub memory: String,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct SetBreakpointArgs {
+    pub id: cynic::Id,
+    pub bp: Breakpoint,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "SetBreakpointArgs"
+)]
+pub struct SetBreakpoint {
+    #[arguments(id = &args.id, breakpoint = &args.bp)]
+    pub set_breakpoint: bool,
+}
+
+#[derive(cynic::InputObject, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Breakpoint {
+    pub contract: ContractId,
+    pub pc: U64,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct SetSingleSteppingArgs {
+    pub id: cynic::Id,
+    pub enable: bool,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "SetSingleSteppingArgs"
+)]
+pub struct SetSingleStepping {
+    #[arguments(id = &args.id, enable = &args.enable)]
+    pub set_single_stepping: bool,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct StartTxArgs {
+    pub id: cynic::Id,
+    pub tx: String,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "StartTxArgs"
+)]
+pub struct StartTx {
+    #[arguments(id = &args.id, tx_json = &args.tx)]
+    pub start_tx: RunResult,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct ContinueTxArgs {
+    pub id: cynic::Id,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Mutation",
+    argument_struct = "ContinueTxArgs"
+)]
+pub struct ContinueTx {
+    #[arguments(id = &args.id)]
+    pub continue_tx: RunResult,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct RunResult {
+    pub breakpoint: Option<OutputBreakpoint>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct OutputBreakpoint {
+    pub contract: ContractId,
+    pub pc: U64,
+}
+
 /// Generic graphql pagination query args
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ConnectionArgs {

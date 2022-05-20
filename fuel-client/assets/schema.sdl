@@ -67,7 +67,7 @@ type BlockEdge {
 scalar BlockId
 input Breakpoint {
 	contract: ContractId!
-	pc: Int!
+	pc: U64!
 }
 scalar Bytes32
 type ChainInfo {
@@ -200,11 +200,8 @@ A separate `Breakpoint` type to be used as an output, as a single
 type cannot act as both input and output type in async-graphql
 """
 type OutputBreakpoint {
-	contract: OutputContractId!
-	pc: Int!
-}
-type OutputContractId {
-	value: [Int!]!
+	contract: ContractId!
+	pc: U64!
 }
 """
 Information about pagination in a connection
