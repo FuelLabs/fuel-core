@@ -274,7 +274,7 @@ impl DapMutation {
 
         let state_ref = vm
             .transact(tx)
-            .map_err(|err| async_graphql::Error::new(format!("Fransaction failed: {err:?}")))?;
+            .map_err(|err| async_graphql::Error::new(format!("Transaction failed: {err:?}")))?;
 
         #[cfg(feature = "debug")]
         {
