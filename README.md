@@ -30,11 +30,11 @@ apt install -y cmake pkg-config build-essential git clang libclang-dev
 ```
 
 ###### Arch
-```bash
+```bash 
 pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
 ```
 
-## Building
+## Building 
 
 We recommend using `xtask` to build fuel-core:
 
