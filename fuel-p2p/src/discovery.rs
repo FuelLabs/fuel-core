@@ -17,7 +17,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     io,
     task::{Context, Poll},
     time::Duration,
@@ -47,6 +47,9 @@ pub struct DiscoveryBehaviour {
     /// List of bootstrap nodes and their addresses
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
 
+    /// Track the connected peers
+    connected_peers: HashSet<PeerId>,
+
     /// Events to report to the swarm
     events: VecDeque<DiscoveryEvent>,
 
@@ -63,11 +66,8 @@ pub struct DiscoveryBehaviour {
     /// The Duration for the next random walk, after the current one ends
     duration_to_next_kad: Duration,
 
-    /// Track the count of peers connected
-    connected_peers_count: u64,
-
     /// Maximum amount of allowed peers
-    max_peers_connected: u64,
+    max_peers_connected: usize,
 
     /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
     /// except for the ones stored in `bootstrap_nodes`.
@@ -91,7 +91,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         self.kademlia.new_handler()
     }
 
-    // receives events from KademliaHandler and pass it down to kademlia
+    // receive events from KademliaHandler and pass it down to kademlia
     fn inject_event(
         &mut self,
         peer_id: PeerId,
@@ -114,7 +114,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         // if random walk is enabled poll the stream that will fire when random walk is scheduled
         if let Some(next_kad_random_query) = self.next_kad_random_walk.as_mut() {
             while next_kad_random_query.poll_unpin(cx).is_ready() {
-                if self.connected_peers_count < self.max_peers_connected {
+                if self.connected_peers.len() < self.max_peers_connected {
                     let random_peer_id = PeerId::random();
                     self.kademlia.get_closest_peers(random_peer_id);
                 }
@@ -174,7 +174,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 NetworkBehaviourAction::GenerateEvent(MdnsEvent::Discovered(list)) => {
                     // inform kademlia of newly discovered local peers
                     // only if there aren't enough peers already connected
-                    if self.connected_peers_count < self.max_peers_connected {
+                    if self.connected_peers.len() < self.max_peers_connected {
                         for (peer_id, multiaddr) in list {
                             self.kademlia.add_address(&peer_id, multiaddr);
                         }
@@ -253,21 +253,22 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
-        self.connected_peers_count += 1;
+        if self.connected_peers.insert(*peer_id) {
+            self.kademlia.inject_connection_established(
+                peer_id,
+                connection_id,
+                endpoint,
+                failed_addresses,
+                other_established,
+            );
 
-        self.kademlia.inject_connection_established(
-            peer_id,
-            connection_id,
-            endpoint,
-            failed_addresses,
-            other_established,
-        );
+            let addresses = self.addresses_of_peer(peer_id);
 
-        let addresses = self.addresses_of_peer(peer_id);
+            self.events
+                .push_back(DiscoveryEvent::Connected(*peer_id, addresses));
 
-        self.events
-            .push_back(DiscoveryEvent::Connected(*peer_id, addresses));
-        trace!("Connected to a peer {:?}", peer_id);
+            trace!("Connected to a peer {:?}", peer_id);
+        }
     }
 
     fn inject_connection_closed(
@@ -278,17 +279,20 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
         other_established: usize,
     ) {
-        self.connected_peers_count -= 1;
-        self.kademlia.inject_connection_closed(
-            peer_id,
-            connection_id,
-            connection_point,
-            handler,
-            other_established,
-        );
+        if self.connected_peers.remove(peer_id) {
+            self.kademlia.inject_connection_closed(
+                peer_id,
+                connection_id,
+                connection_point,
+                handler,
+                other_established,
+            );
 
-        self.events
-            .push_back(DiscoveryEvent::Disconnected(*peer_id));
+            self.events
+                .push_back(DiscoveryEvent::Disconnected(*peer_id));
+
+            trace!("Disconnected from {:?}", peer_id);
+        }
     }
 
     fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
