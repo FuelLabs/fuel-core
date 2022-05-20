@@ -75,7 +75,7 @@ impl PeerInfoBehaviour {
 
         let ping = {
             let ping_config = PingConfig::new();
-            if let Some(interval) = config.identify_interval {
+            if let Some(interval) = config.info_interval {
                 Ping::new(ping_config.with_interval(interval))
             } else {
                 Ping::new(ping_config)
