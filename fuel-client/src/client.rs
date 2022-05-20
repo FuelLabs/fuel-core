@@ -157,13 +157,14 @@ impl FuelClient {
     pub async fn set_breakpoint(
         &self,
         session_id: &str,
-        bp: fuel_vm::prelude::Breakpoint,
+        contract: fuel_types::ContractId,
+        pc: u64,
     ) -> io::Result<()> {
         let operation = SetBreakpoint::build(SetBreakpointArgs {
             id: Id::new(session_id),
             bp: schema::Breakpoint {
-                contract: crate::client::schema::primitives::ContractId::from(*bp.contract()),
-                pc: U64(bp.pc()),
+                contract: contract.into(),
+                pc: U64(pc),
             },
         });
 

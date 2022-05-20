@@ -1,3 +1,5 @@
+#![cfg(feature = "debug")]
+
 use fuel_core::service::{Config, FuelService};
 use fuel_gql_client::client::FuelClient;
 use fuel_vm::prelude::*;
@@ -14,7 +16,7 @@ async fn debugger() {
     assert_eq!(0x00, register);
 
     client
-        .set_breakpoint(session_id, Breakpoint::script(0))
+        .set_breakpoint(session_id, ContractId::zeroed(), 0)
         .await
         .unwrap();
 
