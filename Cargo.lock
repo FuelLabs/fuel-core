@@ -2209,6 +2209,7 @@ dependencies = [
  "insta",
  "itertools",
  "rand 0.8.5",
+ "serde_json",
  "tokio",
 ]
 
