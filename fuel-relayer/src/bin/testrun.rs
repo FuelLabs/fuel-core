@@ -62,9 +62,7 @@ async fn main() -> Result<(), anyhow::Error> {
         },
         consensus: FuelBlockConsensus {
             required_stake: 10,
-            validators: Vec::new(),
-            stakes: Vec::new(),
-            signatures: Vec::new(),
+            ..Default::default()
         },
     };
 

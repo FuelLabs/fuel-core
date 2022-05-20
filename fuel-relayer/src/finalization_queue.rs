@@ -13,11 +13,11 @@ use fuel_tx::{Address, Bytes32};
 use tracing::{error, info, warn};
 
 use crate::{
-    block_commit::PendingBlocks,
+    pending_blocks::PendingBlocks,
     log::{AssetDepositLog, EthEventLog},
 };
 
-pub struct PendingQueue {
+pub struct FInalizationQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     pending: VecDeque<DaBlockDiff>,
     /// Revert on eth are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
@@ -26,7 +26,7 @@ pub struct PendingQueue {
     /// finalized fuel block
     finalized_da_height: DaBlockHeight,
     /// Pending block handling
-    block_commit: PendingBlocks,
+    pending_blocks: PendingBlocks,
 }
 
 /// Pending diff between FuelBlocks
@@ -53,21 +53,21 @@ impl DaBlockDiff {
     }
 }
 
-impl PendingQueue {
+impl FInalizationQueue {
     pub fn new(
         chain_id: u64,
         contract_address: H160,
         private_key: &[u8],
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
-        let block_commit = PendingBlocks::new(
+        let pending_blocks = PendingBlocks::new(
             chain_id,
             contract_address,
             private_key,
             last_commited_finalized_fuel_height,
         );
         Self {
-            block_commit,
+            pending_blocks,
             pending: VecDeque::new(),
             bundled_removed_eth_events: Vec::new(),
             finalized_da_height: 0,
@@ -98,12 +98,12 @@ impl PendingQueue {
         }
     }
 
-    /// propagate new fuel block to block_commit
+    /// propagate new fuel block to pending_blocks
     pub fn handle_fuel_block(&mut self, block: &Arc<SealedFuelBlock>) {
-        self.block_commit.set_chain_height(block.header.height)
+        self.pending_blocks.set_chain_height(block.header.height)
     }
 
-    /// propagate new created fuel block to block_commit
+    /// propagate new created fuel block to pending_blocks
     pub async fn handle_created_fuel_block<P>(
         &mut self,
         block: &Arc<SealedFuelBlock>,
@@ -112,8 +112,8 @@ impl PendingQueue {
     ) where
         P: Middleware + 'static,
     {
-        self.block_commit
-            .commit(block.clone(), db, provider)
+        self.pending_blocks
+            .commit(block.header.height, db, provider)
             .await;
     }
 
@@ -141,7 +141,7 @@ impl PendingQueue {
                 // mark all removed pending block commits as reverted.
                 for event in events {
                     if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.block_commit.handle_block_commit(
+                        self.pending_blocks.handle_block_commit(
                             block_root,
                             height.into(),
                             da_height.into(),
@@ -220,7 +220,7 @@ impl PendingQueue {
                 last_diff.validators.insert(staking_key, None);
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
-                self.block_commit.handle_block_commit(
+                self.pending_blocks.handle_block_commit(
                     block_root,
                     (height).into(),
                     da_height.into(),
@@ -272,7 +272,7 @@ impl PendingQueue {
         }
 
         let last_commited_fin_fuel_height = self
-            .block_commit
+            .pending_blocks
             .handle_da_finalization(finalized_da_height.into());
 
         db.set_last_commited_finalized_fuel_height(last_commited_fin_fuel_height)
@@ -296,7 +296,7 @@ mod tests {
         let nonce2 = Bytes32::from([3; 32]);
         let nonce3 = Bytes32::from([4; 32]);
 
-        let mut pending = PendingQueue::new(
+        let mut pending = FInalizationQueue::new(
             0,
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")

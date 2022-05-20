@@ -65,6 +65,7 @@ impl From<KvStoreError> for InterpreterError {
 pub mod helpers {
 
     use async_trait::async_trait;
+    use chrono::Utc;
     use lazy_static::lazy_static;
     use parking_lot::Mutex;
 
@@ -125,7 +126,10 @@ pub mod helpers {
     use std::collections::{HashMap, HashSet};
 
     use crate::{
-        model::{BlockHeight, Coin, CoinStatus, DepositCoin, SealedFuelBlock},
+        model::{
+            BlockHeight, Coin, CoinStatus, DepositCoin, FuelBlock, FuelBlockConsensus,
+            FuelBlockHeader, SealedFuelBlock,
+        },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
     };
@@ -589,6 +593,30 @@ pub mod helpers {
                 }
             }
 
+            let block = SealedFuelBlock {
+                block: FuelBlock {
+                    header: FuelBlockHeader {
+                        number: BlockHeight::from(2u64),
+                        time: Utc::now(),
+                        ..Default::default()
+                    },
+                    transactions: Vec::new(),
+                },
+                consensus: FuelBlockConsensus {
+                    required_stake: 10,
+                    ..Default::default()
+                },
+            };
+
+            let mut block1 = block.clone();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = block.clone();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = block.clone();
+            block3.block.header.height = 3u64.into();
+            let mut block4 = block.clone();
+            block4.block.header.height = 4u64.into();
+
             let data = Data {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
@@ -598,7 +626,12 @@ pub mod helpers {
                 chain_height: BlockHeight::from(0u64),
                 current_validators_height: 0,
                 finalized_da_height: 0,
-                sealed_blocks: HashMap::new(),
+                sealed_blocks: HashMap::from([
+                    (1u64.into(), Arc::new(block1)),
+                    (2u64.into(), Arc::new(block2)),
+                    (3u64.into(), Arc::new(block3)),
+                    (4u64.into(), Arc::new(block4)),
+                ]),
                 current_validators: HashMap::new(),
                 staking_diffs: BTreeMap::new(),
                 delegator_index: BTreeMap::new(),

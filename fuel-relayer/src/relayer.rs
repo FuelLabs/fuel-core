@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    config, log::EthEventLog, pending_queue::PendingQueue, validators::Validators, Config,
+    config, log::EthEventLog, finalization_queue::FInalizationQueue, validators::Validators, Config,
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, trace, warn};
@@ -21,7 +21,7 @@ use fuel_core_interfaces::{
 
 pub struct Relayer {
     /// Pending stakes/assets/withdrawals. Before they are finalized
-    pending: PendingQueue,
+    pending: FInalizationQueue,
     /// Current validator set
     validators: Validators,
     /// db connector to apply stake and token deposit
@@ -75,7 +75,7 @@ impl Relayer {
         let last_commited_finalized_fuel_height =
             db.get_last_commited_finalized_fuel_height().await;
 
-        let pending = PendingQueue::new(
+        let pending = FInalizationQueue::new(
             config.eth_chain_id(),
             config.eth_v2_block_commit_contract(),
             private_key,
