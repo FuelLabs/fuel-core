@@ -192,6 +192,8 @@ mod tests {
             ideal_mesh_size: 6,
             set_request_timeout: None,
             set_connection_keep_alive: None,
+            info_interval: Duration::from_secs(5),
+            identify_interval: Duration::from_secs(15),
         }
     }
 
@@ -513,84 +515,6 @@ mod tests {
                 },
                 // will not receive the request at all
                 _ = node_b.next_event() => {}
-            };
-        }
-    }
-
-    /// This test is mainly our 'sanity check' for other tests.
-    /// A peer could drop a connection while performing the tests
-    /// yet we can rely on the connection being re-established and continue the tests.
-    /// 1. Two Nodes A & B connect to each other
-    /// 2. Node A while receiving PeerInfoUpdated(Node_B) disconnects from Node B
-    /// 3. Since we didn't ban the peer - nor do we have any other peers in the network
-    /// Node A and Node B will establish the connection again.
-    /// 4. Node A receives PeerInfoUpdated(Node_B) again -
-    /// signaling it can continue executing test logic where it stopped previously.
-    #[tokio::test]
-    async fn peer_reconnects_after_disconnect() {
-        // Node A
-        let mut p2p_config = build_p2p_config();
-        p2p_config.tcp_port = 4014;
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
-
-        let node_a_address = match node_a.next_event().await {
-            FuelP2PEvent::NewListenAddr(address) => Some(address),
-            _ => None,
-        };
-
-        // Node B
-        let mut p2p_config = build_p2p_config();
-        p2p_config.tcp_port = 4015;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
-        let mut node_b = build_fuel_p2p_service(p2p_config).await;
-
-        enum ConnectionFlow {
-            Initial,
-            Connected,
-            Disconnecting,
-            Disconnected,
-            ConnectedAgain,
-        }
-
-        let mut conn_flow = ConnectionFlow::Initial;
-
-        loop {
-            tokio::select! {
-                event_a = node_a.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
-                        match conn_flow {
-                            ConnectionFlow::Connected => {
-                                // 1. PeerInfoUpdated happens for the 1st time - we drop the connection
-                                let _ = node_a.swarm.disconnect_peer_id(peer_id);
-                                conn_flow = ConnectionFlow::Disconnecting;
-                            },
-                            ConnectionFlow::ConnectedAgain => {
-                                // 2. PeerInfoUpdated happens for the 2nd time - we are once again connected
-                                assert!(node_a.swarm.is_connected(&peer_id));
-                                break;
-                            },
-                            _ => {}
-                        }
-                    }
-                },
-                event_b = node_b.next_event() => {
-                    if let FuelP2PEvent::Behaviour(event) = event_b {
-                        match event {
-                            FuelBehaviourEvent::PeerConnected(_) => {
-                                match conn_flow {
-                                    ConnectionFlow::Initial => conn_flow = ConnectionFlow::Connected,
-                                    ConnectionFlow::Disconnected => conn_flow = ConnectionFlow::ConnectedAgain,
-                                    _ => {}
-                                }
-                            }
-                            FuelBehaviourEvent::PeerDisconnected(_) => {
-                                // conn_flow should be ConnectionFlow::Disconnecting
-                                // but the disconnect might happen at any point so we handle any case
-                                conn_flow = ConnectionFlow::Disconnected;
-                            },
-                            _ => {}
-                    }
-                }}
             };
         }
     }
