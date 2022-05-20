@@ -355,46 +355,48 @@ impl DapMutation {
 
 mod gql_types {
     //! GraphQL type wrappers
+    use std::str::FromStr;
+
     use async_graphql::*;
 
-    use fuel_types::Word;
+    use crate::schema::scalars::U64;
+
     #[cfg(feature = "debug")]
     use fuel_vm::prelude::Breakpoint as FuelBreakpoint;
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, InputObject)]
-    pub struct ContractId {
-        value: [u8; 32],
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct ContractId(fuel_types::ContractId);
+
+    #[Scalar]
+    impl ScalarType for ContractId {
+        fn parse(value: Value) -> InputValueResult<Self> {
+            if let Value::String(value) = &value {
+                Ok(Self(fuel_types::ContractId::from_str(value)?))
+            } else {
+                Err(InputValueError::expected_type(value))
+            }
+        }
+
+        fn to_value(&self) -> Value {
+            Value::String(self.0.to_string())
+        }
     }
+
     impl From<fuel_types::ContractId> for ContractId {
         fn from(id: fuel_types::ContractId) -> Self {
-            Self { value: *id }
+            Self(id)
         }
     }
     impl From<ContractId> for fuel_types::ContractId {
         fn from(id: ContractId) -> Self {
-            Self::from(id.value)
-        }
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SimpleObject)]
-    pub struct OutputContractId {
-        value: [u8; 32],
-    }
-    impl From<fuel_types::ContractId> for OutputContractId {
-        fn from(id: fuel_types::ContractId) -> Self {
-            Self { value: *id }
-        }
-    }
-    impl From<OutputContractId> for fuel_types::ContractId {
-        fn from(id: OutputContractId) -> Self {
-            Self::from(id.value)
+            id.0
         }
     }
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
         contract: ContractId,
-        pc: Word,
+        pc: U64,
     }
 
     #[cfg(feature = "debug")]
@@ -402,7 +404,7 @@ mod gql_types {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
                 contract: (*bp.contract()).into(),
-                pc: bp.pc(),
+                pc: U64(bp.pc()),
             }
         }
     }
@@ -410,7 +412,7 @@ mod gql_types {
     #[cfg(feature = "debug")]
     impl From<Breakpoint> for FuelBreakpoint {
         fn from(bp: Breakpoint) -> Self {
-            Self::new(bp.contract.into(), bp.pc)
+            Self::new(bp.contract.into(), bp.pc.0)
         }
     }
 
@@ -418,8 +420,8 @@ mod gql_types {
     /// type cannot act as both input and output type in async-graphql
     #[derive(Debug, Clone, Copy, SimpleObject)]
     pub struct OutputBreakpoint {
-        contract: OutputContractId,
-        pc: Word,
+        contract: ContractId,
+        pc: U64,
     }
 
     #[cfg(feature = "debug")]
@@ -427,15 +429,8 @@ mod gql_types {
         fn from(bp: &FuelBreakpoint) -> Self {
             Self {
                 contract: (*bp.contract()).into(),
-                pc: bp.pc(),
+                pc: U64(bp.pc()),
             }
-        }
-    }
-
-    #[cfg(feature = "debug")]
-    impl From<OutputBreakpoint> for FuelBreakpoint {
-        fn from(bp: OutputBreakpoint) -> Self {
-            Self::new(bp.contract.into(), bp.pc)
         }
     }
 
