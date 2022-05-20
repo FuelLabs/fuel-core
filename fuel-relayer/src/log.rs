@@ -75,14 +75,13 @@ impl TryFrom<&Log> for EthEventLog {
         }
 
         let log = match log.topics[0] {
-            n if n == *config::ETH_ASSET_DEPOSIT => {
+            n if n == *config::ETH_LOG_ASSET_DEPOSIT => {
                 if log.topics.len() != 4 {
                     return Err("Malformed topics for AssetDeposit");
                 }
                 let account = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
                 let token = unsafe { AssetId::from_slice_unchecked(log.topics[2].as_ref()) };
 
-                // TODO check to minimize this into something resonable as in u64.
                 if !log.topics[3][..24].iter().all(|&b| b == 0) {
                     return Err("Malformed amount for AssetDeposit. Amount bigger then u64");
                 }
@@ -122,7 +121,7 @@ impl TryFrom<&Log> for EthEventLog {
                     deposit_nonce,
                 })
             }
-            n if n == *config::ETH_VALIDATOR_REGISTRATION => {
+            n if n == *config::ETH_LOG_VALIDATOR_REGISTRATION => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorRegistration");
                 }
@@ -135,7 +134,7 @@ impl TryFrom<&Log> for EthEventLog {
                     consensus_key,
                 }
             }
-            n if n == *config::ETH_VALIDATOR_UNREGISTRATION => {
+            n if n == *config::ETH_LOG_VALIDATOR_UNREGISTRATION => {
                 if log.topics.len() != 2 {
                     return Err("Malformed topics for ValidatorUnregistration");
                 }
@@ -143,7 +142,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::ValidatorUnregistration { staking_key }
             }
-            n if n == *config::ETH_DEPOSIT => {
+            n if n == *config::ETH_LOG_DEPOSIT => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorRegistration");
                 }
@@ -156,7 +155,7 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::Deposit { depositor, amount }
             }
-            n if n == *config::ETH_WITHDRAWAL => {
+            n if n == *config::ETH_LOG_WITHDRAWAL => {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for ValidatorRegistration");
                 }
@@ -169,13 +168,13 @@ impl TryFrom<&Log> for EthEventLog {
 
                 Self::Withdrawal { withdrawer, amount }
             }
-            n if n == *config::ETH_DELEGATION => {
-                // TODO
+            n if n == *config::ETH_LOG_DELEGATION => {
                 if log.topics.len() != 2 {
                     return Err("Malformed topics for ValidatorRegistration");
                 }
+
+                // Safety: Casting between same sized structures. It is okay not to check size.
                 let delegator = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
-                //let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
 
                 Self::Delegation {
                     delegator,
@@ -187,7 +186,6 @@ impl TryFrom<&Log> for EthEventLog {
                 if log.topics.len() != 3 {
                     return Err("Malformed topics for FuelBlockCommited");
                 }
-                // Safety: Casting between same sized structures. It is okay not to check size.
                 let block_root = unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
 
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
@@ -222,7 +220,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_VALIDATOR_REGISTRATION,
+                *config::ETH_LOG_VALIDATOR_REGISTRATION,
                 H256::from_slice(staking_key.as_ref()),
                 H256::from_slice(consensus_key.as_ref()),
             ],
@@ -234,7 +232,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_VALIDATOR_UNREGISTRATION,
+                *config::ETH_LOG_VALIDATOR_UNREGISTRATION,
                 H256::from_slice(staking_key.as_ref()),
             ],
             Bytes::new(),
@@ -245,7 +243,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_DEPOSIT,
+                *config::ETH_LOG_DEPOSIT,
                 H256::from_slice(depositor.as_ref()),
                 H256::from_low_u64_be(amount),
             ],
@@ -257,7 +255,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_WITHDRAWAL,
+                *config::ETH_LOG_WITHDRAWAL,
                 H256::from_slice(withdrawer.as_ref()),
                 H256::from_low_u64_be(amount),
             ],
@@ -274,7 +272,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_DELEGATION,
+                *config::ETH_LOG_DELEGATION,
                 H256::from_slice(delegator.as_ref()),
                 //TODO
             ],
@@ -303,7 +301,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_ASSET_DEPOSIT,
+                *config::ETH_LOG_ASSET_DEPOSIT,
                 H256::from_slice(account.as_ref()),
                 H256::from_slice(token.as_ref()),
                 H256::from_low_u64_be(amount),

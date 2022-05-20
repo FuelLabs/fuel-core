@@ -14,7 +14,7 @@ use ethers_providers::Middleware;
 use fuel_tx::Bytes32;
 
 use fuel_core_interfaces::{
-    model::{BlockHeight, SealedFuelBlock},
+    model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
     relayer::RelayerDb,
 };
 
@@ -24,7 +24,7 @@ use tracing::{debug, error, info, warn};
 
 abigen!(ContractAbi, "abi/fuel.json");
 
-pub struct BlockCommit {
+pub struct PendingBlocks {
     signer: LocalWallet,
     contract_address: H160,
     // Pending block commits seen on DA layer and waiting to be finalized
@@ -35,16 +35,16 @@ pub struct BlockCommit {
     last_commited_finalized_fuel_height: BlockHeight,
 }
 
-pub struct PendingBlock {
+struct PendingBlock {
     pub reverted: bool,
-    pub da_height: BlockHeight,
+    pub da_height: DaBlockHeight,
     pub block_height: BlockHeight,
     pub block_root: Bytes32, //is this block hash?
 }
 
 impl PendingBlock {
     pub fn new_commited_block(
-        da_height: BlockHeight,
+        da_height: DaBlockHeight,
         block_height: BlockHeight,
         block_root: Bytes32,
     ) -> Self {
@@ -80,7 +80,7 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
     block
 }
 
-impl BlockCommit {
+impl PendingBlocks {
     /// Pending blocks at least finalization number of blocks.
     pub fn new(
         chain_id: u64,
@@ -102,14 +102,15 @@ impl BlockCommit {
         }
     }
 
-    pub fn last_commited_finalized_fuel_height(&self) -> BlockHeight {
-        self.last_commited_finalized_fuel_height
+    /// new sealed fuel block received update chain_height
+    pub fn set_chain_height(&mut self, height: BlockHeight) {
+        self.chain_height = height;
     }
 
     /// Discard block from pending queue that got finalized.
     /// return last finalized block commit hash and height if there is one.
-    pub fn new_da_block(&mut self, finalized_da_height: BlockHeight) {
-        // iterate over all pending blocks and finalize some
+    pub fn handle_da_finalization(&mut self, finalized_da_height: DaBlockHeight) -> BlockHeight {
+        // iterate over all pending blocks and finalize some\
         self.pending_block_commits.retain(|block| {
             if block.da_height <= finalized_da_height {
                 self.last_commited_finalized_fuel_height = BlockHeight::from(max(
@@ -122,108 +123,25 @@ impl BlockCommit {
                 true
             }
         });
+        self.last_commited_finalized_fuel_height
     }
 
-    /// new sealed fuel block received update chain_height
-    pub fn set_chain_height(&mut self, height: BlockHeight) {
-        self.chain_height = height;
-    }
-
-    /// Handle commited block from contract.
-    pub fn block_commited(
+    pub fn handle_block_commit(
         &mut self,
         block_root: Bytes32,
         height: BlockHeight,
-        da_height: BlockHeight,
+        da_height: DaBlockHeight,
+        is_reverted: bool,
     ) {
-        if self.pending_block_commits.is_empty() {
-            // no pending commits, add one
-            self.pending_block_commits
-                .push_front(PendingBlock::new_commited_block(
-                    da_height, height, block_root,
-                ));
-            return;
-        }
-
-        let front_height = self.pending_block_commits.front().unwrap().block_height;
-        let back_height = self.pending_block_commits.back().unwrap().block_height;
-
-        if height < back_height {
-            // This case means that we somehow skipped block commit and didnt receive it in expected order.
-            panic!(
-                "Commited block {} is lower then current lowest pending block {}.",
-                height, back_height
-            );
-        } else if height > front_height {
-            // check if we are lagging agains da layer
-            if self.chain_height < height {
-                error!(
-                    "Our chain height: {} is lower then da layer height {}",
-                    self.chain_height, height
-                );
-            }
-            // new block received. Happy path
-            if height == front_height + BlockHeight::from(1u64) {
-                self.pending_block_commits
-                    .push_front(PendingBlock::new_commited_block(
-                        da_height, height, block_root,
-                    ));
-            } else {
-                panic!("Something unexpected happened. New Fuel commits are always increased by one, it cants jump numbers ")
-            }
+        if is_reverted {
+            self.handle_block_commit_revert(block_root, height, da_height);
         } else {
-            // happens if reverted commit is again visible
-            // iterate over pending blocks and set reverted commit as commited.
-            for pending in self.pending_block_commits.iter_mut() {
-                if pending.block_height == height {
-                    pending.da_height = da_height;
-                    pending.reverted = false;
-                    pending.block_height = height;
-                    pending.block_root = block_root;
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Handle revert of block commit from contract.
-    pub fn block_commit_reverted(
-        &mut self,
-        block_root: Bytes32,
-        height: BlockHeight,
-        da_height: BlockHeight,
-    ) {
-        // re-add block from bundle to be send to contract
-        // handle commited block from contract, remove it from bundle
-        if self.pending_block_commits.is_empty() {
-            // nothing to revert
-            return;
-        }
-
-        let front_height = self.pending_block_commits.front().unwrap().block_height;
-        let back_height = self.pending_block_commits.back().unwrap().block_height;
-
-        if height < back_height {
-            // ignore block that are not inside pending queue.
-            error!("All pending block commits should be present in block queue. height:{} last_known:{}"
-            ,height,back_height);
-        } else if height > front_height {
-            error!("Something unexpected happened.Reverted block commits are not something found in the future.");
-        } else {
-            // happy path. iterate over pending blocks and set it as commited.
-            for pending in self.pending_block_commits.iter_mut() {
-                if pending.block_height > height {
-                    pending.da_height = da_height;
-                    pending.reverted = true;
-                    pending.block_height = height;
-                    pending.block_root = block_root;
-                }
-            }
+            self.handle_block_commit_append(block_root, height, da_height);
         }
     }
 
     /// When new block is created by this client, bundle all not commited blocks and send it to contract.
-    pub async fn created_block<P>(
+    pub async fn commit<P>(
         &mut self,
         block: Arc<SealedFuelBlock>,
         db: &mut dyn RelayerDb,
@@ -266,7 +184,7 @@ impl BlockCommit {
                 "Bundle send pair {}:{} of blocks:",
                 parent.header.height, block.header.height
             );
-            if let Err(error) = self.commit_fuel_block(&parent, &block, provider).await {
+            if let Err(error) = self.call_contract(&parent, &block, provider).await {
                 warn!("Commit fuel block failed: {}", error);
                 break;
             }
@@ -274,7 +192,107 @@ impl BlockCommit {
         }
     }
 
-    pub async fn commit_fuel_block<P>(
+    /// Handle commited block from contract.
+    fn handle_block_commit_append(
+        &mut self,
+        block_root: Bytes32,
+        height: BlockHeight,
+        da_height: DaBlockHeight,
+    ) {
+        if self.pending_block_commits.is_empty() {
+            let lcffh = self.last_commited_finalized_fuel_height;
+            if lcffh + 1u64.into() != height {
+                error!("We have missing logs from LCFFH {lcffh} to new height {height}")
+            }
+            // no pending commits, add one
+            self.pending_block_commits
+                .push_front(PendingBlock::new_commited_block(
+                    da_height, height, block_root,
+                ));
+            return;
+        }
+
+        let front_height = self.pending_block_commits.front().unwrap().block_height;
+        let back_height = self.pending_block_commits.back().unwrap().block_height;
+
+        if height < back_height {
+            // This case means that we somehow skipped block commit and didnt receive it in expected order.
+            error!(
+                "Commited block {height} is lower then current lowest pending block {back_height}."
+            );
+            return;
+        } else if height > front_height {
+            // check if we are lagging against da layer
+            if self.chain_height < height {
+                error!(
+                    "Our chain height: {} is lower then da layer height {}",
+                    self.chain_height, height
+                );
+            }
+            // new block received. Happy path
+            if height == front_height + BlockHeight::from(1u64) {
+                self.pending_block_commits
+                    .push_front(PendingBlock::new_commited_block(
+                        da_height, height, block_root,
+                    ));
+            } else {
+                error!("Commited block height {height} should be only increased by one from current height {front_height}.");
+                return;
+            }
+        } else {
+            // happens if reverted commit is again visible
+            // iterate over pending blocks and set reverted commit as commited.
+            for pending in self.pending_block_commits.iter_mut() {
+                if pending.block_height == height {
+                    if pending.reverted != true {
+                        error!("We received block {height} commit that was not reverted")
+                    }
+                    pending.da_height = da_height;
+                    pending.reverted = false;
+                    pending.block_height = height;
+                    pending.block_root = block_root;
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Handle revert of block commit from contract.
+    fn handle_block_commit_revert(
+        &mut self,
+        block_root: Bytes32,
+        height: BlockHeight,
+        da_height: DaBlockHeight,
+    ) {
+        if self.pending_block_commits.is_empty() {
+            // nothing to revert
+            error!("Revert for height {height} received while pending block queue is empty");
+            return;
+        }
+
+        let front_height = self.pending_block_commits.front().unwrap().block_height;
+        let back_height = self.pending_block_commits.back().unwrap().block_height;
+
+        if height < back_height {
+            // ignore block that are not inside pending queue.
+            error!("All pending block commits should be present in block queue. height:{} last_known:{}"
+            ,height,back_height);
+        } else if height > front_height {
+            error!("Something unexpected happened.Reverted block commits are not something found in the future.");
+        } else {
+            // happy path. iterate over pending blocks and set it as commited.
+            for pending in self.pending_block_commits.iter_mut() {
+                if pending.block_height > height {
+                    pending.da_height = da_height;
+                    pending.reverted = true;
+                    pending.block_height = height;
+                    pending.block_root = block_root;
+                }
+            }
+        }
+    }
+
+    async fn call_contract<P>(
         &self,
         parent: &SealedFuelBlock,
         block: &SealedFuelBlock,
@@ -363,6 +381,107 @@ impl BlockCommit {
 #[cfg(test)]
 mod tests {
 
+    use rand::{prelude::StdRng, Rng, SeedableRng};
+
+    use super::*;
+    use tracing_test::traced_test;
+
+    pub fn block_commit(last_commited_fuel_block: BlockHeight) -> PendingBlocks {
+        let private_key =
+            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
+                .unwrap();
+        PendingBlocks::new(0, H160::zero(), &private_key, last_commited_fuel_block)
+    }
+
     #[test]
-    pub fn testing() {}
+    pub fn test_simple_log_append_with_finalizations() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+        let b2 = rng.gen();
+        let b3 = rng.gen();
+        let b4 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
+        blocks.handle_block_commit(b2, 3u64.into(), 10, false);
+        blocks.handle_block_commit(b3, 4u64.into(), 11, false);
+        blocks.handle_block_commit(b4, 5u64.into(), 13, false);
+        blocks.handle_block_commit(b4, 5u64.into(), 13, true);
+
+        let q = &blocks.pending_block_commits;
+        assert_eq!(q.len(), 4, "Should contain for pending blocks");
+        blocks.handle_da_finalization(10);
+
+        let q = &blocks.pending_block_commits;
+        assert_eq!(q.len(), 2, "Should contains only two pending blocks");
+
+        let back = q.back().unwrap();
+        let front = q.front().unwrap();
+        assert_eq!(back.block_root, b3, "First back should be b3");
+        assert_eq!(front.block_root, b4, "First front should be b4");
+    }
+
+    #[test]
+    #[traced_test]
+    //#[should_panic(expected = "Commited block 0 is lower then current lowest pending block 2.")]
+    pub fn error_log_on_lower_block_commit() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+        let b2 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
+        blocks.handle_block_commit(b2, 0u64.into(), 9, false);
+        assert!(logs_contain(
+            "Commited block 0 is lower then current lowest pending block 2."
+        ))
+    }
+
+    #[test]
+    #[traced_test]
+    pub fn error_log_on_higher_block_commit() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+        let b2 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
+        blocks.handle_block_commit(b2, 4u64.into(), 10, false);
+        assert!(logs_contain(
+            "Commited block height 4 should be only increased by one from current height 2"
+        ))
+    }
+
+    #[test]
+    #[traced_test]
+    pub fn duplicated_log_received_for_block_commit() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+        let b2 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
+        blocks.handle_block_commit(b2, 2u64.into(), 10, false);
+        assert!(logs_contain(
+            "We received block 2 commit that was not reverted"
+        ))
+    }
+
+    #[test]
+    #[traced_test]
+    pub fn skipped_logs_for_new_block_commit_on_empty_queue() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 3u64.into(), 9, false);
+        assert!(logs_contain(
+            "We have missing logs from LCFFH 1 to new height 3"
+        ))
+    }
 }

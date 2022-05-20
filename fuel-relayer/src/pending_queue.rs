@@ -13,7 +13,7 @@ use fuel_tx::{Address, Bytes32};
 use tracing::{error, info, warn};
 
 use crate::{
-    block_commit::BlockCommit,
+    block_commit::PendingBlocks,
     log::{AssetDepositLog, EthEventLog},
 };
 
@@ -26,7 +26,7 @@ pub struct PendingQueue {
     /// finalized fuel block
     finalized_da_height: DaBlockHeight,
     /// Pending block handling
-    block_commit: BlockCommit,
+    block_commit: PendingBlocks,
 }
 
 /// Pending diff between FuelBlocks
@@ -60,7 +60,7 @@ impl PendingQueue {
         private_key: &[u8],
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
-        let block_commit = BlockCommit::new(
+        let block_commit = PendingBlocks::new(
             chain_id,
             contract_address,
             private_key,
@@ -113,7 +113,7 @@ impl PendingQueue {
         P: Middleware + 'static,
     {
         self.block_commit
-            .created_block(block.clone(), db, provider)
+            .commit(block.clone(), db, provider)
             .await;
     }
 
@@ -141,10 +141,11 @@ impl PendingQueue {
                 // mark all removed pending block commits as reverted.
                 for event in events {
                     if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.block_commit.block_commit_reverted(
+                        self.block_commit.handle_block_commit(
                             block_root,
                             height.into(),
                             da_height.into(),
+                            true,
                         );
                     }
                 }
@@ -219,8 +220,12 @@ impl PendingQueue {
                 last_diff.validators.insert(staking_key, None);
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
-                self.block_commit
-                    .block_commited(block_root, (height).into(), da_height.into());
+                self.block_commit.handle_block_commit(
+                    block_root,
+                    (height).into(),
+                    da_height.into(),
+                    false,
+                );
             }
             EthEventLog::Unknown => (),
         }
@@ -266,12 +271,12 @@ impl PendingQueue {
             self.pending.pop_front();
         }
 
-        self.block_commit.new_da_block(finalized_da_height.into());
+        let last_commited_fin_fuel_height = self
+            .block_commit
+            .handle_da_finalization(finalized_da_height.into());
 
-        db.set_last_commited_finalized_fuel_height(
-            self.block_commit.last_commited_finalized_fuel_height(),
-        )
-        .await;
+        db.set_last_commited_finalized_fuel_height(last_commited_fin_fuel_height)
+            .await;
         self.finalized_da_height = finalized_da_height;
     }
 }
