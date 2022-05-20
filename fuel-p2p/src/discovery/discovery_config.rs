@@ -4,7 +4,10 @@ use libp2p::{
     kad::{store::MemoryStore, Kademlia, KademliaConfig},
     Multiaddr, PeerId,
 };
-use std::{collections::VecDeque, time::Duration};
+use std::{
+    collections::{HashSet, VecDeque},
+    time::Duration,
+};
 use tracing::warn;
 
 #[derive(Clone, Debug)]
@@ -15,7 +18,7 @@ pub struct DiscoveryConfig {
     with_random_walk: bool,
     allow_private_addresses: bool,
     network_name: String,
-    max_peers_connected: u64,
+    max_peers_connected: usize,
     connection_idle_timeout: Duration,
 }
 
@@ -24,7 +27,7 @@ impl DiscoveryConfig {
         Self {
             local_peer_id,
             bootstrap_nodes: vec![],
-            max_peers_connected: std::u64::MAX,
+            max_peers_connected: std::usize::MAX,
             allow_private_addresses: false,
             with_mdns: false,
             network_name,
@@ -34,7 +37,7 @@ impl DiscoveryConfig {
     }
 
     /// limit the number of connected nodes
-    pub fn discovery_limit(&mut self, limit: u64) -> &mut Self {
+    pub fn discovery_limit(&mut self, limit: usize) -> &mut Self {
         self.max_peers_connected = limit;
         self
     }
@@ -112,11 +115,11 @@ impl DiscoveryConfig {
 
         DiscoveryBehaviour {
             bootstrap_nodes,
+            connected_peers: HashSet::new(),
             events: VecDeque::new(),
             kademlia,
             next_kad_random_walk,
             duration_to_next_kad: Duration::from_secs(1),
-            connected_peers_count: 0,
             max_peers_connected,
             mdns,
             allow_private_addresses,
