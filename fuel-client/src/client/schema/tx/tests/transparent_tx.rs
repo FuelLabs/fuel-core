@@ -69,6 +69,7 @@ pub struct Transaction {
     pub static_contracts: Option<Vec<ContractIdFragment>>,
     pub storage_slots: Option<Vec<HexString>>,
     pub bytecode_witness_index: Option<i32>,
+    pub bytecode_length: Option<U64>,
 }
 
 impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
@@ -111,6 +112,10 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 gas_limit: tx.gas_limit.into(),
                 byte_price: tx.byte_price.into(),
                 maturity: tx.maturity.into(),
+                bytecode_length: tx
+                    .bytecode_length
+                    .ok_or_else(|| ConversionError::MissingField("bytecode_length".to_string()))?
+                    .into(),
                 bytecode_witness_index: tx
                     .bytecode_witness_index
                     .ok_or_else(|| {

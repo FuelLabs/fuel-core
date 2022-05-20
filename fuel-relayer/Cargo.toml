@@ -23,9 +23,9 @@ ethers-contract = { git = "https://github.com/rakita/ethers-rs.git", branch = "m
 ] }
 ethers-signers = { git = "https://github.com/rakita/ethers-rs.git", branch = "master", default-features = false }
 features = "0.10"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.6.3" }
-fuel-tx = { version = "0.9", features = ["serde-types"] }
-fuel-types = { version = "0.3", features = ["serde-types"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.0" }
+fuel-tx = { version = "0.10", features = ["serde"] }
+fuel-types = { version = "0.5", features = ["serde"] }
 futures = "0.3"
 lazy_static = "1.4"
 parking_lot = "0.12"
@@ -41,10 +41,10 @@ hex = "0.4"
 url = "2.2"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.6.3", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.0", features = [
     "test_helpers",
 ] }
-fuel-types = { version = "0.3", features = ["serde-types", "random"] }
+fuel-types = { version = "0.5", features = ["serde", "random"] }
 rand = "0.8"
 tracing-test = "0.2"
 
@@ -54,6 +54,9 @@ test-helpers = ["fuel-core-interfaces/test_helpers"]
 # Example of customizing binaries in Cargo.toml.
 [[bin]]
 name = "testrun"
+# path needs to be specified (even though this is the default path) due
+# to a bug in cargo-chef https://github.com/LukeMathWalker/cargo-chef/issues/128
+path = "src/bin/testrun.rs"
 test = true
 bench = false
 required-features = ["test-helpers"]

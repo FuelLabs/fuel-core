@@ -6,7 +6,7 @@ use fuel_tx::{Address, AssetId, Bytes32, Transaction};
 use fuel_types::Word;
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockHeader {
     /// Fuel block height.
     pub height: BlockHeight,
@@ -32,7 +32,7 @@ pub struct FuelBlockHeader {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HeaderMetadata {
     id: Bytes32,
 }
@@ -79,7 +79,7 @@ impl Default for FuelBlockHeader {
 
 /// The compact representation of a block used in the database
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockDb {
     pub headers: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
@@ -93,7 +93,7 @@ impl FuelBlockDb {
 
 /// Fuel block with all transaction data included
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlock {
     pub header: FuelBlockHeader,
     pub transactions: Vec<Transaction>,
@@ -138,7 +138,7 @@ impl FuelBlock {
     }
 }
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockConsensus {
     pub required_stake: u64,
     pub validators: Vec<Address>,
@@ -147,7 +147,7 @@ pub struct FuelBlockConsensus {
 }
 
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SealedFuelBlock {
     pub block: FuelBlock,
     pub consensus: FuelBlockConsensus,

@@ -99,25 +99,25 @@ pub enum Error {
     #[error("Transaction is not inserted. The byte price is too low.")]
     NotInsertedBytePriceTooLow,
     #[error(
-        "Transaction is not inserted. More priced tx {0:?} already spend this UTXO output: {1:?}"
+        "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
     )]
     NotInsertedCollision(TxId, UtxoId),
     #[error(
-        "Transaction is not inserted. More priced tx has created contract with ContractId {0:?}"
+        "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
     )]
     NotInsertedCollisionContractId(ContractId),
-    #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:?}")]
+    #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}")]
     NotInsertedOutputNotExisting(UtxoId),
-    #[error("Transaction is not inserted. UTXO input contract is not existing: {0:?}")]
+    #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
     NotInsertedInputContractNotExisting(ContractId),
-    #[error("Transaction is not inserted. ContractId is already taken {0:?}")]
+    #[error("Transaction is not inserted. ContractId is already taken {0:#x}")]
     NotInsertedContractIdAlreadyTaken(ContractId),
-    #[error("Transaction is not inserted. UTXO is not existing: {0:?}")]
+    #[error("Transaction is not inserted. UTXO is not existing: {0:#x}")]
     NotInsertedInputUtxoIdNotExisting(UtxoId),
-    #[error("Transaction is not inserted. UTXO is spent: {0:?}")]
+    #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
     #[error(
-        "Transaction is not inserted. UTXO requires Contract input {0:?} that is priced lower"
+        "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
     )]
     NotInsertedContractPricedLower(ContractId),
     #[error("Transaction is not inserted. Input output mismatch. Coin owner is different from expected input")]

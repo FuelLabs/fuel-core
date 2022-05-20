@@ -13,8 +13,8 @@ use fuel_tx::{Address, Bytes32};
 use tracing::{error, info, warn};
 
 use crate::{
-    pending_blocks::PendingBlocks,
     log::{AssetDepositLog, EthEventLog},
+    pending_blocks::PendingBlocks,
 };
 
 pub struct FInalizationQueue {
@@ -144,7 +144,7 @@ impl FInalizationQueue {
                         self.pending_blocks.handle_block_commit(
                             block_root,
                             height.into(),
-                            da_height.into(),
+                            da_height,
                             true,
                         );
                     }
@@ -223,7 +223,7 @@ impl FInalizationQueue {
                 self.pending_blocks.handle_block_commit(
                     block_root,
                     (height).into(),
-                    da_height.into(),
+                    da_height,
                     false,
                 );
             }
@@ -273,7 +273,7 @@ impl FInalizationQueue {
 
         let last_commited_fin_fuel_height = self
             .pending_blocks
-            .handle_da_finalization(finalized_da_height.into());
+            .handle_da_finalization(finalized_da_height);
 
         db.set_last_commited_finalized_fuel_height(last_commited_fin_fuel_height)
             .await;

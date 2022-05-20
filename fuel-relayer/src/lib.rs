@@ -1,7 +1,7 @@
-pub(crate) mod pending_blocks;
 pub(crate) mod config;
-pub(crate) mod log;
 pub(crate) mod finalization_queue;
+pub(crate) mod log;
+pub(crate) mod pending_blocks;
 pub(crate) mod validators;
 
 mod relayer;

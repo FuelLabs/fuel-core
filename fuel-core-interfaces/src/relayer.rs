@@ -5,8 +5,8 @@ use fuel_storage::Storage;
 use fuel_types::{Address, Bytes32};
 use tokio::sync::oneshot;
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde-types", derive(serde::Serialize, serde::Deserialize))]
 pub struct StakingDiff {
     /// new value of validator registration, it can be new consensus address if registered or None of
     /// unregistration happens

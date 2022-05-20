@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    config, log::EthEventLog, finalization_queue::FInalizationQueue, validators::Validators, Config,
+    config, finalization_queue::FInalizationQueue, log::EthEventLog, validators::Validators, Config,
 };
 use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, trace, warn};

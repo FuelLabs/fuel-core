@@ -232,7 +232,6 @@ impl PendingBlocks {
             error!(
                 "Commited block {height} is lower then current lowest pending block {back_height}."
             );
-            return;
         } else if height > front_height {
             // check if we are lagging against da layer
             if self.chain_height < height {
@@ -249,14 +248,13 @@ impl PendingBlocks {
                     ));
             } else {
                 error!("Commited block height {height} should be only increased by one from current height {front_height}.");
-                return;
             }
         } else {
             // happens if reverted commit is again visible
             // iterate over pending blocks and set reverted commit as commited.
             for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
-                    if pending.reverted != true {
+                    if !pending.reverted {
                         error!("We received block {height} commit that was not reverted")
                     }
                     pending.da_height = da_height;
@@ -295,7 +293,7 @@ impl PendingBlocks {
             // happy path. iterate over pending blocks and set it as commited.
             for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
-                    if pending.reverted == true {
+                    if pending.reverted {
                         error!("We received block {height} commit that was already reverted");
                     }
                     pending.da_height = da_height;
@@ -583,14 +581,13 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(),2,false);
+        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
         assert_eq!(out[0].header.height, 2u64.into(), "First should be 2");
         assert_eq!(out[1].header.height, 3u64.into(), "Second should be 3");
     }
-
 
     #[tokio::test]
     #[should_panic(expected = "All not commited blocks should have its seal and blocks inside db")]
@@ -601,7 +598,6 @@ mod tests {
         blocks.bundle(10u64.into(), db.as_mut()).await;
     }
 
-
     #[tokio::test]
     async fn bundle_on_one_block_and_one_revert() {
         let mut rng = StdRng::seed_from_u64(59);
@@ -611,9 +607,9 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(),2,false);
-        blocks.handle_block_commit(b2, 3u64.into(),3,false);
-        blocks.handle_block_commit(b2, 3u64.into(),3,true);
+        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
+        blocks.handle_block_commit(b2, 3u64.into(), 3, false);
+        blocks.handle_block_commit(b2, 3u64.into(), 3, true);
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
@@ -621,6 +617,4 @@ mod tests {
         assert_eq!(out[1].header.height, 3u64.into(), "First should be 3");
         assert_eq!(out[2].header.height, 4u64.into(), "Second should be 4");
     }
-
-
 }
