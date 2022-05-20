@@ -6474,8 +6474,3 @@ dependencies = [
  "syn",
  "synstructure",
 ]
-
-[[patch.unused]]
-name = "fuel-vm"
-version = "0.8.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=profiler-fixes#fea427ef25ee6b43ff65d588c8f7f408f3449e38"
