@@ -33,6 +33,14 @@ pub struct P2PConfig {
     pub enable_random_walk: bool,
     pub connection_idle_timeout: Option<Duration>,
 
+    // `PeerInfo` fields
+    /// The interval at which identification requests are sent to
+    /// the remote on established connections after the first request
+    pub identify_interval: Duration,
+    /// The duration between the last successful outbound or inbound ping
+    /// and the next outbound ping
+    pub info_interval: Duration,
+
     // `Gossipsub` related fields
     pub topics: Vec<String>,
     pub ideal_mesh_size: usize,
