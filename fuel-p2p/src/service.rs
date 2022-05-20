@@ -175,9 +175,9 @@ mod tests {
     use tokio::sync::{mpsc, oneshot};
 
     /// helper function for building default testing config
-    fn build_p2p_config() -> P2PConfig {
+    fn build_p2p_config(network_name: &str) -> P2PConfig {
         P2PConfig {
-            network_name: "test_network".into(),
+            network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 4000,
             bootstrap_nodes: vec![],
@@ -192,8 +192,8 @@ mod tests {
             ideal_mesh_size: 6,
             set_request_timeout: None,
             set_connection_keep_alive: None,
-            info_interval: Duration::from_secs(5),
-            identify_interval: Duration::from_secs(15),
+            info_interval: Duration::from_secs(3),
+            identify_interval: Duration::from_secs(5),
         }
     }
 
@@ -207,7 +207,8 @@ mod tests {
 
     #[tokio::test]
     async fn p2p_service_works() {
-        let mut fuel_p2p_service = build_fuel_p2p_service(build_p2p_config()).await;
+        let mut fuel_p2p_service =
+            build_fuel_p2p_service(build_p2p_config("p2p_service_works")).await;
 
         loop {
             match fuel_p2p_service.next_event().await {
@@ -227,15 +228,13 @@ mod tests {
     #[tokio::test]
     async fn nodes_connected_via_mdns() {
         // Node A
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("nodes_connected_via_mdns");
         p2p_config.tcp_port = 4001;
         p2p_config.enable_mdns = true;
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4002;
-        p2p_config.enable_mdns = true;
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 
         loop {
@@ -256,9 +255,9 @@ mod tests {
     #[tokio::test]
     async fn nodes_connected_via_identify() {
         // Node A
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("nodes_connected_via_identify");
         p2p_config.tcp_port = 4003;
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
             FuelP2PEvent::NewListenAddr(address) => Some(address),
@@ -266,15 +265,12 @@ mod tests {
         };
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4004;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
-        let mut node_b = build_fuel_p2p_service(p2p_config).await;
+        let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // Node C
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4005;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.unwrap())];
         let mut node_c = build_fuel_p2p_service(p2p_config).await;
 
         loop {
@@ -298,9 +294,9 @@ mod tests {
     #[tokio::test]
     async fn peer_info_updates_work() {
         // Node A
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("peer_info_updates_work");
         p2p_config.tcp_port = 4006;
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
             FuelP2PEvent::NewListenAddr(address) => Some(address),
@@ -308,7 +304,6 @@ mod tests {
         };
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4007;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
@@ -338,7 +333,7 @@ mod tests {
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
 
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
         let topics = vec!["create_tx".into(), "send_tx".into()];
         let selected_topic = Topic::new(format!("{}/{}", topics[0], p2p_config.network_name));
         let mut message_sent = false;
@@ -346,7 +341,7 @@ mod tests {
         // Node A
         p2p_config.tcp_port = 4008;
         p2p_config.topics = topics.clone();
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
             FuelP2PEvent::NewListenAddr(address) => Some(address),
@@ -354,9 +349,7 @@ mod tests {
         };
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4009;
-        p2p_config.topics = topics.clone();
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -390,11 +383,11 @@ mod tests {
 
     #[tokio::test]
     async fn request_response_works() {
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("request_response_works");
 
         // Node A
         p2p_config.tcp_port = 4010;
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
             FuelP2PEvent::NewListenAddr(address) => Some(address),
@@ -402,7 +395,6 @@ mod tests {
         };
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4011;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
@@ -448,13 +440,13 @@ mod tests {
 
     #[tokio::test]
     async fn req_res_outbound_timeout_works() {
-        let mut p2p_config = build_p2p_config();
+        let mut p2p_config = build_p2p_config("req_res_outbound_timeout_works");
 
         // Node A
         p2p_config.tcp_port = 4012;
         // setup request timeout to 0 in order for the Request to fail
         p2p_config.set_request_timeout = Some(Duration::from_secs(0));
-        let mut node_a = build_fuel_p2p_service(p2p_config).await;
+        let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
             FuelP2PEvent::NewListenAddr(address) => Some(address),
@@ -462,7 +454,6 @@ mod tests {
         };
 
         // Node B
-        let mut p2p_config = build_p2p_config();
         p2p_config.tcp_port = 4013;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
