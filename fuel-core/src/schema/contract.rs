@@ -1,5 +1,5 @@
 use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::{ContractId, AssetId, U64, HexString, Salt};
+use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
 use async_graphql::{Context, Object};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;

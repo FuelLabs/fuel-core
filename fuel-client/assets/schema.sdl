@@ -233,6 +233,7 @@ type Query {
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
+	contractBalance(contract: ContractId!, asset: AssetId!): U64!
 }
 type Receipt {
 	contract: Contract
