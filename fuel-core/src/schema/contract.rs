@@ -78,13 +78,13 @@ impl ContractBalanceQuery {
 
         let asset_id: fuel_types::AssetId = asset.into();
 
-        let balance = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+        let result = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
             &db,
             &contract_id,
             &asset_id,
-        )
-        .unwrap()
-        .expect("Contract does not exist");
+        );
+
+        let balance = result.unwrap().unwrap_or_default();
 
         let final_balance: U64 = balance.into();
 

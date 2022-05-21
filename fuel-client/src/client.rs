@@ -316,14 +316,17 @@ impl FuelClient {
         Ok(contract)
     }
 
-    pub async fn contract_balance(&self, id: &str, asset: &str) -> io::Result<u64> {
-        let contract_id: schema::ContractId = id.parse()?;
-        let asset_id: schema::AssetId = asset.parse()?;
+    pub async fn contract_balance(&self, id: &str, asset: Option<&str>) -> io::Result<u64> {
+        let asset_id: schema::AssetId = match asset {
+            Some(asset) => asset.parse()?,
+            None => schema::AssetId::default(),
+        };
 
         let query = schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
-            id: contract_id,
+            id: id.parse()?,
             asset: asset_id,
         });
+
         let balance = self.query(query).await.unwrap().contract_balance.0;
         Ok(balance)
     }
