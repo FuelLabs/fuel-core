@@ -1,59 +1,9 @@
-use fuel_core::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
-use fuel_core::service::{Config, FuelService};
-use crate::common::TestSetupBuilder;
+use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_crypto::SecretKey;
-use fuel_gql_client::client::FuelClient;
-use fuel_tx::{Transaction, TransactionBuilder};
+use fuel_tx::TransactionBuilder;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::collections::HashMap;
-use std::io;
-
-struct TestContext {
-    rng: StdRng,
-    pub client: FuelClient,
-}
-
-impl TestContext {
-    async fn new(seed: u64) -> Self {
-        let rng = StdRng::seed_from_u64(seed);
-        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-        Self { rng, client }
-    }
-
-    async fn transfer(&mut self, from: Address, to: Address, amount: u64) -> io::Result<Bytes32> {
-        let script = Opcode::RET(0x10).to_bytes().to_vec();
-        let tx = Transaction::Script {
-            gas_price: 0,
-            gas_limit: 1_000_000,
-            byte_price: 0,
-            maturity: 0,
-            receipts_root: Default::default(),
-            script,
-            script_data: vec![],
-            inputs: vec![Input::Coin {
-                utxo_id: self.rng.gen(),
-                owner: from,
-                amount,
-                asset_id: Default::default(),
-                witness_index: 0,
-                maturity: 0,
-                predicate: vec![],
-                predicate_data: vec![],
-            }],
-            outputs: vec![Output::Coin {
-                amount,
-                to,
-                asset_id: Default::default(),
-            }],
-            witnesses: vec![vec![].into()],
-            metadata: None,
-        };
-        self.client.submit(&tx).await.map(Into::into)
-    }
-}
 
 #[tokio::test]
 async fn test_contract_salt() {
@@ -248,12 +198,4 @@ async fn test_contract_balance() {
         .unwrap();
 
     assert_eq!(balance, 500);
-}
-/// Helper for configuring the genesis block in tests
-struct TestSetupBuilder {
-    rng: StdRng,
-    contracts: HashMap<ContractId, ContractConfig>,
-    initial_coins: Vec<CoinConfig>,
-    min_gas_price: u64,
-    min_byte_price: u64,
 }
