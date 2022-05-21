@@ -1,10 +1,11 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
+assertion_line: 324
 expression: query.query
 
 ---
-mutation Mutation($_0: HexString!) {
-  dryRun(tx: $_0) {
+mutation Mutation($_0: HexString!, $_1: Boolean) {
+  dryRun(tx: $_0, utxoValidation: $_1) {
     rawPayload
   }
 }

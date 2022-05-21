@@ -259,9 +259,16 @@ impl TxMutation {
         &self,
         ctx: &Context<'_>,
         tx: HexString,
+        // disable input utxo validation, allowing for non-existent inputs to be used
+        // without signature validation
+        utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let transaction = ctx.data_unchecked::<Database>().transaction();
-        let cfg = ctx.data_unchecked::<Config>();
+        let mut cfg = ctx.data_unchecked::<Config>().clone();
+        // disable utxo-validation
+        if let Some(utxo_validation) = utxo_validation {
+            cfg.utxo_validation = utxo_validation;
+        }
         let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
         let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
