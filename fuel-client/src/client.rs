@@ -17,6 +17,7 @@ use std::{
 };
 use types::{TransactionResponse, TransactionStatus};
 
+use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
 pub mod schema;
@@ -82,10 +83,22 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
+    /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
+        self.dry_run_opt(tx, None).await
+    }
+
+    /// Dry run with options to override the node behavior
+    pub async fn dry_run_opt(
+        &self,
+        tx: &Transaction,
+        // Disable utxo input checks (exists, unspent, and valid signature)
+        utxo_validation: Option<bool>,
+    ) -> io::Result<Vec<Receipt>> {
         let tx = tx.clone().to_bytes();
-        let query = schema::tx::DryRun::build(&TxArg {
+        let query = schema::tx::DryRun::build(&DryRunArg {
             tx: HexString(Bytes(tx)),
+            utxo_validation,
         });
         let receipts = self.query(query).await.map(|r| r.dry_run)?;
         receipts
