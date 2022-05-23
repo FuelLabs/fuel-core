@@ -87,7 +87,7 @@ async fn main() -> Result<(), anyhow::Error> {
         io::stdin()
             .read_line(&mut input)
             .expect("error: unable to read user input");
-        match input.as_str().chars().nth(0) {
+        match input.as_str().chars().next() {
             Some('n') => {
                 let mut block = block.clone();
                 block.block.header.height = BlockHeight::from(next);

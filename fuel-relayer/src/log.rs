@@ -157,7 +157,7 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_WITHDRAWAL => {
                 if log.topics.len() != 3 {
-                    return Err("Malformed topics for ValidatorRegistration");
+                    return Err("Malformed topics for Withdrawal");
                 }
                 let withdrawer = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
                 let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
@@ -170,11 +170,13 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_DELEGATION => {
                 if log.topics.len() != 2 {
-                    return Err("Malformed topics for ValidatorRegistration");
+                    return Err("Malformed topics for Delegation");
                 }
 
                 // Safety: Casting between same sized structures. It is okay not to check size.
                 let delegator = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+
+                // TODO delegates and amount.
 
                 Self::Delegation {
                     delegator,

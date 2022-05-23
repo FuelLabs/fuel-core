@@ -144,15 +144,18 @@ pub mod helpers {
     #[derive(Clone, Debug)]
     pub struct Data {
         /// Used for Storage<Address, (u64, Option<Address>)>
-        pub current_validators: HashMap<Address, (u64, Option<Address>)>,
+        pub validators: HashMap<Address, (u64, Option<Address>)>,
+        /// variable for current validators height, at height our validator set is
+        pub validators_height: u64,
+        /// diffs between blocks regarding validator set and delegation stake
         pub staking_diffs: BTreeMap<u64, StakingDiff>,
-        pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
+        /// index of blocks where delegation happened.
         pub delegator_index: BTreeMap<Address, Vec<u64>>,
+        /// blocks that have consensus votes/
+        pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
         /// variable for best fuel block height
         pub chain_height: BlockHeight,
         pub finalized_da_height: u64,
-        /// variable for current validators height, at height our validator set is
-        pub current_validators_height: u64,
         pub tx_hashes: Vec<TxId>,
         /// Dummy transactions
         pub tx: HashMap<TxId, Arc<Transaction>>,
@@ -614,7 +617,7 @@ pub mod helpers {
             block2.block.header.height = 2u64.into();
             let mut block3 = block.clone();
             block3.block.header.height = 3u64.into();
-            let mut block4 = block.clone();
+            let mut block4 = block;
             block4.block.header.height = 4u64.into();
 
             let data = Data {
@@ -624,7 +627,7 @@ pub mod helpers {
                 contract: HashSet::new(),
                 deposit_coin: HashMap::new(),
                 chain_height: BlockHeight::from(0u64),
-                current_validators_height: 0,
+                validators_height: 0,
                 finalized_da_height: 0,
                 sealed_blocks: HashMap::from([
                     (1u64.into(), Arc::new(block1)),
@@ -632,7 +635,7 @@ pub mod helpers {
                     (3u64.into(), Arc::new(block3)),
                     (4u64.into(), Arc::new(block4)),
                 ]),
-                current_validators: HashMap::new(),
+                validators: HashMap::new(),
                 staking_diffs: BTreeMap::new(),
                 delegator_index: BTreeMap::new(),
                 last_commited_finalized_fuel_height: BlockHeight::from(0u64),
@@ -805,11 +808,7 @@ pub mod helpers {
             key: &Address,
             value: &(u64, Option<Address>),
         ) -> Result<Option<(u64, Option<Address>)>, Self::Error> {
-            Ok(self
-                .data
-                .lock()
-                .current_validators
-                .insert(*key, value.clone()))
+            Ok(self.data.lock().validators.insert(*key, *value))
         }
 
         fn remove(
@@ -823,12 +822,7 @@ pub mod helpers {
             &'a self,
             key: &Address,
         ) -> Result<Option<std::borrow::Cow<'a, (u64, Option<Address>)>>, Self::Error> {
-            Ok(self
-                .data
-                .lock()
-                .current_validators
-                .get(key)
-                .map(|i| Cow::Owned(i.clone())))
+            Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
         fn contains_key(&self, _key: &Address) -> Result<bool, Self::Error> {
@@ -872,18 +866,18 @@ pub mod helpers {
     #[async_trait]
     impl RelayerDb for DummyDb {
         async fn get_validators(&self) -> HashMap<Address, (u64, Option<Address>)> {
-            self.data.lock().current_validators.clone()
+            self.data.lock().validators.clone()
         }
 
         async fn set_validators_da_height(&self, block: u64) {
-            self.data.lock().current_validators_height = block;
+            self.data.lock().validators_height = block;
         }
 
         async fn get_validators_da_height(&self) -> u64 {
-            self.data.lock().current_validators_height
+            self.data.lock().validators_height
         }
 
-        async fn get_staking_diff(
+        async fn get_staking_diffs(
             &self,
             from_da_height: u64,
             to_da_height: Option<u64>,
@@ -892,13 +886,13 @@ pub mod helpers {
             let diffs = &self.data.lock().staking_diffs;
             // in BTreeMap iteration are done on sorted items.
             for (block, diff) in diffs {
-                if from_da_height >= *block {
-                    out.push((*block, diff.clone()))
-                }
-                if let Some(end_block) = to_da_height {
-                    if end_block < *block {
-                        break;
+                if *block >= from_da_height {
+                    if let Some(end_block) = to_da_height {
+                        if *block > end_block {
+                            break;
+                        }
                     }
+                    out.push((*block, diff.clone()));
                 }
             }
             out

@@ -89,7 +89,7 @@ pub trait RelayerDb:
     }
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
-    async fn get_staking_diff(
+    async fn get_staking_diffs(
             &self,
             _from_da_height: u64,
             _to_da_height: Option<u64>,
@@ -145,7 +145,7 @@ pub enum RelayerEvent {
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
-        da_height: u64,
+        da_height: DaBlockHeight,
         response_channel: oneshot::Sender<Result<ValidatorSet, RelayerError>>,
     },
     GetStatus {
@@ -158,7 +158,7 @@ pub use thiserror::Error;
 
 use crate::{
     db::KvStoreError,
-    model::{BlockHeight, DepositCoin, SealedFuelBlock, ValidatorStake},
+    model::{BlockHeight, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorStake},
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]

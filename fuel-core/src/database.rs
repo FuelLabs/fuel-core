@@ -293,7 +293,7 @@ impl RelayerDb for Database {
         out
     }
 
-    async fn get_staking_diff(
+    async fn get_staking_diffs(
         &self,
         from_da_height: u64,
         to_da_height: Option<u64>,

@@ -1,4 +1,8 @@
 use derive_more::{Add, Deref, Display, From, Into};
+
+#[derive(Copy, Clone, Debug, Default, Add, Display, Into, From, Deref, Hash)]
+pub struct Height(u32);
+
 use std::{
     array::TryFromSliceError,
     convert::{TryFrom, TryInto},

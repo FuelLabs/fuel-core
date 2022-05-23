@@ -16,7 +16,7 @@ pub struct Validators {
     /// Validator set
     pub set: HashMap<Address, (ValidatorStake, Option<Address>)>,
     /// Da height
-    pub da_height: u64,
+    pub da_height: DaBlockHeight,
 }
 
 impl Validators {
@@ -30,7 +30,7 @@ impl Validators {
     /// Get validator set
     pub async fn get(
         &mut self,
-        da_height: u64,
+        da_height: DaBlockHeight,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
         // TODO apply down drift
         if self.da_height == da_height {
@@ -65,7 +65,7 @@ impl Validators {
 
         let mut validators = HashMap::new();
         // get staking diffs.
-        let diffs = db.get_staking_diff(self.da_height, Some(da_height)).await;
+        let diffs = db.get_staking_diffs(self.da_height, Some(da_height)).await;
         let mut delegates_cached: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key

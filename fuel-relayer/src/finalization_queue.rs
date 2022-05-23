@@ -10,14 +10,15 @@ use fuel_core_interfaces::{
     relayer::{RelayerDb, StakingDiff},
 };
 use fuel_tx::{Address, Bytes32};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     log::{AssetDepositLog, EthEventLog},
     pending_blocks::PendingBlocks,
+    validators::Validators,
 };
 
-pub struct FInalizationQueue {
+pub struct FinalizationQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     pending: VecDeque<DaBlockDiff>,
     /// Revert on eth are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
@@ -26,7 +27,9 @@ pub struct FInalizationQueue {
     /// finalized fuel block
     finalized_da_height: DaBlockHeight,
     /// Pending block handling
-    pending_blocks: PendingBlocks,
+    blocks: PendingBlocks,
+    /// Current validator set
+    validators: Validators,
 }
 
 /// Pending diff between FuelBlocks
@@ -53,25 +56,37 @@ impl DaBlockDiff {
     }
 }
 
-impl FInalizationQueue {
+impl FinalizationQueue {
     pub fn new(
         chain_id: u64,
         contract_address: H160,
         private_key: &[u8],
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
-        let pending_blocks = PendingBlocks::new(
+        let blocks = PendingBlocks::new(
             chain_id,
             contract_address,
             private_key,
             last_commited_finalized_fuel_height,
         );
         Self {
-            pending_blocks,
+            blocks,
             pending: VecDeque::new(),
+            validators: Validators::default(),
             bundled_removed_eth_events: Vec::new(),
             finalized_da_height: 0,
         }
+    }
+
+    pub async fn load_validators(&mut self, db: &dyn RelayerDb) {
+        self.validators.load(db).await
+    }
+
+    pub async fn get_validators(
+        &mut self,
+        da_height: DaBlockHeight,
+    ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
+        self.validators.get(da_height).await
     }
 
     pub fn clear(&mut self) {
@@ -100,7 +115,7 @@ impl FInalizationQueue {
 
     /// propagate new fuel block to pending_blocks
     pub fn handle_fuel_block(&mut self, block: &Arc<SealedFuelBlock>) {
-        self.pending_blocks.set_chain_height(block.header.height)
+        self.blocks.set_chain_height(block.header.height)
     }
 
     /// propagate new created fuel block to pending_blocks
@@ -112,14 +127,30 @@ impl FInalizationQueue {
     ) where
         P: Middleware + 'static,
     {
-        self.pending_blocks
-            .commit(block.header.height, db, provider)
-            .await;
+        self.blocks.commit(block.header.height, db, provider).await;
+    }
+
+    pub async fn append_eth_logs(&mut self, logs: Vec<Log>) {
+        for log in logs {
+            self.append_eth_log(log).await;
+        }
     }
 
     /// Handle eth log events
-    pub async fn handle_eth_log(&mut self, event: EthEventLog, eth_block: u64, removed: bool) {
-        info!("handle eth log:{:?}", event);
+    pub async fn append_eth_log(&mut self, log: Log) {
+        let event = EthEventLog::try_from(&log);
+        if let Err(err) = event {
+            warn!(target:"relayer", "Eth Event not formated properly:{}",err);
+            return;
+        }
+        if log.block_number.is_none() {
+            error!(target:"relayer", "Block number not found in eth log");
+            return;
+        }
+        let removed = log.removed.unwrap_or(false);
+        let eth_block = log.block_number.unwrap().as_u64();
+        let event = event.unwrap();
+        debug!("append inbound log:{:?}", event);
         // bundle removed events and return
         if removed {
             self.bundle_removed_events(event, eth_block);
@@ -141,12 +172,8 @@ impl FInalizationQueue {
                 // mark all removed pending block commits as reverted.
                 for event in events {
                     if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.pending_blocks.handle_block_commit(
-                            block_root,
-                            height.into(),
-                            da_height,
-                            true,
-                        );
+                        self.blocks
+                            .handle_block_commit(block_root, height.into(), da_height, true);
                     }
                 }
             }
@@ -159,24 +186,9 @@ impl FInalizationQueue {
         self.append_da_events(event, eth_block).await;
     }
 
-    pub async fn append_eth_logs(&mut self, logs: Vec<Log>) {
-        for eth_event in logs {
-            let fuel_event = EthEventLog::try_from(&eth_event);
-            if let Err(err) = fuel_event {
-                // not formated event from contract
-                // just skip it for now.
-                warn!("Event casting error:{err} for log: {:?}", eth_event);
-                continue;
-            }
-            let fuel_event = fuel_event.unwrap();
-            self.append_da_events(fuel_event, eth_event.block_number.unwrap().as_u64())
-                .await;
-        }
-    }
-
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
-    pub async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: u64) {
+    async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: u64) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
                 self.pending.push_back(DaBlockDiff::new(da_height))
@@ -220,18 +232,14 @@ impl FInalizationQueue {
                 last_diff.validators.insert(staking_key, None);
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
-                self.pending_blocks.handle_block_commit(
-                    block_root,
-                    (height).into(),
-                    da_height,
-                    false,
-                );
+                self.blocks
+                    .handle_block_commit(block_root, (height).into(), da_height, false);
             }
             EthEventLog::Unknown => (),
         }
     }
 
-    /// Used in two places. On initial sync and when new fuel blocks is
+    /// Used to commit da block diff to database.
     pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
         if self.finalized_da_height >= finalized_da_height {
             error!(
@@ -271,13 +279,15 @@ impl FInalizationQueue {
             self.pending.pop_front();
         }
 
-        let last_commited_fin_fuel_height = self
-            .pending_blocks
-            .handle_da_finalization(finalized_da_height);
+        let last_commited_fin_fuel_height = self.blocks.handle_da_finalization(finalized_da_height);
 
         db.set_last_commited_finalized_fuel_height(last_commited_fin_fuel_height)
             .await;
         self.finalized_da_height = finalized_da_height;
+        // bump validator set to last finalized block
+        self.validators
+            .bump_set_to_da_height(finalized_da_height, db)
+            .await
     }
 }
 
@@ -286,17 +296,22 @@ mod tests {
 
     use super::*;
     use crate::log::tests::*;
+    use fuel_core_interfaces::db::helpers::DummyDb;
     use fuel_types::{Address, AssetId};
+    use rand::rngs::StdRng;
+    use rand::{Rng, SeedableRng};
 
     #[tokio::test]
     pub async fn check_token_deposits_on_multiple_eth_blocks() {
-        let acc1 = Address::from([1; 32]);
-        let token1 = AssetId::zeroed();
-        let nonce1 = Bytes32::from([2; 32]);
-        let nonce2 = Bytes32::from([3; 32]);
-        let nonce3 = Bytes32::from([4; 32]);
+        let mut rng = StdRng::seed_from_u64(3020);
 
-        let mut pending = FInalizationQueue::new(
+        let acc1: Address = rng.gen();
+        let token1 = AssetId::zeroed();
+        let nonce1: Bytes32 = rng.gen();
+        let nonce2: Bytes32 = rng.gen();
+        let nonce3: Bytes32 = rng.gen();
+
+        let mut queue = FinalizationQueue::new(
             0,
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
@@ -305,34 +320,35 @@ mod tests {
         );
 
         let deposit1 = eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1, 0);
-        let deposit2 = eth_log_asset_deposit(1, acc1, token1, 0, 20, nonce2, 0);
-        let deposit3 = eth_log_asset_deposit(1, acc1, token1, 0, 40, nonce3, 0);
+        let deposit2 = eth_log_asset_deposit(1, acc1, token1, 1, 20, nonce2, 0);
+        let deposit3 = eth_log_asset_deposit(1, acc1, token1, 1, 40, nonce3, 0);
 
-        let deposit1 = EthEventLog::try_from(&deposit1).unwrap();
-        let deposit2 = EthEventLog::try_from(&deposit2).unwrap();
-        let deposit3 = EthEventLog::try_from(&deposit3).unwrap();
+        let deposit1_db = EthEventLog::try_from(&deposit1).unwrap();
+        let deposit2_db = EthEventLog::try_from(&deposit2).unwrap();
+        let deposit3_db = EthEventLog::try_from(&deposit3).unwrap();
 
-        pending.handle_eth_log(deposit1.clone(), 0, false).await;
-        pending.handle_eth_log(deposit2.clone(), 1, false).await;
-        pending.handle_eth_log(deposit3.clone(), 1, false).await;
-        let diff1 = pending.pending[0].clone();
-        let diff2 = pending.pending[1].clone();
+        queue
+            .append_eth_logs(vec![deposit1, deposit2, deposit3])
+            .await;
 
-        if let EthEventLog::AssetDeposit(deposit) = &deposit1 {
+        let diff1 = queue.pending[0].clone();
+        let diff2 = queue.pending[1].clone();
+
+        if let EthEventLog::AssetDeposit(deposit) = &deposit1_db {
             assert_eq!(
                 diff1.assets.get(&nonce1),
                 Some(deposit),
                 "Deposit 1 not valid"
             );
         }
-        if let EthEventLog::AssetDeposit(deposit) = &deposit2 {
+        if let EthEventLog::AssetDeposit(deposit) = &deposit2_db {
             assert_eq!(
                 diff2.assets.get(&nonce2),
                 Some(deposit),
                 "Deposit 2 not valid"
             );
         }
-        if let EthEventLog::AssetDeposit(deposit) = &deposit3 {
+        if let EthEventLog::AssetDeposit(deposit) = &deposit3_db {
             assert_eq!(
                 diff2.assets.get(&nonce3),
                 Some(deposit),
@@ -341,129 +357,137 @@ mod tests {
         }
     }
 
-    /*
     #[tokio::test]
-    pub async fn check_validator_set_deposits_on_multiple_eth_blocks() {
-        let acc1 = Address::from([1; 32]);
-        let acc2 = Address::from([2; 32]);
+    pub async fn check_validator_registration_unregistration() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let val1: Address = rng.gen();
+        let cons1: Address = rng.gen();
+        let val2: Address = rng.gen();
+        let cons2: Address = rng.gen();
 
-        let mut pending = PendingEvents::new(
+        let mut queue = FinalizationQueue::new(
             0,
             H160::zero(),
-            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
-                .unwrap(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(0u64),
         );
 
-        let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1)).unwrap();
-        let deposit2 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 20)).unwrap();
-        let deposit3 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 5)).unwrap();
-        let deposit4 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
-        let deposit5 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc1, 300)).unwrap();
+        let val1_register = eth_log_validator_registration(0, val1, cons1);
+        let val2_register = eth_log_validator_registration(0, val2, cons2);
+        let val1_unregister = eth_log_validator_unregistration(1, val1);
 
-        pending.handle_eth_log(deposit1, 0, false).await;
-        pending.handle_eth_log(deposit2, 1, false).await;
-        pending.handle_eth_log(deposit3, 1, false).await;
-        pending.handle_eth_log(deposit4, 1, false).await;
-        pending.handle_eth_log(deposit5, 1, false).await;
-        let diff1 = pending.pending[0].clone();
-        let diff2 = pending.pending[1].clone();
+        queue
+            .append_eth_logs(vec![val1_register, val2_register, val1_unregister])
+            .await;
+
+        let diff1 = queue.pending[0].clone();
+        let diff2 = queue.pending[1].clone();
         assert_eq!(
-            diff1.stake_diff.get(&acc1),
-            Some(&1),
-            "Account1 expect 1 diff stake"
+            diff1.validators.get(&val1),
+            Some(&Some(cons1)),
+            "Val1 registered cons1"
         );
         assert_eq!(
-            diff1.stake_diff.get(&acc2),
-            None,
-            "Account2 stake diff should not exist on eth height 0"
+            diff1.validators.get(&val2),
+            Some(&Some(cons2)),
+            "Val1 registered cons2"
         );
 
         assert_eq!(
-            diff2.stake_diff.get(&acc1),
-            Some(&320),
-            "Account1 expect 320 diff stake"
-        );
-        assert_eq!(
-            diff2.stake_diff.get(&acc2),
-            Some(&65),
-            "Account2 expect 65 diff stake"
+            diff2.validators.get(&val1),
+            Some(&None),
+            "Val1 unregistered consensus key"
         );
     }
 
     #[tokio::test]
-    pub async fn check_validator_set_withdrawal_on_multiple_eth_blocks() {
-        let acc1 = Address::from([1; 32]);
-        let acc2 = Address::from([2; 32]);
+    #[tracing_test::traced_test]
+    pub async fn check_deposit_and_validator_finalization() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let val1: Address = rng.gen();
+        let cons1: Address = rng.gen();
+        let val2: Address = rng.gen();
+        let cons2: Address = rng.gen();
 
-        let mut pending = PendingEvents::new(
+        let acc1: Address = rng.gen();
+        let token1 = AssetId::zeroed();
+        let nonce1: Bytes32 = rng.gen();
+
+        let mut queue = FinalizationQueue::new(
             0,
             H160::zero(),
-            hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
-                .unwrap(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(0u64),
         );
 
-        let deposit1 = EthEventLog::try_from(&eth_log_validator_deposit(0, acc1, 1000)).unwrap();
-        let deposit2 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 300)).unwrap();
-        let deposit3 = EthEventLog::try_from(&eth_log_validator_deposit(1, acc2, 60)).unwrap();
-        let deposit4 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc2, 10)).unwrap();
-        let deposit5 = EthEventLog::try_from(&eth_log_validator_withdrawal(1, acc1, 100)).unwrap();
-        let deposit6 = EthEventLog::try_from(&eth_log_validator_withdrawal(2, acc1, 50)).unwrap();
+        let val1_register = eth_log_validator_registration(1, val1, cons1);
+        let val2_register = eth_log_validator_registration(2, val2, cons2);
+        let deposit1 = eth_log_asset_deposit(2, acc1, token1, 1, 40, nonce1, 0);
+        let val1_unregister = eth_log_validator_unregistration(3, val1);
 
-        pending.handle_eth_log(deposit1, 0, false).await;
-        pending.handle_eth_log(deposit2, 1, false).await;
-        pending.handle_eth_log(deposit3, 1, false).await;
-        pending.handle_eth_log(deposit4, 1, false).await;
-        pending.handle_eth_log(deposit5, 1, false).await;
-        pending.handle_eth_log(deposit6, 2, false).await;
-        let diff1 = pending.pending[0].clone();
-        let diff2 = pending.pending[1].clone();
-        let diff3 = pending.pending[2].clone();
-        assert_eq!(
-            diff1.stake_diff.get(&acc1),
-            Some(&1000),
-            "Account1 expect 1000 diff stake"
-        );
-        assert_eq!(
-            diff2.stake_diff.get(&acc1),
-            Some(&-400),
-            "Account1 expect -500 diff stake"
-        );
-        assert_eq!(
-            diff2.stake_diff.get(&acc2),
-            Some(&50),
-            "Account2 expect 60-10 diff stake"
-        );
+        queue
+            .append_eth_logs(vec![
+                val1_register,
+                val2_register,
+                deposit1,
+                val1_unregister,
+            ])
+            .await;
 
-        assert_eq!(
-            diff3.stake_diff.get(&acc1),
-            Some(&-50),
-            "Account1 expect -50 diff stake"
-        );
-
-        // apply all diffs to finalized state
         let mut db = DummyDb::filled();
+        //let db_ref = &mut db as &mut dyn RelayerDb;
 
-        pending.commit_diffs(&mut db, 5).await;
-
-        assert_eq!(pending.pending.len(), 0, "All diffs should be flushed");
-        assert_eq!(pending.finalized_da_height, 5, "Finalized should be 5");
+        queue.commit_diffs(&mut db, 1).await;
         assert_eq!(
-            pending.finalized_validator_set.get(&acc1),
-            Some(&550),
-            "Acc1 state should be "
-        );
-        assert_eq!(
-            pending.finalized_validator_set.get(&acc2),
-            Some(&50),
-            "Acc2 state should be "
+            db.data.lock().validators.get(&val1),
+            Some(&(0, Some(cons1))),
+            "Val1 should be set"
         );
 
-        let data = db.data.lock();
-        let diffs = &data.validator_set_diff;
-        assert_eq!(diffs.len(), 3);
-        assert_eq!(diffs.get(&0).unwrap().get(&acc1), Some(&1000));
-        assert_eq!(diffs.get(&1).unwrap().get(&acc1), Some(&600));
-        assert_eq!(diffs.get(&1).unwrap().get(&acc2), Some(&50));
-        assert_eq!(diffs.get(&2).unwrap().get(&acc1), Some(&550));
-    } */
+        assert_eq!(
+            db.data.lock().validators.get(&val2),
+            None,
+            "Val2 shouldn't be found"
+        );
+
+        assert_eq!(
+            db.data.lock().deposit_coin.len(),
+            0,
+            "asset is not finalized"
+        );
+
+        queue.commit_diffs(&mut db, 2).await;
+
+        assert_eq!(
+            db.data.lock().validators.get(&val2),
+            Some(&(0, Some(cons2))),
+            "Val2 should be set"
+        );
+
+        assert_eq!(
+            db.data.lock().deposit_coin.len(),
+            1,
+            "asset should be finalized"
+        );
+
+        queue.commit_diffs(&mut db, 3).await;
+
+        assert_eq!(
+            db.data.lock().validators.get(&val1),
+            Some(&(0, None)),
+            "Val1 should be unregistered"
+        );
+        assert_eq!(
+            db.data.lock().validators.get(&val2),
+            Some(&(0, Some(cons2))),
+            "Val2 should be registered"
+        );
+        assert_eq!(
+            db.data.lock().deposit_coin.len(),
+            1,
+            "asset should stay finalized"
+        );
+    }
 }
