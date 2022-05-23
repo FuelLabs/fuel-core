@@ -42,7 +42,7 @@ impl TestSetupBuilder {
                 code,
                 salt,
                 state: None,
-                balances: None,
+                balances,
             },
         );
 
