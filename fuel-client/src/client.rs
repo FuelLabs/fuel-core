@@ -327,8 +327,8 @@ impl FuelClient {
             asset: asset_id,
         });
 
-        let balance = self.query(query).await.unwrap().contract_balance.0;
-        Ok(balance)
+        let balance = self.query(query).await.unwrap().contract_balance.amount;
+        Ok(balance.into())
     }
 
     pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {

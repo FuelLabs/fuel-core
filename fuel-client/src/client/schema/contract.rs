@@ -16,6 +16,14 @@ pub struct ContractByIdQuery {
     pub contract: Option<Contract>,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct ContractBalance {
+    pub contract: ContractId,
+    pub amount: U64,
+    pub asset_id: AssetId,
+}
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ContractBalanceQueryArgs {
     pub id: ContractId,
@@ -30,7 +38,7 @@ pub struct ContractBalanceQueryArgs {
 )]
 pub struct ContractBalanceQuery {
     #[arguments(contract = &args.id, asset = &args.asset)]
-    pub contract_balance: U64,
+    pub contract_balance: ContractBalance,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

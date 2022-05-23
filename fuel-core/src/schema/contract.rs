@@ -61,6 +61,27 @@ impl ContractQuery {
     }
 }
 
+pub struct ContractBalance {
+    contract: fuel_types::ContractId,
+    amount: u64,
+    asset_id: fuel_types::AssetId,
+}
+
+#[Object]
+impl ContractBalance {
+    async fn contract(&self) -> ContractId {
+        self.contract.into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.amount.into()
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.asset_id.into()
+    }
+}
+
 #[derive(Default)]
 pub struct ContractBalanceQuery;
 
@@ -71,7 +92,7 @@ impl ContractBalanceQuery {
         ctx: &Context<'_>,
         contract: ContractId,
         asset: AssetId,
-    ) -> async_graphql::Result<U64> {
+    ) -> async_graphql::Result<ContractBalance> {
         let contract_id: fuel_types::ContractId = contract.0;
 
         let db = ctx.data_unchecked::<Database>().clone();
@@ -86,8 +107,10 @@ impl ContractBalanceQuery {
 
         let balance = result.unwrap().unwrap_or_default();
 
-        let final_balance: U64 = balance.into();
-
-        Ok(final_balance)
+        Ok(ContractBalance {
+            contract: contract.into(),
+            amount: balance,
+            asset_id,
+        })
     }
 }
