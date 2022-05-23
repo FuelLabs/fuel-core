@@ -11,8 +11,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 async fn submit_utxo_verified_tx_with_min_gas_price() {
     let mut rng = StdRng::seed_from_u64(2322);
     let mut test_builder = TestSetupBuilder::new(2322);
-    let (_, contract_id) = test_builder.setup_contract(vec![]);
-
+    let (_, contract_id) = test_builder.setup_contract(vec![], None);
     // initialize 10 random transactions that transfer coins and call a contract
     let transactions = (1..=10)
         .into_iter()

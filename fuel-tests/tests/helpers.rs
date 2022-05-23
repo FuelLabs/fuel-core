@@ -30,7 +30,11 @@ impl TestSetupBuilder {
     }
 
     /// setup a contract and add to genesis configuration
-    pub fn setup_contract(&mut self, code: Vec<u8>) -> (Salt, ContractId) {
+    pub fn setup_contract(
+        &mut self,
+        code: Vec<u8>,
+        balances: Option<Vec<(AssetId, u64)>>,
+    ) -> (Salt, ContractId) {
         let contract = Contract::from(code.clone());
         let root = contract.root();
         let salt: Salt = self.rng.gen();
@@ -43,30 +47,6 @@ impl TestSetupBuilder {
                 salt,
                 state: None,
                 balances,
-            },
-        );
-
-        (salt, contract_id)
-    }
-
-    /// setup a contract and add to genesis configuration
-    pub fn setup_funded_contract(&mut self, code: Vec<u8>) -> (Salt, ContractId) {
-        let contract = Contract::from(code.clone());
-        let root = contract.root();
-        let salt: Salt = self.rng.gen();
-        let contract_id = contract.id(&salt.clone(), &root, &Contract::default_state_root());
-
-        let test_asset_id: AssetId = AssetId::new([1u8; 32]);
-        let test_balance: u64 = 500;
-        let balances = vec![(test_asset_id, test_balance)];
-
-        self.contracts.insert(
-            contract_id,
-            ContractConfig {
-                code,
-                salt,
-                state: None,
-                balances: Some(balances),
             },
         );
 
