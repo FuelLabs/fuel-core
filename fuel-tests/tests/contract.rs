@@ -1,9 +1,11 @@
 use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_vm::prelude::*;
 
+const SEED: u64 = 2322;
+
 #[tokio::test]
 async fn test_contract_salt() {
-    let mut test_builder = TestSetupBuilder::new(2322);
+    let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(vec![], None);
 
     // spin up node
@@ -21,7 +23,7 @@ async fn test_contract_salt() {
 
 #[tokio::test]
 async fn test_contract_balance_default() {
-    let mut test_builder = TestSetupBuilder::new(2322);
+    let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) =
         test_builder.setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), 0)]));
 
@@ -43,7 +45,7 @@ async fn test_contract_balance_default() {
 
 #[tokio::test]
 async fn test_contract_balance() {
-    let mut test_builder = TestSetupBuilder::new(2322);
+    let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) =
         test_builder.setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), 500)]));
 
