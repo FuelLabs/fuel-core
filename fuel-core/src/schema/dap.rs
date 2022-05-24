@@ -192,4 +192,228 @@ impl DapMutation {
 
         Ok(result)
     }
+
+    #[cfg(not(feature = "debug"))]
+    async fn set_single_stepping(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+        _enable: bool,
+    ) -> async_graphql::Result<bool> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
+    async fn set_single_stepping(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+        enable: bool,
+    ) -> async_graphql::Result<bool> {
+        trace!("Set single stepping to {} for VM {:?}", enable, id);
+
+        let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        vm.set_single_stepping(enable);
+        Ok(enable)
+    }
+
+    #[cfg(not(feature = "debug"))]
+    async fn set_breakpoint(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+        _breakpoint: self::gql_types::Breakpoint,
+    ) -> async_graphql::Result<bool> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
+    async fn set_breakpoint(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+        breakpoint: self::gql_types::Breakpoint,
+    ) -> async_graphql::Result<bool> {
+        trace!("Continue execution of VM {:?}", id);
+
+        let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        vm.set_breakpoint(breakpoint.into());
+        Ok(true)
+    }
+
+    async fn start_tx(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+        tx_json: String,
+    ) -> async_graphql::Result<self::gql_types::RunResult> {
+        trace!("Spawning a new VM instance");
+
+        let tx: Transaction = serde_json::from_str(&tx_json)
+            .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
+
+        let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        let state_ref = vm
+            .transact(tx)
+            .map_err(|err| async_graphql::Error::new(format!("Transaction failed: {err:?}")))?;
+
+        #[cfg(feature = "debug")]
+        {
+            let dbgref = state_ref.state().debug_ref();
+            Ok(self::gql_types::RunResult {
+                state: match dbgref {
+                    Some(_) => self::gql_types::RunState::Breakpoint,
+                    None => self::gql_types::RunState::Completed,
+                },
+                breakpoint: dbgref.and_then(|d| match d {
+                    DebugEval::Continue => None,
+                    DebugEval::Breakpoint(bp) => Some(bp.into()),
+                }),
+            })
+        }
+
+        #[cfg(not(feature = "debug"))]
+        {
+            let _ = state_ref;
+            Ok(self::gql_types::RunResult {
+                state: self::gql_types::RunState::Completed,
+                breakpoint: None,
+            })
+        }
+    }
+
+    #[cfg(not(feature = "debug"))]
+    async fn continue_tx(
+        &self,
+        _ctx: &Context<'_>,
+        _id: ID,
+    ) -> async_graphql::Result<self::gql_types::RunResult> {
+        Err(async_graphql::Error::new(
+            "Feature 'debug' is not compiled in",
+        ))
+    }
+
+    #[cfg(feature = "debug")]
+    async fn continue_tx(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> async_graphql::Result<self::gql_types::RunResult> {
+        trace!("Continue execution of VM {:?}", id);
+
+        let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
+        let vm = locked
+            .vm
+            .get_mut(&id)
+            .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+        let state = match vm.resume() {
+            Ok(state) => state,
+            // The transaction was already completed earlier, so it cannot be resumed
+            Err(fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+                return Ok(self::gql_types::RunResult {
+                    state: self::gql_types::RunState::Completed,
+                    breakpoint: None,
+                })
+            }
+            // The transaction was already completed earlier, so it cannot be resumed
+            Err(err) => return Err(async_graphql::Error::new(format!("VM error: {err:?}"))),
+        };
+
+        let dbgref = state.debug_ref();
+
+        Ok(self::gql_types::RunResult {
+            state: match dbgref {
+                Some(_) => self::gql_types::RunState::Breakpoint,
+                None => self::gql_types::RunState::Completed,
+            },
+            breakpoint: dbgref.and_then(|d| match d {
+                DebugEval::Continue => None,
+                DebugEval::Breakpoint(bp) => Some(bp.into()),
+            }),
+        })
+    }
+}
+
+mod gql_types {
+    //! GraphQL type wrappers
+    use async_graphql::*;
+
+    use crate::schema::scalars::{ContractId, U64};
+
+    #[cfg(feature = "debug")]
+    use fuel_vm::prelude::Breakpoint as FuelBreakpoint;
+
+    #[derive(Debug, Clone, Copy, InputObject)]
+    pub struct Breakpoint {
+        contract: ContractId,
+        pc: U64,
+    }
+
+    #[cfg(feature = "debug")]
+    impl From<&FuelBreakpoint> for Breakpoint {
+        fn from(bp: &FuelBreakpoint) -> Self {
+            Self {
+                contract: (*bp.contract()).into(),
+                pc: U64(bp.pc()),
+            }
+        }
+    }
+
+    #[cfg(feature = "debug")]
+    impl From<Breakpoint> for FuelBreakpoint {
+        fn from(bp: Breakpoint) -> Self {
+            Self::new(bp.contract.into(), bp.pc.0)
+        }
+    }
+
+    /// A separate `Breakpoint` type to be used as an output, as a single
+    /// type cannot act as both input and output type in async-graphql
+    #[derive(Debug, Clone, Copy, SimpleObject)]
+    pub struct OutputBreakpoint {
+        contract: ContractId,
+        pc: U64,
+    }
+
+    #[cfg(feature = "debug")]
+    impl From<&FuelBreakpoint> for OutputBreakpoint {
+        fn from(bp: &FuelBreakpoint) -> Self {
+            Self {
+                contract: (*bp.contract()).into(),
+                pc: U64(bp.pc()),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Enum)]
+    pub enum RunState {
+        /// All breakpoints have been processed, and the program has terminated
+        Completed,
+        /// Stopped on a breakpoint
+        Breakpoint,
+    }
+
+    #[derive(Debug, Clone, Copy, SimpleObject)]
+    pub struct RunResult {
+        pub state: RunState,
+        pub breakpoint: Option<OutputBreakpoint>,
+    }
 }

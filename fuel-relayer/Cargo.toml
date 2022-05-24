@@ -19,7 +19,7 @@ ethers-providers = { git = "https://github.com/rakita/ethers-rs.git", branch = "
     "rustls",
 ] }
 features = "0.10"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.0" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.1" }
 fuel-tx = { version = "0.10", features = ["serde"] }
 fuel-types = { version = "0.5", features = ["serde"] }
 futures = "0.3"
@@ -33,7 +33,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3.9"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.0", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.7.1", features = [
     "test_helpers",
 ] }
 fuel-types = { version = "0.5", features = ["serde", "random"] }
