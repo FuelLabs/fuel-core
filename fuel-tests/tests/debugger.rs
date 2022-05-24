@@ -4,8 +4,10 @@ use fuel_core::service::{Config, FuelService};
 use fuel_gql_client::client::FuelClient;
 use fuel_vm::prelude::*;
 
+/// Tests that debugger doesn't produce any errors with a running local node,
+/// and also verifies that breakpoints are working as they should
 #[tokio::test]
-async fn debugger() {
+async fn debugger_integration() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
