@@ -355,43 +355,12 @@ impl DapMutation {
 
 mod gql_types {
     //! GraphQL type wrappers
-    use std::str::FromStr;
-
     use async_graphql::*;
 
-    use crate::schema::scalars::U64;
+    use crate::schema::scalars::{ContractId, U64};
 
     #[cfg(feature = "debug")]
     use fuel_vm::prelude::Breakpoint as FuelBreakpoint;
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct ContractId(fuel_types::ContractId);
-
-    #[Scalar]
-    impl ScalarType for ContractId {
-        fn parse(value: Value) -> InputValueResult<Self> {
-            if let Value::String(value) = &value {
-                Ok(Self(fuel_types::ContractId::from_str(value)?))
-            } else {
-                Err(InputValueError::expected_type(value))
-            }
-        }
-
-        fn to_value(&self) -> Value {
-            Value::String(self.0.to_string())
-        }
-    }
-
-    impl From<fuel_types::ContractId> for ContractId {
-        fn from(id: fuel_types::ContractId) -> Self {
-            Self(id)
-        }
-    }
-    impl From<ContractId> for fuel_types::ContractId {
-        fn from(id: ContractId) -> Self {
-            id.0
-        }
-    }
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {
