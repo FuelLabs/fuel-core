@@ -1,3 +1,4 @@
+use crate::client::schema::contract::ContractBalanceQueryArgs;
 use cynic::{http::SurfExt, Id, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
@@ -363,6 +364,21 @@ impl FuelClient {
             schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
         let contract = self.query(query).await?.contract;
         Ok(contract)
+    }
+
+    pub async fn contract_balance(&self, id: &str, asset: Option<&str>) -> io::Result<u64> {
+        let asset_id: schema::AssetId = match asset {
+            Some(asset) => asset.parse()?,
+            None => schema::AssetId::default(),
+        };
+
+        let query = schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
+            id: id.parse()?,
+            asset: asset_id,
+        });
+
+        let balance = self.query(query).await.unwrap().contract_balance.amount;
+        Ok(balance.into())
     }
 
     pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {

@@ -20,6 +20,7 @@ pub struct Query(
     health::HealthQuery,
     coin::CoinQuery,
     contract::ContractQuery,
+    contract::ContractBalanceQuery,
 );
 
 #[derive(MergedObject, Default)]

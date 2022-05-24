@@ -135,6 +135,12 @@ enum CoinStatus {
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
+	salt: Salt!
+}
+type ContractBalance {
+	contract: ContractId!
+	amount: U64!
+	assetId: AssetId!
 }
 type ContractCreated {
 	contract: Contract!
@@ -248,6 +254,7 @@ type Query {
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
+	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 }
 type Receipt {
 	contract: Contract

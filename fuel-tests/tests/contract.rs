@@ -1,29 +1,46 @@
-use fuel_core::{
-    database::Database,
-    service::{Config, FuelService},
-};
-use fuel_gql_client::client::FuelClient;
-use fuel_storage::Storage;
-use fuel_vm::prelude::Contract as FuelVmContract;
+use crate::helpers::{TestContext, TestSetupBuilder};
+use fuel_vm::prelude::*;
+
+const SEED: u64 = 2322;
 
 #[tokio::test]
-async fn contract() {
-    // setup test data in the node
-    let contract = FuelVmContract::default();
-    let id = fuel_types::ContractId::new(Default::default());
+async fn test_contract_salt() {
+    let mut test_builder = TestSetupBuilder::new(SEED);
+    let (_, contract_id) = test_builder.setup_contract(vec![], None);
 
-    let mut db = Database::default();
-    Storage::<fuel_types::ContractId, FuelVmContract>::insert(&mut db, &id, &contract).unwrap();
-    // setup server & client
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
-    let client = FuelClient::from(srv.bound_address);
+    // spin up node
+    let TestContext { client, .. } = test_builder.finalize().await;
 
-    // run test
     let contract = client
-        .contract(format!("{:#x}", id).as_str())
+        .contract(format!("{:#x}", contract_id).as_str())
         .await
         .unwrap();
-    assert!(contract.is_some());
+
+    // Check that salt is 0x Hex prefixed
+    let salt = contract.unwrap().salt;
+    assert_eq!("0x", &salt.to_string()[..2]);
+}
+
+#[tokio::test]
+async fn test_contract_balance() {
+    for test_bal in 0..10 {
+        let mut test_builder = TestSetupBuilder::new(SEED);
+        let (_, contract_id) =
+            test_builder.setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), test_bal)]));
+
+        // spin up node
+        let TestContext { client, .. } = test_builder.finalize().await;
+
+        let asset_id = AssetId::new([1u8; 32]);
+
+        let balance = client
+            .contract_balance(
+                format!("{:#x}", contract_id).as_str(),
+                Some(format!("{:#x}", asset_id).as_str()),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(balance, test_bal);
+    }
 }
