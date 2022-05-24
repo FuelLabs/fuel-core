@@ -288,8 +288,8 @@ Then create a DNS record based on that ADDRESS value in your DNS registrar.
 [aws-eks]: https://aws.amazon.com/eks/
 [cert-manager]: https://cert-manager.io/docs/configuration/acme/
 [create-git-token]:  https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token
-[create-k8s-sh]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/create-k8s.sh
-[delete-k8s-sh]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/delete-k8s.sh
+[create-k8s-sh]: https://github.com/FuelLabs/infrastructure/blob/master/scripts/create-k8s.sh
+[delete-k8s-sh]: https://github.com/FuelLabs/infrastructure/blob/master/scripts/delete-k8s.sh
 [docker-desktop]: https://docs.docker.com/engine/install/
 [env-file]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/.env
 [fuel-core-image]: https://github.com/fuellabs/fuel-core/pkgs/container/fuel-core
@@ -304,9 +304,9 @@ Then create a DNS record based on that ADDRESS value in your DNS registrar.
 [iam-auth]: https://docs.aws.amazon.com/eks/latest/userguide/install-aws-iam-authenticator.html
 [ingress-controller]: https://github.com/kubernetes/ingress-nginx
 [ingress-def]: https://kubernetes.io/docs/concepts/services-networking/ingress/
-[k8s-terraform]: https://github.com/FuelLabs/fuel-core/tree/master/deployment/terraform
+[k8s-terraform]: https://github.com/FuelLabs/infrastructure/tree/master/terraform
 [kubectl-cli]: https://kubernetes.io/docs/tasks/tools/
-[monitoring-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/monitoring-deploy.sh
-[monitoring-ingress-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/monitoring-ingress-deploy.sh
+[monitoring-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/fuel-core-ingress-deploy.sh
+[monitoring-ingress-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/fuel-core-ingress-deploy.sh
 [prometheus]: https://prometheus.io/
 [terraform]: https://learn.hashicorp.com/tutorials/terraform/install-cli
