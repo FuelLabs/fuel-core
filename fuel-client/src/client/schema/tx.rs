@@ -233,14 +233,20 @@ pub struct TxArg {
     pub tx: HexString,
 }
 
+#[derive(cynic::FragmentArguments)]
+pub struct DryRunArg {
+    pub tx: HexString,
+    pub utxo_validation: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "TxArg"
+    argument_struct = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx = &args.tx)]
+    #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
     pub dry_run: Vec<OpaqueReceipt>,
 }
 
@@ -311,8 +317,9 @@ pub mod tests {
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
         let mut tx = fuel_tx::Transaction::default();
-        let query = DryRun::build(TxArg {
+        let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
+            utxo_validation: None,
         });
         insta::assert_snapshot!(query.query)
     }

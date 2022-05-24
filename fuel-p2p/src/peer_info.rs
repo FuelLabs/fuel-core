@@ -1,3 +1,4 @@
+use crate::config::P2PConfig;
 use libp2p::{
     core::{
         connection::{ConnectionId, ListenerId},
@@ -44,11 +45,11 @@ pub struct PeerInfo {
 }
 
 impl PeerInfo {
-    pub fn new(conencted_point: ConnectedPoint) -> Self {
+    pub fn new(connected_point: ConnectedPoint) -> Self {
         Self {
             peer_addresses: HashSet::default(),
             client_version: None,
-            connected_point: conencted_point,
+            connected_point,
             latest_ping: None,
         }
     }
@@ -62,14 +63,27 @@ pub struct PeerInfoBehaviour {
 }
 
 impl PeerInfoBehaviour {
-    pub fn new(local_public_key: PublicKey) -> Self {
+    pub fn new(local_public_key: PublicKey, config: &P2PConfig) -> Self {
         let identify = {
-            let cfg = IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
-            Identify::new(cfg)
+            let identify_config = IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
+            if let Some(interval) = config.identify_interval {
+                Identify::new(identify_config.with_interval(interval))
+            } else {
+                Identify::new(identify_config)
+            }
+        };
+
+        let ping = {
+            let ping_config = PingConfig::new();
+            if let Some(interval) = config.info_interval {
+                Ping::new(ping_config.with_interval(interval))
+            } else {
+                Ping::new(ping_config)
+            }
         };
 
         Self {
-            ping: Ping::new(PingConfig::new()),
+            ping,
             identify,
             peers: HashMap::default(),
         }

@@ -123,6 +123,96 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
         .contains("The gas price is too low"));
 }
 
+// verify that dry run can disable utxo_validation by simulating a transaction with unsigned
+// non-existent coin inputs
+#[tokio::test]
+async fn dry_run_override_utxo_validation() {
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    let asset_id = rng.gen();
+    let tx = TransactionBuilder::script(
+        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+        vec![],
+    )
+    .gas_limit(1000)
+    .add_input(Input::coin(
+        rng.gen(),
+        rng.gen(),
+        1000,
+        AssetId::default(),
+        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    ))
+    .add_input(Input::coin(
+        rng.gen(),
+        rng.gen(),
+        rng.gen(),
+        asset_id,
+        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    ))
+    .add_output(Output::change(rng.gen(), 0, asset_id))
+    .add_witness(Default::default())
+    .finalize();
+
+    let client = TestSetupBuilder::new(2322).finalize().await.client;
+
+    let log = client.dry_run_opt(&tx, Some(false)).await.unwrap();
+    assert_eq!(2, log.len());
+
+    assert!(matches!(log[0],
+        Receipt::Return {
+            val, ..
+        } if val == 1));
+}
+
+// verify that dry run without utxo-validation override respects the node setting
+#[tokio::test]
+async fn dry_run_no_utxo_validation_override() {
+    let mut rng = StdRng::seed_from_u64(2322);
+
+    let asset_id = rng.gen();
+    // construct a tx with invalid inputs
+    let tx = TransactionBuilder::script(
+        Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
+        vec![],
+    )
+    .gas_limit(1000)
+    .add_input(Input::coin(
+        rng.gen(),
+        rng.gen(),
+        1000,
+        AssetId::default(),
+        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    ))
+    .add_input(Input::coin(
+        rng.gen(),
+        rng.gen(),
+        rng.gen(),
+        asset_id,
+        0,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    ))
+    .add_output(Output::change(rng.gen(), 0, asset_id))
+    .add_witness(Default::default())
+    .finalize();
+
+    let client = TestSetupBuilder::new(2322).finalize().await.client;
+
+    // verify that the client validated the inputs and failed the tx
+    let res = client.dry_run_opt(&tx, None).await;
+    assert!(res.is_err());
+}
+
 /// Helper for configuring the genesis block in tests
 struct TestSetupBuilder {
     rng: StdRng,
@@ -195,7 +285,7 @@ impl TestSetupBuilder {
     }
 
     // setup chainspec and spin up a fuel-node
-    pub async fn finalize(self) -> TestContext {
+    pub async fn finalize(&mut self) -> TestContext {
         let config = Config {
             utxo_validation: true,
             tx_pool_config: fuel_txpool::Config {
@@ -205,7 +295,7 @@ impl TestSetupBuilder {
             },
             chain_conf: ChainConfig {
                 initial_state: Some(StateConfig {
-                    coins: Some(self.initial_coins),
+                    coins: Some(self.initial_coins.clone()),
                     contracts: Some(self.contracts.values().cloned().collect_vec()),
                     ..StateConfig::default()
                 }),
@@ -218,7 +308,7 @@ impl TestSetupBuilder {
         let client = FuelClient::from(srv.bound_address);
 
         TestContext {
-            rng: self.rng,
+            rng: self.rng.clone(),
             client,
         }
     }

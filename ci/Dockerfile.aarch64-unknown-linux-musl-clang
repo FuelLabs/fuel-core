@@ -1,0 +1,5 @@
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
+
+RUN dpkg --add-architecture arm64 && \
+    apt-get update && \
+    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu

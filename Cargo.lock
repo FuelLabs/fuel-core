@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.6.4"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2061,7 +2061,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.6.4"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2098,7 +2098,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.6.4"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.6.4"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2222,7 +2222,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.6.4"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2249,9 +2249,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.9.0"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62bfa4ac84af427a2840a2c48cd340858cd35b66f9b7e6ddb17bf2f96faa6b64"
+checksum = "80c2dc53d77a9f3d815231efe6bed2688ec7435c36870453defebb43e60bbdcb"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
