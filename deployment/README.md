@@ -111,6 +111,7 @@ You will need to customize the following environment variables as needed (for va
 | ENV Variable                   |  Script Usage             | Description                                                                                       |
 |--------------------------------|---------------------------|---------------------------------------------------------------------------------------------------|
 | letsencrypt_email              |  fuel-core-ingress-deploy | the email address for requesting & renewing your lets encrypt certificate                         |
+| k8s_provider                   |  all                      | your kubernetes provider name, possible options: eks                                              |
 | k8s_namespace                  |  fuel-core-deploy         | your kubernetes namespace for fuel-core deployment                                                |
 | fuel_core_ingress_dns          |  fuel-core-ingress-deploy | the custom dns address for the fuel-core ingress                                                  | 
 | fuel_core_ingress_http_port    |  fuel-core-ingress-deploy | the custom port for the fuel-core ingress                                                         |    
