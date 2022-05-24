@@ -474,15 +474,13 @@ impl TestContext {
             receipts_root: Default::default(),
             script,
             script_data: vec![],
-            inputs: vec![Input::Coin {
+            inputs: vec![Input::CoinSigned {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
                 asset_id: Default::default(),
                 witness_index: 0,
                 maturity: 0,
-                predicate: vec![],
-                predicate_data: vec![],
             }],
             outputs: vec![Output::Coin {
                 amount,

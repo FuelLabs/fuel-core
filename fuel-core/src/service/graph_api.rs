@@ -2,10 +2,10 @@ use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
 use crate::service::Config;
 use crate::tx_pool::TxPool;
+use anyhow::Result;
 use async_graphql::{
     extensions::Tracing, http::playground_source, http::GraphQLPlaygroundConfig, Request, Response,
 };
-use axum::routing::{get, post};
 use axum::{
     extract::Extension,
     http::{
@@ -16,6 +16,7 @@ use axum::{
     },
     response::Html,
     response::IntoResponse,
+    routing::{get, post},
     Json, Router,
 };
 use serde_json::json;
@@ -32,7 +33,7 @@ pub async fn start_server(
     config: Config,
     db: Database,
     tx_pool: Arc<TxPool>,
-) -> Result<(SocketAddr, JoinHandle<Result<(), crate::service::Error>>), std::io::Error> {
+) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let schema = build_schema().data(db).data(tx_pool).data(config);
     let schema = dap::init(schema).extension(Tracing).finish();

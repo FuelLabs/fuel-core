@@ -53,9 +53,15 @@ pub struct Opt {
     /// The minimum allowed gas price
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
+
     /// The minimum allowed byte price
     #[clap(long = "min-byte-price", default_value = "0")]
     pub min_byte_price: u64,
+
+    /// Enable predicate execution on transaction inputs.
+    /// Will reject any transactions with predicates if set to false.
+    #[clap(long = "predicates")]
+    pub predicates: bool,
 }
 
 impl Opt {
@@ -104,6 +110,7 @@ impl Opt {
             utxo_validation,
             min_gas_price,
             min_byte_price,
+            predicates,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -122,6 +129,7 @@ impl Opt {
                 min_byte_price,
                 ..Default::default()
             },
+            predicates,
         })
     }
 }

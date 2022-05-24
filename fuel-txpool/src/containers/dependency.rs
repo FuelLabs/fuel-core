@@ -87,7 +87,8 @@ impl Dependency {
                 for input in parent_tx.inputs() {
                     // if found and depth is not zero add it to `check`.
                     match input {
-                        Input::Coin { utxo_id, .. } => {
+                        Input::CoinSigned { utxo_id, .. }
+                        | Input::CoinPredicate { utxo_id, .. } => {
                             let state = self
                                 .coins
                                 .get(utxo_id)
@@ -118,7 +119,14 @@ impl Dependency {
 
     fn check_if_coin_input_can_spend_db_coin(coin: &Coin, input: &Input) -> anyhow::Result<()> {
         match input {
-            Input::Coin {
+            Input::CoinSigned {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                ..
+            }
+            | Input::CoinPredicate {
                 utxo_id,
                 owner,
                 amount,
@@ -148,7 +156,13 @@ impl Dependency {
         input: &Input,
         is_output_filled: bool,
     ) -> anyhow::Result<()> {
-        if let Input::Coin {
+        if let Input::CoinSigned {
+            owner,
+            amount,
+            asset_id,
+            ..
+        }
+        | Input::CoinPredicate {
             owner,
             amount,
             asset_id,
@@ -244,7 +258,7 @@ impl Dependency {
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
-                Input::Coin { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
                     // is it dependent output?
                     if let Some(state) = self.coins.get(utxo_id) {
                         // check depth
@@ -387,7 +401,7 @@ impl Dependency {
         // iterate over all inputs and spend parent coins/contracts
         for input in tx.inputs() {
             match input {
-                Input::Coin { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
                     // spend coin
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         state.is_spend_by = Some(tx.id());
@@ -497,7 +511,7 @@ impl Dependency {
         // remove this transaction as a dependency of its' inputs.
         for input in tx.inputs() {
             match input {
-                Input::Coin { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
                     // Input coin cases
                     // 1. coin state was already removed if parent tx was also removed, no cleanup required.
                     // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
@@ -559,15 +573,13 @@ mod tests {
             amount: 10,
             asset_id: AssetId::default(),
         };
-        let input = Input::Coin {
+        let input = Input::CoinSigned {
             utxo_id: UtxoId::default(),
             owner: Address::default(),
             amount: 10,
             asset_id: AssetId::default(),
             witness_index: 0,
             maturity: 0,
-            predicate: Vec::new(),
-            predicate_data: Vec::new(),
         };
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_ok(), "test1. It should be Ok");
