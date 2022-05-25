@@ -24,15 +24,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
             .gas_limit(100)
             .gas_price(1)
             .byte_price(1)
-            .add_unsigned_coin_input(
-                rng.gen(),
-                &secret,
-                1000 + i,
-                Default::default(),
-                0,
-                vec![],
-                vec![],
-            )
+            .add_unsigned_coin_input(rng.gen(), &secret, 1000 + i, Default::default(), 0)
             .add_input(Input::Contract {
                 utxo_id: Default::default(),
                 balance_root: Default::default(),
@@ -54,7 +46,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         .collect_vec();
 
     // setup genesis block with coins that transactions can spend
-    test_builder.config_coin_inputs_from_transactions(&transactions);
+    test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
 
     // spin up node
     let TestContext { client, .. } = test_builder.finalize().await;
@@ -129,24 +121,20 @@ async fn dry_run_override_utxo_validation() {
         vec![],
     )
     .gas_limit(1000)
-    .add_input(Input::coin(
+    .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
         1000,
         AssetId::default(),
         0,
         Default::default(),
-        Default::default(),
-        Default::default(),
     ))
-    .add_input(Input::coin(
+    .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
         rng.gen(),
         asset_id,
         0,
-        Default::default(),
-        Default::default(),
         Default::default(),
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
@@ -176,24 +164,20 @@ async fn dry_run_no_utxo_validation_override() {
         vec![],
     )
     .gas_limit(1000)
-    .add_input(Input::coin(
+    .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
         1000,
         AssetId::default(),
         0,
         Default::default(),
-        Default::default(),
-        Default::default(),
     ))
-    .add_input(Input::coin(
+    .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
         rng.gen(),
         asset_id,
         0,
-        Default::default(),
-        Default::default(),
         Default::default(),
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))

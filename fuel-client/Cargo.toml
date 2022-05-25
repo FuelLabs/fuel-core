@@ -21,9 +21,9 @@ clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "1.0", features = ["surf"] }
 derive_more = { version = "0.99" }
 fuel-storage = "0.1"
-fuel-tx = { version = "0.10", features = ["serde"] }
+fuel-tx = { version = "0.11", features = ["serde"] }
 fuel-types = { version = "0.5", features = ["serde"] }
-fuel-vm = { version = "0.9", features = ["serde"] }
+fuel-vm = { version = "0.10", features = ["serde"] }
 futures = "0.3"
 hex = "0.4"
 itertools = "0.10"

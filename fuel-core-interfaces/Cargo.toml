@@ -18,9 +18,9 @@ derive_more = { version = "0.99" }
 fuel-asm = "0.5"
 fuel-crypto = { version = "0.5", default-features = false }
 fuel-storage = "0.1"
-fuel-tx = { version = "0.10", default-features = false }
+fuel-tx = { version = "0.11", default-features = false }
 fuel-types = { version = "0.5", default-features = false }
-fuel-vm = { version = "0.9", default-features = false }
+fuel-vm = { version = "0.10", default-features = false }
 futures = "0.3"
 lazy_static = "1.4"
 parking_lot = "0.12"

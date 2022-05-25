@@ -22,10 +22,10 @@ fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-featur
 fuel-crypto = { version = "0.5", features = ["random"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-storage = "0.1"
-fuel-tx = { version = "0.10", features = ["serde", "builder", "internals"] }
+fuel-tx = { version = "0.11", features = ["serde", "builder", "internals"] }
 fuel-txpool = { path = "../fuel-txpool" }
 fuel-types = { version = "0.5", features = ["serde"] }
-fuel-vm = { version = "0.9", features = ["serde", "random", "test-helpers"] }
+fuel-vm = { version = "0.10", features = ["serde", "random", "test-helpers"] }
 insta = "1.8"
 itertools = "0.10"
 rand = "0.8"

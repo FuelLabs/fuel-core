@@ -37,7 +37,7 @@ pub enum Error {
     #[error("unexpected database error {0:?}")]
     Database(Box<dyn StdError>),
     #[error("unexpected block execution error {0:?}")]
-    Execution(crate::executor::Error),
+    Execution(#[from] crate::executor::Error),
     #[error("Tx is invalid, insertion failed {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -85,6 +85,9 @@ impl TxPool {
     }
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+        // verify predicates
+        self.executor.verify_tx_predicates(&tx)?;
+
         let db = self.db.clone();
 
         let mut tx_to_exec = tx.clone();
@@ -145,8 +148,7 @@ impl TxPool {
         // immediately execute block
         self.executor
             .execute(&mut block, ExecutionMode::Production)
-            .await
-            .map_err(Error::Execution)?;
+            .await?;
         Ok(tx_id)
     }
 

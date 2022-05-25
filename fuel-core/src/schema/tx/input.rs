@@ -27,6 +27,7 @@ impl InputCoin {
     async fn utxo_id(&self) -> UtxoId {
         self.utxo_id
     }
+
     async fn owner(&self) -> Address {
         self.owner
     }
@@ -85,12 +86,28 @@ impl InputContract {
 impl From<&fuel_tx::Input> for Input {
     fn from(input: &fuel_tx::Input) -> Self {
         match input {
-            fuel_tx::Input::Coin {
+            fuel_tx::Input::CoinSigned {
                 utxo_id,
                 owner,
                 amount,
                 asset_id,
                 witness_index,
+                maturity,
+            } => Input::Coin(InputCoin {
+                utxo_id: UtxoId(*utxo_id),
+                owner: Address(*owner),
+                amount: *amount,
+                asset_id: AssetId(*asset_id),
+                witness_index: *witness_index,
+                maturity: *maturity,
+                predicate: HexString(Default::default()),
+                predicate_data: HexString(Default::default()),
+            }),
+            fuel_tx::Input::CoinPredicate {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
                 maturity,
                 predicate,
                 predicate_data,
@@ -99,7 +116,7 @@ impl From<&fuel_tx::Input> for Input {
                 owner: Address(*owner),
                 amount: *amount,
                 asset_id: AssetId(*asset_id),
-                witness_index: *witness_index,
+                witness_index: Default::default(),
                 maturity: *maturity,
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),

@@ -11,9 +11,10 @@ use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::Rng;
 use std::io;
 
+mod predicates;
 mod utxo_validation;
 
 #[test]
@@ -457,13 +458,6 @@ async fn get_owned_transactions() {
 }
 
 impl TestContext {
-    async fn new(seed: u64) -> Self {
-        let rng = StdRng::seed_from_u64(seed);
-        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-        Self { rng, client }
-    }
-
     async fn transfer(&mut self, from: Address, to: Address, amount: u64) -> io::Result<Bytes32> {
         let script = Opcode::RET(0x10).to_bytes().to_vec();
         let tx = Transaction::Script {
@@ -474,15 +468,13 @@ impl TestContext {
             receipts_root: Default::default(),
             script,
             script_data: vec![],
-            inputs: vec![Input::Coin {
+            inputs: vec![Input::CoinSigned {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
                 asset_id: Default::default(),
                 witness_index: 0,
                 maturity: 0,
-                predicate: vec![],
-                predicate_data: vec![],
             }],
             outputs: vec![Output::Coin {
                 amount,
