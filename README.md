@@ -68,7 +68,7 @@ OPTIONS:
 #### Example
 
 ```
-$ ./target/release/fuel-core --ip 127.0.0.1 --port 4000
+$ ./target/debug/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 
