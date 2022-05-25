@@ -7,6 +7,21 @@ use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::collections::HashMap;
 
+/// Helper for wrapping a currently running node environment
+pub struct TestContext {
+    pub rng: StdRng,
+    pub client: FuelClient,
+}
+
+impl TestContext {
+    pub async fn new(seed: u64) -> Self {
+        let rng = StdRng::seed_from_u64(seed);
+        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+        let client = FuelClient::from(srv.bound_address);
+        Self { rng, client }
+    }
+}
+
 /// Helper for configuring the genesis block in tests
 pub struct TestSetupBuilder {
     pub rng: StdRng,
@@ -14,11 +29,7 @@ pub struct TestSetupBuilder {
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
     pub min_byte_price: u64,
-}
-
-pub struct TestContext {
-    pub rng: StdRng,
-    pub client: FuelClient,
+    pub predicates: bool,
 }
 
 impl TestSetupBuilder {
@@ -56,7 +67,7 @@ impl TestSetupBuilder {
     /// add input coins from a set of transaction to the genesis config
     pub fn config_coin_inputs_from_transactions(
         &mut self,
-        transactions: &[Transaction],
+        transactions: &[&Transaction],
     ) -> &mut Self {
         self.initial_coins
             .extend(
@@ -64,7 +75,14 @@ impl TestSetupBuilder {
                     .iter()
                     .flat_map(|t| t.inputs())
                     .filter_map(|input| {
-                        if let Input::Coin {
+                        if let Input::CoinSigned {
+                            amount,
+                            owner,
+                            asset_id,
+                            utxo_id,
+                            ..
+                        }
+                        | Input::CoinPredicate {
                             amount,
                             owner,
                             asset_id,
@@ -94,6 +112,7 @@ impl TestSetupBuilder {
     pub async fn finalize(&mut self) -> TestContext {
         let config = Config {
             utxo_validation: true,
+            predicates: self.predicates,
             tx_pool_config: fuel_txpool::Config {
                 min_byte_price: self.min_byte_price,
                 min_gas_price: self.min_gas_price,
@@ -128,6 +147,7 @@ impl Default for TestSetupBuilder {
             initial_coins: vec![],
             min_gas_price: 0,
             min_byte_price: 0,
+            predicates: false,
         }
     }
 }

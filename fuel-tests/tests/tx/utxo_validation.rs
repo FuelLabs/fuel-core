@@ -46,7 +46,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         .collect_vec();
 
     // setup genesis block with coins that transactions can spend
-    test_builder.config_coin_inputs_from_transactions(&transactions);
+    test_builder.config_coin_inputs_from_transactions(&transactions.iter().collect_vec());
 
     // spin up node
     let TestContext { client, .. } = test_builder.finalize().await;
