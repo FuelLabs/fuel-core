@@ -334,7 +334,7 @@ jobs:
           /target/aarch64-unknown-linux-musl/release/fuel-core
 
       - name: Strip release binary mac
-        if: matrix.job.os == 'mac-os'
+        if: matrix.job.os == 'macos-latest'
         run: strip -x "target/${{ matrix.job.target }}/release/fuel-core"
 
       - name: Prepare Binary Artifact
