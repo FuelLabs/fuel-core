@@ -153,6 +153,7 @@ jobs:
 
   publish-docker-image:
     needs:
+      - cancel-previous-runs
       - lint-toml-files
       - cargo-verifications
       - publish-crates
@@ -367,7 +368,8 @@ jobs:
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+        # need to find a work-around to be able to run this action on mac
+        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}

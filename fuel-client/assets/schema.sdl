@@ -65,6 +65,10 @@ type BlockEdge {
 	cursor: String!
 }
 scalar BlockId
+input Breakpoint {
+	contract: ContractId!
+	pc: U64!
+}
 scalar Bytes32
 type ChainInfo {
 	name: String!
@@ -131,6 +135,12 @@ enum CoinStatus {
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
+	salt: Salt!
+}
+type ContractBalance {
+	contract: ContractId!
+	amount: U64!
+	assetId: AssetId!
 }
 type ContractCreated {
 	contract: Contract!
@@ -177,16 +187,28 @@ type Mutation {
 	endSession(id: ID!): Boolean!
 	reset(id: ID!): Boolean!
 	execute(id: ID!, op: String!): Boolean!
+	setSingleStepping(id: ID!, enable: Boolean!): Boolean!
+	setBreakpoint(id: ID!, breakpoint: Breakpoint!): Boolean!
+	startTx(id: ID!, txJson: String!): RunResult!
+	continueTx(id: ID!): RunResult!
 	"""
 	Execute a dry-run of the transaction using a fork of current state, no changes are committed.
 	"""
-	dryRun(tx: HexString!): [Receipt!]!
+	dryRun(tx: HexString!, utxoValidation: Boolean): [Receipt!]!
 	"""
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
 }
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
+"""
+A separate `Breakpoint` type to be used as an output, as a single
+type cannot act as both input and output type in async-graphql
+"""
+type OutputBreakpoint {
+	contract: ContractId!
+	pc: U64!
+}
 """
 Information about pagination in a connection
 """
@@ -232,6 +254,7 @@ type Query {
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
+	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 }
 type Receipt {
 	contract: Contract
@@ -275,6 +298,14 @@ enum ReturnType {
 	RETURN
 	RETURN_DATA
 	REVERT
+}
+type RunResult {
+	state: RunState!
+	breakpoint: OutputBreakpoint
+}
+enum RunState {
+	COMPLETED
+	BREAKPOINT
 }
 scalar Salt
 input SpendQueryElementInput {

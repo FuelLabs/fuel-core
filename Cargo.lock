@@ -1333,9 +1333,9 @@ dependencies = [
 
 [[package]]
 name = "cynic"
-version = "0.14.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b06f1415b8314cde001d73cacbc152b6ca7f88c139d261f0da325c5483003cb1"
+checksum = "9a086fdece2d6206e52894d978a09b09efca1e61ac59d69a934eab74d8d9ee40"
 dependencies = [
  "cynic-proc-macros",
  "json-decode",
@@ -1347,12 +1347,12 @@ dependencies = [
 
 [[package]]
 name = "cynic-codegen"
-version = "0.14.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7b58270fd2d5ced0cb1d2b4ca8b632be15840a6c99285d1062c37be40bd48ac"
+checksum = "dd9f0852fe3d3637d4dccb4b69e5a8f881214fc38907a528385ff71cd7b15c3e"
 dependencies = [
  "Inflector",
- "darling 0.12.4",
+ "darling 0.13.1",
  "graphql-parser",
  "lazy_static",
  "proc-macro2",
@@ -1363,9 +1363,9 @@ dependencies = [
 
 [[package]]
 name = "cynic-proc-macros"
-version = "0.14.1"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d016913e640d17de49a4ad8df09a39ea4be1554dd976b9e6ed964eedaafd563"
+checksum = "1cabdef46a6ff3c06e337a9c0c6b7d2f71aefae4ab582ed319a0d454ea1085f9"
 dependencies = [
  "cynic-codegen",
  "syn",
@@ -1569,6 +1569,12 @@ name = "dunce"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "453440c271cf5577fd2a40e4942540cb7d0d2f85e27c8d07dd0023c925a67541"
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21e50f3adc76d6a43f5ed73b698a87d0760ca74617f60f7c3b879003536fdd28"
 
 [[package]]
 name = "ecdsa"
@@ -2006,13 +2012,13 @@ version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee63d1f54705db47d3cfa15f48b320c04a98252226adff0a46a88a9fbb08c489"
 dependencies = [
- "fuel-types 0.5.0",
+ "fuel-types",
  "serde",
 ]
 
 [[package]]
 name = "fuel-core"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2028,12 +2034,12 @@ dependencies = [
  "env_logger",
  "fuel-asm",
  "fuel-core-interfaces",
- "fuel-crypto 0.5.0",
+ "fuel-crypto",
  "fuel-merkle",
  "fuel-storage",
  "fuel-tx",
  "fuel-txpool",
- "fuel-types 0.5.0",
+ "fuel-types",
  "fuel-vm",
  "futures",
  "graphql-parser",
@@ -2061,17 +2067,17 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "derive_more",
  "fuel-asm",
- "fuel-crypto 0.5.0",
+ "fuel-crypto",
  "fuel-storage",
  "fuel-tx",
- "fuel-types 0.5.0",
+ "fuel-types",
  "fuel-vm",
  "futures",
  "lazy_static",
@@ -2083,24 +2089,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-crypto"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55e0f5a52d0dc3ac1e3cb57ef85955d5e87225b95a6b4718e4c81ae0423609c9"
-dependencies = [
- "borrown",
- "fuel-types 0.3.1",
- "secp256k1",
- "sha2 0.9.9",
-]
-
-[[package]]
-name = "fuel-crypto"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8af1477833b63cf956b71a63a67a7af0e7477bd2f774536556fe0338f909542e"
 dependencies = [
  "borrown",
- "fuel-types 0.5.0",
+ "fuel-types",
  "lazy_static",
  "rand 0.8.5",
  "secp256k1",
@@ -2110,7 +2104,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2119,7 +2113,7 @@ dependencies = [
  "derive_more",
  "fuel-storage",
  "fuel-tx",
- "fuel-types 0.5.0",
+ "fuel-types",
  "fuel-vm",
  "futures",
  "hex",
@@ -2150,7 +2144,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2182,9 +2176,9 @@ dependencies = [
  "ethers-signers",
  "features",
  "fuel-core-interfaces",
- "fuel-crypto 0.4.2",
+ "fuel-crypto",
  "fuel-tx",
- "fuel-types 0.5.0",
+ "fuel-types",
  "futures",
  "hex",
  "lazy_static",
@@ -2212,16 +2206,17 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "fuel-core",
- "fuel-crypto 0.5.0",
+ "fuel-crypto",
  "fuel-gql-client",
  "fuel-storage",
  "fuel-tx",
  "fuel-txpool",
- "fuel-types 0.5.0",
+ "fuel-types",
  "fuel-vm",
  "insta",
  "itertools",
  "rand 0.8.5",
+ "serde_json",
  "tokio",
 ]
 
@@ -2232,8 +2227,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fedf61251332608a32115e0910611e35938e8b7cf056766fbead42bc787a68c"
 dependencies = [
  "fuel-asm",
- "fuel-crypto 0.5.0",
- "fuel-types 0.5.0",
+ "fuel-crypto",
+ "fuel-types",
  "itertools",
  "rand 0.8.5",
  "serde",
@@ -2241,26 +2236,20 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
  "fuel-core-interfaces",
  "fuel-tx",
- "fuel-types 0.5.0",
+ "fuel-types",
  "futures",
  "parking_lot 0.11.2",
  "thiserror",
  "tokio",
  "tracing",
 ]
-
-[[package]]
-name = "fuel-types"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ff2ec353be2812a5f91f77824624686beb2e08a8410eab529a231232da0754a"
 
 [[package]]
 name = "fuel-types"
@@ -2278,12 +2267,13 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80c2dc53d77a9f3d815231efe6bed2688ec7435c36870453defebb43e60bbdcb"
 dependencies = [
+ "dyn-clone",
  "fuel-asm",
- "fuel-crypto 0.5.0",
+ "fuel-crypto",
  "fuel-merkle",
  "fuel-storage",
  "fuel-tx",
- "fuel-types 0.5.0",
+ "fuel-types",
  "itertools",
  "rand 0.8.5",
  "secp256k1",

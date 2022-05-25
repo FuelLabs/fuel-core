@@ -55,6 +55,10 @@ impl From<VmProgramState> for ProgramState {
                 return_type: ReturnType::Revert,
                 data: d.to_be_bytes().to_vec(),
             },
+            #[cfg(feature = "debug")]
+            VmProgramState::RunProgram(_) | VmProgramState::VerifyPredicate(_) => {
+                unreachable!("This shouldn't get called with a debug state")
+            }
         }
     }
 }

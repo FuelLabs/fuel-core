@@ -49,7 +49,7 @@ This will run `cargo build` as well as any other custom build processes we have 
 The service can listen to an arbitrary socket, as specified in the help command:
 
 ```
-$ ./target/release/fuel-core --help
+$ ./target/debug/fuel-core --help
 fuel-core 0.1.0
 
 USAGE:
@@ -68,7 +68,7 @@ OPTIONS:
 #### Example
 
 ```
-$ ./target/release/fuel-core --ip 127.0.0.1 --port 4000
+$ ./target/debug/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 

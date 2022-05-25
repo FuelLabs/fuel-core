@@ -25,11 +25,13 @@ fuel-storage = "0.1"
 fuel-tx = { version = "0.10", features = ["serde", "builder", "internals"] }
 fuel-txpool = { path = "../fuel-txpool" }
 fuel-types = { version = "0.5", features = ["serde"] }
-fuel-vm = { version = "0.9", features = ["serde", "random","test-helpers"] }
+fuel-vm = { version = "0.9", features = ["serde", "random", "test-helpers"] }
 insta = "1.8"
 itertools = "0.10"
 rand = "0.8"
+serde_json = "1.0"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [features]
 default = ["fuel-core/default"]
+debug = ["fuel-vm/debug"]

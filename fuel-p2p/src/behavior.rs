@@ -113,7 +113,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             discovery_config
         };
 
-        let peer_info = PeerInfoBehaviour::new(local_public_key);
+        let peer_info = PeerInfoBehaviour::new(local_public_key, p2p_config);
 
         let req_res_protocol =
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
