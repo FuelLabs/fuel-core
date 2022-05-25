@@ -283,8 +283,17 @@ impl Executor {
                     TransactionValidityError::PredicateExecutionDisabled(tx.id()),
                 ));
             }
+        } else {
+            // otherwise attempt to validate any predicates if the feature flag is enabled
+            if !Interpreter::<()>::check_predicates(
+                tx.clone(),
+                self.config.chain_conf.transaction_parameters,
+            ) {
+                return Err(Error::TransactionValidity(
+                    TransactionValidityError::InvalidPredicate(tx.id()),
+                ));
+            }
         }
-        // otherwise, allow execution to continue for now.
         Ok(())
     }
 
@@ -633,8 +642,12 @@ pub enum TransactionValidityError {
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin input type: {0:#x}")]
     NoCoinInput(TxId),
-    #[error("The transaction contains predicate inputs which aren't enabled")]
+    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
     PredicateExecutionDisabled(TxId),
+    #[error(
+        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
+    )]
+    InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
