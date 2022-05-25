@@ -44,7 +44,7 @@ pub struct DaBlockDiff {
 }
 
 impl DaBlockDiff {
-    pub fn new(da_height: u64) -> Self {
+    pub fn new(da_height: DaBlockHeight) -> Self {
         Self {
             da_height,
             validators: HashMap::new(),
@@ -92,22 +92,22 @@ impl FinalizationQueue {
     }
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
-    fn bundle_removed_events(&mut self, event: EthEventLog, eth_block: u64) {
+    fn bundle_removed_events(&mut self, event: EthEventLog, da_height: DaBlockHeight) {
         // agregate all removed events before reverting them.
         // check if we have pending block for removal
         if let Some((last_eth_block, list)) = self.bundled_removed_eth_events.last_mut() {
             // check if last pending block is same as log event that we received.
-            if *last_eth_block == eth_block {
+            if *last_eth_block == da_height {
                 list.push(event)
             } else {
                 // if block number differs just push new block.
                 self.bundled_removed_eth_events
-                    .push((eth_block, vec![event]));
+                    .push((da_height, vec![event]));
             }
         } else {
             // if there are not pending block for removal just add it.
             self.bundled_removed_eth_events
-                .push((eth_block, vec![event]));
+                .push((da_height, vec![event]));
         }
     }
 
@@ -146,12 +146,12 @@ impl FinalizationQueue {
             return;
         }
         let removed = log.removed.unwrap_or(false);
-        let eth_block = log.block_number.unwrap().as_u64();
+        let da_height = log.block_number.unwrap().as_u64() as DaBlockHeight;
         let event = event.unwrap();
         debug!("append inbound log:{:?}", event);
         // bundle removed events and return
         if removed {
-            self.bundle_removed_events(event, eth_block);
+            self.bundle_removed_events(event, da_height);
             return;
         }
         // apply all reverted event
@@ -161,12 +161,12 @@ impl FinalizationQueue {
                 self.bundled_removed_eth_events.len()
             );
 
-            let mut lowest_removed_da_height = u64::MAX;
+            let mut lowest_removed_da_height = DaBlockHeight::MAX;
 
             for (da_height, events) in
                 std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
             {
-                lowest_removed_da_height = u64::min(lowest_removed_da_height, da_height);
+                lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
                 // mark all removed pending block commits as reverted.
                 for event in events {
                     if let EthEventLog::FuelBlockCommited { block_root, height } = event {
@@ -181,12 +181,12 @@ impl FinalizationQueue {
                 .retain(|diff| diff.da_height < lowest_removed_da_height);
         }
         // apply new event to pending queue
-        self.append_da_events(event, eth_block).await;
+        self.append_da_events(event, da_height).await;
     }
 
     /// At begining we will ignore all event until event for new fuel block commit commes
     /// after that syncronization can start.
-    async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: u64) {
+    async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: DaBlockHeight) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
                 self.pending.push_back(DaBlockDiff::new(da_height))
@@ -238,7 +238,11 @@ impl FinalizationQueue {
     }
 
     /// Used to commit da block diff to database.
-    pub async fn commit_diffs(&mut self, db: &mut dyn RelayerDb, finalized_da_height: u64) {
+    pub async fn commit_diffs(
+        &mut self,
+        db: &mut dyn RelayerDb,
+        finalized_da_height: DaBlockHeight,
+    ) {
         if self.finalized_da_height >= finalized_da_height {
             error!(
                 "We received finalized height {} but we already have {}",

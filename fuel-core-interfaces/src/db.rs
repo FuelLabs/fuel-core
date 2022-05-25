@@ -127,8 +127,8 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, DepositCoin, FuelBlock, FuelBlockConsensus,
-            FuelBlockHeader, SealedFuelBlock,
+            BlockHeight, Coin, CoinStatus, DaBlockHeight, DepositCoin, FuelBlock,
+            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
@@ -144,18 +144,18 @@ pub mod helpers {
     #[derive(Clone, Debug)]
     pub struct Data {
         /// Used for Storage<Address, (u64, Option<Address>)>
-        pub validators: HashMap<Address, (u64, Option<Address>)>,
+        pub validators: HashMap<Address, (ValidatorStake, Option<Address>)>,
         /// variable for current validators height, at height our validator set is
-        pub validators_height: u64,
+        pub validators_height: DaBlockHeight,
         /// diffs between blocks regarding validator set and delegation stake
-        pub staking_diffs: BTreeMap<u64, StakingDiff>,
+        pub staking_diffs: BTreeMap<DaBlockHeight, StakingDiff>,
         /// index of blocks where delegation happened.
-        pub delegator_index: BTreeMap<Address, Vec<u64>>,
+        pub delegator_index: BTreeMap<Address, Vec<DaBlockHeight>>,
         /// blocks that have consensus votes/
         pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
         /// variable for best fuel block height
         pub chain_height: BlockHeight,
-        pub finalized_da_height: u64,
+        pub finalized_da_height: DaBlockHeight,
         pub tx_hashes: Vec<TxId>,
         /// Dummy transactions
         pub tx: HashMap<TxId, Arc<Transaction>>,
@@ -767,25 +767,25 @@ pub mod helpers {
     }
 
     // delegates index. Used by relayer.
-    impl Storage<Address, Vec<u64>> for DummyDb {
+    impl Storage<Address, Vec<DaBlockHeight>> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
             key: &Address,
-            value: &Vec<u64>,
-        ) -> Result<Option<Vec<u64>>, Self::Error> {
+            value: &Vec<DaBlockHeight>,
+        ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
             Ok(self.data.lock().delegator_index.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &Address) -> Result<Option<Vec<u64>>, Self::Error> {
+        fn remove(&mut self, _key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
             unreachable!()
         }
 
         fn get<'a>(
             &'a self,
             key: &Address,
-        ) -> Result<Option<std::borrow::Cow<'a, Vec<u64>>>, Self::Error> {
+        ) -> Result<Option<std::borrow::Cow<'a, Vec<DaBlockHeight>>>, Self::Error> {
             Ok(self
                 .data
                 .lock()
@@ -800,28 +800,29 @@ pub mod helpers {
     }
 
     // Validator set. Used by relayer.
-    impl Storage<Address, (u64, Option<Address>)> for DummyDb {
+    impl Storage<Address, (ValidatorStake, Option<Address>)> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
             key: &Address,
-            value: &(u64, Option<Address>),
-        ) -> Result<Option<(u64, Option<Address>)>, Self::Error> {
+            value: &(ValidatorStake, Option<Address>),
+        ) -> Result<Option<(ValidatorStake, Option<Address>)>, Self::Error> {
             Ok(self.data.lock().validators.insert(*key, *value))
         }
 
         fn remove(
             &mut self,
             _key: &Address,
-        ) -> Result<Option<(u64, Option<Address>)>, Self::Error> {
+        ) -> Result<Option<(ValidatorStake, Option<Address>)>, Self::Error> {
             unreachable!()
         }
 
         fn get<'a>(
             &'a self,
             key: &Address,
-        ) -> Result<Option<std::borrow::Cow<'a, (u64, Option<Address>)>>, Self::Error> {
+        ) -> Result<Option<std::borrow::Cow<'a, (ValidatorStake, Option<Address>)>>, Self::Error>
+        {
             Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
@@ -831,24 +832,24 @@ pub mod helpers {
     }
 
     // Staking diff. Used by relayer.
-    impl Storage<u64, StakingDiff> for DummyDb {
+    impl Storage<DaBlockHeight, StakingDiff> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
-            key: &u64,
+            key: &DaBlockHeight,
             value: &StakingDiff,
         ) -> Result<Option<StakingDiff>, Self::Error> {
             Ok(self.data.lock().staking_diffs.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &u64) -> Result<Option<StakingDiff>, Self::Error> {
+        fn remove(&mut self, _key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
             unreachable!()
         }
 
         fn get<'a>(
             &'a self,
-            key: &u64,
+            key: &DaBlockHeight,
         ) -> Result<Option<std::borrow::Cow<'a, StakingDiff>>, Self::Error> {
             Ok(self
                 .data
@@ -858,30 +859,30 @@ pub mod helpers {
                 .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &u64) -> Result<bool, Self::Error> {
+        fn contains_key(&self, _key: &DaBlockHeight) -> Result<bool, Self::Error> {
             unreachable!()
         }
     }
 
     #[async_trait]
     impl RelayerDb for DummyDb {
-        async fn get_validators(&self) -> HashMap<Address, (u64, Option<Address>)> {
+        async fn get_validators(&self) -> HashMap<Address, (ValidatorStake, Option<Address>)> {
             self.data.lock().validators.clone()
         }
 
-        async fn set_validators_da_height(&self, block: u64) {
+        async fn set_validators_da_height(&self, block: DaBlockHeight) {
             self.data.lock().validators_height = block;
         }
 
-        async fn get_validators_da_height(&self) -> u64 {
+        async fn get_validators_da_height(&self) -> DaBlockHeight {
             self.data.lock().validators_height
         }
 
         async fn get_staking_diffs(
             &self,
-            from_da_height: u64,
-            to_da_height: Option<u64>,
-        ) -> Vec<(u64, StakingDiff)> {
+            from_da_height: DaBlockHeight,
+            to_da_height: Option<DaBlockHeight>,
+        ) -> Vec<(DaBlockHeight, StakingDiff)> {
             let mut out = Vec::new();
             let diffs = &self.data.lock().staking_diffs;
             // in BTreeMap iteration are done on sorted items.
@@ -906,11 +907,11 @@ pub mod helpers {
             self.data.lock().sealed_blocks.get(&height).cloned()
         }
 
-        async fn set_finalized_da_height(&self, height: u64) {
+        async fn set_finalized_da_height(&self, height: DaBlockHeight) {
             self.data.lock().finalized_da_height = height;
         }
 
-        async fn get_finalized_da_height(&self) -> u64 {
+        async fn get_finalized_da_height(&self) -> DaBlockHeight {
             self.data.lock().finalized_da_height
         }
 

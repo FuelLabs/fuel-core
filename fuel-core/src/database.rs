@@ -9,7 +9,7 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock, ValidatorStake};
+use fuel_core_interfaces::model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake};
 use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
@@ -269,7 +269,7 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(&self) -> HashMap<Address, (u64, Option<Address>)> {
+    async fn get_validators(&self) -> HashMap<Address, (ValidatorStake, Option<Address>)> {
         struct WrapAddress(pub Address);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
@@ -277,7 +277,7 @@ impl RelayerDb for Database {
             }
         }
         let mut out = HashMap::new();
-        for diff in self.iter_all::<WrapAddress, (u64, Option<Address>)>(
+        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<Address>)>(
             columns::VALIDATOR_SET,
             None,
             None,
@@ -295,24 +295,24 @@ impl RelayerDb for Database {
 
     async fn get_staking_diffs(
         &self,
-        from_da_height: u64,
-        to_da_height: Option<u64>,
-    ) -> Vec<(u64, StakingDiff)> {
+        from_da_height: DaBlockHeight,
+        to_da_height: Option<DaBlockHeight>,
+    ) -> Vec<(DaBlockHeight, StakingDiff)> {
         let to_da_height = if let Some(to_da_height) = to_da_height {
             if from_da_height > to_da_height {
                 return Vec::new();
             }
             to_da_height
         } else {
-            u64::MAX
+            DaBlockHeight::MAX
         };
-        struct WrapU64Be(pub u64);
+        struct WrapU64Be(pub DaBlockHeight);
         impl From<Vec<u8>> for WrapU64Be {
             fn from(i: Vec<u8>) -> Self {
                 use byteorder::{BigEndian, ReadBytesExt};
                 use std::io::Cursor;
                 let mut i = Cursor::new(i);
-                Self(i.read_u64::<BigEndian>().unwrap_or_default())
+                Self(i.read_u32::<BigEndian>().unwrap_or_default())
             }
         }
         let mut out = Vec::new();
@@ -338,7 +338,7 @@ impl RelayerDb for Database {
 
     async fn apply_validator_diffs(
         &mut self,
-        da_height: u64,
+        da_height: DaBlockHeight,
         changes: &HashMap<Address, (ValidatorStake, Option<Address>)>,
     ) {
         // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
@@ -371,13 +371,13 @@ impl RelayerDb for Database {
         Some(Arc::new(SealedFuelBlock::default()))
     }
 
-    async fn set_finalized_da_height(&self, block: u64) {
+    async fn set_finalized_da_height(&self, block: DaBlockHeight) {
         if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA, block) {
             panic!("set_finalized_da_height should always succeed: {:?}", err);
         }
     }
 
-    async fn get_finalized_da_height(&self) -> u64 {
+    async fn get_finalized_da_height(&self) -> DaBlockHeight {
         match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
                 return res
@@ -389,13 +389,13 @@ impl RelayerDb for Database {
         }
     }
 
-    async fn set_validators_da_height(&self, block: u64) {
+    async fn set_validators_da_height(&self, block: DaBlockHeight) {
         if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA, block) {
             panic!("set_validators_da_height should always succeed: {:?}", err);
         }
     }
 
-    async fn get_validators_da_height(&self) -> u64 {
+    async fn get_validators_da_height(&self) -> DaBlockHeight {
         match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
                 return res

@@ -10,5 +10,5 @@ pub use coin::{Coin, CoinStatus};
 pub use deposit_coin::DepositCoin;
 pub use txpool::{ArcTx, TxInfo};
 
-pub type DaBlockHeight = u64;
+pub type DaBlockHeight = u32;
 pub type ValidatorStake = u64;

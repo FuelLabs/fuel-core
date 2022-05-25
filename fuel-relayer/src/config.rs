@@ -1,4 +1,5 @@
 use ethers_core::types::{H160, H256};
+use fuel_core_interfaces::model::DaBlockHeight;
 use std::{str::FromStr, time::Duration};
 
 lazy_static::lazy_static! {
@@ -20,12 +21,12 @@ lazy_static::lazy_static! {
     pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872").unwrap();
 }
 
-pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: u64 = 1000;
+pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     /// number of da blocks between after which deposits/stakes/validators become finalized
-    pub da_finalization: u64,
+    pub da_finalization: DaBlockHeight,
     /// uri address to ethereum client
     pub eth_client: String,
     /// ethereum chain_id
@@ -36,7 +37,7 @@ pub struct Config {
     pub eth_v2_contract_addresses: Vec<H160>,
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
-    pub eth_v2_contract_deployment: u64,
+    pub eth_v2_contract_deployment: DaBlockHeight,
     /// number of blocks that will be asked at one time from client, used for initial sync
     pub initial_sync_step: usize,
     /// Refresh rate of waiting for eth client to finish its initial sync.
@@ -65,7 +66,7 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn eth_v2_contract_deployment(&self) -> u64 {
+    pub fn eth_v2_contract_deployment(&self) -> DaBlockHeight {
         self.eth_v2_contract_deployment
     }
 
@@ -73,7 +74,7 @@ impl Config {
         &self.eth_v2_contract_addresses
     }
 
-    pub fn da_finalization(&self) -> u64 {
+    pub fn da_finalization(&self) -> DaBlockHeight {
         self.da_finalization
     }
 

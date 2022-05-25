@@ -125,7 +125,7 @@ impl Relayer {
         // should be allways more then last finalized_da_heights
 
         let best_finalized_block =
-            provider.get_block_number().await?.as_u64() - self.config.da_finalization();
+            (provider.get_block_number().await?.as_u64() as u32) - self.config.da_finalization();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.config.initial_sync_step(); // do some stats on optimal value
@@ -139,7 +139,7 @@ impl Relayer {
         );
 
         for start in (last_finalized_da_height..best_finalized_block).step_by(step) {
-            let end = min(start + step as u64, best_finalized_block);
+            let end = min(start + step as DaBlockHeight, best_finalized_block);
             if (start - last_finalized_da_height) % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
                 == 0
             {
@@ -216,13 +216,14 @@ impl Relayer {
         }
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
-        let finalized_da_height = best_block.as_u64() - self.config.da_finalization();
+        let finalized_da_height =
+            best_block.as_u64() as DaBlockHeight - self.config.da_finalization();
         self.queue
             .commit_diffs(self.db.as_mut(), finalized_da_height)
             .await;
 
         watchers
-            .map(|(w1, w2)| (best_block.as_u64(), w1, w2))
+            .map(|(w1, w2)| (best_block.as_u64() as DaBlockHeight, w1, w2))
             .ok_or_else(|| RelayerError::ProviderError.into())
     }
 
@@ -354,7 +355,8 @@ impl Relayer {
         trace!("Received new block hash:{:x?}", block_hash);
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
-                let finalized_da_height = da_height.as_u64() - self.config.da_finalization();
+                let finalized_da_height =
+                    da_height.as_u64() as DaBlockHeight - self.config.da_finalization();
 
                 self.queue
                     .commit_diffs(self.db.as_mut(), finalized_da_height)

@@ -25,7 +25,7 @@ impl From<&AssetDepositLog> for DepositCoin {
             amount: asset.amount,
             asset_id: asset.token, // TODO should this be hash of token_id and precision factor
             nonce: asset.deposit_nonce,
-            deposited_da_height: asset.block_number as u64,
+            deposited_da_height: asset.block_number,
             fuel_block_spend: None,
         }
     }

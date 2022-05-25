@@ -32,9 +32,9 @@ impl StakingDiff {
 #[async_trait]
 pub trait RelayerDb:
      Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
-    + Storage<Address, (u64, Option<Address>), Error = KvStoreError> // validator set
-    + Storage<Address, Vec<u64>,Error = KvStoreError> // delegate index
-    + Storage<u64, StakingDiff, Error = KvStoreError> // staking diff
+    + Storage<Address, (ValidatorStake, Option<Address>), Error = KvStoreError> // validator set
+    + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
+    + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
     + Send
     + Sync
 {
@@ -48,17 +48,17 @@ pub trait RelayerDb:
     }
 
     /// Insert difference make on staking in this particular DA height.
-    async fn insert_staking_diff(&mut self, da_height: u64, stakes: &StakingDiff) {
-        let _ = Storage::<u64,StakingDiff>::insert(self, &da_height,stakes);
+    async fn insert_staking_diff(&mut self, da_height: DaBlockHeight, stakes: &StakingDiff) {
+        let _ = Storage::<DaBlockHeight,StakingDiff>::insert(self, &da_height,stakes);
     }
 
     /// Query delegate index to find list of blocks that delegation changed
     /// iterate over list of indexed to find height that is less and closest to da_height
     /// Query that block StakeDiff to find actual delegation change.
     /// TODO not needed
-    async fn get_last_delegation(&mut self,delegate: &Address, da_height: u64) ->  Option<HashMap<Address,u64>> {
+    async fn get_last_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<Address,u64>> {
         // get delegate index
-        let delegate_index = Storage::<Address,Vec<u64>>::get(self,delegate).expect("Expect to get data without problem")?;
+        let delegate_index = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).expect("Expect to get data without problem")?;
         let mut last_da_height = 0;
         for index in delegate_index.iter() {
             if  *index >= da_height {
@@ -71,34 +71,34 @@ pub trait RelayerDb:
             return None
         }
         // get staking diff
-        let staking_diff = Storage::<u64,StakingDiff>::get(self, &last_da_height).expect("Expect to get data without problem")?;
+        let staking_diff = Storage::<DaBlockHeight,StakingDiff>::get(self, &last_da_height).expect("Expect to get data without problem")?;
 
         staking_diff.delegations.get(delegate).unwrap().clone()
     }
 
-    async fn append_delegate_index(&mut self, delegate: &Address, da_height: u64) {
-        let new_indexes = if let Some(indexes) = Storage::<Address,Vec<u64>>::get(self,delegate).unwrap() {
+    async fn append_delegate_index(&mut self, delegate: &Address, da_height: DaBlockHeight) {
+        let new_indexes = if let Some(indexes) = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).unwrap() {
             let mut indexes = (*indexes).clone();
             indexes.push(da_height);
             indexes
         } else {
             vec![da_height]
         };
-        Storage::<Address,Vec<u64>>::insert(self,delegate,&new_indexes).expect("Expect to insert without problem");
+        Storage::<Address,Vec<DaBlockHeight>>::insert(self,delegate,&new_indexes).expect("Expect to insert without problem");
     }
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
     async fn get_staking_diffs(
             &self,
-            _from_da_height: u64,
-            _to_da_height: Option<u64>,
-    ) -> Vec<(u64, StakingDiff)> {
+            _from_da_height: DaBlockHeight,
+            _to_da_height: Option<DaBlockHeight>,
+    ) -> Vec<(DaBlockHeight, StakingDiff)> {
         Vec::new()
     }
 
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
     /// to be atomic.
-    async fn apply_validator_diffs(&mut self, da_height: u64, changes: &HashMap<Address,(ValidatorStake,Option<Address>)>) {
+    async fn apply_validator_diffs(&mut self, da_height: DaBlockHeight, changes: &HashMap<Address,(ValidatorStake,Option<Address>)>) {
         // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation
         for ( address, stake) in changes {
             let _ = Storage::<Address,(ValidatorStake,Option<Address>)>::insert(self,address,stake);
@@ -112,19 +112,19 @@ pub trait RelayerDb:
     async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>>;
 
     /// get validator set for current eth height
-    async fn get_validators(&self) -> HashMap<Address,(u64,Option<Address>)>;
+    async fn get_validators(&self) -> HashMap<Address,(ValidatorStake,Option<Address>)>;
 
     /// Set data availability block height that corresponds to current_validator_set
-    async fn set_validators_da_height(&self, block: u64);
+    async fn set_validators_da_height(&self, block: DaBlockHeight);
 
     /// Assume it is allways set as initialization of database.
-    async fn get_validators_da_height(&self) -> u64;
+    async fn get_validators_da_height(&self) -> DaBlockHeight;
 
     /// set finalized da height that represent last block from da layer that got finalized.
-    async fn set_finalized_da_height(&self, block: u64);
+    async fn set_finalized_da_height(&self, block: DaBlockHeight);
 
     /// Assume it is allways set as initialization of database.
-    async fn get_finalized_da_height(&self) -> u64;
+    async fn get_finalized_da_height(&self) -> DaBlockHeight;
 
     /// Until blocks gets commited to da layer it is expected for it to still contains consensus
     /// votes and be saved in database until commitment is send to da layer and finalization pariod passes.
