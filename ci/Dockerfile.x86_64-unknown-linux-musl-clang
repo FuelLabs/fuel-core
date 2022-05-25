@@ -1,0 +1,4 @@
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-musl:main
+
+RUN apt-get update && \
+    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu
