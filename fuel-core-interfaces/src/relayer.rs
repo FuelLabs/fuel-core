@@ -1,8 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
-
 use async_trait::async_trait;
 use fuel_storage::Storage;
 use fuel_types::{Address, Bytes32};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::oneshot;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

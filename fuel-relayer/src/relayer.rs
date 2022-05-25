@@ -1,13 +1,4 @@
-use std::{
-    cmp::{max, min},
-    sync::Arc,
-    time::Duration,
-};
-
 use crate::{config, finalization_queue::FinalizationQueue, Config};
-use tokio::sync::{broadcast, mpsc};
-use tracing::{debug, error, info, trace};
-
 use anyhow::Error;
 use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{FilterWatcher, Middleware, ProviderError, StreamExt, SyncingStatus};
@@ -16,6 +7,13 @@ use fuel_core_interfaces::{
     model::DaBlockHeight,
     relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
 };
+use std::{
+    cmp::{max, min},
+    sync::Arc,
+    time::Duration,
+};
+use tokio::sync::{broadcast, mpsc};
+use tracing::{debug, error, info, trace};
 
 pub struct Relayer {
     /// Pending stakes/assets/withdrawals. Before they are finalized

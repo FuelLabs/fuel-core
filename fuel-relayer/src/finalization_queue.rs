@@ -1,8 +1,8 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
+use crate::{
+    log::{AssetDepositLog, EthEventLog},
+    pending_blocks::PendingBlocks,
+    validators::Validators,
 };
-
 use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
@@ -10,13 +10,11 @@ use fuel_core_interfaces::{
     relayer::{RelayerDb, StakingDiff},
 };
 use fuel_tx::{Address, Bytes32};
-use tracing::{debug, error, info, warn};
-
-use crate::{
-    log::{AssetDepositLog, EthEventLog},
-    pending_blocks::PendingBlocks,
-    validators::Validators,
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
 };
+use tracing::{debug, error, info, warn};
 
 pub struct FinalizationQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized

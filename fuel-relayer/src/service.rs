@@ -1,13 +1,11 @@
-use std::sync::Arc;
-
-use crate::Config;
-use crate::Relayer;
+use crate::{Config, Relayer};
 use anyhow::Error;
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use fuel_core_interfaces::{
     block_importer::NewBlockEvent,
     relayer::{RelayerDb, RelayerEvent},
 };
+use std::sync::Arc;
 use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,

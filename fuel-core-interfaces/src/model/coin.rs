@@ -1,7 +1,6 @@
 use crate::model::BlockHeight;
 #[cfg(graphql)]
 use async_graphql::Enum;
-
 use fuel_asm::Word;
 use fuel_tx::{Address, AssetId};
 

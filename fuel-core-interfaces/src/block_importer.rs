@@ -1,8 +1,6 @@
-use std::sync::Arc;
-
-use fuel_tx::Bytes32;
-
 use crate::model::{BlockHeight, SealedFuelBlock};
+use fuel_tx::Bytes32;
+use std::sync::Arc;
 
 /// Currently just placeholder for new block included and new block created events.
 #[derive(Clone, Debug)]

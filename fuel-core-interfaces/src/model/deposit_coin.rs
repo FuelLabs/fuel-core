@@ -1,6 +1,5 @@
-use fuel_types::{Address, AssetId, Bytes32, Word};
-
 use super::{BlockHeight, DaBlockHeight};
+use fuel_types::{Address, AssetId, Bytes32, Word};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]

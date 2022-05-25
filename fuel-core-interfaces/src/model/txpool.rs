@@ -1,7 +1,6 @@
-use std::ops::Deref;
-
 use chrono::{DateTime, Utc};
 use fuel_tx::Transaction;
+use std::ops::Deref;
 use std::sync::Arc;
 
 pub type ArcTx = Arc<Transaction>;

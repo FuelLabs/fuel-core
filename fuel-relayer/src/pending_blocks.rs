@@ -1,5 +1,3 @@
-use std::{cmp::max, collections::VecDeque, sync::Arc};
-
 use anyhow::Error;
 use ethers_core::{
     k256::ecdsa::SigningKey,
@@ -10,12 +8,12 @@ use ethers_middleware::{
     NonceManagerMiddleware, SignerMiddleware,
 };
 use ethers_providers::Middleware;
-use fuel_tx::Bytes32;
-
 use fuel_core_interfaces::{
     model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
     relayer::RelayerDb,
 };
+use fuel_tx::Bytes32;
+use std::{cmp::max, collections::VecDeque, sync::Arc};
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use crate::abi;

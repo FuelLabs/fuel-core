@@ -1,10 +1,9 @@
-use std::collections::{hash_map::Entry, HashMap};
-
 use fuel_core_interfaces::{
     model::{DaBlockHeight, ValidatorStake},
     relayer::RelayerDb,
 };
 use fuel_tx::Address;
+use std::collections::{hash_map::Entry, HashMap};
 use tracing::{error, info};
 
 /// It contains list of Validators and its stake and consensus public key.
