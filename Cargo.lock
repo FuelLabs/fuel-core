@@ -2111,7 +2111,6 @@ dependencies = [
  "clap",
  "cynic",
  "derive_more",
- "fuel-storage",
  "fuel-tx",
  "fuel-types",
  "fuel-vm",
