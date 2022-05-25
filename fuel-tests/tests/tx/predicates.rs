@@ -3,8 +3,7 @@
 use crate::helpers::TestSetupBuilder;
 use fuel_crypto::Hasher;
 use fuel_tx::{Input, Output, TransactionBuilder};
-use fuel_vm::consts::REG_ONE;
-use fuel_vm::prelude::Opcode;
+use fuel_vm::{consts::REG_ONE, prelude::Opcode};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[tokio::test]
