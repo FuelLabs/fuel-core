@@ -1,3 +1,4 @@
+pub(crate) mod abi;
 pub(crate) mod config;
 pub(crate) mod finalization_queue;
 pub(crate) mod log;

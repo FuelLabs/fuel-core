@@ -335,35 +335,23 @@ mod tests {
         let diff2 = queue.pending[1].clone();
 
         if let EthEventLog::AssetDeposit(deposit) = &deposit1_db {
-            assert_eq!(
-                diff1.assets.get(&nonce1),
-                Some(deposit),
-                "Deposit 1 not valid"
-            );
+            assert_eq!(diff1.assets.get(&nonce1), Some(deposit),);
         }
         if let EthEventLog::AssetDeposit(deposit) = &deposit2_db {
-            assert_eq!(
-                diff2.assets.get(&nonce2),
-                Some(deposit),
-                "Deposit 2 not valid"
-            );
+            assert_eq!(diff2.assets.get(&nonce2), Some(deposit),);
         }
         if let EthEventLog::AssetDeposit(deposit) = &deposit3_db {
-            assert_eq!(
-                diff2.assets.get(&nonce3),
-                Some(deposit),
-                "Deposit 3 not valid"
-            );
+            assert_eq!(diff2.assets.get(&nonce3), Some(deposit),);
         }
     }
 
     #[tokio::test]
     pub async fn check_validator_registration_unregistration() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let val1: Address = rng.gen();
-        let cons1: Address = rng.gen();
-        let val2: Address = rng.gen();
-        let cons2: Address = rng.gen();
+        let v1: Address = rng.gen();
+        let v2: Address = rng.gen();
+        let c1: Address = rng.gen();
+        let c2: Address = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -373,42 +361,28 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let val1_register = eth_log_validator_registration(0, val1, cons1);
-        let val2_register = eth_log_validator_registration(0, val2, cons2);
-        let val1_unregister = eth_log_validator_unregistration(1, val1);
+        let v1_register = eth_log_validator_registration(0, v1, c1);
+        let v2_register = eth_log_validator_registration(0, v2, c2);
+        let v1_unregister = eth_log_validator_unregistration(1, v1);
 
         queue
-            .append_eth_logs(vec![val1_register, val2_register, val1_unregister])
+            .append_eth_logs(vec![v1_register, v2_register, v1_unregister])
             .await;
 
         let diff1 = queue.pending[0].clone();
         let diff2 = queue.pending[1].clone();
-        assert_eq!(
-            diff1.validators.get(&val1),
-            Some(&Some(cons1)),
-            "Val1 registered cons1"
-        );
-        assert_eq!(
-            diff1.validators.get(&val2),
-            Some(&Some(cons2)),
-            "Val1 registered cons2"
-        );
-
-        assert_eq!(
-            diff2.validators.get(&val1),
-            Some(&None),
-            "Val1 unregistered consensus key"
-        );
+        assert_eq!(diff1.validators.get(&v1), Some(&Some(c1)),);
+        assert_eq!(diff1.validators.get(&v2), Some(&Some(c2)),);
+        assert_eq!(diff2.validators.get(&v1), Some(&None),);
     }
 
     #[tokio::test]
-    #[tracing_test::traced_test]
     pub async fn check_deposit_and_validator_finalization() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let val1: Address = rng.gen();
-        let cons1: Address = rng.gen();
-        let val2: Address = rng.gen();
-        let cons2: Address = rng.gen();
+        let v1: Address = rng.gen();
+        let c1: Address = rng.gen();
+        let v2: Address = rng.gen();
+        let c2: Address = rng.gen();
 
         let acc1: Address = rng.gen();
         let token1 = AssetId::zeroed();
@@ -422,72 +396,124 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let val1_register = eth_log_validator_registration(1, val1, cons1);
-        let val2_register = eth_log_validator_registration(2, val2, cons2);
+        let v1_register = eth_log_validator_registration(1, v1, c1);
+        let v2_register = eth_log_validator_registration(2, v2, c2);
         let deposit1 = eth_log_asset_deposit(2, acc1, token1, 1, 40, nonce1, 0);
-        let val1_unregister = eth_log_validator_unregistration(3, val1);
+        let v1_unregister = eth_log_validator_unregistration(3, v1);
 
         queue
-            .append_eth_logs(vec![
-                val1_register,
-                val2_register,
-                deposit1,
-                val1_unregister,
-            ])
+            .append_eth_logs(vec![v1_register, v2_register, deposit1, v1_unregister])
             .await;
 
         let mut db = DummyDb::filled();
         //let db_ref = &mut db as &mut dyn RelayerDb;
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(
-            db.data.lock().validators.get(&val1),
-            Some(&(0, Some(cons1))),
-            "Val1 should be set"
-        );
-
-        assert_eq!(
-            db.data.lock().validators.get(&val2),
-            None,
-            "Val2 shouldn't be found"
-        );
-
-        assert_eq!(
-            db.data.lock().deposit_coin.len(),
-            0,
-            "asset is not finalized"
-        );
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, Some(c1))),);
+        assert_eq!(db.data.lock().validators.get(&v2), None,);
+        assert_eq!(db.data.lock().deposit_coin.len(), 0,);
 
         queue.commit_diffs(&mut db, 2).await;
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
+        assert_eq!(db.data.lock().deposit_coin.len(), 1,);
 
-        assert_eq!(
-            db.data.lock().validators.get(&val2),
-            Some(&(0, Some(cons2))),
-            "Val2 should be set"
+        queue.commit_diffs(&mut db, 3).await;
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, None)),);
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
+        assert_eq!(db.data.lock().deposit_coin.len(), 1,);
+    }
+
+    #[tokio::test]
+    pub async fn delegation_and_withdrawal_finalization() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let mut delegator1: Address = rng.gen();
+        let mut delegator2: Address = rng.gen();
+        delegator1.iter_mut().take(12).for_each(|i| *i = 0);
+        delegator2.iter_mut().take(12).for_each(|i| *i = 0);
+        let mut v1: Address = rng.gen();
+        let c1: Address = rng.gen();
+        let mut v2: Address = rng.gen();
+        v1.iter_mut().take(12).for_each(|i| *i = 0);
+        v2.iter_mut().take(12).for_each(|i| *i = 0);
+
+        let mut queue = FinalizationQueue::new(
+            0,
+            H160::zero(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(0u64),
         );
 
-        assert_eq!(
-            db.data.lock().deposit_coin.len(),
-            1,
-            "asset should be finalized"
-        );
+        let s1 = rng.gen::<u16>() as u64;
+        let s2 = rng.gen::<u16>() as u64;
+        let s3 = rng.gen::<u16>() as u64;
+
+        let del1 = eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]);
+        let v1_register = eth_log_validator_registration(2, v1, c1);
+        let del2 = eth_log_delegation(2, delegator2, vec![v1], vec![s3]);
+        let del_with = eth_log_withdrawal(3, delegator1, 7);
+
+        queue
+            .append_eth_logs(vec![del1, del2, v1_register, del_with])
+            .await;
+        let mut db = DummyDb::filled();
+
+        queue.commit_diffs(&mut db, 1).await;
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s2, None)),);
+
+        queue.commit_diffs(&mut db, 2).await;
+        let s13 = s1 + s3;
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s13, Some(c1))),);
 
         queue.commit_diffs(&mut db, 3).await;
 
-        assert_eq!(
-            db.data.lock().validators.get(&val1),
-            Some(&(0, None)),
-            "Val1 should be unregistered"
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s3, Some(c1))),);
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+    }
+
+    #[tokio::test]
+    pub async fn test_edge_case_of_double_delegation() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let mut delegator1: Address = rng.gen();
+        let mut delegator2: Address = rng.gen();
+        delegator1.iter_mut().take(12).for_each(|i| *i = 0);
+        delegator2.iter_mut().take(12).for_each(|i| *i = 0);
+        let mut v1: Address = rng.gen();
+        let mut v2: Address = rng.gen();
+        v1.iter_mut().take(12).for_each(|i| *i = 0);
+        v2.iter_mut().take(12).for_each(|i| *i = 0);
+
+        let mut queue = FinalizationQueue::new(
+            0,
+            H160::zero(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(0u64),
         );
-        assert_eq!(
-            db.data.lock().validators.get(&val2),
-            Some(&(0, Some(cons2))),
-            "Val2 should be registered"
-        );
-        assert_eq!(
-            db.data.lock().deposit_coin.len(),
-            1,
-            "asset should stay finalized"
-        );
+
+        let s1 = rng.gen::<u16>() as u64;
+        let s2 = rng.gen::<u16>() as u64;
+        let s3 = rng.gen::<u16>() as u64;
+
+        let del1 = eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]);
+        let del1_ret = eth_log_delegation(1, delegator1, vec![v1], vec![s1]);
+        let del2 = eth_log_delegation(1, delegator2, vec![v2], vec![s1]);
+
+        let del2_first = eth_log_delegation(2, delegator2, vec![v1], vec![s3]);
+        let del2_ret = eth_log_withdrawal(2, delegator2, 0); // amount does nothing
+
+        queue
+            .append_eth_logs(vec![del1, del1_ret, del2, del2_first, del2_ret])
+            .await;
+        let mut db = DummyDb::filled();
+
+        queue.commit_diffs(&mut db, 1).await;
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s1, None)),);
+
+        queue.commit_diffs(&mut db, 2).await;
+        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
+        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
     }
 }

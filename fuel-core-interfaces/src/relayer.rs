@@ -62,7 +62,7 @@ pub trait RelayerDb:
         let delegate_index = Storage::<Address,Vec<u64>>::get(self,delegate).expect("Expect to get data without problem")?;
         let mut last_da_height = 0;
         for index in delegate_index.iter() {
-            if da_height < *index {
+            if  *index >= da_height {
                 break;
             }
             last_da_height = *index;

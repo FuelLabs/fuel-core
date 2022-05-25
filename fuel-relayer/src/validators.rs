@@ -65,7 +65,9 @@ impl Validators {
 
         let mut validators = HashMap::new();
         // get staking diffs.
-        let diffs = db.get_staking_diffs(self.da_height, Some(da_height)).await;
+        let diffs = db
+            .get_staking_diffs(self.da_height + 1, Some(da_height))
+            .await;
         let mut delegates_cached: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key

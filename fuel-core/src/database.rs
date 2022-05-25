@@ -325,7 +325,7 @@ impl RelayerDb for Database {
             match diff {
                 Ok((key, diff)) => {
                     let block = key.0;
-                    if block >= to_da_height {
+                    if block > to_da_height {
                         return out;
                     }
                     out.push((block, diff))

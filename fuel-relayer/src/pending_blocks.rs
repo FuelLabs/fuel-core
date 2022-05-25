@@ -1,7 +1,6 @@
 use std::{cmp::max, collections::VecDeque, sync::Arc};
 
 use anyhow::Error;
-use ethers_contract::*;
 use ethers_core::{
     k256::ecdsa::SigningKey,
     types::{TransactionRequest, H160, U256},
@@ -19,10 +18,9 @@ use fuel_core_interfaces::{
 };
 
 // use the ethers_signers crate to manage LocalWallet and Signer
+use crate::abi;
 use ethers_signers::{LocalWallet, Signer};
 use tracing::{debug, error, info, warn};
-
-abigen!(ContractAbi, "abi/fuel.json");
 
 /// Pending Fuel Blocks waiting to be finalized inside client. Until then
 /// there is possibility that they are going to be reverted
@@ -59,8 +57,8 @@ impl PendingBlock {
     }
 }
 
-pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> BlockHeader {
-    let block = BlockHeader {
+pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> abi::fuel::BlockHeader {
+    let block = abi::fuel::BlockHeader {
         producer: H160::from_slice(&fuel_block.header.producer.as_ref()[12..]),
         previous_block_root: <[u8; 32]>::try_from(fuel_block.id()).unwrap(),
         height: fuel_block.header.height.into(),
@@ -338,7 +336,7 @@ impl PendingBlocks {
         let withdrawals = block
             .withdrawals()
             .iter()
-            .map(|wd| Withdrawal {
+            .map(|wd| abi::fuel::Withdrawal {
                 owner: H160::from_slice(&wd.0.as_ref()[12..]),
                 token: H160::from_slice(&wd.2.as_ref()[12..]),
                 amount: wd.1.into(),
@@ -348,7 +346,7 @@ impl PendingBlocks {
             .collect();
 
         let calldata = {
-            let contract = ContractAbi::new(self.contract_address, provider.clone());
+            let contract = abi::Fuel::new(self.contract_address, provider.clone());
             let event = contract.commit_block(
                 block.header.height.into(),
                 <[u8; 32]>::try_from(block.id()).unwrap(),
