@@ -274,11 +274,7 @@ impl Executor {
     pub fn verify_tx_predicates(&self, tx: &Transaction) -> Result<(), Error> {
         // fail if tx contains any predicates when predicates are disabled
         if !self.config.predicates {
-            let has_predicate = tx
-                .inputs()
-                .iter()
-                .find(|input| input.is_coin_predicate())
-                .is_some();
+            let has_predicate = tx.inputs().iter().any(|input| input.is_coin_predicate());
             if has_predicate {
                 return Err(Error::TransactionValidity(
                     TransactionValidityError::PredicateExecutionDisabled(tx.id()),
@@ -286,7 +282,7 @@ impl Executor {
             }
         }
         // otherwise, allow execution to continue for now.
-        return Ok(());
+        Ok(())
     }
 
     /// Verify the transaction has at least one coin.

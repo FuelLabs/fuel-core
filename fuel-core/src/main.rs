@@ -1,12 +1,11 @@
 use clap::Parser;
 use fuel_core::service::FuelService;
-use std::io;
 use tracing::{info, trace};
 
 mod args;
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     // load configuration
     let config = args::Opt::parse().exec()?;
     // log fuel-core version
