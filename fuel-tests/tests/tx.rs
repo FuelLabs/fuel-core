@@ -1,3 +1,4 @@
+use crate::helpers::TestContext;
 use chrono::Utc;
 use fuel_core::executor::ExecutionMode;
 use fuel_core::model::{FuelBlock, FuelBlockHeader};
@@ -453,11 +454,6 @@ async fn get_owned_transactions() {
     assert_eq!(&alice_txs, &[tx1]);
     assert_eq!(&bob_txs, &[tx2, tx3]);
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
-}
-
-struct TestContext {
-    rng: StdRng,
-    pub client: FuelClient,
 }
 
 impl TestContext {

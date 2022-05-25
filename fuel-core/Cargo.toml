@@ -45,7 +45,7 @@ fuel-storage = { version = "0.1" }
 fuel-tx = { version = "0.10", features = ["serde"] }
 fuel-txpool = { path = "../fuel-txpool", version = "0.7.1" }
 fuel-types = { version = "0.5", features = ["serde"] }
-fuel-vm = { version = "0.9", features = ["serde"] }
+fuel-vm = { version = "0.9", features = ["serde", "profile-coverage"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -86,5 +86,6 @@ fuel-vm = { version = "0.9", features = [
 insta = "1.8"
 
 [features]
-default = ["rocksdb"]
+default = ["rocksdb", "debug"]
+debug = ["fuel-vm/debug"]
 test-helpers = []
