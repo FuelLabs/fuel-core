@@ -1,7 +1,6 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
-use fuel_crypto::Hasher;
 use fuel_tx::{Input, Output, TransactionBuilder};
 use fuel_vm::{consts::REG_ONE, prelude::Opcode};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -45,7 +44,7 @@ async fn transaction_with_predicates_is_allowed_when_feature_enabled() {
     // setup tx with a predicate input
     let asset_id = rng.gen();
     let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
-    let owner = (*Hasher::hash(predicate.as_slice())).into();
+    let owner = Input::predicate_owner(&predicate);
     let predicate_tx = TransactionBuilder::script(Default::default(), Default::default())
         .add_input(Input::coin_predicate(
             rng.gen(),

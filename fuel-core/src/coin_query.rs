@@ -38,7 +38,7 @@ pub type SpendQueryElement = (Address, AssetId, u64);
 pub fn largest_first(
     db: &Database,
     spend_query: &SpendQuery,
-    max_inputs: u8,
+    max_inputs: u64,
     excluded_ids: Option<&Vec<UtxoId>>,
 ) -> Result<Vec<(UtxoId, Coin)>, CoinQueryError> {
     // Merge elements with the same (owner, asset_id)
@@ -117,7 +117,7 @@ pub fn largest_first(
 pub fn random_improve(
     db: &Database,
     spend_query: &SpendQuery,
-    max_inputs: u8,
+    max_inputs: u64,
     excluded_ids: Option<&Vec<UtxoId>>,
 ) -> Result<Vec<(UtxoId, Coin)>, CoinQueryError> {
     // Merge elements with the same (owner, asset_id)
@@ -281,7 +281,7 @@ mod tests {
             db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
         });
         let query = |spend_query: &[SpendQueryElement],
-                     max_inputs: u8|
+                     max_inputs: u64|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
             let coins = largest_first(db.as_ref(), spend_query, max_inputs, None);
 
@@ -296,7 +296,7 @@ mod tests {
 
         // Query some amounts, including higher than the owner's balance
         for amount in 0..20 {
-            let coins = query(&[(owner, asset_ids[0], amount)], u8::MAX);
+            let coins = query(&[(owner, asset_ids[0], amount)], u8::MAX as u64);
 
             // Transform result for convenience
             let coins = coins.map(|coins| {
@@ -332,14 +332,14 @@ mod tests {
         // Query multiple asset IDs
         let coins = query(
             &[(owner, asset_ids[0], 3), (owner, asset_ids[1], 6)],
-            u8::MAX,
+            u8::MAX as u64,
         );
         assert_matches!(coins, Ok(coins) if coins == vec![(asset_ids[0], 5), (asset_ids[1], 5), (asset_ids[1], 4)]);
 
         // Query with duplicate (owner, asset_id)
         let coins = query(
             &[(owner, asset_ids[0], 3), (owner, asset_ids[0], 3)],
-            u8::MAX,
+            u8::MAX as u64,
         );
         assert_matches!(coins, Ok(coins) if coins == vec![(asset_ids[0], 5),  (asset_ids[0], 4)]);
 
@@ -359,7 +359,7 @@ mod tests {
             db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
         });
         let query = |spend_query: &[SpendQueryElement],
-                     max_inputs: u8|
+                     max_inputs: u64|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
             let coins = random_improve(db.as_ref(), spend_query, max_inputs, None);
 
@@ -380,7 +380,7 @@ mod tests {
 
         // Query some amounts, including higher than the owner's balance
         for amount in 0..20 {
-            let coins = query(&[(owner, asset_ids[0], amount)], u8::MAX);
+            let coins = query(&[(owner, asset_ids[0], amount)], u8::MAX as u64);
 
             // Transform result for convenience
             let coins = coins.map(|coins| {
@@ -436,7 +436,7 @@ mod tests {
         // Query with duplicate (owner, asset_id)
         let coins = query(
             &[(owner, asset_ids[0], 3), (owner, asset_ids[0], 3)],
-            u8::MAX,
+            u8::MAX as u64,
         );
         assert_matches!(coins, Ok(coins) if coins
             .iter()
@@ -461,7 +461,7 @@ mod tests {
             db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
         });
         let query = |spend_query: &[SpendQueryElement],
-                     max_inputs: u8,
+                     max_inputs: u64,
                      excluded_ids: Option<&Vec<UtxoId>>|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
             let coins = random_improve(db.as_ref(), spend_query, max_inputs, excluded_ids);
@@ -493,7 +493,7 @@ mod tests {
         for amount in 0..20 {
             let coins = query(
                 &[(owner, asset_ids[0], amount)],
-                u8::MAX,
+                u8::MAX as u64,
                 Some(&excluded_ids),
             );
 

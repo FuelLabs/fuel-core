@@ -42,10 +42,10 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.7.1", fe
 fuel-crypto = { version = "0.5", features = ["random"] }
 fuel-merkle = "0.1"
 fuel-storage = { version = "0.1" }
-fuel-tx = { version = "0.11", features = ["serde"] }
+fuel-tx = { version = "0.12", features = ["serde"] }
 fuel-txpool = { path = "../fuel-txpool", version = "0.7.1" }
 fuel-types = { version = "0.5", features = ["serde"] }
-fuel-vm = { version = "0.10", features = ["serde", "profile-coverage"] }
+fuel-vm = { version = "0.11", features = ["serde", "profile-coverage"] }
 futures = "0.3"
 graphql-parser = "0.3.0"
 hex = { version = "0.4", features = ["serde"] }
@@ -73,12 +73,12 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-tx = { version = "0.11", features = [
+fuel-tx = { version = "0.12", features = [
     "serde",
     "builder",
     "internals",
 ] }
-fuel-vm = { version = "0.10", features = [
+fuel-vm = { version = "0.11", features = [
     "serde",
     "random",
     "test-helpers",

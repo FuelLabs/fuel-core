@@ -1,6 +1,7 @@
 use crate::coin_query::{random_improve, SpendQueryElement};
 use crate::database::{Database, KvStoreError};
 use crate::schema::scalars::{Address, AssetId, UtxoId, U64};
+use crate::service::Config;
 use crate::state::IterDirection;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
@@ -8,7 +9,6 @@ use async_graphql::{
 };
 use fuel_core_interfaces::model::{Coin as CoinModel, CoinStatus as CoinStatusModel};
 use fuel_storage::Storage;
-use fuel_tx::consts::MAX_INPUTS;
 use itertools::Itertools;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -189,17 +189,20 @@ impl CoinQuery {
         #[graphql(desc = "The total amount of each asset type to spend")] spend_query: Vec<
             SpendQueryElementInput,
         >,
-        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u8>,
+        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u64>,
         #[graphql(desc = "The max number of utxos that can be used")] excluded_ids: Option<
             Vec<UtxoId>,
         >,
     ) -> async_graphql::Result<Vec<Coin>> {
+        let config = ctx.data_unchecked::<Config>();
+
         let owner: fuel_tx::Address = owner.0;
         let spend_query: Vec<SpendQueryElement> = spend_query
             .iter()
             .map(|e| (owner, e.asset_id.0, e.amount.0))
             .collect();
-        let max_inputs: u8 = max_inputs.unwrap_or(MAX_INPUTS);
+        let max_inputs: u64 =
+            max_inputs.unwrap_or(config.chain_conf.transaction_parameters.max_inputs);
         let excluded_ids: Option<Vec<fuel_tx::UtxoId>> =
             excluded_ids.map(|ids| ids.into_iter().map(|id| id.0).collect());
 
