@@ -202,16 +202,28 @@ impl TryFrom<Input> for fuel_tx::Input {
 
     fn try_from(input: Input) -> Result<fuel_tx::Input, Self::Error> {
         Ok(match input {
-            Input::InputCoin(coin) => fuel_tx::Input::Coin {
-                utxo_id: coin.utxo_id.into(),
-                owner: coin.owner.into(),
-                amount: coin.amount.into(),
-                asset_id: coin.asset_id.into(),
-                witness_index: coin.witness_index.try_into()?,
-                maturity: coin.maturity.into(),
-                predicate: coin.predicate.into(),
-                predicate_data: coin.predicate_data.into(),
-            },
+            Input::InputCoin(coin) => {
+                if coin.predicate.0 .0.is_empty() {
+                    fuel_tx::Input::CoinSigned {
+                        utxo_id: coin.utxo_id.into(),
+                        owner: coin.owner.into(),
+                        amount: coin.amount.into(),
+                        asset_id: coin.asset_id.into(),
+                        witness_index: coin.witness_index.try_into()?,
+                        maturity: coin.maturity.into(),
+                    }
+                } else {
+                    fuel_tx::Input::CoinPredicate {
+                        utxo_id: coin.utxo_id.into(),
+                        owner: coin.owner.into(),
+                        amount: coin.amount.into(),
+                        asset_id: coin.asset_id.into(),
+                        maturity: coin.maturity.into(),
+                        predicate: coin.predicate.into(),
+                        predicate_data: coin.predicate_data.into(),
+                    }
+                }
+            }
             Input::InputContract(contract) => fuel_tx::Input::Contract {
                 utxo_id: contract.utxo_id.into(),
                 balance_root: contract.balance_root.into(),

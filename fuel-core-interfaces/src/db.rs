@@ -4,6 +4,7 @@ use fuel_vm::prelude::InterpreterError;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     #[error("error performing binary serialization")]
     Codec,
@@ -194,15 +195,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![
                     Output::Coin {
@@ -235,15 +234,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![Output::ContractCreated {
                     contract_id: *CONTRACT_ID1,
@@ -269,15 +266,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID1, 0),
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![Output::Coin {
                     amount: 100,
@@ -304,15 +299,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID1, 0),
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![
                     Output::Coin {
@@ -346,15 +339,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID_DB1, 0),
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![Output::Coin {
                     amount: 100,
@@ -382,15 +373,13 @@ pub mod helpers {
                 receipts_root: Default::default(),
                 script,
                 script_data: vec![],
-                inputs: vec![Input::Coin {
+                inputs: vec![Input::CoinSigned {
                     utxo_id: UtxoId::new(*TX_ID_DB2, 0),
                     owner: Address::default(),
                     amount: 200,
                     asset_id: Default::default(),
                     witness_index: 0,
                     maturity: 0,
-                    predicate: vec![],
-                    predicate_data: vec![],
                 }],
                 outputs: vec![Output::Coin {
                     amount: 100,

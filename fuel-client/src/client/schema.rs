@@ -267,6 +267,7 @@ pub struct PaginatedResult<T, C> {
 }
 
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum ConversionError {
     #[error("Field is required from the GraphQL response {0}")]
     MissingField(String),
