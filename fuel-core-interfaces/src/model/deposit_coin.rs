@@ -1,6 +1,7 @@
 use super::{BlockHeight, DaBlockHeight};
 use fuel_types::{Address, AssetId, Bytes32, Word};
 
+/// Probably going to be supperseaded with bridge message https://github.com/FuelLabs/fuel-core/issues/366
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct DepositCoin {
@@ -13,8 +14,6 @@ pub struct DepositCoin {
 }
 
 impl DepositCoin {
-    /// TODO check what id are we going to use
-    /// depends on https://github.com/FuelLabs/fuel-specs/issues/106
     pub fn id(&self) -> Bytes32 {
         self.nonce
     }

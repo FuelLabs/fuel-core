@@ -7,10 +7,10 @@ use tokio::sync::oneshot;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct StakingDiff {
-    /// new value of validator registration, it can be new consensus address if registered or None of
-    /// unregistration happens
+    /// Validator registration, it can be new consensus address if registered or
+    /// None if unregistration happened.
     pub validators: HashMap<Address, Option<Address>>,
-    /// in one da block register changes for all delegation and how they delegation changes.
+    /// Register changes for all delegations inside one da block.
     pub delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
 }
 

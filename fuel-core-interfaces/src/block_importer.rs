@@ -2,10 +2,9 @@ use crate::model::{BlockHeight, SealedFuelBlock};
 use fuel_tx::Bytes32;
 use std::sync::Arc;
 
-/// Currently just placeholder for new block included and new block created events.
+/// New block included/created event.
 #[derive(Clone, Debug)]
 pub enum NewBlockEvent {
-    /// send this to eth
     Created(Arc<SealedFuelBlock>),
     Included(Arc<SealedFuelBlock>),
 }

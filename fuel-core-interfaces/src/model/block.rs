@@ -1,9 +1,11 @@
 pub use super::BlockHeight;
+use super::ValidatorStake;
 use chrono::{DateTime, TimeZone, Utc};
 use core::ops::Deref;
 use fuel_crypto::Hasher;
 use fuel_tx::{Address, AssetId, Bytes32, Transaction};
 use fuel_types::Word;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -139,13 +141,15 @@ impl FuelBlock {
     }
 }
 
+/// This structure is ceated as placeholder for future usage.
+/// It represent commitment for next child block
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockConsensus {
+    /// required stake for next block
     pub required_stake: u64,
-    pub validators: Vec<Address>,
-    pub stakes: Vec<u64>,
-    pub signatures: Vec<Bytes32>,
+    /// Map of Validator consensus key and pair of stake and signature
+    pub validators: HashMap<Address, (ValidatorStake, Bytes32)>,
 }
 
 #[derive(Clone, Debug, Default)]

@@ -317,19 +317,19 @@ impl PendingBlocks {
             .consensus
             .validators
             .iter()
-            .map(|val| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
+            .map(|(val, _)| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
             .collect();
         let stakes = block
             .consensus
-            .stakes
+            .validators
             .iter()
-            .map(|stake| (*stake).into())
+            .map(|(_, (stake, _))| (*stake).into())
             .collect(); // U256
         let signatures = block
             .consensus
-            .signatures
+            .validators
             .iter()
-            .map(|sig| sig.to_vec().into())
+            .map(|(_, (_, sig))| sig.to_vec().into())
             .collect(); //bytes
         let withdrawals = block
             .withdrawals()
