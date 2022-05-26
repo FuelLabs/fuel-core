@@ -35,8 +35,9 @@ pub async fn start_server(
     tx_pool: Arc<TxPool>,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
+    let params = config.chain_conf.transaction_parameters;
     let schema = build_schema().data(db).data(tx_pool).data(config);
-    let schema = dap::init(schema).extension(Tracing).finish();
+    let schema = dap::init(schema, params).extension(Tracing).finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))

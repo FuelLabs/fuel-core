@@ -89,7 +89,7 @@ impl FuelService {
     async fn init_service(database: Database, config: Config) -> Result<Self, AnyError> {
         // check predicates flag
         if config.predicates {
-            warn!("Predicates are not supported yet!");
+            warn!("Predicates are currently an unstable feature!");
         }
 
         // initialize state

@@ -80,6 +80,9 @@ spec:
           {{- if .Values.app.vm_backtrace }}
             - "--vm-backtrace"
           {{- end}}
+          {{- if .Values.app.predicates }}
+            - "--predicates"
+          {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
             - "--min-byte-price"

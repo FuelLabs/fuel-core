@@ -2,6 +2,7 @@ use crate::database::transactional::DatabaseTransaction;
 use crate::database::Database;
 use crate::schema::scalars::U64;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
+use fuel_tx::ConsensusParameters;
 use fuel_vm::{consts, prelude::*};
 use futures::lock::Mutex;
 use std::{collections::HashMap, io, sync};
@@ -13,9 +14,17 @@ pub struct ConcreteStorage {
     vm: HashMap<ID, Interpreter<Database>>,
     tx: HashMap<ID, Vec<Transaction>>,
     db: HashMap<ID, DatabaseTransaction>,
+    params: ConsensusParameters,
 }
 
 impl ConcreteStorage {
+    pub fn new(params: ConsensusParameters) -> Self {
+        Self {
+            params,
+            ..Default::default()
+        }
+    }
+
     pub fn register(&self, id: &ID, register: RegisterId) -> Option<Word> {
         self.vm
             .get(id)
@@ -47,7 +56,7 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -69,7 +78,7 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let mut vm = Interpreter::with_storage(storage.as_ref().clone());
+        let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
         vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
@@ -84,7 +93,7 @@ impl ConcreteStorage {
     pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), InterpreterError> {
         self.vm
             .get_mut(id)
-            .map(|vm| vm.instruction(op.into()))
+            .map(|vm| vm.instruction(Interpreter::instruction_script, op.into()))
             .transpose()?
             .map(|_| ())
             .ok_or_else(|| {
@@ -103,8 +112,11 @@ pub struct DapQuery;
 #[derive(Default)]
 pub struct DapMutation;
 
-pub fn init<Q, M, S>(schema: SchemaBuilder<Q, M, S>) -> SchemaBuilder<Q, M, S> {
-    schema.data(GraphStorage::default())
+pub fn init<Q, M, S>(
+    schema: SchemaBuilder<Q, M, S>,
+    params: ConsensusParameters,
+) -> SchemaBuilder<Q, M, S> {
+    schema.data(GraphStorage::new(Mutex::new(ConcreteStorage::new(params))))
 }
 
 #[Object]

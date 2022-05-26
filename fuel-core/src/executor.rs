@@ -95,7 +95,10 @@ impl Executor {
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
             // execution vm
-            let mut vm = Interpreter::with_storage(sub_db_view.clone());
+            let mut vm = Interpreter::with_storage(
+                sub_db_view.clone(),
+                self.config.chain_conf.transaction_parameters,
+            );
             let vm_result = vm
                 .transact(tx.clone())
                 .map_err(|error| Error::VmExecution {
@@ -280,8 +283,17 @@ impl Executor {
                     TransactionValidityError::PredicateExecutionDisabled(tx.id()),
                 ));
             }
+        } else {
+            // otherwise attempt to validate any predicates if the feature flag is enabled
+            if !Interpreter::<()>::check_predicates(
+                tx.clone(),
+                self.config.chain_conf.transaction_parameters,
+            ) {
+                return Err(Error::TransactionValidity(
+                    TransactionValidityError::InvalidPredicate(tx.id()),
+                ));
+            }
         }
-        // otherwise, allow execution to continue for now.
         Ok(())
     }
 
@@ -630,8 +642,12 @@ pub enum TransactionValidityError {
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin input type: {0:#x}")]
     NoCoinInput(TxId),
-    #[error("The transaction contains predicate inputs which aren't enabled")]
+    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
     PredicateExecutionDisabled(TxId),
+    #[error(
+        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
+    )]
+    InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
@@ -708,7 +724,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_crypto::SecretKey;
-    use fuel_tx::consts::MAX_GAS_PER_TX;
+    use fuel_tx::default_parameters::MAX_GAS_PER_TX;
     use fuel_tx::TransactionBuilder;
     use fuel_types::{ContractId, Immediate12, Salt};
     use fuel_vm::consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO};
@@ -740,9 +756,9 @@ mod tests {
 
     fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
         let salt: Salt = rng.gen();
-        let contract = fuel_vm::contract::Contract::from(contract_code.clone());
+        let contract = fuel_tx::Contract::from(contract_code.clone());
         let root = contract.root();
-        let state_root = fuel_vm::contract::Contract::default_state_root();
+        let state_root = fuel_tx::Contract::default_state_root();
         let contract_id = contract.id(&salt, &root, &state_root);
 
         let tx = Transaction::create(
