@@ -369,6 +369,7 @@ impl PendingBlocks {
         let provider = SignerMiddleware::new(provider, self.signer.clone());
 
         // Use EthGasStation as the gas oracle
+        // https://github.com/FuelLabs/fuel-core/issues/363
         // TODO check how this is going to be done in testnet.
         //let gas_oracle = EthGasStation::new(None);
         //let provider = GasOracleMiddleware::new(provider, gas_oracle);

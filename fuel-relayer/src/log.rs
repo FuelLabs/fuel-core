@@ -8,6 +8,7 @@ use ethers_core::{
 use fuel_core_interfaces::model::DepositCoin;
 use fuel_types::{Address, AssetId, Bytes32, Word};
 
+/// This is going to be superseded with MessageLog: https://github.com/FuelLabs/fuel-core/issues/366
 #[derive(Debug, Clone, PartialEq)]
 pub struct AssetDepositLog {
     pub account: Address,

@@ -111,7 +111,8 @@ impl FuelBlock {
         }
     }
 
-    /* BIG TODO FOR FUNCTIONS BELLOW */
+    /* TODO for functions bellow, they are mostly going to be removed
+    https://github.com/FuelLabs/fuel-core/issues/364 */
 
     pub fn transaction_data_lenght(&self) -> usize {
         self.transactions.len() * 100
@@ -137,6 +138,7 @@ impl FuelBlock {
         Bytes32::zeroed()
     }
 }
+
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockConsensus {

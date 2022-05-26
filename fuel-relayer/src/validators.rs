@@ -31,7 +31,7 @@ impl Validators {
         &mut self,
         da_height: DaBlockHeight,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
-        // TODO apply down drift
+        // TODO apply down drift https://github.com/FuelLabs/fuel-core/issues/365
         if self.da_height == da_height {
             return Some(self.set.clone());
         }
