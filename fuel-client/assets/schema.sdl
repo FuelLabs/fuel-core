@@ -1,10 +1,13 @@
 scalar Address
+
 scalar AssetId
+
 type Balance {
 	owner: Address!
 	amount: U64!
 	assetId: AssetId!
 }
+
 type BalanceConnection {
 	"""
 	Information to aid in pagination.
@@ -13,27 +16,30 @@ type BalanceConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [BalanceEdge]
+	edges: [BalanceEdge!]!
 }
+
 """
 An edge in a connection.
 """
 type BalanceEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Balance!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: Balance!
 }
+
 input BalanceFilterInput {
 	"""
 	Filter coins based on the `owner` field
 	"""
 	owner: Address!
 }
+
 type Block {
 	id: BlockId!
 	height: U64!
@@ -41,6 +47,7 @@ type Block {
 	time: DateTime!
 	producer: Address!
 }
+
 type BlockConnection {
 	"""
 	Information to aid in pagination.
@@ -49,38 +56,46 @@ type BlockConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [BlockEdge]
+	edges: [BlockEdge!]!
 }
+
 """
 An edge in a connection.
 """
 type BlockEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Block!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: Block!
 }
+
 scalar BlockId
+
+
 input Breakpoint {
 	contract: ContractId!
 	pc: U64!
 }
+
 scalar Bytes32
+
 type ChainInfo {
 	name: String!
 	latestBlock: Block!
 	baseChainHeight: U64!
 	peerCount: Int!
 }
+
 type ChangeOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
 }
+
 type Coin {
 	utxoId: UtxoId!
 	owner: Address!
@@ -90,6 +105,7 @@ type Coin {
 	status: CoinStatus!
 	blockCreated: U64!
 }
+
 type CoinConnection {
 	"""
 	Information to aid in pagination.
@@ -98,21 +114,23 @@ type CoinConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [CoinEdge]
+	edges: [CoinEdge!]!
 }
+
 """
 An edge in a connection.
 """
 type CoinEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Coin!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: Coin!
 }
+
 input CoinFilterInput {
 	"""
 	Address of the owner
@@ -123,49 +141,63 @@ input CoinFilterInput {
 	"""
 	assetId: AssetId
 }
+
 type CoinOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
 }
+
 enum CoinStatus {
 	UNSPENT
 	SPENT
 }
+
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
 	salt: Salt!
 }
+
 type ContractBalance {
 	contract: ContractId!
 	amount: U64!
 	assetId: AssetId!
 }
+
 type ContractCreated {
 	contract: Contract!
 	stateRoot: Bytes32!
 }
+
 scalar ContractId
+
 type ContractOutput {
 	inputIndex: Int!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 }
+
 """
 Implement the DateTime<Utc> scalar
 
 The input/output is a string in RFC3339 format.
 """
 scalar DateTime
+
 type FailureStatus {
 	block: Block!
 	time: DateTime!
 	reason: String!
 	programState: ProgramState
 }
+
+
 scalar HexString
+
+
 union Input = | InputCoin | InputContract
+
 type InputCoin {
 	utxoId: UtxoId!
 	owner: Address!
@@ -176,12 +208,15 @@ type InputCoin {
 	predicate: HexString!
 	predicateData: HexString!
 }
+
 type InputContract {
 	utxoId: UtxoId!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
 	contract: Contract!
 }
+
+
 type Mutation {
 	startSession: ID!
 	endSession(id: ID!): Boolean!
@@ -200,7 +235,9 @@ type Mutation {
 	"""
 	submit(tx: HexString!): Transaction!
 }
+
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
+
 """
 A separate `Breakpoint` type to be used as an output, as a single
 type cannot act as both input and output type in async-graphql
@@ -209,6 +246,7 @@ type OutputBreakpoint {
 	contract: ContractId!
 	pc: U64!
 }
+
 """
 Information about pagination in a connection
 """
@@ -230,10 +268,12 @@ type PageInfo {
 	"""
 	endCursor: String
 }
+
 type ProgramState {
 	returnType: ReturnType!
 	data: HexString!
 }
+
 type Query {
 	register(id: ID!, register: U64!): U64!
 	memory(id: ID!, start: U64!, size: U64!): String!
@@ -256,6 +296,7 @@ type Query {
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 }
+
 type Receipt {
 	contract: Contract
 	pc: U64
@@ -282,6 +323,7 @@ type Receipt {
 	gasUsed: U64
 	data: HexString
 }
+
 enum ReceiptType {
 	CALL
 	RETURN
@@ -294,20 +336,25 @@ enum ReceiptType {
 	TRANSFER_OUT
 	SCRIPT_RESULT
 }
+
 enum ReturnType {
 	RETURN
 	RETURN_DATA
 	REVERT
 }
+
 type RunResult {
 	state: RunState!
 	breakpoint: OutputBreakpoint
 }
+
 enum RunState {
 	COMPLETED
 	BREAKPOINT
 }
+
 scalar Salt
+
 input SpendQueryElementInput {
 	"""
 	Asset ID of the coins
@@ -318,14 +365,18 @@ input SpendQueryElementInput {
 	"""
 	amount: U64!
 }
+
+
 type SubmittedStatus {
 	time: DateTime!
 }
+
 type SuccessStatus {
 	block: Block!
 	time: DateTime!
 	programState: ProgramState!
 }
+
 type Transaction {
 	id: TransactionId!
 	inputAssetIds: [AssetId!]!
@@ -353,6 +404,7 @@ type Transaction {
 	"""
 	rawPayload: HexString!
 }
+
 type TransactionConnection {
 	"""
 	Information to aid in pagination.
@@ -361,35 +413,43 @@ type TransactionConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [TransactionEdge]
+	edges: [TransactionEdge!]!
 }
+
 """
 An edge in a connection.
 """
 type TransactionEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: Transaction!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: Transaction!
 }
+
 scalar TransactionId
+
 union TransactionStatus = | SubmittedStatus | SuccessStatus | FailureStatus
+
 scalar U64
+
 scalar UtxoId
+
 type VariableOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
 }
+
 type WithdrawalOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!
 }
+
 schema {
 	query: Query
 	mutation: Mutation
