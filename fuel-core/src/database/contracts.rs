@@ -1,13 +1,31 @@
 use crate::{
     database::{
-        columns::{CONTRACTS, CONTRACT_UTXO_ID},
+        columns::{BALANCES, CONTRACTS, CONTRACT_UTXO_ID},
         Database,
     },
-    state::Error,
+    state::{Error, IterDirection},
 };
-use fuel_tx::UtxoId;
-use fuel_vm::prelude::{Contract, ContractId, Storage};
+use fuel_tx::{Bytes32, UtxoId};
+use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
+
+fn contract_asset_id_id_key(contract: &ContractId, asset: &AssetId) -> Vec<u8> {
+    contract
+        .as_ref()
+        .iter()
+        .chain(asset_id_to_bytes(asset).iter())
+        .copied()
+        .collect()
+}
+
+// Flat 32 bytes
+const SIZE_OF_ASSET_ID: usize = 256;
+
+fn asset_id_to_bytes(asset_id: &AssetId) -> Vec<u8> {
+    let mut out = Vec::with_capacity(SIZE_OF_ASSET_ID);
+    out.extend(asset_id.as_ref().iter());
+    out
+}
 
 impl Storage<ContractId, Contract> for Database {
     type Error = Error;
@@ -46,6 +64,24 @@ impl Storage<ContractId, UtxoId> for Database {
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), CONTRACT_UTXO_ID)
+    }
+}
+
+impl Database {
+    pub fn contract_balances(
+        &self,
+        contract: ContractId,
+        start_asset: Option<AssetId>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<AssetId, Error>> + '_ {
+        self.iter_all::<Vec<u8>, bool>(
+            BALANCES,
+            Some(contract.as_ref().to_vec()),
+            start_asset.map(|b| contract_asset_id_id_key(&contract, &b)),
+            direction,
+        )
+        // Safety: key is always 64 bytes
+        .map(|res| res.map(|(key, _)| AssetId::new(key.try_into().unwrap())))
     }
 }
 

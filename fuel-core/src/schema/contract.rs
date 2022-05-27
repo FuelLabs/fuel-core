@@ -113,4 +113,12 @@ impl ContractBalanceQuery {
             asset_id,
         })
     }
+
+    async fn contract_balances(&self, ctx: &Context<'_>, contract : ContractId, start_asset : AssetId, ) -> async_graphql::Result<U64> {
+        let db = ctx.data_unchecked::<Database>().clone();
+
+        let balances = db.contract_balances(contract, start_asset, direction).map(|res| -> Result<_, Error> {})
+
+        Ok(U64::from(1))
+    }
 }
