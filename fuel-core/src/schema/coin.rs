@@ -171,12 +171,13 @@ impl CoinQuery {
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= coins.len());
-                connection.append(
+                connection.edges.extend(
                     coins
                         .into_iter()
                         .map(|item| Edge::new(UtxoId::from(item.0), item)),
                 );
-                Ok(connection)
+
+                Ok::<Connection<UtxoId, Coin>, KvStoreError>(connection)
             },
         )
         .await
