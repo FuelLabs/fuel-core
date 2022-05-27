@@ -651,7 +651,7 @@ pub enum TransactionValidityError {
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
-    DataStoreError(Box<dyn std::error::Error>),
+    DataStoreError(Box<dyn StdError + Send + Sync>),
 }
 
 impl From<KvStoreError> for TransactionValidityError {
@@ -674,7 +674,7 @@ pub enum Error {
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
-    CorruptedBlockState(Box<dyn StdError>),
+    CorruptedBlockState(Box<dyn StdError + Send + Sync>),
     #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
     MissingTransactionData {
         block_id: Bytes32,
