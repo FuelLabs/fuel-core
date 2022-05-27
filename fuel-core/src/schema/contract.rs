@@ -3,7 +3,8 @@ use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
 use async_graphql::{Context, Object};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
-
+use crate::state::{IterDirection};
+use async_graphql::{connection::{query, Connection, Edge, EmptyFields}};
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
 impl From<fuel_types::ContractId> for Contract {
@@ -114,11 +115,114 @@ impl ContractBalanceQuery {
         })
     }
 
-    async fn contract_balances(&self, ctx: &Context<'_>, contract : ContractId, start_asset : AssetId, ) -> async_graphql::Result<U64> {
+    async fn contract_balances(
+        &self, 
+        ctx: &Context<'_>, 
+        contract : ContractId,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>
+    ) -> async_graphql::Result<Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>> {
+
         let db = ctx.data_unchecked::<Database>().clone();
 
-        let balances = db.contract_balances(contract, start_asset, direction).map(|res| -> Result<_, Error> {})
+        let balances:Vec<ContractBalance> = db.contract_balances(contract.into(), None, None).filter(|element| {
+            // Remove all Errors which occured when fetching balances
+            element.is_err()
+        }).map(|balance| -> ContractBalance {
+            let asset_id = balance.unwrap();
 
-        Ok(U64::from(1))
+            let result = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+                &db,
+                &contract.into(),
+                &asset_id,
+            ).unwrap();
+
+            let amount = result.unwrap_or(0);
+
+            let contract_balance = ContractBalance {
+                contract: contract.into(),
+                amount,
+                asset_id,
+
+            };
+
+            contract_balance
+
+        }).collect();
+        
+        query(
+            after,
+            before,
+            first,
+            last,
+            |after: Option<AssetId>, before: Option<AssetId>, first, last| async move {
+                let (records_to_fetch, direction) = if let Some(first) = first {
+                    (first, IterDirection::Forward)
+                } else if let Some(last) = last {
+                    (last, IterDirection::Reverse)
+                } else {
+                    (0, IterDirection::Forward)
+                };
+
+                let after = after.map(fuel_tx::AssetId::from);
+                let before = before.map(fuel_tx::AssetId::from);
+
+                let start;
+                let end;
+
+                if direction == IterDirection::Forward {
+                    start = after;
+                    end = before;
+                } else {
+                    start = before;
+                    end = after;
+                }
+
+                let mut balances = balances.into_iter();
+                if direction == IterDirection::Reverse {
+                    balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
+                }
+                if let Some(start) = start {
+                    balances = balances
+                        .skip_while(|balance| balance.asset_id == start)
+                        .collect::<Vec<ContractBalance>>()
+                        .into_iter();
+                }
+                let mut started = None;
+                if start.is_some() {
+                    // skip initial result
+                    started = balances.next();
+                }
+
+                // take desired amount of results
+                let balances = balances
+                    .take_while(|balance| {
+                        // take until we've reached the end
+                        if let Some(end) = end.as_ref() {
+                            if balance.asset_id == *end {
+                                return false;
+                            }
+                        }
+                        true
+                    })
+                    .take(records_to_fetch);
+                let mut balances: Vec<ContractBalance> = balances.collect();
+                if direction == IterDirection::Reverse {
+                    balances.reverse();
+                }
+
+                let mut connection =
+                    Connection::new(started.is_some(), records_to_fetch <= balances.len());
+                connection.append(
+                    balances
+                        .into_iter()
+                        .map(|item| Edge::new(item.asset_id.into(), item)),
+                );
+                Ok(connection)
+            },
+        )
+        .await
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     },
     state::{Error, IterDirection},
 };
-use fuel_tx::{Bytes32, UtxoId};
+use fuel_tx::UtxoId;
 use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
 
