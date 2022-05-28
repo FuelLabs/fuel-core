@@ -236,6 +236,16 @@ type Mutation {
 	submit(tx: HexString!): Transaction!
 }
 
+type NodeInfo {
+	utxoValidation: Boolean!
+	predicates: Boolean!
+	vmBacktraces: Boolean!
+	minGasPrice: U64!
+	minBytePrice: U64!
+	maxTx: U64!
+	maxDepth: U64!
+}
+
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
@@ -295,6 +305,8 @@ type Query {
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
+	nodeVersion: String!
+	nodeSettings: NodeInfo!
 }
 
 type Receipt {
