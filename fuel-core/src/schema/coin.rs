@@ -179,7 +179,7 @@ impl CoinQuery {
                 Ok(connection)
             },
         )
-        .await
+            .await
     }
 
     /// For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
@@ -194,9 +194,7 @@ impl CoinQuery {
             SpendQueryElementInput,
         >,
         #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u64>,
-        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<
-            Vec<UtxoId>,
-        >,
+        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<Vec<UtxoId>>,
     ) -> async_graphql::Result<Vec<Coin>> {
         let config = ctx.data_unchecked::<Config>();
 
