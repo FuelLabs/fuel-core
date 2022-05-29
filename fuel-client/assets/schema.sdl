@@ -239,7 +239,7 @@ type Mutation {
 type NodeInfo {
 	utxoValidation: Boolean!
 	predicates: Boolean!
-	vmBacktraces: Boolean!
+	vmBacktrace: Boolean!
 	minGasPrice: U64!
 	minBytePrice: U64!
 	maxTx: U64!
