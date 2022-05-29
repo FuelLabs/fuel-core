@@ -1,10 +1,11 @@
 use crate::database::{Database, KvStoreError};
 use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
+use crate::state::IterDirection;
+use async_graphql::connection::{query, Connection, Edge, EmptyFields};
+use async_graphql::InputObject;
 use async_graphql::{Context, Object};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
-use crate::state::{IterDirection};
-use async_graphql::{connection::{query, Connection, Edge, EmptyFields}};
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
 impl From<fuel_types::ContractId> for Contract {
@@ -83,6 +84,12 @@ impl ContractBalance {
     }
 }
 
+#[derive(InputObject)]
+struct ContractBalanceFilterInput {
+    /// Filter assets based on the `contractId` field
+    contract: ContractId,
+}
+
 #[derive(Default)]
 pub struct ContractBalanceQuery;
 
@@ -116,42 +123,45 @@ impl ContractBalanceQuery {
     }
 
     async fn contract_balances(
-        &self, 
-        ctx: &Context<'_>, 
-        contract : ContractId,
+        &self,
+        ctx: &Context<'_>,
+        filter: ContractBalanceFilterInput,
         first: Option<i32>,
         after: Option<String>,
         last: Option<i32>,
-        before: Option<String>
+        before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>> {
-
         let db = ctx.data_unchecked::<Database>().clone();
 
-        let balances:Vec<ContractBalance> = db.contract_balances(contract.into(), None, None).filter(|element| {
-            // Remove all Errors which occured when fetching balances
-            element.is_err()
-        }).map(|balance| -> ContractBalance {
-            let asset_id = balance.unwrap();
+        let balances: Vec<ContractBalance> = db
+            .contract_balances(filter.contract.into(), None, None)
+            .filter(|element| {
+                // Remove all Errors which occured when fetching balances
+                element.is_err()
+            })
+            .map(|balance| -> ContractBalance {
+                let asset_id = balance.unwrap();
 
-            let result = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
-                &db,
-                &contract.into(),
-                &asset_id,
-            ).unwrap();
+                let result =
+                    fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+                        &db,
+                        &filter.contract.into(),
+                        &asset_id,
+                    )
+                    .unwrap();
 
-            let amount = result.unwrap_or(0);
+                let amount = result.unwrap_or(0);
 
-            let contract_balance = ContractBalance {
-                contract: contract.into(),
-                amount,
-                asset_id,
+                let contract_balance = ContractBalance {
+                    contract: filter.contract.into(),
+                    amount,
+                    asset_id,
+                };
 
-            };
+                contract_balance
+            })
+            .collect();
 
-            contract_balance
-
-        }).collect();
-        
         query(
             after,
             before,
