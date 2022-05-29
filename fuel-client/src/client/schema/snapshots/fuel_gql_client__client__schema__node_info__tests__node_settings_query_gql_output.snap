@@ -1,0 +1,8 @@
+---
+source: fuel-client/src/client/schema/node_info.rs
+expression: operation.query
+---
+query Query {
+  nodeVersion
+}
+
