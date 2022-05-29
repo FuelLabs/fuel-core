@@ -25,7 +25,7 @@ impl NodeInfo {
         self.predicates
     }
 
-    async fn vm_backtraces(&self) -> bool {
+    async fn vm_backtrace(&self) -> bool {
         self.vm_backtrace
     }
 
@@ -54,7 +54,7 @@ impl NodeQuery {
         Ok(VERSION.to_owned())
     }
 
-    async fn node_settings(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
+    async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let Config {
             utxo_validation,
             predicates,

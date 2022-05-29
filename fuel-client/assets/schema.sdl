@@ -306,7 +306,7 @@ type Query {
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	nodeVersion: String!
-	nodeSettings: NodeInfo!
+	nodeInfo: NodeInfo!
 }
 
 type Receipt {
