@@ -179,7 +179,7 @@ impl CoinQuery {
                 Ok(connection)
             },
         )
-            .await
+        .await
     }
 
     /// For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
