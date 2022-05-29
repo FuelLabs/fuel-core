@@ -1,4 +1,4 @@
-use crate::client::schema::{schema, AssetId, ContractId, PageInfo, HexString, Salt, U64};
+use crate::client::schema::{schema, AssetId, ContractId, HexString, PageInfo, Salt, U64};
 use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
 
 #[derive(cynic::FragmentArguments, Debug)]

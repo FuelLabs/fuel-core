@@ -414,7 +414,7 @@ impl FuelClient {
         let query = schema::contract::ContractBalancesQuery::build(&(contract_id, request).into());
 
         let balances = self.query(query).await?.contract_balances.into();
-        
+
         Ok(balances)
     }
 }
