@@ -18,10 +18,10 @@ fn contract_asset_id_id_key(contract: &ContractId, asset: &AssetId) -> Vec<u8> {
         .collect()
 }
 
-
 fn asset_id_to_bytes(asset_id: &AssetId) -> Vec<u8> {
     let mut out = Vec::with_capacity(256);
     out.extend(asset_id.as_ref().iter());
+    println!("{:?}", out);
     out
 }
 
@@ -79,7 +79,9 @@ impl Database {
             direction,
         )
         // Safety: key is always 64 bytes
-        .map(|res| res.map(|(key, _)| AssetId::new(key.try_into().unwrap())))
+        .map(|res| {
+            res.map(|(key, _)| AssetId::new(key.try_into().expect("Failed on line 82 here")))
+        })
     }
 }
 

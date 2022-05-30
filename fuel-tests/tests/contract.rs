@@ -49,13 +49,16 @@ async fn test_contract_balance() {
 #[tokio::test]
 async fn test_first_5_contract_balances() {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) =
-        test_builder.setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), 1000)]));
+    let (_, contract_id) = test_builder.setup_contract(
+        vec![],
+        Some(vec![
+            (AssetId::new([1u8; 32]), 1000),
+            (AssetId::new([2u8; 32]), 400),
+            (AssetId::new([3u8; 32]), 700),
+        ]),
+    );
 
-    // spin up node
     let TestContext { client, .. } = test_builder.finalize().await;
-
-    let asset_id = AssetId::new([1u8; 32]);
 
     let contract_balances = client
         .contract_balances(
