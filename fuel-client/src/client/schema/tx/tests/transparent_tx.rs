@@ -35,7 +35,7 @@ pub struct TransactionsQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
-    pub edges: Option<Vec<Option<TransactionEdge>>>,
+    pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
