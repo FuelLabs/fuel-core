@@ -69,5 +69,7 @@ async fn test_first_5_contract_balances() {
         .await
         .unwrap();
 
+    println!("Weird");
+
     assert!(!contract_balances.results.is_empty());
 }

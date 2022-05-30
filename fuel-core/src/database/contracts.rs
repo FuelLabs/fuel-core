@@ -18,11 +18,9 @@ fn contract_asset_id_id_key(contract: &ContractId, asset: &AssetId) -> Vec<u8> {
         .collect()
 }
 
-// Flat 32 bytes
-const SIZE_OF_ASSET_ID: usize = 256;
 
 fn asset_id_to_bytes(asset_id: &AssetId) -> Vec<u8> {
-    let mut out = Vec::with_capacity(SIZE_OF_ASSET_ID);
+    let mut out = Vec::with_capacity(256);
     out.extend(asset_id.as_ref().iter());
     out
 }

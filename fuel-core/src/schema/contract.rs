@@ -162,6 +162,8 @@ impl ContractBalanceQuery {
             })
             .collect();
 
+        println!("Got here!");
+
         query(
             after,
             before,
