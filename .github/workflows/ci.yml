@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - elliot/deploy-dev-environment
   pull_request:
   release:
     types: [published]
