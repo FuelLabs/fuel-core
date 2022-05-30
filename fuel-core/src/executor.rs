@@ -64,6 +64,8 @@ impl Executor {
                 return Err(Error::TransactionIdCollision(tx_id));
             }
 
+            self.verify_tx_predicates(tx)?;
+
             if self.config.utxo_validation {
                 // validate transaction has at least one coin
                 self.verify_tx_has_at_least_one_coin(tx)?;
@@ -93,7 +95,10 @@ impl Executor {
             let mut sub_block_db_commit = block_db_transaction.transaction();
             let sub_db_view = sub_block_db_commit.deref_mut();
             // execution vm
-            let mut vm = Interpreter::with_storage(sub_db_view.clone());
+            let mut vm = Interpreter::with_storage(
+                sub_db_view.clone(),
+                self.config.chain_conf.transaction_parameters,
+            );
             let vm_result = vm
                 .transact(tx.clone())
                 .map_err(|error| Error::VmExecution {
@@ -249,7 +254,7 @@ impl Executor {
     ) -> Result<(), TransactionValidityError> {
         for input in transaction.inputs() {
             match input {
-                Input::Coin { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
                     if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent(*utxo_id));
@@ -268,6 +273,30 @@ impl Executor {
         Ok(())
     }
 
+    /// Verify all the predicates of a tx.
+    pub fn verify_tx_predicates(&self, tx: &Transaction) -> Result<(), Error> {
+        // fail if tx contains any predicates when predicates are disabled
+        if !self.config.predicates {
+            let has_predicate = tx.inputs().iter().any(|input| input.is_coin_predicate());
+            if has_predicate {
+                return Err(Error::TransactionValidity(
+                    TransactionValidityError::PredicateExecutionDisabled(tx.id()),
+                ));
+            }
+        } else {
+            // otherwise attempt to validate any predicates if the feature flag is enabled
+            if !Interpreter::<()>::check_predicates(
+                tx.clone(),
+                self.config.chain_conf.transaction_parameters,
+            ) {
+                return Err(Error::TransactionValidity(
+                    TransactionValidityError::InvalidPredicate(tx.id()),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Verify the transaction has at least one coin.
     ///
     /// TODO: This verification really belongs in fuel-tx, and can be removed once
@@ -283,7 +312,15 @@ impl Executor {
     /// Mark inputs as spent
     fn spend_inputs(&self, tx: &Transaction, db: &mut Database) -> Result<(), Error> {
         for input in tx.inputs() {
-            if let Input::Coin {
+            if let Input::CoinSigned {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                maturity,
+                ..
+            }
+            | Input::CoinPredicate {
                 utxo_id,
                 owner,
                 amount,
@@ -327,7 +364,9 @@ impl Executor {
                 .inputs()
                 .iter()
                 .filter_map(|input| {
-                    if let Input::Coin { amount, .. } = input {
+                    if let Input::CoinSigned { amount, .. } | Input::CoinPredicate { amount, .. } =
+                        input
+                    {
                         Some(*amount)
                     } else {
                         None
@@ -355,7 +394,7 @@ impl Executor {
                 .checked_add(gas_fees)
                 .ok_or(Error::FeeOverflow)?;
             gas.checked_sub(total_gas_required)
-                .ok_or(Error::InsufficientGas {
+                .ok_or(Error::InsufficientFeeAmount {
                     provided: gas,
                     required: total_gas_required,
                 })?;
@@ -540,7 +579,7 @@ impl Executor {
     ) -> Result<(), Error> {
         let mut owners = vec![];
         for input in tx.inputs() {
-            if let Input::Coin { owner, .. } = input {
+            if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } = input {
                 owners.push(owner);
             }
         }
@@ -603,14 +642,20 @@ pub enum TransactionValidityError {
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin input type: {0:#x}")]
     NoCoinInput(TxId),
+    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
+    PredicateExecutionDisabled(TxId),
+    #[error(
+        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
+    )]
+    InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
     Validation(#[from] ValidationError),
     #[error("Datastore error occurred")]
-    DataStoreError(Box<dyn std::error::Error>),
+    DataStoreError(Box<dyn StdError + Send + Sync>),
 }
 
-impl From<crate::database::KvStoreError> for TransactionValidityError {
-    fn from(e: crate::database::KvStoreError) -> Self {
+impl From<KvStoreError> for TransactionValidityError {
+    fn from(e: KvStoreError) -> Self {
         Self::DataStoreError(Box::new(e))
     }
 }
@@ -623,13 +668,13 @@ pub enum Error {
     #[error("output already exists")]
     OutputAlreadyExists,
     #[error("Transaction doesn't include enough value to pay for gas: {provided} < {required}")]
-    InsufficientGas { provided: Word, required: Word },
+    InsufficientFeeAmount { provided: Word, required: Word },
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
-    CorruptedBlockState(Box<dyn StdError>),
+    CorruptedBlockState(Box<dyn StdError + Send + Sync>),
     #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
     MissingTransactionData {
         block_id: Bytes32,
@@ -660,7 +705,7 @@ impl From<FuelBacktrace> for Error {
     }
 }
 
-impl From<crate::database::KvStoreError> for Error {
+impl From<KvStoreError> for Error {
     fn from(e: KvStoreError) -> Self {
         Error::CorruptedBlockState(Box::new(e))
     }
@@ -679,7 +724,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_crypto::SecretKey;
-    use fuel_tx::consts::MAX_GAS_PER_TX;
+    use fuel_tx::default_parameters::MAX_GAS_PER_TX;
     use fuel_tx::TransactionBuilder;
     use fuel_types::{ContractId, Immediate12, Salt};
     use fuel_vm::consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO};
@@ -711,9 +756,9 @@ mod tests {
 
     fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
         let salt: Salt = rng.gen();
-        let contract = fuel_vm::contract::Contract::from(contract_code.clone());
+        let contract = fuel_tx::Contract::from(contract_code.clone());
         let root = contract.root();
-        let state_root = fuel_vm::contract::Contract::default_state_root();
+        let state_root = fuel_tx::Contract::default_state_root();
         let contract_id = contract.id(&salt, &root, &state_root);
 
         let tx = Transaction::create(
@@ -809,7 +854,7 @@ mod tests {
             .await;
         assert!(matches!(
             produce_result,
-            Err(Error::InsufficientGas { required, .. }) if required == gas_limit
+            Err(Error::InsufficientFeeAmount { required, .. }) if required == gas_limit
         ));
 
         let verify_result = verifier
@@ -817,7 +862,7 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
-            Err(Error::InsufficientGas {required, ..}) if required == gas_limit
+            Err(Error::InsufficientFeeAmount {required, ..}) if required == gas_limit
         ))
     }
 
@@ -880,7 +925,7 @@ mod tests {
         Storage::<UtxoId, Coin>::insert(&mut db, &spent_utxo_id, &coin).unwrap();
 
         // create an input referring to a coin that is already spent
-        let input = Input::coin(spent_utxo_id, owner, amount, asset_id, 0, 0, vec![], vec![]);
+        let input = Input::coin_signed(spent_utxo_id, owner, amount, asset_id, 0, 0);
         let output = Output::Change {
             to: owner,
             amount: 0,
@@ -953,8 +998,6 @@ mod tests {
                     10,
                     Default::default(),
                     0,
-                    vec![],
-                    vec![],
                 )
                 .add_output(Output::Change {
                     to: Default::default(),
@@ -1173,8 +1216,6 @@ mod tests {
                     100,
                     Default::default(),
                     0,
-                    vec![],
-                    vec![],
                 )
                 .add_output(Output::Change {
                     to: Default::default(),
@@ -1185,7 +1226,14 @@ mod tests {
         let mut db = Database::default();
 
         // insert coin into state
-        if let Input::Coin {
+        if let Input::CoinSigned {
+            utxo_id,
+            owner,
+            amount,
+            asset_id,
+            ..
+        }
+        | Input::CoinPredicate {
             utxo_id,
             owner,
             amount,

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
-use fuel_txpool::{Config as TxPoolConfig, TxPoolService};
+use fuel_txpool::TxPoolService;
 use fuel_vm::prelude::{ProgramState, Transaction};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -35,9 +35,9 @@ pub enum TransactionStatus {
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("unexpected database error {0:?}")]
-    Database(Box<dyn StdError>),
+    Database(Box<dyn StdError + Send + Sync>),
     #[error("unexpected block execution error {0:?}")]
-    Execution(crate::executor::Error),
+    Execution(#[from] crate::executor::Error),
     #[error("Tx is invalid, insertion failed {0:?}")]
     Other(#[from] anyhow::Error),
 }
@@ -71,20 +71,23 @@ impl TxPool {
     pub fn new(database: Database, config: Config) -> Self {
         let executor = Executor {
             database: database.clone(),
-            config,
+            config: config.clone(),
         };
-        let config = TxPoolConfig::default();
+
         TxPool {
             executor,
             db: database.clone(),
             fuel_txpool: Box::new(TxPoolService::new(
                 Box::new(database) as Box<dyn TxPoolDb>,
-                config,
+                config.tx_pool_config,
             )),
         }
     }
 
     pub async fn submit_tx(&self, tx: Transaction) -> Result<Bytes32, Error> {
+        // verify predicates
+        self.executor.verify_tx_predicates(&tx)?;
+
         let db = self.db.clone();
 
         let mut tx_to_exec = tx.clone();
@@ -145,8 +148,7 @@ impl TxPool {
         // immediately execute block
         self.executor
             .execute(&mut block, ExecutionMode::Production)
-            .await
-            .map_err(Error::Execution)?;
+            .await?;
         Ok(tx_id)
     }
 

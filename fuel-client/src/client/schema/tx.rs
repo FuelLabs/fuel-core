@@ -39,7 +39,7 @@ pub struct TransactionsQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
-    pub edges: Option<Vec<Option<TransactionEdge>>>,
+    pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
@@ -47,15 +47,13 @@ impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, Str
     type Error = ConversionError;
 
     fn try_from(conn: TransactionConnection) -> Result<Self, Self::Error> {
-        let results: Result<Vec<TransactionResponse>, Self::Error> = conn
-            .edges
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|e| e.map(|e| e.node.try_into()))
-            .collect();
+        let results: Result<Vec<TransactionResponse>, Self::Error> =
+            conn.edges.into_iter().map(|e| e.node.try_into()).collect();
 
         Ok(PaginatedResult {
             cursor: conn.page_info.end_cursor,
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
             results: results?,
         })
     }
@@ -231,14 +229,20 @@ pub struct TxArg {
     pub tx: HexString,
 }
 
+#[derive(cynic::FragmentArguments)]
+pub struct DryRunArg {
+    pub tx: HexString,
+    pub utxo_validation: Option<bool>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "TxArg"
+    argument_struct = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx = &args.tx)]
+    #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
     pub dry_run: Vec<OpaqueReceipt>,
 }
 
@@ -309,8 +313,9 @@ pub mod tests {
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
         let mut tx = fuel_tx::Transaction::default();
-        let query = DryRun::build(TxArg {
+        let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
+            utxo_validation: None,
         });
         insta::assert_snapshot!(query.query)
     }

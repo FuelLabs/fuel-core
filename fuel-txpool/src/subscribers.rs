@@ -6,17 +6,12 @@ use fuel_core_interfaces::model::ArcTx;
 use fuel_core_interfaces::txpool::Subscriber;
 use parking_lot::RwLock;
 
+#[derive(Default)]
 pub struct MultiSubscriber {
     annons: RwLock<Vec<Arc<dyn Subscriber>>>,
 }
 
 impl MultiSubscriber {
-    pub fn new() -> Self {
-        Self {
-            annons: RwLock::new(Vec::new()),
-        }
-    }
-
     pub fn sub(&self, sub: Arc<dyn Subscriber>) {
         self.annons.write().push(sub);
     }

@@ -20,6 +20,7 @@ pub struct Query(
     health::HealthQuery,
     coin::CoinQuery,
     contract::ContractQuery,
+    contract::ContractBalanceQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -32,9 +33,10 @@ pub struct Mutation(dap::DapMutation, tx::TxMutation);
 pub type CoreSchema = Schema<Query, Mutation, EmptySubscription>;
 
 pub fn build_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(
+    Schema::build_with_ignore_name_conflicts(
         Query::default(),
         Mutation::default(),
         EmptySubscription::default(),
+        ["TransactionConnection"],
     )
 }

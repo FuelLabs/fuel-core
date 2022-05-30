@@ -128,16 +128,13 @@ impl TxQuery {
                         }
                     })
                     .skip(if tx_id.is_some() { 1 } else { 0 })
-                    .take(records_to_fetch);
+                    .take(records_to_fetch + 1);
 
-                let mut txs: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
+                let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
 
-                if direction == IterDirection::Reverse {
-                    txs.reverse()
-                }
-
-                let txs: Vec<(Cow<FuelTx>, &BlockHeight)> = txs
+                let mut txs: Vec<(Cow<FuelTx>, &BlockHeight)> = tx_ids
                     .iter()
+                    .take(records_to_fetch)
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
                         let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, tx_id)
                             .transpose()
@@ -147,20 +144,24 @@ impl TxQuery {
                     })
                     .try_collect()?;
 
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= txs.len());
+                if direction == IterDirection::Reverse {
+                    txs.reverse()
+                }
 
-                connection.append(txs.into_iter().map(|(tx, block_height)| {
+                let mut connection =
+                    Connection::new(started.is_some(), records_to_fetch < tx_ids.len());
+
+                connection.edges.extend(txs.into_iter().map(|(tx, block_height)| {
                     Edge::new(
                         SortedTxCursor::new(*block_height, Bytes32::from(tx.id())),
-                        tx.into_owned(),
+                        Transaction(tx.into_owned()),
                     )
                 }));
-                Ok(connection)
+
+                Ok::<Connection<SortedTxCursor, Transaction>, KvStoreError>(connection)
             },
         )
         .await
-        .map(|conn| conn.map_node(Transaction))
     }
 
     async fn transactions_by_owner(
@@ -237,11 +238,12 @@ impl TxQuery {
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                connection.append(
+                connection.edges.extend(
                     txs.into_iter()
                         .map(|item| Edge::new(HexString::from(item.0), Transaction(item.1))),
                 );
-                Ok(connection)
+
+                Ok::<Connection<HexString, Transaction>, KvStoreError>(connection)
             },
         )
         .await
@@ -258,9 +260,17 @@ impl TxMutation {
         &self,
         ctx: &Context<'_>,
         tx: HexString,
+        // If set to false, disable input utxo validation, overriding the configuration of the node.
+        // This allows for non-existent inputs to be used without signature validation
+        // for read-only calls.
+        utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
         let transaction = ctx.data_unchecked::<Database>().transaction();
-        let cfg = ctx.data_unchecked::<Config>();
+        let mut cfg = ctx.data_unchecked::<Config>().clone();
+        // override utxo_validation if set
+        if let Some(utxo_validation) = utxo_validation {
+            cfg.utxo_validation = utxo_validation;
+        }
         let tx = FuelTx::from_bytes(&tx.0)?;
         // make virtual txpool from transactional view
         let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());

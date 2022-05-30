@@ -35,7 +35,7 @@ pub struct TransactionsQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
-    pub edges: Option<Vec<Option<TransactionEdge>>>,
+    pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
@@ -69,6 +69,7 @@ pub struct Transaction {
     pub static_contracts: Option<Vec<ContractIdFragment>>,
     pub storage_slots: Option<Vec<HexString>>,
     pub bytecode_witness_index: Option<i32>,
+    pub bytecode_length: Option<U64>,
 }
 
 impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
@@ -111,6 +112,10 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 gas_limit: tx.gas_limit.into(),
                 byte_price: tx.byte_price.into(),
                 maturity: tx.maturity.into(),
+                bytecode_length: tx
+                    .bytecode_length
+                    .ok_or_else(|| ConversionError::MissingField("bytecode_length".to_string()))?
+                    .into(),
                 bytecode_witness_index: tx
                     .bytecode_witness_index
                     .ok_or_else(|| {
@@ -197,16 +202,28 @@ impl TryFrom<Input> for fuel_tx::Input {
 
     fn try_from(input: Input) -> Result<fuel_tx::Input, Self::Error> {
         Ok(match input {
-            Input::InputCoin(coin) => fuel_tx::Input::Coin {
-                utxo_id: coin.utxo_id.into(),
-                owner: coin.owner.into(),
-                amount: coin.amount.into(),
-                asset_id: coin.asset_id.into(),
-                witness_index: coin.witness_index.try_into()?,
-                maturity: coin.maturity.into(),
-                predicate: coin.predicate.into(),
-                predicate_data: coin.predicate_data.into(),
-            },
+            Input::InputCoin(coin) => {
+                if coin.predicate.0 .0.is_empty() {
+                    fuel_tx::Input::CoinSigned {
+                        utxo_id: coin.utxo_id.into(),
+                        owner: coin.owner.into(),
+                        amount: coin.amount.into(),
+                        asset_id: coin.asset_id.into(),
+                        witness_index: coin.witness_index.try_into()?,
+                        maturity: coin.maturity.into(),
+                    }
+                } else {
+                    fuel_tx::Input::CoinPredicate {
+                        utxo_id: coin.utxo_id.into(),
+                        owner: coin.owner.into(),
+                        amount: coin.amount.into(),
+                        asset_id: coin.asset_id.into(),
+                        maturity: coin.maturity.into(),
+                        predicate: coin.predicate.into(),
+                        predicate_data: coin.predicate_data.into(),
+                    }
+                }
+            }
             Input::InputContract(contract) => fuel_tx::Input::Contract {
                 utxo_id: contract.utxo_id.into(),
                 balance_root: contract.balance_root.into(),

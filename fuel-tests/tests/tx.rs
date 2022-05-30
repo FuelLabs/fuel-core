@@ -1,5 +1,5 @@
+use crate::helpers::TestContext;
 use chrono::Utc;
-use fuel_core::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
 use fuel_core::executor::ExecutionMode;
 use fuel_core::model::{FuelBlock, FuelBlockHeader};
 use fuel_core::{
@@ -7,14 +7,15 @@ use fuel_core::{
     executor::Executor,
     service::{Config, FuelService},
 };
-use fuel_crypto::SecretKey;
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use fuel_tx::TransactionBuilder;
 use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::Rng;
 use std::io;
+
+mod predicates;
+mod utxo_validation;
 
 #[test]
 fn basic_script_snapshot() {
@@ -122,138 +123,6 @@ async fn submit() {
         .unwrap()
         .transaction;
     assert_eq!(tx.id(), ret_tx.id());
-}
-
-#[tokio::test]
-async fn submit_utxo_verified_tx() {
-    let mut rng = StdRng::seed_from_u64(2322);
-
-    let test_contract_code = vec![];
-    let test_contract = Contract::from(test_contract_code.clone());
-    let root = test_contract.root();
-    let test_contract_salt: Salt = rng.gen();
-    let contract_id = test_contract.id(
-        &test_contract_salt.clone(),
-        &root,
-        &Contract::default_state_root(),
-    );
-
-    // initialize transactions
-    let transactions = (1..10 + 1)
-        .into_iter()
-        .map(|i| {
-            let secret = SecretKey::random(&mut rng);
-            TransactionBuilder::script(
-                Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
-                vec![],
-            )
-            .gas_limit(100)
-            .add_unsigned_coin_input(
-                rng.gen(),
-                &secret,
-                100 + i,
-                Default::default(),
-                0,
-                vec![],
-                vec![],
-            )
-            .add_input(Input::Contract {
-                utxo_id: Default::default(),
-                balance_root: Default::default(),
-                state_root: Default::default(),
-                contract_id,
-            })
-            .add_output(Output::Change {
-                amount: 0,
-                asset_id: Default::default(),
-                to: rng.gen(),
-            })
-            .add_output(Output::Contract {
-                input_index: 1,
-                balance_root: Default::default(),
-                state_root: Default::default(),
-            })
-            .finalize()
-        })
-        .collect_vec();
-
-    // setup genesis block with coins that transactions can spend
-    let genesis_coins = transactions
-        .iter()
-        .flat_map(|t| t.inputs())
-        .filter_map(|input| {
-            if let Input::Coin {
-                amount,
-                owner,
-                asset_id,
-                utxo_id,
-                ..
-            } = input
-            {
-                Some(CoinConfig {
-                    tx_id: Some(*utxo_id.tx_id()),
-                    output_index: Some(utxo_id.output_index() as u64),
-                    block_created: None,
-                    maturity: None,
-                    owner: *owner,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                })
-            } else {
-                None
-            }
-        })
-        .collect_vec();
-
-    let config = Config {
-        utxo_validation: true,
-        chain_conf: ChainConfig {
-            initial_state: Some(StateConfig {
-                coins: Some(genesis_coins),
-                contracts: Some(vec![ContractConfig {
-                    code: test_contract_code,
-                    salt: test_contract_salt,
-                    state: None,
-                    balances: None,
-                }]),
-                ..StateConfig::default()
-            }),
-            ..ChainConfig::local_testnet()
-        },
-        ..Config::local_node()
-    };
-
-    let srv = FuelService::new_node(config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    for tx in transactions {
-        let id = client.submit(&tx).await.unwrap();
-        // verify that the tx returned from the api matches the submitted tx
-        let ret_tx = client
-            .transaction(&id.0.to_string())
-            .await
-            .unwrap()
-            .unwrap()
-            .transaction;
-
-        let transaction_result = client
-            .transaction_status(&ret_tx.id().to_string())
-            .await
-            .ok()
-            .unwrap();
-
-        if let TransactionStatus::Success { block_id, .. } = transaction_result.clone() {
-            let block_exists = client.block(&block_id).await.unwrap();
-
-            assert!(block_exists.is_some());
-        }
-
-        // Once https://github.com/FuelLabs/fuel-core/issues/50 is resolved this should rely on the Submitted Status rather than Success
-        assert!(matches!(
-            transaction_result,
-            TransactionStatus::Success { .. }
-        ));
-    }
 }
 
 #[ignore]
@@ -369,6 +238,16 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx1, tx2, tx3]);
+    // Check pagination state for first page
+    assert!(response.has_next_page);
+    assert!(!response.has_previous_page);
+
+    // Query for second page 2 with last given cursor: [4,5]
+    let page_request_middle_page = PaginationRequest {
+        cursor: response.cursor.clone(),
+        results: 2,
+        direction: PageDirection::Forward,
+    };
 
     // Query backwards from last given cursor [3]: [1,2]
     let page_request_backwards = PaginationRequest {
@@ -384,6 +263,18 @@ async fn get_transactions() {
         direction: PageDirection::Forward,
     };
 
+    let response = client.transactions(page_request_middle_page).await.unwrap();
+    let transactions = &response
+        .results
+        .iter()
+        .map(|tx| tx.transaction.id())
+        .collect_vec();
+    assert_eq!(transactions, &[tx4, tx5]);
+    // Check pagination state for middle page
+    // it should have next and previous page
+    assert!(response.has_next_page);
+    assert!(response.has_previous_page);
+
     let response = client.transactions(page_request_backwards).await.unwrap();
     let transactions = &response
         .results
@@ -391,6 +282,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx1, tx2]);
+    // Check pagination state for last page
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 
     let response = client.transactions(page_request_forwards).await.unwrap();
     let transactions = &response
@@ -399,6 +293,9 @@ async fn get_transactions() {
         .map(|tx| tx.transaction.id())
         .collect_vec();
     assert_eq!(transactions, &[tx4, tx5, tx6]);
+    // Check pagination state for last page
+    assert!(!response.has_next_page);
+    assert!(response.has_previous_page);
 }
 
 #[tokio::test]
@@ -560,19 +457,7 @@ async fn get_owned_transactions() {
     assert_eq!(&charlie_txs, &[tx1, tx2, tx3]);
 }
 
-struct TestContext {
-    rng: StdRng,
-    pub client: FuelClient,
-}
-
 impl TestContext {
-    async fn new(seed: u64) -> Self {
-        let rng = StdRng::seed_from_u64(seed);
-        let srv = FuelService::new_node(Config::local_node()).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-        Self { rng, client }
-    }
-
     async fn transfer(&mut self, from: Address, to: Address, amount: u64) -> io::Result<Bytes32> {
         let script = Opcode::RET(0x10).to_bytes().to_vec();
         let tx = Transaction::Script {
@@ -583,15 +468,13 @@ impl TestContext {
             receipts_root: Default::default(),
             script,
             script_data: vec![],
-            inputs: vec![Input::Coin {
+            inputs: vec![Input::CoinSigned {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
                 asset_id: Default::default(),
                 witness_index: 0,
                 maturity: 0,
-                predicate: vec![],
-                predicate_data: vec![],
             }],
             outputs: vec![Output::Coin {
                 amount,

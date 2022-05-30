@@ -1,4 +1,5 @@
-use cynic::{http::SurfExt, MutationBuilder, Operation, QueryBuilder};
+use crate::client::schema::contract::ContractBalanceQueryArgs;
+use cynic::{http::SurfExt, Id, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
 use schema::{
@@ -7,7 +8,9 @@ use schema::{
     coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
     contract::{Contract, ContractByIdArgs},
     tx::{TxArg, TxIdArgs},
-    Bytes, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs, TransactionId,
+    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs,
+    RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping, SetSingleSteppingArgs, StartTx,
+    StartTxArgs, TransactionId, U64,
 };
 use std::{
     convert::TryInto,
@@ -17,6 +20,7 @@ use std::{
 };
 use types::{TransactionResponse, TransactionStatus};
 
+use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
 pub mod schema;
@@ -82,10 +86,22 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
+    /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
+        self.dry_run_opt(tx, None).await
+    }
+
+    /// Dry run with options to override the node behavior
+    pub async fn dry_run_opt(
+        &self,
+        tx: &Transaction,
+        // Disable utxo input checks (exists, unspent, and valid signature)
+        utxo_validation: Option<bool>,
+    ) -> io::Result<Vec<Receipt>> {
         let tx = tx.clone().to_bytes();
-        let query = schema::tx::DryRun::build(&TxArg {
+        let query = schema::tx::DryRun::build(&DryRunArg {
             tx: HexString(Bytes(tx)),
+            utxo_validation,
         });
         let receipts = self.query(query).await.map(|r| r.dry_run)?;
         receipts
@@ -150,6 +166,54 @@ impl FuelClient {
         let memory = self.query(query).await?.memory;
 
         Ok(serde_json::from_str(memory.as_str())?)
+    }
+
+    pub async fn set_breakpoint(
+        &self,
+        session_id: &str,
+        contract: fuel_types::ContractId,
+        pc: u64,
+    ) -> io::Result<()> {
+        let operation = SetBreakpoint::build(SetBreakpointArgs {
+            id: Id::new(session_id),
+            bp: schema::Breakpoint {
+                contract: contract.into(),
+                pc: U64(pc),
+            },
+        });
+
+        let response = self.query(operation).await?;
+        assert!(
+            response.set_breakpoint,
+            "Setting breakpoint returned invalid reply"
+        );
+        Ok(())
+    }
+
+    pub async fn set_single_stepping(&self, session_id: &str, enable: bool) -> io::Result<()> {
+        let operation = SetSingleStepping::build(SetSingleSteppingArgs {
+            id: Id::new(session_id),
+            enable,
+        });
+        self.query(operation).await?;
+        Ok(())
+    }
+
+    pub async fn start_tx(&self, session_id: &str, tx: &Transaction) -> io::Result<RunResult> {
+        let operation = StartTx::build(StartTxArgs {
+            id: Id::new(session_id),
+            tx: serde_json::to_string(tx).expect("Couldn't serialize tx to json"),
+        });
+        let response = self.query(operation).await?.start_tx;
+        Ok(response)
+    }
+
+    pub async fn continue_tx(&self, session_id: &str) -> io::Result<RunResult> {
+        let operation = ContinueTx::build(ContinueTxArgs {
+            id: Id::new(session_id),
+        });
+        let response = self.query(operation).await?.continue_tx;
+        Ok(response)
     }
 
     pub async fn transaction(&self, id: &str) -> io::Result<Option<TransactionResponse>> {
@@ -300,6 +364,21 @@ impl FuelClient {
             schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
         let contract = self.query(query).await?.contract;
         Ok(contract)
+    }
+
+    pub async fn contract_balance(&self, id: &str, asset: Option<&str>) -> io::Result<u64> {
+        let asset_id: schema::AssetId = match asset {
+            Some(asset) => asset.parse()?,
+            None => schema::AssetId::default(),
+        };
+
+        let query = schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
+            id: id.parse()?,
+            asset: asset_id,
+        });
+
+        let balance = self.query(query).await.unwrap().contract_balance.amount;
+        Ok(balance.into())
     }
 
     pub async fn balance(&self, owner: &str, asset_id: Option<&str>) -> io::Result<u64> {

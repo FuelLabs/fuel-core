@@ -1,5 +1,6 @@
 use self::serialization::{HexNumber, HexType};
 use crate::model::BlockHeight;
+use fuel_tx::ConsensusParameters;
 use fuel_types::{Address, AssetId, Bytes32, Salt};
 use itertools::Itertools;
 use rand::rngs::StdRng;
@@ -21,6 +22,7 @@ pub struct ChainConfig {
     pub parent_network: BaseChainConfig,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
+    pub transaction_parameters: ConsensusParameters,
 }
 
 impl ChainConfig {
@@ -58,6 +60,7 @@ impl ChainConfig {
                 coins: Some(initial_coins),
                 ..StateConfig::default()
             }),
+            transaction_parameters: ConsensusParameters::default(),
         }
     }
 }

@@ -82,7 +82,7 @@ pub struct CoinsQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct CoinConnection {
-    pub edges: Option<Vec<Option<CoinEdge>>>,
+    pub edges: Vec<CoinEdge>,
     pub page_info: PageInfo,
 }
 
@@ -90,12 +90,9 @@ impl From<CoinConnection> for PaginatedResult<Coin, String> {
     fn from(conn: CoinConnection) -> Self {
         PaginatedResult {
             cursor: conn.page_info.end_cursor,
-            results: conn
-                .edges
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|e| e.map(|e| e.node))
-                .collect(),
+            has_next_page: conn.page_info.has_next_page,
+            has_previous_page: conn.page_info.has_previous_page,
+            results: conn.edges.into_iter().map(|e| e.node).collect(),
         }
     }
 }

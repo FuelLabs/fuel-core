@@ -1,0 +1,11 @@
+[target.aarch64-unknown-linux-gnu]
+image = "aarch64-linux-gnu"
+
+[target.aarch64-unknown-linux-musl]
+image = "aarch64-linux-musl"
+
+[target.x86_64-unknown-linux-gnu]
+image = "x86_64-linux-gnu"
+
+[target.x86_64-unknown-linux-musl]
+image = "x86_64-linux-musl"
