@@ -292,6 +292,12 @@ type Query {
 	health: Boolean!
 	coin(utxoId: UtxoId!): Coin
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	"""
+	For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
+	`owner` that add up at least the query amount. The returned coins (UTXOs) are actual coins
+	that can be spent. The number of coins (UXTOs) is optimized to prevent dust accumulation.
+	Max number of UTXOS and excluded UTXOS can also be specified.
+	"""
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
@@ -361,7 +367,7 @@ input SpendQueryElementInput {
 	"""
 	assetId: AssetId!
 	"""
-	Address of the owner
+	Target amount for the query
 	"""
 	amount: U64!
 }

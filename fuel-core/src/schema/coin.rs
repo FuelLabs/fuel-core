@@ -63,7 +63,7 @@ struct CoinFilterInput {
 struct SpendQueryElementInput {
     /// Asset ID of the coins
     asset_id: AssetId,
-    /// Address of the owner
+    /// Target amount for the query
     amount: U64,
 }
 
@@ -183,6 +183,10 @@ impl CoinQuery {
         .await
     }
 
+    /// For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
+    /// `owner` that add up at least the query amount. The returned coins (UTXOs) are actual coins
+    /// that can be spent. The number of coins (UXTOs) is optimized to prevent dust accumulation.
+    /// Max number of UTXOS and excluded UTXOS can also be specified.
     async fn coins_to_spend(
         &self,
         ctx: &Context<'_>,
@@ -191,9 +195,7 @@ impl CoinQuery {
             SpendQueryElementInput,
         >,
         #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u64>,
-        #[graphql(desc = "The max number of utxos that can be used")] excluded_ids: Option<
-            Vec<UtxoId>,
-        >,
+        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<Vec<UtxoId>>,
     ) -> async_graphql::Result<Vec<Coin>> {
         let config = ctx.data_unchecked::<Config>();
 
