@@ -86,6 +86,11 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
+    pub async fn node_info(&self) -> io::Result<schema::node_info::NodeInfo> {
+        let query = schema::node_info::QueryNodeInfo::build(());
+        self.query(query).await.map(|r| r.node_info)
+    }
+
     /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
         self.dry_run_opt(tx, None).await
