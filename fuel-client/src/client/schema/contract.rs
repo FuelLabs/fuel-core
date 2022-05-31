@@ -69,7 +69,7 @@ pub struct ContractBalancesConnectionArgs {
     filter: ContractBalanceFilterInput,
     /// Skip until asset id (forward pagination)
     pub after: Option<String>,
-    /// Skip until coin id (backward pagination)
+    /// Skip until asset id (backward pagination)
     pub before: Option<String>,
     /// Retrieve the first n coins in order (forward pagination)
     pub first: Option<i32>,
