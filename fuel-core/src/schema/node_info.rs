@@ -2,9 +2,6 @@ use super::scalars::U64;
 use crate::service::Config;
 use async_graphql::{Context, Object};
 
-#[derive(Default)]
-pub struct NodeQuery {}
-
 pub struct NodeInfo {
     utxo_validation: bool,
     predicates: bool,
@@ -13,6 +10,7 @@ pub struct NodeInfo {
     min_byte_price: U64,
     max_tx: U64,
     max_depth: U64,
+    node_version: String,
 }
 
 #[Object]
@@ -44,16 +42,17 @@ impl NodeInfo {
     async fn max_depth(&self) -> U64 {
         self.max_depth
     }
+
+    async fn node_version(&self) -> String {
+        self.node_version.to_owned()
+    }
 }
+
+#[derive(Default)]
+pub struct NodeQuery {}
 
 #[Object]
 impl NodeQuery {
-    async fn node_version(&self, _ctx: &Context<'_>) -> async_graphql::Result<String> {
-        const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-        Ok(VERSION.to_owned())
-    }
-
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let Config {
             utxo_validation,
@@ -63,6 +62,8 @@ impl NodeQuery {
             ..
         } = ctx.data_unchecked::<Config>();
 
+        const VERSION: &str = env!("CARGO_PKG_VERSION");
+
         Ok(NodeInfo {
             utxo_validation: *utxo_validation,
             predicates: *predicates,
@@ -71,6 +72,7 @@ impl NodeQuery {
             min_byte_price: tx_pool_config.min_byte_price.into(),
             max_tx: (tx_pool_config.max_tx as u64).into(),
             max_depth: (tx_pool_config.max_depth as u64).into(),
+            node_version: VERSION.to_owned(),
         })
     }
 }
