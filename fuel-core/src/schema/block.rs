@@ -164,15 +164,14 @@ impl BlockQuery {
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= blocks.len());
-                connection.append(
-                    blocks
-                        .into_iter()
-                        .map(|item| Edge::new(item.headers.height.to_usize(), item.into_owned())),
-                );
-                Ok(connection)
+
+                connection.edges.extend(blocks.into_iter().map(|item| {
+                    Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
+                }));
+
+                Ok::<Connection<usize, Block>, KvStoreError>(connection)
             },
         )
         .await
-        .map(|conn| conn.map_node(Block))
     }
 }

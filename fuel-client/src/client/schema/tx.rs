@@ -39,7 +39,7 @@ pub struct TransactionsQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct TransactionConnection {
-    pub edges: Option<Vec<Option<TransactionEdge>>>,
+    pub edges: Vec<TransactionEdge>,
     pub page_info: PageInfo,
 }
 
@@ -47,12 +47,8 @@ impl TryFrom<TransactionConnection> for PaginatedResult<TransactionResponse, Str
     type Error = ConversionError;
 
     fn try_from(conn: TransactionConnection) -> Result<Self, Self::Error> {
-        let results: Result<Vec<TransactionResponse>, Self::Error> = conn
-            .edges
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|e| e.map(|e| e.node.try_into()))
-            .collect();
+        let results: Result<Vec<TransactionResponse>, Self::Error> =
+            conn.edges.into_iter().map(|e| e.node.try_into()).collect();
 
         Ok(PaginatedResult {
             cursor: conn.page_info.end_cursor,

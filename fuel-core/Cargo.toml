@@ -21,7 +21,7 @@ test = false
 anyhow = "1.0"
 # This needs to be pinned as newer versions are incompatible with fuel-core.
 # We're waiting for the following resolution: https://github.com/FuelLabs/fuel-core/pull/260#issuecomment-1102435692
-async-graphql = { version = "=2.9", features = [
+async-graphql = { version = "4.0", features = [
     "chrono",
     "chrono-tz",
     "tracing",
