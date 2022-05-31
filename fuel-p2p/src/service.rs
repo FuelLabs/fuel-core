@@ -33,7 +33,7 @@ pub struct FuelP2PService {
     swarm: Swarm<FuelBehaviour<BincodeCodec>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FuelP2PEvent {
     Behaviour(FuelBehaviourEvent),
     NewListenAddr(Multiaddr),
@@ -167,12 +167,15 @@ mod tests {
         config::P2PConfig, peer_info::PeerInfo, request_response::messages::ReqResNetworkError,
         service::FuelP2PEvent,
     };
+    use ctor::ctor;
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::{
         net::{IpAddr, Ipv4Addr},
         time::Duration,
     };
     use tokio::sync::{mpsc, oneshot};
+    use tracing_attributes::instrument;
+    use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter};
 
     /// helper function for building default testing config
     fn build_p2p_config(network_name: &str) -> P2PConfig {
@@ -197,7 +200,30 @@ mod tests {
         }
     }
 
-    /// helper function for building FuelP2PService
+    /// Conditionally initializes tracing, depending if RUST_LOG env variable is set
+    /// Logs to stderr & to a file
+    #[ctor]
+    fn initialize_tracing() {
+        if std::env::var_os("RUST_LOG").is_some() {
+            let log_file = tracing_appender::rolling::daily("./logs", "p2p_logfile");
+
+            let subscriber = tracing_subscriber::registry()
+                .with(EnvFilter::from_default_env())
+                .with(fmt::Layer::new().with_writer(std::io::stderr))
+                .with(
+                    fmt::Layer::new()
+                        .compact()
+                        .pretty()
+                        .with_ansi(false) // disabling terminal color fixes this issue: https://github.com/tokio-rs/tracing/issues/1817
+                        .with_writer(log_file),
+                );
+
+            tracing::subscriber::set_global_default(subscriber)
+                .expect("Unable to set a global subscriber");
+        }
+    }
+
+    /// helper function for building FuelP2PService    
     async fn build_fuel_p2p_service(p2p_config: P2PConfig) -> FuelP2PService {
         let keypair = Keypair::generate_secp256k1();
         let fuel_p2p_service = FuelP2PService::new(keypair, p2p_config).await.unwrap();
@@ -206,6 +232,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[instrument]
     async fn p2p_service_works() {
         let mut fuel_p2p_service =
             build_fuel_p2p_service(build_p2p_config("p2p_service_works")).await;
@@ -217,7 +244,8 @@ mod tests {
                     break;
                 }
                 other_event => {
-                    panic!("Unexpected event: {:?}", other_event)
+                    tracing::error!("Unexpected event: {:?}", other_event);
+                    panic!("Unexpected event")
                 }
             }
         }
@@ -226,6 +254,7 @@ mod tests {
     // Simulates 2 p2p nodes that are on the same network and should connect via mDNS
     // without any additional bootstrapping
     #[tokio::test]
+    #[instrument]
     async fn nodes_connected_via_mdns() {
         // Node A
         let mut p2p_config = build_p2p_config("nodes_connected_via_mdns");
@@ -239,13 +268,16 @@ mod tests {
 
         loop {
             tokio::select! {
-                p2p_event_on_second_service = node_b.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerConnected(_)) = p2p_event_on_second_service {
+                node_b_event = node_b.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerConnected(_)) = node_b_event {
                         // successfully connected to Node B
                         break
                     }
+                    tracing::info!("Node B Event: {:?}", node_b_event);
                 },
-                _ = node_a.next_event() => {}
+                node_a_event = node_a.next_event() => {
+                    tracing::info!("Node A Event: {:?}", node_a_event);
+                }
             };
         }
     }
@@ -253,6 +285,7 @@ mod tests {
     // Simulates 3 p2p nodes, Node B & Node C are bootstrapped with Node A
     // Using Identify Protocol Node C should be able to identify and connect to Node B
     #[tokio::test]
+    #[instrument]
     async fn nodes_connected_via_identify() {
         // Node A
         let mut p2p_config = build_p2p_config("nodes_connected_via_identify");
@@ -275,16 +308,22 @@ mod tests {
 
         loop {
             tokio::select! {
-                _ = node_a.next_event() => {},
-                _ = node_b.next_event() => {},
+                node_a_event = node_a.next_event() => {
+                    tracing::info!("Node A Event: {:?}", node_a_event);
+                },
+                node_b_event = node_b.next_event() => {
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                },
 
-                node_c_p2p_event = node_c.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerConnected(peer_id)) = node_c_p2p_event {
+                node_c_event = node_c.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerConnected(peer_id)) = node_c_event {
                         // we have connected to Node B!
                         if peer_id == node_b.local_peer_id {
                             break
                         }
                     }
+
+                    tracing::info!("Node C Event: {:?}", node_c_event);
                 }
             };
         }
@@ -292,6 +331,7 @@ mod tests {
 
     // Simulates 2 p2p nodes that connect to each other and consequently exchange Peer Info
     #[tokio::test]
+    #[instrument]
     async fn peer_info_updates_work() {
         // Node A
         let mut p2p_config = build_p2p_config("peer_info_updates_work");
@@ -310,8 +350,8 @@ mod tests {
 
         loop {
             tokio::select! {
-                event_a = node_a.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                node_a_event = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, latest_ping, client_version, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // Exits after it verifies that:
                             // 1. Peer Addresses are known
@@ -323,13 +363,17 @@ mod tests {
                         }
                     }
 
+                    tracing::info!("Node A Event: {:?}", node_a_event);
                 },
-                _ = node_b.next_event() => {}
+                node_b_event = node_b.next_event() => {
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                }
             };
         }
     }
 
     #[tokio::test]
+    #[instrument]
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
 
@@ -355,8 +399,8 @@ mod tests {
 
         loop {
             tokio::select! {
-                event_a = node_a.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                node_a_event = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
@@ -366,22 +410,28 @@ mod tests {
                         }
                     }
 
+                    tracing::info!("Node A Event: {:?}", node_a_event);
                 },
-                event_b = node_b.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::GossipsubMessage { topic_hash, message, .. }) = event_b {
+                node_b_event = node_b.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::GossipsubMessage { topic_hash, message, .. }) = node_b_event.clone() {
                         if topic_hash != selected_topic.hash() {
+                            tracing::error!("Wrong topic hash, expected: {} - actual: {}", selected_topic.hash(), topic_hash);
                             panic!("Wrong Topic");
                         } else if FuelGossipsubMessage::BroadcastNewTx != message {
+                            tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::BroadcastNewTx, message);
                             panic!("Wrong Message")
                         }
                         break
                     }
+
+                    tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
         }
     }
 
     #[tokio::test]
+    #[instrument]
     async fn request_response_works() {
         let mut p2p_config = build_p2p_config("request_response_works");
 
@@ -408,8 +458,8 @@ mod tests {
                     assert_eq!(message_sent, Some(true), "Message not received successfully!");
                     break;
                 }
-                event_a = node_a.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                node_a_event = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request messsage from
                             if !peer_addresses.is_empty() {
@@ -427,18 +477,22 @@ mod tests {
                         }
                     }
 
+                    tracing::info!("Node A Event: {:?}", node_a_event);
                 },
-                event_b = node_b.next_event() => {
+                node_b_event = node_b.next_event() => {
                     // 2. Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = event_b {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = node_b_event {
                         let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock);
                     }
+
+                    tracing::info!("Node B Event: {:?}", node_b_event);
                 }
             };
         }
     }
 
     #[tokio::test]
+    #[instrument]
     async fn req_res_outbound_timeout_works() {
         let mut p2p_config = build_p2p_config("req_res_outbound_timeout_works");
 
@@ -465,8 +519,8 @@ mod tests {
 
         loop {
             tokio::select! {
-                event_a = node_a.next_event() => {
-                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = event_a {
+                node_a_event = node_a.next_event() => {
+                    if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request messsage from
                             if !peer_addresses.is_empty() && !request_sent {
@@ -496,6 +550,7 @@ mod tests {
                         }
                     }
 
+                    tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 _ = rx_test_end.recv() => {
                     // we received a signal to end the test
@@ -505,7 +560,9 @@ mod tests {
                     break;
                 },
                 // will not receive the request at all
-                _ = node_b.next_event() => {}
+                node_b_event = node_b.next_event() => {
+                    tracing::info!("Node B Event: {:?}", node_b_event);
+                }
             };
         }
     }
