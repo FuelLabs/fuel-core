@@ -11,6 +11,7 @@ query Query {
     minBytePrice
     maxTx
     maxDepth
+    nodeVersion
   }
 }
 
