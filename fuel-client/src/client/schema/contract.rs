@@ -73,7 +73,7 @@ pub struct ContractBalancesConnectionArgs {
     pub before: Option<String>,
     /// Retrieve the first n asset balances in order (forward pagination)
     pub first: Option<i32>,
-    /// Retrieve the last n coins in order (backward pagination).
+    /// Retrieve the last n asset balances in order (backward pagination).
     /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
 }
