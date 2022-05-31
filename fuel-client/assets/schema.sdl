@@ -164,6 +164,7 @@ type ContractBalance {
 	amount: U64!
 	assetId: AssetId!
 }
+
 type ContractBalanceConnection {
 	"""
 	Information to aid in pagination.
@@ -172,27 +173,30 @@ type ContractBalanceConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [ContractBalanceEdge]
+	edges: [ContractBalanceEdge!]!
 }
+
 """
 An edge in a connection.
 """
 type ContractBalanceEdge {
 	"""
-	The item at the end of the edge
-	"""
-	node: ContractBalance!
-	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: ContractBalance!
 }
+
 input ContractBalanceFilterInput {
 	"""
 	Filter assets based on the `contractId` field
 	"""
 	contract: ContractId!
 }
+
 type ContractCreated {
 	contract: Contract!
 	stateRoot: Bytes32!

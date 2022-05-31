@@ -219,12 +219,12 @@ impl ContractBalanceQuery {
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= balances.len());
-                connection.append(
+                connection.edges.extend(
                     balances
                         .into_iter()
                         .map(|item| Edge::new(item.asset_id.into(), item)),
                 );
-                Ok(connection)
+                Ok::<Connection<AssetId, ContractBalance>, KvStoreError>(connection)
             },
         )
         .await

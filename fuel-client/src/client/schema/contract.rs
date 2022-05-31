@@ -88,7 +88,7 @@ pub struct ContractBalanceEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractBalanceConnection {
-    pub edges: Option<Vec<Option<ContractBalanceEdge>>>,
+    pub edges: Vec<ContractBalanceEdge>,
     pub page_info: PageInfo,
 }
 
@@ -109,12 +109,7 @@ impl From<ContractBalanceConnection> for PaginatedResult<ContractBalance, String
             has_next_page: conn.page_info.has_next_page,
             has_previous_page: conn.page_info.has_previous_page,
             cursor: conn.page_info.end_cursor,
-            results: conn
-                .edges
-                .unwrap_or_default()
-                .into_iter()
-                .filter_map(|e| e.map(|e| e.node))
-                .collect(),
+            results: conn.edges.into_iter().map(|e| e.node).collect(),
         }
     }
 }
