@@ -22,7 +22,6 @@ fn contract_asset_id_id_key(contract: &ContractId, asset: &AssetId) -> Vec<u8> {
 fn asset_id_to_bytes(asset_id: &AssetId) -> Vec<u8> {
     let mut out = Vec::with_capacity(256);
     out.extend(asset_id.as_ref().iter());
-    println!("{:?}", out);
     out
 }
 
