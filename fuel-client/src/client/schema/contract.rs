@@ -67,7 +67,7 @@ pub struct ContractBalanceFilterInput {
 pub struct ContractBalancesConnectionArgs {
     /// Filter balances based on a filter
     filter: ContractBalanceFilterInput,
-    /// Skip until coin id (forward pagination)
+    /// Skip until asset id (forward pagination)
     pub after: Option<String>,
     /// Skip until coin id (backward pagination)
     pub before: Option<String>,
