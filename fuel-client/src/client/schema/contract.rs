@@ -65,7 +65,7 @@ pub struct ContractBalanceFilterInput {
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ContractBalancesConnectionArgs {
-    /// Filter coins based on a filter
+    /// Filter balances based on a filter
     filter: ContractBalanceFilterInput,
     /// Skip until coin id (forward pagination)
     pub after: Option<String>,
