@@ -38,8 +38,8 @@ impl Validators {
         None
     }
 
-    /// new_block_diff is finality slider adjusted
-    /// it supports only going up
+    /// Bump validator set to new high da_height.
+    /// Iterate over database StakingDiff column and apply them to our current `self.set`.
     pub async fn bump_set_to_da_height(
         &mut self,
         da_height: DaBlockHeight,

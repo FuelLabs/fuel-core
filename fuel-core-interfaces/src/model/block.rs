@@ -149,7 +149,7 @@ pub struct FuelBlockConsensus {
     /// required stake for next block
     pub required_stake: u64,
     /// Map of Validator consensus key and pair of stake and signature
-    pub validators: HashMap<Address, (ValidatorStake, Bytes32)>,
+    pub validators: HashMap<Address, (ValidatorStake, Address)>,
 }
 
 #[derive(Clone, Debug, Default)]

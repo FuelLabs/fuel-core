@@ -145,10 +145,13 @@ pub mod helpers {
     #[derive(Clone, Debug)]
     pub struct Data {
         /// Used for Storage<Address, (u64, Option<Address>)>
+        /// Contains test validator set: <validator_address, (stake and consensus_key)>;
         pub validators: HashMap<Address, (ValidatorStake, Option<Address>)>,
         /// variable for current validators height, at height our validator set is
         pub validators_height: DaBlockHeight,
-        /// diffs between blocks regarding validator set and delegation stake
+        /// Used for Storage<DaBlockHeight, StakingDiff>
+        /// Contains test data for staking changed that is done inside DaBlockHeight.
+        /// Staking diff changes can be validator un/registration and un/delegations.
         pub staking_diffs: BTreeMap<DaBlockHeight, StakingDiff>,
         /// index of blocks where delegation happened.
         pub delegator_index: BTreeMap<Address, Vec<DaBlockHeight>>,
