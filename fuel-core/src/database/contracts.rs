@@ -6,6 +6,7 @@ use crate::{
     state::{Error, IterDirection},
 };
 use fuel_tx::UtxoId;
+use fuel_types::Word;
 use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
 
@@ -72,16 +73,13 @@ impl Database {
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<AssetId, Error>> + '_ {
-        self.iter_all::<Vec<u8>, bool>(
+        self.iter_all::<Vec<u8>, Word>(
             BALANCES,
             Some(contract.as_ref().to_vec()),
             start_asset.map(|b| contract_asset_id_id_key(&contract, &b)),
             direction,
         )
-        // Safety: key is always 64 bytes
-        .map(|res| {
-            res.map(|(key, _)| AssetId::new(key.try_into().expect("Failed on line 82 here")))
-        })
+        .map(|res| res.map(|(key, _)| AssetId::new(key[32..].try_into().unwrap())))
     }
 }
 

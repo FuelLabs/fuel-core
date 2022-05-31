@@ -135,10 +135,6 @@ impl ContractBalanceQuery {
 
         let balances: Vec<ContractBalance> = db
             .contract_balances(filter.contract.into(), None, None)
-            .filter(|element| {
-                // Remove all Errors which occured when fetching balances
-                element.is_err()
-            })
             .map(|balance| -> ContractBalance {
                 let asset_id = balance.unwrap();
 
@@ -152,17 +148,13 @@ impl ContractBalanceQuery {
 
                 let amount = result.unwrap_or(0);
 
-                let contract_balance = ContractBalance {
+                ContractBalance {
                     contract: filter.contract.into(),
                     amount,
                     asset_id,
-                };
-
-                contract_balance
+                }
             })
             .collect();
-
-        println!("Got here!");
 
         query(
             after,

@@ -1,5 +1,5 @@
 use crate::helpers::{TestContext, TestSetupBuilder};
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_gql_client::client::{PageDirection, PaginationRequest};
 use fuel_vm::prelude::*;
 
 const SEED: u64 = 2322;
@@ -72,7 +72,8 @@ async fn test_first_5_contract_balances() {
         .await
         .unwrap();
 
-    println!("Weird");
-
     assert!(!contract_balances.results.is_empty());
+    assert_eq!(contract_balances.results[0].amount.0, 1000);
+    assert_eq!(contract_balances.results[1].amount.0, 400);
+    assert_eq!(contract_balances.results[2].amount.0, 700);
 }
