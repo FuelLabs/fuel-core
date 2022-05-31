@@ -59,7 +59,7 @@ pub struct ContractIdFragment {
 #[derive(cynic::InputObject, Clone, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct ContractBalanceFilterInput {
-    /// Filter coins based on the `owner` field
+    /// Filter asset balances based on the `contract` field
     pub contract: ContractId,
 }
 
