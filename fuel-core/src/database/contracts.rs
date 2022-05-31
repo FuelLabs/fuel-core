@@ -3,27 +3,12 @@ use crate::{
         columns::{BALANCES, CONTRACTS, CONTRACT_UTXO_ID},
         Database,
     },
-    state::{Error, IterDirection},
+    state::{Error, IterDirection, MultiKey},
 };
 use fuel_tx::UtxoId;
 use fuel_types::Word;
 use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
-
-fn contract_asset_id_id_key(contract: &ContractId, asset: &AssetId) -> Vec<u8> {
-    contract
-        .as_ref()
-        .iter()
-        .chain(asset_id_to_bytes(asset).iter())
-        .copied()
-        .collect()
-}
-
-fn asset_id_to_bytes(asset_id: &AssetId) -> Vec<u8> {
-    let mut out = Vec::with_capacity(256);
-    out.extend(asset_id.as_ref().iter());
-    out
-}
 
 impl Storage<ContractId, Contract> for Database {
     type Error = Error;
@@ -75,7 +60,7 @@ impl Database {
         self.iter_all::<Vec<u8>, Word>(
             BALANCES,
             Some(contract.as_ref().to_vec()),
-            start_asset.map(|b| contract_asset_id_id_key(&contract, &b)),
+            start_asset.map(|b| MultiKey::new((&contract, &b)).as_ref().to_vec()),
             direction,
         )
         .map(|res| res.map(|(key, _)| AssetId::new(key[32..].try_into().unwrap())))
