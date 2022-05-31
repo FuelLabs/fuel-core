@@ -378,7 +378,7 @@ jobs:
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: peter-evans/repository-dispatch@v2
-        if: github.ref == 'refs/heads/master'
+        # if: github.ref == 'refs/heads/master'
         with:
           # Personal Access Token to trigger repository_dispatch actions
           token: ${{ secrets.REPO_TOKEN }}
