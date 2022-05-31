@@ -31,7 +31,7 @@ use std::{
 use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FuelBehaviourEvent {
     PeerConnected(PeerId),
     PeerDisconnected(PeerId),
