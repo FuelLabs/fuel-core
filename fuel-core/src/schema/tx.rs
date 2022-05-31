@@ -28,12 +28,6 @@ pub struct TxQuery;
 
 #[Object]
 impl TxQuery {
-    async fn version(&self, _ctx: &Context<'_>) -> async_graphql::Result<String> {
-        const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-        Ok(VERSION.to_owned())
-    }
-
     async fn transaction(
         &self,
         ctx: &Context<'_>,
