@@ -16,7 +16,7 @@ query Query {
         id
       }
     }
-    transactionParameters {
+    consensusParameters {
       contractMaxSize
       maxInputs
       maxOutputs
