@@ -29,25 +29,23 @@ pub struct PendingBlocks {
     pending_block_commits: VecDeque<PendingBlock>,
     // Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
     chain_height: BlockHeight,
-    // Last known commited and finalized fuel height that is known by client.
-    last_commited_finalized_fuel_height: BlockHeight,
+    // Last known committed and finalized fuel height that is known by client.
+    last_committed_finalized_fuel_height: BlockHeight,
 }
 
-struct PendingBlock {
-    pub reverted: bool,
+pub struct PendingBlock {
     pub da_height: DaBlockHeight,
     pub block_height: BlockHeight,
     pub block_root: Bytes32, //is this block hash?
 }
 
 impl PendingBlock {
-    pub fn new_commited_block(
+    pub fn new_committed_block(
         da_height: DaBlockHeight,
         block_height: BlockHeight,
         block_root: Bytes32,
     ) -> Self {
         Self {
-            reverted: false,
             da_height,
             block_height,
             block_root,
@@ -96,7 +94,7 @@ impl PendingBlocks {
             contract_address,
             chain_height: BlockHeight::from(10u64), // TODO
             pending_block_commits: VecDeque::new(),
-            last_commited_finalized_fuel_height,
+            last_committed_finalized_fuel_height: last_commited_finalized_fuel_height,
         }
     }
 
@@ -111,9 +109,9 @@ impl PendingBlocks {
         // iterate over all pending blocks and finalize some\
         self.pending_block_commits.retain(|block| {
             if block.da_height <= finalized_da_height {
-                self.last_commited_finalized_fuel_height = BlockHeight::from(max(
+                self.last_committed_finalized_fuel_height = BlockHeight::from(max(
                     u64::from(block.block_height),
-                    u64::from(self.last_commited_finalized_fuel_height),
+                    u64::from(self.last_committed_finalized_fuel_height),
                 ));
 
                 false
@@ -121,7 +119,12 @@ impl PendingBlocks {
                 true
             }
         });
-        self.last_commited_finalized_fuel_height
+        self.last_committed_finalized_fuel_height
+    }
+
+    pub fn revert_blocks_after_height(&mut self, revert_height: DaBlockHeight) {
+        self.pending_block_commits
+            .retain(|pending_commit| pending_commit.da_height < revert_height)
     }
 
     pub fn handle_block_commit(
@@ -129,13 +132,8 @@ impl PendingBlocks {
         block_root: Bytes32,
         height: BlockHeight,
         da_height: DaBlockHeight,
-        is_reverted: bool,
     ) {
-        if is_reverted {
-            self.handle_block_commit_revert(block_root, height, da_height);
-        } else {
-            self.handle_block_commit_append(block_root, height, da_height);
-        }
+        self.handle_block_commit_append(block_root, height, da_height);
     }
 
     async fn bundle(
@@ -143,14 +141,11 @@ impl PendingBlocks {
         to_height: BlockHeight,
         db: &mut dyn RelayerDb,
     ) -> Vec<Arc<SealedFuelBlock>> {
-        // if queue is empty check last_finalized_commited fuel block and send all newest ones that we know about.
-        let mut from_height = self.last_commited_finalized_fuel_height;
-        //get blocks range that start from last pending queue item that is not reverted and goes to current block.
-        for pending in self.pending_block_commits.iter() {
-            if !pending.reverted {
-                from_height = pending.block_height;
-                break;
-            }
+        // if queue is empty check last_finalized_committed fuel block and send all newest ones that we know about.
+        let mut from_height = self.last_committed_finalized_fuel_height;
+        // get blocks range that start from last pending block commitment and goes to current block.
+        if let Some(pending) = self.pending_block_commits.back() {
+            from_height = pending.block_height;
         }
 
         debug!("Bundle from:{from_height}, to:{to_height}");
@@ -161,13 +156,13 @@ impl PendingBlocks {
             if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
                 bundle.push(sealed_block.clone());
             } else {
-                panic!("All not commited blocks should have its seal and blocks inside db");
+                panic!("All not committed blocks should have its seal and blocks inside db");
             }
         }
         bundle
     }
 
-    /// When new block is created by this client, bundle all not commited blocks and send it to contract.
+    /// When new block is created by this client, bundle all not committed blocks and send it to contract.
     pub async fn commit<P>(
         &mut self,
         height: BlockHeight,
@@ -200,7 +195,7 @@ impl PendingBlocks {
         }
     }
 
-    /// Handle commited block from contract.
+    /// Handle committed block from contract.
     fn handle_block_commit_append(
         &mut self,
         block_root: Bytes32,
@@ -208,13 +203,13 @@ impl PendingBlocks {
         da_height: DaBlockHeight,
     ) {
         if self.pending_block_commits.is_empty() {
-            let lcffh = self.last_commited_finalized_fuel_height;
+            let lcffh = self.last_committed_finalized_fuel_height;
             if lcffh + 1u64.into() != height {
                 error!("We have missing logs from LCFFH {lcffh} to new height {height}")
             }
             // no pending commits, add one
             self.pending_block_commits
-                .push_front(PendingBlock::new_commited_block(
+                .push_front(PendingBlock::new_committed_block(
                     da_height, height, block_root,
                 ));
             return;
@@ -226,7 +221,7 @@ impl PendingBlocks {
         if height < back_height {
             // This case means that we somehow skipped block commit and didnt receive it in expected order.
             error!(
-                "Commited block {height} is lower then current lowest pending block {back_height}."
+                "Committed block {height} is lower then current lowest pending block {back_height}."
             );
         } else if height > front_height {
             // check if we are lagging against da layer
@@ -239,65 +234,14 @@ impl PendingBlocks {
             // new block received. Happy path
             if height == front_height + BlockHeight::from(1u64) {
                 self.pending_block_commits
-                    .push_front(PendingBlock::new_commited_block(
+                    .push_front(PendingBlock::new_committed_block(
                         da_height, height, block_root,
                     ));
             } else {
-                error!("Commited block height {height} should be only increased by one from current height {front_height}.");
+                error!("Committed block height {height} should be only increased by one from current height {front_height}.");
             }
         } else {
-            // happens if reverted commit is again visible
-            // iterate over pending blocks and set reverted commit as commited.
-            for pending in self.pending_block_commits.iter_mut() {
-                if pending.block_height == height {
-                    if !pending.reverted {
-                        error!("We received block {height} commit that was not reverted")
-                    }
-                    pending.da_height = da_height;
-                    pending.reverted = false;
-                    pending.block_height = height;
-                    pending.block_root = block_root;
-                    break;
-                }
-            }
-        }
-    }
-
-    /// Handle revert of block commit from contract.
-    fn handle_block_commit_revert(
-        &mut self,
-        block_root: Bytes32,
-        height: BlockHeight,
-        da_height: DaBlockHeight,
-    ) {
-        if self.pending_block_commits.is_empty() {
-            // nothing to revert
-            error!("Revert for height {height} received while pending block queue is empty and LFCFB is {}",
-                self.last_commited_finalized_fuel_height);
-            return;
-        }
-
-        let front_height = self.pending_block_commits.front().unwrap().block_height;
-        let back_height = self.pending_block_commits.back().unwrap().block_height;
-
-        if height < back_height {
-            // ignore block that are not inside pending queue.
-            error!("All pending block commits should be present in block queue. height:{height} last_known:{back_height}");
-        } else if height > front_height {
-            error!("Something unexpected happened.Reverted block commits are not something found in the future.");
-        } else {
-            // happy path. iterate over pending blocks and set it as commited.
-            for pending in self.pending_block_commits.iter_mut() {
-                if pending.block_height == height {
-                    if pending.reverted {
-                        error!("We received block {height} commit that was already reverted");
-                    }
-                    pending.da_height = da_height;
-                    pending.reverted = true;
-                    pending.block_height = height;
-                    pending.block_root = block_root;
-                }
-            }
+            error!("Duplicate block commitment received at {height}");
         }
     }
 
@@ -412,20 +356,22 @@ mod tests {
         let b2 = rng.gen();
         let b3 = rng.gen();
         let b4 = rng.gen();
+        let b5 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 10, false);
-        blocks.handle_block_commit(b3, 4u64.into(), 11, false);
-        blocks.handle_block_commit(b4, 5u64.into(), 13, false);
-        blocks.handle_block_commit(b4, 5u64.into(), 13, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 9);
+        blocks.handle_block_commit(b2, 3u64.into(), 10);
+        blocks.handle_block_commit(b3, 4u64.into(), 11);
+        blocks.handle_block_commit(b4, 5u64.into(), 13);
+        blocks.handle_block_commit(b5, 6u64.into(), 14);
+        blocks.revert_blocks_after_height(14);
 
         let q = &blocks.pending_block_commits;
         assert_eq!(q.len(), 4, "Should contain for pending blocks");
         blocks.handle_da_finalization(10);
 
         let q = &blocks.pending_block_commits;
-        assert_eq!(q.len(), 2, "Should contains only two pending blocks");
+        assert_eq!(q.len(), 2, "Should contains only one pending block");
 
         let back = q.back().unwrap();
         let front = q.front().unwrap();
@@ -442,10 +388,10 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 0u64.into(), 9, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 9);
+        blocks.handle_block_commit(b2, 0u64.into(), 9);
         assert!(logs_contain(
-            "Commited block 0 is lower then current lowest pending block 2."
+            "Committed block 0 is lower then current lowest pending block 2."
         ))
     }
 
@@ -458,10 +404,10 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 4u64.into(), 10, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 9);
+        blocks.handle_block_commit(b2, 4u64.into(), 10);
         assert!(logs_contain(
-            "Commited block height 4 should be only increased by one from current height 2"
+            "Committed block height 4 should be only increased by one from current height 2"
         ))
     }
 
@@ -474,11 +420,9 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 2u64.into(), 10, false);
-        assert!(logs_contain(
-            "We received block 2 commit that was not reverted"
-        ))
+        blocks.handle_block_commit(b1, 2u64.into(), 9);
+        blocks.handle_block_commit(b2, 2u64.into(), 10);
+        assert!(logs_contain("Duplicate block commitment received at 2"))
     }
 
     #[test]
@@ -489,72 +433,9 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 3u64.into(), 9, false);
+        blocks.handle_block_commit(b1, 3u64.into(), 9);
         assert!(logs_contain(
             "We have missing logs from LCFFH 1 to new height 3"
-        ))
-    }
-
-    #[test]
-    #[traced_test]
-    pub fn error_log_on_lower_block_commit_revert() {
-        let mut rng = StdRng::seed_from_u64(59);
-
-        let b1 = rng.gen();
-        let b2 = rng.gen();
-
-        let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 1u64.into(), 9, true);
-        assert!(logs_contain(
-            "All pending block commits should be present in block queue. height:1 last_known:2"
-        ))
-    }
-
-    #[test]
-    #[traced_test]
-    pub fn error_log_on_higher_block_commit_revert() {
-        let mut rng = StdRng::seed_from_u64(59);
-
-        let b1 = rng.gen();
-        let b2 = rng.gen();
-
-        let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 10, true);
-        assert!(logs_contain(
-            "Something unexpected happened.Reverted block commits are not something found in the future"
-        ))
-    }
-
-    #[test]
-    #[traced_test]
-    pub fn duplicated_log_received_for_block_commit_revert() {
-        let mut rng = StdRng::seed_from_u64(59);
-
-        let b1 = rng.gen();
-
-        let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b1, 2u64.into(), 9, true);
-        blocks.handle_block_commit(b1, 2u64.into(), 9, true);
-        assert!(logs_contain(
-            "We received block 2 commit that was already reverted"
-        ))
-    }
-
-    #[test]
-    #[traced_test]
-    pub fn skipped_logs_for_block_commit_revert_on_empty_queue() {
-        let mut rng = StdRng::seed_from_u64(59);
-
-        let b1 = rng.gen();
-
-        let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 10u64.into(), 9, true);
-        assert!(logs_contain(
-            "Revert for height 10 received while pending block queue is empty and LFCFB is 1"
         ))
     }
 
@@ -578,7 +459,7 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 2);
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
@@ -587,7 +468,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "All not commited blocks should have its seal and blocks inside db")]
+    #[should_panic(expected = "All not committed blocks should have its seal and blocks inside db")]
     async fn bundle_should_panic_if_sealed_block_is_missing() {
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
@@ -604,9 +485,9 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 3, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 3, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 2);
+        blocks.handle_block_commit(b2, 3u64.into(), 3);
+        blocks.handle_block_commit(b2, 3u64.into(), 3);
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");

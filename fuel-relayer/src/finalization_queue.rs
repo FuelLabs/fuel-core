@@ -11,6 +11,7 @@ use fuel_core_interfaces::{
 };
 use fuel_tx::{Address, Bytes32};
 use std::{
+    cmp::min,
     collections::{HashMap, VecDeque},
     sync::Arc,
 };
@@ -19,15 +20,14 @@ use tracing::{debug, error, info, warn};
 pub struct FinalizationQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     pending: VecDeque<DaBlockDiff>,
-    /// Revert on eth are reported as list of reverted logs in order of Block2Log1,Block2Log2,Block1Log1,Block2Log2.
-    /// So when applying multiple block reverts it is good to mind the order.
-    bundled_removed_eth_events: Vec<(DaBlockHeight, Vec<EthEventLog>)>,
-    /// finalized fuel block
+    /// most recently finalized da height
     finalized_da_height: DaBlockHeight,
     /// Pending block handling
     blocks: PendingBlocks,
     /// Current validator set
     validators: Validators,
+    /// Track how far back an ongoing reorg is occurring.
+    lowest_da_reorg_height: DaBlockHeight,
 }
 
 /// Pending diff between FuelBlocks
@@ -71,8 +71,8 @@ impl FinalizationQueue {
             blocks,
             pending: VecDeque::new(),
             validators: Validators::default(),
-            bundled_removed_eth_events: Vec::new(),
             finalized_da_height: 0,
+            lowest_da_reorg_height: u32::MAX,
         }
     }
 
@@ -89,26 +89,6 @@ impl FinalizationQueue {
 
     pub fn clear(&mut self) {
         self.pending.clear()
-    }
-
-    /// Bundle all removed events to apply them in same time when all of them are flushed.
-    fn bundle_removed_events(&mut self, event: EthEventLog, da_height: DaBlockHeight) {
-        // agregate all removed events before reverting them.
-        // check if we have pending block for removal
-        if let Some((last_eth_block, list)) = self.bundled_removed_eth_events.last_mut() {
-            // check if last pending block is same as log event that we received.
-            if *last_eth_block == da_height {
-                list.push(event)
-            } else {
-                // if block number differs just push new block.
-                self.bundled_removed_eth_events
-                    .push((da_height, vec![event]));
-            }
-        } else {
-            // if there are not pending block for removal just add it.
-            self.bundled_removed_eth_events
-                .push((da_height, vec![event]));
-        }
     }
 
     /// propagate new fuel block to pending_blocks
@@ -149,43 +129,32 @@ impl FinalizationQueue {
         let da_height = log.block_number.unwrap().as_u64() as DaBlockHeight;
         let event = event.unwrap();
         debug!("append inbound log:{:?}", event);
-        // bundle removed events and return
+        // accumulate how far back a reorg goes.
         if removed {
-            self.bundle_removed_events(event, da_height);
+            self.lowest_da_reorg_height = min(self.lowest_da_reorg_height, da_height);
             return;
         }
         // apply all reverted event
-        if !self.bundled_removed_eth_events.is_empty() {
+        if self.lowest_da_reorg_height != DaBlockHeight::MAX {
             info!(
-                "Reorg happened on ethereum. Reverting {} logs",
-                self.bundled_removed_eth_events.len()
+                "Reorg happened on ethereum. Reverting to block {}",
+                self.lowest_da_reorg_height
             );
-
-            let mut lowest_removed_da_height = DaBlockHeight::MAX;
-
-            for (da_height, events) in
-                std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
-            {
-                lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
-                // mark all removed pending block commits as reverted.
-                for event in events {
-                    if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.blocks
-                            .handle_block_commit(block_root, height.into(), da_height, true);
-                    }
-                }
-            }
             // remove all blocks that were reverted. In best case those blocks heights and events are going
             // to be reinserted in append eth events.
+            self.blocks
+                .revert_blocks_after_height(self.lowest_da_reorg_height);
             self.pending
-                .retain(|diff| diff.da_height < lowest_removed_da_height);
+                .retain(|diff| diff.da_height < self.lowest_da_reorg_height);
+            // reset reorg height after reverting blocks
+            self.lowest_da_reorg_height = DaBlockHeight::MAX;
         }
         // apply new event to pending queue
         self.append_da_events(event, da_height).await;
     }
 
-    /// At begining we will ignore all event until event for new fuel block commit commes
-    /// after that syncronization can start.
+    /// At beginning we will ignore all event until event for new fuel block commit comes
+    /// after that synchronization can start.
     async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: DaBlockHeight) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
@@ -231,7 +200,7 @@ impl FinalizationQueue {
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
                 self.blocks
-                    .handle_block_commit(block_root, (height).into(), da_height, false);
+                    .handle_block_commit(block_root, (height).into(), da_height);
             }
             EthEventLog::Unknown => (),
         }
