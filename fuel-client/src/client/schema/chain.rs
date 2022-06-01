@@ -29,7 +29,7 @@ pub struct ChainInfo {
     pub name: String,
     pub peer_count: i32,
     pub latest_block: Block,
-    pub transaction_parameters: ConsensusParameters,
+    pub consensus_parameters: ConsensusParameters,
 }
 
 #[cfg(test)]

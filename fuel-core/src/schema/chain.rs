@@ -84,7 +84,7 @@ impl ChainInfo {
         0
     }
 
-    async fn transaction_parameters(
+    async fn consensus_parameters(
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<ConsensusParameters> {
