@@ -389,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore("Because chain_height is hardcoded to 10")]
+    #[ignore = "Because chain_height is hardcoded to 10"]
     fn reverted_blocks_causes_rollback_of_best_chain_height() {
         let mut rng = StdRng::seed_from_u64(59);
 
