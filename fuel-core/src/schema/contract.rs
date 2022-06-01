@@ -2,10 +2,10 @@ use crate::database::{Database, KvStoreError};
 use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
 use crate::state::IterDirection;
 use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-use async_graphql::InputObject;
-use async_graphql::{Context, Object};
+use async_graphql::{Context, InputObject, Object};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
+use std::iter::IntoIterator;
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
 impl From<fuel_types::ContractId> for Contract {
@@ -133,29 +133,6 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>().clone();
 
-        let balances: Vec<ContractBalance> = db
-            .contract_balances(filter.contract.into(), None, None)
-            .map(|balance| -> ContractBalance {
-                let asset_id = balance.unwrap();
-
-                let result =
-                    fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
-                        &db,
-                        &filter.contract.into(),
-                        &asset_id,
-                    )
-                    .unwrap();
-
-                let amount = result.unwrap_or(0);
-
-                ContractBalance {
-                    contract: filter.contract.into(),
-                    amount,
-                    asset_id,
-                }
-            })
-            .collect();
-
         query(
             after,
             before,
@@ -183,8 +160,31 @@ impl ContractBalanceQuery {
                     start = before;
                     end = after;
                 }
+                // impl Iterator<Item = ContractBalance>
+                let mut balances = db
+                    .contract_balances(filter.contract.into(), start, Some(IterDirection::Forward))
+                    .map(|balance| -> ContractBalance {
+                        let asset_id = balance.unwrap();
 
-                let mut balances = balances.into_iter();
+                        let result =
+                            fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+                                &db,
+                                &filter.contract.into(),
+                                &asset_id,
+                            )
+                            .unwrap();
+
+                        let amount = result.unwrap_or(0);
+
+                        ContractBalance {
+                            contract: filter.contract.into(),
+                            amount,
+                            asset_id,
+                        }
+                    })
+                    .collect::<Vec<ContractBalance>>()
+                    .into_iter();
+
                 if direction == IterDirection::Reverse {
                     balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
                 }

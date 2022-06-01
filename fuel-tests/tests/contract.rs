@@ -65,7 +65,7 @@ async fn test_first_5_contract_balances() {
             format!("{:#x}", contract_id).as_str(),
             PaginationRequest {
                 cursor: None,
-                results: 5,
+                results: 3,
                 direction: PageDirection::Forward,
             },
         )
