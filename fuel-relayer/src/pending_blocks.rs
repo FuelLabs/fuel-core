@@ -27,12 +27,13 @@ pub struct PendingBlocks {
     contract_address: H160,
     // Pending block commits seen on DA layer and waiting to be finalized
     pending_block_commits: VecDeque<PendingBlock>,
-    // Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
+    // Highest known chain height, used to check if we are seeing lag between block commits and our fuel chain
     chain_height: BlockHeight,
     // Last known committed and finalized fuel height that is known by client.
     last_committed_finalized_fuel_height: BlockHeight,
 }
 
+#[derive(Debug)]
 pub struct PendingBlock {
     pub da_height: DaBlockHeight,
     pub block_height: BlockHeight,
@@ -123,8 +124,16 @@ impl PendingBlocks {
     }
 
     pub fn revert_blocks_after_height(&mut self, revert_height: DaBlockHeight) {
+        // evict all reverted blocks
         self.pending_block_commits
-            .retain(|pending_commit| pending_commit.da_height < revert_height)
+            .retain(|pending_commit| pending_commit.da_height < revert_height);
+        // reset the chain_height to best known block after evicting reverted blocks
+        self.chain_height = self
+            .pending_block_commits
+            .iter()
+            .map(|pending_commit| u32::from(pending_commit.block_height))
+            .fold(0, max)
+            .into();
     }
 
     pub fn handle_block_commit(
@@ -377,6 +386,26 @@ mod tests {
         let front = q.front().unwrap();
         assert_eq!(back.block_root, b3, "First back should be b3");
         assert_eq!(front.block_root, b4, "First front should be b4");
+    }
+
+    #[test]
+    #[ignore("Because chain_height is hardcoded to 10")]
+    fn reverted_blocks_causes_rollback_of_best_chain_height() {
+        let mut rng = StdRng::seed_from_u64(59);
+
+        let b1 = rng.gen();
+        let b2 = rng.gen();
+
+        let mut blocks = block_commit(1u64.into());
+        blocks.handle_block_commit(b1, 2u64.into(), 9);
+        blocks.handle_block_commit(b2, 3u64.into(), 10);
+        // verify chain_height is set to most recent seen value
+        assert_eq!(blocks.chain_height, 3u32.into());
+
+        // revert last block and verify chain_height reverts to next best value
+        dbg!(&blocks.pending_block_commits);
+        blocks.revert_blocks_after_height(10);
+        assert_eq!(blocks.chain_height, 2u32.into());
     }
 
     #[test]

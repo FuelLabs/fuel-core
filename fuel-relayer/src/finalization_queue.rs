@@ -35,7 +35,7 @@ pub struct FinalizationQueue {
 pub struct DaBlockDiff {
     /// da block height
     pub da_height: DaBlockHeight,
-    /// Validator stake deposit and withdrawel.
+    /// Validator stake deposit and withdrawal.
     pub validators: HashMap<Address, Option<Address>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
