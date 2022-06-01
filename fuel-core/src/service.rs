@@ -1,5 +1,10 @@
 use crate::{chain_config::ChainConfig, database::Database, tx_pool::TxPool};
 use anyhow::Error as AnyError;
+use fuel_block_importer::{Config as FuelBlockImporterConfig, Service as FuelBlockImporterService};
+use fuel_block_producer::{Config as FuelBlockProducerConfig, Service as FuelBlockProducerService};
+use fuel_core_bft::{Config as FuelCoreBftConfig, Service as FuelCoreBftService};
+use fuel_core_interfaces::{model, *};
+use fuel_sync::{Config as FuelSyncConfig, Service as FuelSyncService};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     panic,
@@ -10,6 +15,9 @@ use strum_macros::{Display, EnumString, EnumVariantNames};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
+// TODO chenge naming of txpool service to be similar to others
+use fuel_txpool::{Config as FuelTxpoolConfig, TxPoolService as FuelTxpoolService};
+// TOOD include for p2p and relayer
 
 pub use graph_api::start_server;
 
@@ -92,10 +100,38 @@ impl FuelService {
             warn!("Predicates are currently an unstable feature!");
         }
 
+        let db = ();
+        
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
         // initialize transaction pool
         let tx_pool = Arc::new(TxPool::new(database.clone(), config.clone()));
+        // Initialize and bind all components
+        let mut block_importer =
+            FuelBlockImporterService::new(&FuelBlockImporterConfig::default(), db).await?;
+        let mut block_producer =
+            FuelBlockProducerService::new(&FuelBlockProducerConfig::default(), db).await?;
+        let mut bft = FuelCoreBftService::new(&FuelCoreBftConfig::default(), db).await?;
+        let mut sync = FuelSyncService::new(&FuelSyncConfig::default()).await?;
+        
+        // let mut relayer = FuelRelayer::new(FuelRelayerConfig::default());
+        // let mut p2p = FuelP2P::new(FuelP2PConfig::default());
+        // let mut txpool = FuelTxpool::new(FuelTxpoolConfig::default());
+        let txpool_mpsc = ();
+        let p2p_mpsc = ();
+        let p2p_broadcast_consensus = ();
+        let relayer_mpsc = ();
+
+        block_importer.start().await;
+        block_producer.start(txpool_mpsc).await;
+        bft.start(
+            relayer_mpsc,
+            block_producer.sender().clone(),
+            block_importer.sender().clone(),
+            block_importer.subscribe(),
+        )
+        .await;
+        sync.start().await;
 
         // start background tasks
         let mut tasks = vec![];
