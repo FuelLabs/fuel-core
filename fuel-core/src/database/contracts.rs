@@ -56,14 +56,14 @@ impl Database {
         contract: ContractId,
         start_asset: Option<AssetId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<AssetId, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
         self.iter_all::<Vec<u8>, Word>(
             BALANCES,
             Some(contract.as_ref().to_vec()),
             start_asset.map(|asset_id| MultiKey::new((&contract, &asset_id)).as_ref().to_vec()),
             direction,
         )
-        .map(|res| res.map(|(key, _)| AssetId::new(key[32..].try_into().unwrap())))
+        .map(|res| res.map(|(key, balance)| (AssetId::new(key[32..].try_into().unwrap()), balance)))
     }
 }
 

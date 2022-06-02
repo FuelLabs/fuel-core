@@ -1,6 +1,7 @@
 use crate::database::{Database, KvStoreError};
 use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
 use crate::state::IterDirection;
+use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, InputObject, Object,
@@ -150,79 +151,58 @@ impl ContractBalanceQuery {
                     (0, IterDirection::Forward)
                 };
 
+                if (first.is_some() && before.is_some()) || (after.is_some() && before.is_some()) {
+                    return Err(anyhow!("Wrong argument combination"));
+                }
+
                 let after = after.map(fuel_tx::AssetId::from);
                 let before = before.map(fuel_tx::AssetId::from);
 
-                let start;
-                let end;
-
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
+                let start = if direction == IterDirection::Forward {
+                    after
                 } else {
-                    start = before;
-                    end = after;
-                }
+                    before
+                };
 
-                let mut balances = db
-                    .contract_balances(filter.contract.into(), start, Some(direction))
-                    .map(|balance| -> ContractBalance {
-                        let asset_id = balance.unwrap();
-
-                        // Handle this unrwap safely
-                        // Couple thoughts - continue if fail occurs moving to next value
-                        // Which is either via an unwrap_or or some changing the above map to fail
-                        let result =
-                            fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
-                                &db,
-                                &filter.contract.into(),
-                                &asset_id,
-                            )
-                            .unwrap();
-
-                        let amount = result.unwrap_or(0);
-
-                        ContractBalance {
-                            contract: filter.contract.into(),
-                            amount,
-                            asset_id,
-                        }
-                    })
-                    .collect::<Vec<ContractBalance>>()
-                    .into_iter();
+                let mut balances_iter =
+                    db.contract_balances(filter.contract.into(), start, Some(direction));
 
                 let mut started = None;
                 if start.is_some() {
-                    // skip initial result
-                    started = balances.next();
+                    started = balances_iter.next();
+                }
+
+                let balances: Result<Vec<ContractBalance>, KvStoreError> = balances_iter
+                    .take(records_to_fetch + 1)
+                    .map(|balance| {
+                        let balance = balance?;
+
+                        Ok(ContractBalance {
+                            contract: filter.contract.into(),
+                            amount: balance.1,
+                            asset_id: balance.0,
+                        })
+                    })
+                    .collect();
+                let mut balances = balances?;
+
+                let has_next_page = balances.len() > records_to_fetch;
+
+                if has_next_page {
+                    balances.pop();
                 }
 
                 if direction == IterDirection::Reverse {
-                    balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
+                    balances.reverse();
                 }
 
-                // take desired amount of results
-                let balances = balances
-                    .take_while(|balance| {
-                        // take until we've reached the end
-                        if let Some(end) = end.as_ref() {
-                            if balance.asset_id == *end {
-                                return false;
-                            }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch + 1);
-                let balances: Vec<ContractBalance> = balances.collect();
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= balances.len());
+                let mut connection = Connection::new(started.is_some(), has_next_page);
                 connection.edges.extend(
                     balances
                         .into_iter()
                         .map(|item| Edge::new(item.asset_id.into(), item)),
                 );
-                Ok::<Connection<AssetId, ContractBalance>, KvStoreError>(connection)
+                Ok::<Connection<AssetId, ContractBalance>, anyhow::Error>(connection)
             },
         )
         .await

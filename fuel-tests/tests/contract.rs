@@ -1,7 +1,7 @@
 use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_gql_client::client::{PageDirection, PaginationRequest};
 use fuel_vm::prelude::*;
-
+use rstest::rstest;
 const SEED: u64 = 2322;
 
 #[tokio::test]
@@ -46,8 +46,11 @@ async fn test_contract_balance() {
     }
 }
 
+#[rstest]
+#[case(PageDirection::Forward)]
+#[case(PageDirection::Backward)]
 #[tokio::test]
-async fn test_first_5_contract_balances() {
+async fn test_first_5_contract_balances(#[case] direction: PageDirection) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(
         vec![],
@@ -66,7 +69,7 @@ async fn test_first_5_contract_balances() {
             PaginationRequest {
                 cursor: None,
                 results: 3,
-                direction: PageDirection::Forward,
+                direction,
             },
         )
         .await
