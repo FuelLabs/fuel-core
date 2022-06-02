@@ -35,7 +35,7 @@ pub enum TransactionStatus {
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("unexpected database error {0:?}")]
-    Database(Box<dyn StdError>),
+    Database(Box<dyn StdError + Send + Sync>),
     #[error("unexpected block execution error {0:?}")]
     Execution(#[from] crate::executor::Error),
     #[error("Tx is invalid, insertion failed {0:?}")]

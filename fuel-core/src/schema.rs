@@ -7,6 +7,7 @@ pub mod coin;
 pub mod contract;
 pub mod dap;
 pub mod health;
+pub mod node_info;
 pub mod scalars;
 pub mod tx;
 
@@ -21,6 +22,7 @@ pub struct Query(
     coin::CoinQuery,
     contract::ContractQuery,
     contract::ContractBalanceQuery,
+    node_info::NodeQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -33,9 +35,10 @@ pub struct Mutation(dap::DapMutation, tx::TxMutation);
 pub type CoreSchema = Schema<Query, Mutation, EmptySubscription>;
 
 pub fn build_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
-    Schema::build(
+    Schema::build_with_ignore_name_conflicts(
         Query::default(),
         Mutation::default(),
         EmptySubscription::default(),
+        ["TransactionConnection"],
     )
 }

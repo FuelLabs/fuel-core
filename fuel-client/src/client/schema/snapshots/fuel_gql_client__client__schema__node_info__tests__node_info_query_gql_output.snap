@@ -1,0 +1,17 @@
+---
+source: fuel-client/src/client/schema/node_info.rs
+expression: operation.query
+---
+query Query {
+  nodeInfo {
+    utxoValidation
+    predicates
+    vmBacktrace
+    minGasPrice
+    minBytePrice
+    maxTx
+    maxDepth
+    nodeVersion
+  }
+}
+

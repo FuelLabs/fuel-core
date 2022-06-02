@@ -28,12 +28,6 @@ pub struct TxQuery;
 
 #[Object]
 impl TxQuery {
-    async fn version(&self, _ctx: &Context<'_>) -> async_graphql::Result<String> {
-        const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-        Ok(VERSION.to_owned())
-    }
-
     async fn transaction(
         &self,
         ctx: &Context<'_>,
@@ -151,17 +145,17 @@ impl TxQuery {
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch < tx_ids.len());
 
-                connection.append(txs.into_iter().map(|(tx, block_height)| {
+                connection.edges.extend(txs.into_iter().map(|(tx, block_height)| {
                     Edge::new(
                         SortedTxCursor::new(*block_height, Bytes32::from(tx.id())),
-                        tx.into_owned(),
+                        Transaction(tx.into_owned()),
                     )
                 }));
-                Ok(connection)
+
+                Ok::<Connection<SortedTxCursor, Transaction>, KvStoreError>(connection)
             },
         )
         .await
-        .map(|conn| conn.map_node(Transaction))
     }
 
     async fn transactions_by_owner(
@@ -238,11 +232,12 @@ impl TxQuery {
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                connection.append(
+                connection.edges.extend(
                     txs.into_iter()
                         .map(|item| Edge::new(HexString::from(item.0), Transaction(item.1))),
                 );
-                Ok(connection)
+
+                Ok::<Connection<HexString, Transaction>, KvStoreError>(connection)
             },
         )
         .await
