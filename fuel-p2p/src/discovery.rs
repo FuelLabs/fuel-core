@@ -385,7 +385,6 @@ mod tests {
     // test completes after all swarms have connected to each other
     #[tokio::test]
     async fn discovery_works() {
-        env_logger::init();
         // Number of peers in the network
         let num_of_swarms = 25;
         let (first_swarm, first_peer_addr, first_peer_id) = build_fuel_discovery(vec![]);

@@ -236,6 +236,17 @@ type Mutation {
 	submit(tx: HexString!): Transaction!
 }
 
+type NodeInfo {
+	utxoValidation: Boolean!
+	predicates: Boolean!
+	vmBacktrace: Boolean!
+	minGasPrice: U64!
+	minBytePrice: U64!
+	maxTx: U64!
+	maxDepth: U64!
+	nodeVersion: String!
+}
+
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
@@ -282,7 +293,6 @@ type Query {
 	block(id: BlockId, height: U64): Block
 	blocks(first: Int, after: String, last: Int, before: String): BlockConnection!
 	chain: ChainInfo!
-	version: String!
 	transaction(id: TransactionId!): Transaction
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
@@ -301,6 +311,7 @@ type Query {
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
+	nodeInfo: NodeInfo!
 }
 
 type Receipt {
