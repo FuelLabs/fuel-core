@@ -1,9 +1,7 @@
-use std::sync::Arc;
-
-use fuel_tx::Transaction;
-use tokio::sync::oneshot;
-
 use super::model::{BlockHeight, ConsensusVote, FuelBlock, SealedFuelBlock};
+use fuel_tx::Transaction;
+use std::sync::Arc;
+use tokio::sync::oneshot;
 
 pub enum TransactionBroadcast {
     NewTransaction(Transaction),

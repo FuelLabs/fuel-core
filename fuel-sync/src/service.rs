@@ -1,11 +1,5 @@
 use crate::Config;
-use fuel_core_interfaces::{
-    bft::BFTMpsc,
-    block_importer::ImportBlockMpsc,
-    // p2p::{BlockBroadcast, P2PMpsc},
-    // relayer::RelayerEvent,
-    sync::SyncMpsc,
-};
+use fuel_core_interfaces::{bft::BFTMpsc, block_importer::ImportBlockMpsc, sync::SyncMpsc};
 use parking_lot::Mutex;
 use tokio::{sync::mpsc, task::JoinHandle};
 

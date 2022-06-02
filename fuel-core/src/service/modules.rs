@@ -27,7 +27,7 @@ impl Modules {
             self.sync.stop().await,
         ]
         .into_iter()
-        .filter_map(|i| i)
+        .flatten()
         .collect();
 
         join_all(stops).await;

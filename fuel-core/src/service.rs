@@ -1,5 +1,6 @@
 use crate::{chain_config::ChainConfig, database::Database};
 use anyhow::Error as AnyError;
+use modules::Modules;
 use std::{
     net::{Ipv4Addr, SocketAddr},
     panic,
@@ -9,8 +10,6 @@ use strum_macros::{Display, EnumString, EnumVariantNames};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
-
-use self::modules::Modules;
 
 pub(crate) mod genesis;
 pub mod graph_api;
@@ -59,7 +58,7 @@ pub enum DbType {
 
 pub struct FuelService {
     tasks: Vec<JoinHandle<Result<(), AnyError>>>,
-    /// internal modules.
+    /// handler for all modules.
     modules: Modules,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
