@@ -190,12 +190,6 @@ impl ContractBalanceQuery {
                 if direction == IterDirection::Reverse {
                     balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
                 }
-                if let Some(start) = start {
-                    balances = balances
-                        .skip_while(|balance| balance.asset_id == start)
-                        .collect::<Vec<ContractBalance>>()
-                        .into_iter();
-                }
                 let mut started = None;
                 if start.is_some() {
                     // skip initial result
