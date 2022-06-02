@@ -172,7 +172,7 @@ impl ContractBalanceQuery {
                     started = balances_iter.next();
                 }
 
-                let balances = balances_iter
+                let mut balances = balances_iter
                     .take(records_to_fetch + 1)
                     .map(|balance| {
                         let balance = balance?;
