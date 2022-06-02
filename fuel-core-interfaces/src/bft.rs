@@ -12,4 +12,6 @@ pub enum BFTMpsc {
         block: Arc<FuelBlock>,
         ret: oneshot::Sender<Result<()>>,
     },
+    Stop,
+    Start,
 }

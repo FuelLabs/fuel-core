@@ -2015,10 +2015,7 @@ name = "fuel-block-executor"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-interfaces",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-types",
  "tokio",
 ]
@@ -2028,10 +2025,7 @@ name = "fuel-block-importer"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-interfaces",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-types",
  "tokio",
 ]
@@ -2041,10 +2035,7 @@ name = "fuel-block-producer"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-interfaces",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-types",
  "tokio",
 ]
@@ -2108,10 +2099,7 @@ name = "fuel-core-bft"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-interfaces",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-types",
  "tokio",
 ]
@@ -2267,10 +2255,7 @@ name = "fuel-sync"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "fuel-core-interfaces",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-types",
  "tokio",
 ]

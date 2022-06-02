@@ -1,5 +1,5 @@
-pub mod service;
 pub mod config;
+pub mod service;
 
-pub use service::Service;
 pub use config::Config;
+pub use service::Service;

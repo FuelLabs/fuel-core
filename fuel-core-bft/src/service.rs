@@ -1,6 +1,8 @@
 use crate::Config;
 use fuel_core_interfaces::{
-    block_importer::{ImportBlockMpsc, ImportBlockBroadcast}, block_producer::BlockProducerMpsc, relayer::RelayerEvent,
+    bft::BFTMpsc,
+    block_importer::{ImportBlockBroadcast, ImportBlockMpsc},
+    block_producer::BlockProducerMpsc,
 };
 use tokio::{
     sync::{broadcast, mpsc},
@@ -9,7 +11,7 @@ use tokio::{
 
 pub struct Service {
     join: Option<JoinHandle<()>>,
-    sender: mpsc::Sender<RelayerEvent>,
+    sender: mpsc::Sender<BFTMpsc>,
 }
 
 impl Service {
@@ -21,6 +23,7 @@ impl Service {
     pub async fn start(
         &mut self,
         _relayer: (),
+        _p2p_consensus: (),
         _block_producer: mpsc::Sender<BlockProducerMpsc>,
         _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,
         _block_importer_broadcast: broadcast::Receiver<ImportBlockBroadcast>,
@@ -29,13 +32,13 @@ impl Service {
     }
 
     pub async fn stop(&mut self) {
-        let _ = self.sender.send(RelayerEvent::Stop);
+        let _ = self.sender.send(BFTMpsc::Stop);
         if let Some(join) = self.join.take() {
             let _ = join.await;
         }
     }
 
-    pub fn sender(&self) -> &mpsc::Sender<RelayerEvent> {
+    pub fn sender(&self) -> &mpsc::Sender<BFTMpsc> {
         &self.sender
     }
 }
