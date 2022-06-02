@@ -8,6 +8,7 @@ use async_graphql::{
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
 use std::iter::IntoIterator;
+
 pub struct Contract(pub(crate) fuel_types::ContractId);
 
 impl From<fuel_types::ContractId> for Contract {
