@@ -2,6 +2,7 @@ use crate::helpers::{TestContext, TestSetupBuilder};
 use fuel_gql_client::client::{PageDirection, PaginationRequest};
 use fuel_vm::prelude::*;
 use rstest::rstest;
+
 const SEED: u64 = 2322;
 
 #[tokio::test]
