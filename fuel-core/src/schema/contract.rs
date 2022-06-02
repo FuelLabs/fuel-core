@@ -115,7 +115,6 @@ impl ContractBalanceQuery {
             &contract_id,
             &asset_id,
         );
-
         let balance = result.unwrap().unwrap_or_default();
 
         Ok(ContractBalance {
@@ -142,6 +141,7 @@ impl ContractBalanceQuery {
             first,
             last,
             |after: Option<AssetId>, before: Option<AssetId>, first, last| async move {
+                // Calculate direction of which to iterate through rocksdb
                 let (records_to_fetch, direction) = if let Some(first) = first {
                     (first, IterDirection::Forward)
                 } else if let Some(last) = last {
@@ -163,11 +163,15 @@ impl ContractBalanceQuery {
                     start = before;
                     end = after;
                 }
+
                 let mut balances = db
-                    .contract_balances(filter.contract.into(), start, Some(IterDirection::Forward))
+                    .contract_balances(filter.contract.into(), start, Some(direction))
                     .map(|balance| -> ContractBalance {
                         let asset_id = balance.unwrap();
 
+                        // Handle this unrwap safely
+                        // Couple thoughts - continue if fail occurs moving to next value
+                        // Which is either via an unwrap_or or some changing the above map to fail
                         let result =
                             fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
                                 &db,
@@ -187,13 +191,14 @@ impl ContractBalanceQuery {
                     .collect::<Vec<ContractBalance>>()
                     .into_iter();
 
-                if direction == IterDirection::Reverse {
-                    balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
-                }
                 let mut started = None;
                 if start.is_some() {
                     // skip initial result
                     started = balances.next();
+                }
+
+                if direction == IterDirection::Reverse {
+                    balances = balances.rev().collect::<Vec<ContractBalance>>().into_iter();
                 }
 
                 // take desired amount of results
@@ -207,11 +212,8 @@ impl ContractBalanceQuery {
                         }
                         true
                     })
-                    .take(records_to_fetch);
-                let mut balances: Vec<ContractBalance> = balances.collect();
-                if direction == IterDirection::Reverse {
-                    balances.reverse();
-                }
+                    .take(records_to_fetch + 1);
+                let balances: Vec<ContractBalance> = balances.collect();
 
                 let mut connection =
                     Connection::new(started.is_some(), records_to_fetch <= balances.len());
