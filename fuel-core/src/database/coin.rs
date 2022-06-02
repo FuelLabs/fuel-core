@@ -19,6 +19,7 @@ fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {
         .copied()
         .collect()
 }
+
 // 32 Bytes for Tx_id + 1 byte for output_index
 const SIZE_OF_UTXO_ID: usize = 264;
 
