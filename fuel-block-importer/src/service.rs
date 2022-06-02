@@ -1,12 +1,13 @@
 use crate::Config;
 use fuel_core_interfaces::block_importer::{ImportBlockBroadcast, ImportBlockMpsc};
+use parking_lot::Mutex;
 use tokio::{
     sync::{broadcast, mpsc},
     task::JoinHandle,
 };
 
 pub struct Service {
-    join: Option<JoinHandle<()>>,
+    join: Mutex<Option<JoinHandle<()>>>,
     sender: mpsc::Sender<ImportBlockMpsc>,
     broadcast: broadcast::Sender<ImportBlockBroadcast>,
 }
@@ -18,19 +19,23 @@ impl Service {
         Ok(Self {
             sender,
             broadcast,
-            join: None,
+            join: Mutex::new(None),
         })
     }
 
-    pub async fn start(&mut self) {
-        self.join = Some(tokio::spawn(async {}));
+    pub async fn start(&self) {
+        let mut join = self.join.lock();
+        if join.is_none() {
+            *join = Some(tokio::spawn(async {}));
+        }
     }
 
-    pub async fn stop(&mut self) {
-        let _ = self.sender.send(ImportBlockMpsc::Stop);
-        if let Some(join) = self.join.take() {
-            let _ = join.await;
+    pub async fn stop(&self) -> Option<JoinHandle<()>> {
+        let join = self.join.lock().take();
+        if join.is_some() {
+            let _ = self.sender.send(ImportBlockMpsc::Stop);
         }
+        join
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<ImportBlockBroadcast> {

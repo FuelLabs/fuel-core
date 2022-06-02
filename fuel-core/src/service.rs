@@ -10,6 +10,8 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
+use self::modules::Modules;
+
 pub(crate) mod genesis;
 pub mod graph_api;
 pub mod modules;
@@ -57,6 +59,8 @@ pub enum DbType {
 
 pub struct FuelService {
     tasks: Vec<JoinHandle<Result<(), AnyError>>>,
+    /// internal modules.
+    modules: Modules,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
@@ -99,12 +103,13 @@ impl FuelService {
         // start background tasks
         let mut tasks = vec![];
         let (bound_address, api_server) =
-            graph_api::start_server(config, database, modules).await?;
+            graph_api::start_server(config, database, &modules).await?;
         tasks.push(api_server);
 
         Ok(FuelService {
             tasks,
             bound_address,
+            modules,
         })
     }
 
@@ -127,10 +132,11 @@ impl FuelService {
     }
 
     /// Shutdown background tasks
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         for task in &self.tasks {
             task.abort();
         }
+        self.modules.stop().await;
     }
 }
 

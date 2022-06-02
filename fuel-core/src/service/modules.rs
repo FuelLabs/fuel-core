@@ -5,7 +5,9 @@ use fuel_block_importer::{Config as FuelBlockImporterConfig, Service as FuelBloc
 use fuel_block_producer::{Config as FuelBlockProducerConfig, Service as FuelBlockProducerService};
 use fuel_core_bft::{Config as FuelCoreBftConfig, Service as FuelCoreBftService};
 use fuel_sync::{Config as FuelSyncConfig, Service as FuelSyncService};
+use futures::future::join_all;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 
 pub struct Modules {
     pub tx_pool: Arc<TxPool>,
@@ -15,17 +17,34 @@ pub struct Modules {
     pub sync: Arc<FuelSyncService>,
 }
 
+impl Modules {
+    pub async fn stop(&self) {
+        let stops: Vec<JoinHandle<()>> = vec![
+            //self.tx_pool.stop().await,
+            self.block_importer.stop().await,
+            self.block_producer.stop().await,
+            self.bft.stop().await,
+            self.sync.stop().await,
+        ]
+        .into_iter()
+        .filter_map(|i| i)
+        .collect();
+
+        join_all(stops).await;
+    }
+}
+
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
     // initialize transaction pool
     let tx_pool = TxPool::new(database.clone(), config.clone());
     // Initialize and bind all components
-    let mut block_importer =
+    let block_importer =
         FuelBlockImporterService::new(&FuelBlockImporterConfig::default(), db).await?;
-    let mut block_producer =
+    let block_producer =
         FuelBlockProducerService::new(&FuelBlockProducerConfig::default(), db).await?;
-    let mut bft = FuelCoreBftService::new(&FuelCoreBftConfig::default(), db).await?;
-    let mut sync = FuelSyncService::new(&FuelSyncConfig::default()).await?;
+    let bft = FuelCoreBftService::new(&FuelCoreBftConfig::default(), db).await?;
+    let sync = FuelSyncService::new(&FuelSyncConfig::default()).await?;
     // let mut relayer = FuelRelayer::new(FuelRelayerConfig::default());
     // let mut p2p = FuelP2P::new(FuelP2PConfig::default());
     // let mut txpool = FuelTxpool::new(FuelTxpoolConfig::default());

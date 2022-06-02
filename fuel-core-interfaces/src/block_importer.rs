@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::model::{ConsensusVote, FuelBlock, SealedFuelBlock};
 
 /// Currently just placeholder for new block included and new block created events.
-/// TODO remove this after relayer merga passes
+/// TODO remove this after relayer pull request passes
 #[derive(Clone, Debug)]
 pub enum NewBlockEvent {
     /// send this to eth

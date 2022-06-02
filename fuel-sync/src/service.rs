@@ -6,35 +6,43 @@ use fuel_core_interfaces::{
     // relayer::RelayerEvent,
     sync::SyncMpsc,
 };
+use parking_lot::Mutex;
 use tokio::{sync::mpsc, task::JoinHandle};
 
 pub struct Service {
-    join: Option<JoinHandle<()>>,
+    join: Mutex<Option<JoinHandle<()>>>,
     sender: mpsc::Sender<SyncMpsc>,
 }
 
 impl Service {
     pub async fn new(_config: &Config) -> Result<Self, anyhow::Error> {
         let (sender, _receiver) = mpsc::channel(100);
-        Ok(Self { sender, join: None })
+        Ok(Self {
+            sender,
+            join: Mutex::new(None),
+        })
     }
 
     pub async fn start(
-        &mut self,
+        &self,
         _p2p_block: (),   // broadcast::Receiver<BlockBroadcast>,
         _p2p_request: (), // mpsc::Sender<P2PMpsc>,
         _relayer: (),     // mpsc::Sender<RelayerEvent>,
         _bft: mpsc::Sender<BFTMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,
     ) {
-        self.join = Some(tokio::spawn(async {}));
+        let mut join = self.join.lock();
+        if join.is_none() {
+            *join = Some(tokio::spawn(async {}));
+        }
     }
 
-    pub async fn stop(&mut self) {
-        let _ = self.sender.send(SyncMpsc::Stop);
-        if let Some(join) = self.join.take() {
-            let _ = join.await;
+    pub async fn stop(&self) -> Option<JoinHandle<()>> {
+        let join = self.join.lock().take();
+        if join.is_some() {
+            let _ = self.sender.send(SyncMpsc::Stop);
         }
+        join
     }
 
     pub fn sender(&self) -> &mpsc::Sender<SyncMpsc> {

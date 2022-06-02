@@ -2027,6 +2027,7 @@ dependencies = [
  "anyhow",
  "fuel-core-interfaces",
  "fuel-types",
+ "parking_lot 0.12.0",
  "tokio",
 ]
 
@@ -2037,6 +2038,7 @@ dependencies = [
  "anyhow",
  "fuel-core-interfaces",
  "fuel-types",
+ "parking_lot 0.12.0",
  "tokio",
 ]
 
@@ -2101,6 +2103,7 @@ dependencies = [
  "anyhow",
  "fuel-core-interfaces",
  "fuel-types",
+ "parking_lot 0.12.0",
  "tokio",
 ]
 
@@ -2257,6 +2260,7 @@ dependencies = [
  "anyhow",
  "fuel-core-interfaces",
  "fuel-types",
+ "parking_lot 0.12.0",
  "tokio",
 ]
 

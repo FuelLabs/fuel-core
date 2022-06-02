@@ -29,7 +29,7 @@ use tracing::info;
 pub async fn start_server(
     config: Config,
     db: Database,
-    modules: Modules,
+    modules: &Modules,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
