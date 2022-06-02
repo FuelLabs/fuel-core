@@ -172,7 +172,7 @@ impl ContractBalanceQuery {
                     started = balances_iter.next();
                 }
 
-                let balances: Result<Vec<ContractBalance>, KvStoreError> = balances_iter
+                let balances  = balances_iter
                     .take(records_to_fetch + 1)
                     .map(|balance| {
                         let balance = balance?;
@@ -183,8 +183,7 @@ impl ContractBalanceQuery {
                             asset_id: balance.0,
                         })
                     })
-                    .collect();
-                let mut balances = balances?;
+                    .collect::<Result<Vec<ContractBalance>, KvStoreError>>()?;
 
                 let has_next_page = balances.len() > records_to_fetch;
 
