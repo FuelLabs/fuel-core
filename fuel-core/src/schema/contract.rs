@@ -163,7 +163,6 @@ impl ContractBalanceQuery {
                     start = before;
                     end = after;
                 }
-                // impl Iterator<Item = ContractBalance>
                 let mut balances = db
                     .contract_balances(filter.contract.into(), start, Some(IterDirection::Forward))
                     .map(|balance| -> ContractBalance {
