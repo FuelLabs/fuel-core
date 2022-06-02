@@ -1,8 +1,10 @@
 use crate::database::{Database, KvStoreError};
 use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
 use crate::state::IterDirection;
-use async_graphql::connection::{query, Connection, Edge, EmptyFields};
-use async_graphql::{Context, InputObject, Object};
+use async_graphql::{
+    connection::{query, Connection, Edge, EmptyFields},
+    Context, InputObject, Object,
+};
 use fuel_storage::Storage;
 use fuel_vm::prelude::Contract as FuelVmContract;
 use std::iter::IntoIterator;
