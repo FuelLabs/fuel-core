@@ -151,7 +151,10 @@ impl ContractBalanceQuery {
                     (0, IterDirection::Forward)
                 };
 
-                if (first.is_some() && before.is_some()) || (after.is_some() && before.is_some()) {
+                if (first.is_some() && before.is_some())
+                    || (after.is_some() && before.is_some())
+                    || (last.is_some() && after.is_some())
+                {
                     return Err(anyhow!("Wrong argument combination"));
                 }
 
