@@ -376,6 +376,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
+        use fuel_tx::Transaction;
 
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
         let topics = vec!["create_tx".into(), "send_tx".into()];
@@ -405,7 +406,8 @@ mod tests {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
                                 message_sent = true;
-                                node_a.publish_message(selected_topic.clone(), FuelGossipsubMessage::BroadcastNewTx).unwrap();
+                                let default_tx = FuelGossipsubMessage::BroadcastNewTx(Transaction::default());
+                                node_a.publish_message(selected_topic.clone(), default_tx).unwrap();
                             }
                         }
                     }
@@ -417,10 +419,16 @@ mod tests {
                         if topic_hash != selected_topic.hash() {
                             tracing::error!("Wrong topic hash, expected: {} - actual: {}", selected_topic.hash(), topic_hash);
                             panic!("Wrong Topic");
-                        } else if FuelGossipsubMessage::BroadcastNewTx != message {
-                            tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::BroadcastNewTx, message);
-                            panic!("Wrong Message")
                         }
+
+                        if let FuelGossipsubMessage::BroadcastNewTx(message) = message {
+                            if message != Transaction::default() {
+                                tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::BroadcastNewTx(Transaction::default()), message);
+                                panic!("Wrong Message")
+
+                            }
+                        }
+
                         break
                     }
 
