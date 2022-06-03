@@ -2176,6 +2176,8 @@ dependencies = [
  "async-trait",
  "bincode",
  "ctor",
+ "fuel-core-interfaces",
+ "fuel-tx",
  "futures",
  "futures-timer",
  "ip_network",
