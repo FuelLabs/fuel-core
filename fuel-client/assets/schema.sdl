@@ -180,6 +180,38 @@ type ContractBalance {
 	assetId: AssetId!
 }
 
+type ContractBalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ContractBalanceEdge!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ContractBalanceEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: ContractBalance!
+}
+
+input ContractBalanceFilterInput {
+	"""
+	Filter assets based on the `contractId` field
+	"""
+	contract: ContractId!
+}
+
 type ContractCreated {
 	contract: Contract!
 	stateRoot: Bytes32!
@@ -326,6 +358,7 @@ type Query {
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
+	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 }
 

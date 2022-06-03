@@ -1,12 +1,13 @@
 use crate::{
     database::{
-        columns::{CONTRACTS, CONTRACT_UTXO_ID},
+        columns::{BALANCES, CONTRACTS, CONTRACT_UTXO_ID},
         Database,
     },
-    state::Error,
+    state::{Error, IterDirection, MultiKey},
 };
 use fuel_tx::UtxoId;
-use fuel_vm::prelude::{Contract, ContractId, Storage};
+use fuel_types::Word;
+use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
 
 impl Storage<ContractId, Contract> for Database {
@@ -46,6 +47,23 @@ impl Storage<ContractId, UtxoId> for Database {
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
         self.exists(key.as_ref(), CONTRACT_UTXO_ID)
+    }
+}
+
+impl Database {
+    pub fn contract_balances(
+        &self,
+        contract: ContractId,
+        start_asset: Option<AssetId>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
+        self.iter_all::<Vec<u8>, Word>(
+            BALANCES,
+            Some(contract.as_ref().to_vec()),
+            start_asset.map(|asset_id| MultiKey::new((&contract, &asset_id)).as_ref().to_vec()),
+            direction,
+        )
+        .map(|res| res.map(|(key, balance)| (AssetId::new(key[32..].try_into().unwrap()), balance)))
     }
 }
 

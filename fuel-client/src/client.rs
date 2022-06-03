@@ -414,6 +414,19 @@ impl FuelClient {
         let balances = self.query(query).await?.balances.into();
         Ok(balances)
     }
+
+    pub async fn contract_balances(
+        &self,
+        contract: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
+        let contract_id: schema::ContractId = contract.parse()?;
+        let query = schema::contract::ContractBalancesQuery::build(&(contract_id, request).into());
+
+        let balances = self.query(query).await?.contract_balances.into();
+
+        Ok(balances)
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
