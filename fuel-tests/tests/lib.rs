@@ -1,5 +1,6 @@
 mod balances;
 mod blocks;
+mod chain;
 mod coin;
 mod contract;
 mod dap;
