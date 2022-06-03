@@ -26,6 +26,7 @@ pub struct FuelBlockHeader {
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
     /// The block producer time
+    #[serde(with = "ts_seconds")]
     pub time: DateTime<Utc>,
     /// The block producer public key
     pub producer: Address,
