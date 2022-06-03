@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
-    BroadcastNewTx(Transaction),
-    BroadcastNewBlock(FuelBlock),
-    BroadcastConensusVote(Vote),
+    NewTx(Transaction),
+    NewBlock(FuelBlock),
+    ConensusVote(Vote),
 }

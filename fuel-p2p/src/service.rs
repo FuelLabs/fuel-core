@@ -33,6 +33,7 @@ pub struct FuelP2PService {
     swarm: Swarm<FuelBehaviour<BincodeCodec>>,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
 pub enum FuelP2PEvent {
     Behaviour(FuelBehaviourEvent),
@@ -406,7 +407,7 @@ mod tests {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
                                 message_sent = true;
-                                let default_tx = FuelGossipsubMessage::BroadcastNewTx(Transaction::default());
+                                let default_tx = FuelGossipsubMessage::NewTx(Transaction::default());
                                 node_a.publish_message(selected_topic.clone(), default_tx).unwrap();
                             }
                         }
@@ -421,9 +422,9 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
-                        if let FuelGossipsubMessage::BroadcastNewTx(message) = message {
+                        if let FuelGossipsubMessage::NewTx(message) = message {
                             if message != Transaction::default() {
-                                tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::BroadcastNewTx(Transaction::default()), message);
+                                tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::NewTx(Transaction::default()), message);
                                 panic!("Wrong Message")
 
                             }
