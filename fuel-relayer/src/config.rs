@@ -1,25 +1,30 @@
 use ethers_core::types::{H160, H256};
 use fuel_core_interfaces::model::DaBlockHeight;
+use once_cell::sync::Lazy;
+use sha3::{Digest, Keccak256};
 use std::{str::FromStr, time::Duration};
 
-lazy_static::lazy_static! {
-    /// Hash over solidity function: `DepositMade(uint32,address,address,uint8,uint256,uint256)`
-    pub static ref ETH_LOG_ASSET_DEPOSIT : H256 = H256::from_str("0x34dccbe410bb771d28929a3f1ada2323bfb6ae501200c02dc871b287fb558759").unwrap();
-    /// Hash over solidity function: `WithdrawalMade(address,address,address,uint256)`
-    pub static ref ETH_LOG_ASSET_WITHDRAWAL : H256 = H256::from_str("0x779c18fbb35b88ab773ee6b3d87e1d10eb58021e64e0d7808db646f49403d20b").unwrap();
-    /// Hash over solidity function: `ValidatorRegistration(bytes,bytes)`
-    pub static ref ETH_LOG_VALIDATOR_REGISTRATION : H256 = H256::from_str("0xb880ae9a41c67ab61e670929983ea383810f2a09e384b5d1e40a6a8d123e643f").unwrap();
-    /// Hash over solidity function: `ValidatorUnregistration(bytes)`
-    pub static ref ETH_LOG_VALIDATOR_UNREGISTRATION : H256 = H256::from_str("0xf47db10f5afa43b31c8a897bb251641a7d2b84011c567c906a5df347c183df14").unwrap();
-    /// Hash over solidity function: `Deposit(address,uint256)`
-    pub static ref ETH_LOG_DEPOSIT : H256 = H256::from_str("0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c").unwrap();
-    /// Hash over solidity function: `Withdrawal(address,uint256)`
-    pub static ref ETH_LOG_WITHDRAWAL : H256 = H256::from_str("0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65").unwrap();
-    /// Hash over solidity function: `Delegation(address,bytes[],uint256[])`
-    pub static ref ETH_LOG_DELEGATION : H256 = H256::from_str("0xb304243c5b5465a0f6a6b44be45b6906650d542c8e1dd33b0630f72b2f454081").unwrap();
-    /// Hash over solidity function: `BlockCommitted(bytes32,uint32)`
-    pub static ref ETH_FUEL_BLOCK_COMMITED : H256 = H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872").unwrap();
+pub fn keccak256(data: &'static str) -> H256 {
+    let out = Keccak256::digest(data.as_bytes());
+    H256::from_slice(out.as_slice())
 }
+
+pub(crate) static ETH_LOG_ASSET_DEPOSIT: Lazy<H256> =
+    Lazy::new(|| keccak256("DepositMade(uint32,address,address,uint8,uint256,uint256)"));
+#[allow(dead_code)]
+pub(crate) static ETH_LOG_ASSET_WITHDRAWAL: Lazy<H256> =
+    Lazy::new(|| keccak256("WithdrawalMade(address,address,address,uint256)"));
+pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
+    Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
+pub(crate) static ETH_LOG_VALIDATOR_UNREGISTRATION: Lazy<H256> =
+    Lazy::new(|| keccak256("ValidatorUnregistration(bytes)"));
+pub(crate) static ETH_LOG_DEPOSIT: Lazy<H256> = Lazy::new(|| keccak256("Deposit(address,uint256)"));
+pub(crate) static ETH_LOG_WITHDRAWAL: Lazy<H256> =
+    Lazy::new(|| keccak256("Withdrawal(address,uint256)"));
+pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
+    Lazy::new(|| keccak256("Delegation(address,bytes[],uint256[])"));
+pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
+    Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
 
 pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
 
@@ -96,5 +101,49 @@ impl Config {
 
     pub fn eth_v2_block_commit_contract(&self) -> H160 {
         self.eth_v2_block_commit_contract
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::config::*;
+
+    #[test]
+    pub fn test_function_signatures() {
+        assert_eq!(
+            *ETH_LOG_ASSET_DEPOSIT,
+            H256::from_str("0x34dccbe410bb771d28929a3f1ada2323bfb6ae501200c02dc871b287fb558759")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_ASSET_WITHDRAWAL,
+            H256::from_str("0x779c18fbb35b88ab773ee6b3d87e1d10eb58021e64e0d7808db646f49403d20b")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_VALIDATOR_REGISTRATION,
+            H256::from_str("0xb880ae9a41c67ab61e670929983ea383810f2a09e384b5d1e40a6a8d123e643f")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_DEPOSIT,
+            H256::from_str("0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_WITHDRAWAL,
+            H256::from_str("0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_DELEGATION,
+            H256::from_str("0xb304243c5b5465a0f6a6b44be45b6906650d542c8e1dd33b0630f72b2f454081")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_FUEL_BLOCK_COMMITED,
+            H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872")
+                .unwrap()
+        );
     }
 }
