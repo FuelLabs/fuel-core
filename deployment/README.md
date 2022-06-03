@@ -110,7 +110,6 @@ You will need to customize the following environment variables as needed (for va
 
 | ENV Variable                   |  Script Usage             | Description                                                                                       |
 |--------------------------------|---------------------------|---------------------------------------------------------------------------------------------------|
-| letsencrypt_email              |  fuel-core-ingress-deploy | the email address for requesting & renewing your lets encrypt certificate                         |
 | k8s_provider                   |  all                      | your kubernetes provider name, possible options: eks                                              |
 | k8s_namespace                  |  fuel-core-deploy         | your kubernetes namespace for fuel-core deployment                                                |
 | fuel_core_ingress_dns          |  fuel-core-ingress-deploy | the custom dns address for the fuel-core ingress                                                  | 
@@ -118,7 +117,6 @@ You will need to customize the following environment variables as needed (for va
 | fuel_core_image_repository     |  fuel-core-deploy         | fuel-core ghcr image registry URI                                                                 |   
 | fuel_core_image_tag            |  fuel-core-deploy         | fuel-core ghcr image tag                                                                          | 
 | fuel_core_pod_replicas         |  fuel-core-deploy         | number of fuel-core pod replicas                                                                  | 
-| grafana_ingress_dns            |  fuel-core-ingress-deploy | the custom dns address for the grafana ingress                                                    | 
 | pvc_storage_class              |  fuel-core-deploy         | Storage class for the persistent volume                                                           | 
 | pvc_storage_requests           |  fuel-core-deploy         | Th size of the request for the persistent volume                                                  |
 
@@ -202,35 +200,6 @@ If you need to cleanup your existing ingress resource, run the [fuel-core-ingres
   ./fuel-core-ingress-delete.sh
 ```
 
-## Deploying Prometheus-Grafana on k8s
-
-[Prometheus][prometheus] and [Grafana][grafana] are used for monitoring and visualization of the k8s cluster and fuel-core deployment(s) metrics.
-
-The prometheus-grafana stack is deployed to the monitoring namespace via create-k8s script:
-
-In order to access the grafana dashboard, you can will need to run:
-
-```bash
-kubectl port-forward svc/kube-prometheus-grafana 3001:80 -n monitoring
-```
-
-You can then access the grafana dashboard via localhost:3001. 
-
-For grafana console access, the default username is 'admin' and password is 'prom-operator',
-
-If you want to access the grafana dashboard from a custom DNS address, you need to select 'grafana_ingress_dns' env that is a custom DNS address available in your owned DNS domain.
-
-Check that the grafana ingress is setup via:
-
-```bash
-% kubectl get ingress -n monitoring
-NAME                 CLASS    HOSTS                    ADDRESS                              PORTS     AGE
-monitoring-ingress   <none>   monitoring.example.com   xxxxxx.elb.us-east-1.amazonaws.com   80, 443   19d
-
-```
-
-Then create a DNS record based on that ADDRESS value in your DNS registrar.
-
 [add-users-aws-auth]: https://docs.aws.amazon.com/eks/latest/userguide/add-user-role.html
 [aws-cli]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 [aws-eks]: https://aws.amazon.com/eks/
@@ -251,7 +220,4 @@ Then create a DNS record based on that ADDRESS value in your DNS registrar.
 [ingress-controller]: https://github.com/kubernetes/ingress-nginx
 [ingress-def]: https://kubernetes.io/docs/concepts/services-networking/ingress/
 [kubectl-cli]: https://kubernetes.io/docs/tasks/tools/
-[monitoring-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/fuel-core-ingress-deploy.sh
-[monitoring-ingress-deploy]: https://github.com/FuelLabs/fuel-core/blob/master/deployment/scripts/fuel-core-ingress-deploy.sh
-[prometheus]: https://prometheus.io/
 [terraform]: https://learn.hashicorp.com/tutorials/terraform/install-cli
