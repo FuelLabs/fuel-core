@@ -1,8 +1,6 @@
 ---
 source: fuel-client/src/client/schema/chain.rs
-assertion_line: 26
 expression: operation.query
-
 ---
 query Query {
   chain {
@@ -17,6 +15,19 @@ query Query {
       transactions {
         id
       }
+    }
+    consensusParameters {
+      contractMaxSize
+      maxInputs
+      maxOutputs
+      maxWitnesses
+      maxGasPerTx
+      maxScriptLength
+      maxScriptDataLength
+      maxStaticContracts
+      maxStorageSlots
+      maxPredicateLength
+      maxPredicateDataLength
     }
   }
 }

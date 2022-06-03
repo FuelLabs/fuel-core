@@ -88,6 +88,7 @@ type ChainInfo {
 	latestBlock: Block!
 	baseChainHeight: U64!
 	peerCount: Int!
+	consensusParameters: ConsensusParameters!
 }
 
 type ChangeOutput {
@@ -151,6 +152,20 @@ type CoinOutput {
 enum CoinStatus {
 	UNSPENT
 	SPENT
+}
+
+type ConsensusParameters {
+	contractMaxSize: U64!
+	maxInputs: U64!
+	maxOutputs: U64!
+	maxWitnesses: U64!
+	maxGasPerTx: U64!
+	maxScriptLength: U64!
+	maxScriptDataLength: U64!
+	maxStaticContracts: U64!
+	maxStorageSlots: U64!
+	maxPredicateLength: U64!
+	maxPredicateDataLength: U64!
 }
 
 type Contract {
