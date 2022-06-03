@@ -59,12 +59,14 @@ impl FinalizationQueue {
         chain_id: u64,
         contract_address: H160,
         private_key: &[u8],
+        chain_height: BlockHeight,
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
         let blocks = PendingBlocks::new(
             chain_id,
             contract_address,
             private_key,
+            chain_height,
             last_commited_finalized_fuel_height,
         );
         Self {
@@ -112,7 +114,7 @@ impl FinalizationQueue {
     }
 
     /// propagate new fuel block to pending_blocks
-    pub fn handle_fuel_block(&mut self, block: &Arc<SealedFuelBlock>) {
+    pub fn handle_fuel_block(&mut self, block: &SealedFuelBlock) {
         self.blocks.set_chain_height(block.header.height)
     }
 
@@ -184,8 +186,7 @@ impl FinalizationQueue {
         self.append_da_events(event, da_height).await;
     }
 
-    /// At begining we will ignore all event until event for new fuel block commit commes
-    /// after that syncronization can start.
+    /// Append da events before to finalization queue.
     async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: DaBlockHeight) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
@@ -318,6 +319,7 @@ mod tests {
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+            BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
 
@@ -360,6 +362,7 @@ mod tests {
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+            BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
 
@@ -395,6 +398,7 @@ mod tests {
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+            BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
 
@@ -443,6 +447,7 @@ mod tests {
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+            BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
 
@@ -491,6 +496,7 @@ mod tests {
             H160::zero(),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+            BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
 

@@ -4,6 +4,9 @@ use once_cell::sync::Lazy;
 use sha3::{Digest, Keccak256};
 use std::{str::FromStr, time::Duration};
 
+pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
+pub(crate) const NUMBER_OF_TRIES_FOR_INITIAL_SYNC: u64 = 10;
+
 pub fn keccak256(data: &'static str) -> H256 {
     let out = Keccak256::digest(data.as_bytes());
     H256::from_slice(out.as_slice())
@@ -25,8 +28,6 @@ pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
     Lazy::new(|| keccak256("Delegation(address,bytes[],uint256[])"));
 pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
     Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
-
-pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
 
 #[derive(Clone, Debug)]
 pub struct Config {

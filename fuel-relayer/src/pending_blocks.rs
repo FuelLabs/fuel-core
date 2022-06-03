@@ -25,11 +25,11 @@ use tracing::{debug, error, info, warn};
 pub struct PendingBlocks {
     signer: LocalWallet,
     contract_address: H160,
-    // Pending block commits seen on DA layer and waiting to be finalized
+    /// Pending block commits seen on DA layer and waiting to be finalized
     pending_block_commits: VecDeque<PendingBlock>,
-    // Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
+    /// Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
     chain_height: BlockHeight,
-    // Last known commited and finalized fuel height that is known by client.
+    /// Last known commited and finalized fuel height that is known by client.
     last_commited_finalized_fuel_height: BlockHeight,
 }
 
@@ -84,6 +84,7 @@ impl PendingBlocks {
         chain_id: u64,
         contract_address: H160,
         private_key: &[u8],
+        chain_height: BlockHeight,
         last_commited_finalized_fuel_height: BlockHeight,
     ) -> Self {
         // it is some random key for now
@@ -94,7 +95,7 @@ impl PendingBlocks {
         Self {
             signer,
             contract_address,
-            chain_height: BlockHeight::from(10u64), // TODO
+            chain_height,
             pending_block_commits: VecDeque::new(),
             last_commited_finalized_fuel_height,
         }
@@ -154,8 +155,6 @@ impl PendingBlocks {
         }
 
         debug!("Bundle from:{from_height}, to:{to_height}");
-        //.expect("This block should be present as we couldn't create new block");
-        //from_height = from_height + BlockHeight::from(1u64);
         let mut bundle = Vec::new();
         for height in from_height.as_usize()..=to_height.as_usize() {
             if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
@@ -210,7 +209,7 @@ impl PendingBlocks {
         if self.pending_block_commits.is_empty() {
             let lcffh = self.last_commited_finalized_fuel_height;
             if lcffh + 1u64.into() != height {
-                error!("We have missing logs from LCFFH {lcffh} to new height {height}")
+                error!("Missing block commitments between last finalized commitment {lcffh} to new height {height}")
             }
             // no pending commits, add one
             self.pending_block_commits
@@ -255,7 +254,6 @@ impl PendingBlocks {
                     }
                     pending.da_height = da_height;
                     pending.reverted = false;
-                    pending.block_height = height;
                     pending.block_root = block_root;
                     break;
                 }
@@ -294,7 +292,6 @@ impl PendingBlocks {
                     }
                     pending.da_height = da_height;
                     pending.reverted = true;
-                    pending.block_height = height;
                     pending.block_root = block_root;
                 }
             }
@@ -401,7 +398,13 @@ mod tests {
         let private_key =
             hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
                 .unwrap();
-        PendingBlocks::new(0, H160::zero(), &private_key, last_commited_fuel_block)
+        PendingBlocks::new(
+            0,
+            H160::zero(),
+            &private_key,
+            10u64.into(),
+            last_commited_fuel_block,
+        )
     }
 
     #[test]
@@ -491,7 +494,7 @@ mod tests {
         let mut blocks = block_commit(1u64.into());
         blocks.handle_block_commit(b1, 3u64.into(), 9, false);
         assert!(logs_contain(
-            "We have missing logs from LCFFH 1 to new height 3"
+            "Missing block commitments between last finalized commitment 1 to new height 3"
         ))
     }
 

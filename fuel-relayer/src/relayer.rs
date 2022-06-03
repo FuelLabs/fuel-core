@@ -66,6 +66,7 @@ impl Relayer {
         requests: mpsc::Receiver<RelayerEvent>,
         fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
     ) -> Self {
+        let chain_height = db.get_chain_height().await;
         let last_commited_finalized_fuel_height =
             db.get_last_commited_finalized_fuel_height().await;
 
@@ -73,6 +74,7 @@ impl Relayer {
             config.eth_chain_id(),
             config.eth_v2_block_commit_contract(),
             private_key,
+            chain_height,
             last_commited_finalized_fuel_height,
         );
 
@@ -170,7 +172,6 @@ impl Relayer {
         loop {
             // 1. get best block and its hash sync over it, and push it over
             self.queue.clear();
-            //sself.queue.push_back(last_diff.clone());
 
             best_block = handle_interrupt!(self, provider.get_block_number())??;
             // there is not get block latest from ethers so we need to do it in two steps to get hash
@@ -235,7 +236,7 @@ impl Relayer {
     {
         self.queue.load_validators(self.db.as_mut()).await;
 
-        let mut number_of_tries = 10;
+        let mut number_of_tries = config::NUMBER_OF_TRIES_FOR_INITIAL_SYNC;
         let (best_block, mut da_blocks_watcher, mut logs_watcher) = loop {
             match self.initial_sync(&provider).await {
                 Ok(watcher) => break watcher,
