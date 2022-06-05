@@ -377,14 +377,13 @@ jobs:
 
     steps:
       - name: Deploy Fuel-Core Developer Environment
-        uses: peter-evans/repository-dispatch@v2
+        uses: benc-uk/workflow-dispatch@v1
         # if: github.ref == 'refs/heads/master'
         with:
-          # Personal Access Token to trigger repository_dispatch actions
+          workflow: Deploy Fuel-Core on k8s
+          repo: FuelLabs/fuel-deployment
           token: ${{ secrets.REPO_TOKEN }}
-          repository: FuelLabs/fuel-deployment
-          event-type: deploy-fuel-core-dev
-          client-payload: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
         env:
           CONFIG: "fuel-dev1"
           K8S: "eks"
