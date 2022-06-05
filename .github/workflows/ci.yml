@@ -375,7 +375,7 @@ jobs:
     # Deploy Latest Fuel-Core Release
     runs-on: ubuntu-latest
     needs:
-      - Docker meta
+      - publish-docker-image
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
