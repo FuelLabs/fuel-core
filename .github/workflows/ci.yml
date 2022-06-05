@@ -224,14 +224,12 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
       - name: Echo Output
-        echo:
-          message: |
-            Version: {{ steps.meta.outputs.version }}
-            Tags: {{ steps.meta.outputs.tags }}
-            Labels: {{ steps.meta.outputs.labels }}
-            JSON: {{ steps.meta.outputs.json }}
-            Bake-file: ${{ steps.meta.outputs.bake-file }}
-          append: true
+        run: |
+            echo Version: {{ steps.meta.outputs.version }}
+            echo Tags: {{ steps.meta.outputs.tags }}
+            echo Labels: {{ steps.meta.outputs.labels }}
+            echo JSON: {{ steps.meta.outputs.json }}
+            echo Bake-file: ${{ steps.meta.outputs.bake-file }}
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
