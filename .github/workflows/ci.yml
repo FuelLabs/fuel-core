@@ -72,7 +72,7 @@ jobs:
             args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
             skip-error: true
     # disallow any job that takes longer than 30 minutes
-    timeout-minutes: 1
+    timeout-minutes: 30
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
       - uses: actions/checkout@v2
