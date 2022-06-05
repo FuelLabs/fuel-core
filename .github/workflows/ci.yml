@@ -374,7 +374,8 @@ jobs:
   deploy:
     # Deploy Latest Fuel-Core Release
     runs-on: ubuntu-latest
-
+    needs:
+      - Docker meta
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
@@ -389,6 +390,6 @@ jobs:
           K8S: "eks"
           CONFIG: "fuel-dev1"
           ENV: "fueldevsway.env"
-          TAG: github.tag
+          TAG: ${{ steps.meta.outputs.tags }}
           SHA: github.sha
           DELETE_INFRA: true
