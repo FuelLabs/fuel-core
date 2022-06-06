@@ -88,6 +88,7 @@ type ChainInfo {
 	latestBlock: Block!
 	baseChainHeight: U64!
 	peerCount: Int!
+	consensusParameters: ConsensusParameters!
 }
 
 type ChangeOutput {
@@ -153,6 +154,20 @@ enum CoinStatus {
 	SPENT
 }
 
+type ConsensusParameters {
+	contractMaxSize: U64!
+	maxInputs: U64!
+	maxOutputs: U64!
+	maxWitnesses: U64!
+	maxGasPerTx: U64!
+	maxScriptLength: U64!
+	maxScriptDataLength: U64!
+	maxStaticContracts: U64!
+	maxStorageSlots: U64!
+	maxPredicateLength: U64!
+	maxPredicateDataLength: U64!
+}
+
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
@@ -163,6 +178,38 @@ type ContractBalance {
 	contract: ContractId!
 	amount: U64!
 	assetId: AssetId!
+}
+
+type ContractBalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ContractBalanceEdge!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ContractBalanceEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: ContractBalance!
+}
+
+input ContractBalanceFilterInput {
+	"""
+	Filter assets based on the `contractId` field
+	"""
+	contract: ContractId!
 }
 
 type ContractCreated {
@@ -311,6 +358,7 @@ type Query {
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
+	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 }
 
