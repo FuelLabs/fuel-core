@@ -1,5 +1,5 @@
 pub use super::BlockHeight;
-use chrono::{serde::ts_seconds, DateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use fuel_crypto::Hasher;
 use fuel_tx::{Address, Bytes32, Transaction};
 
@@ -21,8 +21,7 @@ pub struct FuelBlockHeader {
     pub prev_root: Bytes32,
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
-    /// The block producer time
-    #[serde(with = "ts_seconds")]
+    /// The block producer time    
     pub time: DateTime<Utc>,
     /// The block producer public key
     pub producer: Address,
