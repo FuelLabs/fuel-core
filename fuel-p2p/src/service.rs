@@ -47,7 +47,11 @@ impl FuelP2PService {
 
         // configure and build P2P Serivce
         let transport = build_transport(local_keypair.clone()).await;
-        let behaviour = FuelBehaviour::new(local_keypair, &config, BincodeCodec);
+        let behaviour = FuelBehaviour::new(
+            local_keypair,
+            &config,
+            BincodeCodec::new(config.max_block_size),
+        );
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
         // set up node's address to listen on
@@ -184,6 +188,7 @@ mod tests {
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 4000,
+            max_block_size: 100_000,
             bootstrap_nodes: vec![],
             enable_mdns: false,
             max_peers_connected: 50,
@@ -442,6 +447,9 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works() {
+        use fuel_core_interfaces::model::{FuelBlock, FuelBlockHeader};
+        use fuel_tx::Transaction;
+
         let mut p2p_config = build_p2p_config("request_response_works");
 
         // Node A
@@ -460,27 +468,40 @@ mod tests {
 
         let (tx_test_end, mut rx_test_end) = mpsc::channel(1);
 
+        let mut request_sent = false;
+
         loop {
             tokio::select! {
                 message_sent = rx_test_end.recv() => {
                     // we received a signal to end the test
-                    assert_eq!(message_sent, Some(true), "Message not received successfully!");
+                    assert_eq!(message_sent, Some(true), "Received wrong block height!");
                     break;
                 }
                 node_a_event = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
                             // 0. verifies that we've got at least a single peer address to request messsage from
-                            if !peer_addresses.is_empty() {
+                            if !peer_addresses.is_empty() && !request_sent {
+                                request_sent = true;
+
                                 // 1. Simulating Oneshot channel from the NetworkOrchestrator
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
-                                assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+
+                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
+                                assert!(node_a.send_request_msg(None, requested_block_height, tx_orchestrator).is_ok());
 
                                 let tx_test_end = tx_test_end.clone();
                                 tokio::spawn(async move {
                                     // 4. Simulating NetworkOrchestrator receving a message from Node B
-                                    let message_sent = matches!(rx_orchestrator.await, Ok(Ok(_)));
-                                    tx_test_end.send(message_sent).await
+                                    let response_message = rx_orchestrator.await;
+
+                                    if let Ok(Ok(ResponseMessage::ResponseBlock(block))) = response_message {
+                                        let _ = tx_test_end.send(block.header.height == 0_u64.into()).await;
+                                    } else {
+                                        tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
+                                        panic!("Message not received successfully!")
+                                    }
+
                                 });
                             }
                         }
@@ -491,7 +512,12 @@ mod tests {
                 node_b_event = node_b.next_event() => {
                     // 2. Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = node_b_event {
-                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock);
+                        let block = FuelBlock {
+                            header: FuelBlockHeader::default(),
+                            transactions: vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()],
+                        };
+
+                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock(block));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -542,7 +568,8 @@ mod tests {
                                 assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 0);
 
                                 // Request successfully sent
-                                assert!(node_a.send_request_msg(None, RequestMessage::RequestBlock, tx_orchestrator).is_ok());
+                                let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
+                                assert!(node_a.send_request_msg(None, requested_block_height, tx_orchestrator).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
