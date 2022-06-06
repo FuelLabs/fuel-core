@@ -21,7 +21,7 @@ pub struct FuelBlockHeader {
     pub prev_root: Bytes32,
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
-    /// The block producer time    
+    /// The block producer time
     pub time: DateTime<Utc>,
     /// The block producer public key
     pub producer: Address,
