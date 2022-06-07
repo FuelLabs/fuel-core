@@ -1,6 +1,6 @@
 use crate::{
     log::{AssetDepositLog, EthEventLog},
-    pending_blocks::PendingBlocks,
+    pending_blocks::{IsReverted, PendingBlocks},
     validators::Validators,
 };
 use ethers_core::types::{Log, H160};
@@ -136,6 +136,39 @@ impl FinalizationQueue {
         }
     }
 
+    pub fn remove_bundled_reverted_events(&mut self) {
+        // apply all reverted event
+        if !self.bundled_removed_eth_events.is_empty() {
+            info!(
+                "Reorg happened on ethereum. Reverting {} logs",
+                self.bundled_removed_eth_events.len()
+            );
+
+            let mut lowest_removed_da_height = DaBlockHeight::MAX;
+
+            for (da_height, events) in
+                std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
+            {
+                lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
+                // mark all removed pending block commits as reverted.
+                for event in events {
+                    if let EthEventLog::FuelBlockCommited { block_root, height } = event {
+                        self.blocks.handle_block_commit(
+                            block_root,
+                            height.into(),
+                            da_height,
+                            IsReverted::True,
+                        );
+                    }
+                }
+            }
+            // remove all blocks that were reverted. In best case those blocks heights and events are going
+            // to be reinserted in append eth events.
+            self.pending
+                .retain(|diff| diff.da_height < lowest_removed_da_height);
+        }
+    }
+
     /// Handle eth log events
     pub async fn append_eth_log(&mut self, log: Log) {
         let event = EthEventLog::try_from(&log);
@@ -156,32 +189,7 @@ impl FinalizationQueue {
             self.bundle_removed_events(event, da_height);
             return;
         }
-        // apply all reverted event
-        if !self.bundled_removed_eth_events.is_empty() {
-            info!(
-                "Reorg happened on ethereum. Reverting {} logs",
-                self.bundled_removed_eth_events.len()
-            );
-
-            let mut lowest_removed_da_height = DaBlockHeight::MAX;
-
-            for (da_height, events) in
-                std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
-            {
-                lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
-                // mark all removed pending block commits as reverted.
-                for event in events {
-                    if let EthEventLog::FuelBlockCommited { block_root, height } = event {
-                        self.blocks
-                            .handle_block_commit(block_root, height.into(), da_height, true);
-                    }
-                }
-            }
-            // remove all blocks that were reverted. In best case those blocks heights and events are going
-            // to be reinserted in append eth events.
-            self.pending
-                .retain(|diff| diff.da_height < lowest_removed_da_height);
-        }
+        self.remove_bundled_reverted_events();
         // apply new event to pending queue
         self.append_da_events(event, da_height).await;
     }
@@ -231,8 +239,12 @@ impl FinalizationQueue {
                 last_diff.validators.insert(staking_key, None);
             }
             EthEventLog::FuelBlockCommited { height, block_root } => {
-                self.blocks
-                    .handle_block_commit(block_root, (height).into(), da_height, false);
+                self.blocks.handle_block_commit(
+                    block_root,
+                    (height).into(),
+                    da_height,
+                    IsReverted::False,
+                );
             }
             EthEventLog::Unknown => (),
         }
@@ -251,6 +263,8 @@ impl FinalizationQueue {
             );
             return;
         }
+        self.remove_bundled_reverted_events();
+
         while let Some(diff) = self.pending.front_mut() {
             if diff.da_height > finalized_da_height {
                 break;
@@ -523,5 +537,79 @@ mod tests {
         queue.commit_diffs(&mut db, 2).await;
         assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
         assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+    }
+
+    #[tokio::test]
+    async fn test_reverting_pending_logs() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let v1: Address = rng.gen();
+        let v2: Address = rng.gen();
+        let c1: Address = rng.gen();
+        let c2: Address = rng.gen();
+
+        let mut queue = FinalizationQueue::new(
+            0,
+            H160::zero(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(10u64),
+            BlockHeight::from(0u64),
+        );
+
+        let reg1 = eth_log_validator_registration(1, v1, c1);
+        let mut reg1_revert = reg1.clone();
+        reg1_revert.removed = Some(true);
+
+        let reg2 = eth_log_validator_registration(2, v2, c2);
+        let mut reg2_revert = reg2.clone();
+        reg2_revert.removed = Some(true);
+
+        let unreg1 = eth_log_validator_unregistration(0, v1);
+
+        queue.append_eth_logs(vec![reg1, reg2]).await;
+
+        assert_eq!(queue.pending.len(), 2);
+
+        queue
+            .append_eth_logs(vec![reg1_revert, reg2_revert, unreg1])
+            .await;
+
+        assert_eq!(queue.pending.len(), 1)
+    }
+
+    #[tokio::test]
+    async fn test_reverting_pending_logs_on_new_block() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let v1: Address = rng.gen();
+        let v2: Address = rng.gen();
+        let c1: Address = rng.gen();
+        let c2: Address = rng.gen();
+
+        let mut queue = FinalizationQueue::new(
+            0,
+            H160::zero(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(10u64),
+            BlockHeight::from(0u64),
+        );
+
+        let reg1 = eth_log_validator_registration(1, v1, c1);
+        let mut reg1_revert = reg1.clone();
+        reg1_revert.removed = Some(true);
+
+        let reg2 = eth_log_validator_registration(2, v2, c2);
+        let mut reg2_revert = reg2.clone();
+        reg2_revert.removed = Some(true);
+
+        queue.append_eth_logs(vec![reg1, reg2]).await;
+        assert_eq!(queue.pending.len(), 2);
+
+        queue.append_eth_logs(vec![reg1_revert, reg2_revert]).await;
+
+        let mut db = DummyDb::filled();
+        queue.commit_diffs(&mut db, 1).await;
+
+        assert_eq!(queue.pending.len(), 0)
     }
 }

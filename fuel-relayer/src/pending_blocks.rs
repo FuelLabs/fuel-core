@@ -78,6 +78,11 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> abi::fuel::Blo
     block
 }
 
+pub enum IsReverted {
+    True,
+    False,
+}
+
 impl PendingBlocks {
     /// Pending blocks at least finalization number of blocks.
     pub fn new(
@@ -130,12 +135,11 @@ impl PendingBlocks {
         block_root: Bytes32,
         height: BlockHeight,
         da_height: DaBlockHeight,
-        is_reverted: bool,
+        is_reverted: IsReverted,
     ) {
-        if is_reverted {
-            self.handle_block_commit_revert(block_root, height, da_height);
-        } else {
-            self.handle_block_commit_append(block_root, height, da_height);
+        match is_reverted {
+            IsReverted::True => self.handle_block_commit_revert(block_root, height, da_height),
+            IsReverted::False => self.handle_block_commit_append(block_root, height, da_height),
         }
     }
 
@@ -417,11 +421,11 @@ mod tests {
         let b4 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 10, false);
-        blocks.handle_block_commit(b3, 4u64.into(), 11, false);
-        blocks.handle_block_commit(b4, 5u64.into(), 13, false);
-        blocks.handle_block_commit(b4, 5u64.into(), 13, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 3u64.into(), 10, IsReverted::False);
+        blocks.handle_block_commit(b3, 4u64.into(), 11, IsReverted::False);
+        blocks.handle_block_commit(b4, 5u64.into(), 13, IsReverted::False);
+        blocks.handle_block_commit(b4, 5u64.into(), 13, IsReverted::True);
 
         let q = &blocks.pending_block_commits;
         assert_eq!(q.len(), 4, "Should contain for pending blocks");
@@ -445,8 +449,8 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 0u64.into(), 9, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 0u64.into(), 9, IsReverted::False);
         assert!(logs_contain(
             "Commited block 0 is lower then current lowest pending block 2."
         ))
@@ -461,8 +465,8 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 4u64.into(), 10, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 4u64.into(), 10, IsReverted::False);
         assert!(logs_contain(
             "Commited block height 4 should be only increased by one from current height 2"
         ))
@@ -477,8 +481,8 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 2u64.into(), 10, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 2u64.into(), 10, IsReverted::False);
         assert!(logs_contain(
             "We received block 2 commit that was not reverted"
         ))
@@ -492,7 +496,7 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 3u64.into(), 9, false);
+        blocks.handle_block_commit(b1, 3u64.into(), 9, IsReverted::False);
         assert!(logs_contain(
             "Missing block commitments between last finalized commitment 1 to new height 3"
         ))
@@ -507,9 +511,9 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 1u64.into(), 9, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 3u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 1u64.into(), 9, IsReverted::True);
         assert!(logs_contain(
             "All pending block commits should be present in block queue. height:1 last_known:2"
         ))
@@ -524,8 +528,8 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 10, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b2, 3u64.into(), 10, IsReverted::True);
         assert!(logs_contain(
             "Something unexpected happened.Reverted block commits are not something found in the future"
         ))
@@ -539,9 +543,9 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 2u64.into(), 9, false);
-        blocks.handle_block_commit(b1, 2u64.into(), 9, true);
-        blocks.handle_block_commit(b1, 2u64.into(), 9, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::True);
+        blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::True);
         assert!(logs_contain(
             "We received block 2 commit that was already reverted"
         ))
@@ -555,7 +559,7 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        blocks.handle_block_commit(b1, 10u64.into(), 9, true);
+        blocks.handle_block_commit(b1, 10u64.into(), 9, IsReverted::True);
         assert!(logs_contain(
             "Revert for height 10 received while pending block queue is empty and LFCFB is 1"
         ))
@@ -581,7 +585,7 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
+        blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
@@ -607,9 +611,9 @@ mod tests {
 
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());
-        blocks.handle_block_commit(b1, 2u64.into(), 2, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 3, false);
-        blocks.handle_block_commit(b2, 3u64.into(), 3, true);
+        blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
+        blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::False);
+        blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::True);
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
