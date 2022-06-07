@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-pub enum BFTMpsc {
+pub enum BftMpsc {
     CheckBlockConsensus {
         block: Arc<SealedFuelBlock>,
         ret: oneshot::Sender<Result<()>>,

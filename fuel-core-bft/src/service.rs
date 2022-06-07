@@ -1,6 +1,6 @@
 use crate::Config;
 use fuel_core_interfaces::{
-    bft::BFTMpsc,
+    bft::BftMpsc,
     block_importer::{ImportBlockBroadcast, ImportBlockMpsc},
     block_producer::BlockProducerMpsc,
 };
@@ -12,7 +12,7 @@ use tokio::{
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,
-    sender: mpsc::Sender<BFTMpsc>,
+    sender: mpsc::Sender<BftMpsc>,
 }
 
 impl Service {
@@ -41,12 +41,12 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let join = self.join.lock().take();
         if join.is_some() {
-            let _ = self.sender.send(BFTMpsc::Stop);
+            let _ = self.sender.send(BftMpsc::Stop);
         }
         join
     }
 
-    pub fn sender(&self) -> &mpsc::Sender<BFTMpsc> {
+    pub fn sender(&self) -> &mpsc::Sender<BftMpsc> {
         &self.sender
     }
 }

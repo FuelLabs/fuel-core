@@ -1,5 +1,5 @@
 use crate::Config;
-use fuel_core_interfaces::{bft::BFTMpsc, block_importer::ImportBlockMpsc, sync::SyncMpsc};
+use fuel_core_interfaces::{bft::BftMpsc, block_importer::ImportBlockMpsc, sync::SyncMpsc};
 use parking_lot::Mutex;
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -20,9 +20,9 @@ impl Service {
     pub async fn start(
         &self,
         _p2p_block: (),   // broadcast::Receiver<BlockBroadcast>,
-        _p2p_request: (), // mpsc::Sender<P2PMpsc>,
+        _p2p_request: (), // mpsc::Sender<P2pMpsc>,
         _relayer: (),     // mpsc::Sender<RelayerEvent>,
-        _bft: mpsc::Sender<BFTMpsc>,
+        _bft: mpsc::Sender<BftMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,
     ) {
         let mut join = self.join.lock();
