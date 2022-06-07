@@ -97,7 +97,8 @@ This is a rough outline of what a contributor's workflow looks like:
 - Write code, add test cases, and commit your work.
 - Run tests and make sure all tests pass.
 - If the PR contains any breaking changes, add the breaking label to your PR.
-- Push your changes to a branch in your fork of the repository and submit a pull request.
+- If you are part of the FuelLabs Github org, please open a PR from the repository itself.
+- Otherwise, push your changes to a branch in your fork of the repository and submit a pull request.
     * Make sure mention the issue, which is created at step 1, in the commit message.
 - Your PR will be reviewed and some changes may be requested.
     * Once you've made changes, your PR must be re-reviewed and approved.
