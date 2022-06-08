@@ -1,10 +1,12 @@
-pub mod config;
+pub(crate) mod abi;
+pub(crate) mod config;
+pub(crate) mod finalization_queue;
 pub(crate) mod log;
-pub mod pending_events;
-pub mod relayer;
-pub mod service;
-pub mod validator_set;
+pub(crate) mod pending_blocks;
+pub(crate) mod validators;
 
+mod relayer;
+mod service;
 #[cfg(test)]
 pub mod test_helpers;
 

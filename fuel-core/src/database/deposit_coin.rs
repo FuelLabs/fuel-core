@@ -1,5 +1,5 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::relayer::DepositCoin;
+use fuel_core_interfaces::model::DepositCoin;
 use fuel_storage::Storage;
 use fuel_types::Bytes32;
 use std::borrow::Cow;

@@ -135,13 +135,8 @@ impl TxPool {
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: new_block_height,
-                number: Default::default(),
                 parent_hash: current_hash,
-                time: Utc::now(),
-                producer: Default::default(),
-                transactions_root: Default::default(),
-                // TODO: compute the current merkle root of all blocks
-                prev_root: Default::default(),
+                ..Default::default()
             },
             transactions: includable_txs,
         };

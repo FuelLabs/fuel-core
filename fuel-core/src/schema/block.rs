@@ -140,7 +140,7 @@ impl BlockQuery {
                 let blocks = blocks
                     .take_while(|r| {
                         if let (Ok(b), Some(end)) = (r, end) {
-                            if b.0 == end.into() {
+                            if b.0.as_usize() == end {
                                 return false;
                             }
                         }
