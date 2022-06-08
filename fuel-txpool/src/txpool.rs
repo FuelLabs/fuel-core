@@ -31,6 +31,10 @@ impl TxPool {
         &self.by_hash
     }
 
+    pub async fn run(mut self) {
+        
+    } 
+
     pub fn dependency(&self) -> &Dependency {
         &self.by_dependency
     }

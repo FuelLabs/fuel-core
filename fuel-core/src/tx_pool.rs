@@ -80,7 +80,7 @@ impl TxPool {
             fuel_txpool: Box::new(TxPoolService::new(
                 Box::new(database) as Box<dyn TxPoolDb>,
                 config.tx_pool_config,
-            )),
+            ).unwrap()),
         }
     }
 

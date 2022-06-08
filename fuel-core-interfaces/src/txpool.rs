@@ -1,17 +1,16 @@
-use async_trait::async_trait;
-use fuel_tx::{Transaction, TxId};
-use std::sync::Arc;
-
-use fuel_tx::{ContractId, UtxoId};
-use thiserror::Error;
-
 use crate::{
     db::{Error as DbStateError, KvStoreError},
     model::Coin,
     model::TxInfo,
 };
+use async_trait::async_trait;
 use fuel_storage::Storage;
+use fuel_tx::{ContractId, UtxoId};
+use fuel_tx::{Transaction, TxId};
 use fuel_vm::prelude::Contract;
+use std::sync::Arc;
+use thiserror::Error;
+use tokio::sync::oneshot;
 
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
@@ -28,8 +27,60 @@ pub trait TxPoolDb:
     }
 }
 
+pub enum TxPoolMpsc {
+    /// Return all sorted transactions that are includable in next block.
+    /// This is going to be heavy operation, use it with only when needed.
+    Includable { oneshot: Vec<Arc<Transaction>> },
+    /// import list of transaction into txpool. All needed parents need to be known
+    /// and parent->child order should be enforced in Vec, we will not do that check inside
+    /// txpool and will just drop child and include only parent. Additional restrain is that
+    /// child gas_price needs to be lower then parent gas_price. Transaction can be received
+    /// from p2p **RespondTransactions** or from userland. Because of userland we are returning
+    /// error for every insert for better user experience.
+    Include {
+        tx: Vec<Transaction>,
+        response: oneshot::Sender<Vec<anyhow::Result<Vec<Arc<Transaction>>>>>,
+    },
+    /// find all tx by their hash
+    Find {
+        hashes: Vec<TxId>,
+        response: oneshot::Sender<Vec<Option<TxInfo>>>,
+    },
+    /// find one tx by its hash
+    FindOne {
+        hashes: TxId,
+        response: oneshot::Sender<Option<TxInfo>>,
+    },
+    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
+    FindDependent {
+        hashes: Vec<TxId>,
+        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+    },
+    /// remove transaction from pool needed on user demand. Low priority
+    Remove { hashes: Vec<TxId> },
+    /// stop txpool
+    Stop,
+}
+
+#[derive(Clone, Debug)]
+pub enum TxStatus {
+    /// Included into txpool.
+    Included,
+    /// Executed in fuel block.
+    Executed,
+    /// removed from txpool.
+    SqueezedOut { reason: Error },
+}
+
+#[derive(Clone, Debug)]
+pub struct TxStatusBroadcast {
+    pub tx: Arc<Transaction>,
+    pub status: TxStatus,
+}
+
 /// Subscriber interface that receive inserted/removed events from txpool.
 /// Usually needed for libp2p broadcasting and can be used to notify users of new tx.
+/// TODO remove
 #[async_trait]
 pub trait Subscriber: Send + Sync {
     async fn inserted(&self, tx: Arc<Transaction>);
