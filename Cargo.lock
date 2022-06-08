@@ -2029,6 +2029,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-block-executor"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "fuel-types",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-block-importer"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "fuel-types",
+ "parking_lot 0.12.0",
+ "tokio",
+]
+
+[[package]]
+name = "fuel-block-producer"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "fuel-types",
+ "parking_lot 0.12.0",
+ "tokio",
+]
+
+[[package]]
 name = "fuel-core"
 version = "0.8.0"
 dependencies = [
@@ -2045,10 +2077,15 @@ dependencies = [
  "dirs",
  "env_logger",
  "fuel-asm",
+ "fuel-block-executor",
+ "fuel-block-importer",
+ "fuel-block-producer",
+ "fuel-core-bft",
  "fuel-core-interfaces",
  "fuel-crypto",
  "fuel-merkle 0.1.1",
  "fuel-storage 0.1.0",
+ "fuel-sync",
  "fuel-tx",
  "fuel-txpool",
  "fuel-types",
@@ -2075,6 +2112,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "fuel-core-bft"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "fuel-types",
+ "parking_lot 0.12.0",
+ "tokio",
 ]
 
 [[package]]
@@ -2225,6 +2273,17 @@ name = "fuel-storage"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34b9161e86d434a93088409530a4f71f42e074b3bbcbb7a27bfe666583f92fd7"
+
+[[package]]
+name = "fuel-sync"
+version = "0.8.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "fuel-types",
+ "parking_lot 0.12.0",
+ "tokio",
+]
 
 [[package]]
 name = "fuel-tests"

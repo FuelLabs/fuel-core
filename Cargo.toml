@@ -2,11 +2,16 @@
 # Use the new resolver to prevent dev-deps and build-deps from enabling debugging or test features in production.
 resolver = "2"
 members = [
+  "fuel-block-executor",
+  "fuel-block-importer",
+  "fuel-block-producer",
   "fuel-client",
   "fuel-core",
+  "fuel-core-bft",
   "fuel-core-interfaces",
   "fuel-p2p",
   "fuel-relayer",
+  "fuel-sync",
   "fuel-tests",
   "fuel-txpool",
   "xtask",
