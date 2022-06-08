@@ -1,7 +1,7 @@
+use super::modules::Modules;
 use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
 use crate::service::Config;
-use crate::tx_pool::TxPool;
 use anyhow::Result;
 use async_graphql::{
     extensions::Tracing, http::playground_source, http::GraphQLPlaygroundConfig, Request, Response,
@@ -20,10 +20,7 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
-use std::{
-    net::{SocketAddr, TcpListener},
-    sync::Arc,
-};
+use std::net::{SocketAddr, TcpListener};
 use tokio::task::JoinHandle;
 use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
@@ -32,11 +29,18 @@ use tracing::info;
 pub async fn start_server(
     config: Config,
     db: Database,
-    tx_pool: Arc<TxPool>,
+    modules: &Modules,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
-    let schema = build_schema().data(db).data(tx_pool).data(config);
+    let schema = build_schema()
+        .data(config)
+        .data(db)
+        .data(modules.tx_pool.clone())
+        .data(modules.block_importer.clone())
+        .data(modules.block_producer.clone())
+        .data(modules.sync.clone())
+        .data(modules.bft.clone());
     let schema = dap::init(schema, params).extension(Tracing).finish();
 
     let router = Router::new()

@@ -12,3 +12,7 @@ pub use txpool::{ArcTx, TxInfo};
 
 pub type DaBlockHeight = u32;
 pub type ValidatorStake = u64;
+
+/// TODO temporary structure
+#[derive(Clone, Debug)]
+pub struct ConsensusVote {}

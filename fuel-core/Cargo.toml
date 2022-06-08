@@ -36,12 +36,17 @@ derive_more = { version = "0.99" }
 dirs = "3.0"
 env_logger = "0.9"
 fuel-asm = { version = "0.5", features = ["serde"] }
+fuel-block-executor = { path = "../fuel-block-executor", version = "0.8.0" }
+fuel-block-importer = { path = "../fuel-block-importer", version = "0.8.0" }
+fuel-block-producer = { path = "../fuel-block-producer", version = "0.8.0" }
+fuel-core-bft = { path = "../fuel-core-bft", version = "0.8.0" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.8.0", features = [
     "serde",
 ] }
 fuel-crypto = { version = "0.5", features = ["random"] }
 fuel-merkle = "0.1"
 fuel-storage = { version = "0.1" }
+fuel-sync = { path = "../fuel-sync", version = "0.8.0" }
 fuel-tx = { version = "0.12", features = ["serde"] }
 fuel-txpool = { path = "../fuel-txpool", version = "0.8.0" }
 fuel-types = { version = "0.5", features = ["serde"] }
@@ -68,21 +73,17 @@ tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["ansi", "env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = [
+    "ansi",
+    "env-filter",
+    "json",
+] }
 uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 assert_matches = "1.5"
-fuel-tx = { version = "0.12", features = [
-    "serde",
-    "builder",
-    "internals",
-] }
-fuel-vm = { version = "0.11", features = [
-    "serde",
-    "random",
-    "test-helpers",
-] }
+fuel-tx = { version = "0.12", features = ["serde", "builder", "internals"] }
+fuel-vm = { version = "0.11", features = ["serde", "random", "test-helpers"] }
 insta = "1.8"
 
 [features]
