@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - elliot/deploy-dev-environment
+      - master
   pull_request:
   release:
     types: [published]
@@ -59,18 +59,18 @@ jobs:
         include:
           - command: fmt
             args: --all --verbose -- --check
-          # - command: clippy
-          #   args: --all-targets --all-features
-          # - command: check
-          #   args: --all-targets --all-features
-          # - command: test
-          #   args: --all-targets --all-features --workspace --exclude fuel-p2p
-          # - command: test
-          #   args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-          # # Split p2p into its own job so that it can use a single threaded runner
-          # - command: test
-          #   args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
-          #   skip-error: true
+          - command: clippy
+            args: --all-targets --all-features
+          - command: check
+            args: --all-targets --all-features
+          - command: test
+            args: --all-targets --all-features --workspace --exclude fuel-p2p
+          - command: test
+            args: --all-targets --no-default-features --workspace --exclude fuel-p2p
+          # Split p2p into its own job so that it can use a single threaded runner
+          - command: test
+            args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
+            skip-error: true
     # disallow any job that takes longer than 30 minutes
     timeout-minutes: 30
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -391,7 +391,7 @@ jobs:
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
-        # if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master'
         with:
           workflow: Deploy Fuel-Core on k8s
           repo: FuelLabs/fuel-deployment
