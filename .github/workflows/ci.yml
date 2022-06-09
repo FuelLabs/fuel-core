@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - master
+      - elliot/deploy-dev-environment
   pull_request:
   release:
     types: [published]
@@ -59,17 +59,17 @@ jobs:
         include:
           - command: fmt
             args: --all --verbose -- --check
-          - command: clippy
-            args: --all-targets --all-features
-          - command: check
-            args: --all-targets --all-features
-          - command: test
-            args: --all-targets --all-features --workspace --exclude fuel-p2p
-          - command: test
-            args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-          # Split p2p into its own job so that it can use a single threaded runner
-          - command: test
-            args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
+            # - command: clippy
+            #   args: --all-targets --all-features
+            # - command: check
+            #   args: --all-targets --all-features
+            # - command: test
+            #   args: --all-targets --all-features --workspace --exclude fuel-p2p
+            # - command: test
+            #   args: --all-targets --no-default-features --workspace --exclude fuel-p2p
+            # # Split p2p into its own job so that it can use a single threaded runner
+            # - command: test
+            #   args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
             skip-error: true
     # disallow any job that takes longer than 30 minutes
     timeout-minutes: 30
@@ -387,8 +387,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/elliot/deploy-dev-environment'
     runs-on: ubuntu-latest
-    needs:
-      - publish-docker-image
+    # needs:
+    #   - publish-docker-image
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
