@@ -57,7 +57,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      run: echo "Cargo Verifications"
+      - run: echo "Cargo Verifications"
     # strategy:
     #   matrix:
     #     include:
