@@ -27,7 +27,7 @@ jobs:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
     steps:
-      run: echo "Linting toml files"
+      - run: echo "Linting toml files"
     # steps:
     #   - uses: actions/checkout@v2
     #   - uses: actions-rs/toolchain@v1
