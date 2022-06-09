@@ -163,7 +163,7 @@ jobs:
 
   publish-docker-image:
     # needs:
-    # - cancel-previous-runs
+    - cancel-previous-runs
     # - lint-toml-files
     # - cargo-verifications
     # - publish-crates
