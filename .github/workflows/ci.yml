@@ -385,14 +385,14 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    # if: github.ref == 'refs/heads/elliot/deploy-dev-environment'
+    if: github.ref == 'refs/heads/elliot/deploy-dev-environment'
     runs-on: ubuntu-latest
     needs:
       # - cancel-previous-runs
       # - lint-toml-files
       # - cargo-verifications
       # - publish-crates
-      - publish-docker-image
+      # - publish-docker-image
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
