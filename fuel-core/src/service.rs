@@ -1,20 +1,19 @@
-use crate::{chain_config::ChainConfig, database::Database, tx_pool::TxPool};
+use crate::{chain_config::ChainConfig, database::Database};
 use anyhow::Error as AnyError;
+use modules::Modules;
 use std::{
     net::{Ipv4Addr, SocketAddr},
     panic,
     path::PathBuf,
-    sync::Arc,
 };
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
-pub use graph_api::start_server;
-
 pub(crate) mod genesis;
 pub mod graph_api;
+pub mod modules;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -59,6 +58,8 @@ pub enum DbType {
 
 pub struct FuelService {
     tasks: Vec<JoinHandle<Result<(), AnyError>>>,
+    /// handler for all modules.
+    modules: Modules,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
@@ -94,17 +95,20 @@ impl FuelService {
 
         // initialize state
         Self::import_state(&config.chain_conf, &database)?;
-        // initialize transaction pool
-        let tx_pool = Arc::new(TxPool::new(database.clone(), config.clone()));
+
+        // start modules
+        let modules = modules::start_modules(&config, &database).await?;
 
         // start background tasks
         let mut tasks = vec![];
-        let (bound_address, api_server) = start_server(config, database, tx_pool).await?;
+        let (bound_address, api_server) =
+            graph_api::start_server(config, database, &modules).await?;
         tasks.push(api_server);
 
         Ok(FuelService {
             tasks,
             bound_address,
+            modules,
         })
     }
 
@@ -127,10 +131,11 @@ impl FuelService {
     }
 
     /// Shutdown background tasks
-    pub fn stop(&self) {
+    pub async fn stop(&self) {
         for task in &self.tasks {
             task.abort();
         }
+        self.modules.stop().await;
     }
 }
 

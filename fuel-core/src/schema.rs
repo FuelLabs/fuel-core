@@ -7,6 +7,7 @@ pub mod coin;
 pub mod contract;
 pub mod dap;
 pub mod health;
+pub mod node_info;
 pub mod scalars;
 pub mod tx;
 
@@ -21,6 +22,7 @@ pub struct Query(
     coin::CoinQuery,
     contract::ContractQuery,
     contract::ContractBalanceQuery,
+    node_info::NodeQuery,
 );
 
 #[derive(MergedObject, Default)]

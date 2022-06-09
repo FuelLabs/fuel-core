@@ -8,12 +8,12 @@ pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 pub(crate) const MAX_REQUEST_SIZE: usize = 100;
 pub(crate) const MAX_RESPONSE_SIZE: usize = 100;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     RequestBlock,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
 pub enum ResponseMessage {
     ResponseBlock,
 }

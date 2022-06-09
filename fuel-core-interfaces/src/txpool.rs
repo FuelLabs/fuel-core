@@ -1,17 +1,15 @@
-use async_trait::async_trait;
-use fuel_tx::{Transaction, TxId};
-use std::sync::Arc;
-
-use fuel_tx::{ContractId, UtxoId};
-use thiserror::Error;
-
 use crate::{
     db::{Error as DbStateError, KvStoreError},
     model::Coin,
     model::TxInfo,
 };
+use async_trait::async_trait;
 use fuel_storage::Storage;
+use fuel_tx::{ContractId, UtxoId};
+use fuel_tx::{Transaction, TxId};
 use fuel_vm::prelude::Contract;
+use std::sync::Arc;
+use thiserror::Error;
 
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>

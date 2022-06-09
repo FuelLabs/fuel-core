@@ -88,6 +88,7 @@ type ChainInfo {
 	latestBlock: Block!
 	baseChainHeight: U64!
 	peerCount: Int!
+	consensusParameters: ConsensusParameters!
 }
 
 type ChangeOutput {
@@ -153,6 +154,20 @@ enum CoinStatus {
 	SPENT
 }
 
+type ConsensusParameters {
+	contractMaxSize: U64!
+	maxInputs: U64!
+	maxOutputs: U64!
+	maxWitnesses: U64!
+	maxGasPerTx: U64!
+	maxScriptLength: U64!
+	maxScriptDataLength: U64!
+	maxStaticContracts: U64!
+	maxStorageSlots: U64!
+	maxPredicateLength: U64!
+	maxPredicateDataLength: U64!
+}
+
 type Contract {
 	id: ContractId!
 	bytecode: HexString!
@@ -163,6 +178,38 @@ type ContractBalance {
 	contract: ContractId!
 	amount: U64!
 	assetId: AssetId!
+}
+
+type ContractBalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ContractBalanceEdge!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ContractBalanceEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	"The item at the end of the edge
+	"""
+	node: ContractBalance!
+}
+
+input ContractBalanceFilterInput {
+	"""
+	Filter assets based on the `contractId` field
+	"""
+	contract: ContractId!
 }
 
 type ContractCreated {
@@ -236,6 +283,17 @@ type Mutation {
 	submit(tx: HexString!): Transaction!
 }
 
+type NodeInfo {
+	utxoValidation: Boolean!
+	predicates: Boolean!
+	vmBacktrace: Boolean!
+	minGasPrice: U64!
+	minBytePrice: U64!
+	maxTx: U64!
+	maxDepth: U64!
+	nodeVersion: String!
+}
+
 union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
@@ -282,7 +340,6 @@ type Query {
 	block(id: BlockId, height: U64): Block
 	blocks(first: Int, after: String, last: Int, before: String): BlockConnection!
 	chain: ChainInfo!
-	version: String!
 	transaction(id: TransactionId!): Transaction
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
@@ -292,9 +349,17 @@ type Query {
 	health: Boolean!
 	coin(utxoId: UtxoId!): Coin
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
+	"""
+	For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
+	`owner` that add up at least the query amount. The returned coins (UTXOs) are actual coins
+	that can be spent. The number of coins (UXTOs) is optimized to prevent dust accumulation.
+	Max number of UTXOS and excluded UTXOS can also be specified.
+	"""
 	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
+	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
+	nodeInfo: NodeInfo!
 }
 
 type Receipt {
@@ -361,7 +426,7 @@ input SpendQueryElementInput {
 	"""
 	assetId: AssetId!
 	"""
-	Address of the owner
+	Target amount for the query
 	"""
 	amount: U64!
 }

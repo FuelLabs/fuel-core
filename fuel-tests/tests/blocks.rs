@@ -39,12 +39,8 @@ async fn block_connection_first_5() {
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
                 height: i.into(),
-                number: Default::default(),
-                parent_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
-                producer: Default::default(),
-                transactions_root: Default::default(),
-                prev_root: Default::default(),
+                ..Default::default()
             },
             transactions: vec![],
         })
@@ -88,12 +84,8 @@ async fn block_connection_last_5() {
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
                 height: i.into(),
-                number: Default::default(),
-                parent_hash: Default::default(),
                 time: Utc.timestamp(i.into(), 0),
-                producer: Default::default(),
-                transactions_root: Default::default(),
-                prev_root: Default::default(),
+                ..Default::default()
             },
             transactions: vec![],
         })

@@ -28,8 +28,6 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }
 
-[dev-dependencies]
-
 [features]
 test_helpers = []
 serde = ["dep:serde", "fuel-tx/serde", "fuel-types/serde", "fuel-vm/serde"]

@@ -86,6 +86,16 @@ impl FuelClient {
         self.query(query).await.map(|r| r.health)
     }
 
+    pub async fn node_info(&self) -> io::Result<schema::node_info::NodeInfo> {
+        let query = schema::node_info::QueryNodeInfo::build(());
+        self.query(query).await.map(|r| r.node_info)
+    }
+
+    pub async fn chain_info(&self) -> io::Result<schema::chain::ChainInfo> {
+        let query = schema::chain::ChainQuery::build(());
+        self.query(query).await.map(|r| r.chain)
+    }
+
     /// Default dry run, matching the exact configuration as the node
     pub async fn dry_run(&self, tx: &Transaction) -> io::Result<Vec<Receipt>> {
         self.dry_run_opt(tx, None).await
@@ -402,6 +412,19 @@ impl FuelClient {
         let query = schema::balance::BalancesQuery::build(&(owner, request).into());
 
         let balances = self.query(query).await?.balances.into();
+        Ok(balances)
+    }
+
+    pub async fn contract_balances(
+        &self,
+        contract: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
+        let contract_id: schema::ContractId = contract.parse()?;
+        let query = schema::contract::ContractBalancesQuery::build(&(contract_id, request).into());
+
+        let balances = self.query(query).await?.contract_balances.into();
+
         Ok(balances)
     }
 }
