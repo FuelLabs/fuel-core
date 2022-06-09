@@ -162,8 +162,8 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
-    # needs:
-    - cancel-previous-runs
+    needs:
+      - cancel-previous-runs
     # - lint-toml-files
     # - cargo-verifications
     # - publish-crates
