@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -227,6 +228,13 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+      - name: Set Environment Variables
+        run: |
+          echo "Tags: ${{ steps.meta.outputs.tags }}"
+          echo "Version: ${{ steps.meta.outputs.version }}"
+          echo "FUEL_CORE_TAG=$(echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2)" >> $GITHUB_ENV
+          echo "FUEL_CORE_VERSION=$(echo ${{ steps.meta.outputs.version }} )" >> $GITHUB_ENV
+
   publish-fuel-core-binary:
     name: Release fuel-core binaries
     runs-on: ${{ matrix.job.os }}
@@ -374,3 +382,26 @@ jobs:
           notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  deploy:
+    # Deploy Latest Fuel-Core Release
+    runs-on: ubuntu-latest
+    needs:
+      - publish-docker-image
+    steps:
+      - name: Deploy Fuel-Core Developer Environment
+        uses: benc-uk/workflow-dispatch@v1
+        if: github.ref == 'refs/heads/master'
+        with:
+          workflow: Deploy Fuel-Core on k8s
+          repo: FuelLabs/fuel-deployment
+          ref: refs/heads/master
+          token: ${{ secrets.REPO_TOKEN }}
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.TAG }}", "image-tag": "${{ env.SHA }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+        env:
+          K8S: "eks"
+          CONFIG: "fuel-dev1"
+          ENV: "fueldevsway.env"
+          TAG: ${{ env.FUEL_CORE_TAG }}
+          SHA: ${{ env.FUEL_CORE_TAG }}
+          DELETE_INFRA: true

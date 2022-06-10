@@ -1,7 +1,11 @@
 pub use super::BlockHeight;
+use super::ValidatorStake;
 use chrono::{DateTime, TimeZone, Utc};
+use core::ops::Deref;
 use fuel_crypto::Hasher;
-use fuel_tx::{Address, Bytes32, Transaction};
+use fuel_tx::{Address, AssetId, Bytes32, Transaction};
+use fuel_types::Word;
+use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,10 +29,21 @@ pub struct FuelBlockHeader {
     pub time: DateTime<Utc>,
     /// The block producer public key
     pub producer: Address,
+    /// Header Metadata
+    pub metadata: Option<HeaderMetadata>,
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HeaderMetadata {
+    id: Bytes32,
 }
 
 impl FuelBlockHeader {
-    pub fn id(&self) -> Bytes32 {
+    pub fn recalculate_metadata(&mut self) {
+        self.metadata = Some(HeaderMetadata { id: self.hash() });
+    }
+    fn hash(&self) -> Bytes32 {
         let mut hasher = Hasher::default();
         hasher.input(&self.height.to_bytes()[..]);
         hasher.input(&self.number.to_bytes()[..]);
@@ -39,18 +54,27 @@ impl FuelBlockHeader {
         hasher.input(self.producer.as_ref());
         hasher.digest()
     }
+
+    pub fn id(&self) -> Bytes32 {
+        if let Some(ref metadata) = self.metadata {
+            metadata.id
+        } else {
+            self.hash()
+        }
+    }
 }
 
 impl Default for FuelBlockHeader {
     fn default() -> Self {
         Self {
-            height: 0u32.into(),
-            number: 0u32.into(),
-            parent_hash: Default::default(),
             time: Utc.timestamp(0, 0),
-            producer: Default::default(),
-            transactions_root: Default::default(),
-            prev_root: Default::default(),
+            height: BlockHeight::default(),
+            number: BlockHeight::default(),
+            parent_hash: Bytes32::default(),
+            prev_root: Bytes32::default(),
+            transactions_root: Bytes32::default(),
+            producer: Address::default(),
+            metadata: None,
         }
     }
 }
@@ -87,5 +111,58 @@ impl FuelBlock {
             headers: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
+    }
+
+    /* TODO for functions bellow, they are mostly going to be removed
+    https://github.com/FuelLabs/fuel-core/issues/364 */
+
+    pub fn transaction_data_lenght(&self) -> usize {
+        self.transactions.len() * 100
+    }
+
+    pub fn transaction_data_hash(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+
+    pub fn validator_set_hash(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+
+    pub fn transaction_sum(&self) -> usize {
+        0
+    }
+
+    pub fn withdrawals(&self) -> Vec<(Address, Word, AssetId)> {
+        vec![]
+    }
+
+    pub fn withdrawals_root(&self) -> Bytes32 {
+        Bytes32::zeroed()
+    }
+}
+
+/// This structure is ceated as placeholder for future usage.
+/// It represent commitment for next child block
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FuelBlockConsensus {
+    /// required stake for next block
+    pub required_stake: u64,
+    /// Map of Validator consensus key and pair of stake and signature
+    pub validators: HashMap<Address, (ValidatorStake, Address)>,
+}
+
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SealedFuelBlock {
+    pub block: FuelBlock,
+    pub consensus: FuelBlockConsensus,
+}
+
+impl Deref for SealedFuelBlock {
+    type Target = FuelBlock;
+
+    fn deref(&self) -> &FuelBlock {
+        &self.block
     }
 }

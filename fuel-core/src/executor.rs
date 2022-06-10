@@ -721,7 +721,6 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
-    use chrono::{TimeZone, Utc};
     use fuel_asm::Opcode;
     use fuel_crypto::SecretKey;
     use fuel_tx::default_parameters::MAX_GAS_PER_TX;
@@ -1267,15 +1266,11 @@ mod tests {
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: 6u64.into(),
-                number: Default::default(),
-                parent_hash: Default::default(),
-                time: Utc.timestamp(0, 0),
-                producer: Default::default(),
-                transactions_root: Default::default(),
-                prev_root: Default::default(),
+                ..Default::default()
             },
             transactions: vec![tx],
         };
+        block.header.recalculate_metadata();
 
         executor
             .execute(&mut block, ExecutionMode::Production)

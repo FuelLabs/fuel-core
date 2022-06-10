@@ -1,11 +1,13 @@
-use derive_more::{Add, Display, From, Into};
+use derive_more::{Add, Deref, Display, From, Into};
 use std::{
     array::TryFromSliceError,
     convert::{TryFrom, TryInto},
 };
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, Debug, Default, PartialEq, PartialOrd, Add, Display, Into, From)]
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, PartialOrd, Eq, Add, Display, Into, From, Deref, Hash,
+)]
 pub struct BlockHeight(u32);
 
 impl From<BlockHeight> for Vec<u8> {
@@ -47,6 +49,10 @@ impl BlockHeight {
     }
 
     pub fn to_usize(self) -> usize {
+        self.0 as usize
+    }
+
+    pub fn as_usize(&self) -> usize {
         self.0 as usize
     }
 }

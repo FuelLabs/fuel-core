@@ -311,12 +311,8 @@ async fn get_transactions_from_manual_blocks() {
     let mut first_test_block = FuelBlock {
         header: FuelBlockHeader {
             height: 1u32.into(),
-            number: Default::default(),
-            parent_hash: Default::default(),
             time: Utc::now(),
-            producer: Default::default(),
-            transactions_root: Default::default(),
-            prev_root: Default::default(),
+            ..Default::default()
         },
 
         // set the first 5 ids of the manually saved txs
@@ -327,12 +323,8 @@ async fn get_transactions_from_manual_blocks() {
     let mut second_test_block = FuelBlock {
         header: FuelBlockHeader {
             height: 2u32.into(),
-            number: Default::default(),
-            parent_hash: Default::default(),
             time: Utc::now(),
-            producer: Default::default(),
-            transactions_root: Default::default(),
-            prev_root: Default::default(),
+            ..Default::default()
         },
         // set the last 5 ids of the manually saved txs
         transactions: txs.iter().skip(5).take(5).cloned().collect(),

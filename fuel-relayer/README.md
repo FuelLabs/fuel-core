@@ -2,21 +2,16 @@
 
 # Relayer
 
-
-We will need to connect with ethereum node provider or client to have open API.
-
 Functionalities expected from Relayer:
 
 * Validator staking (Handle ValidatorList and use it for fuel-bft):
-    * Delegation (Deposits are not in consern for fuel-core client)
-    * Withdrawal
+    * Validator registration and unregistration
+    * Delegator delegations deposits and withdrawal
 * Bridge:
-    * Deposit token
-    * Withdrawal token
+    * Receive message
+    * Transmit message
 * Block related:
     * Publishing new block
-    * Validating received block (Not impl)
-    * pushing challenge if needed (Not impl)
 
 ## Validity, finality and syncronization
 
@@ -51,19 +46,37 @@ Delagation: ...
 
 ### Bridge
 
-Bridge has functionality to connect ethereum ERC-20 tokens with Fuel network and allow transfer of token between them. Deposit and withdrawal are lot simpler in comparising to staking.
-
-Deposit transfers token into contract and after eth finalization passes it is saved inside database with its `da_height` and with da_height of past fuel block it can be activated.
-
-Deposit token id is calculated as specified here: https://github.com/FuelLabs/fuel-specs/issues/106
-
-For Withdrawal, any Tx can have OutputWithdrawal and that information is send inside a fuel block to eth contract and v2 contract handles this internaly to be withdrawed in future after finalization (N eth blocks) passes.
+Bridging is currently WIP and it is moving as generalizes messages between smart contract gateway.
 
 ## Implementation:
 
-For fetching logs from contract use ethers-rs to fetch data and be consistent what exactly we are getting. We need to be sure that we are receiving/reading all logs from out contracts that we are watching.
+Info about fuel-relayer structure:
+* `Service`: a way to initialize relayer
+  * `Relayer`: the main mod that contains initial sync and handling of inbound channels from both ethereum and fuel:
+    * `FinalizationQueue`: before events get finalized they are saved in memory here, we handle the finalization of events here.
+      * `PendingBlocks`: Handles what block are committed to the contract and what is the best block inside fuel network. This is the place where we do packing of eth transaction and bundling of block commits.
+      *  `Validators`:  Has a last finalized validator set. Handles saving of diffs to database and applying that diff current validator set.
 
-Propagating of new block is simplest thing, whatever fuel-importer give us the block transfer it into PackedFuelBlock, calculate expected gas_price/gas_limit, sign it, and send it to contract. Validation and challange comes later.
+`Log` mod contains type casting from eth log to event that we can digest. `bin/testrun.rs` is simple run with DummyDb for manual testing.
+
+Communication channels that we have:
+* Inbound `fuel_block_importer` with `NewBlockEvent`: new block event from fuel, , mostly send block commit if this client created new fuel block
+* Inbound `requests` with `RelayerEvent`: request for relayer for example for validator set.
+* `da_block_watcher`: do finalization on this event
+* `logs_watcher`: insert logs into finalization_queue.
+
+On the database side we have:
+* `StakingDIffs` table: for every da_block it contain staking diff. Staking diff contains un/registration of validator and delegations
+* `ValidatorSet` table: validator set at last finalized da block. 
+* `DelegatesIndex` table: One delegation has a list of validators and delegation stakes, when undelegating or adding a new delegation, the old delegation needs to be removed. This index contains list of blocks where delegation happened so that we can traverse it and get that old delegation. 
+* `DepositCoin`: table of finalized coins. It will become the table of messages in the new bridging architecture.
+
+And some DB variables:
+* `validator_da_height`: Relater to `ValidatorSet` table
+* `finalized_da_height`:  Updated to become `new_da_height - finalization_period`
+* `last_commited_finalized_fuel_height`: this is an interesting one, as it name says it represents the last committed finalized fuel height, a block that we know is committed and finalized in Ethereum contract, for blocks after this height we will still need to have consensus votes (`SealedBlock`)
+
+For fetching logs from contract use ethers-rs to fetch data and be consistent what exactly we are getting. We need to be sure that we are receiving/reading all logs from out contracts that we are watching.
 
 ### Syncing flow
 
@@ -98,19 +111,12 @@ For passive sync we are using ethereum pubsub protocol to get `logs` event: http
 * "log_type":"None",
 * "removed":"Some(false)"
 
-### Database:
-
-The relayer utlizes the following columns:
-* Validator set diff: mapping of fuel_block and hashmap of diffs for finalized new stakes.
-* Validator set: mapping of validator address to its current stakes.
-* Deposits: mapping of deposit_nonce to token deposits.
-
 ## Block Commitments
 
 When new fuel block is made it needs to be commited to ethereum network.
+For every block that we dont have fuel commit we try to do our best guess and send block that contracts can include, gaps in height will be discarded by contract.
 
-There is timeframe of few eth blocks where current leader can broadcast block to ethereum network. In case that he do it in time he will receive additional reward.
-
-In case that leader does not commit fuel block next leader will have ability to do it for him as bundle block commit, in that case bonus reward will go to second leader that has spend additional gas to push this change to ethereum network.
+There is timeframe of few eth blocks where current leader can broadcast block to ethereum network. In case that he do it in time he will receive additional reward. In case that leader does not commit fuel block next leader will have ability to do it for him as bundle block commit, in that case bonus reward will go to second leader that has spend additional gas to push this change to ethereum network This is stilll WIP discussion.
 
 Github discussion on fuel sync with L1: https://github.com/FuelLabs/fuel-specs/issues/285
+
