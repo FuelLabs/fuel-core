@@ -38,7 +38,6 @@ pub struct FuelP2PService {
 pub enum FuelP2PEvent {
     Behaviour(FuelBehaviourEvent),
     NewListenAddr(Multiaddr),
-    RequestMessage(RequestMessage),
 }
 
 impl FuelP2PService {
