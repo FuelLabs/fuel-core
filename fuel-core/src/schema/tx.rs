@@ -36,7 +36,7 @@ impl TxQuery {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;
 
-        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+        let _tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
         /* TODO
         let found_tx = vec![None];//tx_pool.pool().find(&[key]).await;
 
