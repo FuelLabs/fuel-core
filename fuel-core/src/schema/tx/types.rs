@@ -11,7 +11,7 @@ use crate::{
 };
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::db::KvStoreError;
+use fuel_core_interfaces::{db::KvStoreError,model::TxInfo};
 use fuel_storage::Storage;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
@@ -223,9 +223,9 @@ impl Transaction {
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
 
-        let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
+        //let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
 
-        let transaction_in_pool = txpool.find_one(&self.0.id()).await;
+        let transaction_in_pool: Option<TxInfo> = None;//txpool.find_one(&self.0.id()).await;
 
         if transaction_in_pool.is_some() {
             let time = transaction_in_pool.unwrap().submited_time();

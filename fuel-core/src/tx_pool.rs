@@ -3,15 +3,15 @@ use crate::executor::{ExecutionMode, Executor};
 use crate::model::{FuelBlock, FuelBlockHeader};
 use crate::service::Config;
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
+use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_storage::Storage;
 use fuel_tx::{Bytes32, Receipt};
-use fuel_txpool::TxPoolService;
+//use fuel_txpool::Service as TxPoolService;
 use fuel_vm::prelude::{ProgramState, Transaction};
-use itertools::Itertools;
+//use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
-use std::sync::Arc;
+//use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -60,13 +60,13 @@ impl TxPoolDb for Database {}
 pub struct TxPool {
     executor: Executor,
     db: Database,
-    fuel_txpool: Box<dyn TxPoolTrait>,
+    //fuel_txpool: Box<dyn TxPoolTrait>,
 }
 
 impl TxPool {
-    pub fn pool(&self) -> &dyn TxPoolTrait {
+    /*pub fn pool(&self) -> &dyn TxPoolTrait {
         self.fuel_txpool.as_ref()
-    }
+    }*/
 
     pub fn new(database: Database, config: Config) -> Self {
         let executor = Executor {
@@ -77,10 +77,10 @@ impl TxPool {
         TxPool {
             executor,
             db: database.clone(),
-            fuel_txpool: Box::new(TxPoolService::new(
+            /*fuel_txpool: Box::new(TxPoolService::new(
                 Box::new(database) as Box<dyn TxPoolDb>,
                 config.tx_pool_config,
-            ).unwrap()),
+            ).unwrap()),*/
         }
     }
 
@@ -99,6 +99,7 @@ impl TxPool {
                 tx_to_exec.precompute_metadata();
             }
 
+            /*
             self.fuel_txpool
                 .insert(vec![Arc::new(tx_to_exec.clone())])
                 .await
@@ -111,10 +112,10 @@ impl TxPool {
                 .await
                 .into_iter()
                 .map(|tx| (&*tx).clone())
-                .collect();
-
-            let included_tx_ids = includable_txs.iter().map(|tx| tx.id()).collect_vec();
-            self.fuel_txpool.remove(&included_tx_ids).await;
+                .collect(); */
+            includable_txs = Vec::new();
+            //let included_tx_ids = includable_txs.iter().map(|tx| tx.id()).collect_vec();
+            //self.fuel_txpool.remove(&included_tx_ids).await;
         } else {
             includable_txs = vec![tx];
         }

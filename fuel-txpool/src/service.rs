@@ -1,54 +1,66 @@
-use std::cmp::Reverse;
+use crate::{interface::Interface, types::*, Config};
+use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
+use fuel_core_interfaces::model::TxInfo;
+use fuel_core_interfaces::txpool::{TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use parking_lot::Mutex as BlockingMutex;
 use std::sync::Arc;
-
-use crate::Error;
-use crate::{subscribers::MultiSubscriber, types::*, Config, TxPool as TxPoolImpl};
-use async_trait::async_trait;
-use fuel_core_interfaces::model::{ArcTx, TxInfo};
-use fuel_core_interfaces::txpool::{Subscriber, TxPool, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use parking_lot::Mutex;
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::task::JoinHandle;
-use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tracing::warn;
 
-pub struct TxPoolService {
-    txpool: RwLock<TxPoolImpl>,
-    db: Box<dyn TxPoolDb>,
-    subs: MultiSubscriber,
+pub struct Service {
+    interface: Arc<Interface>,
     sender: mpsc::Sender<TxPoolMpsc>,
-    receiver: mpsc::Receiver<TxPoolMpsc>,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
-    join: Mutex<Option<JoinHandle<()>>>,
+    join: BlockingMutex<Option<JoinHandle<mpsc::Receiver<TxPoolMpsc>>>>,
+    receiver: Arc<Mutex<Option<mpsc::Receiver<TxPoolMpsc>>>>,
 }
 
-impl TxPoolService {
+impl Service {
     pub fn new(db: Box<dyn TxPoolDb>, config: Config) -> Result<Self, anyhow::Error> {
         let (sender, receiver) = mpsc::channel(100);
         let (broadcast, _receiver) = broadcast::channel(100);
         Ok(Self {
-            txpool: RwLock::new(TxPoolImpl::new(config)),
-            db,
-            subs: MultiSubscriber::default(),
+            interface: Arc::new(Interface::new(db, broadcast.clone(), config)),
             sender,
-            receiver,
             broadcast,
-            join: Mutex::new(None),
+            join: BlockingMutex::new(None),
+            receiver: Arc::new(Mutex::new(Some(receiver))),
         })
     }
 
-    pub async fn start(&self) {
+    pub async fn start(&self, new_block: broadcast::Receiver<ImportBlockBroadcast>) -> bool {
         let mut join = self.join.lock();
         if join.is_none() {
-            *join = Some(tokio::spawn(async {}));
+            if let Some(receiver) = self.receiver.lock().await.take() {
+                let interface = self.interface.clone();
+                *join = Some(tokio::spawn(async {
+                    Interface::run(interface, new_block, receiver).await
+                }));
+                return true;
+            } else {
+                warn!("Starting TxPool service that is stopping");
+            }
+        } else {
+            warn!("Service TxPool is already started");
         }
+        false
     }
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        let join = self.join.lock().take();
-        if join.is_some() {
-            let _ = self.sender.send(TxPoolMpsc::Stop);
+        let mut join = self.join.lock();
+        let join_handle = join.take();
+        if let Some(join_handle) = join_handle {
+            let _ = self.sender.send(TxPoolMpsc::Stop).await;
+            let receiver = self.receiver.clone();
+            Some(tokio::spawn(async move {
+                let ret = join_handle.await;
+                *receiver.lock().await = ret.ok();
+                ()
+            }))
+        } else {
+            None
         }
-        join
     }
 
     pub fn subscribe_ch(&self) -> broadcast::Receiver<TxStatusBroadcast> {
@@ -58,230 +70,54 @@ impl TxPoolService {
     pub fn sender(&self) -> &mpsc::Sender<TxPoolMpsc> {
         &self.sender
     }
-}
 
-impl TxPoolService {
-    async fn handle(&self, event: TxPoolMpsc) {
-        match event {
-            TxPoolMpsc::Includable { oneshot } => todo!(),
-            TxPoolMpsc::Include { tx, response } => todo!(),
-            TxPoolMpsc::Find { hashes, response } => todo!(),
-            TxPoolMpsc::FindOne { hashes, response } => todo!(),
-            TxPoolMpsc::FindDependent { hashes, response } => todo!(),
-            TxPoolMpsc::Remove { hashes } => todo!(),
-            TxPoolMpsc::Stop => todo!(),
-        }
-        // this is litlle bit risky but we can always add semaphore to limit number of requests.
-    }
-    /*
-    /// import tx
-    async fn insert(&self, txs: Vec<ArcTx>) -> Vec<anyhow::Result<Vec<ArcTx>>> {
-        // insert inside pool
-
-        // Check that data is okay (witness match input/output, and if recovered signatures ara valid).
-        // should be done before transaction comes to txpool, or before it enters RwLocked region.
-        let mut res = Vec::new();
-        for tx in txs.iter() {
-            let mut pool = self.txpool.write().await;
-            res.push(pool.insert(tx.clone(), self.db.as_ref()).await)
-        }
-        // announce to subscribers
-        for (ret, tx) in res.iter().zip(txs.into_iter()) {
-            match ret {
-                Ok(removed) => {
-                    for removed in removed {
-                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
-                        // but for now it is okay to just use Error::Removed.
-                        self.subs.removed(removed.clone(), &Error::Removed).await;
-                    }
-                    self.subs.inserted(tx).await;
-                }
-                Err(_) => {}
-            }
-        }
-        res
+    pub async fn insert(
+        &self,
+        txs: Vec<Arc<Transaction>>,
+    ) -> oneshot::Receiver<Vec<anyhow::Result<Vec<Arc<Transaction>>>>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.sender.send(TxPoolMpsc::Insert { txs, response }).await;
+        receiver
     }
 
-    /// find all tx by its hash
-    async fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
-        let mut res = Vec::with_capacity(hashes.len());
-        let pool = self.txpool.read().await;
-        for hash in hashes {
-            res.push(pool.txs().get(hash).cloned());
-        }
-        res
+    pub async fn find(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<Option<TxInfo>>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.sender.send(TxPoolMpsc::Find { ids, response }).await;
+        receiver
     }
 
-    async fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
-        self.txpool.read().await.txs().get(hash).cloned()
+    pub async fn find_one(&self, id: TxId) -> oneshot::Receiver<Option<TxInfo>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.sender.send(TxPoolMpsc::FindOne { id, response }).await;
+        receiver
     }
 
-    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
-    async fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcTx> {
-        let mut seen = HashMap::new();
-        {
-            let pool = self.txpool.read().await;
-            for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash) {
-                    pool.dependency()
-                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
-                }
-            }
-        }
-        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
-        // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.gas_price()));
-
-        list
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<Arc<Transaction>>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self
+            .sender
+            .send(TxPoolMpsc::FindDependent { ids, response })
+            .await;
+        receiver
     }
 
-    /// Iterete over `hashes` and return all hashes that we dont have.
-    async fn filter_by_negative(&self, tx_ids: &[TxId]) -> Vec<TxId> {
-        let mut res = Vec::new();
-        let pool = self.txpool.read().await;
-        for tx_id in tx_ids {
-            if pool.txs().get(tx_id).is_none() {
-                res.push(*tx_id)
-            }
-        }
-        res
+    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<TxId>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self
+            .sender
+            .send(TxPoolMpsc::FilterByNegative { ids, response })
+            .await;
+        receiver
     }
 
-    /// Return all sorted transactions that are includable in next block.
-    /// This is going to be heavy operation, use it with only when needed.
-    async fn includable(&self) -> Vec<ArcTx> {
-        let pool = self.txpool.read().await;
-        pool.sorted_includable()
-    }
-
-    /// When block is updated we need to receive all spend outputs and remove them from txpool
-    async fn block_update(&self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {
-        self.txpool.write().await.block_update()
-    }
-
-    /// remove transaction from pool needed on user demand. Low priority
-    async fn remove(&self, tx_ids: &[TxId]) {
-        let mut removed = Vec::new();
-        for tx_id in tx_ids {
-            let rem = { self.txpool.write().await.remove_by_tx_id(tx_id) };
-            removed.extend(rem.into_iter());
-        }
-        for removed in removed {
-            self.subs.removed(removed, &Error::Removed).await
-        }
-    }
-
-    async fn subscribe(&self, sub: Arc<dyn Subscriber>) {
-        self.subs.sub(sub);
-    }*/
-}
-
-#[async_trait]
-impl TxPool for TxPoolService {
-    /// import tx
-    async fn insert(&self, txs: Vec<ArcTx>) -> Vec<anyhow::Result<Vec<ArcTx>>> {
-        // insert inside pool
-
-        // Check that data is okay (witness match input/output, and if recovered signatures ara valid).
-        // should be done before transaction comes to txpool, or before it enters RwLocked region.
-        let mut res = Vec::new();
-        for tx in txs.iter() {
-            let mut pool = self.txpool.write().await;
-            res.push(pool.insert(tx.clone(), self.db.as_ref()).await)
-        }
-        // announce to subscribers
-        for (ret, tx) in res.iter().zip(txs.into_iter()) {
-            match ret {
-                Ok(removed) => {
-                    for removed in removed {
-                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
-                        // but for now it is okay to just use Error::Removed.
-                        self.subs.removed(removed.clone(), &Error::Removed).await;
-                    }
-                    self.subs.inserted(tx).await;
-                }
-                Err(_) => {}
-            }
-        }
-        res
-    }
-
-    /// find all tx by its hash
-    async fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
-        let mut res = Vec::with_capacity(hashes.len());
-        let pool = self.txpool.read().await;
-        for hash in hashes {
-            res.push(pool.txs().get(hash).cloned());
-        }
-        res
-    }
-
-    async fn find_one(&self, hash: &TxId) -> Option<TxInfo> {
-        self.txpool.read().await.txs().get(hash).cloned()
-    }
-
-    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
-    async fn find_dependent(&self, hashes: &[TxId]) -> Vec<ArcTx> {
-        let mut seen = HashMap::new();
-        {
-            let pool = self.txpool.read().await;
-            for hash in hashes {
-                if let Some(tx) = pool.txs().get(hash) {
-                    pool.dependency()
-                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
-                }
-            }
-        }
-        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
-        // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.gas_price()));
-
-        list
-    }
-
-    /// Iterete over `hashes` and return all hashes that we dont have.
-    async fn filter_by_negative(&self, tx_ids: &[TxId]) -> Vec<TxId> {
-        let mut res = Vec::new();
-        let pool = self.txpool.read().await;
-        for tx_id in tx_ids {
-            if pool.txs().get(tx_id).is_none() {
-                res.push(*tx_id)
-            }
-        }
-        res
-    }
-
-    /// Return all sorted transactions that are includable in next block.
-    /// This is going to be heavy operation, use it with only when needed.
-    async fn includable(&self) -> Vec<ArcTx> {
-        let pool = self.txpool.read().await;
-        pool.sorted_includable()
-    }
-
-    /// When block is updated we need to receive all spend outputs and remove them from txpool
-    async fn block_update(&self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {
-        self.txpool.write().await.block_update()
-    }
-
-    /// remove transaction from pool needed on user demand. Low priority
-    async fn remove(&self, tx_ids: &[TxId]) {
-        let mut removed = Vec::new();
-        for tx_id in tx_ids {
-            let rem = { self.txpool.write().await.remove_by_tx_id(tx_id) };
-            removed.extend(rem.into_iter());
-        }
-        for removed in removed {
-            self.subs.removed(removed, &Error::Removed).await
-        }
-    }
-
-    async fn subscribe(&self, sub: Arc<dyn Subscriber>) {
-        self.subs.sub(sub);
+    pub async fn remove(&self, ids: Vec<TxId>) {
+        let _ = self.sender.send(TxPoolMpsc::Remove { ids }).await;
     }
 }
 
 #[cfg(any(test))]
 pub mod tests {
+
     use super::*;
     use fuel_core_interfaces::db::helpers::*;
 
@@ -289,6 +125,7 @@ pub mod tests {
     async fn test_filter_by_negative() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -297,20 +134,28 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = TxPoolService::new(db, config).unwrap();
-        let out = service.insert(vec![tx1, tx2]).await;
+        let service = Service::new(db, config).unwrap();
+        service.start(br).await;
+
+        let out = service.insert(vec![tx1, tx2]).await.await.unwrap();
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        let out = service.filter_by_negative(&[tx1_hash, tx3_hash]).await;
+        let out = service
+            .filter_by_negative(vec![tx1_hash, tx3_hash])
+            .await
+            .await
+            .unwrap();
         assert_eq!(out.len(), 1, "Shoud be len 1:{:?}", out);
         assert_eq!(out[0], tx3_hash, "Found tx id match{:?}", out);
+        service.stop().await.unwrap().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_find() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -319,19 +164,22 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = TxPoolService::new(db, config).unwrap();
-        let out = service.insert(vec![tx1, tx2]).await;
+        let service = Service::new(db, config).unwrap();
+        service.start(br).await;
+        let out = service.insert(vec![tx1, tx2]).await.await.unwrap();
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        let out = service.find(&[tx1_hash, tx3_hash]).await;
+        let out = service.find(vec![tx1_hash, tx3_hash]).await.await.unwrap();
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
         let id = out[0].as_ref().unwrap().id();
         assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
         assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
+        service.stop().await.unwrap().await.unwrap();
     }
 
+    /*
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Config::default();
@@ -366,7 +214,7 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = TxPoolService::new(db, config).unwrap();
+        let service = Service::new(db, config).unwrap();
         service.subscribe(sub.clone()).await;
         let out = service.insert(vec![tx1, tx2]).await;
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
@@ -385,5 +233,5 @@ pub mod tests {
             assert_eq!(removed[0].id(), tx1_hash, "First removed should be tx1");
             assert_eq!(removed[1].id(), tx2_hash, "Second removed should be tx2");
         }
-    }
+    }*/
 }

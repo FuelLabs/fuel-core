@@ -37,12 +37,14 @@ impl TxQuery {
         let key = id.0;
 
         let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-
-        let found_tx = tx_pool.pool().find(&[key]).await;
+        /* TODO
+        let found_tx = vec![None];//tx_pool.pool().find(&[key]).await;
 
         if let Some(Some(transaction)) = found_tx.get(0) {
             Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
+             */
+        {
             Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
                 .map(|tx| Transaction(tx.into_owned())))
         }

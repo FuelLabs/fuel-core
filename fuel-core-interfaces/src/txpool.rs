@@ -27,37 +27,48 @@ pub trait TxPoolDb:
     }
 }
 
+#[derive(Debug)]
 pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it with only when needed.
-    Includable { oneshot: Vec<Arc<Transaction>> },
+    Includable {
+        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+    },
     /// import list of transaction into txpool. All needed parents need to be known
     /// and parent->child order should be enforced in Vec, we will not do that check inside
     /// txpool and will just drop child and include only parent. Additional restrain is that
     /// child gas_price needs to be lower then parent gas_price. Transaction can be received
     /// from p2p **RespondTransactions** or from userland. Because of userland we are returning
     /// error for every insert for better user experience.
-    Include {
-        tx: Vec<Transaction>,
+    Insert {
+        txs: Vec<Arc<Transaction>>,
         response: oneshot::Sender<Vec<anyhow::Result<Vec<Arc<Transaction>>>>>,
     },
     /// find all tx by their hash
     Find {
-        hashes: Vec<TxId>,
+        ids: Vec<TxId>,
         response: oneshot::Sender<Vec<Option<TxInfo>>>,
     },
     /// find one tx by its hash
     FindOne {
-        hashes: TxId,
+        id: TxId,
         response: oneshot::Sender<Option<TxInfo>>,
     },
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
     FindDependent {
-        hashes: Vec<TxId>,
+        ids: Vec<TxId>,
         response: oneshot::Sender<Vec<Arc<Transaction>>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
-    Remove { hashes: Vec<TxId> },
+    Remove { ids: Vec<TxId> },
+    /// Iterete over `hashes` and return all hashes that we dont have.
+    /// Needed when we receive list of new hashed from peer with
+    /// **BroadcastTransactionHashes**, so txpool needs to return
+    /// tx that we dont have, and request them from that particular peer.
+    FilterByNegative {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<TxId>>,
+    },
     /// stop txpool
     Stop,
 }
