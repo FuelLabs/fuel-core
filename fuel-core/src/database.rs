@@ -1,6 +1,8 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
+#[cfg(feature = "prometheus")]
+use crate::metrics::DATABASE_METRICS;
 use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
@@ -148,6 +150,13 @@ impl Database {
         column: ColumnId,
         value: V,
     ) -> Result<Option<V>, Error> {
+        #[cfg(feature = "prometheus")]
+        {
+            DATABASE_METRICS.write_meter.inc();
+            DATABASE_METRICS
+                .bytes_written_meter
+                .inc_by(bincode::serialized_size(&value).unwrap_or(0));
+        }
         let result = self.data.put(
             key.into(),
             column,
@@ -174,9 +183,21 @@ impl Database {
     }
 
     fn get<V: DeserializeOwned>(&self, key: &[u8], column: ColumnId) -> Result<Option<V>, Error> {
+        #[cfg(feature = "prometheus")]
+        {
+            DATABASE_METRICS.read_meter.inc();
+        }
         self.data
             .get(key, column)?
-            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
+            .map(|val| {
+                #[cfg(feature = "prometheus")]
+                {
+                    DATABASE_METRICS
+                        .bytes_read_meter
+                        .inc_by(bincode::serialized_size(&val).unwrap_or(0));
+                }
+                bincode::deserialize(&val).map_err(|_| Error::Codec)
+            })
             .transpose()
     }
 

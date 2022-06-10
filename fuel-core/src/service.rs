@@ -1,3 +1,5 @@
+#[cfg(feature = "prometheus")]
+use crate::metrics::start_metrics_server;
 use crate::{chain_config::ChainConfig, database::Database};
 use anyhow::Error as AnyError;
 use modules::Modules;
@@ -104,7 +106,13 @@ impl FuelService {
         let (bound_address, api_server) =
             graph_api::start_server(config, database, &modules).await?;
         tasks.push(api_server);
-
+        #[cfg(feature = "prometheus")]
+        {
+            // Socket is ignored for now, but as more services are added
+            // it maye be helpful to have a way to list all services and their ports
+            let (_, metrics_server) = start_metrics_server().await?;
+            tasks.push(metrics_server);
+        }
         Ok(FuelService {
             tasks,
             bound_address,

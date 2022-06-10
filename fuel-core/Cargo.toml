@@ -69,6 +69,7 @@ strum = "0.21"
 strum_macros = "0.21"
 tempfile = "3.3"
 thiserror = "1.0"
+prometheus = { version = "0.13.0", optional = true }
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"
@@ -87,6 +88,7 @@ fuel-vm = { version = "0.11", features = ["serde", "random", "test-helpers"] }
 insta = "1.8"
 
 [features]
-default = ["rocksdb", "debug"]
+prometheus = ["dep:prometheus"]
+default = ["rocksdb","prometheus" ,"debug"]
 debug = ["fuel-vm/debug"]
 test-helpers = []
