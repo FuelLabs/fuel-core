@@ -19,7 +19,8 @@ pub mod modules;
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub addr: SocketAddr,
+    pub gql_addr: SocketAddr,
+    pub metrics_addr: SocketAddr,
     pub database_path: PathBuf,
     pub database_type: DbType,
     pub chain_conf: ChainConfig,
@@ -34,7 +35,8 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            gql_addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            metrics_addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
@@ -63,7 +65,10 @@ pub struct FuelService {
     /// handler for all modules.
     modules: Modules,
     /// The address bound by the system for serving the API
+    // Ideally bound_address would be called gql_address, but that would breaking because its pub
     pub bound_address: SocketAddr,
+    #[cfg(feature = "prometheus")]
+    pub metrics_address: SocketAddr,
 }
 
 impl FuelService {
@@ -104,20 +109,31 @@ impl FuelService {
         // start background tasks
         let mut tasks = vec![];
         let (bound_address, api_server) =
-            graph_api::start_server(config, database, &modules).await?;
+            graph_api::start_server(config.clone(), database, &modules).await?;
         tasks.push(api_server);
         #[cfg(feature = "prometheus")]
         {
             // Socket is ignored for now, but as more services are added
             // it maye be helpful to have a way to list all services and their ports
-            let (_, metrics_server) = start_metrics_server().await?;
+            let (metrics_address, metrics_server) = start_metrics_server(config.clone()).await?;
             tasks.push(metrics_server);
+
+            Ok(FuelService {
+                tasks,
+                bound_address,
+                modules,
+                #[cfg(feature = "prometheus")]
+                metrics_address,
+            })
         }
-        Ok(FuelService {
-            tasks,
-            bound_address,
-            modules,
-        })
+        #[cfg(not(feature = "prometheus"))]
+        {
+            Ok(FuelService {
+                tasks,
+                bound_address,
+                modules,
+            })
+        }
     }
 
     /// Awaits for the completion of any server background tasks

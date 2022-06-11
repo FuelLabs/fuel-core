@@ -10,10 +10,10 @@ async fn test_database_metrics() {
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
 
+    let metrics_port = srv.metrics_address;
     let client = FuelClient::from(srv.bound_address);
     let owner = Address::default();
     let asset_id = AssetId::new([1u8; 32]);
-
     // Should generate some database reads
     _ = client
         .balance(
@@ -22,7 +22,7 @@ async fn test_database_metrics() {
         )
         .await;
 
-    let resp = reqwest::get("http://localhost:9090/metrics")
+    let resp = reqwest::get(format!("http://{}/metrics", metrics_port))
         .await
         .unwrap()
         .text()

@@ -3,12 +3,14 @@ use prometheus::{self, Encoder, IntCounter, TextEncoder};
 
 use prometheus::register_int_counter;
 
+use crate::service::Config;
 use anyhow::Result;
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
 };
 use hyper::{Body, Method, Request, Response, Server};
+use std::net::TcpListener;
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::task::JoinHandle;
 use tracing::info;
@@ -64,12 +66,13 @@ async fn metrics(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
     Ok(response)
 }
 
-pub async fn start_metrics_server() -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
-    let addr: SocketAddr = ([0, 0, 0, 0], 9090).into();
+pub async fn start_metrics_server(config: Config) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
+    let listener = TcpListener::bind(&config.metrics_addr)?;
+    let bound_addr = listener.local_addr().unwrap();
+
+    let return_bound_addr = bound_addr.clone();
 
     let handle = tokio::spawn(async move {
-        let addr_in_block: SocketAddr = ([0, 0, 0, 0], 9090).into();
-
         // For every connection, we must make a `Service` to handle all
         // incoming HTTP requests on said connection.
         let make_svc = make_service_fn(move |_conn| {
@@ -79,12 +82,12 @@ pub async fn start_metrics_server() -> Result<(SocketAddr, JoinHandle<Result<()>
             async move { Ok::<_, Infallible>(service_fn(metrics)) }
         });
 
-        let server = Server::bind(&addr_in_block).serve(make_svc);
+        let server = Server::bind(&bound_addr).serve(make_svc);
 
-        info!("Serving prometheus metrics on http://{}", addr_in_block);
+        info!("Serving prometheus metrics on http://{}", bound_addr);
 
         server.await.map_err(Into::into)
     });
 
-    Ok((addr, handle))
+    Ok((return_bound_addr, handle))
 }

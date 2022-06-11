@@ -31,7 +31,7 @@ pub async fn start_server(
     db: Database,
     modules: &Modules,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
-    let network_addr = config.addr;
+    let network_addr = config.gql_addr;
     let params = config.chain_conf.transaction_parameters;
     let schema = build_schema()
         .data(config)
