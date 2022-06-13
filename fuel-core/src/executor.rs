@@ -47,8 +47,6 @@ impl Executor {
         let db = self.database.clone();
 
         for tx in txs.iter() {
-            // verify predicates
-            self.verify_tx_predicates(&tx)?;
             // set status to submitted
             db.update_tx_status(&tx.id(), TransactionStatus::Submitted { time: Utc::now() })?;
         }

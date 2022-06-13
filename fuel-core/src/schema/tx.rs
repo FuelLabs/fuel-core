@@ -296,7 +296,9 @@ impl TxMutation {
                 .unwrap()
                 .as_ref()?;
 
-            txpool.includable().await.await?
+            let txs = txpool.includable().await.await?;
+            txpool.remove(vec![tx.id()]).await;
+            txs
         } else {
             vec![Arc::new(tx.clone())]
         };
@@ -310,6 +312,7 @@ impl TxMutation {
         };
         executor.submit_txs(includable).await?;
 
+        // probably need to fetch executed tx that is now in db.
         let tx = Transaction(tx);
         Ok(tx)
     }
