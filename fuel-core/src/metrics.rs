@@ -32,12 +32,12 @@ lazy_static! {
         read_meter: register_int_counter!("Reads", "Number of database read operations").unwrap(),
         bytes_written_meter: register_int_counter!(
             "Bytes_Written",
-            "Number bytes read from the database"
+            "The number of bytes written to the database"
         )
         .unwrap(),
         bytes_read_meter: register_int_counter!(
             "Bytes_Read",
-            "The Number of Bytes Read from the Database"
+            "The number of bytes read from the database"
         )
         .unwrap(),
     };
@@ -70,7 +70,7 @@ pub async fn start_metrics_server(config: Config) -> Result<(SocketAddr, JoinHan
     let listener = TcpListener::bind(&config.metrics_addr)?;
     let bound_addr = listener.local_addr().unwrap();
 
-    let return_bound_addr = bound_addr.clone();
+    let return_bound_addr = bound_addr;
 
     let handle = tokio::spawn(async move {
         // For every connection, we must make a `Service` to handle all
