@@ -1,7 +1,6 @@
 use super::modules::Modules;
 use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
-#[cfg(feature = "prometheus")]
 use crate::service::metrics::metrics;
 use crate::service::Config;
 use anyhow::Result;
