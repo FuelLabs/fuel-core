@@ -28,8 +28,6 @@ async fn test_database_metrics() {
         .await
         .unwrap();
 
-    println!("{:?}", resp);
-
     let categories = resp.split('\n').collect::<Vec<&str>>();
 
     srv.stop().await;
