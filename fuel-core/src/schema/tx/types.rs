@@ -7,12 +7,13 @@ use crate::{
         contract::Contract,
         scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
     },
-    tx_pool::{TransactionStatus as TxStatus, TxPool},
+    tx_pool::{TransactionStatus as TxStatus},
 };
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::{db::KvStoreError,model::TxInfo};
+use fuel_core_interfaces::{db::KvStoreError, model::TxInfo};
 use fuel_storage::Storage;
+use fuel_txpool::Service as TxPoolService;
 use fuel_types::bytes::SerializableVec;
 use fuel_vm::prelude::ProgramState as VmProgramState;
 use std::sync::Arc;
@@ -223,9 +224,9 @@ impl Transaction {
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
 
-        //let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
+        let txpool = ctx.data::<Arc<TxPoolService>>()?.clone();
 
-        let transaction_in_pool: Option<TxInfo> = None;//txpool.find_one(&self.0.id()).await;
+        let transaction_in_pool: Option<TxInfo> = txpool.find_one(self.0.id()).await.await?;
 
         if transaction_in_pool.is_some() {
             let time = transaction_in_pool.unwrap().submited_time();

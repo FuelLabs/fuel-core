@@ -110,6 +110,12 @@ impl Service {
         receiver
     }
 
+    pub async fn includable(&self) -> oneshot::Receiver<Vec<Arc<Transaction>>> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.sender.send(TxPoolMpsc::Includable { response }).await;
+        receiver
+    }
+
     pub async fn remove(&self, ids: Vec<TxId>) {
         let _ = self.sender.send(TxPoolMpsc::Remove { ids }).await;
     }

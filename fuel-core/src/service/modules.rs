@@ -1,18 +1,17 @@
 use super::Config;
-use crate::{database::Database, tx_pool::TxPool};
+use crate::database::Database;
 use anyhow::Result;
 use fuel_block_importer::{Config as FuelBlockImporterConfig, Service as FuelBlockImporterService};
 use fuel_block_producer::{Config as FuelBlockProducerConfig, Service as FuelBlockProducerService};
 use fuel_core_bft::{Config as FuelCoreBftConfig, Service as FuelCoreBftService};
 use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_sync::{Config as FuelSyncConfig, Service as FuelSyncService};
-use fuel_txpool::{Config as FuelTxPoolConfig, Service as FuelTxPoolService};
+use fuel_txpool::Service as FuelTxPoolService;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 pub struct Modules {
-    pub legacy_tx_pool: Arc<TxPool>,
     pub txpool: Arc<FuelTxPoolService>,
     pub block_importer: Arc<FuelBlockImporterService>,
     pub block_producer: Arc<FuelBlockProducerService>,
@@ -39,8 +38,6 @@ impl Modules {
 
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
-    // initialize transaction pool
-    let legacy_tx_pool = TxPool::new(database.clone(), config.clone());
     // Initialize and bind all components
     let block_importer =
         FuelBlockImporterService::new(&FuelBlockImporterConfig::default(), db).await?;
@@ -52,7 +49,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // let mut p2p = FuelP2P::new(FuelP2PConfig::default());
     let txpool = FuelTxPoolService::new(
         Box::new(database.clone()) as Box<dyn TxPoolDb>,
-        FuelTxPoolConfig::default(),
+        config.tx_pool_config.clone(),
     )?;
 
     let p2p_mpsc = ();
@@ -83,7 +80,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     Ok(Modules {
         txpool: Arc::new(txpool),
-        legacy_tx_pool: Arc::new(legacy_tx_pool),
         block_importer: Arc::new(block_importer),
         block_producer: Arc::new(block_producer),
         bft: Arc::new(bft),

@@ -1,15 +1,17 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
+use crate::executor::Executor;
 use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;
-use crate::tx_pool::TxPool;
+//use crate::tx_pool::TxPool;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
 use fuel_storage::Storage;
-use fuel_tx::Transaction as FuelTx;
+use fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx};
+use fuel_txpool::Service as TxPoolService;
 use fuel_vm::prelude::Deserializable;
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -35,16 +37,11 @@ impl TxQuery {
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let key = id.0;
+        let tx_pool = ctx.data::<Arc<TxPoolService>>().unwrap();
 
-        let _tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        /* TODO
-        let found_tx = vec![None];//tx_pool.pool().find(&[key]).await;
-
-        if let Some(Some(transaction)) = found_tx.get(0) {
+        if let Ok(Some(transaction)) = tx_pool.find_one(key).await.await {
             Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
-             */
-        {
             Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
                 .map(|tx| Transaction(tx.into_owned())))
         }
@@ -267,20 +264,53 @@ impl TxMutation {
         if let Some(utxo_validation) = utxo_validation {
             cfg.utxo_validation = utxo_validation;
         }
-        let tx = FuelTx::from_bytes(&tx.0)?;
-        // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
-        let receipts = tx_pool.run_tx(tx).await?;
-        Ok(receipts.into_iter().map(Into::into).collect())
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        tx.precompute_metadata();
+        let id = tx.id();
+
+        // make executor from transaction database view.
+        let executor = Executor {
+            database: transaction.deref().clone(),
+            config: cfg.clone(),
+        };
+        executor.submit_txs(vec![Arc::new(tx)]).await?;
+        // get receipts from db transaction
+        let receipts = Storage::<FuelBytes32, Vec<FuelReceipt>>::get(transaction.deref(), &id)?
+            .unwrap_or_default();
+        Ok(receipts.iter().map(Into::into).collect())
     }
 
     /// Submits transaction to the txpool
     async fn submit(&self, ctx: &Context<'_>, tx: HexString) -> async_graphql::Result<Transaction> {
-        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        let tx = FuelTx::from_bytes(&tx.0)?;
-        tx_pool.submit_tx(tx.clone()).await?;
-        let tx = Transaction(tx);
+        let db = ctx.data_unchecked::<Database>();
+        let txpool = ctx.data::<Arc<TxPoolService>>().unwrap();
+        let cfg = ctx.data_unchecked::<Config>().clone();
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        tx.precompute_metadata();
+        let includable = if cfg.utxo_validation {
+            txpool
+                .insert(vec![Arc::new(tx.clone())])
+                .await
+                .await?
+                .get(0)
+                .unwrap()
+                .as_ref()?;
 
+            txpool.includable().await.await?
+        } else {
+            vec![Arc::new(tx.clone())]
+        };
+
+        // next part can be extracted to saparate endpoint that will trigger block building
+        // just inlude call to txpool.includable
+
+        let executor = Executor {
+            database: db.clone(),
+            config: cfg.clone(),
+        };
+        executor.submit_txs(includable).await?;
+
+        let tx = Transaction(tx);
         Ok(tx)
     }
 }

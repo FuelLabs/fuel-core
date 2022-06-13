@@ -37,7 +37,6 @@ pub async fn start_server(
         .data(config)
         .data(db)
         .data(modules.txpool.clone())
-        .data(modules.legacy_tx_pool.clone())
         .data(modules.block_importer.clone())
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())

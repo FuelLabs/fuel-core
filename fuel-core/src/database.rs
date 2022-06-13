@@ -11,6 +11,7 @@ use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake};
 use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
+use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_storage::Storage;
 use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
 use serde::{de::DeserializeOwned, Serialize};
@@ -123,6 +124,8 @@ impl Drop for DropResources {
 */
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
+
+impl TxPoolDb for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
