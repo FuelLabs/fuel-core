@@ -1,21 +1,21 @@
+use fuel_core_interfaces::model::{BlockHeight, FuelBlock};
 use libp2p::request_response::OutboundFailure;
 use serde::{Deserialize, Serialize};
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
-/// Max Size in Bytes of the messages
-// todo: this will be defined once Request & Response Messages are clearly defined
-// it should be the biggest field of respective enum
-pub(crate) const MAX_REQUEST_SIZE: usize = 100;
-pub(crate) const MAX_RESPONSE_SIZE: usize = 100;
+
+/// Max Size in Bytes of the Request Message
+/// Currently the only and the biggest message is RequestBlock(BlockHeight)
+pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
-    RequestBlock,
+    RequestBlock(BlockHeight),
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    ResponseBlock,
+    ResponseBlock(FuelBlock),
 }
 
 #[derive(Debug)]

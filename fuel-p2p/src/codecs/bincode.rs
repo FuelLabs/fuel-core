@@ -2,8 +2,7 @@ use super::{GossipsubCodec, NetworkCodec};
 use crate::{
     gossipsub::messages::GossipsubMessage,
     request_response::messages::{
-        RequestMessage, ResponseMessage, MAX_REQUEST_SIZE, MAX_RESPONSE_SIZE,
-        REQUEST_RESPONSE_PROTOCOL_ID,
+        RequestMessage, ResponseMessage, MAX_REQUEST_SIZE, REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -18,7 +17,20 @@ use libp2p::{
 use std::io;
 
 #[derive(Debug, Clone)]
-pub struct BincodeCodec;
+pub struct BincodeCodec {
+    /// Used for `max_size` parameter when reading Response Message
+    /// Necessary in order to avoid DoS attacks
+    /// Currently the size mostly depends on the max size of the FuelBlock
+    max_response_size: usize,
+}
+
+impl BincodeCodec {
+    pub fn new(max_block_size: usize) -> Self {
+        Self {
+            max_response_size: max_block_size,
+        }
+    }
+}
 
 /// Since Bincode does not support async reads or writes out of the box
 /// We prefix Request & Response Messages with the length of the data in bytes
@@ -57,7 +69,7 @@ impl RequestResponseCodec for BincodeCodec {
     where
         T: futures::AsyncRead + Unpin + Send,
     {
-        let encoded_data = read_length_prefixed(socket, MAX_RESPONSE_SIZE).await?;
+        let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
 
         match bincode::deserialize(&encoded_data) {
             Ok(decoded_data) => Ok(decoded_data),
