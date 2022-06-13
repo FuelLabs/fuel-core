@@ -26,8 +26,6 @@ jobs:
   lint-toml-files:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
-    # steps:
-    #   - run: echo "Linting toml files"
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -56,8 +54,6 @@ jobs:
   cargo-verifications:
     needs: cancel-previous-runs
     runs-on: ubuntu-latest
-    # steps:
-    #   - run: echo "Cargo Verifications"
     strategy:
       matrix:
         include:
@@ -170,8 +166,6 @@ jobs:
 
     if: always()
     runs-on: ubuntu-latest
-    # steps:
-    #   - run: echo "Publishing docker image"
     permissions:
       contents: read
       packages: write
@@ -395,8 +389,6 @@ jobs:
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
-    # steps:
-    #   - run: echo "Deploying latest fuel-core release"
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
