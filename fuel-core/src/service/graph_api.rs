@@ -48,6 +48,7 @@ pub async fn start_server(
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
+        .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
