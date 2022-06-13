@@ -67,6 +67,7 @@ async fn metrics(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
 }
 
 pub async fn start_metrics_server(config: Config) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
+    #[cfg(feature = "prometheus")]
     let listener = TcpListener::bind(&config.metrics_addr)?;
     let bound_addr = listener.local_addr().unwrap();
 

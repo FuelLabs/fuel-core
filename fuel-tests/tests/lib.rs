@@ -7,6 +7,7 @@ mod dap;
 mod debugger;
 mod health;
 mod helpers;
+#[cfg(feature = "prometheus")]
 mod metrics;
 mod node_info;
 mod tx;

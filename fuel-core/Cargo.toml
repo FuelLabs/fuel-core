@@ -57,6 +57,7 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
+prometheus = { version = "0.13.0", optional = true }
 rand = "0.8"
 rocksdb = { version = "0.17", features = [
     "snappy",
@@ -69,7 +70,6 @@ strum = "0.21"
 strum_macros = "0.21"
 tempfile = "3.3"
 thiserror = "1.0"
-prometheus = { version = "0.13.0", optional = true }
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.2.1", features = ["set-header", "trace"] }
 tower-layer = "0.3"

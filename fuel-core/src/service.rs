@@ -20,6 +20,7 @@ pub mod modules;
 #[derive(Clone, Debug)]
 pub struct Config {
     pub gql_addr: SocketAddr,
+    #[cfg(feature = "prometheus")]
     pub metrics_addr: SocketAddr,
     pub database_path: PathBuf,
     pub database_type: DbType,
@@ -36,6 +37,7 @@ impl Config {
     pub fn local_node() -> Self {
         Self {
             gql_addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
+            #[cfg(feature = "prometheus")]
             metrics_addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
             database_type: DbType::InMemory,
