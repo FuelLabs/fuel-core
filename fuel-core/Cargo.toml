@@ -89,6 +89,6 @@ insta = "1.8"
 
 [features]
 prometheus = ["dep:prometheus"]
-default = ["rocksdb","prometheus" ,"debug"]
+default = ["rocksdb", "prometheus", "debug"]
 debug = ["fuel-vm/debug"]
 test-helpers = []
