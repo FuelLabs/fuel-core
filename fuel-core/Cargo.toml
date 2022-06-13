@@ -57,7 +57,7 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
-prometheus = { version = "0.13.0", optional = true }
+prometheus = { version = "0.13", optional = true }
 rand = "0.8"
 rocksdb = { version = "0.17", features = [
     "snappy",
