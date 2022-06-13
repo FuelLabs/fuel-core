@@ -11,11 +11,9 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
-#[cfg(feature = "prometheus")]
-pub mod metrics;
-
 pub(crate) mod genesis;
 pub mod graph_api;
+pub mod metrics;
 pub mod modules;
 
 #[derive(Clone, Debug)]

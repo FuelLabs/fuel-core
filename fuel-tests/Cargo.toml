@@ -19,7 +19,7 @@ harness = true
 [[test]]
 name = "metrics_test"
 path = "tests/metrics.rs"
-required-features = ["prometheus"]
+required-features = ["fuel-core/prometheus"]
 harness = true
 
 [dependencies]
