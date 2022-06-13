@@ -162,7 +162,6 @@ jobs:
       - cancel-previous-runs
       - lint-toml-files
       - cargo-verifications
-    # - publish-crates
 
     if: always()
     runs-on: ubuntu-latest
