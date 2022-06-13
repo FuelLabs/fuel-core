@@ -3,7 +3,7 @@ use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::model::FuelBlockDb;
 #[cfg(feature = "prometheus")]
-use crate::service::metrics::DATABASE_METRICS;
+use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
