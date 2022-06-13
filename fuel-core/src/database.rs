@@ -220,6 +220,13 @@ impl Database {
             .iter_all(column, prefix, start, direction.unwrap_or_default())
             .map(|(key, value)| {
                 let key = K::from(key);
+                #[cfg(feature = "prometheus")]
+                {
+                    DATABASE_METRICS.read_meter.inc();
+                    DATABASE_METRICS
+                        .bytes_read_meter
+                        .inc_by(bincode::serialized_size(&value).unwrap_or(0));
+                }
                 let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
                 Ok((key, value))
             })
