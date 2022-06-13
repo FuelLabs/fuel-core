@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - elliot/deploy-dev-environment
+      - master
   pull_request:
   release:
     types: [published]
@@ -385,7 +385,7 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    if: github.ref == 'refs/heads/elliot/deploy-dev-environment'
+    if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
