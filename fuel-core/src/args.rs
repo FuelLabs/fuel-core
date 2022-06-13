@@ -113,13 +113,9 @@ impl Opt {
             predicates,
         } = self;
 
-        let gql_addr = net::SocketAddr::new(ip, port);
-        #[cfg(feature = "prometheus")]
-        let metrics_addr = net::SocketAddr::new(ip, port);
+        let addr = net::SocketAddr::new(ip, port);
         Ok(Config {
-            gql_addr,
-            #[cfg(feature = "prometheus")]
-            metrics_addr,
+            addr,
             database_path,
             database_type,
             chain_conf: chain_config.as_str().parse()?,

@@ -1,6 +1,8 @@
 use super::modules::Modules;
 use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
+#[cfg(feature = "prometheus")]
+use crate::service::metrics::metrics;
 use crate::service::Config;
 use anyhow::Result;
 use async_graphql::{
@@ -31,7 +33,7 @@ pub async fn start_server(
     db: Database,
     modules: &Modules,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
-    let network_addr = config.gql_addr;
+    let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
     let schema = build_schema()
         .data(config)
@@ -43,9 +45,31 @@ pub async fn start_server(
         .data(modules.bft.clone());
     let schema = dap::init(schema, params).extension(Tracing).finish();
 
+    #[cfg(not(feature = "prometheus"))]
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
+        .route("/health", get(health))
+        .layer(Extension(schema))
+        .layer(TraceLayer::new_for_http())
+        .layer(SetResponseHeaderLayer::<_>::overriding(
+            ACCESS_CONTROL_ALLOW_ORIGIN,
+            HeaderValue::from_static("*"),
+        ))
+        .layer(SetResponseHeaderLayer::<_>::overriding(
+            ACCESS_CONTROL_ALLOW_METHODS,
+            HeaderValue::from_static("*"),
+        ))
+        .layer(SetResponseHeaderLayer::<_>::overriding(
+            ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_static("*"),
+        ));
+
+    #[cfg(feature = "prometheus")]
+    let router = Router::new()
+        .route("/playground", get(graphql_playground))
+        .route("/graphql", post(graphql_handler).options(ok))
+        .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())

@@ -1,9 +1,9 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
-#[cfg(feature = "prometheus")]
-use crate::metrics::DATABASE_METRICS;
 use crate::model::FuelBlockDb;
+#[cfg(feature = "prometheus")]
+use crate::service::metrics::DATABASE_METRICS;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{

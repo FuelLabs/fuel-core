@@ -16,6 +16,12 @@ name = "integration_tests"
 path = "tests/lib.rs"
 harness = true
 
+[[test]]
+name = "metrics_test"
+path = "tests/metrics.rs"
+required-features = ["prometheus"]
+harness = true
+
 [dependencies]
 chrono = { version = "0.4", features = ["serde"] }
 fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-features = false }
