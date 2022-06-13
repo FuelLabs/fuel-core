@@ -288,6 +288,12 @@ impl DapMutation {
             .transact(tx)
             .map_err(|err| async_graphql::Error::new(format!("Transaction failed: {err:?}")))?;
 
+        let json_receipts = state_ref
+            .receipts()
+            .iter()
+            .map(|r| serde_json::to_string(&r).expect("JSON serialization failed"))
+            .collect();
+
         #[cfg(feature = "debug")]
         {
             let dbgref = state_ref.state().debug_ref();
@@ -300,6 +306,7 @@ impl DapMutation {
                     DebugEval::Continue => None,
                     DebugEval::Breakpoint(bp) => Some(bp.into()),
                 }),
+                json_receipts,
             })
         }
 
@@ -309,6 +316,7 @@ impl DapMutation {
             Ok(self::gql_types::RunResult {
                 state: self::gql_types::RunState::Completed,
                 breakpoint: None,
+                json_receipts,
             })
         }
     }
@@ -337,6 +345,9 @@ impl DapMutation {
             .vm
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
+
+        let receipt_count_before = vm.receipts().len();
+
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
@@ -344,11 +355,19 @@ impl DapMutation {
                 return Ok(self::gql_types::RunResult {
                     state: self::gql_types::RunState::Completed,
                     breakpoint: None,
+                    json_receipts: Vec::new(),
                 })
             }
             // The transaction was already completed earlier, so it cannot be resumed
             Err(err) => return Err(async_graphql::Error::new(format!("VM error: {err:?}"))),
         };
+
+        let json_receipts = vm
+            .receipts()
+            .iter()
+            .skip(receipt_count_before)
+            .map(|r| serde_json::to_string(&r).expect("JSON serialization failed"))
+            .collect();
 
         let dbgref = state.debug_ref();
 
@@ -361,6 +380,7 @@ impl DapMutation {
                 DebugEval::Continue => None,
                 DebugEval::Breakpoint(bp) => Some(bp.into()),
             }),
+            json_receipts,
         })
     }
 }
@@ -423,9 +443,10 @@ mod gql_types {
         Breakpoint,
     }
 
-    #[derive(Debug, Clone, Copy, SimpleObject)]
+    #[derive(Debug, Clone, SimpleObject)]
     pub struct RunResult {
         pub state: RunState,
         pub breakpoint: Option<OutputBreakpoint>,
+        pub json_receipts: Vec<String>,
     }
 }
