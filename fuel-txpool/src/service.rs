@@ -127,6 +127,28 @@ pub mod tests {
     use fuel_core_interfaces::db::helpers::*;
 
     #[tokio::test]
+    async fn test_start_stop() {
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let (bs, _br) = broadcast::channel(10);
+
+        let service = Service::new(db, config).unwrap();
+        assert!(service.start(bs.subscribe()).await, "start service");
+
+        //double start will return false
+        assert!(
+            !service.start(bs.subscribe()).await,
+            "double start should fail"
+        );
+
+        let stop_handle = service.stop().await;
+        assert!(stop_handle.is_some());
+        let _ = stop_handle.unwrap().await;
+
+        assert!(service.start(bs.subscribe()).await, "Should start again");
+    }
+
+    #[tokio::test]
     async fn test_filter_by_negative() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
