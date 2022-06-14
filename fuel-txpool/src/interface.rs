@@ -53,9 +53,7 @@ impl Interface {
                         TxPoolMpsc::Remove { ids } => {
                             let _ = interface.remove(&ids).await;
                         }
-                        TxPoolMpsc::Stop => {
-                            ()
-                        }
+                        TxPoolMpsc::Stop => {}
                     }});
                 }
                 _block_updated = new_block.recv() => {

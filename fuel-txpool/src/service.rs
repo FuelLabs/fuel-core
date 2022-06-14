@@ -56,7 +56,6 @@ impl Service {
             Some(tokio::spawn(async move {
                 let ret = join_handle.await;
                 *receiver.lock().await = ret.ok();
-                ()
             }))
         } else {
             None
