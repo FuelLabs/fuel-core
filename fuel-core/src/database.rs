@@ -153,15 +153,13 @@ impl Database {
         #[cfg(feature = "prometheus")]
         {
             DATABASE_METRICS.write_meter.inc();
-            DATABASE_METRICS
-                .bytes_written_meter
-                .inc_by(bincode::serialized_size(&value).unwrap_or(0));
         }
-        let result = self.data.put(
-            key.into(),
-            column,
-            bincode::serialize(&value).map_err(|_| Error::Codec)?,
-        )?;
+        let serialized_value = bincode::serialize(&value).map_err(|_| Error::Codec)?;
+        #[cfg(feature = "prometheus")]
+        DATABASE_METRICS
+            .bytes_written_meter
+            .inc_by(serialized_value.len() as u64);
+        let result = self.data.put(key.into(), column, serialized_value)?;
         if let Some(previous) = result {
             Ok(Some(
                 bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
@@ -192,9 +190,7 @@ impl Database {
             .map(|val| {
                 #[cfg(feature = "prometheus")]
                 {
-                    DATABASE_METRICS
-                        .bytes_read_meter
-                        .inc_by(val.len() as u64);
+                    DATABASE_METRICS.bytes_read_meter.inc_by(val.len() as u64);
                 }
                 bincode::deserialize(&val).map_err(|_| Error::Codec)
             })
