@@ -2,8 +2,8 @@ pub mod config;
 mod containers;
 pub use fuel_core_interfaces::txpool::Error;
 
-pub mod service;
 mod interface;
+pub mod service;
 pub mod txpool;
 pub mod types;
 

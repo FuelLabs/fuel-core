@@ -7,7 +7,7 @@ use crate::{
         contract::Contract,
         scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
     },
-    tx_pool::{TransactionStatus as TxStatus},
+    tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
