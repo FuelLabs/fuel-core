@@ -25,6 +25,9 @@ pub struct P2PConfig {
     /// The TCP port that Swarm listens on
     pub tcp_port: u16,
 
+    /// Max Size of a FuelBlock in bytes
+    pub max_block_size: usize,
+
     // `DiscoveryBehaviour` related fields
     pub bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     pub enable_mdns: bool,
