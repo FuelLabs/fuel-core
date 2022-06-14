@@ -2,8 +2,6 @@
 use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::model::FuelBlockDb;
-#[cfg(feature = "prometheus")]
-use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 use crate::state::{
@@ -150,16 +148,11 @@ impl Database {
         column: ColumnId,
         value: V,
     ) -> Result<Option<V>, Error> {
-        #[cfg(feature = "prometheus")]
-        {
-            DATABASE_METRICS.write_meter.inc();
-        }
-        let serialized_value = bincode::serialize(&value).map_err(|_| Error::Codec)?;
-        #[cfg(feature = "prometheus")]
-        DATABASE_METRICS
-            .bytes_written_meter
-            .inc_by(serialized_value.len() as u64);
-        let result = self.data.put(key.into(), column, serialized_value)?;
+        let result = self.data.put(
+            key.into(),
+            column,
+            bincode::serialize(&value).map_err(|_| Error::Codec)?,
+        )?;
         if let Some(previous) = result {
             Ok(Some(
                 bincode::deserialize(&previous).map_err(|_| Error::Codec)?,
@@ -181,19 +174,9 @@ impl Database {
     }
 
     fn get<V: DeserializeOwned>(&self, key: &[u8], column: ColumnId) -> Result<Option<V>, Error> {
-        #[cfg(feature = "prometheus")]
-        {
-            DATABASE_METRICS.read_meter.inc();
-        }
         self.data
             .get(key, column)?
-            .map(|val| {
-                #[cfg(feature = "prometheus")]
-                {
-                    DATABASE_METRICS.bytes_read_meter.inc_by(val.len() as u64);
-                }
-                bincode::deserialize(&val).map_err(|_| Error::Codec)
-            })
+            .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
             .transpose()
     }
 
@@ -216,13 +199,6 @@ impl Database {
             .iter_all(column, prefix, start, direction.unwrap_or_default())
             .map(|(key, value)| {
                 let key = K::from(key);
-                #[cfg(feature = "prometheus")]
-                {
-                    DATABASE_METRICS.read_meter.inc();
-                    DATABASE_METRICS
-                        .bytes_read_meter
-                        .inc_by(bincode::serialized_size(&value).unwrap_or(0));
-                }
                 let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
                 Ok((key, value))
             })
