@@ -1,11 +1,10 @@
 [package]
 name = "fuel-relayer"
-version = "0.0.0"
+version = "0.8.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel Relayer"
-publish = false
 
 [dependencies]
 anyhow = "1.0"
@@ -13,16 +12,16 @@ async-trait = "0.1"
 bytes = "1.1"
 chrono = "0.4"
 env_logger = "0.9"
-ethers-contract = { git = "https://github.com/gakonst/ethers-rs.git", branch = "master", default-features = false, features = [
+ethers-contract = { version = "0.13", default-features = false, features = [
     "abigen",
 ] }
-ethers-core = { git = "https://github.com/gakonst/ethers-rs.git", branch = "master", default-features = false }
-ethers-middleware = { git = "https://github.com/gakonst/ethers-rs.git", branch = "master", default-features = false }
-ethers-providers = { git = "https://github.com/gakonst/ethers-rs.git", branch = "master", default-features = false, features = [
+ethers-core = { version = "0.13", default-features = false }
+ethers-middleware = { version = "0.13", default-features = false }
+ethers-providers = { version = "0.13", default-features = false, features = [
     "ws",
     "rustls",
 ] }
-ethers-signers = { git = "https://github.com/gakonst/ethers-rs.git", branch = "master", default-features = false }
+ethers-signers = { version = "0.13", default-features = false }
 features = "0.10"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.8.0" }
 fuel-tx = { version = "0.12", features = ["serde"] }
