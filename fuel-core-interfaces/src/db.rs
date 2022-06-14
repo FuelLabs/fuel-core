@@ -590,7 +590,7 @@ pub mod helpers {
             let block = SealedFuelBlock {
                 block: FuelBlock {
                     header: FuelBlockHeader {
-                        number: BlockHeight::from(2u64),
+                        number: *BlockHeight::from(2u64),
                         time: Utc::now(),
                         ..Default::default()
                     },

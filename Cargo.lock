@@ -2092,9 +2092,11 @@ name = "fuel-block-producer"
 version = "0.9.4"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fuel-core-interfaces",
  "parking_lot 0.12.1",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

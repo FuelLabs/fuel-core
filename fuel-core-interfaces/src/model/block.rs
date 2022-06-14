@@ -1,9 +1,13 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
+use crate::model::DaBlockHeight;
 use chrono::{DateTime, TimeZone, Utc};
 use core::ops::Deref;
 use fuel_crypto::Hasher;
+use fuel_merkle::binary::MerkleTree;
+use fuel_merkle::common::StorageMap;
 use fuel_tx::{Address, AssetId, Bytes32, Transaction};
+use fuel_types::bytes::SerializableVec;
 use fuel_types::Word;
 use std::collections::HashMap;
 
@@ -18,7 +22,7 @@ pub struct FuelBlockHeader {
     /// example, they should verify that the block number satisfies the finality requirements of the
     /// layer 1 chain. They should also verify that the block number isn't too stale and is increasing.
     /// Some similar concerns are noted in this issue: https://github.com/FuelLabs/fuel-specs/issues/220
-    pub number: BlockHeight,
+    pub number: DaBlockHeight,
     /// Block header hash of the previous block.
     pub parent_hash: Bytes32,
     /// Merkle root of all previous block header hashes.
@@ -46,7 +50,7 @@ impl FuelBlockHeader {
     fn hash(&self) -> Bytes32 {
         let mut hasher = Hasher::default();
         hasher.input(&self.height.to_bytes()[..]);
-        hasher.input(&self.number.to_bytes()[..]);
+        hasher.input(&self.number.to_be_bytes()[..]);
         hasher.input(self.parent_hash.as_ref());
         hasher.input(self.prev_root.as_ref());
         hasher.input(self.transactions_root.as_ref());
@@ -62,6 +66,17 @@ impl FuelBlockHeader {
             self.hash()
         }
     }
+
+    pub fn transactions_root(txs: &[Transaction]) -> Bytes32 {
+        let mut storage = StorageMap::new();
+        let mut tree = MerkleTree::new(&mut storage);
+        for tx in txs {
+            // serialize tx into canonical format for hashing
+            let ser_tx = tx.clone().to_bytes();
+            tree.push(&ser_tx).expect("infallible storage");
+        }
+        tree.root().expect("infallible storage").into()
+    }
 }
 
 impl Default for FuelBlockHeader {
@@ -69,7 +84,7 @@ impl Default for FuelBlockHeader {
         Self {
             time: Utc.timestamp(0, 0),
             height: BlockHeight::default(),
-            number: BlockHeight::default(),
+            number: DaBlockHeight::default(),
             parent_hash: Bytes32::default(),
             prev_root: Bytes32::default(),
             transactions_root: Bytes32::default(),

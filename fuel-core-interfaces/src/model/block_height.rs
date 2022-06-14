@@ -1,4 +1,4 @@
-use derive_more::{Add, Deref, Display, From, Into};
+use derive_more::{Add, Deref, Display, From, Into, Sub};
 use std::{
     array::TryFromSliceError,
     convert::{TryFrom, TryInto},
@@ -6,7 +6,20 @@ use std::{
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
-    Copy, Clone, Debug, Default, PartialEq, PartialOrd, Eq, Add, Display, Into, From, Deref, Hash,
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    PartialOrd,
+    Eq,
+    Add,
+    Sub,
+    Display,
+    Into,
+    From,
+    Deref,
+    Hash,
 )]
 pub struct BlockHeight(u32);
 

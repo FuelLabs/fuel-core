@@ -1,38 +1,87 @@
+use crate::block_producer::Task;
+use crate::db::BlockProducerDatabase;
+use crate::ports::{Relayer, TxPool};
 use crate::Config;
-use fuel_core_interfaces::{block_producer::BlockProducerMpsc, txpool};
-use parking_lot::Mutex;
-use tokio::{sync::mpsc, task::JoinHandle};
+use fuel_core_interfaces::block_producer::BlockProducerBroadcast;
+use fuel_core_interfaces::block_producer::BlockProducerMpsc;
+use std::sync::Arc;
+use tokio::{
+    sync::{broadcast, mpsc, Mutex},
+    task::JoinHandle,
+};
+use tracing::{info, warn};
 
+/// Primary entrypoint for the block producer.
+/// Manages channels and tasks related to block production (i.e. supervisor)
+/// External dependencies are interfaced for maximal decoupling, modularity and testability.
 pub struct Service {
-    join: Mutex<Option<JoinHandle<()>>>,
+    join: Mutex<Option<JoinHandle<mpsc::Receiver<BlockProducerMpsc>>>>,
     sender: mpsc::Sender<BlockProducerMpsc>,
+    broadcast: broadcast::Sender<BlockProducerBroadcast>,
+    config: Config,
+    receiver: Arc<Mutex<Option<mpsc::Receiver<BlockProducerMpsc>>>>,
 }
 
 impl Service {
-    pub async fn new(_config: &Config, _db: ()) -> anyhow::Result<Self> {
-        let (sender, _receiver) = mpsc::channel(100);
+    pub async fn new(config: &Config, _db: ()) -> Result<Self, anyhow::Error> {
+        let (sender, receiver) = mpsc::channel(100);
+        let (broadcast, _receiver) = broadcast::channel(100);
         Ok(Self {
             sender,
             join: Mutex::new(None),
+            broadcast,
+            config: config.clone(),
+            receiver: Arc::new(Mutex::new(Some(receiver))),
         })
     }
 
-    pub async fn start(&self, _txpool: txpool::Sender) {
-        let mut join = self.join.lock();
+    pub async fn start(
+        &self,
+        txpool: Box<dyn TxPool>,
+        relayer: Box<dyn Relayer>,
+        db: Box<dyn BlockProducerDatabase>,
+    ) -> bool {
+        let mut join = self.join.lock().await;
         if join.is_none() {
-            *join = Some(tokio::spawn(async {}));
+            if let Some(receiver) = self.receiver.lock().await.take() {
+                let task = Task {
+                    receiver,
+                    config: self.config.clone(),
+                    db,
+                    relayer,
+                    txpool,
+                };
+                *join = Some(tokio::spawn(task.spawn()));
+                return true;
+            } else {
+                warn!("Starting block producer that is stopping");
+            }
+        } else {
+            warn!("Service block producer is already started")
         }
+        false
     }
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
-        let join = self.join.lock().take();
-        if join.is_some() {
+        info!("stopping block producer service...");
+        let join = self.join.lock().await.take();
+        if let Some(join_handle) = join {
             let _ = self.sender.send(BlockProducerMpsc::Stop);
+            let receiver = self.receiver.clone();
+            Some(tokio::spawn(async move {
+                let ret = join_handle.await;
+                *receiver.lock().await = ret.ok();
+            }))
+        } else {
+            None
         }
-        join
     }
 
     pub fn sender(&self) -> &mpsc::Sender<BlockProducerMpsc> {
         &self.sender
+    }
+
+    pub fn subscribe_ch(&self) -> broadcast::Receiver<BlockProducerBroadcast> {
+        self.broadcast.subscribe()
     }
 }
