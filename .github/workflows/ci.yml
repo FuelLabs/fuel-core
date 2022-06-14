@@ -162,7 +162,6 @@ jobs:
       - cancel-previous-runs
       - lint-toml-files
       - cargo-verifications
-      - publish-crates
 
     if: always()
     runs-on: ubuntu-latest
@@ -383,15 +382,15 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  # Deploy Latest Fuel-Core Release
   deploy:
-    # Deploy Latest Fuel-Core Release
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
-        if: github.ref == 'refs/heads/master'
         with:
           workflow: Deploy Fuel-Core on k8s
           repo: FuelLabs/fuel-deployment
