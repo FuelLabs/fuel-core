@@ -194,7 +194,7 @@ impl Database {
                 {
                     DATABASE_METRICS
                         .bytes_read_meter
-                        .inc_by(bincode::serialized_size(&val).unwrap_or(0));
+                        .inc_by(val.len() as u64);
                 }
                 bincode::deserialize(&val).map_err(|_| Error::Codec)
             })
