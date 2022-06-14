@@ -19,7 +19,7 @@ harness = true
 [[test]]
 name = "metrics_test"
 path = "tests/metrics.rs"
-required-features = ["fuel-core/prometheus"]
+required-features = ["fuel-core/prometheus", "fuel-core/rocksdb"]
 harness = true
 
 [dependencies]
@@ -38,6 +38,7 @@ rand = "0.8"
 reqwest = "0.11"
 rstest = { version = "0.13" }
 serde_json = "1.0"
+tempfile = "3.3"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [features]

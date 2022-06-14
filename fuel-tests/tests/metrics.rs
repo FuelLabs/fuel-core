@@ -1,12 +1,15 @@
-use fuel_core::service::{Config, FuelService};
+use fuel_core::service::{Config, DbType, FuelService};
 use fuel_gql_client::client::FuelClient;
 use fuel_tx::AssetId;
 use fuel_vm::prelude::Address;
+use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_database_metrics() {
-    let config = Config::local_node();
-
+    let mut config = Config::local_node();
+    let tmp_dir = TempDir::new().unwrap();
+    config.database_type = DbType::RocksDb;
+    config.database_path = tmp_dir.path().to_path_buf();
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
 
