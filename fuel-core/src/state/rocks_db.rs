@@ -113,7 +113,7 @@ impl KeyValueStore for RocksDb {
         #[cfg(feature = "prometheus")]
         {
             if value.is_ok() && value.as_ref().unwrap().is_some() {
-                let value_as_vec: Vec<u8> = value.as_ref().unwrap().unwrap();
+                let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
                 DATABASE_METRICS
                     .bytes_read_meter
                     .inc_by(value_as_vec.len() as u64);
