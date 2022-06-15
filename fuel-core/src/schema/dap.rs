@@ -4,7 +4,7 @@ use crate::schema::scalars::U64;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
-    fuel_vm::{self, consts, prelude::*},
+    fuel_vm::{consts, prelude::*},
 };
 use futures::lock::Mutex;
 use std::{collections::HashMap, io, sync};
@@ -342,7 +342,7 @@ impl DapMutation {
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+            Err(fuel_core_interfaces::common::fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
                 return Ok(self::gql_types::RunResult {
                     state: self::gql_types::RunState::Completed,
                     breakpoint: None,
