@@ -1,3 +1,5 @@
+#[cfg(feature = "prometheus")]
+use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
 use crate::{
     database::{columns, columns::METADATA, VERSION},
     state::{
@@ -102,9 +104,22 @@ impl RocksDb {
 
 impl KeyValueStore for RocksDb {
     fn get(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
-        self.db
+        #[cfg(feature = "prometheus")]
+        DATABASE_METRICS.read_meter.inc();
+        let value = self
+            .db
             .get_cf(&self.cf(column), key)
-            .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map_err(|e| Error::DatabaseError(Box::new(e)));
+        #[cfg(feature = "prometheus")]
+        {
+            if value.is_ok() && value.as_ref().unwrap().is_some() {
+                let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
+                DATABASE_METRICS
+                    .bytes_read_meter
+                    .inc_by(value_as_vec.len() as u64);
+            }
+        }
+        value
     }
 
     fn put(
@@ -113,6 +128,13 @@ impl KeyValueStore for RocksDb {
         column: ColumnId,
         value: Vec<u8>,
     ) -> crate::state::Result<Option<Vec<u8>>> {
+        #[cfg(feature = "prometheus")]
+        {
+            DATABASE_METRICS.write_meter.inc();
+            DATABASE_METRICS
+                .bytes_written_meter
+                .inc_by(value.len() as u64);
+        }
         let prev = self.get(&key, column)?;
         self.db
             .put_cf(&self.cf(column), key, value)
@@ -171,7 +193,17 @@ impl KeyValueStore for RocksDb {
         let iter = self
             .db
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(|(key, value)| (key.to_vec(), value.to_vec()));
+            .map(|(key, value)| {
+                let value_as_vec = value.to_vec();
+                #[cfg(feature = "prometheus")]
+                {
+                    DATABASE_METRICS.read_meter.inc();
+                    DATABASE_METRICS
+                        .bytes_read_meter
+                        .inc_by(value_as_vec.len() as u64);
+                }
+                (key.to_vec(), value_as_vec)
+            });
 
         if let Some(prefix) = prefix {
             let prefix = prefix.to_vec();

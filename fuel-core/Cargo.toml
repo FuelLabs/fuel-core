@@ -50,6 +50,7 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
+prometheus = { version = "0.13", optional = true }
 rand = "0.8"
 rocksdb = { version = "0.17", features = [
     "snappy",
@@ -79,6 +80,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["serde", 
 insta = "1.8"
 
 [features]
-default = ["rocksdb", "debug"]
+prometheus = ["dep:prometheus"]
+default = ["rocksdb", "prometheus", "debug"]
 debug = ["fuel-core-interfaces/debug"]
 test-helpers = []
