@@ -1,10 +1,10 @@
 use crate::{types::*, Error};
 use anyhow::anyhow;
 use fuel_core_interfaces::{
+    common::fuel_tx::{Input, Output, UtxoId},
     model::{ArcTx, Coin, CoinStatus, TxInfo},
     txpool::TxPoolDb,
 };
-use fuel_tx::{Input, Output, UtxoId};
 use std::collections::{HashMap, HashSet};
 use tracing::warn;
 
@@ -561,8 +561,10 @@ mod tests {
 
     use std::str::FromStr;
 
-    use fuel_tx::{Address, AssetId, UtxoId};
-    use fuel_types::Bytes32;
+    use fuel_core_interfaces::common::{
+        fuel_tx::{Address, AssetId, UtxoId},
+        fuel_types::Bytes32,
+    };
 
     use super::*;
 

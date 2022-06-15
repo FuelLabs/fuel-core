@@ -13,10 +13,11 @@ description = "Fuel core interfaces"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { version = "0.4" }
 derive_more = { version = "0.99" }
 fuel-asm = "0.5"
-fuel-crypto = { version = "0.5", default-features = false }
+fuel-crypto = { version = "0.5", default-features = false, features = [ "random" ]}
+fuel-merkle = { version = "0.2" }
 fuel-storage = "0.1"
 fuel-tx = { version = "0.12", default-features = false }
 fuel-types = { version = "0.5", default-features = false }
@@ -29,5 +30,9 @@ thiserror = "1.0"
 tokio = { version = "1.14", features = ["full"] }
 
 [features]
-test_helpers = []
-serde = ["dep:serde", "fuel-tx/serde", "fuel-types/serde", "fuel-vm/serde"]
+test-helpers = [
+    "fuel-tx/internals", "fuel-tx/builder", "fuel-tx/random", "fuel-vm/random", "fuel-vm/test-helpers",
+    "fuel-types/random"
+]
+serde = ["dep:serde", "fuel-vm/serde", "chrono/serde"]
+debug = ["fuel-vm/debug"]

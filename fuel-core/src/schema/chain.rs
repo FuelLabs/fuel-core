@@ -1,9 +1,9 @@
-use crate::model::FuelBlockDb;
-use crate::schema::block::Block;
-use crate::schema::scalars::U64;
-use crate::{database::Database, service::Config};
+use crate::{
+    database::Database, model::FuelBlockDb, schema::block::Block, schema::scalars::U64,
+    service::Config,
+};
 use async_graphql::{Context, Object};
-use fuel_storage::Storage;
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
 

@@ -1,6 +1,6 @@
 use fuel_core::service::{Config, FuelService};
+use fuel_core_interfaces::common::fuel_vm::{consts::*, prelude::*};
 use fuel_gql_client::client::FuelClient;
-use fuel_vm::{consts::*, prelude::*};
 use std::convert::TryInto;
 
 #[tokio::test]

@@ -5,8 +5,10 @@ use ethers_core::{
     abi::RawLog,
     types::{Log, U256},
 };
-use fuel_core_interfaces::model::DepositCoin;
-use fuel_types::{Address, AssetId, Bytes32, Word};
+use fuel_core_interfaces::{
+    common::fuel_types::{Address, AssetId, Bytes32, Word},
+    model::DepositCoin,
+};
 
 /// This is going to be superseded with MessageLog: https://github.com/FuelLabs/fuel-core/issues/366
 #[derive(Debug, Clone, PartialEq)]

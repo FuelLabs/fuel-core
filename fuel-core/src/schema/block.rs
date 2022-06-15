@@ -13,7 +13,7 @@ use async_graphql::{
     Context, Object,
 };
 use chrono::{DateTime, Utc};
-use fuel_storage::Storage;
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::convert::TryInto;

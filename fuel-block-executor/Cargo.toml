@@ -12,5 +12,4 @@ description = "Fuel Block Executor"
 [dependencies]
 anyhow = "1.0"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.8.0" }
-fuel-types = { version = "0.5", default-features = false }
 tokio = { version = "1.14", features = ["full"] }

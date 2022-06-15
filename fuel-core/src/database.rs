@@ -9,18 +9,22 @@ use crate::state::{
 };
 use async_trait::async_trait;
 pub use fuel_core_interfaces::db::KvStoreError;
-use fuel_core_interfaces::model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake};
-use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff};
-use fuel_storage::Storage;
-use fuel_vm::prelude::{Address, Bytes32, InterpreterStorage};
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage,
+        fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
+    },
+    model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake},
+    relayer::{RelayerDb, StakingDiff},
+};
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
-use std::marker::Send;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
-use std::{collections::HashMap, ops::DerefMut};
 use std::{
-    fmt::{self, Formatter},
+    collections::HashMap,
+    fmt::{self, Debug, Formatter},
+    marker::Send,
+    ops::DerefMut,
     sync::Arc,
 };
 #[cfg(feature = "rocksdb")]
