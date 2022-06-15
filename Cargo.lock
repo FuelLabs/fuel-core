@@ -2051,7 +2051,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-executor"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2060,7 +2060,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-importer"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2070,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-producer"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2080,7 +2080,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2128,7 +2128,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2138,7 +2138,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2176,7 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2228,7 +2228,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2250,7 +2250,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-relayer"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2294,7 +2294,7 @@ checksum = "34b9161e86d434a93088409530a4f71f42e074b3bbcbb7a27bfe666583f92fd7"
 
 [[package]]
 name = "fuel-sync"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2339,7 +2339,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-trait",
