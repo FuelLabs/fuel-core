@@ -194,14 +194,15 @@ impl KeyValueStore for RocksDb {
             .db
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
             .map(|(key, value)| {
+                let value_as_vec = value.to_vec();
                 #[cfg(feature = "prometheus")]
                 {
                     DATABASE_METRICS.read_meter.inc();
                     DATABASE_METRICS
                         .bytes_read_meter
-                        .inc_by(value.to_vec().len() as u64);
+                        .inc_by(value_as_vec.len() as u64);
                 }
-                (key.to_vec(), value.to_vec())
+                (key.to_vec(), value_as_vec)
             });
 
         if let Some(prefix) = prefix {

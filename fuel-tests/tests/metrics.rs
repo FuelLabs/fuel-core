@@ -1,7 +1,6 @@
 use fuel_core::service::{Config, DbType, FuelService};
+use fuel_core_interfaces::common::fuel_tx::{Address, AssetId};
 use fuel_gql_client::client::FuelClient;
-use fuel_tx::AssetId;
-use fuel_vm::prelude::Address;
 use tempfile::TempDir;
 
 #[tokio::test]
