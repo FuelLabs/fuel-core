@@ -1567,12 +1567,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "453440c271cf5577fd2a40e4942540cb7d0d2f85e27c8d07dd0023c925a67541"
 
 [[package]]
-name = "dyn-clone"
-version = "1.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21e50f3adc76d6a43f5ed73b698a87d0760ca74617f60f7c3b879003536fdd28"
-
-[[package]]
 name = "ecdsa"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2046,7 +2040,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
- "fuel-types",
  "tokio",
 ]
 
@@ -2056,7 +2049,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
- "fuel-types",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2067,7 +2059,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
- "fuel-types",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2088,20 +2079,13 @@ dependencies = [
  "derive_more",
  "dirs",
  "env_logger",
- "fuel-asm",
  "fuel-block-executor",
  "fuel-block-importer",
  "fuel-block-producer",
  "fuel-core-bft",
  "fuel-core-interfaces",
- "fuel-crypto",
- "fuel-merkle 0.1.1",
- "fuel-storage 0.1.0",
  "fuel-sync",
- "fuel-tx",
  "fuel-txpool",
- "fuel-types",
- "fuel-vm",
  "futures",
  "graphql-parser",
  "hex",
@@ -2132,7 +2116,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
- "fuel-types",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2147,6 +2130,7 @@ dependencies = [
  "derive_more",
  "fuel-asm",
  "fuel-crypto",
+ "fuel-merkle 0.2.0",
  "fuel-storage 0.1.0",
  "fuel-tx",
  "fuel-types",
@@ -2234,7 +2218,6 @@ dependencies = [
  "bincode",
  "ctor",
  "fuel-core-interfaces",
- "fuel-tx",
  "futures",
  "futures-timer",
  "ip_network",
@@ -2265,8 +2248,6 @@ dependencies = [
  "ethers-signers",
  "features",
  "fuel-core-interfaces",
- "fuel-tx",
- "fuel-types",
  "futures",
  "hex",
  "once_cell",
@@ -2301,7 +2282,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
- "fuel-types",
  "parking_lot 0.12.1",
  "tokio",
 ]
@@ -2312,13 +2292,10 @@ version = "0.0.0"
 dependencies = [
  "chrono",
  "fuel-core",
+ "fuel-core-interfaces",
  "fuel-crypto",
  "fuel-gql-client",
- "fuel-storage 0.1.0",
- "fuel-tx",
  "fuel-txpool",
- "fuel-types",
- "fuel-vm",
  "insta",
  "itertools",
  "rand 0.8.5",
@@ -2350,8 +2327,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "fuel-core-interfaces",
- "fuel-tx",
- "fuel-types",
  "futures",
  "parking_lot 0.11.2",
  "thiserror",
@@ -2375,7 +2350,6 @@ version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76a70dffe9faeb81f9d9d202eb26af4742980f884fa3109c169819ac6b2c51d3"
 dependencies = [
- "dyn-clone",
  "fuel-asm",
  "fuel-crypto",
  "fuel-merkle 0.1.1",

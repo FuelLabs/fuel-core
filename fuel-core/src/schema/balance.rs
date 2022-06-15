@@ -7,7 +7,7 @@ use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
-use fuel_storage::Storage;
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;
 
 pub struct Balance {

@@ -1,8 +1,10 @@
 use crate::database::{Database, KvStoreError};
 use crate::model::{Coin, CoinStatus};
 use crate::state::{self};
-use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, UtxoId};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{Address, AssetId, UtxoId},
+};
 use itertools::Itertools;
 use rand::prelude::*;
 use std::cmp::Reverse;
@@ -265,8 +267,7 @@ pub fn random_improve(
 mod tests {
     use crate::test_utils::*;
     use assert_matches::assert_matches;
-    use fuel_asm::Word;
-    use fuel_tx::Address;
+    use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx::Address};
 
     use super::*;
 

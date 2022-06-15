@@ -1,7 +1,8 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::model::DepositCoin;
-use fuel_storage::Storage;
-use fuel_types::Bytes32;
+use fuel_core_interfaces::{
+    common::{fuel_storage::Storage, fuel_types::Bytes32},
+    model::DepositCoin,
+};
 use std::borrow::Cow;
 
 impl Storage<Bytes32, DepositCoin> for Database {

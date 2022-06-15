@@ -4,12 +4,14 @@ use fuel_core::{
     model::{Coin, CoinStatus},
     service::{Config, FuelService},
 };
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{AssetId, UtxoId},
+    fuel_vm::prelude::{Address, Bytes32, Word},
+};
 use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemeCoinStatus, FuelClient, PageDirection, PaginationRequest,
 };
-use fuel_storage::Storage;
-use fuel_tx::{AssetId, UtxoId};
-use fuel_vm::prelude::{Address, Bytes32, Word};
 
 #[tokio::test]
 async fn coin() {

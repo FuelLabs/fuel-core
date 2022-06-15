@@ -1,7 +1,9 @@
 use self::serialization::{HexNumber, HexType};
 use crate::model::BlockHeight;
-use fuel_tx::ConsensusParameters;
-use fuel_types::{Address, AssetId, Bytes32, Salt};
+use fuel_core_interfaces::common::{
+    fuel_tx::ConsensusParameters,
+    fuel_types::{Address, AssetId, Bytes32, Salt},
+};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -32,7 +34,7 @@ impl ChainConfig {
         let mut rng = StdRng::seed_from_u64(10);
         let initial_coins = (0..5)
             .map(|_| {
-                let secret = fuel_crypto::SecretKey::random(&mut rng);
+                let secret = fuel_core_interfaces::common::fuel_crypto::SecretKey::random(&mut rng);
                 let address = Address::from(*secret.public_key().hash());
                 tracing::info!(
                     "PrivateKey({:#x}), Address({:#x}), Balance({})",
@@ -165,8 +167,7 @@ pub struct ContractConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_asm::Opcode;
-    use fuel_vm::prelude::Contract;
+    use fuel_core_interfaces::common::{fuel_asm::Opcode, fuel_vm::prelude::Contract};
     use rand::prelude::StdRng;
     use rand::{Rng, RngCore, SeedableRng};
     use std::env::temp_dir;

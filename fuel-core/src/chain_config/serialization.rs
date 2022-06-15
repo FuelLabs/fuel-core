@@ -1,7 +1,6 @@
 use crate::model::BlockHeight;
 use core::fmt;
-use fuel_types::bytes::WORD_SIZE;
-use fuel_types::Word;
+use fuel_core_interfaces::common::{fuel_types::bytes::WORD_SIZE, fuel_types::Word};
 use serde::{de::Error, Deserializer, Serializer};
 use serde_with::{DeserializeAs, SerializeAs};
 use std::convert::TryFrom;
