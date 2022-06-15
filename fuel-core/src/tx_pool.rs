@@ -1,17 +1,22 @@
-use crate::database::{Database, KvStoreError};
-use crate::executor::{ExecutionMode, Executor};
-use crate::model::{FuelBlock, FuelBlockHeader};
-use crate::service::Config;
+use crate::{
+    database::{Database, KvStoreError},
+    executor::{ExecutionMode, Executor},
+    model::{FuelBlock, FuelBlockHeader},
+    service::Config,
+};
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::txpool::{TxPool as TxPoolTrait, TxPoolDb};
-use fuel_storage::Storage;
-use fuel_tx::{Bytes32, Receipt};
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::{Bytes32, Receipt},
+        fuel_vm::prelude::{ProgramState, Transaction},
+    },
+    txpool::{TxPool as TxPoolTrait, TxPoolDb},
+};
 use fuel_txpool::TxPoolService;
-use fuel_vm::prelude::{ProgramState, Transaction};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::error::Error as StdError;
-use std::sync::Arc;
+use std::{error::Error as StdError, sync::Arc};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

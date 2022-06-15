@@ -12,6 +12,5 @@ description = "Fuel Synchronizer"
 [dependencies]
 anyhow = "1.0"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.8.0" }
-fuel-types = { version = "0.5", default-features = false }
 parking_lot = "0.12"
 tokio = { version = "1.14", features = ["full"] }

@@ -62,7 +62,7 @@ impl From<KvStoreError> for InterpreterError {
     }
 }
 
-#[cfg(any(test, feature = "test_helpers"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub mod helpers {
 
     use async_trait::async_trait;

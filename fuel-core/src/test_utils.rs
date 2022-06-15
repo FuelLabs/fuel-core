@@ -1,8 +1,10 @@
 use crate::database::Database;
 use crate::model::{Coin, CoinStatus};
-use fuel_asm::Word;
-use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, Bytes32, UtxoId};
+use fuel_core_interfaces::common::{
+    fuel_asm::Word,
+    fuel_storage::Storage,
+    fuel_tx::{Address, AssetId, Bytes32, UtxoId},
+};
 use itertools::Itertools;
 
 #[derive(Default)]

@@ -15,7 +15,7 @@ pub enum SignerError {
     KeyNotLoaded,
 }
 
-#[cfg(any(test, feature = "test_helpers"))]
+#[cfg(any(test, feature = "test-helpers"))]
 pub mod helpers {
     use super::*;
 
