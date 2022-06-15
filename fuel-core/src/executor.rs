@@ -4,6 +4,7 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
+use fuel_core_interfaces::common::fuel_vm::prelude::PredicateStorage;
 use fuel_core_interfaces::common::{
     fuel_asm::Word,
     fuel_merkle::{binary::MerkleTree, common::StorageMap},
@@ -288,7 +289,7 @@ impl Executor {
             }
         } else {
             // otherwise attempt to validate any predicates if the feature flag is enabled
-            if !Interpreter::<()>::check_predicates(
+            if !Interpreter::<PredicateStorage>::check_predicates(
                 tx.clone(),
                 self.config.chain_conf.transaction_parameters,
             ) {
@@ -724,11 +725,12 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
+    use fuel_core_interfaces::common::fuel_tx::ConsensusParameters;
     use fuel_core_interfaces::common::{
         fuel_asm::Opcode,
         fuel_crypto::SecretKey,
-        fuel_tx::{self, default_parameters::MAX_GAS_PER_TX, TransactionBuilder},
-        fuel_types::{ContractId, Immediate12, Salt},
+        fuel_tx::{self, TransactionBuilder},
+        fuel_types::{ContractId, Immediate12, Immediate18, Salt},
         fuel_vm::{
             consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO},
             prelude::{Call, CallFrame},
@@ -1456,7 +1458,6 @@ mod tests {
             .collect::<Vec<u8>>(),
             &mut rng,
         );
-        use fuel_core_interfaces::common::fuel_types;
         let (script, data_offset) = script_with_data_offset!(
             data_offset,
             vec![
@@ -1469,7 +1470,8 @@ mod tests {
                 // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
                 Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
                 Opcode::RET(REG_ONE),
-            ]
+            ],
+            ConsensusParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
@@ -1489,7 +1491,7 @@ mod tests {
         .collect();
 
         let tx2 = TxBuilder::new(2322)
-            .gas_limit(MAX_GAS_PER_TX)
+            .gas_limit(ConsensusParameters::DEFAULT.max_gas_per_tx)
             .script(script)
             .script_data(script_data)
             .contract_input(contract_id)

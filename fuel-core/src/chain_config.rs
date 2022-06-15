@@ -62,7 +62,7 @@ impl ChainConfig {
                 coins: Some(initial_coins),
                 ..StateConfig::default()
             }),
-            transaction_parameters: ConsensusParameters::default(),
+            transaction_parameters: ConsensusParameters::DEFAULT,
         }
     }
 }
