@@ -1,9 +1,11 @@
 // Tests involving utxo-validation enabled
 use crate::helpers::{TestContext, TestSetupBuilder};
+use fuel_core_interfaces::common::{
+    fuel_tx::TransactionBuilder,
+    fuel_vm::{consts::*, prelude::*},
+};
 use fuel_crypto::SecretKey;
 use fuel_gql_client::client::types::TransactionStatus;
-use fuel_tx::TransactionBuilder;
-use fuel_vm::{consts::*, prelude::*};
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 

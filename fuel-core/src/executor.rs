@@ -4,16 +4,19 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use fuel_asm::Word;
-use fuel_merkle::{binary::MerkleTree, common::StorageMap};
-use fuel_storage::Storage;
-use fuel_tx::{
-    Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId, ValidationError,
-};
-use fuel_types::{bytes::SerializableVec, ContractId};
-use fuel_vm::{
-    consts::REG_SP,
-    prelude::{Backtrace as FuelBacktrace, Interpreter},
+use fuel_core_interfaces::common::{
+    fuel_asm::Word,
+    fuel_merkle::{binary::MerkleTree, common::StorageMap},
+    fuel_storage::Storage,
+    fuel_tx::{
+        Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
+        ValidationError,
+    },
+    fuel_types::{bytes::SerializableVec, ContractId},
+    fuel_vm::{
+        consts::REG_SP,
+        prelude::{Backtrace as FuelBacktrace, Interpreter},
+    },
 };
 use std::{
     error::Error as StdError,
@@ -682,7 +685,7 @@ pub enum Error {
     },
     #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
-        error: fuel_vm::prelude::InterpreterError,
+        error: fuel_core_interfaces::common::fuel_vm::prelude::InterpreterError,
         transaction_id: Bytes32,
     },
     #[error("Execution error with backtrace")]
@@ -721,15 +724,18 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
-    use fuel_asm::Opcode;
-    use fuel_crypto::SecretKey;
-    use fuel_tx::default_parameters::MAX_GAS_PER_TX;
-    use fuel_tx::TransactionBuilder;
-    use fuel_types::{ContractId, Immediate12, Salt};
-    use fuel_vm::consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO};
-    use fuel_vm::prelude::{Call, CallFrame};
-    use fuel_vm::script_with_data_offset;
-    use fuel_vm::util::test_helpers::TestBuilder as TxBuilder;
+    use fuel_core_interfaces::common::{
+        fuel_asm::Opcode,
+        fuel_crypto::SecretKey,
+        fuel_tx::{self, default_parameters::MAX_GAS_PER_TX, TransactionBuilder},
+        fuel_types::{ContractId, Immediate12, Salt},
+        fuel_vm::{
+            consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO},
+            prelude::{Call, CallFrame},
+            script_with_data_offset,
+            util::test_helpers::TestBuilder as TxBuilder,
+        },
+    };
     use itertools::Itertools;
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
@@ -1450,6 +1456,7 @@ mod tests {
             .collect::<Vec<u8>>(),
             &mut rng,
         );
+        use fuel_core_interfaces::common::fuel_types;
         let (script, data_offset) = script_with_data_offset!(
             data_offset,
             vec![

@@ -1,15 +1,18 @@
 use crate::helpers::TestContext;
 use chrono::Utc;
-use fuel_core::executor::ExecutionMode;
-use fuel_core::model::{FuelBlock, FuelBlockHeader};
 use fuel_core::{
     database::Database,
-    executor::Executor,
+    executor::{ExecutionMode, Executor},
+    model::{FuelBlock, FuelBlockHeader},
     service::{Config, FuelService},
 };
-use fuel_gql_client::client::types::TransactionStatus;
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use fuel_vm::{consts::*, prelude::*};
+use fuel_core_interfaces::common::{
+    fuel_tx,
+    fuel_vm::{consts::*, prelude::*},
+};
+use fuel_gql_client::client::{
+    types::TransactionStatus, FuelClient, PageDirection, PaginationRequest,
+};
 use itertools::Itertools;
 use rand::Rng;
 use std::io;
