@@ -5,6 +5,7 @@ use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
+use std::io::Write;
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
 }
@@ -20,6 +21,9 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
     rename_all = "kebab-case"
 )]
 pub struct Opt {
+    #[clap(subcommand)]
+    pub snapshot: Option<SnapshotCommand>,
+
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
 
@@ -64,8 +68,14 @@ pub struct Opt {
     pub predicates: bool,
 }
 
+// Not strictly neccessary, but makes it easy to add an export to .json option
+#[derive(clap::Subcommand, Debug)]
+pub enum SnapshotCommand {
+    Snapshot,
+}
+
 impl Opt {
-    pub fn exec(self) -> io::Result<Config> {
+    pub fn get_config(self) -> io::Result<Config> {
         let filter = match env::var_os(LOG_FILTER) {
             Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
             None => EnvFilter::new("info"),
@@ -111,6 +121,7 @@ impl Opt {
             min_gas_price,
             min_byte_price,
             predicates,
+            snapshot,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -132,4 +143,9 @@ impl Opt {
             predicates,
         })
     }
+}
+
+pub fn dump_snapshot() -> anyhow::Result<()> {
+    io::stdout().write_all(b"please work")?;
+    Ok(())
 }

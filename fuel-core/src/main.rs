@@ -7,13 +7,19 @@ mod args;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // load configuration
-    let config = args::Opt::parse().exec()?;
-    // log fuel-core version
-    info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
-    trace!("Initializing in TRACE mode.");
-    // initialize the server
-    let server = FuelService::new_node(config).await?;
-    // pause the main task while service is running
-    server.run().await;
+    let opt = args::Opt::parse();
+    match opt.snapshot {
+        Some(args::SnapshotCommand::Snapshot) => println!("Hi"),
+        _ => {
+            let config = opt.get_config()?;
+            // log fuel-core version
+            info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
+            trace!("Initializing in TRACE mode.");
+            // initialize the server
+            let server = FuelService::new_node(config).await?;
+            // pause the main task while service is running
+            server.run().await;
+        }
+    }
     Ok(())
 }
