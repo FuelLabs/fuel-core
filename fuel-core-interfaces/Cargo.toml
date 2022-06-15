@@ -16,7 +16,7 @@ async-trait = "0.1"
 chrono = { version = "0.4" }
 derive_more = { version = "0.99" }
 fuel-asm = "0.5"
-fuel-crypto = { version = "0.5", default-features = false }
+fuel-crypto = { version = "0.5", default-features = false, features = [ "random" ]}
 fuel-merkle = { version = "0.2" }
 fuel-storage = "0.1"
 fuel-tx = { version = "0.12", default-features = false }
@@ -32,7 +32,7 @@ tokio = { version = "1.14", features = ["full"] }
 [features]
 test-helpers = [
     "fuel-tx/internals", "fuel-tx/builder", "fuel-tx/random", "fuel-vm/random", "fuel-vm/test-helpers",
-    "fuel-crypto/random", "fuel-types/random"
+    "fuel-types/random"
 ]
 serde = ["dep:serde", "fuel-vm/serde", "chrono/serde"]
 debug = ["fuel-vm/debug"]
