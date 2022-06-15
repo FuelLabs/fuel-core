@@ -9,10 +9,10 @@ use ethers_middleware::{
 };
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
+    common::fuel_tx::Bytes32,
     model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
     relayer::RelayerDb,
 };
-use fuel_tx::Bytes32;
 use std::{cmp::max, collections::VecDeque, sync::Arc};
 
 // use the ethers_signers crate to manage LocalWallet and Signer

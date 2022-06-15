@@ -4,11 +4,14 @@ use crate::{
     service::FuelService,
 };
 use anyhow::Result;
-use fuel_core_interfaces::model::{Coin, CoinStatus};
-use fuel_storage::{MerkleStorage, Storage};
-use fuel_tx::UtxoId;
-use fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word};
-use fuel_vm::prelude::Contract;
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{MerkleStorage, Storage},
+        fuel_tx::{Contract, UtxoId},
+        fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
+    },
+    model::{Coin, CoinStatus},
+};
 use itertools::Itertools;
 
 impl FuelService {
@@ -161,11 +164,12 @@ mod tests {
     use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
     use crate::model::BlockHeight;
     use crate::service::Config;
-    use fuel_asm::Opcode;
-    use fuel_types::{Address, AssetId, Word};
+    use fuel_core_interfaces::common::{
+        fuel_asm::Opcode,
+        fuel_types::{Address, AssetId, Word},
+    };
     use itertools::Itertools;
-    use rand::rngs::StdRng;
-    use rand::{Rng, RngCore, SeedableRng};
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     #[tokio::test]
     async fn config_initializes_chain_name() {

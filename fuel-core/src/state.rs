@@ -1,7 +1,5 @@
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use std::fmt::Debug;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource = Arc<dyn TransactableStorage>;

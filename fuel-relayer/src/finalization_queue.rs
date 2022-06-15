@@ -6,10 +6,10 @@ use crate::{
 use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
+    common::fuel_tx::{Address, Bytes32},
     model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
     relayer::{RelayerDb, StakingDiff},
 };
-use fuel_tx::{Address, Bytes32};
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -313,8 +313,10 @@ mod tests {
 
     use super::*;
     use crate::log::tests::*;
-    use fuel_core_interfaces::db::helpers::DummyDb;
-    use fuel_types::{Address, AssetId};
+    use fuel_core_interfaces::{
+        common::fuel_types::{Address, AssetId},
+        db::helpers::DummyDb,
+    };
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 

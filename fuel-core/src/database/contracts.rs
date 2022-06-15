@@ -5,9 +5,11 @@ use crate::{
     },
     state::{Error, IterDirection, MultiKey},
 };
-use fuel_tx::UtxoId;
-use fuel_types::Word;
-use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
+use fuel_core_interfaces::common::{
+    fuel_tx::UtxoId,
+    fuel_types::Word,
+    fuel_vm::prelude::{AssetId, Contract, ContractId, Storage},
+};
 use std::borrow::Cow;
 
 impl Storage<ContractId, Contract> for Database {
@@ -70,7 +72,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_tx::TxId;
+    use fuel_core_interfaces::common::fuel_tx::TxId;
 
     #[test]
     fn contract_get() {

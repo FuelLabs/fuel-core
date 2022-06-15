@@ -1,6 +1,7 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::{model::DaBlockHeight, relayer::StakingDiff};
-use fuel_storage::Storage;
+use fuel_core_interfaces::{
+    common::fuel_storage::Storage, model::DaBlockHeight, relayer::StakingDiff,
+};
 use std::borrow::Cow;
 
 impl Storage<DaBlockHeight, StakingDiff> for Database {
