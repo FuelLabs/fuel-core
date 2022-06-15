@@ -1,5 +1,6 @@
 ---
 source: fuel-client/src/client/schema/chain.rs
+assertion_line: 64
 expression: operation.query
 ---
 query Query {
@@ -28,6 +29,7 @@ query Query {
       maxStorageSlots
       maxPredicateLength
       maxPredicateDataLength
+      gasPriceFactor
     }
   }
 }
