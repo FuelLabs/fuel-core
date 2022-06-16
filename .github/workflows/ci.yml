@@ -44,18 +44,18 @@ jobs:
           version: "0.1"
       - name: Run Cargo.toml linter
         run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && github.ref == 'refs/heads/master'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "{workflow} has {status_message}"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-          footer: ""
-          notify_when: "failure"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+#      - name: Notify if Job Fails
+#        uses: ravsamhq/notify-slack-action@v1
+#        if: always() && github.ref == 'refs/heads/master'
+#        with:
+#          status: ${{ job.status }}
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          notification_title: "{workflow} has {status_message}"
+#          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+#          footer: ""
+#          notify_when: "failure"
+#        env:
+#          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
 #  cargo-verifications:
 #    needs: cancel-previous-runs
@@ -156,7 +156,7 @@ jobs:
           # add registry and patches to project config
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
           # startup local crate registry
-          cargo-http-registry -a "http://127.0.0.1:8090" /tmp/local-registry &
+          cargo-http-registry -a "127.0.0.1:8090" /tmp/local-registry &
 
       - name: Publish crate
         uses: Voxelot/publish-crates@b11fc443dc3c97e51fcf7ea93c54b99a903964a8
@@ -166,18 +166,18 @@ jobs:
           registry-token: "${{ (!env.PUBLISH_DRY_RUN && secrets.CARGO_REGISTRY_TOKEN) || '' }}"
           args: "${{ env.PUBLISH_DRY_RUN && '--registry local-registry --allow-dirty' }}"
 
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && !env.PUBLISH_DRY_RUN
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "{workflow} has {status_message}"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-          footer: ""
-          notify_when: "failure"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+#      - name: Notify if Job Fails
+#        uses: ravsamhq/notify-slack-action@v1
+#        if: always() && !env.PUBLISH_DRY_RUN
+#        with:
+#          status: ${{ job.status }}
+#          token: ${{ secrets.GITHUB_TOKEN }}
+#          notification_title: "{workflow} has {status_message}"
+#          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+#          footer: ""
+#          notify_when: "failure"
+#        env:
+#          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
     needs:
