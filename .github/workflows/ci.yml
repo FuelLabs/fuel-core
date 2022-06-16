@@ -159,7 +159,7 @@ jobs:
           cargo-http-registry /tmp/local-registry &
 
       - name: Publish crate
-        uses: Voxelot/publish-crates@b62ef819374a2b798ef1ebcf01b437a6b69a89a9
+        uses: Voxelot/publish-crates@b11fc443dc3c97e51fcf7ea93c54b99a903964a8
         with:
           publish-delay: 30000
           registry: "${{ (env.PUBLISH_DRY_RUN && 'local-registry') || 'https://crates.io' }}"
