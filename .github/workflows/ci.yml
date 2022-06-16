@@ -157,11 +157,7 @@ jobs:
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
           # startup local crate registry
           git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "<>"
-
-      - name: Start local crate publishing
-        if: ${{ env.PUBLISH_DRY_RUN }}
-        run: |
+          git config --global user.email "noreply@fuel.sh"
           cargo-http-registry -a "127.0.0.1:8090" /tmp/local-registry &
 
       - name: Publish crate
