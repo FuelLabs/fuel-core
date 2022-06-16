@@ -1,8 +1,8 @@
 use fuel_core_interfaces::{
+    common::fuel_tx::Address,
     model::{DaBlockHeight, ValidatorStake},
     relayer::{RelayerDb, ValidatorDiff},
 };
-use fuel_tx::Address;
 use std::collections::{hash_map::Entry, HashMap};
 use tracing::{debug, error, info};
 

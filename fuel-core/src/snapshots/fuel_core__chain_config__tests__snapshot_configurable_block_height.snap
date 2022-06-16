@@ -1,8 +1,7 @@
 ---
 source: fuel-core/src/chain_config.rs
-assertion_line: 214
+assertion_line: 215
 expression: json
-
 ---
 {
   "chain_name": "local_testnet",
@@ -24,6 +23,7 @@ expression: json
     "max_static_contracts": 255,
     "max_storage_slots": 255,
     "max_predicate_length": 1048576,
-    "max_predicate_data_length": 1048576
+    "max_predicate_data_length": 1048576,
+    "gas_price_factor": 1000000000
   }
 }

@@ -7,9 +7,11 @@ use crate::{
     state::{Error, IterDirection},
     tx_pool::TransactionStatus,
 };
-use fuel_storage::Storage;
-use fuel_tx::{Bytes32, Transaction};
-use fuel_types::Address;
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{Bytes32, Transaction},
+    fuel_types::Address,
+};
 use std::{borrow::Cow, ops::Deref};
 
 pub type TransactionIndex = u32;

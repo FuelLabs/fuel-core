@@ -6,8 +6,10 @@ use crate::{
     model::Coin,
     state::{Error, IterDirection},
 };
-use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, Bytes32, UtxoId};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{Address, AssetId, Bytes32, UtxoId},
+};
 use itertools::Itertools;
 use std::borrow::Cow;
 

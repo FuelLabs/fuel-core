@@ -11,7 +11,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     echo "Copying chainspec into deployment context..."
     cp chainspec/${chain_spec_file} ../charts/chainspec.json
     cd ../charts
-    mv values.yaml values.template 
+    mv values.yaml values.template
     envsubst < values.template > values.yaml
     rm values.template
     echo "Deploying fuel-core helm chart to ${TF_VAR_eks_cluster_name} ...."

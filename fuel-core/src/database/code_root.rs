@@ -2,7 +2,7 @@ use crate::{
     database::{columns::CONTRACTS_CODE_ROOT, Database},
     state::Error,
 };
-use fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
+use fuel_core_interfaces::common::fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
 use std::borrow::Cow;
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
@@ -32,7 +32,7 @@ impl Storage<ContractId, (Salt, Bytes32)> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_vm::prelude::Contract;
+    use fuel_core_interfaces::common::fuel_vm::prelude::Contract;
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 

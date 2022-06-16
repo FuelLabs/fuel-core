@@ -6,8 +6,10 @@ use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, InputObject, Object,
 };
-use fuel_storage::Storage;
-use fuel_vm::prelude::Contract as FuelVmContract;
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage, fuel_tx, fuel_types, fuel_vm,
+    fuel_vm::prelude::Contract as FuelVmContract,
+};
 use std::iter::IntoIterator;
 
 pub struct Contract(pub(crate) fuel_types::ContractId);

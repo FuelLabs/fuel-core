@@ -3,7 +3,7 @@ use crate::schema::{
     scalars::{Address, AssetId, Bytes32, ContractId, HexString, UtxoId, U64},
 };
 use async_graphql::{Object, Union};
-use fuel_asm::Word;
+use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx};
 
 #[derive(Union)]
 pub enum Input {

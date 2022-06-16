@@ -390,8 +390,7 @@ mod test {
     use async_trait::async_trait;
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
     use ethers_providers::SyncingStatus;
-    use fuel_core_interfaces::relayer::RelayerEvent;
-    use fuel_tx::Address;
+    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerEvent};
     use tokio::sync::mpsc;
 
     use crate::{

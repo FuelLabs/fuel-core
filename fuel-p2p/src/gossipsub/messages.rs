@@ -1,7 +1,10 @@
+use fuel_core_interfaces::common::fuel_tx::Transaction;
+use fuel_core_interfaces::model::{FuelBlock, Vote};
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
-    BroadcastNewTx,
-    BroadcastNewBlock,
+    NewTx(Transaction),
+    NewBlock(FuelBlock),
+    ConensusVote(Vote),
 }

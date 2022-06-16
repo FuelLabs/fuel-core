@@ -1,7 +1,8 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::model::ValidatorStake;
-use fuel_storage::Storage;
-use fuel_types::Address;
+use fuel_core_interfaces::{
+    common::{fuel_storage::Storage, fuel_types::Address},
+    model::ValidatorStake,
+};
 use std::borrow::Cow;
 
 impl Storage<Address, (ValidatorStake, Option<Address>)> for Database {
