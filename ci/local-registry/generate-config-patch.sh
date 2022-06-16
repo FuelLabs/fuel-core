@@ -5,7 +5,7 @@
 
 # Setup local registry configuration
 
-dasel put string -f .cargo/config.toml -p toml ".registries.local-registry" '{ index = "file:///tmp/local-registry" }'
+dasel put object -f .cargo/config.toml -p toml -t string "registries.local-registry" index="file:///tmp/local-registry"
 
 # Generate patch definitions for all workspace members to use local registry
 for member in $(< Cargo.toml dasel -r toml -w json 'workspace.members' | jq -r ".[]")

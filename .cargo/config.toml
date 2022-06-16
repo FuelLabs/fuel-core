@@ -1,7 +1,3 @@
 [alias]
 xtask = "run --package xtask --"
 
-[registries]
-
-[registries.local-registry]
-index = "file:///tmp/local-registry"
