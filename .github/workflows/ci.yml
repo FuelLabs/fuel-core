@@ -255,7 +255,7 @@ jobs:
     needs:
       - lint-toml-files
       - cargo-verifications
-    if: (github.event_name == 'release' && github.event.action == 'published') || env.PUBLISH_DRY_RUN
+    if: (github.event_name == 'release' && github.event.action == 'published') || github.env.PUBLISH_DRY_RUN
     strategy:
       matrix:
         job:
