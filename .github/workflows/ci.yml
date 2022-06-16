@@ -158,6 +158,10 @@ jobs:
           # startup local crate registry
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
+
+      - name: Start local crate publishing
+        if: ${{ env.PUBLISH_DRY_RUN }}
+        run: |
           cargo-http-registry -a "127.0.0.1:8090" /tmp/local-registry &
 
       - name: Publish crate
