@@ -1,6 +1,7 @@
 use crate::{
+    chain_config::ContractConfig,
     database::{
-        columns::{BALANCES, CONTRACTS, CONTRACT_UTXO_ID},
+        columns::{BALANCES, CONTRACTS, CONTRACTS_STATE, CONTRACT_UTXO_ID},
         Database,
     },
     state::{Error, IterDirection, MultiKey},
@@ -64,6 +65,51 @@ impl Database {
             direction,
         )
         .map(|res| res.map(|(key, balance)| (AssetId::new(key[32..].try_into().unwrap()), balance)))
+    }
+
+    pub fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
+        let configs = self
+            .iter_all::<Vec<u8>, Word>(CONTRACTS, None, None, None)
+            .map(|raw_contract_id| -> ContractConfig {
+                let contract_id =
+                    ContractId::new(raw_contract_id.unwrap().0[..32].try_into().unwrap());
+
+                // Working?
+                let code: Vec<u8> =
+                    Storage::<fuel_types::ContractId, fuel_vm::prelude::Contract>::get(
+                        self,
+                        &contract_id,
+                    )
+                    .unwrap()
+                    .unwrap()
+                    .into_owned()
+                    .into();
+
+                let salt =
+                    fuel_vm::storage::InterpreterStorage::storage_contract_root(self, &contract_id)
+                        .unwrap()
+                        .unwrap()
+                        .into_owned()
+                        .0;
+
+                // Working
+                let state: Option<Vec<(fuel_types::Bytes32, fuel_types::Bytes32)>> =
+                    self.get(&contract_id.as_ref(), CONTRACTS_STATE).unwrap();
+
+                // Working
+                let balances: Option<Vec<(AssetId, u64)>> =
+                    self.get(&contract_id.as_ref(), BALANCES).unwrap();
+
+                ContractConfig {
+                    code,
+                    salt,
+                    state,
+                    balances,
+                }
+            })
+            .collect();
+
+        Ok(Some(configs))
     }
 }
 

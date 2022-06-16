@@ -9,7 +9,7 @@ async fn main() -> anyhow::Result<()> {
     // load configuration
     let opt = args::Opt::parse();
     match opt.snapshot {
-        Some(args::SnapshotCommand::Snapshot) => println!("Hi"),
+        Some(args::SnapshotCommand::Snapshot) => args::dump_snapshot()?,
         _ => {
             let config = opt.get_config()?;
             // log fuel-core version

@@ -1,6 +1,7 @@
 use crate::{
+    chain_config::CoinConfig,
     database::{
-        columns::{self, OWNED_COINS},
+        columns::{self, COIN, OWNED_COINS},
         Database, KvStoreError,
     },
     model::Coin,
@@ -117,5 +118,29 @@ impl Database {
                 .asset_id
                 == asset_id
         })
+    }
+
+    pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, anyhow::Error> {
+        let configs = self.iter_all(COIN, None, None, None).map(|raw_coin| {
+            println!("Coin is {:?}", raw_coin);
+            /*
+            let coin = raw_coin.unwrap();
+
+            // Potentially chop off a byte for output index
+            let tx_id = coin.0;
+
+            let owner = coin.1.owner;
+
+            let amount = coin.1.amount;
+
+            let asset_id = coin.1.amount;
+
+            let maturity = coin.1.maturity;
+
+            let block_created = coin.1.block_created;
+            */
+        });
+
+        Ok(None)
     }
 }
