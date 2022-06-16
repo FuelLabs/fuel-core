@@ -128,17 +128,17 @@ jobs:
         run: |
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
           mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-relayer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-block-executor/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-block-importer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-block-producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-client/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-core/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-core-bft/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-core-interfaces/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-p2p/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-sync/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-txpool/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ env.PUBLISH_REF }} fuel-relayer/Cargo.toml
 
       - name: Verify helm chart version
         run: |
@@ -160,7 +160,7 @@ jobs:
           cargo-http-registry /tmp/local-registry &
 
       - name: Publish crate
-        uses: katyo/publish-crates@v1
+        uses: Voxelot/publish-crates@b62ef81
         with:
           publish-delay: 30000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -374,6 +374,7 @@ jobs:
 
       - name: Upload Binary Artifact
         uses: actions/upload-release-asset@v1
+        if: ${{ !env.PUBLISH_DRY_RUN }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
