@@ -162,6 +162,7 @@ jobs:
         uses: Voxelot/publish-crates@b62ef819374a2b798ef1ebcf01b437a6b69a89a9
         with:
           publish-delay: 30000
+          registry: "${{ (env.PUBLISH_DRY_RUN && 'local-registry') || 'https://crates.io' }}"
           registry-token: "${{ (!env.PUBLISH_DRY_RUN && secrets.CARGO_REGISTRY_TOKEN) || '' }}"
           args: "${{ env.PUBLISH_DRY_RUN && '--registry local-registry --allow-dirty' }}"
 
