@@ -156,6 +156,7 @@ jobs:
           # add registry and patches to project config
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
           # startup local crate registry
+          mkdir /tmp/local-registry
           cargo-http-registry -a "127.0.0.1:8090" /tmp/local-registry &
 
       - name: Publish crate
