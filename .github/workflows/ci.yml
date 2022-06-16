@@ -164,7 +164,7 @@ jobs:
         with:
           publish-delay: 30000
           registry-token: "${{ (!env.PUBLISH_DRY_RUN && secrets.CARGO_REGISTRY_TOKEN) || '' }}"
-          args: "${{ env.PUBLISH_DRY_RUN && \"--registry local-registry --allow-dirty\" }}"
+          args: "${{ env.PUBLISH_DRY_RUN && '--registry local-registry --allow-dirty' }}"
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
