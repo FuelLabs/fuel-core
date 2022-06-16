@@ -168,7 +168,7 @@ jobs:
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
-        if: always()
+        if: always() && !env.PUBLISH_DRY_RUN
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -386,7 +386,7 @@ jobs:
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         # need to find a work-around to be able to run this action on mac
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
+        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest' && !env.PUBLISH_DRY_RUN
         with:
           status: ${{ job.status }}
           token: ${{ secrets.GITHUB_TOKEN }}
