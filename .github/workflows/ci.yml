@@ -112,7 +112,7 @@ jobs:
     needs:
       - lint-toml-files
       - cargo-verifications
-    if: ${{ (github.event_name == 'release' && github.event.action == 'published') || env.PUBLISH_DRY_RUN }}
+    if: (github.event_name == 'release' && github.event.action == 'published') || ${{ env.PUBLISH_DRY_RUN }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
