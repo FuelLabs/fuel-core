@@ -156,8 +156,8 @@ jobs:
           # add registry and patches to project config
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
           # startup local crate registry
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "<>"
 
       - name: Start local crate publishing
         if: ${{ env.PUBLISH_DRY_RUN }}
