@@ -163,8 +163,8 @@ jobs:
         uses: Voxelot/publish-crates@b62ef81
         with:
           publish-delay: 30000
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          args: ${{ env.PUBLISH_DRY_RUN && "--registry local-registry --token '' --allow-dirty" }}
+          registry-token: ${{ (!env.PUBLISH_DRY_RUN && secrets.CARGO_REGISTRY_TOKEN) || '' }}
+          args: ${{ env.PUBLISH_DRY_RUN && "--registry local-registry --allow-dirty" }}
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
