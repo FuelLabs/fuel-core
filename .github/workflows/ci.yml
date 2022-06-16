@@ -251,7 +251,6 @@ jobs:
     # Only do this job if publishing a release
     needs:
       - lint-toml-files
-      - cargo-verifications
     if: (github.event_name == 'release' && github.event.action == 'published') || github.event.inputs.publish-dry-run-tag != ''
     strategy:
       matrix:
