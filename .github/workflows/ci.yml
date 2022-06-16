@@ -156,6 +156,7 @@ jobs:
         run: |
           # add registry and patches to project config
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
+          # startup local crate registry
           cargo-http-registry /tmp/local-registry &
 
       - name: Publish crate
@@ -163,6 +164,7 @@ jobs:
         with:
           publish-delay: 30000
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          args: "${{ env.PUBLISH_DRY_RUN && \"--registry local-registry --token ''\" }}"
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
@@ -220,7 +222,7 @@ jobs:
         with:
           context: .
           file: deployment/Dockerfile
-          push: true
+          push: ${{ !env.PUBLISH_DRY_RUN }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -253,7 +255,7 @@ jobs:
     needs:
       - lint-toml-files
       - cargo-verifications
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || ${{ env.PUBLISH_DRY_RUN }}
     strategy:
       matrix:
         job:
