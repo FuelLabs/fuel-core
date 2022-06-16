@@ -2,6 +2,10 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      publish-dry-run-tag:
+        description: "tag to use for publish dry-run"
+        required: false
   push:
     branches:
       - master
@@ -13,6 +17,8 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
   REGISTRY: ghcr.io
+  PUBLISH_REF: ${{ github.event.inputs.publish-dry-run-tag || github.ref_name }}
+  PUBLISH_DRY_RUN: ${{ github.event.inputs.publish-dry-run-tag != '' }}
 
 jobs:
   cancel-previous-runs:
@@ -106,9 +112,8 @@ jobs:
     needs:
       - lint-toml-files
       - cargo-verifications
-    if: github.event_name == 'release' && github.event.action == 'published'
+    if: (github.event_name == 'release' && github.event.action == 'published') || env.PUBLISH_DRY_RUN
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -139,6 +144,20 @@ jobs:
         run: |
           ./.github/workflows/scripts/verify_chart_version.sh
 
+      - name: Install local crate registry
+        if: ${{ env.PUBLISH_DRY_RUN }}
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-http-registry
+          version: "0.1.3"
+
+      - name: Setup local crate publishing
+        if: ${{ env.PUBLISH_DRY_RUN }}
+        run: |
+          # add registry and patches to project config
+          ./ci/local-registry/generate-config-patch.sh >> .cargo/config
+          cargo-http-registry /tmp/local-registry &
+
       - name: Publish crate
         uses: katyo/publish-crates@v1
         with:
@@ -164,19 +183,11 @@ jobs:
       - lint-toml-files
       - cargo-verifications
 
-    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
-      # This is a way to make this job run after publish-crates even if it's skipped on master or pr branches
-      # https://stackoverflow.com/a/69252812/680811
-      - name: fail if any dependent jobs failed
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
-
       - name: Checkout repository
         uses: actions/checkout@v2
 
