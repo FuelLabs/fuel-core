@@ -156,13 +156,13 @@ jobs:
           # add registry and patches to project config
           ./ci/local-registry/generate-config-patch.sh >> .cargo/config
           # startup local crate registry
-          cargo-http-registry /tmp/local-registry &
+          cargo-http-registry -a "http://127.0.0.1:8090" /tmp/local-registry &
 
       - name: Publish crate
         uses: Voxelot/publish-crates@b11fc443dc3c97e51fcf7ea93c54b99a903964a8
         with:
           publish-delay: 30000
-          registry: "${{ (env.PUBLISH_DRY_RUN && 'local-registry') || 'https://crates.io' }}"
+          registry: "${{ (env.PUBLISH_DRY_RUN && 'http://127.0.0.1:8090') || 'https://crates.io' }}"
           registry-token: "${{ (!env.PUBLISH_DRY_RUN && secrets.CARGO_REGISTRY_TOKEN) || '' }}"
           args: "${{ env.PUBLISH_DRY_RUN && '--registry local-registry --allow-dirty' }}"
 
