@@ -8,10 +8,10 @@ use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::{Address, Bytes32},
     model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
-    relayer::{RelayerDb, StakingDiff},
+    relayer::{RelayerDb, StakingDiff, ValidatorDiff},
 };
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{hash_map::Entry, HashMap, VecDeque},
     sync::Arc,
 };
 use tracing::{debug, error, info, warn};
@@ -85,8 +85,9 @@ impl FinalizationQueue {
     pub async fn get_validators(
         &mut self,
         da_height: DaBlockHeight,
+        db: &mut dyn RelayerDb,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
-        self.validators.get(da_height).await
+        self.validators.get(da_height, db).await
     }
 
     pub fn clear(&mut self) {
@@ -265,17 +266,42 @@ impl FinalizationQueue {
         }
         self.remove_bundled_reverted_events();
 
+        //TODO to be paranoid, recheck every block and all events got from eth client.
+
+        let mut validators: HashMap<Address, Option<Address>> = HashMap::new();
         while let Some(diff) = self.pending.front_mut() {
             if diff.da_height > finalized_da_height {
                 break;
             }
             info!("flush eth log:{:?} diff:{:?}", diff.da_height, diff);
-            //TODO to be paranoid, recheck events got from eth client.
+
+            let validator_diff: HashMap<Address, ValidatorDiff> = diff
+                .validators
+                .iter()
+                .map(|(val, &new_consensus_key)| {
+                    let previous_consensus_key = match validators.entry(*val) {
+                        Entry::Occupied(mut entry) => {
+                            core::mem::replace(entry.get_mut(), new_consensus_key)
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert(new_consensus_key);
+                            self.validators.set.get(val).and_then(|(_, i)| *i)
+                        }
+                    };
+                    (
+                        *val,
+                        ValidatorDiff {
+                            previous_consensus_key,
+                            new_consensus_key,
+                        },
+                    )
+                })
+                .collect();
 
             // apply staking diffs
             db.insert_staking_diff(
                 diff.da_height,
-                &StakingDiff::new(diff.validators.clone(), diff.delegations.clone()),
+                &StakingDiff::new(validator_diff, diff.delegations.clone()),
             )
             .await;
 
@@ -382,12 +408,12 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let v1_register = eth_log_validator_registration(0, v1, c1);
-        let v2_register = eth_log_validator_registration(0, v2, c2);
-        let v1_unregister = eth_log_validator_unregistration(1, v1);
-
         queue
-            .append_eth_logs(vec![v1_register, v2_register, v1_unregister])
+            .append_eth_logs(vec![
+                eth_log_validator_registration(0, v1, c1),
+                eth_log_validator_registration(0, v2, c2),
+                eth_log_validator_unregistration(1, v1),
+            ])
             .await;
 
         let diff1 = queue.pending[0].clone();
@@ -418,13 +444,13 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let v1_register = eth_log_validator_registration(1, v1, c1);
-        let v2_register = eth_log_validator_registration(2, v2, c2);
-        let deposit1 = eth_log_asset_deposit(2, acc1, token1, 1, 40, nonce1, 0);
-        let v1_unregister = eth_log_validator_unregistration(3, v1);
-
         queue
-            .append_eth_logs(vec![v1_register, v2_register, deposit1, v1_unregister])
+            .append_eth_logs(vec![
+                eth_log_validator_registration(1, v1, c1),
+                eth_log_validator_registration(2, v2, c2),
+                eth_log_asset_deposit(2, acc1, token1, 1, 40, nonce1, 0),
+                eth_log_validator_unregistration(3, v1),
+            ])
             .await;
 
         let mut db = DummyDb::filled();
@@ -471,13 +497,13 @@ mod tests {
         let s2 = rng.gen::<u16>() as u64;
         let s3 = rng.gen::<u16>() as u64;
 
-        let del1 = eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]);
-        let v1_register = eth_log_validator_registration(2, v1, c1);
-        let del2 = eth_log_delegation(2, delegator2, vec![v1], vec![s3]);
-        let del_with = eth_log_withdrawal(3, delegator1, 7);
-
         queue
-            .append_eth_logs(vec![del1, del2, v1_register, del_with])
+            .append_eth_logs(vec![
+                eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]),
+                eth_log_validator_registration(2, v1, c1),
+                eth_log_delegation(2, delegator2, vec![v1], vec![s3]),
+                eth_log_withdrawal(3, delegator1, 7),
+            ])
             .await;
         let mut db = DummyDb::filled();
 
@@ -520,15 +546,14 @@ mod tests {
         let s2 = rng.gen::<u16>() as u64;
         let s3 = rng.gen::<u16>() as u64;
 
-        let del1 = eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]);
-        let del1_ret = eth_log_delegation(1, delegator1, vec![v1], vec![s1]);
-        let del2 = eth_log_delegation(1, delegator2, vec![v2], vec![s1]);
-
-        let del2_first = eth_log_delegation(2, delegator2, vec![v1], vec![s3]);
-        let del2_ret = eth_log_withdrawal(2, delegator2, 0); // amount does nothing
-
         queue
-            .append_eth_logs(vec![del1, del1_ret, del2, del2_first, del2_ret])
+            .append_eth_logs(vec![
+                eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]),
+                eth_log_delegation(1, delegator1, vec![v1], vec![s1]),
+                eth_log_delegation(1, delegator2, vec![v2], vec![s1]),
+                eth_log_delegation(2, delegator2, vec![v1], vec![s3]),
+                eth_log_withdrawal(2, delegator2, 0), // amount does nothing
+            ])
             .await;
         let mut db = DummyDb::filled();
 
@@ -613,5 +638,84 @@ mod tests {
         queue.commit_diffs(&mut db, 1).await;
 
         assert_eq!(queue.pending.len(), 0)
+    }
+
+    #[tokio::test]
+    pub async fn simple_get_validator_set_down_drift() {
+        let mut rng = StdRng::seed_from_u64(3020);
+        let mut delegator1: Address = rng.gen();
+        let mut delegator2: Address = rng.gen();
+        let mut delegator3: Address = rng.gen();
+        delegator1.iter_mut().take(12).for_each(|i| *i = 0);
+        delegator2.iter_mut().take(12).for_each(|i| *i = 0);
+        delegator3.iter_mut().take(12).for_each(|i| *i = 0);
+        let mut v1: Address = rng.gen();
+        let mut v2: Address = rng.gen();
+        let cons1: Address = rng.gen();
+        let cons2: Address = rng.gen();
+        v1.iter_mut().take(12).for_each(|i| *i = 0);
+        v2.iter_mut().take(12).for_each(|i| *i = 0);
+
+        let mut queue = FinalizationQueue::new(
+            0,
+            H160::zero(),
+            &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
+                .unwrap()),
+            BlockHeight::from(0u64),
+            BlockHeight::from(0u64),
+        );
+
+        let s1 = rng.gen::<u16>() as u64;
+        let s2 = rng.gen::<u16>() as u64;
+        let s3 = rng.gen::<u16>() as u64;
+
+        queue
+            .append_eth_logs(vec![
+                eth_log_validator_registration(1, v1, cons1),
+                eth_log_validator_registration(1, v2, cons2),
+                eth_log_delegation(1, delegator1, vec![v1, v2], vec![s1, s2]),
+                eth_log_delegation(2, delegator1, vec![v1], vec![s1]),
+                eth_log_delegation(2, delegator2, vec![v2], vec![s1]),
+                eth_log_delegation(3, delegator2, vec![v1], vec![s3]),
+                eth_log_withdrawal(4, delegator2, 0),
+            ])
+            .await;
+        let mut db = DummyDb::filled();
+
+        // finalize all logs
+        queue.commit_diffs(&mut db, 5).await;
+
+        let set = queue.get_validators(6, &mut db).await;
+        assert_eq!(set, None);
+
+        let set = queue.get_validators(5, &mut db).await;
+        assert!(set.is_some(), "Should be some for 5");
+        let set = set.unwrap();
+        assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
+        assert_eq!(set.get(&v2), None);
+
+        let set = queue.get_validators(4, &mut db).await;
+        assert!(set.is_some(), "Should be some for 4");
+        let set = set.unwrap();
+        assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
+        assert_eq!(set.get(&v2), None);
+
+        let set = queue.get_validators(3, &mut db).await;
+        assert!(set.is_some(), "Should be some for 3");
+        let set = set.unwrap();
+        assert_eq!(set.get(&v1), Some(&(s1 + s3, Some(cons1))));
+        assert_eq!(set.get(&v2), None);
+
+        let set = queue.get_validators(2, &mut db).await;
+        assert!(set.is_some(), "Should be some for 2");
+        let set = set.unwrap();
+        assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
+        assert_eq!(set.get(&v2), Some(&(s1, Some(cons2))));
+
+        let set = queue.get_validators(1, &mut db).await;
+        assert!(set.is_some(), "Should be some for 1");
+        let set = set.unwrap();
+        assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
+        assert_eq!(set.get(&v2), Some(&(s2, Some(cons2))));
     }
 }

@@ -7,16 +7,25 @@ use tokio::sync::oneshot;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct StakingDiff {
-    /// Validator registration, it can be new consensus address if registered or
-    /// None if unregistration happened.
-    pub validators: HashMap<Address, Option<Address>>,
+    /// Validator registration, it is pair of old consensu key and new one, where consensus address
+    /// if registered is Some or None if unregistration happened.
+    pub validators: HashMap<Address, ValidatorDiff>,
     /// Register changes for all delegations inside one da block.
     pub delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
 }
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone)]
+pub struct ValidatorDiff {
+    /// Previous consensus key, None if validator was not set.
+    pub previous_consensus_key: Option<Address>,
+    /// New consensus key or None if unregistration happened.
+    pub new_consensus_key: Option<Address>,
+}
+
 impl StakingDiff {
     pub fn new(
-        validators: HashMap<Address, Option<Address>>,
+        validators: HashMap<Address, ValidatorDiff>,
         delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
     ) -> Self {
         Self {
@@ -53,10 +62,9 @@ pub trait RelayerDb:
     }
 
     /// Query delegate index to find list of blocks that delegation changed
-    /// iterate over list of indexed to find height that is less and closest to da_height
+    /// iterate over list of indexed to find height that is less but closest to da_height
     /// Query that block StakeDiff to find actual delegation change.
-    /// TODO not needed
-    async fn get_last_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<Address,u64>> {
+    async fn get_first_lesser_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<Address,u64>> {
         // get delegate index
         let delegate_index = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).expect("Expect to get data without problem")?;
         let mut last_da_height = 0;

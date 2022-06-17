@@ -1,10 +1,10 @@
 use fuel_core_interfaces::{
     common::fuel_tx::Address,
     model::{DaBlockHeight, ValidatorStake},
-    relayer::RelayerDb,
+    relayer::{RelayerDb, ValidatorDiff},
 };
 use std::collections::{hash_map::Entry, HashMap};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 /// It contains list of Validators and its stake and consensus public key.
 /// We dont expect big number of validators in that sense we are okey to have it all in memory
@@ -26,16 +26,97 @@ impl Validators {
         self.set = db.get_validators().await;
     }
 
-    /// Get validator set
+    /// Get validator set for da_height.
     pub async fn get(
-        &mut self,
+        &self,
         da_height: DaBlockHeight,
+        db: &mut dyn RelayerDb,
     ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
-        // TODO apply down drift https://github.com/FuelLabs/fuel-core/issues/365
-        if self.da_height == da_height {
-            return Some(self.set.clone());
+        match self.da_height.cmp(&da_height) {
+            std::cmp::Ordering::Less => {
+                // We request validator set that we still didnt finalized or know about.
+                // Probably there is eth client sync problem
+                error!(
+                    "current height {} is less then requested validator set height: {da_height}",
+                    self.da_height
+                );
+                None
+            }
+            std::cmp::Ordering::Equal => {
+                // unusual but do nothing
+                debug!("Get last finalized set height: {da_height}");
+                let set = self
+                    .set
+                    .iter()
+                    .filter(|(_, (stake, consensus_key))| *stake != 0 && consensus_key.is_some())
+                    .map(|(k, v)| (*k, *v))
+                    .collect();
+                Some(set)
+            }
+            std::cmp::Ordering::Greater => {
+                // slightly drift to past
+
+                let mut validators = self.set.clone();
+                // get staking diffs to revert from our current set.
+                let diffs = db
+                    .get_staking_diffs(da_height + 1, Some(self.da_height))
+                    .await;
+
+                for (diff_height, diff) in diffs.into_iter().rev() {
+                    // update consensus_key
+                    for (
+                        validator,
+                        ValidatorDiff {
+                            previous_consensus_key,
+                            ..
+                        },
+                    ) in diff.validators
+                    {
+                        if let Some((_, consensus_key)) = validators.get_mut(&validator) {
+                            *consensus_key = previous_consensus_key;
+                        } else {
+                            panic!("Validator should be present when reverting diff");
+                        }
+                    }
+
+                    // for every delegates, cache it and if it is not in cache query db's delegates_index for earlier delegate set.
+                    for (delegator, delegation) in diff.delegations {
+                        // add new delegation stake.
+                        if let Some(ref delegation) = delegation {
+                            for (validator, stake) in delegation {
+                                validators
+                                    .entry(*validator)
+                                    .or_insert_with(|| {
+                                        self.set.get(validator).cloned().unwrap_or_default()
+                                    })
+                                    // remove stake
+                                    .0 -= stake;
+                            }
+                        }
+
+                        // get older delegation to add again to validator stake
+                        if let Some(delegations) = db
+                            .get_first_lesser_delegation(&delegator, diff_height)
+                            .await
+                        {
+                            for (validator, stake) in delegations {
+                                validators
+                                    .entry(validator)
+                                    .or_insert_with(|| {
+                                        self.set.get(&validator).cloned().unwrap_or_default()
+                                    })
+                                    // remove stake
+                                    .0 += stake;
+                            }
+                        };
+                    }
+                }
+
+                validators
+                    .retain(|_, (stake, consensus_key)| *stake != 0 && consensus_key.is_some());
+                Some(validators)
+            }
         }
-        None
     }
 
     /// Bump validator set to new high da_height.
@@ -70,15 +151,21 @@ impl Validators {
         let mut delegates_cached: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key
-            for (validator, consensus_key) in diff.validators {
+            for (
+                validator,
+                ValidatorDiff {
+                    new_consensus_key, ..
+                },
+            ) in diff.validators
+            {
                 validators
                     .entry(validator)
                     .or_insert_with(|| self.set.get(&validator).cloned().unwrap_or_default())
-                    .1 = consensus_key;
+                    .1 = new_consensus_key;
             }
 
             // for every delegates, cache it and if it is not in cache query db's delegates_index for earlier delegate set.
-            for (delegator, delegation) in diff.delegations.into_iter() {
+            for (delegator, delegation) in diff.delegations {
                 // add new delegation stake.
                 if let Some(ref delegation) = delegation {
                     for (validator, stake) in delegation {
@@ -93,7 +180,9 @@ impl Validators {
                 // get old delegation
                 let old_delegation = match delegates_cached.entry(delegator) {
                     Entry::Vacant(entry) => {
-                        let old_delegation = db.get_last_delegation(&delegator, diff_height).await;
+                        let old_delegation = db
+                            .get_first_lesser_delegation(&delegator, diff_height)
+                            .await;
                         entry.insert(delegation);
                         old_delegation
                     }
@@ -111,7 +200,10 @@ impl Validators {
                         validators
                             .entry(validator)
                             .or_insert_with(|| {
-                                self.set.get(&validator).cloned().unwrap_or_default()
+                                self.set
+                                    .get(&validator)
+                                    .cloned()
+                                    .expect("Expect for validator to exists")
                             })
                             // decrease undelegated stake
                             .0 -= old_stake;
@@ -126,3 +218,5 @@ impl Validators {
         self.da_height = da_height;
     }
 }
+
+// testing for this mod is done inside finalization_queue.rs mod.
