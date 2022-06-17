@@ -126,23 +126,23 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, Word>(COIN, None, None, None)
             .map(|raw_coin| -> CoinConfig {
-                println!("Coin is {:?}", raw_coin);
                 let coin = raw_coin.unwrap();
 
                 let byte_id = Bytes32::new(coin.0[..32].try_into().unwrap());
-                let output_index = coin.1;
+                let output_index = coin.0[32];
                 // Potentially chop off a byte for output index
-                let tx_id = fuel_tx::UtxoId::new(byte_id, output_index as u8);
+                let tx_id = fuel_tx::UtxoId::new(byte_id, output_index);
 
                 let ref_coin = Storage::<fuel_tx::UtxoId, CoinModel>::get(self, &tx_id)
-                    .unwrap()
                     .unwrap();
+                                    
+                let ref_coin = ref_coin.unwrap();
 
                 let coin = ref_coin.into_owned();
 
                 CoinConfig {
                     tx_id: Some(byte_id),
-                    output_index: Some(output_index),
+                    output_index: Some(output_index.into()),
                     block_created: Some(coin.block_created),
                     maturity: Some(coin.maturity),
                     owner: coin.owner,
