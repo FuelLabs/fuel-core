@@ -1,9 +1,8 @@
-use crate::{interface::Interface, types::*, Config};
+use crate::{interface::Interface, Config};
 use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::model::TxInfo;
 use fuel_core_interfaces::txpool::{TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task::JoinHandle;
 use tracing::warn;
 
@@ -68,55 +67,6 @@ impl Service {
     pub fn sender(&self) -> &mpsc::Sender<TxPoolMpsc> {
         &self.sender
     }
-
-    pub async fn insert(
-        &self,
-        txs: Vec<Arc<Transaction>>,
-    ) -> oneshot::Receiver<Vec<anyhow::Result<Vec<Arc<Transaction>>>>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self.sender.send(TxPoolMpsc::Insert { txs, response }).await;
-        receiver
-    }
-
-    pub async fn find(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<Option<TxInfo>>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self.sender.send(TxPoolMpsc::Find { ids, response }).await;
-        receiver
-    }
-
-    pub async fn find_one(&self, id: TxId) -> oneshot::Receiver<Option<TxInfo>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self.sender.send(TxPoolMpsc::FindOne { id, response }).await;
-        receiver
-    }
-
-    pub async fn find_dependent(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<Arc<Transaction>>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self
-            .sender
-            .send(TxPoolMpsc::FindDependent { ids, response })
-            .await;
-        receiver
-    }
-
-    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> oneshot::Receiver<Vec<TxId>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self
-            .sender
-            .send(TxPoolMpsc::FilterByNegative { ids, response })
-            .await;
-        receiver
-    }
-
-    pub async fn includable(&self) -> oneshot::Receiver<Vec<Arc<Transaction>>> {
-        let (response, receiver) = oneshot::channel();
-        let _ = self.sender.send(TxPoolMpsc::Includable { response }).await;
-        receiver
-    }
-
-    pub async fn remove(&self, ids: Vec<TxId>) {
-        let _ = self.sender.send(TxPoolMpsc::Remove { ids }).await;
-    }
 }
 
 #[cfg(any(test))]
@@ -124,6 +74,7 @@ pub mod tests {
 
     use super::*;
     use fuel_core_interfaces::db::helpers::*;
+    use tokio::sync::oneshot;
 
     #[tokio::test]
     async fn test_start_stop() {
@@ -163,15 +114,30 @@ pub mod tests {
         let service = Service::new(db, config).unwrap();
         service.start(br).await;
 
-        let out = service.insert(vec![tx1, tx2]).await.await.unwrap();
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1, tx2],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        let out = service
-            .filter_by_negative(vec![tx1_hash, tx3_hash])
-            .await
-            .await
-            .unwrap();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::FilterByNegative {
+                ids: vec![tx1_hash, tx3_hash],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
         assert_eq!(out.len(), 1, "Shoud be len 1:{:?}", out);
         assert_eq!(out[0], tx3_hash, "Found tx id match{:?}", out);
         service.stop().await.unwrap().await.unwrap();
@@ -192,11 +158,29 @@ pub mod tests {
 
         let service = Service::new(db, config).unwrap();
         service.start(br).await;
-        let out = service.insert(vec![tx1, tx2]).await.await.unwrap();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1, tx2],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        let out = service.find(vec![tx1_hash, tx3_hash]).await.await.unwrap();
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Find {
+                ids: vec![tx1_hash, tx3_hash],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
         assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
         assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
         let id = out[0].as_ref().unwrap().id();

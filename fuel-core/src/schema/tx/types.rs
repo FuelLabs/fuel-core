@@ -17,10 +17,11 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
     },
     db::KvStoreError,
-    model::TxInfo,
+    txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -227,13 +228,17 @@ impl Transaction {
 
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
-
         let txpool = ctx.data::<Arc<TxPoolService>>()?.clone();
+        let id = self.0.id();
 
-        let transaction_in_pool: Option<TxInfo> = txpool.find_one(self.0.id()).await.await?;
+        let (response, receiver) = oneshot::channel();
+        let _ = txpool
+            .sender()
+            .send(TxPoolMpsc::FindOne { id, response })
+            .await;
 
-        if transaction_in_pool.is_some() {
-            let time = transaction_in_pool.unwrap().submited_time();
+        if let Ok(Some(transaction_in_pool)) = receiver.await {
+            let time = transaction_in_pool.submited_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
             let status = db.get_tx_status(&self.0.id())?;

@@ -4,7 +4,6 @@ use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;
-//use crate::tx_pool::TxPool;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
@@ -15,12 +14,14 @@ use fuel_core_interfaces::common::{
     fuel_types,
     fuel_vm::prelude::Deserializable,
 };
+use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_txpool::Service as TxPoolService;
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 use types::Transaction;
 
 pub mod input;
@@ -39,13 +40,19 @@ impl TxQuery {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
-        let key = id.0;
-        let tx_pool = ctx.data::<Arc<TxPoolService>>().unwrap();
+        let id = id.0;
+        let txpool = ctx.data::<Arc<TxPoolService>>().unwrap();
 
-        if let Ok(Some(transaction)) = tx_pool.find_one(key).await.await {
+        let (response, receiver) = oneshot::channel();
+        let _ = txpool
+            .sender()
+            .send(TxPoolMpsc::FindOne { id, response })
+            .await;
+
+        if let Ok(Some(transaction)) = receiver.await {
             Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
-            Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
+            Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &id)?
                 .map(|tx| Transaction(tx.into_owned())))
         }
     }
@@ -290,17 +297,33 @@ impl TxMutation {
         let cfg = ctx.data_unchecked::<Config>().clone();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();
-        let includable = if cfg.utxo_validation {
-            txpool
-                .insert(vec![Arc::new(tx.clone())])
-                .await
-                .await?
-                .get(0)
-                .unwrap()
-                .as_ref()?;
 
-            let txs = txpool.includable().await.await?;
-            txpool.remove(vec![tx.id()]).await;
+        let includable = if cfg.utxo_validation {
+            // include transaction
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Insert {
+                    txs: vec![Arc::new(tx.clone())],
+                    response,
+                })
+                .await;
+            receiver.await?.get(0).unwrap().as_ref()?;
+
+            // get includable transactions
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Includable { response })
+                .await;
+            let txs = receiver.await?;
+
+            // remove transaction
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Remove { ids: vec![tx.id()] })
+                .await;
+
             txs
         } else {
             vec![Arc::new(tx.clone())]
