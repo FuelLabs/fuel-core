@@ -1,6 +1,6 @@
 use fuel_core_interfaces::{
     common::fuel_tx::Address,
-    model::{DaBlockHeight, ValidatorStake},
+    model::{ConsensusPublicKey, DaBlockHeight, ValidatorAddress, ValidatorStake},
     relayer::{RelayerDb, ValidatorDiff},
 };
 use std::collections::{hash_map::Entry, HashMap};
@@ -13,7 +13,7 @@ use tracing::{debug, error, info};
 #[derive(Default)]
 pub struct Validators {
     /// Validator set
-    pub set: HashMap<Address, (ValidatorStake, Option<Address>)>,
+    pub set: HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>,
     /// Da height
     pub da_height: DaBlockHeight,
 }
@@ -31,7 +31,7 @@ impl Validators {
         &self,
         da_height: DaBlockHeight,
         db: &mut dyn RelayerDb,
-    ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
+    ) -> Option<HashMap<ValidatorAddress, (u64, Option<ConsensusPublicKey>)>> {
         match self.da_height.cmp(&da_height) {
             std::cmp::Ordering::Less => {
                 // We request validator set that we still didnt finalized or know about.
@@ -148,7 +148,10 @@ impl Validators {
         let diffs = db
             .get_staking_diffs(self.da_height + 1, Some(da_height))
             .await;
-        let mut delegates_cached: HashMap<Address, Option<HashMap<Address, u64>>> = HashMap::new();
+        let mut delegates_cached: HashMap<
+            Address,
+            Option<HashMap<ValidatorAddress, ValidatorStake>>,
+        > = HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key
             for (

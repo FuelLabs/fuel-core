@@ -14,7 +14,10 @@ use fuel_core_interfaces::{
         fuel_storage::Storage,
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
     },
-    model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake},
+    model::{
+        BlockHeight, ConsensusPublicKey, DaBlockHeight, SealedFuelBlock, ValidatorAddress,
+        ValidatorStake,
+    },
     relayer::{RelayerDb, StakingDiff},
 };
 use serde::{de::DeserializeOwned, Serialize};
@@ -273,15 +276,17 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(&self) -> HashMap<Address, (ValidatorStake, Option<Address>)> {
-        struct WrapAddress(pub Address);
+    async fn get_validators(
+        &self,
+    ) -> HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)> {
+        struct WrapAddress(pub ValidatorAddress);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
-                Self(Address::try_from(i.as_ref()).unwrap())
+                Self(ValidatorAddress::try_from(i.as_ref()).unwrap())
             }
         }
         let mut out = HashMap::new();
-        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<Address>)>(
+        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusPublicKey>)>(
             columns::VALIDATOR_SET,
             None,
             None,
@@ -343,17 +348,18 @@ impl RelayerDb for Database {
     async fn apply_validator_diffs(
         &mut self,
         da_height: DaBlockHeight,
-        changes: &HashMap<Address, (ValidatorStake, Option<Address>)>,
+        changes: &HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>,
     ) {
         // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
-            let _ = Storage::<Address, (ValidatorStake, Option<Address>)>::insert(
-                db.deref_mut(),
-                address,
-                stake,
-            );
+            let _ =
+                Storage::<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>::insert(
+                    db.deref_mut(),
+                    address,
+                    stake,
+                );
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {
