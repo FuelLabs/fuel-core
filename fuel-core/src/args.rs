@@ -2,7 +2,6 @@ use clap::Parser;
 use fuel_core::chain_config::StateConfig;
 use fuel_core::database::Database;
 use fuel_core::service::{Config, DbType, VMConfig};
-use std::io::Write;
 use std::str::FromStr;
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
@@ -23,7 +22,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 )]
 pub struct Opt {
     #[clap(subcommand)]
-    pub snapshot: Option<SnapshotCommand>,
+    pub _snapshot: Option<SnapshotCommand>,
 
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
@@ -122,7 +121,7 @@ impl Opt {
             min_gas_price,
             min_byte_price,
             predicates,
-            snapshot,
+            _snapshot,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -149,6 +148,7 @@ impl Opt {
 pub fn dump_snapshot() -> anyhow::Result<()> {
     let mut db = Database::default();
 
+    // Extract later for a test case
     let contract = fuel_vm::prelude::Contract::default();
     let id = fuel_types::ContractId::new([12; 32]);
 
@@ -157,7 +157,6 @@ pub fn dump_snapshot() -> anyhow::Result<()> {
     )
     .unwrap();
 
-    println!("{:?}", id);
     let state_conf = StateConfig::generate_state_config(db);
     println!("{:?}", state_conf);
     Ok(())

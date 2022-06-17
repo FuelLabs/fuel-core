@@ -2,9 +2,7 @@ use self::serialization::{HexNumber, HexType};
 use crate::database::Database;
 use crate::model::BlockHeight;
 use fuel_tx::ConsensusParameters;
-use fuel_types::Word;
 use fuel_types::{Address, AssetId, Bytes32, Salt};
-use fuel_vm::prelude::{Contract, ContractId, Storage};
 use itertools::Itertools;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
@@ -126,7 +124,7 @@ pub struct StateConfig {
 impl StateConfig {
     pub fn generate_state_config(db: Database) -> Self {
         StateConfig {
-            coins: None,
+            coins: db.get_coin_config().unwrap(),
             contracts: db.get_contract_config().unwrap(),
             height: db.get_block_height().unwrap(),
         }

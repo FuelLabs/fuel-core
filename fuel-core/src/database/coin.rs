@@ -7,8 +7,10 @@ use crate::{
     model::Coin,
     state::{Error, IterDirection},
 };
+use fuel_core_interfaces::model::Coin as CoinModel;
 use fuel_storage::Storage;
 use fuel_tx::{Address, AssetId, Bytes32, UtxoId};
+use fuel_types::Word;
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -121,26 +123,35 @@ impl Database {
     }
 
     pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, anyhow::Error> {
-        let configs = self.iter_all(COIN, None, None, None).map(|raw_coin| {
-            println!("Coin is {:?}", raw_coin);
-            /*
-            let coin = raw_coin.unwrap();
+        let configs = self
+            .iter_all::<Vec<u8>, Word>(COIN, None, None, None)
+            .map(|raw_coin| -> CoinConfig {
+                println!("Coin is {:?}", raw_coin);
+                let coin = raw_coin.unwrap();
 
-            // Potentially chop off a byte for output index
-            let tx_id = coin.0;
+                let byte_id = Bytes32::new(coin.0[..32].try_into().unwrap());
+                let output_index = coin.1;
+                // Potentially chop off a byte for output index
+                let tx_id = fuel_tx::UtxoId::new(byte_id, output_index as u8);
 
-            let owner = coin.1.owner;
+                let ref_coin = Storage::<fuel_tx::UtxoId, CoinModel>::get(self, &tx_id)
+                    .unwrap()
+                    .unwrap();
 
-            let amount = coin.1.amount;
+                let coin = ref_coin.into_owned();
 
-            let asset_id = coin.1.amount;
+                CoinConfig {
+                    tx_id: Some(byte_id),
+                    output_index: Some(output_index),
+                    block_created: Some(coin.block_created),
+                    maturity: Some(coin.maturity),
+                    owner: coin.owner,
+                    amount: coin.amount,
+                    asset_id: coin.asset_id,
+                }
+            })
+            .collect();
 
-            let maturity = coin.1.maturity;
-
-            let block_created = coin.1.block_created;
-            */
-        });
-
-        Ok(None)
+        Ok(Some(configs))
     }
 }
