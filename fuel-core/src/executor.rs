@@ -845,7 +845,11 @@ mod tests {
             database: Default::default(),
             config: Config::local_node(),
         };
-        let factor = producer.config.chain_conf.transaction_parameters.gas_price_factor as f64;
+        let factor = producer
+            .config
+            .chain_conf
+            .transaction_parameters
+            .gas_price_factor as f64;
 
         let verifier = Executor {
             database: Default::default(),
