@@ -11,11 +11,15 @@ use crate::{
 };
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::{db::KvStoreError, model::TxInfo};
-use fuel_storage::Storage;
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage, fuel_tx, fuel_types, fuel_types::bytes::SerializableVec,
+        fuel_vm::prelude::ProgramState as VmProgramState,
+    },
+    db::KvStoreError,
+    model::TxInfo,
+};
 use fuel_txpool::Service as TxPoolService;
-use fuel_types::bytes::SerializableVec;
-use fuel_vm::prelude::ProgramState as VmProgramState;
 use std::sync::Arc;
 
 pub struct ProgramState {

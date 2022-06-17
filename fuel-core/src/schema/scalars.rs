@@ -3,6 +3,7 @@ use crate::model::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
+use fuel_core_interfaces::common::{fuel_tx, fuel_types};
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},

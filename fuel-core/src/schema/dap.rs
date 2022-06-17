@@ -2,8 +2,10 @@ use crate::database::transactional::DatabaseTransaction;
 use crate::database::Database;
 use crate::schema::scalars::U64;
 use async_graphql::{Context, Object, SchemaBuilder, ID};
-use fuel_tx::ConsensusParameters;
-use fuel_vm::{consts, prelude::*};
+use fuel_core_interfaces::common::{
+    fuel_tx::ConsensusParameters,
+    fuel_vm::{consts, prelude::*},
+};
 use futures::lock::Mutex;
 use std::{collections::HashMap, io, sync};
 use tracing::{debug, trace};
@@ -93,7 +95,7 @@ impl ConcreteStorage {
     pub fn exec(&mut self, id: &ID, op: Opcode) -> Result<(), InterpreterError> {
         self.vm
             .get_mut(id)
-            .map(|vm| vm.instruction(Interpreter::instruction_script, op.into()))
+            .map(|vm| vm.instruction(op.into()))
             .transpose()?
             .map(|_| ())
             .ok_or_else(|| {
@@ -340,7 +342,7 @@ impl DapMutation {
         let state = match vm.resume() {
             Ok(state) => state,
             // The transaction was already completed earlier, so it cannot be resumed
-            Err(fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
+            Err(fuel_core_interfaces::common::fuel_vm::error::InterpreterError::DebugStateNotInitialized) => {
                 return Ok(self::gql_types::RunResult {
                     state: self::gql_types::RunState::Completed,
                     breakpoint: None,
@@ -372,7 +374,7 @@ mod gql_types {
     use crate::schema::scalars::{ContractId, U64};
 
     #[cfg(feature = "debug")]
-    use fuel_vm::prelude::Breakpoint as FuelBreakpoint;
+    use fuel_core_interfaces::common::fuel_vm::prelude::Breakpoint as FuelBreakpoint;
 
     #[derive(Debug, Clone, Copy, InputObject)]
     pub struct Breakpoint {

@@ -1,9 +1,10 @@
 // Tests related to the predicate execution feature
 
 use crate::helpers::TestSetupBuilder;
-use fuel_tx::{Input, Output, TransactionBuilder};
-use fuel_vm::consts::REG_ZERO;
-use fuel_vm::{consts::REG_ONE, prelude::Opcode};
+use fuel_core_interfaces::common::{
+    fuel_tx::{Input, Output, TransactionBuilder},
+    fuel_vm::{consts::REG_ONE, consts::REG_ZERO, prelude::Opcode},
+};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[tokio::test]

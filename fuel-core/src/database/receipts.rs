@@ -1,6 +1,8 @@
 use crate::database::{columns::RECEIPTS, Database, KvStoreError};
-use fuel_storage::Storage;
-use fuel_tx::{Bytes32, Receipt};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{Bytes32, Receipt},
+};
 use std::borrow::Cow;
 
 impl Storage<Bytes32, Vec<Receipt>> for Database {

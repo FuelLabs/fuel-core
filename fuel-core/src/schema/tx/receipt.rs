@@ -4,8 +4,7 @@ use crate::schema::{
 };
 use async_graphql::{Enum, Object};
 use derive_more::Display;
-use fuel_asm::Word;
-use fuel_types::bytes::SerializableVec;
+use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx, fuel_types::bytes::SerializableVec};
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
 pub enum ReceiptType {

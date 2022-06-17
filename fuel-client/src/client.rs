@@ -1,4 +1,5 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
+use anyhow::Context;
 use cynic::{http::SurfExt, Id, MutationBuilder, Operation, QueryBuilder};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
@@ -35,7 +36,8 @@ impl FromStr for FuelClient {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let mut url = surf::Url::parse(str)?;
+        let mut url =
+            surf::Url::parse(str).with_context(|| format!("Invalid fuel-core URL: {}", str))?;
         url.set_path("/graphql");
         Ok(Self { url })
     }

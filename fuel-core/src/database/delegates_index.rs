@@ -1,7 +1,8 @@
 use crate::database::{columns, Database, KvStoreError};
-use fuel_core_interfaces::model::DaBlockHeight;
-use fuel_storage::Storage;
-use fuel_types::Address;
+use fuel_core_interfaces::{
+    common::{fuel_storage::Storage, fuel_types::Address},
+    model::DaBlockHeight,
+};
 use std::borrow::Cow;
 
 /// Delegate Index maps delegateAddress with list of da block where delegation happened. so that we

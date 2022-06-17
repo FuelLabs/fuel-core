@@ -1,6 +1,7 @@
 use super::modules::Modules;
 use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
+use crate::service::metrics::metrics;
 use crate::service::Config;
 use anyhow::Result;
 use async_graphql::{
@@ -46,6 +47,7 @@ pub async fn start_server(
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
+        .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
         .layer(TraceLayer::new_for_http())
