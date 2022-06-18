@@ -133,9 +133,8 @@ impl Database {
                 // Potentially chop off a byte for output index
                 let tx_id = fuel_tx::UtxoId::new(byte_id, output_index);
 
-                let ref_coin = Storage::<fuel_tx::UtxoId, CoinModel>::get(self, &tx_id)
-                    .unwrap();
-                                    
+                let ref_coin = Storage::<fuel_tx::UtxoId, CoinModel>::get(self, &tx_id).unwrap();
+
                 let ref_coin = ref_coin.unwrap();
 
                 let coin = ref_coin.into_owned();

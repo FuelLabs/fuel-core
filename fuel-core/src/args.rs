@@ -2,10 +2,12 @@ use clap::Parser;
 use fuel_core::chain_config::StateConfig;
 use fuel_core::database::Database;
 use fuel_core::service::{Config, DbType, VMConfig};
+use std::io::{self, Write};
 use std::str::FromStr;
-use std::{env, io, net, path::PathBuf};
+use std::{env, net, path::PathBuf};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
+
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
 }
@@ -146,18 +148,14 @@ impl Opt {
 }
 
 pub fn dump_snapshot() -> anyhow::Result<()> {
-    let mut db = Database::default();
-
-    // Extract later for a test case
-    let contract = fuel_vm::prelude::Contract::default();
-    let id = fuel_types::ContractId::new([12; 32]);
-
-    fuel_storage::Storage::<fuel_types::ContractId, fuel_vm::prelude::Contract>::insert(
-        &mut db, &id, &contract,
-    )
-    .unwrap();
+    let db = Database::open(&DEFAULT_DB_PATH)?;
 
     let state_conf = StateConfig::generate_state_config(db);
-    println!("{:?}", state_conf);
+
+    let serialized = serde_json::to_string(&state_conf).unwrap();
+    let mut stdout = io::stdout().lock();
+
+    stdout.write_all(serialized.as_bytes())?;
+
     Ok(())
 }
