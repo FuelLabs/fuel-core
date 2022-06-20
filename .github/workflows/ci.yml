@@ -54,6 +54,11 @@ jobs:
       - name: Echo
         run: |
           echo "lint-toml-files"
+      - name: Set env
+        run: echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $GITHUB_SHA_SHORT
 
   cargo-verifications:
     needs: cancel-previous-runs
@@ -238,8 +243,8 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "FUEL_CORE_IMAGE_TAG=`(echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2)`" >> $GITHUB_ENV
-          echo "FUEL_CORE_DEPLOYMENT_VERSION=`(echo ${ GITHUB_SHA } )`" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG = `echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2`" >> $GITHUB_ENV
+          echo "FUEL_CORE_DEPLOYMENT_VERSION = `echo ${ GITHUB_SHA }`" >> $GITHUB_ENV
 
           echo "IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
           echo "DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
