@@ -51,7 +51,7 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
     steps:
-      - name: Echo 
+      - name: Echo
         run: |
           echo "lint-toml-files"
 
@@ -238,8 +238,9 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2)" >> $GITHUB_ENV
-          echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo ${ GITHUB_SHA } )" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG=`(echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2)`" >> $GITHUB_ENV
+          echo "FUEL_CORE_DEPLOYMENT_VERSION=`(echo ${ GITHUB_SHA } )`" >> $GITHUB_ENV
+
           echo "IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
           echo "DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
 
@@ -393,7 +394,7 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    if: github.ref == 'refs/heads/master'
+    # if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
@@ -405,11 +406,11 @@ jobs:
           repo: FuelLabs/fuel-deployment
           ref: refs/heads/master
           token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+          inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
         env:
-          K8S: "eks"
           CONFIG: "fuel-dev1"
+          DELETE_INFRA: true
+          DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
           ENV: "fueldevsway.env"
           IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
-          DELETE_INFRA: true
+          K8S: "eks"
