@@ -4,10 +4,10 @@ use fuel_core::{
     chain_config::{CoinConfig, ContractConfig},
     service::{Config, FuelService},
 };
-use fuel_tx::AssetId;
-use fuel_types::{Bytes32, Salt};
-use fuel_vm::prelude::Address;
-
+use fuel_core_interfaces::common::{
+    fuel_types::{Address, Bytes32, Salt},
+    fuel_vm::prelude::{AssetId, Contract, ContractId, InterpreterStorage, Storage},
+};
 #[tokio::test]
 async fn snapshot_chain_config() {
     let mut db = Database::default();
@@ -16,8 +16,8 @@ async fn snapshot_chain_config() {
     let asset_id = AssetId::new([1u8; 32]);
 
     // Extract later for a test case
-    let contract = fuel_vm::prelude::Contract::default();
-    let id = fuel_types::ContractId::new([12; 32]);
+    let contract = Contract::default();
+    let id = ContractId::new([12; 32]);
 
     // setup config
     let mut config = Config::local_node();
@@ -49,12 +49,9 @@ async fn snapshot_chain_config() {
         ),
     });
 
-    fuel_storage::Storage::<fuel_types::ContractId, fuel_vm::prelude::Contract>::insert(
-        &mut db, &id, &contract,
-    )
-    .unwrap();
+    Storage::<ContractId, Contract>::insert(&mut db, &id, &contract).unwrap();
 
-    fuel_vm::storage::InterpreterStorage::storage_contract_root_insert(
+    InterpreterStorage::storage_contract_root_insert(
         &mut db,
         &id,
         &Salt::new([5; 32]),

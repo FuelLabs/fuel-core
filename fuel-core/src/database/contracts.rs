@@ -1,3 +1,4 @@
+use crate::database::InterpreterStorage;
 use crate::{
     chain_config::ContractConfig,
     database::{
@@ -6,9 +7,11 @@ use crate::{
     },
     state::{Error, IterDirection, MultiKey},
 };
-use fuel_tx::UtxoId;
-use fuel_types::Word;
-use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
+use fuel_core_interfaces::common::{
+    fuel_tx::UtxoId,
+    fuel_types::{Bytes32, Word},
+    fuel_vm::prelude::{AssetId, Contract, ContractId, Storage},
+};
 use std::borrow::Cow;
 
 impl Storage<ContractId, Contract> for Database {
@@ -75,25 +78,20 @@ impl Database {
                     ContractId::new(raw_contract_id.unwrap().0[..32].try_into().unwrap());
 
                 // Working?
-                let code: Vec<u8> =
-                    Storage::<fuel_types::ContractId, fuel_vm::prelude::Contract>::get(
-                        self,
-                        &contract_id,
-                    )
+                let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)
                     .unwrap()
                     .unwrap()
                     .into_owned()
                     .into();
 
-                let salt =
-                    fuel_vm::storage::InterpreterStorage::storage_contract_root(self, &contract_id)
-                        .unwrap()
-                        .unwrap()
-                        .into_owned()
-                        .0;
+                let salt = InterpreterStorage::storage_contract_root(self, &contract_id)
+                    .unwrap()
+                    .unwrap()
+                    .into_owned()
+                    .0;
 
                 // Working
-                let state: Option<Vec<(fuel_types::Bytes32, fuel_types::Bytes32)>> =
+                let state: Option<Vec<(Bytes32, Bytes32)>> =
                     self.get(contract_id.as_ref(), CONTRACTS_STATE).unwrap();
 
                 // Working
@@ -116,7 +114,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_tx::TxId;
+    use fuel_core_interfaces::common::fuel_tx::TxId;
 
     #[test]
     fn contract_get() {

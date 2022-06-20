@@ -1,8 +1,8 @@
 #![cfg(feature = "debug")]
 
 use fuel_core::service::{Config, FuelService};
+use fuel_core_interfaces::common::fuel_vm::prelude::*;
 use fuel_gql_client::client::FuelClient;
-use fuel_vm::prelude::*;
 
 /// Tests that debugger doesn't produce any errors with a running local node,
 /// and also verifies that breakpoints are working as they should

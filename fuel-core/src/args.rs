@@ -127,7 +127,6 @@ impl Opt {
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
-
         Ok(Config {
             addr,
             database_path,

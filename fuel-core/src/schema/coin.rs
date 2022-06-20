@@ -1,14 +1,18 @@
-use crate::coin_query::{random_improve, SpendQueryElement};
-use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::{Address, AssetId, UtxoId, U64};
-use crate::service::Config;
-use crate::state::IterDirection;
+use crate::{
+    coin_query::{random_improve, SpendQueryElement},
+    database::{Database, KvStoreError},
+    schema::scalars::{Address, AssetId, UtxoId, U64},
+    service::Config,
+    state::IterDirection,
+};
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Enum, InputObject, Object,
 };
-use fuel_core_interfaces::model::{Coin as CoinModel, CoinStatus as CoinStatusModel};
-use fuel_storage::Storage;
+use fuel_core_interfaces::{
+    common::{fuel_storage::Storage, fuel_tx},
+    model::{Coin as CoinModel, CoinStatus as CoinStatusModel},
+};
 use itertools::Itertools;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]

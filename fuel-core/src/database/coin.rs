@@ -7,10 +7,12 @@ use crate::{
     model::Coin,
     state::{Error, IterDirection},
 };
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::{Address, AssetId, Bytes32, UtxoId},
+    fuel_types::Word,
+};
 use fuel_core_interfaces::model::Coin as CoinModel;
-use fuel_storage::Storage;
-use fuel_tx::{Address, AssetId, Bytes32, UtxoId};
-use fuel_types::Word;
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -131,9 +133,9 @@ impl Database {
                 let byte_id = Bytes32::new(coin.0[..32].try_into().unwrap());
                 let output_index = coin.0[32];
                 // Potentially chop off a byte for output index
-                let tx_id = fuel_tx::UtxoId::new(byte_id, output_index);
+                let tx_id = UtxoId::new(byte_id, output_index);
 
-                let ref_coin = Storage::<fuel_tx::UtxoId, CoinModel>::get(self, &tx_id).unwrap();
+                let ref_coin = Storage::<UtxoId, CoinModel>::get(self, &tx_id).unwrap();
 
                 let ref_coin = ref_coin.unwrap();
 

@@ -6,8 +6,7 @@ mod contract;
 mod dap;
 mod debugger;
 mod health;
+mod helpers;
 mod node_info;
 mod snapshot;
 mod tx;
-
-mod helpers;

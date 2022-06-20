@@ -15,6 +15,7 @@ pub struct ConsensusParameters {
     pub max_storage_slots: U64,
     pub max_predicate_length: U64,
     pub max_predicate_data_length: U64,
+    pub gas_price_factor: U64,
 }
 
 impl From<ConsensusParameters> for TxConsensusParameters {
@@ -31,6 +32,7 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             max_storage_slots: params.max_storage_slots.into(),
             max_predicate_length: params.max_predicate_length.into(),
             max_predicate_data_length: params.max_predicate_data_length.into(),
+            gas_price_factor: params.gas_price_factor.into(),
         }
     }
 }

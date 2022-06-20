@@ -3,8 +3,7 @@ use crate::{
     model::{BlockHeight, FuelBlockDb},
     state::{Error, IterDirection},
 };
-use fuel_storage::Storage;
-use fuel_tx::Bytes32;
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx::Bytes32};
 use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 
