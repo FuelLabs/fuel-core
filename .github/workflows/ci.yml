@@ -242,8 +242,9 @@ jobs:
           echo "FUEL_CORE_IMAGE_TAG=$(echo $steps.meta.outputs.tags | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
-          echo "IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          echo "DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
+          echo GITHUB_SHA_SHORT: ${{ env.GITHUB_SHA_SHORT }}
+          echo IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+          echo DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
