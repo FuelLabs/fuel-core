@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock};
 
+/// Acts an interface between Service and Txpool
 pub struct Interface {
     txpool: RwLock<TxPoolImpl>,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
@@ -106,7 +107,7 @@ impl Interface {
                     }
                     let _ = self.broadcast.send(TxStatusBroadcast {
                         tx,
-                        status: TxStatus::Included,
+                        status: TxStatus::Submitted,
                     });
                 }
                 Err(_) => {}

@@ -73,7 +73,10 @@ impl Service {
 pub mod tests {
 
     use super::*;
-    use fuel_core_interfaces::db::helpers::*;
+    use fuel_core_interfaces::{
+        db::helpers::*,
+        txpool::{Error as TxpoolError, TxStatus},
+    };
     use tokio::sync::oneshot;
 
     #[tokio::test]
@@ -189,34 +192,11 @@ pub mod tests {
         service.stop().await.unwrap().await.unwrap();
     }
 
-    /*
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
-
-        struct Subs {
-            pub new_tx: RwLock<Vec<ArcTx>>,
-            pub rem_tx: RwLock<Vec<ArcTx>>,
-        }
-
-        #[async_trait]
-        impl Subscriber for Subs {
-            async fn inserted(&self, tx: ArcTx) {
-                self.new_tx.write().await.push(tx);
-            }
-
-            async fn inserted_on_block_revert(&self, _tx: ArcTx) {}
-
-            async fn removed(&self, tx: ArcTx, _error: &Error) {
-                self.rem_tx.write().await.push(tx);
-            }
-        }
-
-        let sub = Arc::new(Subs {
-            new_tx: RwLock::new(Vec::new()),
-            rem_tx: RwLock::new(Vec::new()),
-        });
+        let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -225,23 +205,68 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let service = Service::new(db, config).unwrap();
-        service.subscribe(sub.clone()).await;
-        let out = service.insert(vec![tx1, tx2]).await;
+        service.start(br).await;
+        let mut subscribe = service.subscribe_ch();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1.clone(), tx2.clone()],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        {
-            let added = sub.new_tx.read().await;
-            assert_eq!(added.len(), 2, "Sub should contains two new tx");
-            assert_eq!(added[0].id(), tx1_hash, "First added should be tx1");
-            assert_eq!(added[1].id(), tx2_hash, "First added should be tx2");
-        }
-        service.remove(&[tx1_hash]).await;
-        {
-            // removing tx1 removed tx2, bcs it is dependent.
-            let removed = sub.rem_tx.read().await;
-            assert_eq!(removed.len(), 2, "Sub should contains two removed tx");
-            assert_eq!(removed[0].id(), tx1_hash, "First removed should be tx1");
-            assert_eq!(removed[1].id(), tx2_hash, "Second removed should be tx2");
-        }
-    }*/
+
+        // we are sure that included tx are already broadcasted.
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx1.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "First added should be tx1"
+        );
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx2.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "Second added should be tx2"
+        );
+
+        // remove them
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Remove {
+                ids: vec![tx1_hash, tx2_hash],
+            })
+            .await;
+
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            Ok(Ok(TxStatusBroadcast {
+                tx: tx1,
+                status: TxStatus::SqueezedOut {
+                    reason: TxpoolError::Removed
+                }
+            })),
+            "First removed should be tx1"
+        );
+
+        assert_eq!(
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            Ok(Ok(TxStatusBroadcast {
+                tx: tx2,
+                status: TxStatus::SqueezedOut {
+                    reason: TxpoolError::Removed
+                }
+            })),
+            "Second removed should be tx2"
+        );
+    }
 }

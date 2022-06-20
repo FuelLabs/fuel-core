@@ -72,17 +72,17 @@ pub enum TxPoolMpsc {
     Stop,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TxStatus {
-    /// Included into txpool.
-    Included,
+    /// Submitted into txpool.
+    Submitted,
     /// Executed in fuel block.
     Executed,
     /// removed from txpool.
     SqueezedOut { reason: Error },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxStatusBroadcast {
     pub tx: Arc<Transaction>,
     pub status: TxStatus,

@@ -1,7 +1,5 @@
 use chrono::{DateTime, Utc};
-//use fuel_txpool::Service as TxPoolService;
 use fuel_core_interfaces::common::{fuel_tx::Bytes32, fuel_vm::prelude::ProgramState};
-//use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
