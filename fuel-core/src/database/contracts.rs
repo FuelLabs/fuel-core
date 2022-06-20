@@ -7,7 +7,6 @@ use crate::{
     state::{Error, IterDirection, MultiKey},
 };
 use fuel_tx::UtxoId;
-use fuel_types::Salt;
 use fuel_types::Word;
 use fuel_vm::prelude::{AssetId, Contract, ContractId, Storage};
 use std::borrow::Cow;
@@ -86,7 +85,12 @@ impl Database {
                     .into_owned()
                     .into();
 
-                let salt = Salt::new([1u8; 32]);
+                let salt =
+                    fuel_vm::storage::InterpreterStorage::storage_contract_root(self, &contract_id)
+                        .unwrap()
+                        .unwrap()
+                        .into_owned()
+                        .0;
 
                 // Working
                 let state: Option<Vec<(fuel_types::Bytes32, fuel_types::Bytes32)>> =

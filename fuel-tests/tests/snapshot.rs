@@ -1,10 +1,11 @@
 use fuel_core::chain_config::StateConfig;
 use fuel_core::database::Database;
 use fuel_core::{
-    chain_config::CoinConfig,
+    chain_config::{CoinConfig, ContractConfig},
     service::{Config, FuelService},
 };
 use fuel_tx::AssetId;
+use fuel_types::{Bytes32, Salt};
 use fuel_vm::prelude::Address;
 
 #[tokio::test]
@@ -22,7 +23,12 @@ async fn snapshot_chain_config() {
     let mut config = Config::local_node();
     config.chain_conf.initial_state = Some(StateConfig {
         height: None,
-        contracts: None,
+        contracts: Some(vec![ContractConfig {
+            code: vec![8; 32],
+            salt: Salt::new([9; 32]),
+            state: None,
+            balances: None,
+        }]),
         coins: Some(
             vec![
                 (owner, 50, asset_id),
@@ -47,6 +53,15 @@ async fn snapshot_chain_config() {
         &mut db, &id, &contract,
     )
     .unwrap();
+
+    fuel_vm::storage::InterpreterStorage::storage_contract_root_insert(
+        &mut db,
+        &id,
+        &Salt::new([5; 32]),
+        &Bytes32::new([0; 32]),
+    )
+    .unwrap();
+
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)
         .await
