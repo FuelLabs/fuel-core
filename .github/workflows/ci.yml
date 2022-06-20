@@ -239,12 +239,14 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-          echo "FUEL_CORE_IMAGE_TAG=$(echo $steps.meta.outputs.tags | cut -d':' -f2)" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG1=$(echo ${steps.meta.outputs.tags} | cut -d':' -f2)" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG2=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
           echo GITHUB_SHA_SHORT: $GITHUB_SHA_SHORT
-          echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
+          echo IMAGE_TAG1: $FUEL_CORE_IMAGE_TAG1
+          echo IMAGE_TAG2: $FUEL_CORE_IMAGE_TAG2
           echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
   publish-fuel-core-binary:
