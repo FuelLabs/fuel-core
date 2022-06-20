@@ -147,8 +147,16 @@ impl Opt {
     }
 }
 
-pub fn dump_snapshot() -> anyhow::Result<()> {
-    let db = Database::open(&DEFAULT_DB_PATH)?;
+pub fn dump_snapshot(path: PathBuf) -> anyhow::Result<()> {
+    let db: Database;
+    #[cfg(feature = "rocksdb")]
+    {
+        db = Database::open(&path)?;
+    }
+    #[cfg(not(feature = "rocksdb"))]
+    {
+        db = Database::default();
+    }
 
     let state_conf = StateConfig::generate_state_config(db);
 

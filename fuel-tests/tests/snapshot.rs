@@ -68,5 +68,7 @@ async fn snapshot_chain_config() {
         .unwrap();
 
     let state_conf = StateConfig::generate_state_config(db);
-    println!("{:?}", state_conf);
+
+    assert!(state_conf.contracts.is_some());
+    assert!(state_conf.coins.is_some());
 }
