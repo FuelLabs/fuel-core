@@ -145,7 +145,7 @@ pub mod helpers {
 
     #[derive(Clone, Debug)]
     pub struct Data {
-        /// Used for Storage<Address, (u64, Option<Address>)>
+        /// Used for Storage<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>
         /// Contains test validator set: <validator_address, (stake and consensus_key)>;
         pub validators: HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>,
         /// variable for current validators height, at height our validator set is

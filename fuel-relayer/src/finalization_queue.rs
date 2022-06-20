@@ -430,8 +430,8 @@ mod tests {
     pub async fn check_deposit_and_validator_finalization() {
         let mut rng = StdRng::seed_from_u64(3020);
         let v1: ValidatorAddress = rng.gen();
-        let c1: ValidatorAddress = rng.gen();
-        let v2: ConsensusPublicKey = rng.gen();
+        let c1: ConsensusPublicKey = rng.gen();
+        let v2: ValidatorAddress = rng.gen();
         let c2: ConsensusPublicKey = rng.gen();
 
         let acc1: Address = rng.gen();
