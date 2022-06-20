@@ -241,10 +241,11 @@ jobs:
           echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
           echo "FUEL_CORE_IMAGE_TAG=$(echo $steps.meta.outputs.tags | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-
-          echo GITHUB_SHA_SHORT: ${{ env.GITHUB_SHA_SHORT }}
-          echo IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          echo DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
+      - name: Test Environment Variables
+        run: |
+          echo GITHUB_SHA_SHORT: $GITHUB_SHA_SHORT
+          echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
+          echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
@@ -412,7 +413,7 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
+          DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
           ENV: "fueldevsway.env"
-          IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+          IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
           K8S: "eks"
