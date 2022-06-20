@@ -51,7 +51,7 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
     steps:
-      - name: Echo
+      - name: Echo 
         run: |
           echo "lint-toml-files"
 
