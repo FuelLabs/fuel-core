@@ -50,6 +50,7 @@ jobs:
       #     notify_when: "failure"
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+    steps:
       - name: Echo
         run: |
           echo "lint-toml-files"
@@ -103,10 +104,11 @@ jobs:
     #     env:
     #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
     #       RUSTFLAGS: -D warnings
-    - name: Echo
-      run: |
-        echo "lint-toml-files"
-        
+    steps:
+      - name: Echo
+        run: |
+          echo "cargo-verifications"
+
   publish-crates:
     # Only do this job if publishing a release
     needs:
