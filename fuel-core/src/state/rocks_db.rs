@@ -235,7 +235,7 @@ impl BatchOperations for RocksDb {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS
                 .bytes_written_meter
-                .inc_by(batch.len() as u64);
+                .inc_by(batch.size_in_bytes() as u64);
         }
         self.db
             .write(batch)
