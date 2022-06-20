@@ -25,8 +25,8 @@ jobs:
 
   lint-toml-files:
     needs: cancel-previous-runs
-    runs-on: ubuntu-latest
-    steps:
+    runs-on:
+      ubuntu-latest
       # - uses: actions/checkout@v2
       # - uses: actions-rs/toolchain@v1
       #   with:
