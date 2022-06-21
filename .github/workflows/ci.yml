@@ -401,7 +401,7 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    if: github.ref == 'refs/heads/master'
+    # if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
