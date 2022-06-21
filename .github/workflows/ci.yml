@@ -240,7 +240,7 @@ jobs:
 
       - name: Output github.ref
         run: |
-          echo "{{ github.ref }}"
+          echo "${{ github.ref }}"
 
         # Deploy Latest Fuel-Core Release
       - name: Deploy Fuel-Core Developer Environment
