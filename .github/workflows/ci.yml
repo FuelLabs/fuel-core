@@ -229,24 +229,11 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
-      - name: Setup Image Tag JSON
+      - name: Set Environment Variables
         run: |
-          echo ${{ steps.meta.outputs.json }} > tags.json
-          cat tags.json
-
-      - name: Get Image Tag Property
-        id: get_tag_property
-        uses: notiz-dev/github-action-json-property@release
-        with:
-          path: "tags.json"
-          prop_path: "tags"
-
-      - run: echo ${{steps.get_tag_property.outputs.prop}}
-
-      # - name: Set Environment Variables
-      #   run: |
-      #     echo "IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
-      #     echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          echo ${{ steps.meta.outputs.json }} > tags.txt
+          echo "IMAGE_TAG=$(cat tags.txt | grep ghcr.io/fuellabs/fuel-core:sha | cut -d':' -f2 | cut -d'"' -f1)" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
       # - name: Output github.ref
       #   run: |
