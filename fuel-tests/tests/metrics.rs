@@ -1,5 +1,9 @@
 use fuel_core::service::{Config, DbType, FuelService};
-use fuel_core_interfaces::common::fuel_tx::{Address, AssetId};
+use fuel_core_interfaces::common::{
+    fuel_tx,
+    fuel_tx::{Address, AssetId},
+    fuel_vm::{consts::*, prelude::*},
+};
 use fuel_gql_client::client::FuelClient;
 use tempfile::TempDir;
 
@@ -22,6 +26,31 @@ async fn test_database_metrics() {
             Some(format!("{:#x}", asset_id).as_str()),
         )
         .await;
+    let script = vec![
+        Opcode::ADDI(0x10, REG_ZERO, 0xca),
+        Opcode::ADDI(0x11, REG_ZERO, 0xba),
+        Opcode::LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
+        Opcode::RET(REG_ONE),
+    ];
+    let script: Vec<u8> = script
+        .iter()
+        .flat_map(|op| u32::from(*op).to_be_bytes())
+        .collect();
+
+    _ = client
+        .submit(&fuel_tx::Transaction::script(
+            0,
+            1000000,
+            0,
+            0,
+            script,
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+        ))
+        .await
+        .unwrap();
 
     let resp = reqwest::get(format!("http://{}/metrics", srv.bound_address))
         .await
