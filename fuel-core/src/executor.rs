@@ -367,14 +367,14 @@ impl Executor {
             let gas: Word = tx
                 .inputs()
                 .iter()
-                .filter_map(|input| {
-                    if let Input::CoinSigned { amount, .. } | Input::CoinPredicate { amount, .. } =
-                        input
-                    {
-                        Some(*amount)
-                    } else {
-                        None
-                    }
+                .filter_map(|input| match input {
+                    Input::CoinSigned {
+                        amount, asset_id, ..
+                    } if asset_id == &AssetId::default() => Some(amount),
+                    Input::CoinPredicate {
+                        amount, asset_id, ..
+                    } if asset_id == &AssetId::default() => Some(amount),
+                    _ => None,
                 })
                 .sum();
             let spent_gas: Word = tx
@@ -390,8 +390,14 @@ impl Executor {
                     _ => None,
                 })
                 .sum();
-            let byte_fees = tx.metered_bytes_size() as Word * tx.byte_price();
-            let gas_fees = tx.gas_limit() * tx.gas_price();
+            let factor = self
+                .config
+                .chain_conf
+                .transaction_parameters
+                .gas_price_factor as f64;
+            let byte_fees =
+                ((tx.metered_bytes_size() as Word * tx.byte_price()) as f64 / factor).ceil() as u64;
+            let gas_fees = ((tx.gas_limit() * tx.gas_price()) as f64 / factor).ceil() as u64;
             let total_gas_required = spent_gas
                 .checked_add(byte_fees)
                 .ok_or(Error::FeeOverflow)?
@@ -839,6 +845,11 @@ mod tests {
             database: Default::default(),
             config: Config::local_node(),
         };
+        let factor = producer
+            .config
+            .chain_conf
+            .transaction_parameters
+            .gas_price_factor as f64;
 
         let verifier = Executor {
             database: Default::default(),
@@ -861,7 +872,7 @@ mod tests {
             .await;
         assert!(matches!(
             produce_result,
-            Err(Error::InsufficientFeeAmount { required, .. }) if required == gas_limit
+            Err(Error::InsufficientFeeAmount { required, .. }) if required == (gas_limit as f64 / factor).ceil() as u64
         ));
 
         let verify_result = verifier
@@ -869,7 +880,7 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
-            Err(Error::InsufficientFeeAmount {required, ..}) if required == gas_limit
+            Err(Error::InsufficientFeeAmount {required, ..}) if required == (gas_limit as f64 / factor).ceil() as u64
         ))
     }
 
