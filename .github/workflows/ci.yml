@@ -400,8 +400,7 @@ jobs:
     steps:
       - name: Test Environment Variables
         run: |
-          echo $FUEL_CORE_IMAGE_TAG
-          echo ${{ env.REGISTRY }}
+          echo ${{ env.FUEL_CORE_IMAGE_TAG }}
 
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
