@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - master
+      - elliot/update-ci-workflow
   pull_request:
   release:
     types: [published]
@@ -247,8 +248,8 @@ jobs:
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
-          echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
-          echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
+          echo env.FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+          echo env.FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
