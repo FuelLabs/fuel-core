@@ -236,21 +236,9 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
-      - name: Output
-        run: |
-          echo "
-          ============================================================
-          version: ${{ steps.meta.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          json: ${{ steps.meta.outputs.json }}
-          bake-file: ${{ steps.meta.outputs.bake-file }}
-          ============================================================
-          "
-
       - name: Set Environment Variables
         run: |
-          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2 | cut -d':' -f2 )" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}})" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
@@ -423,7 +411,7 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: "$FUEL_CORE_DEPLOYMENT_VERSION"
+          DEPLOYMENT_VERSION: ${FUEL_CORE_DEPLOYMENT_VERSION}
           ENV: "fueldevsway.env"
-          IMAGE_TAG: "$FUEL_CORE_DEPLOYMENT_VERSION"
+          IMAGE_TAG: ${{FUEL_CORE_IMAGE_TAG}}
           K8S: "eks"
