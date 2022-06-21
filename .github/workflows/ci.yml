@@ -16,403 +16,421 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # cancel-previous-runs:
+  setenvvar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set env
+        run: echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
+      - name: Test
+        run: echo $GITHUB_SHA_SHORT
+
+  getenvvar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Get env
+        run: echo $GITHUB_SHA_SHORT
+      - name: Test
+        run: echo ${{ env.GITHUB_SHA_SHORT }}
+
+  # # cancel-previous-runs:
+  # #   runs-on: ubuntu-latest
+  # #   steps:
+  # #     - name: Cancel Previous Runs
+  # #       uses: styfle/cancel-workflow-action@0.9.1
+  # #       with:
+  # #         access_token: ${{ github.token }}
+
+  # # lint-toml-files:
+  # #   needs: cancel-previous-runs
+  # #   runs-on:
+  # #     ubuntu-latest
+  # # - uses: actions/checkout@v2
+  # # - uses: actions-rs/toolchain@v1
+  # #   with:
+  # #     toolchain: stable
+  # # - name: Install Cargo.toml linter
+  # #   uses: baptiste0928/cargo-install@v1
+  # #   with:
+  # #     crate: cargo-toml-lint
+  # #     version: "0.1"
+  # # - name: Run Cargo.toml linter
+  # #   run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
+  # # - name: Notify if Job Fails
+  # #   uses: ravsamhq/notify-slack-action@v1
+  # #   if: always() && github.ref == 'refs/heads/master'
+  # #   with:
+  # #     status: ${{ job.status }}
+  # #     token: ${{ secrets.GITHUB_TOKEN }}
+  # #     notification_title: "{workflow} has {status_message}"
+  # #     message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+  # #     footer: ""
+  # #     notify_when: "failure"
+  # #   env:
+  # #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  # # cargo-verifications:
+  # #   needs: cancel-previous-runs
+  # #   runs-on: ubuntu-latest
+  # # strategy:
+  # #   matrix:
+  # #     include:
+  # #       - command: fmt
+  # #         args: --all --verbose -- --check
+  # #       - command: clippy
+  # #         args: --all-targets --all-features
+  # #       - command: check
+  # #         args: --all-targets --all-features
+  # #       - command: test
+  # #         args: --all-targets --all-features --workspace --exclude fuel-p2p
+  # #       - command: test
+  # #         args: --all-targets --no-default-features --workspace --exclude fuel-p2p
+  # #       # Split p2p into its own job so that it can use a single threaded runner
+  # #       - command: test
+  # #         args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
+  # #         skip-error: true
+  # # # disallow any job that takes longer than 30 minutes
+  # # timeout-minutes: 30
+  # # continue-on-error: ${{ matrix.skip-error || false }}
+  # # steps:
+  # #   - uses: actions/checkout@v2
+  # #   - uses: actions-rs/toolchain@v1
+  # #     with:
+  # #       toolchain: stable
+  # #   - uses: Swatinem/rust-cache@v1
+  # #     with:
+  # #       key: "${{ matrix.command }} ${{ matrix.args }}"
+  # #   - name: ${{ matrix.command }} ${{ matrix.args }}
+  # #     uses: actions-rs/cargo@v1
+  # #     with:
+  # #       command: ${{ matrix.command }}
+  # #       args: ${{ matrix.args }}
+  # #   - name: Notify if Job Fails
+  # #     uses: ravsamhq/notify-slack-action@v1
+  # #     if: always() && github.ref == 'refs/heads/master'
+  # #     with:
+  # #       status: ${{ job.status }}
+  # #       token: ${{ secrets.GITHUB_TOKEN }}
+  # #       notification_title: "{workflow} has {status_message}"
+  # #       message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+  # #       footer: ""
+  # #       notify_when: "failure"
+  # #     env:
+  # #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+  # #       RUSTFLAGS: -D warnings
+
+  # publish-crates:
+  #   # Only do this job if publishing a release
+  #   # needs:
+  #   # - lint-toml-files
+  #   # - cargo-verifications
+  #   if: github.event_name == 'release' && github.event.action == 'published'
+  #   runs-on: ubuntu-latest
+
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+
+  #     - name: Install toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         toolchain: stable
+  #         override: true
+
+  #     - name: Verify tag version
+  #       run: |
+  #         curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
+  #         mv ./dasel /usr/local/bin/dasel
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-sync/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
+  #         ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-relayer/Cargo.toml
+
+  #     - name: Verify helm chart version
+  #       run: |
+  #         ./.github/workflows/scripts/verify_chart_version.sh
+
+  #     - name: Publish crate
+  #       uses: katyo/publish-crates@v1
+  #       with:
+  #         publish-delay: 30000
+  #         registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  #     - name: Notify if Job Fails
+  #       uses: ravsamhq/notify-slack-action@v1
+  #       if: always()
+  #       with:
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.GITHUB_TOKEN }}
+  #         notification_title: "{workflow} has {status_message}"
+  #         message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+  #         footer: ""
+  #         notify_when: "failure"
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  # publish-docker-image:
+  #   # needs:
+  #   # - cancel-previous-runs
+  #   # - lint-toml-files
+  #   # - cargo-verifications
+
+  #   if: always()
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: read
+  #     packages: write
+
+  #   steps:
+  #     # This is a way to make this job run after publish-crates even if it's skipped on master or pr branches
+  #     # https://stackoverflow.com/a/69252812/680811
+  #     - name: fail if any dependent jobs failed
+  #       if: ${{ contains(needs.*.result, 'failure') }}
+  #       run: exit 1
+
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+
+  #     - name: Docker meta
+  #       id: meta
+  #       uses: docker/metadata-action@v3
+  #       with:
+  #         images: |
+  #           ghcr.io/fuellabs/fuel-core
+  #         tags: |
+  #           type=sha
+  #           type=ref,event=branch
+  #           type=ref,event=tag
+  #           type=semver,pattern={{raw}}
+  #         flavor: |
+  #           latest=${{ github.ref == 'refs/heads/master' }}
+
+  #     # - name: Set up Docker Buildx
+  #     #   uses: docker/setup-buildx-action@v1
+
+  #     # - name: Log in to the ghcr.io registry
+  #     #   uses: docker/login-action@v1
+  #     #   with:
+  #     #     registry: ${{ env.REGISTRY }}
+  #     #     username: ${{ github.repository_owner }}
+  #     #     password: ${{ secrets.GITHUB_TOKEN }}
+
+  #     # - name: Build and push the image to ghcr.io
+  #     #   uses: docker/build-push-action@v2
+  #     #   with:
+  #     #     context: .
+  #     #     file: deployment/Dockerfile
+  #     #     push: true
+  #     #     tags: ${{ steps.meta.outputs.tags }}
+  #     #     labels: ${{ steps.meta.outputs.labels }}
+  #     #     cache-from: type=gha
+  #     #     cache-to: type=gha,mode=max
+
+  #     # - name: Notify if Job Fails
+  #     #   uses: ravsamhq/notify-slack-action@v1
+  #     #   if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+  #     #   with:
+  #     #     status: ${{ job.status }}
+  #     #     token: ${{ secrets.GITHUB_TOKEN }}
+  #     #     notification_title: "{workflow} has {status_message}"
+  #     #     message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+  #     #     footer: ""
+  #     #     notify_when: "failure"
+  #     #   env:
+  #     #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  #     - name: Outputs
+  #       run: |
+  #         echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2
+
+  #     - name: Set Environment Variables
+  #       run: |
+  #         echo "FUEL_CORE_IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
+  #         echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+
+  #     - name: Test Environment Variables
+  #       run: |
+  #         echo FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+  #         echo FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
+
+  # publish-fuel-core-binary:
+  #   name: Release fuel-core binaries
+  #   runs-on: ${{ matrix.job.os }}
+  #   # Only do this job if publishing a release
+  #   # needs:
+  #   #   - lint-toml-files
+  #   #   - cargo-verifications
+  #   if: github.event_name == 'release' && github.event.action == 'published'
+  #   strategy:
+  #     matrix:
+  #       job:
+  #         - os: ubuntu-latest
+  #           platform: linux
+  #           target: x86_64-unknown-linux-gnu
+  #           cross_image: x86_64-linux-gnu
+  #         - os: ubuntu-latest
+  #           platform: linux
+  #           target: x86_64-unknown-linux-musl
+  #           cross_image: x86_64-linux-musl
+  #         - os: ubuntu-latest
+  #           platform: linux-arm
+  #           target: aarch64-unknown-linux-gnu
+  #           cross_image: aarch64-linux-gnu
+  #         - os: ubuntu-latest
+  #           platform: linux-arm
+  #           target: aarch64-unknown-linux-musl
+  #           cross_image: aarch64-linux-musl
+  #         - os: macos-latest
+  #           platform: darwin
+  #           target: x86_64-apple-darwin
+  #         - os: macos-latest
+  #           platform: darwin-arm
+  #           target: aarch64-apple-darwin
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v2
+
+  #     - name: Set up Docker Buildx
+  #       uses: docker/setup-buildx-action@v1
+
+  #     - name: Setup custom cross env ${{ matrix.job.cross_image }}
+  #       if: matrix.job.cross_image
+  #       uses: docker/build-push-action@v2
+  #       with:
+  #         context: ci
+  #         file: ci/Dockerfile.${{ matrix.job.target }}-clang
+  #         tags: ${{ matrix.job.cross_image }}:latest
+  #         load: true
+  #         cache-from: type=gha
+  #         cache-to: type=gha,mode=max
+
+  #     - name: Install packages (macOS)
+  #       if: matrix.job.os == 'macos-latest'
+  #       run: |
+  #         ci/macos-install-packages.sh
+
+  #     - name: Install toolchain
+  #       uses: actions-rs/toolchain@v1
+  #       with:
+  #         profile: minimal
+  #         toolchain: stable
+  #         target: ${{ matrix.job.target }}
+  #         override: true
+
+  #     - uses: Swatinem/rust-cache@v1
+  #       with:
+  #         cache-on-failure: true
+  #         key: "${{ matrix.job.target }}"
+
+  #     - name: Install cross
+  #       uses: baptiste0928/cargo-install@v1
+  #       with:
+  #         crate: cross
+  #         cache-key: "${{ matrix.job.target }}"
+
+  #     - name: Build fuel-core
+  #       run: |
+  #         cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+
+  #     - name: Strip release binary linux x86_64
+  #       if: matrix.job.platform == 'linux'
+  #       run: strip "target/${{ matrix.job.target }}/release/fuel-core"
+
+  #     - name: Strip release binary aarch64-linux-gnu
+  #       if: matrix.job.target == 'aarch64-unknown-linux-gnu'
+  #       run: |
+  #         docker run --rm -v \
+  #         "$PWD/target:/target:Z" \
+  #         aarch64-linux-gnu:latest \
+  #         aarch64-linux-gnu-strip \
+  #         /target/aarch64-unknown-linux-gnu/release/fuel-core
+
+  #     - name: Strip release binary aarch64-linux-musl
+  #       if: matrix.job.target == 'aarch64-unknown-linux-musl'
+  #       run: |
+  #         docker run --rm -v \
+  #         "$PWD/target:/target:Z" \
+  #         aarch64-linux-musl:latest \
+  #         aarch64-linux-musl-strip \
+  #         /target/aarch64-unknown-linux-musl/release/fuel-core
+
+  #     - name: Strip release binary mac
+  #       if: matrix.job.os == 'macos-latest'
+  #       run: strip -x "target/${{ matrix.job.target }}/release/fuel-core"
+
+  #     - name: Prepare Binary Artifact
+  #       env:
+  #         PLATFORM_NAME: ${{ matrix.job.platform }}
+  #         TARGET: ${{ matrix.job.target }}
+  #       run: |
+  #         # trim refs/tags/ prefix
+  #         FUEL_CORE_VERSION="${GITHUB_REF#refs/tags/}"
+  #         # optionally trim v from tag prefix
+  #         FUEL_CORE_VERSION="${FUEL_CORE_VERSION#v}"
+  #         echo "version is: $FUEL_CORE_VERSION"
+  #         # setup artifact filename
+  #         ARTIFACT="fuel-core-$FUEL_CORE_VERSION-${{ env.TARGET }}"
+  #         ZIP_FILE_NAME="$ARTIFACT.tar.gz"
+  #         echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
+  #         # create zip file
+  #         mkdir -pv "$ARTIFACT"
+  #         cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
+  #         tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
+
+  #     - name: Upload Binary Artifact
+  #       uses: actions/upload-release-asset@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ github.token }}
+  #       with:
+  #         upload_url: ${{ github.event.release.upload_url }}
+  #         asset_path: ./${{ env.ZIP_FILE_NAME }}
+  #         asset_name: ${{ env.ZIP_FILE_NAME }}
+  #         asset_content_type: application/gzip
+
+  #     - name: Notify if Job Fails
+  #       uses: ravsamhq/notify-slack-action@v1
+  #       # need to find a work-around to be able to run this action on mac
+  #       if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
+  #       with:
+  #         status: ${{ job.status }}
+  #         token: ${{ secrets.GITHUB_TOKEN }}
+  #         notification_title: "{workflow} has {status_message}"
+  #         message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+  #         footer: ""
+  #         notify_when: "failure"
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
+  # # Deploy Latest Fuel-Core Release
+  # deploy:
+  #   # if: github.ref == 'refs/heads/master'
+  #   needs:
+  #     - publish-docker-image
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - name: Cancel Previous Runs
-  #       uses: styfle/cancel-workflow-action@0.9.1
+  #     - name: Test Environment Variables
+  #       run: |
+  #         echo FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+  #         echo FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
+
+  #     - name: Deploy Fuel-Core Developer Environment
+  #       uses: benc-uk/workflow-dispatch@v1
   #       with:
-  #         access_token: ${{ github.token }}
-
-  # lint-toml-files:
-  #   needs: cancel-previous-runs
-  #   runs-on:
-  #     ubuntu-latest
-  # - uses: actions/checkout@v2
-  # - uses: actions-rs/toolchain@v1
-  #   with:
-  #     toolchain: stable
-  # - name: Install Cargo.toml linter
-  #   uses: baptiste0928/cargo-install@v1
-  #   with:
-  #     crate: cargo-toml-lint
-  #     version: "0.1"
-  # - name: Run Cargo.toml linter
-  #   run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
-  # - name: Notify if Job Fails
-  #   uses: ravsamhq/notify-slack-action@v1
-  #   if: always() && github.ref == 'refs/heads/master'
-  #   with:
-  #     status: ${{ job.status }}
-  #     token: ${{ secrets.GITHUB_TOKEN }}
-  #     notification_title: "{workflow} has {status_message}"
-  #     message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-  #     footer: ""
-  #     notify_when: "failure"
-  #   env:
-  #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  # cargo-verifications:
-  #   needs: cancel-previous-runs
-  #   runs-on: ubuntu-latest
-  # strategy:
-  #   matrix:
-  #     include:
-  #       - command: fmt
-  #         args: --all --verbose -- --check
-  #       - command: clippy
-  #         args: --all-targets --all-features
-  #       - command: check
-  #         args: --all-targets --all-features
-  #       - command: test
-  #         args: --all-targets --all-features --workspace --exclude fuel-p2p
-  #       - command: test
-  #         args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-  #       # Split p2p into its own job so that it can use a single threaded runner
-  #       - command: test
-  #         args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
-  #         skip-error: true
-  # # disallow any job that takes longer than 30 minutes
-  # timeout-minutes: 30
-  # continue-on-error: ${{ matrix.skip-error || false }}
-  # steps:
-  #   - uses: actions/checkout@v2
-  #   - uses: actions-rs/toolchain@v1
-  #     with:
-  #       toolchain: stable
-  #   - uses: Swatinem/rust-cache@v1
-  #     with:
-  #       key: "${{ matrix.command }} ${{ matrix.args }}"
-  #   - name: ${{ matrix.command }} ${{ matrix.args }}
-  #     uses: actions-rs/cargo@v1
-  #     with:
-  #       command: ${{ matrix.command }}
-  #       args: ${{ matrix.args }}
-  #   - name: Notify if Job Fails
-  #     uses: ravsamhq/notify-slack-action@v1
-  #     if: always() && github.ref == 'refs/heads/master'
-  #     with:
-  #       status: ${{ job.status }}
-  #       token: ${{ secrets.GITHUB_TOKEN }}
-  #       notification_title: "{workflow} has {status_message}"
-  #       message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-  #       footer: ""
-  #       notify_when: "failure"
-  #     env:
-  #       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-  #       RUSTFLAGS: -D warnings
-
-  publish-crates:
-    # Only do this job if publishing a release
-    # needs:
-    # - lint-toml-files
-    # - cargo-verifications
-    if: github.event_name == 'release' && github.event.action == 'published'
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Verify tag version
-        run: |
-          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
-          mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-relayer/Cargo.toml
-
-      - name: Verify helm chart version
-        run: |
-          ./.github/workflows/scripts/verify_chart_version.sh
-
-      - name: Publish crate
-        uses: katyo/publish-crates@v1
-        with:
-          publish-delay: 30000
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always()
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "{workflow} has {status_message}"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-          footer: ""
-          notify_when: "failure"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  publish-docker-image:
-    # needs:
-    # - cancel-previous-runs
-    # - lint-toml-files
-    # - cargo-verifications
-
-    if: always()
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      # This is a way to make this job run after publish-crates even if it's skipped on master or pr branches
-      # https://stackoverflow.com/a/69252812/680811
-      - name: fail if any dependent jobs failed
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
-
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v3
-        with:
-          images: |
-            ghcr.io/fuellabs/fuel-core
-          tags: |
-            type=sha
-            type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{raw}}
-          flavor: |
-            latest=${{ github.ref == 'refs/heads/master' }}
-
-      # - name: Set up Docker Buildx
-      #   uses: docker/setup-buildx-action@v1
-
-      # - name: Log in to the ghcr.io registry
-      #   uses: docker/login-action@v1
-      #   with:
-      #     registry: ${{ env.REGISTRY }}
-      #     username: ${{ github.repository_owner }}
-      #     password: ${{ secrets.GITHUB_TOKEN }}
-
-      # - name: Build and push the image to ghcr.io
-      #   uses: docker/build-push-action@v2
-      #   with:
-      #     context: .
-      #     file: deployment/Dockerfile
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     cache-from: type=gha
-      #     cache-to: type=gha,mode=max
-
-      # - name: Notify if Job Fails
-      #   uses: ravsamhq/notify-slack-action@v1
-      #   if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
-      #   with:
-      #     status: ${{ job.status }}
-      #     token: ${{ secrets.GITHUB_TOKEN }}
-      #     notification_title: "{workflow} has {status_message}"
-      #     message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-      #     footer: ""
-      #     notify_when: "failure"
-      #   env:
-      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-      - name: Outputs
-        run: |
-          echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2
-
-      - name: Set Environment Variables
-        run: |
-          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
-          echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-
-      - name: Test Environment Variables
-        run: |
-          echo FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          echo FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
-
-  publish-fuel-core-binary:
-    name: Release fuel-core binaries
-    runs-on: ${{ matrix.job.os }}
-    # Only do this job if publishing a release
-    # needs:
-    #   - lint-toml-files
-    #   - cargo-verifications
-    if: github.event_name == 'release' && github.event.action == 'published'
-    strategy:
-      matrix:
-        job:
-          - os: ubuntu-latest
-            platform: linux
-            target: x86_64-unknown-linux-gnu
-            cross_image: x86_64-linux-gnu
-          - os: ubuntu-latest
-            platform: linux
-            target: x86_64-unknown-linux-musl
-            cross_image: x86_64-linux-musl
-          - os: ubuntu-latest
-            platform: linux-arm
-            target: aarch64-unknown-linux-gnu
-            cross_image: aarch64-linux-gnu
-          - os: ubuntu-latest
-            platform: linux-arm
-            target: aarch64-unknown-linux-musl
-            cross_image: aarch64-linux-musl
-          - os: macos-latest
-            platform: darwin
-            target: x86_64-apple-darwin
-          - os: macos-latest
-            platform: darwin-arm
-            target: aarch64-apple-darwin
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Setup custom cross env ${{ matrix.job.cross_image }}
-        if: matrix.job.cross_image
-        uses: docker/build-push-action@v2
-        with:
-          context: ci
-          file: ci/Dockerfile.${{ matrix.job.target }}-clang
-          tags: ${{ matrix.job.cross_image }}:latest
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Install packages (macOS)
-        if: matrix.job.os == 'macos-latest'
-        run: |
-          ci/macos-install-packages.sh
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          target: ${{ matrix.job.target }}
-          override: true
-
-      - uses: Swatinem/rust-cache@v1
-        with:
-          cache-on-failure: true
-          key: "${{ matrix.job.target }}"
-
-      - name: Install cross
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cross
-          cache-key: "${{ matrix.job.target }}"
-
-      - name: Build fuel-core
-        run: |
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
-
-      - name: Strip release binary linux x86_64
-        if: matrix.job.platform == 'linux'
-        run: strip "target/${{ matrix.job.target }}/release/fuel-core"
-
-      - name: Strip release binary aarch64-linux-gnu
-        if: matrix.job.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          docker run --rm -v \
-          "$PWD/target:/target:Z" \
-          aarch64-linux-gnu:latest \
-          aarch64-linux-gnu-strip \
-          /target/aarch64-unknown-linux-gnu/release/fuel-core
-
-      - name: Strip release binary aarch64-linux-musl
-        if: matrix.job.target == 'aarch64-unknown-linux-musl'
-        run: |
-          docker run --rm -v \
-          "$PWD/target:/target:Z" \
-          aarch64-linux-musl:latest \
-          aarch64-linux-musl-strip \
-          /target/aarch64-unknown-linux-musl/release/fuel-core
-
-      - name: Strip release binary mac
-        if: matrix.job.os == 'macos-latest'
-        run: strip -x "target/${{ matrix.job.target }}/release/fuel-core"
-
-      - name: Prepare Binary Artifact
-        env:
-          PLATFORM_NAME: ${{ matrix.job.platform }}
-          TARGET: ${{ matrix.job.target }}
-        run: |
-          # trim refs/tags/ prefix
-          FUEL_CORE_VERSION="${GITHUB_REF#refs/tags/}"
-          # optionally trim v from tag prefix
-          FUEL_CORE_VERSION="${FUEL_CORE_VERSION#v}"
-          echo "version is: $FUEL_CORE_VERSION"
-          # setup artifact filename
-          ARTIFACT="fuel-core-$FUEL_CORE_VERSION-${{ env.TARGET }}"
-          ZIP_FILE_NAME="$ARTIFACT.tar.gz"
-          echo "ZIP_FILE_NAME=$ZIP_FILE_NAME" >> $GITHUB_ENV
-          # create zip file
-          mkdir -pv "$ARTIFACT"
-          cp "target/${{ matrix.job.target }}/release/fuel-core" "$ARTIFACT"
-          tar -czvf "$ZIP_FILE_NAME" "$ARTIFACT"
-
-      - name: Upload Binary Artifact
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./${{ env.ZIP_FILE_NAME }}
-          asset_name: ${{ env.ZIP_FILE_NAME }}
-          asset_content_type: application/gzip
-
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        # need to find a work-around to be able to run this action on mac
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "{workflow} has {status_message}"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-          footer: ""
-          notify_when: "failure"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-  # Deploy Latest Fuel-Core Release
-  deploy:
-    # if: github.ref == 'refs/heads/master'
-    needs:
-      - publish-docker-image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test Environment Variables
-        run: |
-          echo FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          echo FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
-
-      - name: Deploy Fuel-Core Developer Environment
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core on k8s
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
-        env:
-          CONFIG: "fuel-dev1"
-          DELETE_INFRA: true
-          ENV: "fueldevsway.env"
-          K8S: "eks"
+  #         workflow: Deploy Fuel-Core on k8s
+  #         repo: FuelLabs/fuel-deployment
+  #         ref: refs/heads/master
+  #         token: ${{ secrets.REPO_TOKEN }}
+  #         inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
+  #       env:
+  #         CONFIG: "fuel-dev1"
+  #         DELETE_INFRA: true
+  #         ENV: "fueldevsway.env"
+  #         K8S: "eks"
