@@ -195,14 +195,15 @@ impl KeyValueStore for RocksDb {
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
             .map(|(key, value)| {
                 let value_as_vec = value.to_vec();
+                let key_as_vec = key.to_vec();
                 #[cfg(feature = "prometheus")]
                 {
                     DATABASE_METRICS.read_meter.inc();
                     DATABASE_METRICS
                         .bytes_read_meter
-                        .inc_by(value_as_vec.len() as u64);
+                        .inc_by(key_as_vec.len() as u64 + value_as_vec.len() as u64);
                 }
-                (key.to_vec(), value_as_vec)
+                (key_as_vec, value_as_vec)
             });
 
         if let Some(prefix) = prefix {
@@ -229,7 +230,13 @@ impl BatchOperations for RocksDb {
                 }
             }
         }
-
+        #[cfg(feature = "prometheus")]
+        {
+            DATABASE_METRICS.write_meter.inc();
+            DATABASE_METRICS
+                .bytes_written_meter
+                .inc_by(batch.size_in_bytes() as u64);
+        }
         self.db
             .write(batch)
             .map_err(|e| Error::DatabaseError(Box::new(e)))
