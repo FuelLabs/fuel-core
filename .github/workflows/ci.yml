@@ -234,14 +234,13 @@ jobs:
           echo ${{ steps.meta.outputs.json }} > tags.json
 
       - name: Get Image Tag Property
-          id: get_tag_property
-          uses: notiz-dev/github-action-json-property@release
-          with:
-            json: 'tags.json'
-            property: 'tags'
+        id: get_tag_property
+        uses: notiz-dev/github-action-json-property@release
+        with:
+          json: "tags.json"
+          property: "tags"
 
-      - run: echo ${{steps.get_tag_property.outputs.prop}} 
-
+      - run: echo ${{steps.get_tag_property.outputs.prop}}
 
       # - name: Set Environment Variables
       #   run: |
