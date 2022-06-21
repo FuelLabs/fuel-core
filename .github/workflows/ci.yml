@@ -231,7 +231,7 @@ jobs:
 
       - name: Setup Image Tag
         run: |
-          echo ${{ steps.meta.outputs.tags }}
+          echo ${{ steps.meta.outputs.tags[1] }}
 
       # - name: Set Environment Variables
       #   run: |
