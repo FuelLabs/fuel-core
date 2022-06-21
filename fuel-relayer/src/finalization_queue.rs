@@ -8,8 +8,7 @@ use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::{Address, Bytes32},
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId,
-        ValidatorStake,
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
 };

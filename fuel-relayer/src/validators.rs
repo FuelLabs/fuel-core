@@ -148,10 +148,8 @@ impl Validators {
         let diffs = db
             .get_staking_diffs(self.da_height + 1, Some(da_height))
             .await;
-        let mut delegates_cached: HashMap<
-            Address,
-            Option<HashMap<ValidatorId, ValidatorStake>>,
-        > = HashMap::new();
+        let mut delegates_cached: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>> =
+            HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key
             for (

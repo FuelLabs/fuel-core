@@ -15,8 +15,7 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
     },
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId,
-        ValidatorStake,
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff},
 };
@@ -276,9 +275,7 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(
-        &self,
-    ) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
+    async fn get_validators(&self) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
         struct WrapAddress(pub ValidatorId);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
@@ -354,12 +351,11 @@ impl RelayerDb for Database {
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
-            let _ =
-                Storage::<ValidatorId, (ValidatorStake, Option<ConsensusId>)>::insert(
-                    db.deref_mut(),
-                    address,
-                    stake,
-                );
+            let _ = Storage::<ValidatorId, (ValidatorStake, Option<ConsensusId>)>::insert(
+                db.deref_mut(),
+                address,
+                stake,
+            );
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {

@@ -128,9 +128,8 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin,
-            FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId,
-            ValidatorStake,
+            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, FuelBlock,
+            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId, ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
@@ -814,10 +813,8 @@ pub mod helpers {
         fn get<'a>(
             &'a self,
             key: &ValidatorId,
-        ) -> Result<
-            Option<std::borrow::Cow<'a, (ValidatorStake, Option<ConsensusId>)>>,
-            Self::Error,
-        > {
+        ) -> Result<Option<std::borrow::Cow<'a, (ValidatorStake, Option<ConsensusId>)>>, Self::Error>
+        {
             Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
