@@ -3,10 +3,12 @@ use crate::{
     database::{columns::BALANCES, Database},
     state::{IterDirection, MultiKey},
 };
-use fuel_storage::MerkleRoot;
-use fuel_vm::{
-    crypto,
-    prelude::{AssetId, ContractId, MerkleStorage, Word},
+use fuel_core_interfaces::common::{
+    fuel_storage::MerkleRoot,
+    fuel_vm::{
+        crypto,
+        prelude::{AssetId, ContractId, MerkleStorage, Word},
+    },
 };
 use itertools::Itertools;
 use std::borrow::Cow;

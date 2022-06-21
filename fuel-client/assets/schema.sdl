@@ -166,6 +166,7 @@ type ConsensusParameters {
 	maxStorageSlots: U64!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
+	gasPriceFactor: U64!
 }
 
 type Contract {

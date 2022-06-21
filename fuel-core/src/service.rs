@@ -13,6 +13,7 @@ use tracing::log::warn;
 
 pub(crate) mod genesis;
 pub mod graph_api;
+pub mod metrics;
 pub mod modules;
 
 #[derive(Clone, Debug)]
@@ -102,8 +103,10 @@ impl FuelService {
         // start background tasks
         let mut tasks = vec![];
         let (bound_address, api_server) =
-            graph_api::start_server(config, database, &modules).await?;
+            graph_api::start_server(config.clone(), database, &modules).await?;
         tasks.push(api_server);
+        // Socket is ignored for now, but as more services are added
+        // it maye be helpful to have a way to list all services and their ports
 
         Ok(FuelService {
             tasks,

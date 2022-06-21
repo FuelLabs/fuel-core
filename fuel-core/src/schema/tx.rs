@@ -8,9 +8,10 @@ use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
-use fuel_storage::Storage;
-use fuel_tx::Transaction as FuelTx;
-use fuel_vm::prelude::Deserializable;
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage, fuel_tx::Transaction as FuelTx, fuel_types,
+    fuel_vm::prelude::Deserializable,
+};
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::iter;

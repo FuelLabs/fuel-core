@@ -382,7 +382,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
-        use fuel_tx::Transaction;
+        use fuel_core_interfaces::common::fuel_tx::Transaction;
 
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
         let topics = vec!["create_tx".into(), "send_tx".into()];
@@ -447,8 +447,8 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works() {
+        use fuel_core_interfaces::common::fuel_tx::Transaction;
         use fuel_core_interfaces::model::{FuelBlock, FuelBlockHeader};
-        use fuel_tx::Transaction;
 
         let mut p2p_config = build_p2p_config("request_response_works");
 
