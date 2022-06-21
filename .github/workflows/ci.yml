@@ -238,6 +238,10 @@ jobs:
           echo "IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
+      - name: Output github.ref
+        run: |
+          echo "{{ github.ref }}"
+
         # Deploy Latest Fuel-Core Release
       - name: Deploy Fuel-Core Developer Environment
         if: github.ref == 'refs/heads/update-ci-workflow'
