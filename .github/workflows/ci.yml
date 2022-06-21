@@ -202,39 +202,39 @@ jobs:
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+      # - name: Set up Docker Buildx
+      #   uses: docker/setup-buildx-action@v1
 
-      - name: Log in to the ghcr.io registry
-        uses: docker/login-action@v1
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Log in to the ghcr.io registry
+      #   uses: docker/login-action@v1
+      #   with:
+      #     registry: ${{ env.REGISTRY }}
+      #     username: ${{ github.repository_owner }}
+      #     password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push the image to ghcr.io
-        uses: docker/build-push-action@v2
-        with:
-          context: .
-          file: deployment/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # - name: Build and push the image to ghcr.io
+      #   uses: docker/build-push-action@v2
+      #   with:
+      #     context: .
+      #     file: deployment/Dockerfile
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
 
-      - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
-        if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
-        with:
-          status: ${{ job.status }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "{workflow} has {status_message}"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
-          footer: ""
-          notify_when: "failure"
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+      # - name: Notify if Job Fails
+      #   uses: ravsamhq/notify-slack-action@v1
+      #   if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
+      #   with:
+      #     status: ${{ job.status }}
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     notification_title: "{workflow} has {status_message}"
+      #     message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>"
+      #     footer: ""
+      #     notify_when: "failure"
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
       - name: Set Environment Variables
         run: |
@@ -242,6 +242,7 @@ jobs:
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
+          echo TAGS: ${{steps.meta.outputs.tags}}
           echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
           echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
@@ -407,11 +408,11 @@ jobs:
           repo: FuelLabs/fuel-deployment
           ref: refs/heads/master
           token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
+          inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}", "image-tag": "${{ env.FUEL_CORE_IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: echo $FUEL_CORE_DEPLOYMENT_VERSION
+          DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
           ENV: "fueldevsway.env"
-          IMAGE_TAG: echo $FUEL_CORE_IMAGE_TAG
+          IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
           K8S: "eks"
