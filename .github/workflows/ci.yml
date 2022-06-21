@@ -237,14 +237,15 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+      - name: Outputs
+        run: |
+          echo "${{ steps.meta.outputs.tags }}"
+          echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2
+
       - name: Set Environment Variables
         run: |
           echo "FUEL_CORE_IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-      - name: Test Environment Variables
-        run: |
-          echo env.FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
-          echo env.FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
@@ -401,9 +402,10 @@ jobs:
       - publish-docker-image
     runs-on: ubuntu-latest
     steps:
-      - name: Outputs
+      - name: Test Environment Variables
         run: |
-          echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2
+          echo env.FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
+          echo env.FUEL_CORE_DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
 
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
