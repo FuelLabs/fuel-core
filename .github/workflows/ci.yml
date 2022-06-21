@@ -244,7 +244,7 @@ jobs:
 
         # Deploy Latest Fuel-Core Release
       - name: Deploy Fuel-Core Developer Environment
-        if: github.ref == 'refs/heads/update-ci-workflow'
+        if: github.ref == 'refs/heads/elliot/update-ci-workflow'
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: Deploy Fuel-Core on k8s
