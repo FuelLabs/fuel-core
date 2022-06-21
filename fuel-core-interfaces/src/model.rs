@@ -17,10 +17,10 @@ pub type DaBlockHeight = u32;
 pub type ValidatorStake = u64;
 
 /// Validator address used for registration of validator on DA layer
-pub type ValidatorAddress = Address;
+pub type ValidatorId = Address;
 /// Consensus public key used for Fuel network consensus protocol to
-/// check signatures. ConsensusPublicKey is assigned by validator.
-pub type ConsensusPublicKey = Bytes32;
+/// check signatures. ConsensusId is assigned by validator.
+pub type ConsensusId = Bytes32;
 
 /// TODO temporary structure
 #[derive(Clone, Debug)]

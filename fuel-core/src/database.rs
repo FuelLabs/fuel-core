@@ -15,7 +15,7 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
     },
     model::{
-        BlockHeight, ConsensusPublicKey, DaBlockHeight, SealedFuelBlock, ValidatorAddress,
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId,
         ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff},
@@ -278,15 +278,15 @@ impl InterpreterStorage for Database {
 impl RelayerDb for Database {
     async fn get_validators(
         &self,
-    ) -> HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)> {
-        struct WrapAddress(pub ValidatorAddress);
+    ) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
+        struct WrapAddress(pub ValidatorId);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
-                Self(ValidatorAddress::try_from(i.as_ref()).unwrap())
+                Self(ValidatorId::try_from(i.as_ref()).unwrap())
             }
         }
         let mut out = HashMap::new();
-        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusPublicKey>)>(
+        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusId>)>(
             columns::VALIDATOR_SET,
             None,
             None,
@@ -348,14 +348,14 @@ impl RelayerDb for Database {
     async fn apply_validator_diffs(
         &mut self,
         da_height: DaBlockHeight,
-        changes: &HashMap<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>,
+        changes: &HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
     ) {
         // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
             let _ =
-                Storage::<ValidatorAddress, (ValidatorStake, Option<ConsensusPublicKey>)>::insert(
+                Storage::<ValidatorId, (ValidatorStake, Option<ConsensusId>)>::insert(
                     db.deref_mut(),
                     address,
                     stake,
