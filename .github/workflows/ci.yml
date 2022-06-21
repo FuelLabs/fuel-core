@@ -233,7 +233,7 @@ jobs:
         run: |
           echo ${{ steps.meta.outputs.json }} > tags.txt
           tags=(`cat tags.txt | awk -F 'ghcr.io/fuellabs/fuel-core:sha-' '{print $2}' | cut -d '"' -f1`)
-          echo "IMAGE_TAG=$(echo "sha-"$tags)" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$(echo $GITHUB_SHA::7})" >> $GITHUB_ENV
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
       - name: Test Environment Variables
