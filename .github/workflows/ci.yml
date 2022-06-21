@@ -239,13 +239,13 @@ jobs:
 
       - name: Outputs
         run: |
-          echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2 > test.txt
-          cat test.txt
+          echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2
 
       - name: Set Environment Variables
         run: |
           echo "FUEL_CORE_IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+
       - name: Test Environment Variables
         run: |
           echo env.FUEL_CORE_IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
@@ -406,6 +406,10 @@ jobs:
       - publish-docker-image
     runs-on: ubuntu-latest
     steps:
+      - name: Test Environment Variables
+        run: |
+          echo $FUEL_CORE_IMAGE_TAG
+
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
         with:
