@@ -236,13 +236,17 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+      - name: Outputs
+        run: |
+          echo "{{ steps.meta.outputs.tags }}"
+          echo "{{ steps.meta.outputs.labels }}"
+
       - name: Set Environment Variables
         run: |
           echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
-          echo ${{steps.meta.outputs.tags}}
           echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
           echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
