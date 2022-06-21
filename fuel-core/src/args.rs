@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core::chain_config::StateConfig;
+use fuel_core::chain_config::{ChainConfig, StateConfig};
 use fuel_core::database::Database;
 use fuel_core::service::{Config, DbType, VMConfig};
 use std::io::{self, Write};
@@ -71,7 +71,7 @@ pub struct Opt {
 }
 
 // Not strictly neccessary, but makes it easy to add an export to .json option
-#[derive(clap::Subcommand, Debug)]
+#[derive(clap::Subcommand, Copy, Clone, Debug)]
 pub enum SnapshotCommand {
     Snapshot,
 }
@@ -146,7 +146,7 @@ impl Opt {
     }
 }
 
-pub fn dump_snapshot(path: PathBuf) -> anyhow::Result<()> {
+pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
     let db: Database;
     #[cfg(feature = "rocksdb")]
     {
@@ -159,7 +159,15 @@ pub fn dump_snapshot(path: PathBuf) -> anyhow::Result<()> {
 
     let state_conf = StateConfig::generate_state_config(db);
 
-    let serialized = serde_json::to_string(&state_conf).unwrap();
+    let chain_conf = ChainConfig {
+        chain_name: config.chain_name,
+        block_production: config.block_production,
+        parent_network: config.parent_network,
+        initial_state: Some(state_conf),
+        transaction_parameters: config.transaction_parameters,
+    };
+
+    let serialized = serde_json::to_string(&chain_conf).unwrap();
     let mut stdout = io::stdout().lock();
 
     stdout.write_all(serialized.as_bytes())?;

@@ -8,10 +8,14 @@ mod args;
 async fn main() -> anyhow::Result<()> {
     // load configuration
     let opt = args::Opt::parse();
-    match opt._snapshot {
-        Some(args::SnapshotCommand::Snapshot) => args::dump_snapshot(opt.database_path)?,
+    let snapshot = opt._snapshot;
+    let config = opt.get_config()?;
+    match snapshot {
+        Some(args::SnapshotCommand::Snapshot) => {
+            let db_path = config.database_path;
+            args::dump_snapshot(db_path, config.chain_conf)?
+        }
         _ => {
-            let config = opt.get_config()?;
             // log fuel-core version
             info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
             trace!("Initializing in TRACE mode.");
