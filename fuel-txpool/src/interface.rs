@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, RwLock};
 
-/// Acts an interface between Service and Txpool
+/// Acts as a internal interface between transaction pool Service and implementation inside TxPool.
 pub struct Interface {
     txpool: RwLock<TxPoolImpl>,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
@@ -16,19 +16,18 @@ pub struct Interface {
 
 impl Interface {
     pub async fn run(
-        interface: Arc<Interface>,
+        self: Arc<Interface>,
         mut new_block: broadcast::Receiver<ImportBlockBroadcast>,
         mut receiver: mpsc::Receiver<TxPoolMpsc>,
     ) -> mpsc::Receiver<TxPoolMpsc> {
-        let mut running = true;
-        while running {
+        loop {
             tokio::select! {
                 event = receiver.recv() => {
                     let event = event.unwrap();
                     if matches!(event,TxPoolMpsc::Stop) {
-                        running = false;
+                        break;
                     }
-                    let interface = interface.clone();
+                    let interface = self.clone();
 
                     // this is litlle bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
@@ -58,7 +57,7 @@ impl Interface {
                     }});
                 }
                 _block_updated = new_block.recv() => {
-                    let interface = interface.clone();
+                    let interface = self.clone();
                     tokio::spawn( async move {
                         interface.block_update().await;
                     });
@@ -162,7 +161,7 @@ impl Interface {
     }
 
     /// Return all sorted transactions that are includable in next block.
-    /// This is going to be heavy operation, use it with only when needed.
+    /// This is going to be heavy operation, use it only when needed.
     async fn includable(&self) -> Vec<ArcTx> {
         let pool = self.txpool.read().await;
         pool.sorted_includable()

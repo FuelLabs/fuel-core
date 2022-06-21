@@ -41,7 +41,7 @@ impl TxQuery {
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
         let id = id.0;
-        let txpool = ctx.data::<Arc<TxPoolService>>().unwrap();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
 
         let (response, receiver) = oneshot::channel();
         let _ = txpool
@@ -293,7 +293,7 @@ impl TxMutation {
     /// Submits transaction to the txpool
     async fn submit(&self, ctx: &Context<'_>, tx: HexString) -> async_graphql::Result<Transaction> {
         let db = ctx.data_unchecked::<Database>();
-        let txpool = ctx.data::<Arc<TxPoolService>>().unwrap();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let cfg = ctx.data_unchecked::<Config>().clone();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();

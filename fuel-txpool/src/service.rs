@@ -33,7 +33,7 @@ impl Service {
             if let Some(receiver) = self.receiver.lock().await.take() {
                 let interface = self.interface.clone();
                 *join = Some(tokio::spawn(async {
-                    Interface::run(interface, new_block, receiver).await
+                    interface.run(new_block, receiver).await
                 }));
                 return true;
             } else {

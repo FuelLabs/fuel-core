@@ -29,7 +29,7 @@ pub trait TxPoolDb:
 #[derive(Debug)]
 pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.
-    /// This is going to be heavy operation, use it with only when needed.
+    /// This is going to be heavy operation, use it only when needed.
     Includable {
         response: oneshot::Sender<Vec<Arc<Transaction>>>,
     },
