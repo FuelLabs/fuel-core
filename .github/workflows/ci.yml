@@ -164,7 +164,6 @@ jobs:
     # - cancel-previous-runs
     # - lint-toml-files
     # - cargo-verifications
-
     if: always()
     runs-on: ubuntu-latest
     permissions:
