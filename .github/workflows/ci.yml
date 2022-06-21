@@ -239,7 +239,7 @@ jobs:
 
       - name: Outputs
         run: |
-          echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2
+          echo ${{ steps.meta.outputs.tags }} | sed -n 2p
 
       - name: Set Environment Variables
         run: |
