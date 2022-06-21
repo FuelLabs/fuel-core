@@ -164,6 +164,7 @@ jobs:
     # - cancel-previous-runs
     # - lint-toml-files
     # - cargo-verifications
+
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -230,14 +231,14 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
           echo ${{ steps.meta.outputs.json }} > tags.txt
           echo "IMAGE_TAG=$(cat tags.txt | grep ghcr.io/fuellabs/fuel-core:sha | cut -d':' -f2 | cut -d'"' -f1)" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
-     - name: Test Environment Variables
+      - name: Test Environment Variables
         run: |
-          echo ${{ env.DEPLOYMENT_VERSION }} 
           echo ${{ env.IMAGE_TAG }}
+          echo ${{ env.DEPLOYMENT_VERSION }}
 
       #   # Deploy Latest Fuel-Core Release
       # - name: Deploy Fuel-Core Developer Environment
