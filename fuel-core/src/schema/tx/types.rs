@@ -228,7 +228,7 @@ impl Transaction {
 
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
-        let txpool = ctx.data::<Arc<TxPoolService>>()?.clone();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let id = self.0.id();
 
         let (response, receiver) = oneshot::channel();
