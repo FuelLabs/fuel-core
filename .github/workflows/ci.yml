@@ -236,17 +236,27 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+      - name: Output
+        run: |
+          echo "
+          ============================================================
+          version: ${{ steps.meta.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          json: ${{ steps.meta.outputs.json }}
+          bake-file: ${{ steps.meta.outputs.bake-file }}
+          ============================================================
+          "
+
       - name: Set Environment Variables
         run: |
           echo "GITHUB_SHA_SHORT=$(echo $GITHUB_SHA | cut -c 1-6)" >> $GITHUB_ENV
-          echo "FUEL_CORE_IMAGE_TAG1=$(echo ${steps.meta.outputs.tags} | cut -d':' -f2)" >> $GITHUB_ENV
-          echo "FUEL_CORE_IMAGE_TAG2=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2)" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
           echo GITHUB_SHA_SHORT: $GITHUB_SHA_SHORT
-          echo IMAGE_TAG1: $FUEL_CORE_IMAGE_TAG1
-          echo IMAGE_TAG2: $FUEL_CORE_IMAGE_TAG2
+          echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
           echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
   publish-fuel-core-binary:
@@ -415,7 +425,7 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: "${FUEL_CORE_DEPLOYMENT_VERSION}"
+          DEPLOYMENT_VERSION: ${FUEL_CORE_DEPLOYMENT_VERSION}
           ENV: "fueldevsway.env"
-          IMAGE_TAG: "${FUEL_CORE_IMAGE_TAG}"
+          IMAGE_TAG: ${{FUEL_CORE_IMAGE_TAG}}
           K8S: "eks"
