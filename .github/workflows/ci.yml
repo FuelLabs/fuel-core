@@ -415,7 +415,7 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
+          DEPLOYMENT_VERSION: "${FUEL_CORE_DEPLOYMENT_VERSION}"
           ENV: "fueldevsway.env"
-          IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
+          IMAGE_TAG: "${FUEL_CORE_IMAGE_TAG}"
           K8S: "eks"
