@@ -238,8 +238,8 @@ jobs:
 
       - name: Outputs
         run: |
-          echo "{{ steps.meta.outputs.tags }}"
-          echo "{{ steps.meta.outputs.labels }}"
+          echo "${{ steps.meta.outputs.tags }}"
+          echo "${{ steps.meta.outputs.labels }}"
 
       - name: Set Environment Variables
         run: |
