@@ -232,6 +232,7 @@ jobs:
       - name: Setup Image Tag JSON
         run: |
           echo ${{ steps.meta.outputs.json }} > tags.json
+          cat tags.json
 
       - name: Get Image Tag Property
         id: get_tag_property
