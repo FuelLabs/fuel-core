@@ -104,9 +104,9 @@ jobs:
 
   publish-crates:
     # Only do this job if publishing a release
-    needs:
-      # - lint-toml-files
-      # - cargo-verifications
+    # needs:
+    # - lint-toml-files
+    # - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
 
@@ -160,10 +160,10 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
-    needs:
-      # - cancel-previous-runs
-      # - lint-toml-files
-      # - cargo-verifications
+    # needs:
+    # - cancel-previous-runs
+    # - lint-toml-files
+    # - cargo-verifications
 
     if: always()
     runs-on: ubuntu-latest
@@ -247,9 +247,9 @@ jobs:
     name: Release fuel-core binaries
     runs-on: ${{ matrix.job.os }}
     # Only do this job if publishing a release
-    needs:
-      - lint-toml-files
-      - cargo-verifications
+    # needs:
+    #   - lint-toml-files
+    #   - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     strategy:
       matrix:
