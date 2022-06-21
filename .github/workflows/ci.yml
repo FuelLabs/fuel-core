@@ -231,32 +231,32 @@ jobs:
 
       - name: Setup Image Tag
         run: |
-          echo ${{ steps.meta.outputs.tags }} | cut -d' ' -f3 | tail -n+2 | cut -d':' -f2
+          echo ${{ steps.meta.outputs.tags }}
 
-      - name: Set Environment Variables
-        run: |
-          echo "IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+      # - name: Set Environment Variables
+      #   run: |
+      #     echo "IMAGE_TAG=$(echo ${{ steps.meta.outputs.tags }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
+      #     echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
-      - name: Output github.ref
-        run: |
-          echo "${{ github.ref }}"
+      # - name: Output github.ref
+      #   run: |
+      #     echo "${{ github.ref }}"
 
-        # Deploy Latest Fuel-Core Release
-      - name: Deploy Fuel-Core Developer Environment
-        if: github.ref == 'refs/heads/elliot/update-ci-workflow'
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core on k8s
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
-        env:
-          CONFIG: "fuel-dev1"
-          DELETE_INFRA: true
-          ENV: "fueldevsway.env"
-          K8S: "eks"
+      #   # Deploy Latest Fuel-Core Release
+      # - name: Deploy Fuel-Core Developer Environment
+      #   if: github.ref == 'refs/heads/elliot/update-ci-workflow'
+      #   uses: benc-uk/workflow-dispatch@v1
+      #   with:
+      #     workflow: Deploy Fuel-Core on k8s
+      #     repo: FuelLabs/fuel-deployment
+      #     ref: refs/heads/master
+      #     token: ${{ secrets.REPO_TOKEN }}
+      #     inputs: '{ "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "delete-infra": "${{ env.DELETE_INFRA }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "k8s-type": "${{ env.K8S }}" }'
+      #   env:
+      #     CONFIG: "fuel-dev1"
+      #     DELETE_INFRA: true
+      #     ENV: "fueldevsway.env"
+      #     K8S: "eks"
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
