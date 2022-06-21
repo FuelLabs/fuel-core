@@ -229,10 +229,19 @@ jobs:
       #   env:
       #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
-      - name: Setup Image Tag
+      - name: Setup Image Tag JSON
         run: |
-          echo ${{ steps.meta.outputs.json }} > ./tags.txt
-          echo cat tags.txt | tail -n+2 | cut -d':' -f2
+          echo ${{ steps.meta.outputs.json }} > tags.json
+
+      - name: Get Image Tag Property
+          id: get_tag_property
+          uses: notiz-dev/github-action-json-property@release
+          with:
+            json: 'tags.json'
+            property: 'tags'
+
+      - run: echo ${{steps.get_tag_property.outputs.prop}} 
+
 
       # - name: Set Environment Variables
       #   run: |
