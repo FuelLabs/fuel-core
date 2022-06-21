@@ -242,7 +242,7 @@ jobs:
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
-          echo TAGS: ${{steps.meta.outputs.tags}}
+          echo ${{steps.meta.outputs.tags}}
           echo IMAGE_TAG: $FUEL_CORE_IMAGE_TAG
           echo DEPLOYMENT_VERSION: $FUEL_CORE_DEPLOYMENT_VERSION
 
