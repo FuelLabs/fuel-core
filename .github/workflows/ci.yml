@@ -406,6 +406,11 @@ jobs:
       - publish-docker-image
     runs-on: ubuntu-latest
     steps:
+      - name: Get Environment Variables
+        run: |
+          echo "DEPLOYMENT_VERSION=$(echo ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }} | tail -n+2 | cut -d':' -f2)" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$(echo ${{ env.FUEL_CORE_IMAGE_TAG }})" >> $GITHUB_ENV
+
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
         with:
@@ -417,7 +422,5 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: ${{ env.FUEL_CORE_DEPLOYMENT_VERSION }}
           ENV: "fueldevsway.env"
-          IMAGE_TAG: ${{ env.FUEL_CORE_IMAGE_TAG }}
           K8S: "eks"
