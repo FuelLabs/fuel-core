@@ -231,7 +231,7 @@ jobs:
 
       - name: Setup Image Tag
         run: |
-          echo ${{ steps.meta.outputs.tags }} > ./tags.txt
+          echo ${{ steps.meta.outputs.json }} > ./tags.txt
           echo cat tags.txt | tail -n+2 | cut -d':' -f2
 
       # - name: Set Environment Variables
