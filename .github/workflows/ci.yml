@@ -237,8 +237,8 @@ jobs:
         id: get_tag_property
         uses: notiz-dev/github-action-json-property@release
         with:
-          json: "tags.json"
-          property: "tags"
+          path: "tags.json"
+          prop_path: "tags"
 
       - run: echo ${{steps.get_tag_property.outputs.prop}}
 
