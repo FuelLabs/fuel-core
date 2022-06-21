@@ -412,6 +412,7 @@ enum ReturnType {
 type RunResult {
 	state: RunState!
 	breakpoint: OutputBreakpoint
+	jsonReceipts: [String!]!
 }
 
 enum RunState {
