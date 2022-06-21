@@ -197,7 +197,8 @@ pub struct RunResult {
 impl RunResult {
     pub fn receipts(&self) -> impl Iterator<Item = fuel_tx::Receipt> + '_ {
         self.json_receipts.iter().map(|r| {
-            serde_json::from_str::<fuel_tx::Receipt>(r).expect("JSON deserialization failed")
+            serde_json::from_str::<fuel_tx::Receipt>(r)
+                .expect("Receipt deserialization failed, server/client version mismatch")
         })
     }
 }
