@@ -238,7 +238,7 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}})" >> $GITHUB_ENV
+          echo "FUEL_CORE_IMAGE_TAG=$(echo ${{steps.meta.outputs.tags}} | cut -d':' -f2)" >> $GITHUB_ENV
           echo "FUEL_CORE_DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
       - name: Test Environment Variables
         run: |
@@ -411,7 +411,7 @@ jobs:
         env:
           CONFIG: "fuel-dev1"
           DELETE_INFRA: true
-          DEPLOYMENT_VERSION: ${FUEL_CORE_DEPLOYMENT_VERSION}
+          DEPLOYMENT_VERSION: echo $FUEL_CORE_DEPLOYMENT_VERSION
           ENV: "fueldevsway.env"
-          IMAGE_TAG: ${{env.FUEL_CORE_IMAGE_TAG}}
+          IMAGE_TAG: echo $FUEL_CORE_IMAGE_TAG
           K8S: "eks"
