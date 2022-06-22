@@ -7,7 +7,7 @@ use ethers_core::{
 };
 use fuel_core_interfaces::{
     common::fuel_types::{Address, AssetId, Bytes32, Word},
-    model::DepositCoin,
+    model::{ConsensusId, DepositCoin, ValidatorId},
 };
 
 /// This is going to be superseded with MessageLog: https://github.com/FuelLabs/fuel-core/issues/366
@@ -39,12 +39,12 @@ pub enum EthEventLog {
     AssetDeposit(AssetDepositLog),
     // save it in validator set
     ValidatorRegistration {
-        staking_key: Address,
-        consensus_key: Address,
+        staking_key: ValidatorId,
+        consensus_key: ConsensusId,
     },
     // remove it from validator set
     ValidatorUnregistration {
-        staking_key: Address,
+        staking_key: ValidatorId,
     },
     // do nothing. maybe used it for stats or info data.
     Deposit {
@@ -59,7 +59,7 @@ pub enum EthEventLog {
     // remove old delegations, delegate to new validators.
     Delegation {
         delegator: Address, // It is 24bytes address from ethereum
-        delegates: Vec<Address>,
+        delegates: Vec<ValidatorId>,
         amounts: Vec<u64>,
     },
     FuelBlockCommited {
@@ -140,9 +140,10 @@ impl TryFrom<&Log> for EthEventLog {
                 if log.topics.len() != 3 {
                     return Err(anyhow!("Malformed topics for ValidatorRegistration"));
                 }
-                let staking_key = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let staking_key =
+                    unsafe { ValidatorId::from_slice_unchecked(log.topics[1].as_ref()) };
                 let consensus_key =
-                    unsafe { Address::from_slice_unchecked(log.topics[2].as_ref()) };
+                    unsafe { ConsensusId::from_slice_unchecked(log.topics[2].as_ref()) };
 
                 Self::ValidatorRegistration {
                     staking_key,
@@ -153,7 +154,8 @@ impl TryFrom<&Log> for EthEventLog {
                 if log.topics.len() != 2 {
                     return Err(anyhow!("Malformed topics for ValidatorUnregistration"));
                 }
-                let staking_key = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let staking_key =
+                    unsafe { ValidatorId::from_slice_unchecked(log.topics[1].as_ref()) };
 
                 Self::ValidatorUnregistration { staking_key }
             }
@@ -203,7 +205,7 @@ impl TryFrom<&Log> for EthEventLog {
                         .delegates
                         .into_iter()
                         .map(|b| {
-                            let mut delegates = Address::zeroed();
+                            let mut delegates = ValidatorId::zeroed();
                             delegates[12..].copy_from_slice(b.as_ref());
                             delegates
                         })
@@ -253,8 +255,8 @@ pub mod tests {
 
     pub fn eth_log_validator_registration(
         eth_block: u64,
-        staking_key: Address,
-        consensus_key: Address,
+        staking_key: ValidatorId,
+        consensus_key: ConsensusId,
     ) -> Log {
         log_default(
             eth_block,
@@ -267,7 +269,7 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_validator_unregistration(eth_block: u64, staking_key: Address) -> Log {
+    pub fn eth_log_validator_unregistration(eth_block: u64, staking_key: ValidatorId) -> Log {
         log_default(
             eth_block,
             vec![
@@ -305,7 +307,7 @@ pub mod tests {
     pub fn eth_log_delegation(
         eth_block: u64,
         mut delegator: Address,
-        mut delegates: Vec<Address>,
+        mut delegates: Vec<ValidatorId>,
         amounts: Vec<u64>,
     ) -> Log {
         delegator.iter_mut().take(12).for_each(|i| *i = 0);
@@ -517,9 +519,9 @@ pub mod tests {
         let eth_block = rng.gen();
         let mut delegator: Address = rng.gen();
         delegator.iter_mut().take(12).for_each(|i| *i = 0);
-        let mut delegate1: Address = rng.gen();
+        let mut delegate1: ValidatorId = rng.gen();
         delegate1.iter_mut().take(12).for_each(|i| *i = 0);
-        let mut delegate2: Address = rng.gen();
+        let mut delegate2: ValidatorId = rng.gen();
         delegate2.iter_mut().take(12).for_each(|i| *i = 0);
 
         let log = eth_log_delegation(

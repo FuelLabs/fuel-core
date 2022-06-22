@@ -7,7 +7,9 @@ use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::{Address, Bytes32},
-    model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
+    model::{
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
+    },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
 };
 use std::{
@@ -36,9 +38,9 @@ pub struct DaBlockDiff {
     /// da block height
     pub da_height: DaBlockHeight,
     /// Validator stake deposit and withdrawel.
-    pub validators: HashMap<Address, Option<Address>>,
+    pub validators: HashMap<ValidatorId, Option<ConsensusId>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
-    pub delegations: HashMap<Address, Option<HashMap<Address, u64>>>,
+    pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     /// erc-20 pending deposit.
     pub assets: HashMap<Bytes32, AssetDepositLog>,
 }
@@ -86,7 +88,7 @@ impl FinalizationQueue {
         &mut self,
         da_height: DaBlockHeight,
         db: &mut dyn RelayerDb,
-    ) -> Option<HashMap<Address, (u64, Option<Address>)>> {
+    ) -> Option<HashMap<ValidatorId, (u64, Option<ConsensusId>)>> {
         self.validators.get(da_height, db).await
     }
 
@@ -268,14 +270,14 @@ impl FinalizationQueue {
 
         //TODO to be paranoid, recheck every block and all events got from eth client.
 
-        let mut validators: HashMap<Address, Option<Address>> = HashMap::new();
+        let mut validators: HashMap<ValidatorId, Option<ConsensusId>> = HashMap::new();
         while let Some(diff) = self.pending.front_mut() {
             if diff.da_height > finalized_da_height {
                 break;
             }
             info!("flush eth log:{:?} diff:{:?}", diff.da_height, diff);
 
-            let validator_diff: HashMap<Address, ValidatorDiff> = diff
+            let validator_diff: HashMap<ValidatorId, ValidatorDiff> = diff
                 .validators
                 .iter()
                 .map(|(val, &new_consensus_key)| {
@@ -394,10 +396,10 @@ mod tests {
     #[tokio::test]
     pub async fn check_validator_registration_unregistration() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let v1: Address = rng.gen();
-        let v2: Address = rng.gen();
-        let c1: Address = rng.gen();
-        let c2: Address = rng.gen();
+        let v1: ValidatorId = rng.gen();
+        let v2: ValidatorId = rng.gen();
+        let c1: ConsensusId = rng.gen();
+        let c2: ConsensusId = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -426,10 +428,10 @@ mod tests {
     #[tokio::test]
     pub async fn check_deposit_and_validator_finalization() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let v1: Address = rng.gen();
-        let c1: Address = rng.gen();
-        let v2: Address = rng.gen();
-        let c2: Address = rng.gen();
+        let v1: ValidatorId = rng.gen();
+        let c1: ConsensusId = rng.gen();
+        let v2: ValidatorId = rng.gen();
+        let c2: ConsensusId = rng.gen();
 
         let acc1: Address = rng.gen();
         let token1 = AssetId::zeroed();
@@ -478,9 +480,9 @@ mod tests {
         let mut delegator2: Address = rng.gen();
         delegator1.iter_mut().take(12).for_each(|i| *i = 0);
         delegator2.iter_mut().take(12).for_each(|i| *i = 0);
-        let mut v1: Address = rng.gen();
-        let c1: Address = rng.gen();
-        let mut v2: Address = rng.gen();
+        let mut v1: ValidatorId = rng.gen();
+        let c1: ConsensusId = rng.gen();
+        let mut v2: ValidatorId = rng.gen();
         v1.iter_mut().take(12).for_each(|i| *i = 0);
         v2.iter_mut().take(12).for_each(|i| *i = 0);
 
@@ -528,8 +530,8 @@ mod tests {
         let mut delegator2: Address = rng.gen();
         delegator1.iter_mut().take(12).for_each(|i| *i = 0);
         delegator2.iter_mut().take(12).for_each(|i| *i = 0);
-        let mut v1: Address = rng.gen();
-        let mut v2: Address = rng.gen();
+        let mut v1: ValidatorId = rng.gen();
+        let mut v2: ValidatorId = rng.gen();
         v1.iter_mut().take(12).for_each(|i| *i = 0);
         v2.iter_mut().take(12).for_each(|i| *i = 0);
 
@@ -569,10 +571,10 @@ mod tests {
     #[tokio::test]
     async fn test_reverting_pending_logs() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let v1: Address = rng.gen();
-        let v2: Address = rng.gen();
-        let c1: Address = rng.gen();
-        let c2: Address = rng.gen();
+        let v1: ValidatorId = rng.gen();
+        let v2: ValidatorId = rng.gen();
+        let c1: ConsensusId = rng.gen();
+        let c2: ConsensusId = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -607,10 +609,10 @@ mod tests {
     #[tokio::test]
     async fn test_reverting_pending_logs_on_new_block() {
         let mut rng = StdRng::seed_from_u64(3020);
-        let v1: Address = rng.gen();
-        let v2: Address = rng.gen();
-        let c1: Address = rng.gen();
-        let c2: Address = rng.gen();
+        let v1: ValidatorId = rng.gen();
+        let v2: ValidatorId = rng.gen();
+        let c1: ConsensusId = rng.gen();
+        let c2: ConsensusId = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -649,10 +651,10 @@ mod tests {
         delegator1.iter_mut().take(12).for_each(|i| *i = 0);
         delegator2.iter_mut().take(12).for_each(|i| *i = 0);
         delegator3.iter_mut().take(12).for_each(|i| *i = 0);
-        let mut v1: Address = rng.gen();
-        let mut v2: Address = rng.gen();
-        let cons1: Address = rng.gen();
-        let cons2: Address = rng.gen();
+        let mut v1: ValidatorId = rng.gen();
+        let mut v2: ValidatorId = rng.gen();
+        let cons1: ConsensusId = rng.gen();
+        let cons2: ConsensusId = rng.gen();
         v1.iter_mut().take(12).for_each(|i| *i = 0);
         v2.iter_mut().take(12).for_each(|i| *i = 0);
 
