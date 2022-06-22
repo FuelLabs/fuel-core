@@ -9,24 +9,24 @@ use tokio::sync::oneshot;
 pub struct StakingDiff {
     /// Validator registration, it is pair of old consensu key and new one, where consensus address
     /// if registered is Some or None if unregistration happened.
-    pub validators: HashMap<Address, ValidatorDiff>,
+    pub validators: HashMap<ValidatorId, ValidatorDiff>,
     /// Register changes for all delegations inside one da block.
-    pub delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
+    pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct ValidatorDiff {
     /// Previous consensus key, None if validator was not set.
-    pub previous_consensus_key: Option<Address>,
+    pub previous_consensus_key: Option<ConsensusId>,
     /// New consensus key or None if unregistration happened.
-    pub new_consensus_key: Option<Address>,
+    pub new_consensus_key: Option<ConsensusId>,
 }
 
 impl StakingDiff {
     pub fn new(
-        validators: HashMap<Address, ValidatorDiff>,
-        delegations: HashMap<Address, Option<HashMap<Address, ValidatorStake>>>,
+        validators: HashMap<ValidatorId, ValidatorDiff>,
+        delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     ) -> Self {
         Self {
             validators,
@@ -41,7 +41,7 @@ impl StakingDiff {
 #[async_trait]
 pub trait RelayerDb:
      Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
-    + Storage<Address, (ValidatorStake, Option<Address>), Error = KvStoreError> // validator set
+    + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
     + Send
@@ -64,7 +64,7 @@ pub trait RelayerDb:
     /// Query delegate index to find list of blocks that delegation changed
     /// iterate over list of indexed to find height that is less but closest to da_height
     /// Query that block StakeDiff to find actual delegation change.
-    async fn get_first_lesser_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<Address,u64>> {
+    async fn get_first_lesser_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<ValidatorId,ValidatorStake>> {
         // get delegate index
         let delegate_index = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).expect("Expect to get data without problem")?;
         let mut last_da_height = 0;
@@ -106,10 +106,10 @@ pub trait RelayerDb:
 
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
     /// to be atomic.
-    async fn apply_validator_diffs(&mut self, da_height: DaBlockHeight, changes: &HashMap<Address,(ValidatorStake,Option<Address>)>) {
+    async fn apply_validator_diffs(&mut self, da_height: DaBlockHeight, changes: &HashMap<ValidatorId,(ValidatorStake,Option<ConsensusId>)>) {
         // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation
         for ( address, stake) in changes {
-            let _ = Storage::<Address,(ValidatorStake,Option<Address>)>::insert(self,address,stake);
+            let _ = Storage::<ValidatorId,(ValidatorStake,Option<ConsensusId>)>::insert(self,address,stake);
         }
         self.set_validators_da_height(da_height).await;
     }
@@ -120,7 +120,7 @@ pub trait RelayerDb:
     async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>>;
 
     /// get validator set for current eth height
-    async fn get_validators(&self) -> HashMap<Address,(ValidatorStake,Option<Address>)>;
+    async fn get_validators(&self) -> ValidatorSet;
 
     /// Set data availability block height that corresponds to current_validator_set
     async fn set_validators_da_height(&self, block: DaBlockHeight);
@@ -144,7 +144,7 @@ pub trait RelayerDb:
     async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight);
 }
 
-pub type ValidatorSet = HashMap<Address, (ValidatorStake, Option<Address>)>;
+pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>;
 
 #[derive(Debug)]
 pub enum RelayerEvent {
@@ -165,7 +165,10 @@ pub use thiserror::Error;
 
 use crate::{
     db::KvStoreError,
-    model::{BlockHeight, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorStake},
+    model::{
+        BlockHeight, ConsensusId, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorId,
+        ValidatorStake,
+    },
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
