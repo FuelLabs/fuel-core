@@ -141,6 +141,7 @@ impl TxPool {
             header: FuelBlockHeader {
                 height: new_block_height,
                 parent_hash: current_hash,
+                time: Utc::now(),
                 ..Default::default()
             },
             transactions: includable_txs,

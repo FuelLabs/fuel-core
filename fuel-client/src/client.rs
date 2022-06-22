@@ -36,8 +36,13 @@ impl FromStr for FuelClient {
     type Err = anyhow::Error;
 
     fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let mut url =
-            surf::Url::parse(str).with_context(|| format!("Invalid fuel-core URL: {}", str))?;
+        let mut raw_url = str.to_string();
+        if !raw_url.starts_with("http") {
+            raw_url = format!("http://{}", raw_url);
+        }
+
+        let mut url = surf::Url::parse(&raw_url)
+            .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
         url.set_path("/graphql");
         Ok(Self { url })
     }
