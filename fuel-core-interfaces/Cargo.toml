@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core-interfaces"
-version = "0.9.2"
+version = "0.9.3"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies"]
 edition = "2021"
