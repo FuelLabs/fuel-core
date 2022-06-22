@@ -6,7 +6,7 @@ pub mod schema {
 
 use hex::FromHexError;
 use std::array::TryFromSliceError;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::io::ErrorKind;
 use std::num::TryFromIntError;
 use thiserror::Error;
@@ -191,6 +191,26 @@ pub struct ContinueTx {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct RunResult {
     pub breakpoint: Option<OutputBreakpoint>,
+    pub json_receipts: Vec<String>,
+}
+
+impl RunResult {
+    pub fn receipts(&self) -> impl Iterator<Item = fuel_tx::Receipt> + '_ {
+        self.json_receipts.iter().map(|r| {
+            serde_json::from_str::<fuel_tx::Receipt>(r)
+                .expect("Receipt deserialization failed, server/client version mismatch")
+        })
+    }
+}
+
+impl fmt::Display for RunResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let receipts: Vec<fuel_tx::Receipt> = self.receipts().collect();
+        f.debug_struct("RunResult")
+            .field("breakpoint", &self.breakpoint)
+            .field("receipts", &receipts)
+            .finish()
+    }
 }
 
 #[derive(cynic::QueryFragment, Debug)]
