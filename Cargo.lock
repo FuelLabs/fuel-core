@@ -2314,6 +2314,7 @@ dependencies = [
  "fuel-crypto",
  "fuel-gql-client",
  "fuel-txpool",
+ "futures",
  "insta",
  "itertools",
  "rand 0.8.5",
