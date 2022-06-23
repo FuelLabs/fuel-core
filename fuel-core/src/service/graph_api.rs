@@ -72,7 +72,8 @@ pub async fn start_server(
     let handle = tokio::spawn(async move {
         let server = axum::Server::from_tcp(listener)
             .unwrap()
-            .serve(router.into_make_service());
+            .serve(router.into_make_service())
+            .with_graceful_shutdown(shutdown_signal());
 
         tx.send(()).unwrap();
         server.await.map_err(Into::into)
@@ -82,6 +83,13 @@ pub async fn start_server(
     rx.await.unwrap();
 
     Ok((bound_addr, handle))
+}
+
+async fn shutdown_signal() {
+    // Wait for the CTRL+C signal
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to install CTRL+C signal handler");
 }
 
 async fn graphql_playground() -> impl IntoResponse {
