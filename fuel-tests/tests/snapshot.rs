@@ -147,6 +147,8 @@ async fn snapshot_command() {
         .arg("--chain")
         .arg(file_path)
         .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .stdin(Stdio::null())
         .spawn()
         .unwrap();
 

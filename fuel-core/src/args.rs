@@ -1,16 +1,13 @@
 use clap::Parser;
+use fuel_core::service::{Config, DbType, VMConfig};
+#[cfg(feature = "rocksdb")]
 use fuel_core::{
     chain_config::{ChainConfig, StateConfig},
     database::Database,
-    service::{Config, DbType, VMConfig},
 };
-use std::{
-    env,
-    io::{self, Write},
-    net,
-    path::PathBuf,
-    str::FromStr,
-};
+#[cfg(feature = "rocksdb")]
+use std::io::Write;
+use std::{env, io, net, path::PathBuf, str::FromStr};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -83,6 +80,7 @@ pub enum Snapshot {
     Snapshot(SnapshotCommand),
 }
 
+#[cfg(feature = "rocksdb")]
 impl Snapshot {
     pub fn get_args(self) -> Result<SnapshotCommand, anyhow::Error> {
         let Snapshot::Snapshot(cmd) = self;
@@ -90,6 +88,7 @@ impl Snapshot {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 #[derive(Debug, Clone, Parser)]
 pub struct SnapshotCommand {
     #[clap(
@@ -141,6 +140,7 @@ impl Opt {
                 .init();
         }
 
+        #[cfg(feature = "rocksdb")]
         let Opt {
             ip,
             port,
@@ -153,6 +153,19 @@ impl Opt {
             min_byte_price,
             predicates,
             _snapshot,
+        } = self;
+        #[cfg(not(feature = "rocksdb"))]
+        let Opt {
+            ip,
+            port,
+            database_path,
+            database_type,
+            chain_config,
+            vm_backtrace,
+            utxo_validation,
+            min_gas_price,
+            min_byte_price,
+            predicates,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
