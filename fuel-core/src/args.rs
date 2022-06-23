@@ -173,19 +173,9 @@ impl Opt {
 }
 
 pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
-    let db: Database;
-    #[cfg(feature = "rocksdb")]
-    {
-        db = Database::open(&path)?;
-    }
-    #[cfg(not(feature = "rocksdb"))]
-    {
-        db = Database::default();
-    }
+    let db = Database::open(&path)?;
 
-    let state_conf = StateConfig::generate_state_config(db);
-
-    println!("State config here {:?}", state_conf);
+    let state_conf = StateConfig::generate_state_config(db.clone());
 
     let chain_conf = ChainConfig {
         chain_name: config.chain_name,

@@ -1,4 +1,5 @@
 use crate::helpers::create_contract;
+use async_std::task;
 use escargot::CargoBuild;
 use fuel_core::chain_config::StateConfig;
 use fuel_core::database::Database;
@@ -16,10 +17,10 @@ use fuel_core_interfaces::common::{
 use fuel_gql_client::client::FuelClient;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use std::fs::File;
+use std::io::Write;
 use std::time::Duration;
 use tempdir::TempDir;
-
-use async_std::task;
 
 #[tokio::test]
 async fn snapshot_state_config() {
@@ -85,10 +86,45 @@ async fn snapshot_state_config() {
 
 #[tokio::test]
 async fn snapshot_command() {
+    let owner = Address::default();
+    let asset_id = AssetId::new([1u8; 32]);
+
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        height: None,
+        contracts: Some(vec![ContractConfig {
+            code: vec![8; 32],
+            salt: Salt::new([9; 32]),
+            state: None,
+            balances: None,
+        }]),
+        coins: Some(
+            vec![
+                (owner, 50, asset_id),
+                (owner, 100, asset_id),
+                (owner, 150, asset_id),
+            ]
+            .into_iter()
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                block_created: None,
+                maturity: None,
+                owner,
+                amount,
+                asset_id,
+            })
+            .collect(),
+        ),
+    });
     let port = portpicker::pick_unused_port().expect("No ports free");
 
     let tmp_dir = TempDir::new("test").unwrap();
     let tmp_path = tmp_dir.path().to_owned();
+    let file_path = tmp_dir.path().join("chain_conf.json");
+    let mut tmp_file = File::create(file_path.clone()).unwrap();
+    let serialized = serde_json::to_string(&config.chain_conf).unwrap();
+    tmp_file.write_all(serialized.as_bytes()).unwrap();
 
     let mut run_cmd = CargoBuild::new()
         .bin("fuel-core")
@@ -99,13 +135,15 @@ async fn snapshot_command() {
         .unwrap()
         .command();
 
-    run_cmd
+    let mut child = run_cmd
         .arg("--db-type")
         .arg("rocks-db")
         .arg("--db-path")
         .arg(tmp_path.clone())
         .arg("--port")
         .arg(port.to_string())
+        .arg("--chain")
+        .arg(file_path)
         .spawn()
         .unwrap();
 
@@ -122,13 +160,11 @@ async fn snapshot_command() {
 
     let mut rng = StdRng::seed_from_u64(2322);
 
-    // create a contract in block 1
-    // verify a block 2 containing contract id from block 1, with wrong input contract utxo_id
-    let (tx2, _) = create_contract(vec![], &mut rng);
+    let (tx2, _) = create_contract(vec![56; 32], &mut rng);
 
     client.submit(&tx2).await.unwrap();
 
-    dbg!(&run_cmd);
+    child.kill().unwrap(); // I got to finally write this line
 
     let mut snapshot_cmd = CargoBuild::new()
         .bin("fuel-core")
@@ -139,6 +175,8 @@ async fn snapshot_command() {
         .unwrap()
         .command();
 
+    task::sleep(Duration::from_secs(5)).await;
+
     snapshot_cmd
         .arg("snapshot")
         .arg("--db-path")
@@ -146,6 +184,7 @@ async fn snapshot_command() {
         .spawn()
         .unwrap();
 
-    dbg!(&snapshot_cmd);
-    //println!("{:?}", snap_result.unwrap().next());
+    dbg!(snapshot_cmd);
+    drop(tmp_file);
+    tmp_dir.close().unwrap();
 }
