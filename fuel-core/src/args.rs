@@ -1,11 +1,16 @@
-use anyhow::anyhow;
 use clap::Parser;
-use fuel_core::chain_config::{ChainConfig, StateConfig};
-use fuel_core::database::Database;
-use fuel_core::service::{Config, DbType, VMConfig};
-use std::io::{self, Write};
-use std::str::FromStr;
-use std::{env, net, path::PathBuf};
+use fuel_core::{
+    chain_config::{ChainConfig, StateConfig},
+    database::Database,
+    service::{Config, DbType, VMConfig},
+};
+use std::{
+    env,
+    io::{self, Write},
+    net,
+    path::PathBuf,
+    str::FromStr,
+};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -24,6 +29,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
     rename_all = "kebab-case"
 )]
 pub struct Opt {
+    #[cfg(feature = "rocksdb")]
     #[clap(subcommand)]
     pub _snapshot: Option<Snapshot>,
 
@@ -71,7 +77,7 @@ pub struct Opt {
     pub predicates: bool,
 }
 
-// Not strictly neccessary, but makes it easy to add an export to .json option
+#[cfg(feature = "rocksdb")]
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum Snapshot {
     Snapshot(SnapshotCommand),
@@ -79,11 +85,8 @@ pub enum Snapshot {
 
 impl Snapshot {
     pub fn get_args(self) -> Result<SnapshotCommand, anyhow::Error> {
-        if let Snapshot::Snapshot(cmd) = self {
-            Ok(cmd)
-        } else {
-            Err(anyhow!("No Arguments Provided"))
-        }
+        let Snapshot::Snapshot(cmd) = self;
+        Ok(cmd)
     }
 }
 
@@ -172,10 +175,11 @@ impl Opt {
     }
 }
 
+#[cfg(feature = "rocksdb")]
 pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
     let db = Database::open(&path)?;
 
-    let state_conf = StateConfig::generate_state_config(db.clone());
+    let state_conf = StateConfig::generate_state_config(db);
 
     let chain_conf = ChainConfig {
         chain_name: config.chain_name,

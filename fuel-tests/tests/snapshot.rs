@@ -1,7 +1,7 @@
 use crate::helpers::create_contract;
 use async_std::task;
 use escargot::CargoBuild;
-use fuel_core::chain_config::StateConfig;
+use fuel_core::chain_config::{ChainConfig, StateConfig};
 use fuel_core::database::Database;
 use fuel_core::{
     chain_config::{CoinConfig, ContractConfig},
@@ -19,6 +19,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use std::fs::File;
 use std::io::Write;
+use std::process::Stdio;
 use std::time::Duration;
 use tempdir::TempDir;
 
@@ -135,6 +136,7 @@ async fn snapshot_command() {
         .unwrap()
         .command();
 
+    // find some way to kill this process's std
     let mut child = run_cmd
         .arg("--db-type")
         .arg("rocks-db")
@@ -144,12 +146,13 @@ async fn snapshot_command() {
         .arg(port.to_string())
         .arg("--chain")
         .arg(file_path)
+        .stdout(Stdio::null())
         .spawn()
         .unwrap();
 
     task::sleep(Duration::from_secs(5)).await;
 
-    let client = FuelClient::new(format!("http://127.0.0.1:{}", port.to_string())).unwrap();
+    let client = FuelClient::new(format!("http://127.0.0.1:{}", port)).unwrap();
     let tx = TxBuilder::new(2322u64)
         .gas_limit(1)
         .coin_input(Default::default(), 1000)
@@ -177,14 +180,18 @@ async fn snapshot_command() {
 
     task::sleep(Duration::from_secs(5)).await;
 
-    snapshot_cmd
+    let output = snapshot_cmd
         .arg("snapshot")
         .arg("--db-path")
         .arg(tmp_path.clone())
-        .spawn()
+        .output()
         .unwrap();
 
-    dbg!(snapshot_cmd);
+    let snapshot_config: ChainConfig =
+        serde_json::from_str(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
+
+    assert!(snapshot_config.initial_state.is_some());
+
     drop(tmp_file);
     tmp_dir.close().unwrap();
 }
