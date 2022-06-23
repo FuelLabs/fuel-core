@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Parser;
 use fuel_core::chain_config::{ChainConfig, StateConfig};
 use fuel_core::database::Database;
@@ -15,7 +16,7 @@ lazy_static::lazy_static! {
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Clone, Debug)]
 #[clap(
     name = "fuel-core",
     about = "Fuel client implementation",
@@ -24,7 +25,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 )]
 pub struct Opt {
     #[clap(subcommand)]
-    pub _snapshot: Option<SnapshotCommand>,
+    pub _snapshot: Option<Snapshot>,
 
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
@@ -71,9 +72,34 @@ pub struct Opt {
 }
 
 // Not strictly neccessary, but makes it easy to add an export to .json option
-#[derive(clap::Subcommand, Copy, Clone, Debug)]
-pub enum SnapshotCommand {
-    Snapshot,
+#[derive(clap::Subcommand, Clone, Debug)]
+pub enum Snapshot {
+    Snapshot(SnapshotCommand),
+}
+
+impl Snapshot {
+    pub fn get_args(self) -> Result<SnapshotCommand, anyhow::Error> {
+        if let Snapshot::Snapshot(cmd) = self {
+            Ok(cmd)
+        } else {
+            Err(anyhow!("No Arguments Provided"))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct SnapshotCommand {
+    #[clap(
+        name = "DB_PATH",
+        long = "db-path",
+        parse(from_os_str),
+        default_value = (*DEFAULT_DB_PATH).to_str().unwrap()
+    )]
+    pub database_path: PathBuf,
+
+    /// Specify either an alias to a built-in configuration or filepath to a JSON file.
+    #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
+    pub chain_config: String,
 }
 
 impl Opt {
@@ -158,6 +184,8 @@ pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
     }
 
     let state_conf = StateConfig::generate_state_config(db);
+
+    println!("State config here {:?}", state_conf);
 
     let chain_conf = ChainConfig {
         chain_name: config.chain_name,

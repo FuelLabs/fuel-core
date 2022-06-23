@@ -1,6 +1,6 @@
 use fuel_core::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
 use fuel_core::service::{Config, FuelService};
-use fuel_core_interfaces::common::{fuel_tx::Transaction, fuel_tx::Contract, fuel_vm::prelude::*};
+use fuel_core_interfaces::common::{fuel_tx::Contract, fuel_tx::Transaction, fuel_vm::prelude::*};
 use fuel_gql_client::client::FuelClient;
 use itertools::Itertools;
 use rand::{rngs::StdRng, Rng, SeedableRng};
