@@ -6,7 +6,7 @@ use fuel_types::Bytes32;
 /// This is a dummy placeholder for the Vote Struct in fuel-bft
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Vote {
+pub struct ConsensusVote {
     block_id: Bytes32,
     height: u64,
     round: u64,
