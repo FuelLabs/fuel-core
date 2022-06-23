@@ -1,6 +1,6 @@
 [package]
 name = "fuel-gql-client"
-version = "0.9.2"
+version = "0.9.3"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
