@@ -65,6 +65,7 @@ impl Executor {
             header: FuelBlockHeader {
                 height: new_block_height,
                 parent_hash: current_hash,
+                time: Utc::now(),
                 ..Default::default()
             },
             transactions: txs.into_iter().map(|t| t.as_ref().clone()).collect(),

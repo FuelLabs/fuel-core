@@ -1,6 +1,6 @@
 [package]
 name = "fuel-txpool"
-version = "0.9.2"
+version = "0.9.3"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["cryptography::cryptocurrencies"]
 edition = "2021"
@@ -14,7 +14,7 @@ description = "Transaction pool"
 anyhow = "1.0"
 async-trait = "0.1"
 chrono = "0.4"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.9.2" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.9.3" }
 futures = "0.3"
 parking_lot = "0.11"
 thiserror = "1.0"
@@ -22,6 +22,6 @@ tokio = { version = "1.14", default-features = false, features = ["sync"] }
 tracing = "0.1"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.9.2", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.9.3", features = [
     "test-helpers",
 ] }
