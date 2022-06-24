@@ -4,24 +4,28 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use fuel_core_interfaces::common::fuel_vm::prelude::PredicateStorage;
-use fuel_core_interfaces::common::{
-    fuel_asm::Word,
-    fuel_merkle::{binary::MerkleTree, common::StorageMap},
-    fuel_storage::Storage,
-    fuel_tx::{
-        Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
-        ValidationError,
+use chrono::Utc;
+use fuel_core_interfaces::{
+    common::{
+        fuel_asm::Word,
+        fuel_merkle::{binary::MerkleTree, common::StorageMap},
+        fuel_storage::Storage,
+        fuel_tx::{
+            Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
+            ValidationError,
+        },
+        fuel_types::{bytes::SerializableVec, ContractId},
+        fuel_vm::{
+            consts::REG_SP,
+            prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
+        },
     },
-    fuel_types::{bytes::SerializableVec, ContractId},
-    fuel_vm::{
-        consts::REG_SP,
-        prelude::{Backtrace as FuelBacktrace, Interpreter},
-    },
+    model::FuelBlockHeader,
 };
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
+    sync::Arc,
 };
 use thiserror::Error;
 use tracing::{debug, warn};
@@ -44,6 +48,33 @@ pub struct Executor {
 }
 
 impl Executor {
+    pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
+        let db = self.database.clone();
+
+        for tx in txs.iter() {
+            // set status to submitted
+            db.update_tx_status(&tx.id(), TransactionStatus::Submitted { time: Utc::now() })?;
+        }
+
+        // setup and execute block
+        let current_height = db.get_block_height()?.unwrap_or_default();
+        let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+        let new_block_height = current_height + 1u32.into();
+
+        let mut block = FuelBlock {
+            header: FuelBlockHeader {
+                height: new_block_height,
+                parent_hash: current_hash,
+                time: Utc::now(),
+                ..Default::default()
+            },
+            transactions: txs.into_iter().map(|t| t.as_ref().clone()).collect(),
+        };
+        // immediately execute block
+        self.execute(&mut block, ExecutionMode::Production).await?;
+        Ok(())
+    }
+
     pub async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error> {
         // Compute the block id before execution, if mode is set to production just use zeroed id.
         let pre_exec_block_id = match mode {

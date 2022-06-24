@@ -18,6 +18,7 @@ use fuel_core_interfaces::{
         BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff},
+    txpool::TxPoolDb,
 };
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "rocksdb")]
@@ -129,6 +130,8 @@ impl Drop for DropResources {
 */
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
+
+impl TxPoolDb for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]

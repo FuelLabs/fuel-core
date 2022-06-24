@@ -7,7 +7,7 @@ use crate::{
         contract::Contract,
         scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
     },
-    tx_pool::{TransactionStatus as TxStatus, TxPool},
+    tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{Context, Enum, Object, Union};
 use chrono::{DateTime, Utc};
@@ -17,8 +17,11 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
     },
     db::KvStoreError,
+    txpool::TxPoolMpsc,
 };
+use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 
 pub struct ProgramState {
     return_type: ReturnType,
@@ -225,13 +228,17 @@ impl Transaction {
 
     async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+        let id = self.0.id();
 
-        let txpool = ctx.data::<Arc<TxPool>>().unwrap().pool();
+        let (response, receiver) = oneshot::channel();
+        let _ = txpool
+            .sender()
+            .send(TxPoolMpsc::FindOne { id, response })
+            .await;
 
-        let transaction_in_pool = txpool.find_one(&self.0.id()).await;
-
-        if transaction_in_pool.is_some() {
-            let time = transaction_in_pool.unwrap().submited_time();
+        if let Ok(Some(transaction_in_pool)) = receiver.await {
+            let time = transaction_in_pool.submited_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
             let status = db.get_tx_status(&self.0.id())?;
