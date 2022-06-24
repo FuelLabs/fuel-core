@@ -1,22 +1,27 @@
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
+use crate::executor::Executor;
 use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::service::Config;
 use crate::state::IterDirection;
-use crate::tx_pool::TxPool;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
 use fuel_core_interfaces::common::{
-    fuel_storage::Storage, fuel_tx::Transaction as FuelTx, fuel_types,
+    fuel_storage::Storage,
+    fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx},
+    fuel_types,
     fuel_vm::prelude::Deserializable,
 };
+use fuel_core_interfaces::txpool::TxPoolMpsc;
+use fuel_txpool::Service as TxPoolService;
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
+use tokio::sync::oneshot;
 use types::Transaction;
 
 pub mod input;
@@ -35,16 +40,19 @@ impl TxQuery {
         #[graphql(desc = "The ID of the transaction")] id: TransactionId,
     ) -> async_graphql::Result<Option<Transaction>> {
         let db = ctx.data_unchecked::<Database>();
-        let key = id.0;
+        let id = id.0;
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
 
-        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
+        let (response, receiver) = oneshot::channel();
+        let _ = txpool
+            .sender()
+            .send(TxPoolMpsc::FindOne { id, response })
+            .await;
 
-        let found_tx = tx_pool.pool().find(&[key]).await;
-
-        if let Some(Some(transaction)) = found_tx.get(0) {
+        if let Ok(Some(transaction)) = receiver.await {
             Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
-            Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &key)?
+            Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &id)?
                 .map(|tx| Transaction(tx.into_owned())))
         }
     }
@@ -266,20 +274,72 @@ impl TxMutation {
         if let Some(utxo_validation) = utxo_validation {
             cfg.utxo_validation = utxo_validation;
         }
-        let tx = FuelTx::from_bytes(&tx.0)?;
-        // make virtual txpool from transactional view
-        let tx_pool = TxPool::new(transaction.deref().clone(), cfg.clone());
-        let receipts = tx_pool.run_tx(tx).await?;
-        Ok(receipts.into_iter().map(Into::into).collect())
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        tx.precompute_metadata();
+        let id = tx.id();
+
+        // make executor from transaction database view.
+        let executor = Executor {
+            database: transaction.deref().clone(),
+            config: cfg.clone(),
+        };
+        executor.submit_txs(vec![Arc::new(tx)]).await?;
+        // get receipts from db transaction
+        let receipts = Storage::<FuelBytes32, Vec<FuelReceipt>>::get(transaction.deref(), &id)?
+            .unwrap_or_default();
+        Ok(receipts.iter().map(Into::into).collect())
     }
 
     /// Submits transaction to the txpool
     async fn submit(&self, ctx: &Context<'_>, tx: HexString) -> async_graphql::Result<Transaction> {
-        let tx_pool = ctx.data::<Arc<TxPool>>().unwrap();
-        let tx = FuelTx::from_bytes(&tx.0)?;
-        tx_pool.submit_tx(tx.clone()).await?;
-        let tx = Transaction(tx);
+        let db = ctx.data_unchecked::<Database>();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+        let cfg = ctx.data_unchecked::<Config>().clone();
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        tx.precompute_metadata();
 
+        let includable = if cfg.utxo_validation {
+            // include transaction
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Insert {
+                    txs: vec![Arc::new(tx.clone())],
+                    response,
+                })
+                .await;
+            receiver.await?.get(0).unwrap().as_ref()?;
+
+            // get includable transactions
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Includable { response })
+                .await;
+            let txs = receiver.await?;
+
+            // remove transaction
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::Remove { ids: vec![tx.id()] })
+                .await;
+
+            txs
+        } else {
+            vec![Arc::new(tx.clone())]
+        };
+
+        // next part can be extracted to saparate endpoint that will trigger block building
+        // just inlude call to txpool.includable
+
+        let executor = Executor {
+            database: db.clone(),
+            config: cfg.clone(),
+        };
+        executor.submit_txs(includable).await?;
+
+        // probably need to fetch executed tx that is now in db.
+        let tx = Transaction(tx);
         Ok(tx)
     }
 }
