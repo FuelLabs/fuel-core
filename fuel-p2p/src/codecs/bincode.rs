@@ -55,10 +55,7 @@ impl RequestResponseCodec for BincodeCodec {
     {
         let encoded_data = read_length_prefixed(socket, MAX_REQUEST_SIZE).await?;
 
-        match bincode::deserialize(&encoded_data) {
-            Ok(decoded_data) => Ok(decoded_data),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+        bincode::deserialize(&encoded_data).map_err(|e| { io::Error::new(io::ErrorKind::Other, e.to_string()) })
     }
 
     async fn read_response<T>(
@@ -71,10 +68,7 @@ impl RequestResponseCodec for BincodeCodec {
     {
         let encoded_data = read_length_prefixed(socket, self.max_response_size).await?;
 
-        match bincode::deserialize(&encoded_data) {
-            Ok(decoded_data) => Ok(decoded_data),
-            Err(e) => Err(io::Error::new(io::ErrorKind::Other, e.to_string())),
-        }
+        bincode::deserialize(&encoded_data).map_err(|e| { io::Error::new(io::ErrorKind::Other, e.to_string()) })
     }
 
     async fn write_request<T>(
