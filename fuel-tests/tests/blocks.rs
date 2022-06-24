@@ -1,9 +1,9 @@
 use chrono::{TimeZone, Utc};
 use fuel_core::{
+    config::Config,
     database::Database,
     model::{FuelBlockDb, FuelBlockHeader},
     schema::scalars::BlockId,
-    config::Config,
     service::FuelService,
 };
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
