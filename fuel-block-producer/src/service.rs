@@ -1,5 +1,5 @@
 use crate::Config;
-use fuel_core_interfaces::{block_producer::BlockProducerMpsc, txpool::TxPoolMpsc};
+use fuel_core_interfaces::{block_producer::BlockProducerMpsc, txpool};
 use parking_lot::Mutex;
 use tokio::{sync::mpsc, task::JoinHandle};
 
@@ -17,7 +17,7 @@ impl Service {
         })
     }
 
-    pub async fn start(&self, _txpool: mpsc::Sender<TxPoolMpsc>) {
+    pub async fn start(&self, _txpool: txpool::Sender) {
         let mut join = self.join.lock();
         if join.is_none() {
             *join = Some(tokio::spawn(async {}));
