@@ -1,16 +1,17 @@
 use crate::codecs::bincode::BincodeCodec;
+use crate::gossipsub::topics::GossipTopic;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::{build_transport, P2PConfig},
-    gossipsub::messages::GossipsubMessage as FuelGossipsubMessage,
+    gossipsub::messages::GossipsubBroadcastRequest,
     peer_info::PeerInfo,
     request_response::messages::{
-        ReqResNetworkError, RequestError, RequestMessage, ResponseError, ResponseMessage,
+        RequestError, RequestMessage, ResponseChannelItem, ResponseError, ResponseMessage,
     },
 };
 use futures::prelude::*;
 use libp2p::{
-    gossipsub::{error::PublishError, MessageId, Sha256Topic, Topic},
+    gossipsub::{error::PublishError, MessageId, Topic},
     identity::Keypair,
     multiaddr::Protocol,
     request_response::RequestId,
@@ -19,10 +20,7 @@ use libp2p::{
 };
 use rand::Rng;
 use std::{collections::HashMap, error::Error};
-use tokio::sync::oneshot;
 use tracing::warn;
-
-pub type GossipTopic = Sha256Topic;
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
@@ -105,10 +103,9 @@ impl FuelP2PService {
 
     pub fn publish_message(
         &mut self,
-        topic: GossipTopic,
-        message: FuelGossipsubMessage,
+        message: GossipsubBroadcastRequest,
     ) -> Result<MessageId, PublishError> {
-        self.swarm.behaviour_mut().publish_message(topic, message)
+        self.swarm.behaviour_mut().publish_message(message)
     }
 
     pub async fn next_event(&mut self) -> FuelP2PEvent {
@@ -131,7 +128,7 @@ impl FuelP2PService {
         &mut self,
         peer_id: Option<PeerId>,
         message_request: RequestMessage,
-        tx_channel: oneshot::Sender<Result<ResponseMessage, ReqResNetworkError>>,
+        channel_item: ResponseChannelItem,
     ) -> Result<RequestId, RequestError> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
@@ -148,7 +145,7 @@ impl FuelP2PService {
         Ok(self
             .swarm
             .behaviour_mut()
-            .send_request_msg(message_request, peer_id, tx_channel))
+            .send_request_msg(message_request, peer_id, channel_item))
     }
 
     /// Sends ResponseMessage to a peer that requested the data
@@ -166,13 +163,12 @@ impl FuelP2PService {
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::request_response::messages::{RequestMessage, ResponseMessage};
-    use crate::{
-        config::P2PConfig, peer_info::PeerInfo, request_response::messages::ReqResNetworkError,
-        service::FuelP2PEvent,
-    };
+    use crate::gossipsub::topics::{GossipTopic, NEW_TX_GOSSIP_TOPIC};
+    use crate::request_response::messages::{RequestMessage, ResponseChannelItem, ResponseMessage};
+    use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
     use ctor::ctor;
     use libp2p::{gossipsub::Topic, identity::Keypair};
+    use std::collections::HashMap;
     use std::{
         net::{IpAddr, Ipv4Addr},
         time::Duration,
@@ -380,12 +376,17 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn gossipsub_exchanges_messages() {
-        use crate::gossipsub::messages::GossipsubMessage as FuelGossipsubMessage;
+        use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
         use fuel_core_interfaces::common::fuel_tx::Transaction;
+        use std::sync::Arc;
 
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
-        let topics = vec!["create_tx".into(), "send_tx".into()];
-        let selected_topic = Topic::new(format!("{}/{}", topics[0], p2p_config.network_name));
+        let topics = vec![NEW_TX_GOSSIP_TOPIC.into()];
+        let selected_topic: GossipTopic = Topic::new(format!(
+            "{}/{}",
+            NEW_TX_GOSSIP_TOPIC, p2p_config.network_name
+        ));
+
         let mut message_sent = false;
 
         // Node A
@@ -411,8 +412,8 @@ mod tests {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
                                 message_sent = true;
-                                let default_tx = FuelGossipsubMessage::NewTx(Transaction::default());
-                                node_a.publish_message(selected_topic.clone(), default_tx).unwrap();
+                                let default_tx = GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default()));
+                                node_a.publish_message(default_tx).unwrap();
                             }
                         }
                     }
@@ -426,10 +427,10 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
-                        if let FuelGossipsubMessage::NewTx(message) = message {
+                        if let GossipsubMessage::NewTx(message) = message {
                             if message != Transaction::default() {
-                                tracing::error!("Wrong p2p message, expected: {:?} - actual: {:?}", FuelGossipsubMessage::NewTx(Transaction::default()), message);
-                                panic!("Wrong Message")
+                                tracing::error!("Wrong p2p message {:?}", message);
+                                panic!("Wrong GossipsubMessage")
 
                             }
                         }
@@ -447,7 +448,9 @@ mod tests {
     #[instrument]
     async fn request_response_works() {
         use fuel_core_interfaces::common::fuel_tx::Transaction;
-        use fuel_core_interfaces::model::{FuelBlock, FuelBlockHeader};
+        use fuel_core_interfaces::model::{
+            FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock,
+        };
 
         let mut p2p_config = build_p2p_config("request_response_works");
 
@@ -487,15 +490,15 @@ mod tests {
                                 let (tx_orchestrator, rx_orchestrator) = oneshot::channel();
 
                                 let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, tx_orchestrator).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
 
                                 let tx_test_end = tx_test_end.clone();
                                 tokio::spawn(async move {
                                     // 4. Simulating NetworkOrchestrator receving a message from Node B
                                     let response_message = rx_orchestrator.await;
 
-                                    if let Ok(Ok(ResponseMessage::ResponseBlock(block))) = response_message {
-                                        let _ = tx_test_end.send(block.header.height == 0_u64.into()).await;
+                                    if let Ok(sealed_block) = response_message {
+                                        let _ = tx_test_end.send(sealed_block.header.height == 0_u64.into()).await;
                                     } else {
                                         tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                         panic!("Message not received successfully!")
@@ -516,7 +519,15 @@ mod tests {
                             transactions: vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()],
                         };
 
-                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock(block));
+                        let sealed_block = SealedFuelBlock {
+                            block,
+                            consensus: FuelBlockConsensus {
+                                required_stake: 100_000,
+                                validators: HashMap::default()
+                            }
+                        };
+
+                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock(sealed_block));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
@@ -568,7 +579,7 @@ mod tests {
 
                                 // Request successfully sent
                                 let requested_block_height = RequestMessage::RequestBlock(0_u64.into());
-                                assert!(node_a.send_request_msg(None, requested_block_height, tx_orchestrator).is_ok());
+                                assert!(node_a.send_request_msg(None, requested_block_height, ResponseChannelItem::ResponseBlock(tx_orchestrator)).is_ok());
 
                                 // 2b. there should be ONE pending outbound requests in the table
                                 assert_eq!(node_a.swarm.behaviour().get_outbound_requests_table().len(), 1);
@@ -577,7 +588,7 @@ mod tests {
 
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
-                                    if let Ok(Err(ReqResNetworkError::Timeout)) = rx_orchestrator.await {
+                                    if let Err(_) = rx_orchestrator.await {
                                         let _ = tx_test_end.send(()).await;
                                     }
                                 });
