@@ -22,6 +22,7 @@ use axum::{
 };
 use serde_json::json;
 use std::net::{SocketAddr, TcpListener};
+use tokio::signal::unix::SignalKind;
 use tokio::task::JoinHandle;
 use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
@@ -86,10 +87,35 @@ pub async fn start_server(
 }
 
 async fn shutdown_signal() {
-    // Wait for the CTRL+C signal
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install CTRL+C signal handler");
+    #[cfg(unix)]
+    {
+        let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())
+            .expect("failed to install sigterm handler");
+        let sigterm = sigterm.recv();
+
+        let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())
+            .expect("failed to install sigint handler");
+        let sigint = sigint.recv();
+
+        tokio::pin!(sigterm);
+        tokio::pin!(sigint);
+        loop {
+            tokio::select! {
+                _ = &mut sigterm => {
+                    break;
+                }
+                _ = &mut sigint => {
+                    break;
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C signal handler")
+    }
 }
 
 async fn graphql_playground() -> impl IntoResponse {
