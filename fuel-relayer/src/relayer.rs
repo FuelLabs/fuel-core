@@ -332,7 +332,11 @@ impl Relayer {
                 da_height,
                 response_channel,
             } => {
-                let res = self.queue.get_validators(da_height, self.db.as_mut()).await.ok_or_else(|| { RelayerError::ProviderError });
+                let res = self
+                    .queue
+                    .get_validators(da_height, self.db.as_mut())
+                    .await
+                    .ok_or_else(|| RelayerError::ProviderError);
                 let _ = response_channel.send(res);
             }
             RelayerEvent::GetStatus { response } => {
