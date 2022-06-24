@@ -667,30 +667,36 @@ pub mod helpers {
         }
     }
 
-    impl Storage<Bytes32, Transaction> for DummyDb {
+    impl Storage<Bytes32, Arc<Transaction>> for DummyDb {
         type Error = KvStoreError;
 
         fn insert(
             &mut self,
-            _key: &Bytes32,
-            _value: &Transaction,
-        ) -> Result<Option<Transaction>, Self::Error> {
-            unreachable!()
+            key: &Bytes32,
+            value: &Arc<Transaction>,
+        ) -> Result<Option<Arc<Transaction>>, Self::Error> {
+            Ok(self.data.lock().tx.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &Bytes32) -> Result<Option<Transaction>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &Bytes32) -> Result<Option<Arc<Transaction>>, Self::Error> {
+            Ok(self.data.lock().tx.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            _key: &Bytes32,
-        ) -> Result<Option<std::borrow::Cow<'a, Transaction>>, Self::Error> {
-            unreachable!()
+            key: &Bytes32,
+        ) -> Result<Option<std::borrow::Cow<'a, Arc<Transaction>>>, Self::Error> {
+            
+            Ok(self
+                .data
+                .lock()
+                .tx
+                .get(key)
+                .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &Bytes32) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().tx.contains_key(key))
         }
     }
     impl Storage<ContractId, Contract> for DummyDb {
