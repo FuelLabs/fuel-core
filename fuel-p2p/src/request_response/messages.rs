@@ -1,6 +1,6 @@
-use fuel_core_interfaces::model::{BlockHeight, FuelBlock};
-use libp2p::request_response::OutboundFailure;
+use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock};
 use serde::{Deserialize, Serialize};
+use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 
@@ -15,7 +15,12 @@ pub enum RequestMessage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ResponseMessage {
-    ResponseBlock(FuelBlock),
+    ResponseBlock(SealedFuelBlock),
+}
+
+#[derive(Debug)]
+pub enum ResponseChannelItem {
+    ResponseBlock(oneshot::Sender<SealedFuelBlock>),
 }
 
 #[derive(Debug)]
@@ -27,23 +32,4 @@ pub enum RequestError {
 pub enum ResponseError {
     ResponseChannelDoesNotExist,
     SendingResponseFailed,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum ReqResNetworkError {
-    DialFailure,
-    Timeout,
-    ConnectionClosed,
-    UnsupportedProtocols,
-}
-
-impl From<OutboundFailure> for ReqResNetworkError {
-    fn from(err: OutboundFailure) -> Self {
-        match err {
-            OutboundFailure::DialFailure => Self::DialFailure,
-            OutboundFailure::Timeout => Self::Timeout,
-            OutboundFailure::ConnectionClosed => Self::ConnectionClosed,
-            OutboundFailure::UnsupportedProtocols => Self::UnsupportedProtocols,
-        }
-    }
 }
