@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM lukemathwalker/cargo-chef:latest-rust-1.60 as chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.61 as chef
 WORKDIR /build/
 # hadolint ignore=DL3008
 RUN apt-get update && \
