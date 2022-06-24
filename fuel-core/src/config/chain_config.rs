@@ -1,4 +1,4 @@
-use self::serialization::{HexNumber, HexType};
+use super::serialization::{HexNumber, HexType};
 use crate::model::BlockHeight;
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
@@ -11,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
 use std::{io::ErrorKind, path::PathBuf, str::FromStr};
 
-pub mod serialization;
-
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
@@ -21,10 +19,20 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_production: ProductionStrategy,
-    pub parent_network: BaseChainConfig,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
+}
+
+impl Default for ChainConfig {
+    fn default() -> Self {
+        Self {
+            chain_name: "local".into(),
+            block_production: ProductionStrategy::Instant,
+            transaction_parameters: ConsensusParameters::DEFAULT,
+            initial_state: None,
+        }
+    }
 }
 
 impl ChainConfig {
@@ -57,7 +65,6 @@ impl ChainConfig {
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
             block_production: ProductionStrategy::Instant,
-            parent_network: BaseChainConfig::LocalTest,
             initial_state: Some(StateConfig {
                 coins: Some(initial_coins),
                 ..StateConfig::default()
@@ -97,14 +104,6 @@ pub enum ProductionStrategy {
     Manual,
     RoundRobin,
     ProofOfStake,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-#[serde(tag = "type")]
-pub enum BaseChainConfig {
-    LocalTest,
-    // TODO: determine which ethereum config values we'll need here
-    Ethereum,
 }
 
 // TODO: do streaming deserialization to handle large state configs

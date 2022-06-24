@@ -1,8 +1,11 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
+    config::{
+        chain_config::{CoinConfig, StateConfig},
+        Config,
+    },
     database::Database,
     model::{Coin, CoinStatus},
-    service::{Config, FuelService},
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,

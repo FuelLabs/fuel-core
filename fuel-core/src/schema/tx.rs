@@ -1,8 +1,8 @@
+use crate::config::Config;
 use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
 use crate::executor::Executor;
 use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
-use crate::service::Config;
 use crate::state::IterDirection;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},

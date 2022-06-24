@@ -1,12 +1,10 @@
-use crate::{chain_config::ChainConfig, database::Database};
+use crate::{
+    config::{Config, DbType},
+    database::Database,
+};
 use anyhow::Error as AnyError;
 use modules::Modules;
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    panic,
-    path::PathBuf,
-};
-use strum_macros::{Display, EnumString, EnumVariantNames};
+use std::{net::SocketAddr, panic};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
@@ -15,47 +13,6 @@ pub(crate) mod genesis;
 pub mod graph_api;
 pub mod metrics;
 pub mod modules;
-
-#[derive(Clone, Debug)]
-pub struct Config {
-    pub addr: SocketAddr,
-    pub database_path: PathBuf,
-    pub database_type: DbType,
-    pub chain_conf: ChainConfig,
-    // default to false until downstream consumers stabilize
-    pub utxo_validation: bool,
-    // default to false until predicates have fully stabilized
-    pub predicates: bool,
-    pub vm: VMConfig,
-    pub tx_pool_config: fuel_txpool::Config,
-}
-
-impl Config {
-    pub fn local_node() -> Self {
-        Self {
-            addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
-            database_path: Default::default(),
-            database_type: DbType::InMemory,
-            chain_conf: ChainConfig::local_testnet(),
-            vm: Default::default(),
-            utxo_validation: false,
-            predicates: false,
-            tx_pool_config: Default::default(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct VMConfig {
-    pub backtrace: bool,
-}
-
-#[derive(Clone, Debug, Display, PartialEq, EnumString, EnumVariantNames)]
-#[strum(serialize_all = "kebab_case")]
-pub enum DbType {
-    InMemory,
-    RocksDb,
-}
 
 pub struct FuelService {
     tasks: Vec<JoinHandle<Result<(), AnyError>>>,

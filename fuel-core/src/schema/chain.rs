@@ -1,6 +1,6 @@
 use crate::{
-    database::Database, model::FuelBlockDb, schema::block::Block, schema::scalars::U64,
-    service::Config,
+    config::Config, database::Database, model::FuelBlockDb, schema::block::Block,
+    schema::scalars::U64,
 };
 use async_graphql::{Context, Object};
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};

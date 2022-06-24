@@ -1,8 +1,8 @@
 use crate::{
     coin_query::{random_improve, SpendQueryElement},
+    config::Config,
     database::{Database, KvStoreError},
     schema::scalars::{Address, AssetId, UtxoId, U64},
-    service::Config,
     state::IterDirection,
 };
 use async_graphql::{

@@ -3,7 +3,8 @@ use fuel_core::{
     database::Database,
     model::{FuelBlockDb, FuelBlockHeader},
     schema::scalars::BlockId,
-    service::{Config, FuelService},
+    config::Config,
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
