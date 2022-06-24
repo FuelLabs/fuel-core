@@ -91,20 +91,17 @@ async fn shutdown_signal() {
     {
         let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())
             .expect("failed to install sigterm handler");
-        let sigterm = sigterm.recv();
 
         let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())
             .expect("failed to install sigint handler");
-        let sigint = sigint.recv();
-
-        tokio::pin!(sigterm);
-        tokio::pin!(sigint);
         loop {
             tokio::select! {
-                _ = &mut sigterm => {
+                _ = sigterm.recv() => {
+                    info!("sigterm received");
                     break;
                 }
-                _ = &mut sigint => {
+                _ = sigint.recv() => {
+                    info!("sigint received");
                     break;
                 }
             }
@@ -114,7 +111,8 @@ async fn shutdown_signal() {
     {
         tokio::signal::ctrl_c()
             .await
-            .expect("failed to install CTRL+C signal handler")
+            .expect("failed to install CTRL+C signal handler");
+        info!("CTRL+C received");
     }
 }
 
