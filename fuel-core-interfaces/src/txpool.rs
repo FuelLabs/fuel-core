@@ -3,13 +3,13 @@ use crate::{
     model::Coin,
     model::TxInfo,
 };
-use async_trait::async_trait;
 use fuel_storage::Storage;
 use fuel_tx::{ContractId, UtxoId};
 use fuel_tx::{Transaction, TxId};
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::oneshot;
 
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
@@ -26,61 +26,66 @@ pub trait TxPoolDb:
     }
 }
 
-/// Subscriber interface that receive inserted/removed events from txpool.
-/// Usually needed for libp2p broadcasting and can be used to notify users of new tx.
-#[async_trait]
-pub trait Subscriber: Send + Sync {
-    async fn inserted(&self, tx: Arc<Transaction>);
-
-    async fn inserted_on_block_revert(&self, tx: Arc<Transaction>);
-
-    async fn removed(&self, tx: Arc<Transaction>, error: &Error);
-}
-
-#[async_trait]
-pub trait TxPool: Send + Sync {
+#[derive(Debug)]
+pub enum TxPoolMpsc {
+    /// Return all sorted transactions that are includable in next block.
+    /// This is going to be heavy operation, use it only when needed.
+    Includable {
+        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+    },
     /// import list of transaction into txpool. All needed parents need to be known
     /// and parent->child order should be enforced in Vec, we will not do that check inside
     /// txpool and will just drop child and include only parent. Additional restrain is that
     /// child gas_price needs to be lower then parent gas_price. Transaction can be received
     /// from p2p **RespondTransactions** or from userland. Because of userland we are returning
     /// error for every insert for better user experience.
-    async fn insert(&self, tx: Vec<Arc<Transaction>>)
-        -> Vec<anyhow::Result<Vec<Arc<Transaction>>>>;
-
+    Insert {
+        txs: Vec<Arc<Transaction>>,
+        response: oneshot::Sender<Vec<anyhow::Result<Vec<Arc<Transaction>>>>>,
+    },
     /// find all tx by their hash
-    async fn find(&self, hashes: &[TxId]) -> Vec<Option<TxInfo>>;
-
+    Find {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<Option<TxInfo>>>,
+    },
     /// find one tx by its hash
-    async fn find_one(&self, hash: &TxId) -> Option<TxInfo>;
-
+    FindOne {
+        id: TxId,
+        response: oneshot::Sender<Option<TxInfo>>,
+    },
     /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
-    async fn find_dependent(&self, hashes: &[TxId]) -> Vec<Arc<Transaction>>;
-
+    FindDependent {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+    },
+    /// remove transaction from pool needed on user demand. Low priority
+    Remove { ids: Vec<TxId> },
     /// Iterete over `hashes` and return all hashes that we dont have.
     /// Needed when we receive list of new hashed from peer with
     /// **BroadcastTransactionHashes**, so txpool needs to return
     /// tx that we dont have, and request them from that particular peer.
-    async fn filter_by_negative(&self, hashes: &[TxId]) -> Vec<TxId>;
+    FilterByNegative {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<TxId>>,
+    },
+    /// stop txpool
+    Stop,
+}
 
-    /// Return all sorted transactions that are includable in next block.
-    /// This is going to be heavy operation, use it with only when needed.
-    async fn includable(&self) -> Vec<Arc<Transaction>>;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TxStatus {
+    /// Submitted into txpool.
+    Submitted,
+    /// Executed in fuel block.
+    Executed,
+    /// removed from txpool.
+    SqueezedOut { reason: Error },
+}
 
-    /// When block is updated we need to receive all spend outputs and remove them from txpool
-    /// There is three posibilities here. New Block is added or block is reverted/slashed from
-    ///  chain or both. When new block is added we need to remove transactions from pool.
-    /// Un case of block reverting we need to reinsert transaction in pool. What usually happens
-    /// with reorg is that one block get reverted and one new gets add, in that sense it is highly
-    /// probably that a lof of transactions that got reverted are going to be reinserted in new block.
-    /// That explains why we have only one function and it contains two list of reverted/inserted
-    /// transactions
-    async fn block_update(&self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/);
-
-    /// remove transaction from pool needed on user demand. Low priority
-    async fn remove(&self, hashes: &[TxId]);
-
-    async fn subscribe(&self, sub: Arc<dyn Subscriber>);
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TxStatusBroadcast {
+    pub tx: Arc<Transaction>,
+    pub status: TxStatus,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

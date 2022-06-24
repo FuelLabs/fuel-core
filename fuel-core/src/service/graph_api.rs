@@ -37,7 +37,7 @@ pub async fn start_server(
     let schema = build_schema()
         .data(config)
         .data(db)
-        .data(modules.tx_pool.clone())
+        .data(modules.txpool.clone())
         .data(modules.block_importer.clone())
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())
