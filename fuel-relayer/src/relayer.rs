@@ -336,7 +336,7 @@ impl Relayer {
                     .queue
                     .get_validators(da_height, self.db.as_mut())
                     .await
-                    .ok_or_else(|| RelayerError::ProviderError);
+                    .ok_or(RelayerError::ProviderError);
                 let _ = response_channel.send(res);
             }
             RelayerEvent::GetStatus { response } => {
