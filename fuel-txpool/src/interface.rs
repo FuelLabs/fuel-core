@@ -23,15 +23,14 @@ impl Interface {
         loop {
             tokio::select! {
                 event = receiver.recv() => {
-                    let event = event.unwrap();
-                    if matches!(event,TxPoolMpsc::Stop) {
+                    if matches!(event,Some(TxPoolMpsc::Stop) | None) {
                         break;
                     }
                     let interface = self.clone();
 
                     // this is litlle bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
-                    match event {
+                    match event.unwrap() {
                         TxPoolMpsc::Includable { response } => {
                             let _ = response.send(interface.includable().await);
                         }

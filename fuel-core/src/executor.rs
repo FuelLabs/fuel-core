@@ -48,6 +48,7 @@ pub struct Executor {
 }
 
 impl Executor {
+    #[tracing::instrument(skip(self))]
     pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
         let db = self.database.clone();
 
@@ -75,6 +76,7 @@ impl Executor {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error> {
         // Compute the block id before execution, if mode is set to production just use zeroed id.
         let pre_exec_block_id = match mode {

@@ -29,6 +29,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-hel
 fuel-crypto = { version = "0.5", features = ["random"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-txpool = { path = "../fuel-txpool" }
+futures = "0.3"
 insta = "1.8"
 itertools = "0.10"
 rand = "0.8"
