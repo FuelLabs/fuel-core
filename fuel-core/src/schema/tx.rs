@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use types::Transaction;
 
 pub mod input;
@@ -254,7 +254,9 @@ impl TxQuery {
 }
 
 #[derive(Default)]
-pub struct TxMutation;
+pub struct TxMutation {
+    block_production_lock: Mutex<()>,
+}
 
 #[Object]
 impl TxMutation {
@@ -297,6 +299,9 @@ impl TxMutation {
         let cfg = ctx.data_unchecked::<Config>().clone();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();
+
+        // only allow one block to be produced at a time
+        let _block_production_guard = self.block_production_lock.lock().await;
 
         let includable = if cfg.utxo_validation {
             // include transaction
