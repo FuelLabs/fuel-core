@@ -305,30 +305,16 @@ impl TxMutation {
 
         let includable = if cfg.utxo_validation {
             // include transaction
-            let (response, receiver) = oneshot::channel();
-            let _ = txpool
-                .sender()
-                .send(TxPoolMpsc::Insert {
-                    txs: vec![Arc::new(tx.clone())],
-                    response,
-                })
-                .await;
-            receiver.await?.get(0).unwrap().as_ref()?;
+            let ret = txpool.sender().insert(vec![Arc::new(tx.clone())]).await?;
+            ret.get(0).unwrap().as_ref()?;
 
             // get includable transactions
-            let (response, receiver) = oneshot::channel();
-            let _ = txpool
-                .sender()
-                .send(TxPoolMpsc::Includable { response })
-                .await;
-            let txs = receiver.await?;
+            let txs = txpool.sender().includable().await?;
 
-            // remove transaction
-            let _ = txpool
+            txpool
                 .sender()
-                .send(TxPoolMpsc::Remove { ids: vec![tx.id()] })
-                .await;
-
+                .remove(txs.iter().map(|tx| tx.id()).collect())
+                .await?;
             txs
         } else {
             vec![Arc::new(tx.clone())]

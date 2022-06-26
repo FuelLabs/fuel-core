@@ -1,6 +1,6 @@
 use crate::{interface::Interface, Config};
 use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::txpool::{TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use fuel_core_interfaces::txpool::{Sender, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::task::JoinHandle;
@@ -8,7 +8,7 @@ use tracing::warn;
 
 pub struct Service {
     interface: Arc<Interface>,
-    sender: mpsc::Sender<TxPoolMpsc>,
+    sender: Sender,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
     join: Mutex<Option<JoinHandle<mpsc::Receiver<TxPoolMpsc>>>>,
     receiver: Arc<Mutex<Option<mpsc::Receiver<TxPoolMpsc>>>>,
@@ -20,7 +20,7 @@ impl Service {
         let (broadcast, _receiver) = broadcast::channel(100);
         Ok(Self {
             interface: Arc::new(Interface::new(db, broadcast.clone(), config)),
-            sender,
+            sender: Sender::new(sender),
             broadcast,
             join: Mutex::new(None),
             receiver: Arc::new(Mutex::new(Some(receiver))),
@@ -64,7 +64,7 @@ impl Service {
         self.broadcast.subscribe()
     }
 
-    pub fn sender(&self) -> &mpsc::Sender<TxPoolMpsc> {
+    pub fn sender(&self) -> &Sender {
         &self.sender
     }
 }

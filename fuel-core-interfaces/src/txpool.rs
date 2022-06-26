@@ -3,13 +3,14 @@ use crate::{
     model::Coin,
     model::TxInfo,
 };
+use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
 use fuel_tx::{ContractId, UtxoId};
 use fuel_tx::{Transaction, TxId};
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
@@ -23,6 +24,65 @@ pub trait TxPoolDb:
 
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
         Storage::<ContractId, Contract>::contains_key(self, &contract_id)
+    }
+}
+
+#[derive(Clone, Deref, DerefMut)]
+pub struct Sender(mpsc::Sender<TxPoolMpsc>);
+
+impl Sender {
+    pub fn new(sender: mpsc::Sender<TxPoolMpsc>) -> Self {
+        Self(sender)
+    }
+
+    pub async fn insert(
+        &self,
+        txs: Vec<Arc<Transaction>>,
+    ) -> Result<Vec<anyhow::Result<Vec<Arc<Transaction>>>>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::Insert { txs, response }).await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find(&self, ids: Vec<TxId>) -> Result<Vec<Option<TxInfo>>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.send(TxPoolMpsc::Find { ids, response }).await;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find_one(&self, id: TxId) -> Result<Option<TxInfo>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.send(TxPoolMpsc::FindOne { id, response }).await;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn find_dependent(
+        &self,
+        ids: Vec<TxId>,
+    ) -> Result<Vec<Arc<Transaction>>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.send(TxPoolMpsc::FindDependent { ids, response }).await;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> Result<Vec<TxId>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self
+            .send(TxPoolMpsc::FilterByNegative { ids, response })
+            .await;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn includable(&self) -> Result<Vec<Arc<Transaction>>, anyhow::Error> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.send(TxPoolMpsc::Includable { response }).await;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub async fn remove(&self, ids: Vec<TxId>) -> Result<(), anyhow::Error> {
+        self.send(TxPoolMpsc::Remove { ids })
+            .await
+            .map_err(Into::into)
     }
 }
 
