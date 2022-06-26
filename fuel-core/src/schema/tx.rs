@@ -21,7 +21,7 @@ use std::borrow::Cow;
 use std::iter;
 use std::ops::Deref;
 use std::sync::Arc;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use types::Transaction;
 
 pub mod input;
@@ -254,7 +254,9 @@ impl TxQuery {
 }
 
 #[derive(Default)]
-pub struct TxMutation;
+pub struct TxMutation {
+    block_production_lock: Mutex<()>,
+}
 
 #[Object]
 impl TxMutation {
@@ -298,32 +300,21 @@ impl TxMutation {
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();
 
+        // only allow one block to be produced at a time
+        let _block_production_guard = self.block_production_lock.lock().await;
+
         let includable = if cfg.utxo_validation {
             // include transaction
-            let (response, receiver) = oneshot::channel();
-            let _ = txpool
-                .sender()
-                .send(TxPoolMpsc::Insert {
-                    txs: vec![Arc::new(tx.clone())],
-                    response,
-                })
-                .await;
-            receiver.await?.get(0).unwrap().as_ref()?;
+            let ret = txpool.sender().insert(vec![Arc::new(tx.clone())]).await?;
+            ret.get(0).unwrap().as_ref()?;
 
             // get includable transactions
-            let (response, receiver) = oneshot::channel();
-            let _ = txpool
-                .sender()
-                .send(TxPoolMpsc::Includable { response })
-                .await;
-            let txs = receiver.await?;
+            let txs = txpool.sender().includable().await?;
 
-            // remove transaction
-            let _ = txpool
+            txpool
                 .sender()
-                .send(TxPoolMpsc::Remove { ids: vec![tx.id()] })
-                .await;
-
+                .remove(txs.iter().map(|tx| tx.id()).collect())
+                .await?;
             txs
         } else {
             vec![Arc::new(tx.clone())]
