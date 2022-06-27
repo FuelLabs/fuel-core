@@ -1,13 +1,10 @@
 use clap::Parser;
 use fuel_core::config::{Config, DbType, VMConfig};
-#[cfg(feature = "rocksdb")]
 use fuel_core::{
     config::chain_config::{ChainConfig, StateConfig},
     database::Database,
 };
-#[cfg(feature = "rocksdb")]
-use std::io::Write;
-use std::{env, io, net, path::PathBuf, str::FromStr};
+use std::{env, io, io::Write, net, path::PathBuf, str::FromStr};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -26,7 +23,6 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
     rename_all = "kebab-case"
 )]
 pub struct Opt {
-    #[cfg(feature = "rocksdb")]
     #[clap(subcommand)]
     pub _snapshot: Option<Snapshot>,
 
@@ -74,7 +70,6 @@ pub struct Opt {
     pub predicates: bool,
 }
 
-#[cfg(feature = "rocksdb")]
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum Snapshot {
     Snapshot(SnapshotCommand),
@@ -88,7 +83,6 @@ impl Snapshot {
     }
 }
 
-#[cfg(feature = "rocksdb")]
 #[derive(Debug, Clone, Parser)]
 pub struct SnapshotCommand {
     #[clap(
@@ -193,8 +187,11 @@ impl Opt {
     }
 }
 
-#[cfg(feature = "rocksdb")]
 pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
+    #[cfg(not(feature = "rocksdb"))]
+    {
+        anyhow!("Rocks-db not enabled, Snapshot failed");
+    }
     let db = Database::open(&path)?;
 
     let state_conf = StateConfig::generate_state_config(db);
