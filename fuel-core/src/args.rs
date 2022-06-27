@@ -5,7 +5,9 @@ use fuel_core::{
     config::chain_config::{ChainConfig, StateConfig},
     database::Database,
 };
-use std::{env, io, io::Write, net, path::PathBuf, str::FromStr};
+#[cfg(feature = "rocksdb")]
+use std::io::Write;
+use std::{env, io, net, path::PathBuf, str::FromStr};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
