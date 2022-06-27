@@ -378,7 +378,7 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    if: github.ref == 'elliot/update-ci-workflow'
+    # if: github.ref == 'elliot/update-ci-workflow'
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
