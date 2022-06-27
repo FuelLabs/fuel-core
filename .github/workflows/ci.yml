@@ -397,11 +397,9 @@ jobs:
           repo: FuelLabs/fuel-deployment
           ref: refs/heads/master
           token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.TAG }}", "image-tag": "${{ env.SHA }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
         env:
           K8S: "eks"
           CONFIG: "fuel-dev1"
           ENV: "fueldevsway.env"
-          TAG: ${{ env.FUEL_CORE_TAG }}
-          SHA: ${{ env.FUEL_CORE_TAG }}
           DELETE_INFRA: true
