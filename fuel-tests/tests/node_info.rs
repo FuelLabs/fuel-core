@@ -1,4 +1,4 @@
-use fuel_core::service::{Config, FuelService};
+use fuel_core::{config::Config, service::FuelService};
 use fuel_gql_client::client::{schema::node_info::NodeInfo, FuelClient};
 
 #[tokio::test]
@@ -21,14 +21,8 @@ async fn node_info() {
     assert_eq!(utxo_validation, node_config.utxo_validation);
     assert_eq!(predicates, node_config.predicates);
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
-    assert_eq!(
-        min_gas_price,
-        node_config.tx_pool_config.min_gas_price.into()
-    );
-    assert_eq!(
-        min_byte_price,
-        node_config.tx_pool_config.min_byte_price.into()
-    );
-    assert_eq!(max_depth, node_config.tx_pool_config.max_depth.into());
-    assert_eq!(max_tx, node_config.tx_pool_config.max_tx.into());
+    assert_eq!(min_gas_price, node_config.txpool.min_gas_price.into());
+    assert_eq!(min_byte_price, node_config.txpool.min_byte_price.into());
+    assert_eq!(max_depth, node_config.txpool.max_depth.into());
+    assert_eq!(max_tx, node_config.txpool.max_tx.into());
 }

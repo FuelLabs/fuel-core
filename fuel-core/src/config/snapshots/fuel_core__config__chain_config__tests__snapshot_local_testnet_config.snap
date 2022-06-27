@@ -1,14 +1,10 @@
 ---
-source: fuel-core/src/chain_config.rs
-assertion_line: 193
+source: fuel-core/src/config/chain_config.rs
 expression: json
 ---
 {
   "chain_name": "local_testnet",
   "block_production": "Instant",
-  "parent_network": {
-    "type": "LocalTest"
-  },
   "initial_state": {
     "coins": [
       {

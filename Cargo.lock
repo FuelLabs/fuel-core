@@ -2101,6 +2101,7 @@ dependencies = [
  "fuel-block-producer",
  "fuel-core-bft",
  "fuel-core-interfaces",
+ "fuel-relayer",
  "fuel-sync",
  "fuel-txpool",
  "futures",

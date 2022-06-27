@@ -1,5 +1,8 @@
-use fuel_core::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
-use fuel_core::service::{Config, FuelService};
+use fuel_core::config::{
+    chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
+    Config,
+};
+use fuel_core::service::FuelService;
 use fuel_core_interfaces::common::{fuel_tx::Transaction, fuel_vm::prelude::*};
 use fuel_gql_client::client::FuelClient;
 use itertools::Itertools;
@@ -112,7 +115,7 @@ impl TestSetupBuilder {
         let config = Config {
             utxo_validation: true,
             predicates: self.predicates,
-            tx_pool_config: fuel_txpool::Config {
+            txpool: fuel_txpool::Config {
                 min_byte_price: self.min_byte_price,
                 min_gas_price: self.min_gas_price,
                 ..Default::default()

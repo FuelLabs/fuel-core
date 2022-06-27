@@ -1,6 +1,9 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    service::{Config, FuelService},
+    config::{
+        chain_config::{CoinConfig, StateConfig},
+        Config,
+    },
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{fuel_tx::AssetId, fuel_vm::prelude::Address};
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};

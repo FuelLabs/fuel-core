@@ -1,24 +1,15 @@
 ---
-source: fuel-core/src/chain_config.rs
-assertion_line: 282
+source: fuel-core/src/config/chain_config.rs
 expression: json
 ---
 {
   "chain_name": "local_testnet",
   "block_production": "Instant",
-  "parent_network": {
-    "type": "LocalTest"
-  },
   "initial_state": {
-    "coins": [
+    "contracts": [
       {
-        "tx_id": "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
-        "output_index": "0xe46d13fb359a76c9",
-        "block_created": "0x000000007f55f4a4",
-        "maturity": "0x0000000063f8fe17",
-        "owner": "0xa2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00a3f57027",
-        "amount": "0x0d1865b14bc80dbc",
-        "asset_id": "0x0d053242a9719dca480b4f4910fa60671f2068086498c72e30fc8b969e083932"
+        "code": "0x24400000",
+        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
       }
     ]
   },

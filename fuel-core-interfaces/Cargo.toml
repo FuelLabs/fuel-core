@@ -16,7 +16,7 @@ async-trait = "0.1"
 chrono = { version = "0.4" }
 derive_more = { version = "0.99" }
 fuel-asm = "0.5"
-fuel-crypto = { version = "0.5", default-features = false, features = [ "random" ]}
+fuel-crypto = { version = "0.5", default-features = false, features = [ "random" ] }
 fuel-merkle = { version = "0.2" }
 fuel-storage = "0.1"
 fuel-tx = { version = "0.13", default-features = false }
