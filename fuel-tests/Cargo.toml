@@ -16,6 +16,7 @@ name = "integration_tests"
 path = "tests/lib.rs"
 harness = true
 
+
 [[test]]
 name = "metrics_test"
 path = "tests/metrics.rs"
