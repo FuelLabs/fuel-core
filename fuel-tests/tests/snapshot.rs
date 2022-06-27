@@ -196,8 +196,6 @@ async fn snapshot_command() {
 
     assert!(snapshot_config.initial_state.is_some());
 
-    println!("{:?}", snapshot_config);
-
     drop(tmp_file);
     tmp_dir.close().unwrap();
 }

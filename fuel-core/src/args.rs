@@ -1,11 +1,17 @@
+#[cfg(not(feature = "rocksdb"))]
 use anyhow::anyhow;
+#[cfg(feature = "rocksdb")]
+use std::io::Write;
+
+#[cfg(feature = "rocksdb")]
+use fuel_core::database::Database;
+
 use clap::Parser;
+use fuel_core::config::chain_config::ChainConfig;
+#[cfg(feature = "rocksdb")]
+use fuel_core::config::chain_config::StateConfig;
 use fuel_core::config::{Config, DbType, VMConfig};
-use fuel_core::{
-    config::chain_config::{ChainConfig, StateConfig},
-    database::Database,
-};
-use std::{env, io, io::Write, net, path::PathBuf, str::FromStr};
+use std::{env, io, net, path::PathBuf, str::FromStr};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -173,7 +179,7 @@ impl Opt {
     }
 }
 
-pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
+pub fn dump_snapshot(path: PathBuf, _config: ChainConfig) -> anyhow::Result<()> {
     #[cfg(not(feature = "rocksdb"))]
     {
         Err(anyhow!(
@@ -189,10 +195,10 @@ pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
         let state_conf = StateConfig::generate_state_config(db);
 
         let chain_conf = ChainConfig {
-            chain_name: config.chain_name,
-            block_production: config.block_production,
+            chain_name: _config.chain_name,
+            block_production: _config.block_production,
             initial_state: Some(state_conf),
-            transaction_parameters: config.transaction_parameters,
+            transaction_parameters: _config.transaction_parameters,
         };
 
         let serialized = serde_json::to_string(&chain_conf).unwrap();
