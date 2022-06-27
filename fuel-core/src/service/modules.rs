@@ -1,22 +1,17 @@
-use super::Config;
+use crate::config::Config;
 use crate::database::Database;
 use anyhow::Result;
-use fuel_block_importer::{Config as FuelBlockImporterConfig, Service as FuelBlockImporterService};
-use fuel_block_producer::{Config as FuelBlockProducerConfig, Service as FuelBlockProducerService};
-use fuel_core_bft::{Config as FuelCoreBftConfig, Service as FuelCoreBftService};
 use fuel_core_interfaces::txpool::TxPoolDb;
-use fuel_sync::{Config as FuelSyncConfig, Service as FuelSyncService};
-use fuel_txpool::Service as FuelTxPoolService;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
 pub struct Modules {
-    pub txpool: Arc<FuelTxPoolService>,
-    pub block_importer: Arc<FuelBlockImporterService>,
-    pub block_producer: Arc<FuelBlockProducerService>,
-    pub bft: Arc<FuelCoreBftService>,
-    pub sync: Arc<FuelSyncService>,
+    pub txpool: Arc<fuel_txpool::Service>,
+    pub block_importer: Arc<fuel_block_importer::Service>,
+    pub block_producer: Arc<fuel_block_producer::Service>,
+    pub bft: Arc<fuel_core_bft::Service>,
+    pub sync: Arc<fuel_sync::Service>,
 }
 
 impl Modules {
@@ -39,17 +34,15 @@ impl Modules {
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
     // Initialize and bind all components
-    let block_importer =
-        FuelBlockImporterService::new(&FuelBlockImporterConfig::default(), db).await?;
-    let block_producer =
-        FuelBlockProducerService::new(&FuelBlockProducerConfig::default(), db).await?;
-    let bft = FuelCoreBftService::new(&FuelCoreBftConfig::default(), db).await?;
-    let sync = FuelSyncService::new(&FuelSyncConfig::default()).await?;
+    let block_importer = fuel_block_importer::Service::new(&config.block_importer, db).await?;
+    let block_producer = fuel_block_producer::Service::new(&config.block_producer, db).await?;
+    let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
+    let sync = fuel_sync::Service::new(&config.sync).await?;
     // let mut relayer = FuelRelayer::new(FuelRelayerConfig::default());
     // let mut p2p = FuelP2P::new(FuelP2PConfig::default());
-    let txpool = FuelTxPoolService::new(
+    let txpool = fuel_txpool::Service::new(
         Box::new(database.clone()) as Box<dyn TxPoolDb>,
-        config.tx_pool_config.clone(),
+        config.txpool.clone(),
     )?;
 
     let p2p_mpsc = ();

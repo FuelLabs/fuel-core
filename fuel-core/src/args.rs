@@ -1,13 +1,12 @@
 use clap::Parser;
-use fuel_core::service::{Config, DbType, VMConfig};
+use fuel_core::config::{Config, DbType, VMConfig};
 #[cfg(feature = "rocksdb")]
 use fuel_core::{
-    chain_config::{ChainConfig, StateConfig},
+    config::chain_config::{ChainConfig, StateConfig},
     database::Database,
 };
 #[cfg(feature = "rocksdb")]
-use std::io::Write;
-use std::{env, io, net, path::PathBuf, str::FromStr};
+use std::{env, io, io::Write, net, path::PathBuf, str::FromStr};
 use strum::VariantNames;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -178,12 +177,17 @@ impl Opt {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            tx_pool_config: fuel_txpool::Config {
+            txpool: fuel_txpool::Config {
                 min_gas_price,
                 min_byte_price,
                 ..Default::default()
             },
             predicates,
+            block_importer: Default::default(),
+            block_producer: Default::default(),
+            block_executor: Default::default(),
+            bft: Default::default(),
+            sync: Default::default(),
         })
     }
 }
@@ -197,7 +201,6 @@ pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
     let chain_conf = ChainConfig {
         chain_name: config.chain_name,
         block_production: config.block_production,
-        parent_network: config.parent_network,
         initial_state: Some(state_conf),
         transaction_parameters: config.transaction_parameters,
     };

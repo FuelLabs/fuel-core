@@ -31,7 +31,7 @@ pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// number of da blocks between after which deposits/stakes/validators become finalized
+    /// number of da block after which deposits/stakes/validators become finalized
     pub da_finalization: DaBlockHeight,
     /// uri address to ethereum client
     pub eth_client: String,

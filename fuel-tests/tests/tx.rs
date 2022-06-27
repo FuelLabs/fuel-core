@@ -1,10 +1,11 @@
 use crate::helpers::TestContext;
 use chrono::Utc;
 use fuel_core::{
+    config::Config,
     database::Database,
     executor::{ExecutionMode, Executor},
     model::{FuelBlock, FuelBlockHeader},
-    service::{Config, FuelService},
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{
     fuel_tx,

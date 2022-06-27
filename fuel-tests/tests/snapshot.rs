@@ -1,11 +1,13 @@
 use crate::helpers::create_contract;
 use async_std::task;
 use escargot::CargoBuild;
-use fuel_core::chain_config::{ChainConfig, StateConfig};
 use fuel_core::database::Database;
 use fuel_core::{
-    chain_config::{CoinConfig, ContractConfig},
-    service::{Config, FuelService},
+    config::{
+        chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
+        Config,
+    },
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{
     fuel_types::{Address, Bytes32, Salt},

@@ -1,7 +1,7 @@
 use crate::{
+    config::Config,
     database::{transaction::TransactionIndex, Database, KvStoreError},
     model::{BlockHeight, Coin, CoinStatus, FuelBlock, FuelBlockDb},
-    service::Config,
     tx_pool::TransactionStatus,
 };
 use chrono::Utc;
