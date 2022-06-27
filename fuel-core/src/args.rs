@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Parser;
 use fuel_core::config::{Config, DbType, VMConfig};
 use fuel_core::{
@@ -75,7 +76,6 @@ pub enum Snapshot {
     Snapshot(SnapshotCommand),
 }
 
-#[cfg(feature = "rocksdb")]
 impl Snapshot {
     pub fn get_args(self) -> Result<SnapshotCommand, anyhow::Error> {
         let Snapshot::Snapshot(cmd) = self;
@@ -134,7 +134,6 @@ impl Opt {
                 .init();
         }
 
-        #[cfg(feature = "rocksdb")]
         let Opt {
             ip,
             port,
@@ -147,19 +146,6 @@ impl Opt {
             min_byte_price,
             predicates,
             _snapshot,
-        } = self;
-        #[cfg(not(feature = "rocksdb"))]
-        let Opt {
-            ip,
-            port,
-            database_path,
-            database_type,
-            chain_config,
-            vm_backtrace,
-            utxo_validation,
-            min_gas_price,
-            min_byte_price,
-            predicates,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -190,23 +176,30 @@ impl Opt {
 pub fn dump_snapshot(path: PathBuf, config: ChainConfig) -> anyhow::Result<()> {
     #[cfg(not(feature = "rocksdb"))]
     {
-        anyhow!("Rocks-db not enabled, Snapshot failed");
+        Err(anyhow!(
+            "Rocksdb must be enabled to use the database at {}",
+            path.display()
+        ))
     }
-    let db = Database::open(&path)?;
 
-    let state_conf = StateConfig::generate_state_config(db);
+    #[cfg(feature = "rocksdb")]
+    {
+        let db = Database::open(&path)?;
 
-    let chain_conf = ChainConfig {
-        chain_name: config.chain_name,
-        block_production: config.block_production,
-        initial_state: Some(state_conf),
-        transaction_parameters: config.transaction_parameters,
-    };
+        let state_conf = StateConfig::generate_state_config(db);
 
-    let serialized = serde_json::to_string(&chain_conf).unwrap();
-    let mut stdout = io::stdout().lock();
+        let chain_conf = ChainConfig {
+            chain_name: config.chain_name,
+            block_production: config.block_production,
+            initial_state: Some(state_conf),
+            transaction_parameters: config.transaction_parameters,
+        };
 
-    stdout.write_all(serialized.as_bytes())?;
+        let serialized = serde_json::to_string(&chain_conf).unwrap();
+        let mut stdout = io::stdout().lock();
 
-    Ok(())
+        stdout.write_all(serialized.as_bytes())?;
+
+        Ok(())
+    }
 }
