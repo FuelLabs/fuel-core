@@ -169,7 +169,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-
     steps:
       # This is a way to make this job run after publish-crates even if it's skipped on master or pr branches
       # https://stackoverflow.com/a/69252812/680811
@@ -227,13 +226,6 @@ jobs:
           notify_when: "failure"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
-
-      - name: Set Environment Variables
-        run: |
-          echo "Tags: ${{ steps.meta.outputs.tags }}"
-          echo "Version: ${{ steps.meta.outputs.version }}"
-          echo "FUEL_CORE_TAG=$(echo ${{ steps.meta.outputs.tags }} | cut -d':' -f2)" >> $GITHUB_ENV
-          echo "FUEL_CORE_VERSION=$(echo ${{ steps.meta.outputs.version }} )" >> $GITHUB_ENV
 
   publish-fuel-core-binary:
     name: Release fuel-core binaries
@@ -390,6 +382,12 @@ jobs:
       - publish-docker-image
     runs-on: ubuntu-latest
     steps:
+      - name: Set Environment Variables
+        run: |
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
+          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+
       - name: Deploy Fuel-Core Developer Environment
         uses: benc-uk/workflow-dispatch@v1
         with:
@@ -397,11 +395,9 @@ jobs:
           repo: FuelLabs/fuel-deployment
           ref: refs/heads/master
           token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.TAG }}", "image-tag": "${{ env.SHA }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
         env:
           K8S: "eks"
           CONFIG: "fuel-dev1"
           ENV: "fueldevsway.env"
-          TAG: ${{ env.FUEL_CORE_TAG }}
-          SHA: ${{ env.FUEL_CORE_TAG }}
           DELETE_INFRA: true
