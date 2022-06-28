@@ -54,10 +54,7 @@ lazy_static = "1.4"
 prometheus = { version = "0.13", optional = true }
 rand = "0.8"
 rocksdb = { version = "0.18", default-features = false, features = [
-    "zlib",
-    "zstd",
     "lz4",
-    "snappy",
     "multi-threaded-cf",
     "jemalloc"
 ], optional = true }

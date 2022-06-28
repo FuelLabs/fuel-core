@@ -3573,7 +3573,6 @@ dependencies = [
  "libc",
  "libz-sys",
  "tikv-jemalloc-sys",
- "zstd-sys",
 ]
 
 [[package]]
@@ -6934,14 +6933,4 @@ dependencies = [
  "quote",
  "syn",
  "synstructure",
-]
-
-[[package]]
-name = "zstd-sys"
-version = "1.6.3+zstd.1.5.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc49afa5c8d634e75761feda8c592051e7eeb4683ba827211eb0d731d3402ea8"
-dependencies = [
- "cc",
- "libc",
 ]
