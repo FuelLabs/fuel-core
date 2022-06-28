@@ -154,7 +154,7 @@ async fn snapshot_command() {
         .spawn()
         .unwrap();
 
-    task::sleep(Duration::from_secs(5)).await;
+    task::sleep(Duration::from_secs(3)).await;
 
     let client = FuelClient::new(format!("http://127.0.0.1:{}", port)).unwrap();
     let tx = TxBuilder::new(2322u64)
@@ -182,7 +182,7 @@ async fn snapshot_command() {
         .unwrap()
         .command();
 
-    task::sleep(Duration::from_secs(5)).await;
+    task::sleep(Duration::from_secs(3)).await;
 
     let output = snapshot_cmd
         .arg("snapshot")
@@ -195,6 +195,38 @@ async fn snapshot_command() {
         serde_json::from_str(std::str::from_utf8(&output.stdout).unwrap()).unwrap();
 
     assert!(snapshot_config.initial_state.is_some());
+
+    drop(tmp_file);
+    tmp_dir.close().unwrap();
+}
+
+#[tokio::test]
+async fn snapshot_command_negative_test() {
+    let tmp_dir = TempDir::new("test").unwrap();
+    let tmp_path = tmp_dir.path().to_owned();
+    let file_path = tmp_dir.path().join("chain_conf.json");
+    let mut tmp_file = File::create(file_path.clone()).unwrap();
+
+    let mut snapshot_cmd = CargoBuild::new()
+        .bin("fuel-core")
+        .manifest_path("../fuel-core/Cargo.toml")
+        .current_release()
+        .current_target()
+        .no_default_features()
+        .run()
+        .unwrap()
+        .command();
+
+    task::sleep(Duration::from_secs(5)).await;
+
+    let output = snapshot_cmd
+        .arg("snapshot")
+        .arg("--db-path")
+        .arg(tmp_path.clone())
+        .output()
+        .unwrap();
+
+    assert!(output.status.code().unwrap() > 0);
 
     drop(tmp_file);
     tmp_dir.close().unwrap();
