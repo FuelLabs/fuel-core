@@ -385,7 +385,7 @@ jobs:
     steps:
       - name: Set Environment Variables
         run: |
-          tag = (`echo $GITHUB_SHA | cut -c1-7`)
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
           echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
