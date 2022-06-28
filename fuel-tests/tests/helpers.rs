@@ -155,29 +155,3 @@ impl Default for TestSetupBuilder {
         }
     }
 }
-
-pub fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
-    let salt: Salt = rng.gen();
-    let contract = Contract::from(contract_code.clone());
-    let root = contract.root();
-    let state_root = Contract::default_state_root();
-    let contract_id = contract.id(&salt, &root, &state_root);
-
-    let tx = Transaction::create(
-        0,
-        0,
-        0,
-        0,
-        0,
-        salt,
-        vec![],
-        vec![],
-        vec![],
-        vec![Output::ContractCreated {
-            contract_id,
-            state_root,
-        }],
-        vec![contract_code.into()],
-    );
-    (tx, contract_id)
-}
