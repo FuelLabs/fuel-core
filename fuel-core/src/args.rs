@@ -1,5 +1,5 @@
 use clap::Parser;
-use fuel_core::service::{Config, DbType, VMConfig};
+use fuel_core::config::{Config, DbType, VMConfig};
 use std::str::FromStr;
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
@@ -123,12 +123,17 @@ impl Opt {
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            tx_pool_config: fuel_txpool::Config {
+            txpool: fuel_txpool::Config {
                 min_gas_price,
                 min_byte_price,
                 ..Default::default()
             },
             predicates,
+            block_importer: Default::default(),
+            block_producer: Default::default(),
+            block_executor: Default::default(),
+            bft: Default::default(),
+            sync: Default::default(),
         })
     }
 }

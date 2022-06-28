@@ -14,8 +14,11 @@ use fuel_core_interfaces::{
         fuel_storage::Storage,
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
     },
-    model::{BlockHeight, DaBlockHeight, SealedFuelBlock, ValidatorStake},
+    model::{
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
+    },
     relayer::{RelayerDb, StakingDiff},
+    txpool::TxPoolDb,
 };
 use serde::{de::DeserializeOwned, Serialize};
 #[cfg(feature = "rocksdb")]
@@ -127,6 +130,8 @@ impl Drop for DropResources {
 */
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
+
+impl TxPoolDb for Database {}
 
 impl Database {
     #[cfg(feature = "rocksdb")]
@@ -273,15 +278,15 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(&self) -> HashMap<Address, (ValidatorStake, Option<Address>)> {
-        struct WrapAddress(pub Address);
+    async fn get_validators(&self) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
+        struct WrapAddress(pub ValidatorId);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
-                Self(Address::try_from(i.as_ref()).unwrap())
+                Self(ValidatorId::try_from(i.as_ref()).unwrap())
             }
         }
         let mut out = HashMap::new();
-        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<Address>)>(
+        for diff in self.iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusId>)>(
             columns::VALIDATOR_SET,
             None,
             None,
@@ -343,13 +348,13 @@ impl RelayerDb for Database {
     async fn apply_validator_diffs(
         &mut self,
         da_height: DaBlockHeight,
-        changes: &HashMap<Address, (ValidatorStake, Option<Address>)>,
+        changes: &HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
     ) {
         // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
         let mut db = self.transaction();
         // TODO
         for (address, stake) in changes {
-            let _ = Storage::<Address, (ValidatorStake, Option<Address>)>::insert(
+            let _ = Storage::<ValidatorId, (ValidatorStake, Option<ConsensusId>)>::insert(
                 db.deref_mut(),
                 address,
                 stake,

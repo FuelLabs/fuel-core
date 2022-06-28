@@ -1,5 +1,5 @@
 use crate::{
-    chain_config::{ChainConfig, ContractConfig, StateConfig},
+    config::chain_config::{ChainConfig, ContractConfig, StateConfig},
     database::Database,
     service::FuelService,
 };
@@ -161,9 +161,9 @@ impl FuelService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chain_config::{CoinConfig, ContractConfig, StateConfig};
+    use crate::config::chain_config::{CoinConfig, ContractConfig, StateConfig};
+    use crate::config::Config;
     use crate::model::BlockHeight;
-    use crate::service::Config;
     use fuel_core_interfaces::common::{
         fuel_asm::Opcode,
         fuel_types::{Address, AssetId, Word},

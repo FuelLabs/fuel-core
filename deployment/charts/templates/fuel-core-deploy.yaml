@@ -55,6 +55,8 @@ spec:
       app: {{ template "fuel-core.name" . }}
       release: {{ .Release.Name }}
   replicas: {{ .Values.app.replicas }}
+  strategy:
+    type: Recreate
   template:
     metadata:
       labels:

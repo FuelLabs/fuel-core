@@ -128,8 +128,8 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, DaBlockHeight, DepositCoin, FuelBlock,
-            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorStake,
+            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, FuelBlock,
+            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId, ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
@@ -144,9 +144,9 @@ pub mod helpers {
 
     #[derive(Clone, Debug)]
     pub struct Data {
-        /// Used for Storage<Address, (u64, Option<Address>)>
+        /// Used for Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)>
         /// Contains test validator set: <validator_address, (stake and consensus_key)>;
-        pub validators: HashMap<Address, (ValidatorStake, Option<Address>)>,
+        pub validators: HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
         /// variable for current validators height, at height our validator set is
         pub validators_height: DaBlockHeight,
         /// Used for Storage<DaBlockHeight, StakingDiff>
@@ -792,33 +792,33 @@ pub mod helpers {
     }
 
     // Validator set. Used by relayer.
-    impl Storage<Address, (ValidatorStake, Option<Address>)> for DummyDb {
+    impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
-            key: &Address,
-            value: &(ValidatorStake, Option<Address>),
-        ) -> Result<Option<(ValidatorStake, Option<Address>)>, Self::Error> {
+            key: &ValidatorId,
+            value: &(ValidatorStake, Option<ConsensusId>),
+        ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
             Ok(self.data.lock().validators.insert(*key, *value))
         }
 
         fn remove(
             &mut self,
-            _key: &Address,
-        ) -> Result<Option<(ValidatorStake, Option<Address>)>, Self::Error> {
+            _key: &ValidatorId,
+        ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
             unreachable!()
         }
 
         fn get<'a>(
             &'a self,
-            key: &Address,
-        ) -> Result<Option<std::borrow::Cow<'a, (ValidatorStake, Option<Address>)>>, Self::Error>
+            key: &ValidatorId,
+        ) -> Result<Option<std::borrow::Cow<'a, (ValidatorStake, Option<ConsensusId>)>>, Self::Error>
         {
             Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
-        fn contains_key(&self, _key: &Address) -> Result<bool, Self::Error> {
+        fn contains_key(&self, _key: &ValidatorId) -> Result<bool, Self::Error> {
             unreachable!()
         }
     }
@@ -858,7 +858,9 @@ pub mod helpers {
 
     #[async_trait]
     impl RelayerDb for DummyDb {
-        async fn get_validators(&self) -> HashMap<Address, (ValidatorStake, Option<Address>)> {
+        async fn get_validators(
+            &self,
+        ) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
             self.data.lock().validators.clone()
         }
 
