@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - master
-      - elliot/update-ci-workflow
   pull_request:
   release:
     types: [published]
@@ -378,7 +377,7 @@ jobs:
 
   # Deploy Latest Fuel-Core Release
   deploy:
-    # if: github.ref == 'elliot/update-ci-workflow'
+    if: github.ref == 'refs/heads/master'
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
