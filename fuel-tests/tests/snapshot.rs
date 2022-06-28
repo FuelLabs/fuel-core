@@ -205,7 +205,7 @@ async fn snapshot_command_negative_test() {
     let tmp_dir = TempDir::new("test").unwrap();
     let tmp_path = tmp_dir.path().to_owned();
     let file_path = tmp_dir.path().join("chain_conf.json");
-    let mut tmp_file = File::create(file_path.clone()).unwrap();
+    let tmp_file = File::create(file_path.clone()).unwrap();
 
     let mut snapshot_cmd = CargoBuild::new()
         .bin("fuel-core")
