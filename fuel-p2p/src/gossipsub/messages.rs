@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use fuel_core_interfaces::common::fuel_tx::Transaction;
 use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
-use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
