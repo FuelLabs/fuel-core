@@ -27,7 +27,7 @@ impl FuelService {
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
             // initialize the chain id
-            database.init(&config)?;
+            database.init(config)?;
 
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_block_height(database, initial_state)?;

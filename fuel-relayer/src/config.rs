@@ -64,7 +64,7 @@ impl Default for Config {
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contract_deployment: 14_095_090,
+            eth_v2_contract_deployment: 0,
             initial_sync_step: 1000,
             eth_initial_sync_refresh: Duration::from_secs(5),
         }

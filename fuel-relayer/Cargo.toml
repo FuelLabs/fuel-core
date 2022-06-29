@@ -50,12 +50,3 @@ tracing-test = "0.2"
 [features]
 test-helpers = ["fuel-core-interfaces/test-helpers"]
 
-# Example of customizing binaries in Cargo.toml.
-[[bin]]
-name = "testrun"
-# path needs to be specified (even though this is the default path) due
-# to a bug in cargo-chef https://github.com/LukeMathWalker/cargo-chef/issues/128
-path = "src/bin/testrun.rs"
-test = true
-bench = false
-required-features = ["test-helpers"]

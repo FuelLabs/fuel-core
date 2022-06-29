@@ -4,7 +4,6 @@ use fuel_core_interfaces::{
     block_importer::{ImportBlockBroadcast, ImportBlockMpsc},
     block_producer::BlockProducerMpsc,
     relayer,
-    
 };
 use parking_lot::Mutex;
 use tokio::{

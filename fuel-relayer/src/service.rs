@@ -23,12 +23,18 @@ pub struct ServiceBuilder {
     config: Config,
 }
 
+impl Default for ServiceBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServiceBuilder {
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel(100);
         Self {
             sender: relayer::Sender::new(sender),
-            receiver: receiver,
+            receiver,
             private_key: None,
             db: None,
             import_block_events: None,
