@@ -1,12 +1,13 @@
 use crate::codecs::bincode::BincodeCodec;
 use crate::gossipsub::topics::GossipTopic;
+use crate::request_response::messages::OutboundResponse;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::{build_transport, P2PConfig},
     gossipsub::messages::GossipsubBroadcastRequest,
     peer_info::PeerInfo,
     request_response::messages::{
-        RequestError, RequestMessage, ResponseChannelItem, ResponseError, ResponseMessage,
+        RequestError, RequestMessage, ResponseChannelItem, ResponseError,
     },
 };
 use futures::prelude::*;
@@ -152,7 +153,7 @@ impl FuelP2PService {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: ResponseMessage,
+        message: OutboundResponse,
     ) -> Result<(), ResponseError> {
         self.swarm
             .behaviour_mut()
@@ -164,13 +165,16 @@ impl FuelP2PService {
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
     use crate::gossipsub::topics::{GossipTopic, NEW_TX_GOSSIP_TOPIC};
-    use crate::request_response::messages::{RequestMessage, ResponseChannelItem, ResponseMessage};
+    use crate::request_response::messages::{
+        OutboundResponse, RequestMessage, ResponseChannelItem,
+    };
     use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
     use ctor::ctor;
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::collections::HashMap;
     use std::{
         net::{IpAddr, Ipv4Addr},
+        sync::Arc,
         time::Duration,
     };
     use tokio::sync::{mpsc, oneshot};
@@ -378,7 +382,6 @@ mod tests {
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
         use fuel_core_interfaces::common::fuel_tx::Transaction;
-        use std::sync::Arc;
 
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
         let topics = vec![NEW_TX_GOSSIP_TOPIC.into()];
@@ -527,7 +530,7 @@ mod tests {
                             }
                         };
 
-                        let _ = node_b.send_response_msg(request_id, ResponseMessage::ResponseBlock(sealed_block));
+                        let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);

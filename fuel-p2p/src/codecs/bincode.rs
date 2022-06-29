@@ -1,8 +1,9 @@
-use super::{GossipsubCodec, NetworkCodec};
+use super::{GossipsubCodec, NetworkCodec, RequestResponseConverter};
 use crate::{
     gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
     request_response::messages::{
-        RequestMessage, ResponseMessage, MAX_REQUEST_SIZE, REQUEST_RESPONSE_PROTOCOL_ID,
+        IntermediateResponse, OutboundResponse, RequestMessage, ResponseMessage, MAX_REQUEST_SIZE,
+        REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
@@ -14,7 +15,7 @@ use libp2p::{
     },
     request_response::RequestResponseCodec,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::io;
 
 #[derive(Debug, Clone)]
@@ -38,6 +39,10 @@ impl BincodeCodec {
         bincode::deserialize(encoded_data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
+
+    fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
+        bincode::serialize(&data).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
 }
 
 /// Since Bincode does not support async reads or writes out of the box
@@ -51,7 +56,7 @@ impl BincodeCodec {
 impl RequestResponseCodec for BincodeCodec {
     type Protocol = MessageExchangeBincodeProtocol;
     type Request = RequestMessage;
-    type Response = ResponseMessage;
+    type Response = IntermediateResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -148,6 +153,34 @@ impl GossipsubCodec for BincodeCodec {
         };
 
         Ok(decoded_response)
+    }
+}
+
+impl RequestResponseConverter for BincodeCodec {
+    type IntermediateResponse = IntermediateResponse;
+    type OutboundResponse = OutboundResponse;
+    type ResponseMessage = ResponseMessage;
+
+    fn convert_to_response(
+        &self,
+        inter_msg: &Self::IntermediateResponse,
+    ) -> Result<Self::ResponseMessage, io::Error> {
+        match inter_msg {
+            IntermediateResponse::ResponseBlock(block_bytes) => Ok(ResponseMessage::ResponseBlock(
+                self.deserialize(block_bytes)?,
+            )),
+        }
+    }
+
+    fn convert_to_intermediate(
+        &self,
+        res_msg: &Self::OutboundResponse,
+    ) -> Result<Self::IntermediateResponse, io::Error> {
+        match res_msg {
+            OutboundResponse::ResponseBlock(sealed_block) => Ok(
+                IntermediateResponse::ResponseBlock(self.serialize(&**sealed_block)?),
+            ),
+        }
     }
 }
 
