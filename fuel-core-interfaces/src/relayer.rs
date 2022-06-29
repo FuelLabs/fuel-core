@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
 use fuel_types::{Address, Bytes32};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
@@ -159,6 +160,23 @@ pub enum RelayerEvent {
         response: oneshot::Sender<RelayerStatus>,
     },
     Stop,
+}
+
+#[derive(Clone, Deref, DerefMut)]
+pub struct Sender(mpsc::Sender<RelayerEvent>);
+
+impl Sender {
+    pub fn new(sender: mpsc::Sender<RelayerEvent>) -> Self {
+        Self(sender)
+    }
+
+    pub async fn get_validator_set(&self) -> Result<ValidatorSet, anyhow::Error> {
+        Ok(ValidatorSet::new())
+    }
+
+    pub async fn get_status(&self) -> Result<RelayerStatus, anyhow::Error> {
+        Ok(RelayerStatus::Stop)
+    }
 }
 
 pub use thiserror::Error;

@@ -3,6 +3,8 @@ use fuel_core_interfaces::{
     bft::BftMpsc,
     block_importer::{ImportBlockBroadcast, ImportBlockMpsc},
     block_producer::BlockProducerMpsc,
+    relayer,
+    
 };
 use parking_lot::Mutex;
 use tokio::{
@@ -26,7 +28,7 @@ impl Service {
 
     pub async fn start(
         &self,
-        _relayer: (),
+        _relayer: relayer::Sender,
         _p2p_consensus: (),
         _block_producer: mpsc::Sender<BlockProducerMpsc>,
         _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,

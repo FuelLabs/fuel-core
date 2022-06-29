@@ -54,7 +54,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: 64,
-            eth_client: String::from("wss://localhost:8545"),
+            eth_client: String::from("http://localhost:8545"),
             eth_chain_id: 1, // ethereum mainnet
             eth_v2_block_commit_contract: H160::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",

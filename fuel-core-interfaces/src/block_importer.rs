@@ -1,34 +1,10 @@
-use super::model::{BlockHeight, ConsensusVote, FuelBlock, SealedFuelBlock};
+use super::model::{ConsensusVote, FuelBlock, SealedFuelBlock};
 use fuel_types::Bytes32;
 use std::sync::Arc;
 
-/// Currently just placeholder for new block included and new block created events.
-/// TODO remove this after relayer pull request passes
-#[derive(Clone, Debug)]
-pub enum NewBlockEvent {
-    Created(Arc<SealedFuelBlock>),
-    Included(Arc<SealedFuelBlock>),
-}
-
-impl NewBlockEvent {
-    pub fn block(&self) -> &Arc<SealedFuelBlock> {
-        match self {
-            Self::Created(block) => block,
-            Self::Included(block) => block,
-        }
-    }
-    pub fn height(&self) -> BlockHeight {
-        self.block().header.height
-    }
-
-    pub fn id(&self) -> Bytes32 {
-        self.block().header.id()
-    }
-}
-
 #[derive(Clone, Debug)]
 pub enum ImportBlockBroadcast {
-    PendingBlockImported {
+    PendingFuelBlockImported {
         block: Arc<FuelBlock>,
     },
     /// for blocks that imported in initial sync and in active sync.
@@ -36,6 +12,15 @@ pub enum ImportBlockBroadcast {
         block: Arc<SealedFuelBlock>,
         is_created_by_self: bool,
     },
+}
+
+impl ImportBlockBroadcast {
+    pub fn block(&self) -> &FuelBlock {
+        match self {
+            Self::PendingFuelBlockImported { block } => block.as_ref(),
+            Self::SealedFuelBlockImported { block, .. } => block.as_ref(),
+        }
+    }
 }
 
 pub enum ImportBlockMpsc {

@@ -134,6 +134,7 @@ impl Opt {
             block_executor: Default::default(),
             bft: Default::default(),
             sync: Default::default(),
+            relayer: Default::default(),
         })
     }
 }
