@@ -1,7 +1,13 @@
-use fuel_core_interfaces::p2p::{
-    BlockBroadcast, ConsensusBroadcast, P2PRequestEvent, TransactionBroadcast,
+use std::sync::Arc;
+use std::{future::Future, pin::Pin};
+
+use fuel_core_interfaces::{
+    p2p::{BlockBroadcast, ConsensusBroadcast, P2PRequestEvent, TransactionBroadcast},
+    relayer::RelayerDb,
 };
+use futures::{stream::futures_unordered::FuturesUnordered, StreamExt};
 use libp2p::identity::Keypair;
+use libp2p::request_response::RequestId;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tracing::warn;
 
@@ -9,7 +15,7 @@ use crate::{
     behavior::FuelBehaviourEvent,
     config::P2PConfig,
     gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage},
-    request_response::messages::{RequestMessage, ResponseChannelItem},
+    request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
     service::{FuelP2PEvent, FuelP2PService},
 };
 
@@ -23,6 +29,11 @@ pub struct NetworkOrchestrator {
     tx_consensus: Sender<ConsensusBroadcast>,
     tx_transaction: Sender<TransactionBroadcast>,
     tx_block: Sender<BlockBroadcast>,
+
+    db: Arc<dyn RelayerDb>,
+
+    outbound_responses:
+        FuturesUnordered<Pin<Box<dyn Future<Output = Option<(OutboundResponse, RequestId)>>>>>,
 }
 
 impl NetworkOrchestrator {
@@ -34,6 +45,8 @@ impl NetworkOrchestrator {
         tx_consensus: Sender<ConsensusBroadcast>,
         tx_transaction: Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
+
+        db: Arc<dyn RelayerDb>,
     ) -> Self {
         let p2p_service = FuelP2PService::new(local_keypair, p2p_config)
             .await
@@ -45,12 +58,20 @@ impl NetworkOrchestrator {
             tx_block,
             tx_consensus,
             tx_transaction,
+            db,
+            outbound_responses: Default::default(),
         }
     }
 
     pub async fn run(&mut self) {
         loop {
             tokio::select! {
+                next_response = self.outbound_responses.next() => {
+                    if let Some(Some((response, request_id))) = next_response {
+                        let _ = self.p2p_service.send_response_msg(request_id, response);
+                    }
+
+                },
                 p2p_event = self.p2p_service.next_event() => {
                     if let FuelP2PEvent::Behaviour(behaviour_event) = p2p_event {
                         match behaviour_event {
@@ -68,9 +89,18 @@ impl NetworkOrchestrator {
                                 }
                             },
                             FuelBehaviourEvent::RequestMessage { request_message, request_id } => {
-                                tokio::spawn(async move {
+                                match request_message {
+                                    RequestMessage::RequestBlock(block_height) => {
+                                        let db = self.db.clone();
 
-                                });
+                                        self.outbound_responses.push(
+                                            Box::pin(async move {
+                                                db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id))
+                                            })
+                                        );
+                                    }
+                                }
+
                             },
                             _ => {}
                         }

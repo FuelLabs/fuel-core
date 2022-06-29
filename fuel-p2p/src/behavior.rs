@@ -9,7 +9,8 @@ use crate::{
     },
     peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
     request_response::messages::{
-        RequestMessage, ResponseChannelItem, ResponseError, ResponseMessage,
+        IntermediateResponse, OutboundResponse, RequestMessage, ResponseChannelItem, ResponseError,
+        ResponseMessage,
     },
 };
 use libp2p::{
@@ -84,10 +85,10 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
     outbound_requests_table: HashMap<RequestId, ResponseChannelItem>,
 
     /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
-    /// Once the ResponseMessage is prepared by the NetworkOrchestrator
+    /// Once the Response is prepared by the NetworkOrchestrator
     /// It will send it to the specified Peer via its unique ResponseChannel
     #[behaviour(ignore)]
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<ResponseMessage>>,
+    inbound_requests_table: HashMap<RequestId, ResponseChannel<IntermediateResponse>>,
 
     /// Double-ended queue of FuelBehaviour Events
     #[behaviour(ignore)]
@@ -208,20 +209,27 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: ResponseMessage,
+        message: OutboundResponse,
     ) -> Result<(), ResponseError> {
-        if let Some(channel) = self.inbound_requests_table.remove(&request_id) {
-            if self
-                .request_response
-                .send_response(channel, message)
-                .is_err()
-            {
-                debug!("Failed to send ResponseMessage for {:?}", request_id);
-                return Err(ResponseError::SendingResponseFailed);
+        match (
+            self.codec.convert_to_intermediate(&message),
+            self.inbound_requests_table.remove(&request_id),
+        ) {
+            (Ok(message), Some(channel)) => {
+                if self
+                    .request_response
+                    .send_response(channel, message)
+                    .is_err()
+                {
+                    debug!("Failed to send ResponseMessage for {:?}", request_id);
+                    return Err(ResponseError::SendingResponseFailed);
+                }
             }
-        } else {
-            debug!("ResponseChannel for {:?} does not exist!", request_id);
-            return Err(ResponseError::ResponseChannelDoesNotExist);
+            (Ok(_), None) => {
+                debug!("ResponseChannel for {:?} does not exist!", request_id);
+                return Err(ResponseError::ResponseChannelDoesNotExist);
+            }
+            _ => {}
         }
 
         Ok(())
@@ -322,10 +330,10 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent> for FuelB
 }
 
 impl<Codec: NetworkCodec>
-    NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, ResponseMessage>>
+    NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, IntermediateResponse>>
     for FuelBehaviour<Codec>
 {
-    fn inject_event(&mut self, event: RequestResponseEvent<RequestMessage, ResponseMessage>) {
+    fn inject_event(&mut self, event: RequestResponseEvent<RequestMessage, IntermediateResponse>) {
         match event {
             RequestResponseEvent::Message { message, .. } => match message {
                 RequestResponseMessage::Request {
@@ -343,22 +351,26 @@ impl<Codec: NetworkCodec>
                     request_id,
                     response,
                 } => {
-                    if let Some(channel_item) = self.outbound_requests_table.remove(&request_id) {
-                        match (channel_item, response) {
-                            (
-                                ResponseChannelItem::ResponseBlock(channel),
-                                ResponseMessage::ResponseBlock(block),
-                            ) => {
-                                if channel.send(block).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
+                    match (
+                        self.outbound_requests_table.remove(&request_id),
+                        self.codec.convert_to_response(&response),
+                    ) {
+                        (
+                            Some(ResponseChannelItem::ResponseBlock(channel)),
+                            Ok(ResponseMessage::ResponseBlock(block)),
+                        ) => {
+                            if channel.send(block).is_err() {
+                                debug!("Failed to send through the channel for {:?}", request_id);
                             }
-                        };
-                    } else {
-                        debug!("Send channel not found for {:?}", request_id);
+                        }
+
+                        (Some(_), Err(e)) => {
+                            debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
+                        }
+                        (None, Ok(_)) => {
+                            debug!("Send channel not found for {:?}", request_id);
+                        }
+                        _ => {}
                     }
                 }
             },
