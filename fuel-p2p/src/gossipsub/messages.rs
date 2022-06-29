@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
+use fuel_core_interfaces::common::fuel_tx::Transaction;
 use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
-use fuel_tx::Transaction;
 use serde::{Deserialize, Serialize};
 
 /// Used to inform `GossipsubCodec` to which GossipsubMessage decode to

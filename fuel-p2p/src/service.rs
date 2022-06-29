@@ -377,7 +377,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_exchanges_messages() {
         use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
-        use fuel_tx::Transaction;
+        use fuel_core_interfaces::common::fuel_tx::Transaction;
         use std::sync::Arc;
 
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
@@ -448,9 +448,9 @@ mod tests {
     #[instrument]
     async fn request_response_works() {
         use fuel_core_interfaces::common::fuel_tx::Transaction;
-        use fuel_core_interfaces::model::{FuelBlock, FuelBlockHeader};
-        use fuel_core_interfaces::model::{FuelBlockConsensus, SealedFuelBlock};
-        use fuel_tx::Transaction;
+        use fuel_core_interfaces::model::{
+            FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock,
+        };
 
         let mut p2p_config = build_p2p_config("request_response_works");
 
