@@ -592,7 +592,7 @@ mod tests {
 
                                 tokio::spawn(async move {
                                     // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
-                                    if let Err(_) = rx_orchestrator.await {
+                                    if (rx_orchestrator.await).is_err() {
                                         let _ = tx_test_end.send(()).await;
                                     }
                                 });

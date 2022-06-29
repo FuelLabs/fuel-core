@@ -19,6 +19,8 @@ use crate::{
     service::{FuelP2PEvent, FuelP2PService},
 };
 
+type ResponseFuture = Pin<Box<dyn Future<Output = Option<(OutboundResponse, RequestId)>>>>;
+
 pub struct NetworkOrchestrator {
     p2p_service: FuelP2PService,
 
@@ -32,8 +34,7 @@ pub struct NetworkOrchestrator {
 
     db: Arc<dyn RelayerDb>,
 
-    outbound_responses:
-        FuturesUnordered<Pin<Box<dyn Future<Output = Option<(OutboundResponse, RequestId)>>>>>,
+    outbound_responses: FuturesUnordered<ResponseFuture>,
 }
 
 impl NetworkOrchestrator {
