@@ -123,9 +123,9 @@ pub struct StateConfig {
 impl StateConfig {
     pub fn generate_state_config(db: Database) -> Self {
         StateConfig {
-            coins: db.get_coin_config().unwrap(),
-            contracts: db.get_contract_config().unwrap(),
-            height: db.get_block_height().unwrap(),
+            coins: db.get_coin_config().unwrap_or_default(),
+            contracts: db.get_contract_config().unwrap_or_default(),
+            height: db.get_block_height().unwrap_or_default(),
         }
     }
 }
