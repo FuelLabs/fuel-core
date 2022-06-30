@@ -37,8 +37,7 @@ impl RocksDb {
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {
                         for i in 0..cols {
-                            let _ = db
-                                .create_cf(RocksDb::col_name(i), &opts)
+                            db.create_cf(RocksDb::col_name(i), &opts)
                                 .map_err(|e| Error::DatabaseError(Box::new(e)))?;
                         }
                         Ok(db)
