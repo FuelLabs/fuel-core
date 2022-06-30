@@ -77,7 +77,6 @@ impl Database {
                 let contract_id =
                     ContractId::new(raw_contract_id.unwrap().0[..32].try_into().unwrap());
 
-                // Working?
                 let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)
                     .unwrap()
                     .unwrap()

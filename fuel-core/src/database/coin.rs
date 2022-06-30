@@ -127,21 +127,21 @@ impl Database {
     pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, anyhow::Error> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(COIN, None, None, None)
-            .map(|raw_coin| -> CoinConfig {
+            .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
                 let coin = raw_coin.unwrap();
 
-                let byte_id = Bytes32::new(coin.0[..32].try_into().unwrap());
+                let byte_id = Bytes32::new(coin.0[..32].try_into()?);
                 let output_index = coin.0[32];
                 // Potentially chop off a byte for output index
                 let tx_id = UtxoId::new(byte_id, output_index);
 
-                let ref_coin = Storage::<UtxoId, CoinModel>::get(self, &tx_id).unwrap();
+                let ref_coin = Storage::<UtxoId, CoinModel>::get(self, &tx_id)?;
 
                 let ref_coin = ref_coin.unwrap();
 
                 let coin = ref_coin.into_owned();
 
-                CoinConfig {
+                Ok(CoinConfig {
                     tx_id: Some(byte_id),
                     output_index: Some(output_index.into()),
                     block_created: Some(coin.block_created),
@@ -149,9 +149,9 @@ impl Database {
                     owner: coin.owner,
                     amount: coin.amount,
                     asset_id: coin.asset_id,
-                }
+                })
             })
-            .collect();
+            .collect::<Result<Vec<CoinConfig>, anyhow::Error>>()?;
 
         Ok(Some(configs))
     }
