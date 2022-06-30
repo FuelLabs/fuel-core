@@ -50,10 +50,6 @@ pub mod transaction;
 pub mod transactional;
 pub mod validator_set;
 
-// Crude way to invalidate incompatible databases,
-// can be used to perform migrations in the future.
-pub const VERSION: u32 = 0;
-
 pub mod columns {
     pub const METADATA: u32 = 0;
     pub const CONTRACTS: u32 = 1;

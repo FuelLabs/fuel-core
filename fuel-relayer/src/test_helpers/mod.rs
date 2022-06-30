@@ -2,7 +2,7 @@ pub mod middleware;
 pub use middleware::*;
 
 use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast, db::helpers::DummyDb, relayer::RelayerEvent,
+    block_importer::ImportBlockBroadcast, db::helpers::DummyDb, relayer::RelayerRequest,
 };
 use tokio::sync::{broadcast, mpsc};
 
@@ -12,7 +12,7 @@ pub async fn relayer(
     config: Config,
 ) -> (
     Relayer,
-    mpsc::Sender<RelayerEvent>,
+    mpsc::Sender<RelayerRequest>,
     broadcast::Sender<ImportBlockBroadcast>,
 ) {
     let db = Box::new(DummyDb::filled());

@@ -3,7 +3,7 @@ use anyhow::{anyhow, Error};
 use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    relayer::{self, RelayerDb, RelayerEvent},
+    relayer::{self, RelayerDb, RelayerRequest},
 };
 use std::sync::Arc;
 use tokio::{
@@ -16,7 +16,7 @@ const PROVIDER_INTERVAL: u64 = 1000;
 
 pub struct ServiceBuilder {
     sender: relayer::Sender,
-    receiver: mpsc::Receiver<RelayerEvent>,
+    receiver: mpsc::Receiver<RelayerRequest>,
     private_key: Option<Vec<u8>>,
     db: Option<Box<dyn RelayerDb>>,
     import_block_events: Option<broadcast::Receiver<ImportBlockBroadcast>>,
@@ -93,7 +93,7 @@ pub struct Service {
 
 pub struct Context {
     /// Request channel.
-    pub receiver: mpsc::Receiver<RelayerEvent>,
+    pub receiver: mpsc::Receiver<RelayerRequest>,
     /// Private.
     pub private_key: Vec<u8>,
     /// Db connector to apply stake and token deposit.
@@ -180,7 +180,7 @@ impl Service {
         let mut join = self.join.lock().await;
         let join_handle = join.take();
         if let Some(join_handle) = join_handle {
-            let _ = self.sender.send(RelayerEvent::Stop).await;
+            let _ = self.sender.send(RelayerRequest::Stop).await;
             let context = self.context.clone();
             Some(tokio::spawn(async move {
                 let ret = join_handle.await;

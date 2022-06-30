@@ -30,7 +30,6 @@ impl FuelService {
             database.init(config)?;
 
             if let Some(initial_state) = &config.chain_conf.initial_state {
-                Self::init_block_height(database, initial_state)?;
                 Self::init_coin_state(database, initial_state)?;
                 Self::init_contracts(database, initial_state)?;
             }
@@ -39,14 +38,6 @@ impl FuelService {
         // Write transaction to db
         import_tx.commit()?;
 
-        Ok(())
-    }
-
-    /// initialize starting block height if set
-    fn init_block_height(db: &Database, state: &StateConfig) -> Result<()> {
-        if let Some(height) = state.height {
-            db.init_chain_height(height)?;
-        }
         Ok(())
     }
 

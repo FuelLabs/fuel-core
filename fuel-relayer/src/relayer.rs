@@ -5,7 +5,7 @@ use ethers_providers::{FilterWatcher, Middleware, ProviderError, StreamExt, Sync
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     model::DaBlockHeight,
-    relayer::{RelayerError, RelayerEvent, RelayerStatus},
+    relayer::{RelayerError, RelayerRequest, RelayerStatus},
 };
 use std::{
     cmp::{max, min},
@@ -31,14 +31,14 @@ macro_rules! handle_interrupt {
                 inner_fuel_event = $relayer.ctx.receiver.recv() => {
                     tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
                     match inner_fuel_event {
-                        Some(RelayerEvent::Stop) | None =>{
+                        Some(RelayerRequest::Stop) | None =>{
                             $relayer.status = RelayerStatus::Stop;
                             break Err(RelayerError::Stopped);
                         },
-                        Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
-                            let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
+                        Some(RelayerRequest::GetValidatorSet {response, .. }) => {
+                            let _ = response.send(Err(RelayerError::ValidatorSetEthClientSyncing));
                         },
-                        Some(RelayerEvent::GetStatus { response }) => {
+                        Some(RelayerRequest::GetStatus { response }) => {
                             let _ = response.send($relayer.status);
                         },
                     }
@@ -316,23 +316,23 @@ impl Relayer {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerEvent) {
+    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerRequest) {
         match inner_event {
-            RelayerEvent::Stop => {
+            RelayerRequest::Stop => {
                 self.status = RelayerStatus::Stop;
             }
-            RelayerEvent::GetValidatorSet {
+            RelayerRequest::GetValidatorSet {
                 da_height,
-                response_channel,
+                response,
             } => {
                 let res = self
                     .queue
                     .get_validators(da_height, self.ctx.db.as_mut())
                     .await
                     .ok_or(RelayerError::ProviderError);
-                let _ = response_channel.send(res);
+                let _ = response.send(res);
             }
-            RelayerEvent::GetStatus { response } => {
+            RelayerRequest::GetStatus { response } => {
                 let _ = response.send(self.status);
             }
         }
@@ -384,7 +384,7 @@ mod test {
     use async_trait::async_trait;
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
     use ethers_providers::SyncingStatus;
-    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerEvent};
+    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerRequest};
     use tokio::sync::mpsc;
 
     use crate::{
@@ -410,7 +410,7 @@ mod test {
 
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {
@@ -419,7 +419,7 @@ mod test {
                     self.i += 1;
 
                     if self.i == 3 {
-                        let _ = self.event.send(RelayerEvent::Stop).await;
+                        let _ = self.event.send(RelayerRequest::Stop).await;
                         self.i += 1;
                         return;
                     }
@@ -458,7 +458,7 @@ mod test {
         }
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {
@@ -485,7 +485,7 @@ mod test {
                     }
                 }
                 if self.i == 2 {
-                    let _ = self.event.send(RelayerEvent::Stop).await;
+                    let _ = self.event.send(RelayerRequest::Stop).await;
                     return;
                 }
             }
@@ -522,7 +522,7 @@ mod test {
         }
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {

@@ -12,6 +12,7 @@ pub(crate) const VALIDATORS_DA_HEIGHT_KEY: &[u8] = b"current_validator_set";
 pub(crate) const LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY: &[u8] =
     b"last_commited_finalized_block_height";
 
+/// Can be used to perform migrations in the future.
 pub(crate) const DB_VERSION: u32 = 0;
 
 impl Database {
@@ -30,8 +31,15 @@ impl Database {
             }
         })?;
 
+        let chain_height = config
+            .chain_conf
+            .initial_state
+            .as_ref()
+            .and_then(|c| c.height)
+            .unwrap_or_default();
+
         self.insert(DB_VERSION_KEY, METADATA, DB_VERSION)?;
-        self.insert(CHAIN_HEIGHT_KEY, METADATA, 0)?;
+        self.insert(CHAIN_HEIGHT_KEY, METADATA, chain_height)?;
         self.insert(FINALIZED_DA_HEIGHT_KEY, METADATA, 0)?;
         self.insert(VALIDATORS_DA_HEIGHT_KEY, METADATA, 0)?;
         self.insert(LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY, METADATA, 0)?;
@@ -40,17 +48,6 @@ impl Database {
 
     pub fn get_chain_name(&self) -> Result<Option<String>, Error> {
         self.get(CHAIN_NAME_KEY, METADATA)
-    }
-
-    pub fn init_chain_height(&self, height: BlockHeight) -> Result<(), Error> {
-        self.insert(CHAIN_HEIGHT_KEY, METADATA, height)
-            .and_then(|v| {
-                if v.is_some() {
-                    Err(Error::ChainAlreadyInitialized)
-                } else {
-                    Ok(())
-                }
-            })
     }
 
     pub fn get_starting_chain_height(&self) -> Result<Option<BlockHeight>, Error> {
