@@ -73,38 +73,33 @@ impl Database {
     pub fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(CONTRACTS, None, None, None)
-            .map(|raw_contract_id| -> ContractConfig {
-                let contract_id =
-                    ContractId::new(raw_contract_id.unwrap().0[..32].try_into().unwrap());
+            .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
+                let contract_id = ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
 
-                let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)
-                    .unwrap()
+                let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)?
                     .unwrap()
                     .into_owned()
                     .into();
 
-                let salt = InterpreterStorage::storage_contract_root(self, &contract_id)
-                    .unwrap()
+                let salt = InterpreterStorage::storage_contract_root(self, &contract_id)?
                     .unwrap()
                     .into_owned()
                     .0;
 
-                // Working
                 let state: Option<Vec<(Bytes32, Bytes32)>> =
-                    self.get(contract_id.as_ref(), CONTRACTS_STATE).unwrap();
+                    self.get(contract_id.as_ref(), CONTRACTS_STATE)?;
 
-                // Working
                 let balances: Option<Vec<(AssetId, u64)>> =
-                    self.get(contract_id.as_ref(), BALANCES).unwrap();
+                    self.get(contract_id.as_ref(), BALANCES)?;
 
-                ContractConfig {
+                Ok(ContractConfig {
                     code,
                     salt,
                     state,
                     balances,
-                }
+                })
             })
-            .collect();
+            .collect::<Result<Vec<ContractConfig>, anyhow::Error>>()?;
 
         Ok(Some(configs))
     }
