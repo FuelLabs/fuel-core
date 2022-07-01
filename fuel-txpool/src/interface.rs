@@ -50,7 +50,7 @@ impl Interface {
                             let _ = response.send(interface.filter_by_negative(&ids).await);
                         }
                         TxPoolMpsc::Remove { ids } => {
-                            let _ = interface.remove(&ids).await;
+                            interface.remove(&ids).await;
                         }
                         TxPoolMpsc::Stop => {}
                     }});
