@@ -1,9 +1,6 @@
-#[cfg(not(feature = "rocksdb"))]
+#[cfg(feature = "rocksdb")]
 use anyhow::anyhow;
-#[cfg(feature = "rocksdb")]
-use std::io::Write;
-
-#[cfg(feature = "rocksdb")]
+use anyhow::Context;
 use fuel_core::database::Database;
 
 use clap::Parser;
@@ -31,7 +28,7 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 )]
 pub struct Opt {
     #[clap(subcommand)]
-    pub _snapshot: Option<Snapshot>,
+    pub snapshot: Option<Snapshot>,
 
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
@@ -151,7 +148,7 @@ impl Opt {
             min_gas_price,
             min_byte_price,
             predicates,
-            _snapshot,
+            snapshot,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -190,7 +187,10 @@ pub fn dump_snapshot(path: PathBuf, _config: ChainConfig) -> anyhow::Result<()> 
 
     #[cfg(feature = "rocksdb")]
     {
-        let db = Database::open(&path).context(|| format!("failed to open database at path {}", path))?;
+        let db = Database::open(&path).context(format!(
+            "failed to open database at path {}",
+            path.display()
+        ))?;
 
         let state_conf = StateConfig::generate_state_config(db);
 
@@ -201,10 +201,9 @@ pub fn dump_snapshot(path: PathBuf, _config: ChainConfig) -> anyhow::Result<()> 
             transaction_parameters: _config.transaction_parameters,
         };
 
-        let serialized = serde_json::to_string(&chain_conf).unwrap();
-        let mut stdout = io::stdout().lock();
+        let stdout = io::stdout().lock();
 
-        stdout.write_all(serialized.as_bytes())?;
+        serde_json::to_writer(stdout, &chain_conf).context("failed to dump snapshot to JSON")?;
 
         Ok(())
     }

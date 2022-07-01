@@ -8,7 +8,7 @@ mod args;
 async fn main() -> anyhow::Result<()> {
     // load configuration
     let opt = args::Opt::parse();
-    let snapshot = opt.clone()._snapshot;
+    let snapshot = opt.clone().snapshot;
     match snapshot {
         Some(args::Snapshot::Snapshot(_)) => {
             let snapshot = snapshot.unwrap().get_args().unwrap();

@@ -6,9 +6,12 @@ use fuel_core::{
     },
     service::FuelService,
 };
-use fuel_core_interfaces::common::{
-    fuel_types::{Address, Bytes32, Salt},
-    fuel_vm::prelude::{AssetId, Contract, ContractId, InterpreterStorage, Storage},
+use fuel_core_interfaces::{
+    common::{
+        fuel_types::{Address, Bytes32, Salt},
+        fuel_vm::prelude::{AssetId, Contract, ContractId, InterpreterStorage, Storage},
+    },
+    model::BlockHeight,
 };
 
 #[tokio::test]
@@ -24,8 +27,9 @@ async fn snapshot_state_config() {
 
     // setup config
     let mut config = Config::local_node();
+
     config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
+        height: Some(BlockHeight::from(10u64)),
         contracts: Some(vec![ContractConfig {
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
