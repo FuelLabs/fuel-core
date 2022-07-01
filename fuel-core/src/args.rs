@@ -190,7 +190,7 @@ pub fn dump_snapshot(path: PathBuf, _config: ChainConfig) -> anyhow::Result<()> 
 
     #[cfg(feature = "rocksdb")]
     {
-        let db = Database::open(&path)?;
+        let db = Database::open(&path).context(|| format!("failed to open database at path {}", path))?;
 
         let state_conf = StateConfig::generate_state_config(db);
 
