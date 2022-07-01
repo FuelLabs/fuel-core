@@ -1,3 +1,4 @@
+#![allow(clippy::let_unit_value)]
 use crate::config::Config;
 use crate::database::Database;
 use anyhow::Result;
