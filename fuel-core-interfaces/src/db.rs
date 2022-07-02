@@ -1,6 +1,5 @@
-use std::io::ErrorKind;
-
 use fuel_vm::prelude::InterpreterError;
+use std::io::ErrorKind;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -947,5 +946,44 @@ pub mod helpers {
         async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
             self.data.lock().last_commited_finalized_fuel_height = block_height;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::db::helpers::DummyDb;
+    use crate::db::KvStoreError;
+    use fuel_storage::Storage;
+    use fuel_tx::Transaction;
+    use fuel_types::Bytes32;
+
+    #[test]
+    fn transactions_db() -> Result<(), KvStoreError> {
+        let mut db: Box<dyn Storage<Bytes32, Transaction, Error = KvStoreError>> =
+            Box::new(DummyDb::filled());
+
+        let value: Transaction = Transaction::default();
+        let key = value.id();
+
+        //before insert
+        assert!(!db.contains_key(&key)?);
+        assert!(db.get(&key)?.is_none());
+        assert!(db.remove(&key)?.is_none());
+
+        // insert twice
+        assert!(db.insert(&key, &value)?.is_none());
+        assert!(db.insert(&key, &value)?.is_some());
+
+        // after insert
+        assert!(db.contains_key(&key)?);
+        assert!(db.get(&key)?.is_some());
+        assert!(db.remove(&key)?.is_some());
+
+        // after remove
+        assert!(!db.contains_key(&key)?);
+        assert!(db.get(&key)?.is_none());
+        assert!(db.remove(&key)?.is_none());
+
+        Ok(())
     }
 }
