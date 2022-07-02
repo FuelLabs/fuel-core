@@ -681,8 +681,8 @@ pub mod helpers {
         ) -> Result<Option<Transaction>, Self::Error> {
             let arc = Arc::new(value.clone());
 
-            if let Some(tx) = self.data.lock().tx.insert(*key, arc) {
-                Ok(Some(tx.as_ref().clone()))
+            if let Some(previous_tx) = self.data.lock().tx.insert(*key, arc) {
+                Ok(Some(previous_tx.as_ref().clone()))
             } else {
                 Ok(None)
             }
