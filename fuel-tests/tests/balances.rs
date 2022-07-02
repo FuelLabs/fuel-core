@@ -5,8 +5,14 @@ use fuel_core::{
     },
     service::FuelService,
 };
-use fuel_core_interfaces::common::{fuel_tx::AssetId, fuel_vm::prelude::Address};
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_core_interfaces::common::{
+    fuel_tx::{AssetId, Input, Output},
+    fuel_vm::prelude::Address,
+};
+use fuel_gql_client::{
+    client::{FuelClient, PageDirection, PaginationRequest},
+    fuel_tx::TransactionBuilder,
+};
 
 #[tokio::test]
 async fn balance() {
@@ -51,6 +57,55 @@ async fn balance() {
         .await
         .unwrap();
     assert_eq!(balance, 300);
+
+    // spend some coins and check again
+    let coins = client
+        .coins_to_spend(
+            format!("{:#x}", owner).as_str(),
+            vec![(format!("{:#x}", asset_id).as_str(), 1)],
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+    let mut tx = TransactionBuilder::script(vec![], vec![])
+        .gas_limit(1_000_000)
+        .to_owned();
+    for coin in coins {
+        tx.add_input(Input::CoinSigned {
+            utxo_id: coin.utxo_id.into(),
+            owner: coin.owner.into(),
+            amount: coin.amount.into(),
+            asset_id: coin.asset_id.into(),
+            maturity: coin.maturity.into(),
+            witness_index: 0,
+        });
+    }
+    let tx = tx
+        .add_output(Output::Coin {
+            to: Address::new([1u8; 32]),
+            amount: 1,
+            asset_id,
+        })
+        .add_output(Output::Change {
+            to: owner,
+            amount: 0,
+            asset_id,
+        })
+        .add_witness(Default::default())
+        .finalize();
+
+    client.submit(&tx).await.unwrap();
+
+    let balance = client
+        .balance(
+            format!("{:#x}", owner).as_str(),
+            Some(format!("{:#x}", asset_id).as_str()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(balance, 299);
 }
 
 #[tokio::test]
