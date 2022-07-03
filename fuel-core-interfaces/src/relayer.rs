@@ -173,7 +173,7 @@ impl Sender {
     pub async fn get_validator_set(
         &self,
         da_height: DaBlockHeight,
-    ) -> Result<ValidatorSet, anyhow::Error> {
+    ) -> anyhow::Result<ValidatorSet> {
         let (response, receiver) = oneshot::channel();
         let _ = self
             .send(RelayerRequest::GetValidatorSet {
@@ -187,7 +187,7 @@ impl Sender {
             .map_err(Into::into)
     }
 
-    pub async fn get_status(&self) -> Result<RelayerStatus, anyhow::Error> {
+    pub async fn get_status(&self) -> anyhow::Result<RelayerStatus> {
         let (response, receiver) = oneshot::channel();
         let _ = self.send(RelayerRequest::GetStatus { response }).await;
         receiver.await.map_err(Into::into)

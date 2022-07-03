@@ -67,7 +67,7 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Service, anyhow::Error> {
+    pub fn build(self) -> anyhow::Result<Service> {
         if self.private_key.is_none() || self.db.is_none() || self.import_block_events.is_none() {
             return Err(anyhow!("One of context items are not set"));
         }
@@ -105,7 +105,7 @@ pub struct Context {
 }
 
 impl Service {
-    pub(crate) fn new(sender: relayer::Sender, context: Context) -> Result<Self, anyhow::Error> {
+    pub(crate) fn new(sender: relayer::Sender, context: Context) -> anyhow::Result<Self> {
         Ok(Self {
             sender,
             join: Mutex::new(None),
@@ -134,8 +134,8 @@ impl Service {
         &self,
         join: &mut Option<JoinHandle<Context>>,
         context: Context,
-        provider: Result<P, anyhow::Error>,
-    ) -> Result<(), anyhow::Error>
+        provider: anyhow::Result<P>,
+    ) -> anyhow::Result<()>
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
@@ -153,7 +153,7 @@ impl Service {
         Ok(())
     }
 
-    pub async fn start(&self) -> Result<(), anyhow::Error> {
+    pub async fn start(&self) -> anyhow::Result<()> {
         let mut join = self.join.lock().await;
         if join.is_none() {
             if let Some(context) = self.context.lock().await.take() {

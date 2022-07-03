@@ -15,7 +15,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(db: Box<dyn TxPoolDb>, config: Config) -> Result<Self, anyhow::Error> {
+    pub fn new(db: Box<dyn TxPoolDb>, config: Config) -> anyhow::Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
         let (broadcast, _receiver) = broadcast::channel(100);
         Ok(Self {

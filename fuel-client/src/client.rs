@@ -61,7 +61,7 @@ where
 }
 
 impl FuelClient {
-    pub fn new(url: impl AsRef<str>) -> Result<Self, anyhow::Error> {
+    pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
     }
 
