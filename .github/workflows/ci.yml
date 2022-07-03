@@ -64,7 +64,6 @@ jobs:
 
   cargo-verifications:
     needs:
-      - verify-rust-version
       - get-workspace-members
     runs-on: ubuntu-latest
     strategy:
