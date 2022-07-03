@@ -166,7 +166,7 @@ impl Service {
                         .await
                 } else {
                     *self.context.lock().await = Some(context);
-                    Err(anyhow!("Relayer uclient uri is not http or ws"))
+                    Err(anyhow!("Relayer client uri is not http or ws"))
                 }
             } else {
                 Err(anyhow!("Starting FuelRelayer service that is stopping"))
