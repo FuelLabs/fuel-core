@@ -62,19 +62,6 @@ jobs:
           members=$(cat Cargo.toml | dasel -r toml -w json 'workspace.members' | jq -r ".[]" | xargs -L 1 basename | jq -R '[.]' | jq -s -c 'add')
           echo "::set-output name=members::$members"
 
-  verify-rust-version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      # Ensure CI is using the same minimum toolchain specified in fuels Cargo.toml
-      - run: |
-          curl -sSLf "$DASEL_VERSION" -L -o dasel && chmod +x dasel
-          mv ./dasel /usr/local/bin/dasel
-          MIN_VERSION=$(cat packages/fuels/Cargo.toml | dasel -r toml 'package.rust-version')
-          RUST_VERSION="${{ env.RUST_VERSION }}"
-          echo "Comparing minimum supported toolchain ($MIN_VERSION) with ci toolchain (RUST_VERSION)"
-          test "$MIN_VERSION" == "$RUST_VERSION"
-
   cargo-verifications:
     needs:
       - verify-rust-version
