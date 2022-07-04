@@ -2166,7 +2166,7 @@ dependencies = [
  "derive_more",
  "fuel-asm",
  "fuel-crypto",
- "fuel-merkle 0.2.0",
+ "fuel-merkle 0.3.0",
  "fuel-storage 0.1.0",
  "fuel-tx",
  "fuel-types",
@@ -2241,6 +2241,20 @@ checksum = "fab10247f9eababf72a64120da05cfef57fbf811ebd2c93dbbbbeccddcce5f11"
 dependencies = [
  "digest 0.10.3",
  "fuel-storage 0.2.0",
+ "hex",
+ "sha2 0.10.2",
+ "thiserror",
+]
+
+[[package]]
+name = "fuel-merkle"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fa59f2a4e6cd6d83a51981c5ac706d58fc8ef53700003948c826827b88cfff1"
+dependencies = [
+ "digest 0.10.3",
+ "fuel-storage 0.2.0",
+ "hashbrown 0.12.1",
  "hex",
  "sha2 0.10.2",
  "thiserror",
@@ -2687,6 +2701,9 @@ name = "hashbrown"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db0d4cf898abf0081f964436dc980e96670a0f36863e4b83aaacdb65c9d7ccc3"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "hashers"

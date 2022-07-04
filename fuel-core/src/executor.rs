@@ -8,7 +8,7 @@ use chrono::Utc;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
-        fuel_merkle::{binary::MerkleTree, common::StorageMap},
+        fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
             Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
@@ -85,8 +85,7 @@ impl Executor {
         };
 
         let mut block_db_transaction = self.database.transaction();
-        let mut storage = StorageMap::new();
-        let mut txs_merkle = MerkleTree::new(&mut storage);
+        let mut txs_merkle = MerkleTree::new();
         let mut tx_status = vec![];
         let mut coinbase = 0u64;
 
@@ -160,9 +159,7 @@ impl Executor {
             //       possible atm because the change output values are set on the tx instance in the vm
             //       and not also on the in-memory representation of the tx.
             let tx_bytes = vm_result.tx().clone().to_bytes();
-            txs_merkle
-                .push(&tx_bytes)
-                .expect("In-memory impl should be infallible");
+            txs_merkle.push(&tx_bytes);
 
             match mode {
                 ExecutionMode::Validation => {
@@ -239,10 +236,7 @@ impl Executor {
         }
 
         // check or set transaction commitment
-        let txs_root = txs_merkle
-            .root()
-            .expect("In-memory impl should be infallible")
-            .into();
+        let txs_root = txs_merkle.root().into();
         match mode {
             ExecutionMode::Production => {
                 block.header.transactions_root = txs_root;
