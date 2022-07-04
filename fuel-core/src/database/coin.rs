@@ -124,7 +124,7 @@ impl Database {
         })
     }
 
-    pub fn get_coin_config(&self) -> Result<Option<Vec<CoinConfig>>, anyhow::Error> {
+    pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, Word>(COIN, None, None, None)
             .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
