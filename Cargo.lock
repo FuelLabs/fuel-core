@@ -1679,18 +1679,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "escargot"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5584ba17d7ab26a8a7284f13e5bd196294dd2f2d79773cff29b9e9edef601a6"
-dependencies = [
- "log",
- "once_cell",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "eth-keystore"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2340,7 +2328,6 @@ version = "0.0.0"
 dependencies = [
  "async-std",
  "chrono",
- "escargot",
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-crypto",
@@ -2349,7 +2336,6 @@ dependencies = [
  "futures",
  "insta",
  "itertools",
- "portpicker",
  "rand 0.8.5",
  "reqwest",
  "rstest",
@@ -4443,15 +4429,6 @@ dependencies = [
  "cpufeatures",
  "opaque-debug 0.3.0",
  "universal-hash",
-]
-
-[[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand 0.8.5",
 ]
 
 [[package]]
