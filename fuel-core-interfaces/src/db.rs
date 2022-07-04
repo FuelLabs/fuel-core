@@ -951,38 +951,161 @@ pub mod helpers {
 
 #[cfg(test)]
 mod tests {
-    use crate::db::helpers::DummyDb;
-    use crate::db::KvStoreError;
+    use std::collections::HashMap;
+    use std::error::Error;
+
+    use crate::db::helpers::{DummyDb, CONTRACT_ID1};
+    use crate::model::{
+        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, ValidatorId,
+        ValidatorStake,
+    };
+    use crate::relayer::StakingDiff;
     use fuel_storage::Storage;
-    use fuel_tx::Transaction;
-    use fuel_types::Bytes32;
+    use fuel_tx::{Contract, Transaction, UtxoId};
+    use fuel_types::{Address, Bytes32, ContractId};
 
     #[test]
-    fn transactions_db() -> Result<(), KvStoreError> {
-        let mut db: Box<dyn Storage<Bytes32, Transaction, Error = KvStoreError>> =
-            Box::new(DummyDb::filled());
+    fn coins_db() {
+        let db = sample_db();
+        let tx = Transaction::default();
+        let value = Coin {
+            owner: Address::default(),
+            amount: 400,
+            asset_id: Default::default(),
+            maturity: BlockHeight::from(0u64),
+            status: CoinStatus::Unspent,
+            block_created: BlockHeight::from(0u64),
+        };
+        let key = UtxoId::new(tx.id(), 0);
 
-        let value: Transaction = Transaction::default();
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn transactions_db() {
+        let db = sample_db();
+        let value = Transaction::default();
         let key = value.id();
 
-        //before insert
-        assert!(!db.contains_key(&key)?);
-        assert!(db.get(&key)?.is_none());
-        assert!(db.remove(&key)?.is_none());
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn contracts_db() {
+        let db = sample_db();
+        let key: ContractId = *CONTRACT_ID1;
+        let value: Contract = Contract::default();
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn deposit_coins_db() {
+        let db = sample_db();
+        let value = DepositCoin {
+            owner: Address::default(),
+            amount: 400,
+            asset_id: Default::default(),
+            nonce: Bytes32::default(),
+            deposited_da_height: DaBlockHeight::default(),
+            fuel_block_spend: Some(BlockHeight::default()),
+        };
+        let key = value.id();
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn delegator_indexes_db() {
+        let db = sample_db();
+        let key: Address = Address::default();
+        let value: Vec<DaBlockHeight> = vec![DaBlockHeight::default()];
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn validators_db() {
+        let db = sample_db();
+        let key: ValidatorId = ValidatorId::default();
+        let value: (ValidatorStake, Option<ConsensusId>) = (ValidatorStake::default(), None);
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn staking_diffs_db() {
+        let db = sample_db();
+        let key: DaBlockHeight = DaBlockHeight::default();
+        let value: StakingDiff = StakingDiff {
+            validators: HashMap::new(),
+            delegations: HashMap::new(),
+        };
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    fn sample_db() -> Box<DummyDb> {
+        Box::new(DummyDb::filled())
+    }
+
+    fn execute_test<K, V, E>(
+        mut db: Box<dyn Storage<K, V, Error = E>>,
+        key: K,
+        value: V,
+    ) -> Result<(), E>
+    where
+        V: Clone,
+        E: Error,
+    {
+        //before
+        assert!(
+            !db.contains_key(&key)?,
+            "key should not exist before insertion"
+        );
+        assert!(
+            db.get(&key)?.is_none(),
+            "value should not be retrievable before insertion"
+        );
+        assert!(
+            db.remove(&key)?.is_none(),
+            "value should not be removable before insertion"
+        );
 
         // insert twice
-        assert!(db.insert(&key, &value)?.is_none());
-        assert!(db.insert(&key, &value)?.is_some());
+        assert!(
+            db.insert(&key, &value)?.is_none(),
+            "insert should return None on the first insert"
+        );
+        assert!(
+            db.insert(&key, &value)?.is_some(),
+            "insert should return Some on the second insert"
+        );
 
-        // after insert
-        assert!(db.contains_key(&key)?);
-        assert!(db.get(&key)?.is_some());
-        assert!(db.remove(&key)?.is_some());
+        // after
+        assert!(db.contains_key(&key)?, "key should exist after insertion");
+        assert!(
+            db.get(&key)?.is_some(),
+            "value should be retrievable after insertion"
+        );
+        assert!(
+            db.remove(&key)?.is_some(),
+            "value should be removable after insertion"
+        );
 
         // after remove
-        assert!(!db.contains_key(&key)?);
-        assert!(db.get(&key)?.is_none());
-        assert!(db.remove(&key)?.is_none());
+        assert!(
+            !db.contains_key(&key)?,
+            "key should not exist after removal"
+        );
+        assert!(
+            db.get(&key)?.is_none(),
+            "value should not be retrievable after removal"
+        );
+        assert!(
+            db.remove(&key)?.is_none(),
+            "value should not be removable after removal"
+        );
 
         Ok(())
     }
