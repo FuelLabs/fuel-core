@@ -200,7 +200,7 @@ impl BlockMutation {
 
         for _ in 0..iterate {
             let mut block = FuelBlock::default();
-            executor.execute(&mut block, ExecutionMode::Production).await?; 
+            executor.execute(&mut block, ExecutionMode::Validation).await?; 
         }
 
         let new_height:u64 = db.get_block_height()?.unwrap().into();
