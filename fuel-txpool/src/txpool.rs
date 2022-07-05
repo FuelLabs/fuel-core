@@ -3,11 +3,14 @@ use crate::{
     types::*,
     Config, Error,
 };
+use fuel_core_interfaces::txpool::{TxStatus, TxStatusBroadcast};
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
     txpool::TxPoolDb,
 };
+use std::cmp::Reverse;
 use std::collections::HashMap;
+use tokio::sync::{broadcast, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -97,9 +100,6 @@ impl TxPool {
             .collect()
     }
 
-    // When block is updated we need to receive all spend outputs and remove them from txpool
-    pub fn block_update(&mut self /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/) {}
-
     pub fn remove(&mut self, tx: &ArcTx) -> Vec<ArcTx> {
         self.remove_by_tx_id(&tx.id())
     }
@@ -131,6 +131,128 @@ impl TxPool {
             return Err(Error::NotInsertedBytePriceTooLow);
         }
         Ok(())
+    }
+
+    /// import tx
+    pub async fn external_insert(
+        txpool: &RwLock<Self>,
+        db: &dyn TxPoolDb,
+        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        txs: Vec<ArcTx>,
+    ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
+        // insert inside pool
+
+        // Check that data is okay (witness match input/output, and if recovered signatures ara valid).
+        // should be done before transaction comes to txpool, or before it enters RwLocked region.
+        let mut res = Vec::new();
+        for tx in txs.iter() {
+            let mut pool = txpool.write().await;
+            res.push(pool.insert(tx.clone(), db).await)
+        }
+        // announce to subscribers
+        for (ret, tx) in res.iter().zip(txs.into_iter()) {
+            match ret {
+                Ok(removed) => {
+                    for removed in removed {
+                        // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
+                        // but for now it is okay to just use Error::Removed.
+                        let _ = broadcast.send(TxStatusBroadcast {
+                            tx: removed.clone(),
+                            status: TxStatus::SqueezedOut {
+                                reason: Error::Removed,
+                            },
+                        });
+                    }
+                    let _ = broadcast.send(TxStatusBroadcast {
+                        tx,
+                        status: TxStatus::Submitted,
+                    });
+                }
+                Err(_) => {}
+            }
+        }
+        res
+    }
+
+    /// find all tx by its hash
+    pub async fn find(txpool: &RwLock<Self>, hashes: &[TxId]) -> Vec<Option<TxInfo>> {
+        let mut res = Vec::with_capacity(hashes.len());
+        let pool = txpool.read().await;
+        for hash in hashes {
+            res.push(pool.txs().get(hash).cloned());
+        }
+        res
+    }
+
+    pub async fn find_one(txpool: &RwLock<Self>, hash: &TxId) -> Option<TxInfo> {
+        txpool.read().await.txs().get(hash).cloned()
+    }
+
+    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
+    pub async fn find_dependent(txpool: &RwLock<Self>, hashes: &[TxId]) -> Vec<ArcTx> {
+        let mut seen = HashMap::new();
+        {
+            let pool = txpool.read().await;
+            for hash in hashes {
+                if let Some(tx) = pool.txs().get(hash) {
+                    pool.dependency()
+                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
+                }
+            }
+        }
+        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+        // sort from high to low price
+        list.sort_by_key(|tx| Reverse(tx.gas_price()));
+
+        list
+    }
+
+    /// Iterete over `hashes` and return all hashes that we dont have.
+    pub async fn filter_by_negative(txpool: &RwLock<Self>, tx_ids: &[TxId]) -> Vec<TxId> {
+        let mut res = Vec::new();
+        let pool = txpool.read().await;
+        for tx_id in tx_ids {
+            if pool.txs().get(tx_id).is_none() {
+                res.push(*tx_id)
+            }
+        }
+        res
+    }
+
+    /// Return all sorted transactions that are includable in next block.
+    /// This is going to be heavy operation, use it only when needed.
+    pub async fn includable(txpool: &RwLock<Self>) -> Vec<ArcTx> {
+        let pool = txpool.read().await;
+        pool.sorted_includable()
+    }
+
+    /// When block is updated we need to receive all spend outputs and remove them from txpool.
+    pub async fn block_update(
+        txpool: &RwLock<Self>, /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
+    ) {
+        txpool.write().await;
+        // TODO
+    }
+
+    /// remove transaction from pool needed on user demand. Low priority
+    pub async fn external_remove(
+        txpool: &RwLock<Self>,
+        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_ids: &[TxId],
+    ) {
+        let mut removed = Vec::new();
+        for tx_id in tx_ids {
+            let rem = { txpool.write().await.remove_by_tx_id(tx_id) };
+            removed.extend(rem.into_iter());
+        }
+        for tx in removed {
+            let _ = broadcast.send(TxStatusBroadcast {
+                tx,
+                status: TxStatus::SqueezedOut {
+                    reason: Error::Removed,
+                },
+            });
+        }
     }
 }
 
