@@ -86,19 +86,23 @@ impl Database {
                     .into_owned()
                     .0;
 
-                let state: Option<Vec<(Bytes32, Bytes32)>> =
-                    self.get(contract_id.as_ref(), CONTRACTS_STATE)?;
-
-                /*
-                let _state_two = self.iter_all::<Vec<u8>, Vec<u8>>(CONTRACTS_STATE, Some(contract_id.as_ref().to_vec()), None, None)
-                    .map(|res| -> Result<(Bytes32, Bytes32), Error>{
+                let state: Vec<(Bytes32, Bytes32)> = self
+                    .iter_all::<Vec<u8>, Vec<u8>>(
+                        CONTRACTS_STATE,
+                        Some(contract_id.as_ref().to_vec()),
+                        None,
+                        None,
+                    )
+                    .map(|res| -> Result<(Bytes32, Bytes32), Error> {
                         let safe_res = res.unwrap();
                         let bytes_one = Bytes32::new(safe_res.0[..32].try_into().unwrap());
                         let bytes_two = Bytes32::new(safe_res.1[..32].try_into().unwrap());
 
                         Ok((bytes_one, bytes_two))
-                    }).collect::<Vec<Result<(Bytes32, Bytes32), Error>>>();
-                    */
+                    })
+                    .collect::<Vec<Result<(Bytes32, Bytes32), Error>>>()
+                    .into_iter()
+                    .collect::<Result<Vec<(Bytes32, Bytes32)>, Error>>()?;
 
                 let balances: Option<Vec<(AssetId, u64)>> =
                     self.get(contract_id.as_ref(), BALANCES)?;
@@ -106,7 +110,7 @@ impl Database {
                 Ok(ContractConfig {
                     code,
                     salt,
-                    state,
+                    state: Some(state),
                     balances,
                 })
             })
