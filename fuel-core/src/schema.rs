@@ -26,7 +26,7 @@ pub struct Query(
 );
 
 #[derive(MergedObject, Default)]
-pub struct Mutation(dap::DapMutation, tx::TxMutation);
+pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
 
 // Placeholder for when we need to add subscriptions
 // #[derive(MergedSubscription, Default)]

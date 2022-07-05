@@ -1,11 +1,13 @@
 use crate::database::Database;
+use crate::config::Config;
+use crate::executor::{ExecutionMode, Executor};
 use crate::schema::{
     scalars::{BlockId, U64},
     tx::types::Transaction,
 };
 use crate::{
     database::KvStoreError,
-    model::{BlockHeight, FuelBlockDb},
+    model::{BlockHeight, FuelBlock, FuelBlockDb},
     state::IterDirection,
 };
 use async_graphql::{
@@ -173,5 +175,36 @@ impl BlockQuery {
             },
         )
         .await
+    }
+}
+
+#[derive(Default)]
+pub struct BlockMutation;
+
+#[Object]
+impl BlockMutation {
+    async fn advance_block(
+        &self,
+        ctx: &Context<'_>,
+        advance_by: Option<U64>,
+    ) -> async_graphql::Result<U64> {
+        let db = ctx.data_unchecked::<Database>();
+        let cfg = ctx.data_unchecked::<Config>().clone();
+
+        let executor = Executor {
+            database: db.clone(),
+            config: cfg.clone(),
+        };
+
+        let iterate: u64 = advance_by.unwrap_or(U64::from(1)).into();
+
+        for _ in 0..iterate {
+            let mut block = FuelBlock::default();
+            executor.execute(&mut block, ExecutionMode::Production).await?; 
+        }
+
+        let new_height:u64 = db.get_block_height()?.unwrap().into();
+
+        Ok(new_height.into())
     }
 }

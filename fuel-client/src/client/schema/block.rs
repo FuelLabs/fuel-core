@@ -73,6 +73,22 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct AdvanceBlockArgs {
+    pub advance_by: Option<U64>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    argument_struct = "AdvanceBlockArgs",
+    graphql_type = "Mutation"
+)]
+pub struct BlockMutation {
+    #[arguments(advance_by = &args.advance_by)]
+    pub advance_block: U64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

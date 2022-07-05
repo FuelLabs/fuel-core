@@ -24,6 +24,8 @@ use types::{TransactionResponse, TransactionStatus};
 use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
+use self::schema::block::AdvanceBlockArgs;
+
 pub mod schema;
 pub mod types;
 
@@ -299,6 +301,17 @@ impl FuelClient {
             .collect();
 
         Ok(receipts?)
+    }
+
+    pub async fn advance_block(&self, advance_blocks_by: Option<u64>) -> io::Result<u64> {
+
+        let query = schema::block::BlockMutation::build(&AdvanceBlockArgs {
+            advance_by: Some(advance_blocks_by.unwrap_or(1).into()),
+        });
+
+        let new_height = self.query(query).await?.advance_block;
+
+        Ok(new_height.into())
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {

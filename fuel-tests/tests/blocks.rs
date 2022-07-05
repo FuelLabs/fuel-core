@@ -33,6 +33,22 @@ async fn block() {
 }
 
 #[tokio::test]
+async fn advance_block() {
+    let db = Database::default();
+
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+    
+    let client = FuelClient::from(srv.bound_address);
+
+    let new_height = client.advance_block(Some(5)).await.unwrap();
+
+    println!("{:?}", new_height);
+
+}
+
+#[tokio::test]
 async fn block_connection_first_5() {
     // blocks
     let blocks = (0..10u32)
