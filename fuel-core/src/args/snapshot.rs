@@ -1,7 +1,8 @@
 use crate::args::DEFAULT_DB_PATH;
-#[cfg(feature = "rocksdb")]
-use anyhow::Context;
+#[cfg(not(feature = "rocksdb"))]
 use anyhow::{anyhow, Error};
+#[cfg(feature = "rocksdb")]
+use anyhow::{Context, Error};
 use clap::Parser;
 #[cfg(feature = "rocksdb")]
 use fuel_core::{
