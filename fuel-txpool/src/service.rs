@@ -90,7 +90,6 @@ pub struct Context {
 
 impl Context {
     pub async fn run(mut self) -> Self {
-        //let Context{config,broadcast,db,receiver,new_block} = self;
         let txpool = Arc::new(RwLock::new(TxPool::new(self.config.clone())));
 
         loop {
@@ -103,7 +102,7 @@ impl Context {
                     let db = self.db.clone();
                     let txpool = txpool.clone();
 
-                    // this is litlle bit risky but we can always add semaphore to limit number of requests.
+                    // This is litle bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
@@ -133,7 +132,6 @@ impl Context {
                 }
                 _block_updated = self.import_block_events.recv() => {
                     let txpool = txpool.clone();
-                    //let interface = self.clone();
                     tokio::spawn( async move {
                         TxPool::block_update(txpool.as_ref()).await
                     });
@@ -169,7 +167,6 @@ impl Service {
         let mut join = self.join.lock().await;
         if join.is_none() {
             if let Some(context) = self.context.lock().await.take() {
-                //let interface = self.interface.clone();
                 *join = Some(tokio::spawn(async { context.run().await }));
                 Ok(())
             } else {
@@ -229,7 +226,7 @@ pub mod tests {
 
         assert!(service.start().await.is_ok(), "start service");
 
-        //double start will return false
+        // Double start will return false.
         assert!(service.start().await.is_err(), "double start should fail");
 
         let stop_handle = service.stop().await;
