@@ -3,7 +3,6 @@ use crate::args::snapshot::SnapshotCommand;
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
-
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
 }

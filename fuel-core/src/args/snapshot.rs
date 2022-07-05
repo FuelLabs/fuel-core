@@ -1,9 +1,13 @@
 use crate::args::DEFAULT_DB_PATH;
+#[cfg(feature = "rocksdb")]
 use anyhow::Context;
+use anyhow::{anyhow, Error};
 use clap::Parser;
-use fuel_core::config::chain_config::ChainConfig;
-use fuel_core::config::chain_config::StateConfig;
-use fuel_core::database::Database;
+#[cfg(feature = "rocksdb")]
+use fuel_core::{
+    config::chain_config::ChainConfig, config::chain_config::StateConfig, database::Database,
+};
+#[cfg(feature = "rocksdb")]
 use std::io;
 use std::path::PathBuf;
 
@@ -27,19 +31,18 @@ pub struct SnapshotCommand {
     pub chain_config: String,
 }
 
-pub async fn exec(command: SnapshotCommand) -> anyhow::Result<()> {
-    let path = command.database_path;
-    let _config: ChainConfig = command.chain_config.parse()?;
+pub async fn exec(command: SnapshotCommand) -> anyhow::Result<(), Error> {
     #[cfg(not(feature = "rocksdb"))]
     {
         Err(anyhow!(
             "Rocksdb must be enabled to use the database at {}",
-            path.display()
+            command.database_path.display()
         ))
     }
-
     #[cfg(feature = "rocksdb")]
     {
+        let path = command.database_path;
+        let _config: ChainConfig = command.chain_config.parse()?;
         let db = Database::open(&path).context(format!(
             "failed to open database at path {}",
             path.display()
@@ -57,7 +60,6 @@ pub async fn exec(command: SnapshotCommand) -> anyhow::Result<()> {
         let stdout = io::stdout().lock();
 
         serde_json::to_writer(stdout, &chain_conf).context("failed to dump snapshot to JSON")?;
-
         Ok(())
     }
 }
