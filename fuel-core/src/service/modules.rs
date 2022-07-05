@@ -2,6 +2,7 @@
 use crate::config::Config;
 use crate::database::Database;
 use anyhow::Result;
+use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ pub struct Modules {
     pub block_producer: Arc<fuel_block_producer::Service>,
     pub bft: Arc<fuel_core_bft::Service>,
     pub sync: Arc<fuel_sync::Service>,
+    pub relayer: Arc<fuel_relayer::Service>,
 }
 
 impl Modules {
@@ -39,8 +41,17 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let block_producer = fuel_block_producer::Service::new(&config.block_producer, db).await?;
     let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
-    // let mut relayer = FuelRelayer::new(FuelRelayerConfig::default());
-    // let mut p2p = FuelP2P::new(FuelP2PConfig::default());
+
+    let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
+    relayer_builder
+        .config(config.relayer.clone())
+        .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
+        .import_block_event(block_importer.subscribe())
+        .private_key(
+            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
+                .unwrap(),
+        );
+
     let txpool = fuel_txpool::Service::new(
         Box::new(database.clone()) as Box<dyn TxPoolDb>,
         config.txpool.clone(),
@@ -49,13 +60,12 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let p2p_mpsc = ();
     let p2p_broadcast_consensus = ();
     let p2p_broadcast_block = ();
-    let relayer_mpsc = ();
 
     block_importer.start().await;
     txpool.start(block_importer.subscribe()).await;
     block_producer.start(txpool.sender().clone()).await;
     bft.start(
-        relayer_mpsc,
+        relayer_builder.sender().clone(),
         p2p_broadcast_consensus,
         block_producer.sender().clone(),
         block_importer.sender().clone(),
@@ -66,11 +76,17 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     sync.start(
         p2p_broadcast_block,
         p2p_mpsc,
-        relayer_mpsc,
+        relayer_builder.sender().clone(),
         bft.sender().clone(),
         block_importer.sender().clone(),
     )
     .await;
+
+    // build modules
+    let relayer = relayer_builder.build()?;
+
+    // start modules
+    relayer.start().await?;
 
     Ok(Modules {
         txpool: Arc::new(txpool),
@@ -78,5 +94,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         block_producer: Arc::new(block_producer),
         bft: Arc::new(bft),
         sync: Arc::new(sync),
+        relayer: Arc::new(relayer),
     })
 }

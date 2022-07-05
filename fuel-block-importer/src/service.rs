@@ -13,7 +13,7 @@ pub struct Service {
 }
 
 impl Service {
-    pub async fn new(_config: &Config, _db: ()) -> Result<Self, anyhow::Error> {
+    pub async fn new(_config: &Config, _db: ()) -> anyhow::Result<Self> {
         let (sender, _receiver) = mpsc::channel(100);
         let (broadcast, _receiver) = broadcast::channel(100);
         Ok(Self {
