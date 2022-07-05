@@ -24,6 +24,7 @@ pub struct Config {
     pub block_executor: fuel_block_executor::Config,
     pub bft: fuel_core_bft::Config,
     pub sync: fuel_sync::Config,
+    pub relayer: fuel_relayer::Config,
 }
 
 impl Config {
@@ -42,6 +43,7 @@ impl Config {
             block_executor: Default::default(),
             bft: Default::default(),
             sync: Default::default(),
+            relayer: Default::default(),
         }
     }
 }
