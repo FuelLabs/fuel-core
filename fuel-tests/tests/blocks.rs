@@ -39,13 +39,12 @@ async fn advance_block() {
     let srv = FuelService::from_database(db, Config::local_node())
         .await
         .unwrap();
-    
+
     let client = FuelClient::from(srv.bound_address);
 
     let new_height = client.advance_block(Some(5)).await.unwrap();
 
-    println!("{:?}", new_height);
-
+    assert_eq!(5, new_height);
 }
 
 #[tokio::test]

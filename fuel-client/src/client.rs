@@ -304,7 +304,6 @@ impl FuelClient {
     }
 
     pub async fn advance_block(&self, advance_blocks_by: Option<u64>) -> io::Result<u64> {
-
         let query = schema::block::BlockMutation::build(&AdvanceBlockArgs {
             advance_by: Some(advance_blocks_by.unwrap_or(1).into()),
         });

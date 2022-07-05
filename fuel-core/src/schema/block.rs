@@ -1,5 +1,5 @@
-use crate::database::Database;
 use crate::config::Config;
+use crate::database::Database;
 use crate::executor::{ExecutionMode, Executor};
 use crate::schema::{
     scalars::{BlockId, U64},
@@ -7,7 +7,7 @@ use crate::schema::{
 };
 use crate::{
     database::KvStoreError,
-    model::{BlockHeight, FuelBlock, FuelBlockDb},
+    model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
     state::IterDirection,
 };
 use async_graphql::{
@@ -196,14 +196,29 @@ impl BlockMutation {
             config: cfg.clone(),
         };
 
-        let iterate: u64 = advance_by.unwrap_or(U64::from(1)).into();
+        let iterate: u64 = advance_by.unwrap_or_else(|| U64::from(1)).into();
 
         for _ in 0..iterate {
-            let mut block = FuelBlock::default();
-            executor.execute(&mut block, ExecutionMode::Validation).await?; 
+            let current_height = db.get_block_height()?.unwrap_or_default();
+            let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+            let new_block_height = current_height + 1u32.into();
+
+            let mut block = FuelBlock {
+                header: FuelBlockHeader {
+                    height: new_block_height,
+                    parent_hash: current_hash,
+                    time: Utc::now(),
+                    ..Default::default()
+                },
+                transactions: vec![],
+            };
+
+            executor
+                .execute(&mut block, ExecutionMode::Production)
+                .await?;
         }
 
-        let new_height:u64 = db.get_block_height()?.unwrap().into();
+        let new_height: u64 = db.get_block_height()?.unwrap().into();
 
         Ok(new_height.into())
     }
