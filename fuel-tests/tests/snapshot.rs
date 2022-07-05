@@ -1,3 +1,5 @@
+use std::vec;
+
 use fuel_core::database::Database;
 use fuel_core::{
     config::{
@@ -33,8 +35,14 @@ async fn snapshot_state_config() {
         contracts: Some(vec![ContractConfig {
             code: vec![8; 32],
             salt: Salt::new([9; 32]),
-            state: None,
-            balances: None,
+            state: Some(vec![
+                (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
+                (Bytes32::new([5u8; 32]), Bytes32::new([9u8; 32])),
+            ]),
+            balances: Some(vec![
+                (AssetId::new([3u8; 32]), 100),
+                (AssetId::new([10u8; 32]), 10000),
+            ]),
         }]),
         coins: Some(
             vec![
@@ -75,4 +83,13 @@ async fn snapshot_state_config() {
 
     assert!(state_conf.contracts.is_some());
     assert!(state_conf.coins.is_some());
+
+    let contract_config = &state_conf.contracts.unwrap()[1];
+
+    assert!(contract_config.balances.is_some());
+    assert!(contract_config.state.is_some());
+
+    let coin_config = state_conf.coins.unwrap();
+
+    assert!(coin_config.len() == 3);
 }

@@ -86,31 +86,48 @@ impl Database {
                     .into_owned()
                     .0;
 
-                let state: Vec<(Bytes32, Bytes32)> = self
-                    .iter_all::<Vec<u8>, Vec<u8>>(
+                let state = Some(
+                    self.iter_all::<Vec<u8>, Vec<u8>>(
                         CONTRACTS_STATE,
                         Some(contract_id.as_ref().to_vec()),
                         None,
                         None,
                     )
-                    .map(|res| -> Result<(Bytes32, Bytes32), Error> {
+                    .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
                         let safe_res = res.unwrap();
-                        let bytes_one = Bytes32::new(safe_res.0[..32].try_into().unwrap());
-                        let bytes_two = Bytes32::new(safe_res.1[..32].try_into().unwrap());
+                        let bytes_one = Bytes32::new(safe_res.0[..32].try_into()?);
+                        let bytes_two = Bytes32::new(safe_res.1[..32].try_into()?);
 
                         Ok((bytes_one, bytes_two))
                     })
-                    .collect::<Vec<Result<(Bytes32, Bytes32), Error>>>()
+                    .collect::<Vec<Result<(Bytes32, Bytes32), anyhow::Error>>>()
                     .into_iter()
-                    .collect::<Result<Vec<(Bytes32, Bytes32)>, Error>>()?;
+                    .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,
+                );
 
-                let balances: Option<Vec<(AssetId, u64)>> =
-                    self.get(contract_id.as_ref(), BALANCES)?;
+                let balances = Some(
+                    self.iter_all::<Vec<u8>, u64>(
+                        BALANCES,
+                        Some(contract_id.as_ref().to_vec()),
+                        None,
+                        None,
+                    )
+                    .map(|res| -> Result<(AssetId, u64), anyhow::Error> {
+                        let safe_res = res?;
+
+                        let asset_id = AssetId::new(safe_res.0[..32].try_into()?);
+
+                        Ok((asset_id, safe_res.1))
+                    })
+                    .collect::<Vec<Result<(AssetId, u64), anyhow::Error>>>()
+                    .into_iter()
+                    .collect::<Result<Vec<(AssetId, u64)>, anyhow::Error>>()?,
+                );
 
                 Ok(ContractConfig {
                     code,
                     salt,
-                    state: Some(state),
+                    state,
                     balances,
                 })
             })

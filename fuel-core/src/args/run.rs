@@ -128,6 +128,7 @@ impl RunCommand {
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
+            relayer: Default::default(),
             bft: Default::default(),
             sync: Default::default(),
         })
