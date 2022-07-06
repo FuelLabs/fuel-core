@@ -62,7 +62,7 @@ async fn produce_block_negative() {
     let new_height = client.produce_block(5).await;
 
     assert_eq!(
-        "Response errors; RPC Control Must be enable to use this endpoint",
+        "Response errors; RPC control must be enabled to use this endpoint",
         new_height.err().unwrap().to_string()
     );
 }
