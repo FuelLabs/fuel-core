@@ -74,19 +74,19 @@ pub struct BlockIdFragment {
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
-pub struct AdvanceBlockArgs {
-    pub advance_by: Option<U64>,
+pub struct ProduceBlockArgs {
+    pub blocks_to_produce: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
-    argument_struct = "AdvanceBlockArgs",
+    argument_struct = "ProduceBlockArgs",
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(advance_by = &args.advance_by)]
-    pub advance_block: U64,
+    #[arguments(blocks_to_produce = &args.blocks_to_produce)]
+    pub produce_block: U64,
 }
 
 #[cfg(test)]

@@ -184,10 +184,10 @@ pub struct BlockMutation;
 
 #[Object]
 impl BlockMutation {
-    async fn advance_block(
+    async fn produce_block(
         &self,
         ctx: &Context<'_>,
-        advance_by: Option<U64>,
+        blocks_to_produce: U64,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
         let cfg = ctx.data_unchecked::<Config>().clone();
@@ -201,7 +201,7 @@ impl BlockMutation {
             config: cfg.clone(),
         };
 
-        let iterate: u64 = advance_by.unwrap_or_else(|| U64::from(1)).into();
+        let iterate: u64 = blocks_to_produce.into();
 
         for _ in 0..iterate {
             let current_height = db.get_block_height()?.unwrap_or_default();

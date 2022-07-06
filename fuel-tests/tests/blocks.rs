@@ -33,7 +33,7 @@ async fn block() {
 }
 
 #[tokio::test]
-async fn advance_block() {
+async fn produce_block() {
     let db = Database::default();
 
     let mut config = Config::local_node();
@@ -44,13 +44,13 @@ async fn advance_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.advance_block(Some(5)).await.unwrap();
+    let new_height = client.produce_block(5).await.unwrap();
 
     assert_eq!(5, new_height);
 }
 
 #[tokio::test]
-async fn advance_block_negative() {
+async fn produce_block_negative() {
     let db = Database::default();
 
     let srv = FuelService::from_database(db, Config::local_node())
@@ -59,9 +59,12 @@ async fn advance_block_negative() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.advance_block(Some(5)).await;
+    let new_height = client.produce_block(5).await;
 
-    assert!(new_height.is_err());
+    assert_eq!(
+        "Response errors; RPC Control Must be enable to use this endpoint",
+        new_height.err().unwrap().to_string()
+    );
 }
 
 #[tokio::test]
