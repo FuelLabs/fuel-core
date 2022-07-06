@@ -193,7 +193,7 @@ impl BlockMutation {
         let cfg = ctx.data_unchecked::<Config>().clone();
 
         if !cfg.enable_rpc_control {
-            return Err(anyhow!("RPC Control Must be enable to use this endpoint").into());
+            return Err(anyhow!("RPC control must be enabled to use this endpoint").into());
         }
 
         let executor = Executor {
