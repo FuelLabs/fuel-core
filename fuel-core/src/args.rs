@@ -41,6 +41,10 @@ pub struct Opt {
     #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
+    /// Allows RPC Endpoints to arbitrarily modify the VM. Used for local development only
+    #[clap(long = "enable_rpc_control")]
+    pub enable_rpc_control: bool,
+
     /// Enable logging of backtraces from vm errors
     #[clap(long = "vm-backtrace")]
     pub vm_backtrace: bool,
@@ -107,6 +111,7 @@ impl Opt {
             database_type,
             chain_config,
             vm_backtrace,
+            enable_rpc_control,
             utxo_validation,
             min_gas_price,
             min_byte_price,
@@ -120,6 +125,7 @@ impl Opt {
             database_type,
             chain_conf: chain_config.as_str().parse()?,
             utxo_validation,
+            enable_rpc_control,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },

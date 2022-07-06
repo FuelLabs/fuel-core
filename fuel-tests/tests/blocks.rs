@@ -36,15 +36,32 @@ async fn block() {
 async fn advance_block() {
     let db = Database::default();
 
-    let srv = FuelService::from_database(db, Config::local_node())
-        .await
-        .unwrap();
+    let mut config = Config::local_node();
+
+    config.enable_rpc_control = true;
+
+    let srv = FuelService::from_database(db, config).await.unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
     let new_height = client.advance_block(Some(5)).await.unwrap();
 
     assert_eq!(5, new_height);
+}
+
+#[tokio::test]
+async fn advance_block_negative() {
+    let db = Database::default();
+
+    let srv = FuelService::from_database(db, Config::local_node())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let new_height = client.advance_block(Some(5)).await;
+
+    assert!(new_height.is_err());
 }
 
 #[tokio::test]
