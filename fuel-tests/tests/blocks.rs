@@ -38,7 +38,7 @@ async fn produce_block() {
 
     let mut config = Config::local_node();
 
-    config.enable_rpc_control = true;
+    config.manual_blocks_enabled = true;
 
     let srv = FuelService::from_database(db, config).await.unwrap();
 
@@ -62,7 +62,7 @@ async fn produce_block_negative() {
     let new_height = client.produce_block(5).await;
 
     assert_eq!(
-        "Response errors; RPC control must be enabled to use this endpoint",
+        "Response errors; Manual Blocks must be enabled to use this endpoint",
         new_height.err().unwrap().to_string()
     );
 }

@@ -192,8 +192,8 @@ impl BlockMutation {
         let db = ctx.data_unchecked::<Database>();
         let cfg = ctx.data_unchecked::<Config>().clone();
 
-        if !cfg.enable_rpc_control {
-            return Err(anyhow!("RPC control must be enabled to use this endpoint").into());
+        if !cfg.manual_blocks_enabled {
+            return Err(anyhow!("Manual Blocks must be enabled to use this endpoint").into());
         }
 
         let executor = Executor {
