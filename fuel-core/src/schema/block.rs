@@ -218,8 +218,8 @@ impl BlockMutation {
                 .await?;
         }
 
-        let new_height: u64 = db.get_block_height()?.unwrap().into();
-
-        Ok(new_height.into())
+    db.get_block_height()?
+            .map(|new_height| Ok(new_height.into()))
+            .ok_or("Block height not found")?
     }
 }
