@@ -52,7 +52,7 @@ impl FuelService {
         }
 
         // initialize state
-        Self::import_state(&config.chain_conf, &database)?;
+        Self::initialize_state(&config, &database)?;
 
         // start modules
         let modules = modules::start_modules(&config, &database).await?;

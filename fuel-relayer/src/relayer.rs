@@ -1,33 +1,26 @@
-use crate::{config, finalization_queue::FinalizationQueue, Config};
+use crate::{config, finalization_queue::FinalizationQueue, service::Context};
 use anyhow::Error;
 use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
 use ethers_providers::{FilterWatcher, Middleware, ProviderError, StreamExt, SyncingStatus};
 use fuel_core_interfaces::{
-    block_importer::NewBlockEvent,
+    block_importer::ImportBlockBroadcast,
     model::DaBlockHeight,
-    relayer::{RelayerDb, RelayerError, RelayerEvent, RelayerStatus},
+    relayer::{RelayerError, RelayerRequest, RelayerStatus},
 };
 use std::{
     cmp::{max, min},
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::{broadcast, mpsc};
 use tracing::{debug, error, info, trace};
 
 pub struct Relayer {
     /// Pending stakes/assets/withdrawals. Before they are finalized
     queue: FinalizationQueue,
-    /// db connector to apply stake and token deposit
-    db: Box<dyn RelayerDb>,
-    /// Relayer Configuration
-    config: Config,
     /// state of relayer
     status: RelayerStatus,
-    /// new fuel block notifier.
-    requests: mpsc::Receiver<RelayerEvent>,
-    /// Notification of new block event
-    fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
+    /// context,
+    ctx: Context,
 }
 
 macro_rules! handle_interrupt {
@@ -35,17 +28,17 @@ macro_rules! handle_interrupt {
         loop {
             tokio::select! {
                 biased;
-                inner_fuel_event = $relayer.requests.recv() => {
+                inner_fuel_event = $relayer.ctx.receiver.recv() => {
                     tracing::info!("Received event in stop handle:{:?}", inner_fuel_event);
                     match inner_fuel_event {
-                        Some(RelayerEvent::Stop) | None =>{
+                        Some(RelayerRequest::Stop) | None =>{
                             $relayer.status = RelayerStatus::Stop;
                             break Err(RelayerError::Stopped);
                         },
-                        Some(RelayerEvent::GetValidatorSet {response_channel, .. }) => {
-                            let _ = response_channel.send(Err(RelayerError::ValidatorSetEthClientSyncing));
+                        Some(RelayerRequest::GetValidatorSet {response, .. }) => {
+                            let _ = response.send(Err(RelayerError::ValidatorSetEthClientSyncing));
                         },
-                        Some(RelayerEvent::GetStatus { response }) => {
+                        Some(RelayerRequest::GetStatus { response }) => {
                             let _ = response.send($relayer.status);
                         },
                     }
@@ -59,32 +52,23 @@ macro_rules! handle_interrupt {
 }
 
 impl Relayer {
-    pub async fn new(
-        config: Config,
-        private_key: &[u8],
-        db: Box<dyn RelayerDb>,
-        requests: mpsc::Receiver<RelayerEvent>,
-        fuel_block_importer: broadcast::Receiver<NewBlockEvent>,
-    ) -> Self {
-        let chain_height = db.get_chain_height().await;
+    pub async fn new(ctx: Context) -> Self {
+        let chain_height = ctx.db.get_chain_height().await;
         let last_commited_finalized_fuel_height =
-            db.get_last_commited_finalized_fuel_height().await;
+            ctx.db.get_last_commited_finalized_fuel_height().await;
 
         let queue = FinalizationQueue::new(
-            config.eth_chain_id(),
-            config.eth_v2_block_commit_contract(),
-            private_key,
+            ctx.config.eth_chain_id(),
+            ctx.config.eth_v2_block_commit_contract(),
+            &ctx.private_key,
             chain_height,
             last_commited_finalized_fuel_height,
         );
 
         Self {
-            config,
-            db,
             queue,
             status: RelayerStatus::DaClientIsSyncing,
-            requests,
-            fuel_block_importer,
+            ctx,
         }
     }
 
@@ -114,24 +98,24 @@ impl Relayer {
             ) {
                 break;
             }
-            let wait = self.config.eth_initial_sync_refresh();
+            let wait = self.ctx.config.eth_initial_sync_refresh();
             handle_interrupt!(self, tokio::time::sleep(wait))?;
         }
 
         info!("da client is synced");
 
         let last_finalized_da_height = std::cmp::max(
-            self.config.eth_v2_contract_deployment(),
-            self.db.get_finalized_da_height().await,
+            self.ctx.config.eth_v2_contract_deployment(),
+            self.ctx.db.get_finalized_da_height().await,
         );
         // should be allways more then last finalized_da_heights
 
-        let best_finalized_block =
-            (provider.get_block_number().await?.as_u64() as u32) - self.config.da_finalization();
+        let best_finalized_block = (provider.get_block_number().await?.as_u64() as u32)
+            - self.ctx.config.da_finalization();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
-        let step = self.config.initial_sync_step(); // do some stats on optimal value
-        let contracts = self.config.eth_v2_contract_addresses().to_vec();
+        let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
+        let contracts = self.ctx.config.eth_v2_contract_addresses().to_vec();
         // on start of contract there is possibility of them being overlapping, so we want to skip for loop
         // with next line
         let best_finalized_block = max(last_finalized_da_height, best_finalized_block);
@@ -157,7 +141,7 @@ impl Relayer {
             self.queue.append_eth_logs(logs).await;
 
             // we are sending dummy eth block bcs we are sure that it is finalized
-            self.queue.commit_diffs(self.db.as_mut(), end).await;
+            self.queue.commit_diffs(self.ctx.db.as_mut(), end).await;
         }
 
         // TODO probably not needed now. but after some time we will need to do sync to best block here.
@@ -218,9 +202,9 @@ impl Relayer {
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
         let finalized_da_height =
-            best_block.as_u64() as DaBlockHeight - self.config.da_finalization();
+            best_block.as_u64() as DaBlockHeight - self.ctx.config.da_finalization();
         self.queue
-            .commit_diffs(self.db.as_mut(), finalized_da_height)
+            .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)
             .await;
 
         watchers
@@ -230,11 +214,11 @@ impl Relayer {
 
     /// Starting point of relayer
     #[tracing::instrument(name = "main", skip_all)]
-    pub async fn run<P>(mut self, provider: Arc<P>)
+    pub async fn run<P>(mut self, provider: Arc<P>) -> Context
     where
         P: Middleware<Error = ProviderError> + 'static,
     {
-        self.queue.load_validators(self.db.as_mut()).await;
+        self.queue.load_validators(self.ctx.db.as_mut()).await;
 
         let mut number_of_tries = config::NUMBER_OF_TRIES_FOR_INITIAL_SYNC;
         let (best_block, mut da_blocks_watcher, mut logs_watcher) = loop {
@@ -242,7 +226,7 @@ impl Relayer {
                 Ok(watcher) => break watcher,
                 Err(err) => {
                     if self.status == RelayerStatus::Stop {
-                        return;
+                        return self.ctx;
                     }
                     if number_of_tries == 0 {
                         self.status = RelayerStatus::Stop;
@@ -250,7 +234,7 @@ impl Relayer {
                             "Stopping relayer as there are errors on initial sync: {:?}",
                             err
                         );
-                        return;
+                        return self.ctx;
                     }
                     error!("Initial sync error:{:?}", err);
                     info!("Number of tries:{:?}", number_of_tries);
@@ -262,7 +246,7 @@ impl Relayer {
         info!("Initial syncing finished on block {best_block}. Continue to passive sync.");
         loop {
             tokio::select! {
-                inner_fuel_event = self.requests.recv() => {
+                inner_fuel_event = self.ctx.receiver.recv() => {
                     if let Some(inner_fuel_event) = inner_fuel_event {
                         self.handle_inner_fuel_event(inner_fuel_event).await;
                     } else {
@@ -270,7 +254,7 @@ impl Relayer {
                         break;
                     }
                 }
-                fuel_block = self.fuel_block_importer.recv() => {
+                fuel_block = self.ctx.new_block_event.recv() => {
                     match fuel_block {
                         Ok(fuel_block) => {
                             self.handle_fuel_block_importer(fuel_block,&provider).await
@@ -300,46 +284,55 @@ impl Relayer {
                 }
             }
         }
-        self.status = RelayerStatus::Stop;
+        self.ctx
     }
 
-    #[tracing::instrument(fields(block.h=new_block.height().as_usize(), block.id=new_block.id().to_string().as_str()),skip(self, new_block, provider))]
-    async fn handle_fuel_block_importer<P>(&mut self, new_block: NewBlockEvent, provider: &Arc<P>)
-    where
+    #[tracing::instrument(fields(block.h=block.block().header.height.as_usize(), block.id=block.block().id().to_string().as_str()),skip(self, block, provider))]
+    async fn handle_fuel_block_importer<P>(
+        &mut self,
+        block: ImportBlockBroadcast,
+        provider: &Arc<P>,
+    ) where
         P: Middleware<Error = ProviderError> + 'static,
     {
-        match new_block {
-            NewBlockEvent::Created(created_block) => {
-                debug!("received new fuel block created event");
-                self.queue
-                    .handle_created_fuel_block(&created_block, self.db.as_mut(), provider)
-                    .await;
+        match block {
+            ImportBlockBroadcast::PendingFuelBlockImported { .. } => {
+                debug!("received new pending fuel block imported event");
             }
-            NewBlockEvent::Included(new_block) => {
-                debug!("received new fuel block included event");
-                self.queue.handle_fuel_block(&new_block);
+            ImportBlockBroadcast::SealedFuelBlockImported {
+                block,
+                is_created_by_self,
+            } => {
+                debug!("received new sealed fuel block imported event");
+                if is_created_by_self {
+                    self.queue
+                        .handle_created_fuel_block(&block, self.ctx.db.as_mut(), provider)
+                        .await;
+                } else {
+                    self.queue.handle_fuel_block(&block);
+                }
             }
         }
     }
 
     #[tracing::instrument(skip(self))]
-    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerEvent) {
+    async fn handle_inner_fuel_event(&mut self, inner_event: RelayerRequest) {
         match inner_event {
-            RelayerEvent::Stop => {
+            RelayerRequest::Stop => {
                 self.status = RelayerStatus::Stop;
             }
-            RelayerEvent::GetValidatorSet {
+            RelayerRequest::GetValidatorSet {
                 da_height,
-                response_channel,
+                response,
             } => {
                 let res = self
                     .queue
-                    .get_validators(da_height, self.db.as_mut())
+                    .get_validators(da_height, self.ctx.db.as_mut())
                     .await
                     .ok_or(RelayerError::ProviderError);
-                let _ = response_channel.send(res);
+                let _ = response.send(res);
             }
-            RelayerEvent::GetStatus { response } => {
+            RelayerRequest::GetStatus { response } => {
                 let _ = response.send(self.status);
             }
         }
@@ -358,10 +351,10 @@ impl Relayer {
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
                 let finalized_da_height =
-                    da_height.as_u64() as DaBlockHeight - self.config.da_finalization();
+                    da_height.as_u64() as DaBlockHeight - self.ctx.config.da_finalization();
 
                 self.queue
-                    .commit_diffs(self.db.as_mut(), finalized_da_height)
+                    .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)
                     .await;
             } else {
                 error!(
@@ -391,7 +384,7 @@ mod test {
     use async_trait::async_trait;
     use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
     use ethers_providers::SyncingStatus;
-    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerEvent};
+    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerRequest};
     use tokio::sync::mpsc;
 
     use crate::{
@@ -417,7 +410,7 @@ mod test {
 
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {
@@ -426,7 +419,7 @@ mod test {
                     self.i += 1;
 
                     if self.i == 3 {
-                        let _ = self.event.send(RelayerEvent::Stop).await;
+                        let _ = self.event.send(RelayerRequest::Stop).await;
                         self.i += 1;
                         return;
                     }
@@ -465,7 +458,7 @@ mod test {
         }
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {
@@ -492,7 +485,7 @@ mod test {
                     }
                 }
                 if self.i == 2 {
-                    let _ = self.event.send(RelayerEvent::Stop).await;
+                    let _ = self.event.send(RelayerRequest::Stop).await;
                     return;
                 }
             }
@@ -529,7 +522,7 @@ mod test {
         }
         pub struct Handle {
             pub i: u64,
-            pub event: mpsc::Sender<RelayerEvent>,
+            pub event: mpsc::Sender<RelayerRequest>,
         }
         #[async_trait]
         impl TriggerHandle for Handle {

@@ -38,34 +38,31 @@ impl Sender {
     pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
-    ) -> Result<Vec<anyhow::Result<Vec<Arc<Transaction>>>>, anyhow::Error> {
+    ) -> anyhow::Result<Vec<anyhow::Result<Vec<Arc<Transaction>>>>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Insert { txs, response }).await?;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find(&self, ids: Vec<TxId>) -> Result<Vec<Option<TxInfo>>, anyhow::Error> {
+    pub async fn find(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Option<TxInfo>>> {
         let (response, receiver) = oneshot::channel();
         let _ = self.send(TxPoolMpsc::Find { ids, response }).await;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_one(&self, id: TxId) -> Result<Option<TxInfo>, anyhow::Error> {
+    pub async fn find_one(&self, id: TxId) -> anyhow::Result<Option<TxInfo>> {
         let (response, receiver) = oneshot::channel();
         let _ = self.send(TxPoolMpsc::FindOne { id, response }).await;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(
-        &self,
-        ids: Vec<TxId>,
-    ) -> Result<Vec<Arc<Transaction>>, anyhow::Error> {
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
         let _ = self.send(TxPoolMpsc::FindDependent { ids, response }).await;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> Result<Vec<TxId>, anyhow::Error> {
+    pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<TxId>> {
         let (response, receiver) = oneshot::channel();
         let _ = self
             .send(TxPoolMpsc::FilterByNegative { ids, response })
@@ -73,13 +70,13 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn includable(&self) -> Result<Vec<Arc<Transaction>>, anyhow::Error> {
+    pub async fn includable(&self) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
         let _ = self.send(TxPoolMpsc::Includable { response }).await;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn remove(&self, ids: Vec<TxId>) -> Result<(), anyhow::Error> {
+    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<()> {
         self.send(TxPoolMpsc::Remove { ids })
             .await
             .map_err(Into::into)
