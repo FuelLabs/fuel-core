@@ -1,6 +1,5 @@
-use std::io::ErrorKind;
-
 use fuel_vm::prelude::InterpreterError;
+use std::io::ErrorKind;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -124,7 +123,7 @@ pub mod helpers {
         Address, Bytes32, ContractId, Input, Metadata, Output, Transaction, TxId, UtxoId,
     };
     use fuel_vm::prelude::Contract;
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
 
     use crate::{
         model::{
@@ -166,7 +165,7 @@ pub mod helpers {
         /// Dummy coins
         pub coins: HashMap<UtxoId, Coin>,
         /// Dummy contracts
-        pub contract: HashSet<ContractId>,
+        pub contract: HashMap<ContractId, Contract>,
         /// Dummy deposit coins.
         pub deposit_coin: HashMap<Bytes32, DepositCoin>,
         /// variable for last commited and finalized fuel height
@@ -616,7 +615,7 @@ pub mod helpers {
                 tx_hashes: txs.iter().map(|t| t.id()).collect(),
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 coins,
-                contract: HashSet::new(),
+                contract: HashMap::new(),
                 deposit_coin: HashMap::new(),
                 chain_height: BlockHeight::from(0u64),
                 validators_height: 0,
@@ -647,23 +646,28 @@ pub mod helpers {
     impl Storage<UtxoId, Coin> for DummyDb {
         type Error = KvStoreError;
 
-        fn insert(&mut self, _key: &UtxoId, _value: &Coin) -> Result<Option<Coin>, Self::Error> {
-            unreachable!()
+        fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
+            Ok(self.data.lock().coins.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
+            Ok(self.data.lock().coins.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            _key: &UtxoId,
+            key: &UtxoId,
         ) -> Result<Option<std::borrow::Cow<'a, Coin>>, Self::Error> {
-            unreachable!()
+            Ok(self
+                .data
+                .lock()
+                .coins
+                .get(key)
+                .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &UtxoId) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().coins.contains_key(key))
         }
     }
 
@@ -672,25 +676,41 @@ pub mod helpers {
 
         fn insert(
             &mut self,
-            _key: &Bytes32,
-            _value: &Transaction,
+            key: &Bytes32,
+            value: &Transaction,
         ) -> Result<Option<Transaction>, Self::Error> {
-            unreachable!()
+            let arc = Arc::new(value.clone());
+
+            if let Some(previous_tx) = self.data.lock().tx.insert(*key, arc) {
+                Ok(Some(previous_tx.as_ref().clone()))
+            } else {
+                Ok(None)
+            }
         }
 
-        fn remove(&mut self, _key: &Bytes32) -> Result<Option<Transaction>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, Self::Error> {
+            if let Some(tx) = self.data.lock().tx.remove(key) {
+                Ok(Some(tx.as_ref().clone()))
+            } else {
+                Ok(None)
+            }
         }
 
         fn get<'a>(
             &'a self,
-            _key: &Bytes32,
+            key: &Bytes32,
         ) -> Result<Option<std::borrow::Cow<'a, Transaction>>, Self::Error> {
-            unreachable!()
+            let data = self.data.lock();
+
+            if let Some(tx) = data.tx.get(key) {
+                Ok(Some(Cow::Owned(tx.as_ref().clone())))
+            } else {
+                Ok(None)
+            }
         }
 
-        fn contains_key(&self, _key: &Bytes32) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().tx.contains_key(key))
         }
     }
     impl Storage<ContractId, Contract> for DummyDb {
@@ -698,25 +718,30 @@ pub mod helpers {
 
         fn insert(
             &mut self,
-            _key: &ContractId,
-            _value: &Contract,
+            key: &ContractId,
+            value: &Contract,
         ) -> Result<Option<Contract>, Self::Error> {
-            unreachable!()
+            Ok(self.data.lock().contract.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &ContractId) -> Result<Option<Contract>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
+            Ok(self.data.lock().contract.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            _key: &ContractId,
+            key: &ContractId,
         ) -> Result<Option<std::borrow::Cow<'a, Contract>>, Self::Error> {
-            unreachable!()
+            Ok(self
+                .data
+                .lock()
+                .contract
+                .get(key)
+                .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &ContractId) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().contract.contains_key(key))
         }
     }
 
@@ -742,19 +767,24 @@ pub mod helpers {
             Ok(self.data.lock().deposit_coin.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
+            Ok(self.data.lock().deposit_coin.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            _key: &Bytes32,
+            key: &Bytes32,
         ) -> Result<Option<std::borrow::Cow<'a, DepositCoin>>, Self::Error> {
-            unreachable!()
+            Ok(self
+                .data
+                .lock()
+                .deposit_coin
+                .get(key)
+                .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &Bytes32) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().deposit_coin.contains_key(key))
         }
     }
 
@@ -770,8 +800,8 @@ pub mod helpers {
             Ok(self.data.lock().delegator_index.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
+            Ok(self.data.lock().delegator_index.remove(key))
         }
 
         fn get<'a>(
@@ -786,8 +816,8 @@ pub mod helpers {
                 .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &Address) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &Address) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().delegator_index.contains_key(key))
         }
     }
 
@@ -805,9 +835,9 @@ pub mod helpers {
 
         fn remove(
             &mut self,
-            _key: &ValidatorId,
+            key: &ValidatorId,
         ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-            unreachable!()
+            Ok(self.data.lock().validators.remove(key))
         }
 
         fn get<'a>(
@@ -818,8 +848,8 @@ pub mod helpers {
             Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
-        fn contains_key(&self, _key: &ValidatorId) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &ValidatorId) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().validators.contains_key(key))
         }
     }
 
@@ -835,8 +865,8 @@ pub mod helpers {
             Ok(self.data.lock().staking_diffs.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, _key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
-            unreachable!()
+        fn remove(&mut self, key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
+            Ok(self.data.lock().staking_diffs.remove(key))
         }
 
         fn get<'a>(
@@ -851,8 +881,8 @@ pub mod helpers {
                 .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, _key: &DaBlockHeight) -> Result<bool, Self::Error> {
-            unreachable!()
+        fn contains_key(&self, key: &DaBlockHeight) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().staking_diffs.contains_key(key))
         }
     }
 
@@ -916,5 +946,167 @@ pub mod helpers {
         async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
             self.data.lock().last_commited_finalized_fuel_height = block_height;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::error::Error;
+
+    use crate::db::helpers::{DummyDb, CONTRACT_ID1};
+    use crate::model::{
+        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, ValidatorId,
+        ValidatorStake,
+    };
+    use crate::relayer::StakingDiff;
+    use fuel_storage::Storage;
+    use fuel_tx::{Contract, Transaction, UtxoId};
+    use fuel_types::{Address, Bytes32, ContractId};
+
+    #[test]
+    fn coins_db() {
+        let db = sample_db();
+        let tx = Transaction::default();
+        let value = Coin {
+            owner: Address::default(),
+            amount: 400,
+            asset_id: Default::default(),
+            maturity: BlockHeight::from(0u64),
+            status: CoinStatus::Unspent,
+            block_created: BlockHeight::from(0u64),
+        };
+        let key = UtxoId::new(tx.id(), 0);
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn transactions_db() {
+        let db = sample_db();
+        let value = Transaction::default();
+        let key = value.id();
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn contracts_db() {
+        let db = sample_db();
+        let key: ContractId = *CONTRACT_ID1;
+        let value: Contract = Contract::default();
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn deposit_coins_db() {
+        let db = sample_db();
+        let value = DepositCoin {
+            owner: Address::default(),
+            amount: 400,
+            asset_id: Default::default(),
+            nonce: Bytes32::default(),
+            deposited_da_height: DaBlockHeight::default(),
+            fuel_block_spend: Some(BlockHeight::default()),
+        };
+        let key = value.id();
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn delegator_indexes_db() {
+        let db = sample_db();
+        let key: Address = Address::default();
+        let value: Vec<DaBlockHeight> = vec![DaBlockHeight::default()];
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn validators_db() {
+        let db = sample_db();
+        let key: ValidatorId = ValidatorId::default();
+        let value: (ValidatorStake, Option<ConsensusId>) = (ValidatorStake::default(), None);
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    #[test]
+    fn staking_diffs_db() {
+        let db = sample_db();
+        let key: DaBlockHeight = DaBlockHeight::default();
+        let value: StakingDiff = StakingDiff {
+            validators: HashMap::new(),
+            delegations: HashMap::new(),
+        };
+
+        assert!(execute_test(db, key, value).is_ok());
+    }
+
+    fn sample_db() -> Box<DummyDb> {
+        Box::new(DummyDb::filled())
+    }
+
+    fn execute_test<K, V, E>(
+        mut db: Box<dyn Storage<K, V, Error = E>>,
+        key: K,
+        value: V,
+    ) -> Result<(), E>
+    where
+        V: Clone,
+        E: Error,
+    {
+        //before
+        assert!(
+            !db.contains_key(&key)?,
+            "key should not exist before insertion"
+        );
+        assert!(
+            db.get(&key)?.is_none(),
+            "value should not be retrievable before insertion"
+        );
+        assert!(
+            db.remove(&key)?.is_none(),
+            "value should not be removable before insertion"
+        );
+
+        // insert twice
+        assert!(
+            db.insert(&key, &value)?.is_none(),
+            "insert should return None on the first insert"
+        );
+        assert!(
+            db.insert(&key, &value)?.is_some(),
+            "insert should return Some on the second insert"
+        );
+
+        // after
+        assert!(db.contains_key(&key)?, "key should exist after insertion");
+        assert!(
+            db.get(&key)?.is_some(),
+            "value should be retrievable after insertion"
+        );
+        assert!(
+            db.remove(&key)?.is_some(),
+            "value should be removable after insertion"
+        );
+
+        // after remove
+        assert!(
+            !db.contains_key(&key)?,
+            "key should not exist after removal"
+        );
+        assert!(
+            db.get(&key)?.is_none(),
+            "value should not be retrievable after removal"
+        );
+        assert!(
+            db.remove(&key)?.is_none(),
+            "value should not be removable after removal"
+        );
+
+        Ok(())
     }
 }
