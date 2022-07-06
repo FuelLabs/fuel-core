@@ -3,10 +3,9 @@ use crate::{
     types::*,
     Config, Error,
 };
-use fuel_core_interfaces::txpool::{TxStatus, TxStatusBroadcast};
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
-    txpool::TxPoolDb,
+    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -133,16 +132,15 @@ impl TxPool {
         Ok(())
     }
 
-    /// import tx
+    /// Import Arc wrapped transaction to txpool.
     pub async fn external_insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
-        // insert inside pool
 
-        // Check that data is okay (witness match input/output, and if recovered signatures ara valid).
+        // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
         for tx in txs.iter() {
@@ -231,7 +229,7 @@ impl TxPool {
         txpool: &RwLock<Self>, /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
     ) {
         txpool.write().await;
-        // TODO
+        // TODO https://github.com/FuelLabs/fuel-core/issues/465
     }
 
     /// remove transaction from pool needed on user demand. Low priority
