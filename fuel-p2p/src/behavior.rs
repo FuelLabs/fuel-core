@@ -229,7 +229,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
                 debug!("ResponseChannel for {:?} does not exist!", request_id);
                 return Err(ResponseError::ResponseChannelDoesNotExist);
             }
-            _ => {}
+            (Err(e), _) => {
+                debug!("Failed to convert to IntedmediateResponse with {:?}", e);
+                return Err(ResponseError::ConversionToIntermediateFailed);
+            }
         }
 
         Ok(())

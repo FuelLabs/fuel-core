@@ -50,4 +50,5 @@ pub enum RequestError {
 pub enum ResponseError {
     ResponseChannelDoesNotExist,
     SendingResponseFailed,
+    ConversionToIntermediateFailed,
 }
