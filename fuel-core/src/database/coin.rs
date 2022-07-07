@@ -10,7 +10,6 @@ use crate::{
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
     fuel_tx::{Address, AssetId, Bytes32, UtxoId},
-    fuel_types::Word,
 };
 use fuel_core_interfaces::model::Coin as CoinModel;
 use itertools::Itertools;
@@ -126,29 +125,21 @@ impl Database {
 
     pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
         let configs = self
-            .iter_all::<Vec<u8>, Word>(COIN, None, None, None)
+            .iter_all::<Vec<u8>, CoinModel>(COIN, None, None, None)
             .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
                 let coin = raw_coin.unwrap();
 
                 let byte_id = Bytes32::new(coin.0[..32].try_into()?);
                 let output_index = coin.0[32];
-                // Potentially chop off a byte for output index
-                let tx_id = UtxoId::new(byte_id, output_index);
-
-                let ref_coin = Storage::<UtxoId, CoinModel>::get(self, &tx_id)?;
-
-                let ref_coin = ref_coin.unwrap();
-
-                let coin = ref_coin.into_owned();
 
                 Ok(CoinConfig {
                     tx_id: Some(byte_id),
                     output_index: Some(output_index.into()),
-                    block_created: Some(coin.block_created),
-                    maturity: Some(coin.maturity),
-                    owner: coin.owner,
-                    amount: coin.amount,
-                    asset_id: coin.asset_id,
+                    block_created: Some(coin.1.block_created),
+                    maturity: Some(coin.1.maturity),
+                    owner: coin.1.owner,
+                    amount: coin.1.amount,
+                    asset_id: coin.1.asset_id,
                 })
             })
             .collect::<Result<Vec<CoinConfig>, anyhow::Error>>()?;

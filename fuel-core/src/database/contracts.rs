@@ -94,11 +94,14 @@ impl Database {
                         None,
                     )
                     .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
-                        let safe_res = res.unwrap();
-                        let bytes_one = Bytes32::new(safe_res.0[..32].try_into()?);
-                        let bytes_two = Bytes32::new(safe_res.1[..32].try_into()?);
+                        let safe_res = res?;
 
-                        Ok((bytes_one, bytes_two))
+                        // We don't need to store ContractId which is the first 32 bytes of this
+                        // key, as this Vec is already attached to that ContractId
+                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
+                        let state_value = Bytes32::new(safe_res.1[..32].try_into()?);
+
+                        Ok((state_key, state_value))
                     })
                     .collect::<Vec<Result<(Bytes32, Bytes32), anyhow::Error>>>()
                     .into_iter()
