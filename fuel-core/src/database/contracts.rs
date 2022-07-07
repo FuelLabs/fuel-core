@@ -74,7 +74,6 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, Word>(CONTRACTS, None, None, None)
             .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
-                println!("{:?}", raw_contract_id);
                 let contract_id = ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
 
                 let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)?
@@ -88,7 +87,7 @@ impl Database {
                     .0;
 
                 let state = Some(
-                    self.iter_all::<Vec<u8>, Vec<u8>>(
+                    self.iter_all::<Vec<u8>, Bytes32>(
                         CONTRACTS_STATE,
                         Some(contract_id.as_ref().to_vec()),
                         None,
@@ -97,22 +96,11 @@ impl Database {
                     .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
                         let safe_res = res?;
 
-                        let bytes_one = Bytes32::new(safe_res.0[..32].try_into()?);
-                        let bytes_two = Bytes32::new(safe_res.0[32..].try_into()?);
-                        let bytes_three = Bytes32::new(safe_res.1[32..].try_into()?);
-                        let bytes_four = Bytes32::new(safe_res.1[32..].try_into()?);
-
-                        println!("{:?}", bytes_one);
-                        println!("{:?}", bytes_two);
-                        println!("{:?}", bytes_three);
-                        println!("{:?}", bytes_four);
-
                         // We don't need to store ContractId which is the first 32 bytes of this
                         // key, as this Vec is already attached to that ContractId
-                        let state_key = Bytes32::new(safe_res.0[..32].try_into()?);
-                        let state_value = Bytes32::new(safe_res.1[..32].try_into()?);
+                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
 
-                        Ok((state_key, state_value))
+                        Ok((state_key, safe_res.1))
                     })
                     .filter(|val| val.is_ok())
                     .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,

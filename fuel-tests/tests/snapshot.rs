@@ -1,5 +1,3 @@
-use std::vec;
-
 use fuel_core::database::Database;
 use fuel_core::{
     config::{
@@ -11,21 +9,16 @@ use fuel_core::{
 use fuel_core_interfaces::{
     common::{
         fuel_types::{Address, Bytes32, Salt},
-        fuel_vm::prelude::{AssetId, Contract, ContractId, InterpreterStorage, Storage},
+        fuel_vm::prelude::AssetId,
     },
     model::BlockHeight,
 };
 
 #[tokio::test]
 async fn snapshot_state_config() {
-    let mut db = Database::default();
+    let db = Database::default();
 
     let owner = Address::default();
-    let asset_id = AssetId::new([1u8; 32]);
-
-    // Extract later for a test case
-    let contract = Contract::default();
-    let id = ContractId::new([12; 32]);
 
     // setup config
     let mut config = Config::local_node();
@@ -36,7 +29,7 @@ async fn snapshot_state_config() {
             salt: Salt::new([9; 32]),
             state: Some(vec![
                 (Bytes32::new([5u8; 32]), Bytes32::new([8u8; 32])),
-                (Bytes32::new([5u8; 32]), Bytes32::new([9u8; 32])),
+                (Bytes32::new([7u8; 32]), Bytes32::new([9u8; 32])),
             ]),
             balances: Some(vec![
                 (AssetId::new([3u8; 32]), 100),
@@ -45,14 +38,14 @@ async fn snapshot_state_config() {
         }]),
         coins: Some(
             vec![
-                (owner, 50, asset_id),
-                (owner, 100, asset_id),
-                (owner, 150, asset_id),
+                (owner, 50, AssetId::new([8u8; 32])),
+                (owner, 100, AssetId::new([3u8; 32])),
+                (owner, 150, AssetId::new([5u8; 32])),
             ]
             .into_iter()
             .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: Some(Bytes32::new([0; 32])),
-                output_index: Some(0),
+                tx_id: None,
+                output_index: None,
                 block_created: Some(BlockHeight::from(0u64)),
                 maturity: Some(BlockHeight::from(0u64)),
                 owner,
@@ -65,16 +58,6 @@ async fn snapshot_state_config() {
 
     config.chain_conf.initial_state = Some(starting_state.clone());
 
-    Storage::<ContractId, Contract>::insert(&mut db, &id, &contract).unwrap();
-
-    InterpreterStorage::storage_contract_root_insert(
-        &mut db,
-        &id,
-        &Salt::new([5; 32]),
-        &Bytes32::new([0; 32]),
-    )
-    .unwrap();
-
     // setup server & client
     let _ = FuelService::from_database(db.clone(), config)
         .await
@@ -82,10 +65,23 @@ async fn snapshot_state_config() {
 
     let state_conf = StateConfig::generate_state_config(db);
 
-    //assert_eq!(state_conf.coins, starting_state.coins);
+    // initial state
+
+    let starting_coin = starting_state.clone().coins.unwrap();
+
+    let state_coin = state_conf.clone().coins.unwrap();
+
+    for i in 0..starting_coin.len() {
+        // all values are checked except tx_id and output_index as those are generated and not
+        // known at initialization
+        assert_eq!(state_coin[i].owner, starting_coin[i].owner);
+        assert_eq!(state_coin[i].asset_id, starting_coin[i].asset_id);
+        assert_eq!(state_coin[i].amount, starting_coin[i].amount);
+        assert_eq!(state_coin[i].block_created, starting_coin[i].block_created);
+        assert_eq!(state_coin[i].maturity, starting_coin[i].maturity);
+    }
 
     assert_eq!(state_conf.height, starting_state.height);
 
-    println!("{:?}", starting_state.contracts);
-    println!("{:?}", state_conf.contracts.unwrap()[1]);
+    assert_eq!(state_conf.contracts, starting_state.contracts);
 }
