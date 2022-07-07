@@ -127,7 +127,7 @@ impl Database {
         let configs = self
             .iter_all::<Vec<u8>, CoinModel>(COIN, None, None, None)
             .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
-                let coin = raw_coin.unwrap();
+                let coin = raw_coin?;
 
                 let byte_id = Bytes32::new(coin.0[..32].try_into()?);
                 let output_index = coin.0[32];

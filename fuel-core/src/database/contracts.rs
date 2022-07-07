@@ -103,8 +103,7 @@ impl Database {
 
                         Ok((state_key, state_value))
                     })
-                    .collect::<Vec<Result<(Bytes32, Bytes32), anyhow::Error>>>()
-                    .into_iter()
+                    .filter(|val| val.is_ok())
                     .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,
                 );
 
@@ -122,8 +121,7 @@ impl Database {
 
                         Ok((asset_id, safe_res.1))
                     })
-                    .collect::<Vec<Result<(AssetId, u64), anyhow::Error>>>()
-                    .into_iter()
+                    .filter(|val| val.is_ok())
                     .collect::<Result<Vec<(AssetId, u64)>, anyhow::Error>>()?,
                 );
 
