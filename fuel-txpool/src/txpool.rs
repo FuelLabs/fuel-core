@@ -139,7 +139,6 @@ impl TxPool {
         broadcast: broadcast::Sender<TxStatusBroadcast>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
-
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.
         let mut res = Vec::new();
