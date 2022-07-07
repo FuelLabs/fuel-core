@@ -17,7 +17,7 @@ pub enum BlockBroadcast {
     NewBlock(FuelBlock),
 }
 
-pub enum P2PRequestEvent {
+pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,
         response: oneshot::Sender<SealedFuelBlock>,
