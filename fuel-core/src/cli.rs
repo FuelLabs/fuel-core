@@ -1,4 +1,3 @@
-use crate::args::{run::RunCommand, snapshot::SnapshotCommand};
 use anyhow::Result;
 use clap::Parser;
 use std::{env, path::PathBuf, str::FromStr};
@@ -20,21 +19,19 @@ pub mod snapshot;
 )]
 pub struct Opt {
     #[clap(subcommand)]
-    command: Core,
+    command: Fuel,
 }
 
 #[derive(Debug, Parser)]
-pub enum Core {
-    Snapshot(SnapshotCommand),
-    Run(RunCommand),
+pub enum Fuel {
+    Run(run::Command),
+    Snapshot(snapshot::Command),
 }
 
 pub const LOG_FILTER: &str = "RUST_LOG";
 pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
-pub async fn run_cli() -> Result<()> {
-    let opt = Opt::parse();
-
+pub async fn init_logging() -> Result<()> {
     let filter = match env::var_os(LOG_FILTER) {
         Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
         None => EnvFilter::new("info"),
@@ -68,8 +65,24 @@ pub async fn run_cli() -> Result<()> {
             .json()
             .init();
     }
+    Ok(())
+}
+
+pub async fn run_cli() -> Result<()> {
+    init_logging().await?;
+
+    let opt = Opt::try_parse();
+    if opt.is_err() {
+        let command = run::Command::try_parse();
+        if let Ok(command) = command {
+            return run::exec(command).await;
+        }
+    }
+
+    let opt = opt?;
+
     match opt.command {
-        Core::Snapshot(command) => snapshot::exec(command).await,
-        Core::Run(command) => run::exec(command).await,
+        Fuel::Run(command) => run::exec(command).await,
+        Fuel::Snapshot(command) => snapshot::exec(command).await,
     }
 }
