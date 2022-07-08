@@ -1,4 +1,4 @@
-use crate::args::DEFAULT_DB_PATH;
+use crate::cli::DEFAULT_DB_PATH;
 use crate::FuelService;
 use clap::Parser;
 use fuel_core::config::{Config, DbType, VMConfig};
@@ -7,7 +7,7 @@ use strum::VariantNames;
 use tracing::{info, trace};
 
 #[derive(Debug, Clone, Parser)]
-pub struct RunCommand {
+pub struct Command {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
 
@@ -52,9 +52,9 @@ pub struct RunCommand {
     pub predicates: bool,
 }
 
-impl RunCommand {
+impl Command {
     pub fn get_config(self) -> io::Result<Config> {
-        let RunCommand {
+        let Command {
             ip,
             port,
             database_path,
@@ -93,7 +93,7 @@ impl RunCommand {
     }
 }
 
-pub async fn exec(command: RunCommand) -> anyhow::Result<()> {
+pub async fn exec(command: Command) -> anyhow::Result<()> {
     let config = command.get_config()?;
     // log fuel-core version
     info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
