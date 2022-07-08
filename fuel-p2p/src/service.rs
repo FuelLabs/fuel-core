@@ -164,12 +164,17 @@ impl FuelP2PService {
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::gossipsub::topics::{GossipTopic, NEW_TX_GOSSIP_TOPIC};
+    use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
+    use crate::gossipsub::topics::{
+        GossipTopic, CON_VOTE_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_TOPIC, NEW_TX_GOSSIP_TOPIC,
+    };
     use crate::request_response::messages::{
         OutboundResponse, RequestMessage, ResponseChannelItem,
     };
     use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
     use ctor::ctor;
+    use fuel_core_interfaces::common::fuel_tx::Transaction;
+    use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::collections::HashMap;
     use std::{
@@ -379,22 +384,64 @@ mod tests {
 
     #[tokio::test]
     #[instrument]
-    async fn gossipsub_exchanges_messages() {
-        use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
-        use fuel_core_interfaces::common::fuel_tx::Transaction;
-        use std::sync::Arc;
+    async fn gossipsub_broadcast_tx() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
+            4008,
+            4009,
+        )
+        .await;
+    }
 
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_vote() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::ConensusVote(Arc::new(ConsensusVote::default())),
+            4010,
+            4011,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    #[instrument]
+    async fn gossipsub_broadcast_block() {
+        gossipsub_broadcast(
+            GossipsubBroadcastRequest::NewBlock(Arc::new(FuelBlock::default())),
+            4012,
+            4013,
+        )
+        .await;
+    }
+
+    /// Reusable helper function for Broadcasting Gossipsub requests
+    async fn gossipsub_broadcast(
+        broadcast_request: GossipsubBroadcastRequest,
+        port_a: u16,
+        port_b: u16,
+    ) {
         let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
-        let topics = vec![NEW_TX_GOSSIP_TOPIC.into()];
-        let selected_topic: GossipTopic = Topic::new(format!(
-            "{}/{}",
-            NEW_TX_GOSSIP_TOPIC, p2p_config.network_name
-        ));
+        let topics = vec![
+            NEW_TX_GOSSIP_TOPIC.into(),
+            NEW_BLOCK_GOSSIP_TOPIC.into(),
+            CON_VOTE_GOSSIP_TOPIC.into(),
+        ];
+
+        let selected_topic: GossipTopic = {
+            let topic = match broadcast_request {
+                GossipsubBroadcastRequest::ConensusVote(_) => CON_VOTE_GOSSIP_TOPIC,
+                GossipsubBroadcastRequest::NewBlock(_) => NEW_BLOCK_GOSSIP_TOPIC,
+                GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
+            };
+
+            Topic::new(format!("{}/{}", topic, p2p_config.network_name))
+        };
 
         let mut message_sent = false;
 
         // Node A
-        p2p_config.tcp_port = 4008;
+        p2p_config.tcp_port = port_a;
         p2p_config.topics = topics.clone();
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -404,7 +451,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4009;
+        p2p_config.tcp_port = port_b;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -416,8 +463,8 @@ mod tests {
                             // verifies that we've got at least a single peer address to send message to
                             if !peer_addresses.is_empty() && !message_sent  {
                                 message_sent = true;
-                                let default_tx = GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default()));
-                                node_a.publish_message(default_tx).unwrap();
+                                let broadcast_request = broadcast_request.clone();
+                                node_a.publish_message(broadcast_request).unwrap();
                             }
                         }
                     }
@@ -431,11 +478,24 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
-                        if let GossipsubMessage::NewTx(message) = message {
-                            if message != Transaction::default() {
-                                tracing::error!("Wrong p2p message {:?}", message);
-                                panic!("Wrong GossipsubMessage")
-
+                        match &message {
+                            GossipsubMessage::NewTx(tx) => {
+                                if tx != &Transaction::default() {
+                                    tracing::error!("Wrong p2p message {:?}", message);
+                                    panic!("Wrong GossipsubMessage")
+                                }
+                            }
+                            GossipsubMessage::NewBlock(block) => {
+                                if block.header.height != FuelBlock::default().header.height {
+                                    tracing::error!("Wrong p2p message {:?}", message);
+                                    panic!("Wrong GossipsubMessage")
+                                }
+                            }
+                            GossipsubMessage::ConensusVote(vote) => {
+                                if vote != &ConsensusVote::default() {
+                                    tracing::error!("Wrong p2p message {:?}", message);
+                                    panic!("Wrong GossipsubMessage")
+                                }
                             }
                         }
 
@@ -459,7 +519,7 @@ mod tests {
         let mut p2p_config = build_p2p_config("request_response_works");
 
         // Node A
-        p2p_config.tcp_port = 4010;
+        p2p_config.tcp_port = 4014;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
@@ -468,7 +528,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4011;
+        p2p_config.tcp_port = 4015;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -546,7 +606,7 @@ mod tests {
         let mut p2p_config = build_p2p_config("req_res_outbound_timeout_works");
 
         // Node A
-        p2p_config.tcp_port = 4012;
+        p2p_config.tcp_port = 4016;
         // setup request timeout to 0 in order for the Request to fail
         p2p_config.set_request_timeout = Some(Duration::from_secs(0));
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
@@ -557,7 +617,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4013;
+        p2p_config.tcp_port = 4017;
         p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
