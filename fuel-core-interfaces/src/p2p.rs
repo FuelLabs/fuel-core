@@ -1,4 +1,5 @@
-use super::model::{BlockHeight, ConsensusVote, FuelBlock, SealedFuelBlock};
+use super::model::{BlockHeight, FuelBlock, SealedFuelBlock};
+use crate::model::ConsensusVote;
 use fuel_tx::Transaction;
 use std::sync::Arc;
 use tokio::sync::oneshot;
@@ -16,15 +17,18 @@ pub enum BlockBroadcast {
     NewBlock(FuelBlock),
 }
 
-pub enum P2pMpsc {
+pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,
         response: oneshot::Sender<SealedFuelBlock>,
     },
     BroadcastNewTransaction {
-        tx: Arc<Transaction>,
+        transaction: Arc<Transaction>,
     },
     BroadcastNewBlock {
         block: Arc<FuelBlock>,
+    },
+    BroadcastConsensusVote {
+        vote: Arc<ConsensusVote>,
     },
 }
