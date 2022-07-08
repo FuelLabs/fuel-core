@@ -1,6 +1,7 @@
 use anyhow::Result;
 use clap::Parser;
 use std::{env, path::PathBuf, str::FromStr};
+use tracing::log::warn;
 use tracing_subscriber::filter::EnvFilter;
 
 lazy_static::lazy_static! {
@@ -75,6 +76,7 @@ pub async fn run_cli() -> Result<()> {
     if opt.is_err() {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
+            warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
             return run::exec(command).await;
         }
     }
