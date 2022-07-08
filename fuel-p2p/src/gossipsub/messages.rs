@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub enum GossipTopicTag {
     NewTx,
     NewBlock,
-    ConensusVote,
+    ConsensusVote,
 }
 
 /// Takes Arc<T> and wraps it in a matching GossipsubBroadcastRequest
@@ -21,12 +21,12 @@ pub enum GossipTopicTag {
 pub enum GossipsubBroadcastRequest {
     NewTx(Arc<Transaction>),
     NewBlock(Arc<FuelBlock>),
-    ConensusVote(Arc<ConsensusVote>),
+    ConsensusVote(Arc<ConsensusVote>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum GossipsubMessage {
     NewTx(Transaction),
     NewBlock(FuelBlock),
-    ConensusVote(ConsensusVote),
+    ConsensusVote(ConsensusVote),
 }

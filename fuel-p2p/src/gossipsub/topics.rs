@@ -42,7 +42,7 @@ impl GossipsubTopics {
         match incoming_topic {
             hash if hash == &new_tx_topic.0 => Some(GossipTopicTag::NewTx),
             hash if hash == &new_block_topic.0 => Some(GossipTopicTag::NewBlock),
-            hash if hash == &consensus_vote_topic.0 => Some(GossipTopicTag::ConensusVote),
+            hash if hash == &consensus_vote_topic.0 => Some(GossipTopicTag::ConsensusVote),
             _ => None,
         }
     }
@@ -51,7 +51,7 @@ impl GossipsubTopics {
     /// which is broadcast over the network with the serialized inner value of `GossipsubBroadcastRequest`
     pub fn get_gossipsub_topic(&self, outgoing_request: &GossipsubBroadcastRequest) -> GossipTopic {
         match outgoing_request {
-            GossipsubBroadcastRequest::ConensusVote(_) => self.consensus_vote_topic.1.clone(),
+            GossipsubBroadcastRequest::ConsensusVote(_) => self.consensus_vote_topic.1.clone(),
             GossipsubBroadcastRequest::NewBlock(_) => self.new_block_topic.1.clone(),
             GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.1.clone(),
         }
@@ -97,12 +97,12 @@ mod tests {
         );
         assert_eq!(
             gossipsub_topics.get_gossipsub_tag(&consensus_vote_topic.hash()),
-            Some(GossipTopicTag::ConensusVote)
+            Some(GossipTopicTag::ConsensusVote)
         );
 
         // Test given a `GossipsubBroadcastRequest` that `get_gossipsub_topic()` returns matching `Topic`
         let broadcast_req =
-            GossipsubBroadcastRequest::ConensusVote(Arc::new(ConsensusVote::default()));
+            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default()));
         assert_eq!(
             gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
             consensus_vote_topic.hash()

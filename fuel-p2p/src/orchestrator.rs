@@ -84,7 +84,7 @@ impl NetworkOrchestrator {
                                     GossipsubMessage::NewBlock(block) => {
                                         let _ = self.tx_block.send(BlockBroadcast::NewBlock(block));
                                     },
-                                    GossipsubMessage::ConensusVote(vote) => {
+                                    GossipsubMessage::ConsensusVote(vote) => {
                                         let _ = self.tx_consensus.send(ConsensusBroadcast::NewVote(vote));
                                     },
                                 }
@@ -124,7 +124,7 @@ impl NetworkOrchestrator {
                                 let _ = self.p2p_service.publish_message(broadcast);
                             },
                             P2pRequestEvent::BroadcastConsensusVote { vote } => {
-                                let broadcast = GossipsubBroadcastRequest::ConensusVote(vote);
+                                let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
                                 let _ = self.p2p_service.publish_message(broadcast);
                             }
                         }

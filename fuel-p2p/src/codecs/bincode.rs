@@ -131,7 +131,7 @@ impl GossipsubCodec for BincodeCodec {
 
     fn encode(&self, data: Self::RequestMessage) -> Result<Vec<u8>, io::Error> {
         let encoded_data = match data {
-            GossipsubBroadcastRequest::ConensusVote(vote) => bincode::serialize(&*vote),
+            GossipsubBroadcastRequest::ConsensusVote(vote) => bincode::serialize(&*vote),
             GossipsubBroadcastRequest::NewBlock(block) => bincode::serialize(&*block),
             GossipsubBroadcastRequest::NewTx(tx) => bincode::serialize(&*tx),
         };
@@ -147,8 +147,8 @@ impl GossipsubCodec for BincodeCodec {
         let decoded_response = match gossipsub_tag {
             GossipTopicTag::NewTx => GossipsubMessage::NewTx(self.deserialize(encoded_data)?),
             GossipTopicTag::NewBlock => GossipsubMessage::NewBlock(self.deserialize(encoded_data)?),
-            GossipTopicTag::ConensusVote => {
-                GossipsubMessage::ConensusVote(self.deserialize(encoded_data)?)
+            GossipTopicTag::ConsensusVote => {
+                GossipsubMessage::ConsensusVote(self.deserialize(encoded_data)?)
             }
         };
 

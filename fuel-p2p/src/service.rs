@@ -397,7 +397,7 @@ mod tests {
     #[instrument]
     async fn gossipsub_broadcast_vote() {
         gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConensusVote(Arc::new(ConsensusVote::default())),
+            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
             4010,
             4011,
         )
@@ -430,7 +430,7 @@ mod tests {
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
-                GossipsubBroadcastRequest::ConensusVote(_) => CON_VOTE_GOSSIP_TOPIC,
+                GossipsubBroadcastRequest::ConsensusVote(_) => CON_VOTE_GOSSIP_TOPIC,
                 GossipsubBroadcastRequest::NewBlock(_) => NEW_BLOCK_GOSSIP_TOPIC,
                 GossipsubBroadcastRequest::NewTx(_) => NEW_TX_GOSSIP_TOPIC,
             };
@@ -491,7 +491,7 @@ mod tests {
                                     panic!("Wrong GossipsubMessage")
                                 }
                             }
-                            GossipsubMessage::ConensusVote(vote) => {
+                            GossipsubMessage::ConsensusVote(vote) => {
                                 if vote != &ConsensusVote::default() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
