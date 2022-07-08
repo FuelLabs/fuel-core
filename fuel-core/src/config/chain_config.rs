@@ -1,12 +1,11 @@
 use super::serialization::{HexNumber, HexType};
-use crate::model::BlockHeight;
+use crate::{database::Database, model::BlockHeight};
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
     fuel_types::{Address, AssetId, Bytes32, Salt},
 };
 use itertools::Itertools;
-use rand::rngs::StdRng;
-use rand::SeedableRng;
+use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
 use std::{io::ErrorKind, path::PathBuf, str::FromStr};
@@ -119,6 +118,16 @@ pub struct StateConfig {
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
     pub height: Option<BlockHeight>,
+}
+
+impl StateConfig {
+    pub fn generate_state_config(db: Database) -> anyhow::Result<Self> {
+        Ok(StateConfig {
+            coins: db.get_coin_config()?,
+            contracts: db.get_contract_config()?,
+            height: db.get_block_height()?,
+        })
+    }
 }
 
 #[skip_serializing_none]
