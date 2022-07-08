@@ -1,25 +1,13 @@
+use crate::cli::DEFAULT_DB_PATH;
+use crate::FuelService;
 use clap::Parser;
 use fuel_core::config::{Config, DbType, VMConfig};
-use std::str::FromStr;
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
-use tracing_subscriber::filter::EnvFilter;
+use tracing::{info, trace};
 
-lazy_static::lazy_static! {
-    pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
-}
-
-pub const LOG_FILTER: &str = "RUST_LOG";
-pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
-
-#[derive(Parser, Debug)]
-#[clap(
-    name = "fuel-core",
-    about = "Fuel client implementation",
-    version,
-    rename_all = "kebab-case"
-)]
-pub struct Opt {
+#[derive(Debug, Clone, Parser)]
+pub struct Command {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
     pub ip: net::IpAddr,
 
@@ -64,43 +52,9 @@ pub struct Opt {
     pub predicates: bool,
 }
 
-impl Opt {
-    pub fn exec(self) -> io::Result<Config> {
-        let filter = match env::var_os(LOG_FILTER) {
-            Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
-            None => EnvFilter::new("info"),
-        };
-
-        let human_logging = env::var_os(HUMAN_LOGGING)
-            .map(|s| {
-                bool::from_str(s.to_str().unwrap())
-                    .expect("Expected `true` or `false` to be provided for `HUMAN_LOGGING`")
-            })
-            .unwrap_or(true);
-
-        let sub = tracing_subscriber::fmt::Subscriber::builder()
-            .with_writer(std::io::stderr)
-            .with_env_filter(filter);
-
-        if human_logging {
-            // use pretty logs
-            sub.with_ansi(true)
-                .with_level(true)
-                .with_line_number(true)
-                .init();
-        } else {
-            // use machine parseable structured logs
-            sub
-                // disable terminal colors
-                .with_ansi(false)
-                .with_level(true)
-                .with_line_number(true)
-                // use json
-                .json()
-                .init();
-        }
-
-        let Opt {
+impl Command {
+    pub fn get_config(self) -> io::Result<Config> {
+        let Command {
             ip,
             port,
             database_path,
@@ -132,8 +86,22 @@ impl Opt {
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
+            relayer: Default::default(),
             bft: Default::default(),
             sync: Default::default(),
         })
     }
+}
+
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    let config = command.get_config()?;
+    // log fuel-core version
+    info!("Fuel Core version v{}", env!("CARGO_PKG_VERSION"));
+    trace!("Initializing in TRACE mode.");
+    // initialize the server
+    let server = FuelService::new_node(config).await?;
+    // pause the main task while service is running
+    server.run().await;
+
+    Ok(())
 }

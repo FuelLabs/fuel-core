@@ -1,7 +1,11 @@
 #[cfg(feature = "prometheus")]
 use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
 use crate::{
-    database::{columns, columns::METADATA, VERSION},
+    database::{
+        columns,
+        columns::METADATA,
+        metadata::{DB_VERSION, DB_VERSION_KEY},
+    },
     state::{
         BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
         WriteOperation,
@@ -14,9 +18,6 @@ use rocksdb::{
 use std::{convert::TryFrom, path::Path, sync::Arc};
 
 type DB = DBWithThreadMode<MultiThreaded>;
-
-const VERSION_KEY: &[u8] = b"version";
-
 #[derive(Debug)]
 pub struct RocksDb {
     db: DBWithThreadMode<MultiThreaded>,
@@ -54,20 +55,20 @@ impl RocksDb {
     }
 
     fn validate_or_set_db_version(&self) -> Result<(), Error> {
-        let data = self.get(VERSION_KEY, METADATA)?;
+        let data = self.get(DB_VERSION_KEY, METADATA)?;
         match data {
             None => {
                 self.put(
-                    VERSION_KEY.to_vec(),
+                    DB_VERSION_KEY.to_vec(),
                     METADATA,
-                    VERSION.to_be_bytes().to_vec(),
+                    DB_VERSION.to_be_bytes().to_vec(),
                 )?;
             }
             Some(v) => {
                 let b =
                     <[u8; 4]>::try_from(v.as_slice()).map_err(|_| Error::InvalidDatabaseVersion)?;
                 let version = u32::from_be_bytes(b);
-                if version != VERSION {
+                if version != DB_VERSION {
                     return Err(Error::InvalidDatabaseVersion);
                 }
             }

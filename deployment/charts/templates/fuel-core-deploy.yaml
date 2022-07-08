@@ -68,6 +68,7 @@ spec:
           image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
           command: ["./fuel-core"]
           args:
+            - "run"
             - "--ip"
             - "0.0.0.0"
             - "--port"
