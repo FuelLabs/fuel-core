@@ -16,6 +16,7 @@ name = "integration_tests"
 path = "tests/lib.rs"
 harness = true
 
+
 [[test]]
 name = "metrics_test"
 path = "tests/metrics.rs"
@@ -23,6 +24,7 @@ required-features = ["fuel-core/prometheus", "fuel-core/rocksdb"]
 harness = true
 
 [dependencies]
+async-std = "1.12"
 chrono = { version = "0.4", features = ["serde"] }
 fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-features = false }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
@@ -36,6 +38,7 @@ rand = "0.8"
 reqwest = "0.11"
 rstest = { version = "0.13" }
 serde_json = "1.0"
+tempdir = "0.3.7"
 tempfile = "3.3"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
