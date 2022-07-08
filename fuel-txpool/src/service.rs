@@ -110,7 +110,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::external_insert(txpool,db.as_ref().as_ref(),broadcast, txs).await);
+                            let _ = response.send(TxPool::insert(txpool,db.as_ref().as_ref(),broadcast, txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -125,7 +125,7 @@ impl Context {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
                         TxPoolMpsc::Remove { ids } => {
-                            TxPool::external_remove(txpool,broadcast,&ids).await;
+                            TxPool::remove(txpool,broadcast,&ids).await;
                         }
                         TxPoolMpsc::Stop => {}
                     }});

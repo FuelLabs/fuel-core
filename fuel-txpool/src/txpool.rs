@@ -38,7 +38,11 @@ impl TxPool {
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    pub async fn insert(&mut self, tx: ArcTx, db: &dyn TxPoolDb) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn insert_inner(
+        &mut self,
+        tx: ArcTx,
+        db: &dyn TxPoolDb,
+    ) -> anyhow::Result<Vec<ArcTx>> {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into());
         }
@@ -72,7 +76,7 @@ impl TxPool {
             if max_limit_hit {
                 //remove last tx from sort
                 let rem_tx = self.by_gas_price.last().unwrap(); // safe to unwrap limit is hit
-                self.remove(&rem_tx);
+                self.remove_inner(&rem_tx);
                 return Ok(vec![rem_tx]);
             }
             Ok(Vec::new())
@@ -99,7 +103,7 @@ impl TxPool {
             .collect()
     }
 
-    pub fn remove(&mut self, tx: &ArcTx) -> Vec<ArcTx> {
+    pub fn remove_inner(&mut self, tx: &ArcTx) -> Vec<ArcTx> {
         self.remove_by_tx_id(&tx.id())
     }
 
@@ -132,8 +136,8 @@ impl TxPool {
         Ok(())
     }
 
-    /// Import Arc wrapped transaction to txpool.
-    pub async fn external_insert(
+    /// Import Arc wrapped transaction into TxPool.
+    pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
@@ -144,7 +148,7 @@ impl TxPool {
         let mut res = Vec::new();
         for tx in txs.iter() {
             let mut pool = txpool.write().await;
-            res.push(pool.insert(tx.clone(), db).await)
+            res.push(pool.insert_inner(tx.clone(), db).await)
         }
         // announce to subscribers
         for (ret, tx) in res.iter().zip(txs.into_iter()) {
@@ -232,7 +236,7 @@ impl TxPool {
     }
 
     /// remove transaction from pool needed on user demand. Low priority
-    pub async fn external_remove(
+    pub async fn remove(
         txpool: &RwLock<Self>,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
         tx_ids: &[TxId],
@@ -270,7 +274,7 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
 
         let mut txpool = TxPool::new(config);
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Transaction should be OK, get err:{:?}", out);
     }
 
@@ -286,9 +290,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_ok(), "Tx2 dependent should be OK, get err:{:?}", out);
     }
 
@@ -304,9 +308,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should collide on ContractId");
         assert_eq!(out.err().unwrap().to_string(),
         "Transaction is not inserted. More priced tx has created contract with ContractId 0x0000000000000000000000000000000000000000000000000000000000000100"
@@ -326,9 +330,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1_faulty, &db).await;
+        let out = txpool.insert_inner(tx1_faulty, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
         assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x000000000000000000000000000000000000000000000000000000000000001000");
     }
@@ -343,9 +347,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1.clone(), &db).await;
+        let out = txpool.insert_inner(tx1.clone(), &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_err(), "Second insertion of Tx1 should be error");
         assert_eq!(
             out.err().unwrap().to_string(),
@@ -363,7 +367,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_err(), "Tx2 should be error");
         assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x000000000000000000000000000000000000000000000000000000000000001000",);
     }
@@ -386,7 +390,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_err(), "Tx1 should be error");
         assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is spent: 0x000000000000000000000000000000000000000000000000000000000000000000",);
     }
@@ -403,9 +407,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx3, &db).await;
+        let out = txpool.insert_inner(tx3, &db).await;
         assert!(out.is_ok(), "Tx3 should be okay:{:?}", out);
         let vec = out.ok().unwrap();
         assert!(!vec.is_empty(), "Tx1 should be removed:{:?}", vec);
@@ -425,9 +429,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx3, &db).await;
+        let out = txpool.insert_inner(tx3, &db).await;
         assert!(out.is_ok(), "Tx3 should be okay:{:?}", out);
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_err(), "Tx1 should be ERR");
         let err = out.err().unwrap();
         assert_eq!(err.to_string(),"Transaction is not inserted. More priced tx 0x0000000000000000000000000000000000000000000000000000000000000012 already spend this UTXO output: 0x000000000000000000000000000000000000000000000000000000000000000000", "Tx1 should not be included:{:?}",err);
@@ -448,9 +452,9 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be okay:{:?}", out);
-        let out = txpool.insert(tx5, &db).await;
+        let out = txpool.insert_inner(tx5, &db).await;
         assert!(out.is_err(), "Tx5 should be ERR");
         let err = out.err().unwrap();
         assert_eq!(err.to_string(),"Transaction is not inserted. UTXO requires Contract input 0x0000000000000000000000000000000000000000000000000000000000000100 that is priced lower", "Tx5 should not be included:{:?}",err);
@@ -467,9 +471,9 @@ pub mod tests {
         let tx5 = Arc::new(DummyDb::dummy_tx(tx5_hash));
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be Ok:{:?}", out);
-        let out = txpool.insert(tx5, &db).await;
+        let out = txpool.insert_inner(tx5, &db).await;
         assert!(out.is_ok(), "Tx5 should be Ok:{:?}", out);
     }
 
@@ -487,11 +491,11 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_ok(), "Tx2 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx3, &db).await;
+        let out = txpool.insert_inner(tx3, &db).await;
         assert!(out.is_ok(), "Tx3 should be okay:{:?}", out);
         let vec = out.ok().unwrap();
         assert_eq!(vec.len(), 2, "Tx1 and Tx2 should be removed:{:?}", vec);
@@ -514,9 +518,9 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         let t: Error = out.unwrap_err().downcast().unwrap();
         assert_eq!(t, Error::NotInsertedLimitHit, "Tx2 should hit number limit");
     }
@@ -536,9 +540,9 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         let t: Error = out.unwrap_err().downcast().unwrap();
         assert_eq!(t, Error::NotInsertedMaxDepth, "Tx2 should hit max depth");
     }
@@ -556,11 +560,11 @@ pub mod tests {
         let tx4 = Arc::new(DummyDb::dummy_tx(tx4_hash));
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2, &db).await;
+        let out = txpool.insert_inner(tx2, &db).await;
         assert!(out.is_ok(), "Tx2 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx4, &db).await;
+        let out = txpool.insert_inner(tx4, &db).await;
         assert!(out.is_ok(), "Tx4 should be OK, get err:{:?}", out);
 
         let txs = txpool.sorted_includable();
@@ -582,9 +586,9 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert(tx2.clone(), &db).await;
+        let out = txpool.insert_inner(tx2.clone(), &db).await;
         assert!(out.is_ok(), "Tx2 should be OK, get err:{:?}", out);
         let mut seen = HashMap::new();
         txpool
@@ -611,7 +615,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
     }
 
@@ -628,7 +632,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let err = txpool.insert(tx1, &db).await.err().unwrap();
+        let err = txpool.insert_inner(tx1, &db).await.err().unwrap();
         assert!(matches!(
             err.root_cause().downcast_ref::<Error>().unwrap(),
             Error::NotInsertedGasPriceTooLow
@@ -648,7 +652,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let out = txpool.insert(tx1, &db).await;
+        let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
     }
 
@@ -665,7 +669,7 @@ pub mod tests {
 
         let mut txpool = TxPool::new(config);
 
-        let err = txpool.insert(tx1, &db).await.err().unwrap();
+        let err = txpool.insert_inner(tx1, &db).await.err().unwrap();
         assert!(matches!(
             err.root_cause().downcast_ref::<Error>().unwrap(),
             Error::NotInsertedBytePriceTooLow
