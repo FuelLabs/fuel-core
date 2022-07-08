@@ -33,7 +33,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     };
 
     let path = command.database_path;
-    let _config: ChainConfig = command.chain_config.parse()?;
+    let config: ChainConfig = command.chain_config.parse()?;
     let db = Database::open(&path).context(format!(
         "failed to open database at path {}",
         path.display()
@@ -42,10 +42,10 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let state_conf = StateConfig::generate_state_config(db)?;
 
     let chain_conf = ChainConfig {
-        chain_name: _config.chain_name,
-        block_production: _config.block_production,
+        chain_name: config.chain_name,
+        block_production: config.block_production,
         initial_state: Some(state_conf),
-        transaction_parameters: _config.transaction_parameters,
+        transaction_parameters: config.transaction_parameters,
     };
 
     let stdout = std::io::stdout().lock();
