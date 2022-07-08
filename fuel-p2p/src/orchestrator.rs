@@ -70,7 +70,6 @@ impl NetworkOrchestrator {
                     if let Some(Some((response, request_id))) = next_response {
                         let _ = self.p2p_service.send_response_msg(request_id, response);
                     }
-
                 },
                 p2p_event = self.p2p_service.next_event() => {
                     if let FuelP2PEvent::Behaviour(behaviour_event) = p2p_event {
@@ -100,7 +99,6 @@ impl NetworkOrchestrator {
                                         );
                                     }
                                 }
-
                             },
                             _ => {}
                         }
@@ -131,8 +129,6 @@ impl NetworkOrchestrator {
                         warn!(target: "fuel-libp2p", "Failed to receive P2PRequestEvent");
                     }
                 }
-
-
             }
         }
     }
