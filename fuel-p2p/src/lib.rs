@@ -6,4 +6,5 @@ mod gossipsub;
 pub mod orchestrator;
 mod peer_info;
 mod request_response;
-pub mod service;
+mod service;
+pub use libp2p::identity::Keypair;
