@@ -29,6 +29,10 @@ pub struct Command {
     #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
+    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
+    #[clap(long = "manual_blocks_enabled")]
+    pub manual_blocks_enabled: bool,
+
     /// Enable logging of backtraces from vm errors
     #[clap(long = "vm-backtrace")]
     pub vm_backtrace: bool,
@@ -61,6 +65,7 @@ impl Command {
             database_type,
             chain_config,
             vm_backtrace,
+            manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
             min_byte_price,
@@ -74,6 +79,7 @@ impl Command {
             database_type,
             chain_conf: chain_config.as_str().parse()?,
             utxo_validation,
+            manual_blocks_enabled,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
