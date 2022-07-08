@@ -53,4 +53,4 @@ EXPOSE ${PORT}
 # https://stackoverflow.com/a/44671685
 # https://stackoverflow.com/a/40454758
 # hadolint ignore=DL3025
-CMD exec ./fuel-core --ip ${IP} --port ${PORT} --db-path ${DB_PATH}
+CMD exec ./fuel-core run --ip ${IP} --port ${PORT} --db-path ${DB_PATH}

@@ -1,48 +1,180 @@
-use crate::{interface::Interface, Config};
+use crate::{Config, TxPool};
+use anyhow::anyhow;
 use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::txpool::{Sender, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
-use tracing::warn;
+
+pub struct ServiceBuilder {
+    sender: txpool::Sender,
+    receiver: mpsc::Receiver<TxPoolMpsc>,
+    config: Config,
+    broadcast: broadcast::Sender<TxStatusBroadcast>,
+    db: Option<Box<dyn TxPoolDb>>,
+    import_block_events: Option<broadcast::Receiver<ImportBlockBroadcast>>,
+}
+
+impl Default for ServiceBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServiceBuilder {
+    pub fn new() -> Self {
+        let (sender, receiver) = mpsc::channel(100);
+        let (broadcast, _receiver) = broadcast::channel(100);
+        Self {
+            sender: txpool::Sender::new(sender),
+            receiver,
+            db: None,
+            broadcast,
+            config: Default::default(),
+            import_block_events: None,
+        }
+    }
+
+    pub fn sender(&self) -> &txpool::Sender {
+        &self.sender
+    }
+
+    pub fn subscribe(&self) -> broadcast::Receiver<TxStatusBroadcast> {
+        self.broadcast.subscribe()
+    }
+
+    pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
+        self.db = Some(db);
+        self
+    }
+
+    pub fn import_block_event(
+        &mut self,
+        import_block_event: broadcast::Receiver<ImportBlockBroadcast>,
+    ) -> &mut Self {
+        self.import_block_events = Some(import_block_event);
+        self
+    }
+
+    pub fn config(&mut self, config: Config) -> &mut Self {
+        self.config = config;
+        self
+    }
+
+    pub fn build(self) -> anyhow::Result<Service> {
+        if self.db.is_none() || self.import_block_events.is_none() {
+            return Err(anyhow!("One of context items are not set"));
+        }
+        let service = Service::new(
+            self.sender,
+            self.broadcast.clone(),
+            Context {
+                receiver: self.receiver,
+                broadcast: self.broadcast,
+                db: Arc::new(self.db.unwrap()),
+                import_block_events: self.import_block_events.unwrap(),
+                config: self.config,
+            },
+        )?;
+        Ok(service)
+    }
+}
+
+pub struct Context {
+    pub config: Config,
+    pub broadcast: broadcast::Sender<TxStatusBroadcast>,
+    pub db: Arc<Box<dyn TxPoolDb>>,
+    pub receiver: mpsc::Receiver<TxPoolMpsc>,
+    pub import_block_events: broadcast::Receiver<ImportBlockBroadcast>,
+}
+
+impl Context {
+    pub async fn run(mut self) -> Self {
+        let txpool = Arc::new(RwLock::new(TxPool::new(self.config.clone())));
+
+        loop {
+            tokio::select! {
+                event = self.receiver.recv() => {
+                    if matches!(event,Some(TxPoolMpsc::Stop) | None) {
+                        break;
+                    }
+                    let broadcast = self.broadcast.clone();
+                    let db = self.db.clone();
+                    let txpool = txpool.clone();
+
+                    // This is litle bit risky but we can always add semaphore to limit number of requests.
+                    tokio::spawn( async move {
+                        let txpool = txpool.as_ref();
+                    match event.unwrap() {
+                        TxPoolMpsc::Includable { response } => {
+                            let _ = response.send(TxPool::includable(txpool).await);
+                        }
+                        TxPoolMpsc::Insert { txs, response } => {
+                            let _ = response.send(TxPool::insert(txpool,db.as_ref().as_ref(),broadcast, txs).await);
+                        }
+                        TxPoolMpsc::Find { ids, response } => {
+                            let _ = response.send(TxPool::find(txpool,&ids).await);
+                        }
+                        TxPoolMpsc::FindOne { id, response } => {
+                            let _ = response.send(TxPool::find_one(txpool,&id).await);
+                        }
+                        TxPoolMpsc::FindDependent { ids, response } => {
+                            let _ = response.send(TxPool::find_dependent(txpool,&ids).await);
+                        }
+                        TxPoolMpsc::FilterByNegative { ids, response } => {
+                            let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
+                        }
+                        TxPoolMpsc::Remove { ids } => {
+                            TxPool::remove(txpool,broadcast,&ids).await;
+                        }
+                        TxPoolMpsc::Stop => {}
+                    }});
+                }
+                _block_updated = self.import_block_events.recv() => {
+                    let txpool = txpool.clone();
+                    tokio::spawn( async move {
+                        TxPool::block_update(txpool.as_ref()).await
+                    });
+                }
+            }
+        }
+        self
+    }
+}
 
 pub struct Service {
-    interface: Arc<Interface>,
-    sender: Sender,
+    sender: txpool::Sender,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
-    join: Mutex<Option<JoinHandle<mpsc::Receiver<TxPoolMpsc>>>>,
-    receiver: Arc<Mutex<Option<mpsc::Receiver<TxPoolMpsc>>>>,
+    join: Mutex<Option<JoinHandle<Context>>>,
+    context: Arc<Mutex<Option<Context>>>,
 }
 
 impl Service {
-    pub fn new(db: Box<dyn TxPoolDb>, config: Config) -> anyhow::Result<Self> {
-        let (sender, receiver) = mpsc::channel(100);
-        let (broadcast, _receiver) = broadcast::channel(100);
+    pub fn new(
+        sender: txpool::Sender,
+        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        context: Context,
+    ) -> anyhow::Result<Self> {
         Ok(Self {
-            interface: Arc::new(Interface::new(db, broadcast.clone(), config)),
-            sender: Sender::new(sender),
+            sender,
             broadcast,
             join: Mutex::new(None),
-            receiver: Arc::new(Mutex::new(Some(receiver))),
+            context: Arc::new(Mutex::new(Some(context))),
         })
     }
 
-    pub async fn start(&self, new_block: broadcast::Receiver<ImportBlockBroadcast>) -> bool {
+    pub async fn start(&self) -> anyhow::Result<()> {
         let mut join = self.join.lock().await;
         if join.is_none() {
-            if let Some(receiver) = self.receiver.lock().await.take() {
-                let interface = self.interface.clone();
-                *join = Some(tokio::spawn(async {
-                    interface.run(new_block, receiver).await
-                }));
-                return true;
+            if let Some(context) = self.context.lock().await.take() {
+                *join = Some(tokio::spawn(async { context.run().await }));
+                Ok(())
             } else {
-                warn!("Starting TxPool service that is stopping");
+                Err(anyhow!("Starting TxPool service that is stopping"))
             }
         } else {
-            warn!("Service TxPool is already started");
+            Err(anyhow!("Service TxPool is already started"))
         }
-        false
     }
 
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
@@ -50,10 +182,10 @@ impl Service {
         let join_handle = join.take();
         if let Some(join_handle) = join_handle {
             let _ = self.sender.send(TxPoolMpsc::Stop).await;
-            let receiver = self.receiver.clone();
+            let context = self.context.clone();
             Some(tokio::spawn(async move {
                 let ret = join_handle.await;
-                *receiver.lock().await = ret.ok();
+                *context.lock().await = ret.ok();
             }))
         } else {
             None
@@ -64,7 +196,7 @@ impl Service {
         self.broadcast.subscribe()
     }
 
-    pub fn sender(&self) -> &Sender {
+    pub fn sender(&self) -> &txpool::Sender {
         &self.sender
     }
 }
@@ -85,20 +217,23 @@ pub mod tests {
         let db = Box::new(DummyDb::filled());
         let (bs, _br) = broadcast::channel(10);
 
-        let service = Service::new(db, config).unwrap();
-        assert!(service.start(bs.subscribe()).await, "start service");
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(db)
+            .import_block_event(bs.subscribe());
+        let service = builder.build().unwrap();
 
-        //double start will return false
-        assert!(
-            !service.start(bs.subscribe()).await,
-            "double start should fail"
-        );
+        assert!(service.start().await.is_ok(), "start service");
+
+        // Double start will return false.
+        assert!(service.start().await.is_err(), "double start should fail");
 
         let stop_handle = service.stop().await;
         assert!(stop_handle.is_some());
         let _ = stop_handle.unwrap().await;
 
-        assert!(service.start(bs.subscribe()).await, "Should start again");
+        assert!(service.start().await.is_ok(), "Should start again");
     }
 
     #[tokio::test]
@@ -114,8 +249,10 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = Service::new(db, config).unwrap();
-        service.start(br).await;
+        let mut builder = ServiceBuilder::new();
+        builder.config(config).db(db).import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
 
         let (response, receiver) = oneshot::channel();
         let _ = service
@@ -159,8 +296,10 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = Service::new(db, config).unwrap();
-        service.start(br).await;
+        let mut builder = ServiceBuilder::new();
+        builder.config(config).db(db).import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
 
         let (response, receiver) = oneshot::channel();
         let _ = service
@@ -204,8 +343,11 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-        let service = Service::new(db, config).unwrap();
-        service.start(br).await;
+        let mut builder = ServiceBuilder::new();
+        builder.config(config).db(db).import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
         let mut subscribe = service.subscribe_ch();
 
         let (response, receiver) = oneshot::channel();
