@@ -136,7 +136,7 @@ impl TxPool {
         Ok(())
     }
 
-    /// Import Arc wrapped transaction into TxPool.
+    /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
