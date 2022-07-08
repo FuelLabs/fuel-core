@@ -160,6 +160,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         }
     }
 
+    // Currently only used in testing hence `allow`
+    #[allow(dead_code)]
     pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
         self.peer_info.get_peer_info(peer_id)
     }
@@ -184,10 +186,6 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     pub fn subscribe_to_topic(&mut self, topic: &GossipTopic) -> Result<bool, SubscriptionError> {
         self.gossipsub.subscribe(topic)
-    }
-
-    pub fn unsubscribe_from_topic(&mut self, topic: &GossipTopic) -> Result<bool, PublishError> {
-        self.gossipsub.unsubscribe(topic)
     }
 
     pub fn send_request_msg(

@@ -1,5 +1,4 @@
 use crate::codecs::bincode::BincodeCodec;
-use crate::gossipsub::topics::GossipTopic;
 use crate::request_response::messages::OutboundResponse;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
@@ -21,7 +20,6 @@ use libp2p::{
 };
 use rand::Rng;
 use std::{collections::HashMap, error::Error};
-use tracing::warn;
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
@@ -74,32 +72,8 @@ impl FuelP2PService {
         })
     }
 
-    pub fn get_peer_info(&self, peer_id: PeerId) -> Option<&PeerInfo> {
-        self.swarm.behaviour().get_peer_info(&peer_id)
-    }
-
     pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
         self.swarm.behaviour().get_peers()
-    }
-
-    pub fn subscribe_to_topic(&mut self, topic: &GossipTopic) -> bool {
-        match self.swarm.behaviour_mut().subscribe_to_topic(topic) {
-            Ok(value) => value,
-            Err(e) => {
-                warn!(target: "fuel-libp2p", "Failed to subscribe to topic: {:?} with error: {:?}", topic, e);
-                false
-            }
-        }
-    }
-
-    pub fn unsubscribe_from_topic(&mut self, topic: &GossipTopic) -> bool {
-        match self.swarm.behaviour_mut().unsubscribe_from_topic(topic) {
-            Ok(value) => value,
-            Err(e) => {
-                warn!(target: "fuel-libp2p", "Failed to unsubscribe from topic: {:?} with error: {:?}", topic, e);
-                false
-            }
-        }
     }
 
     pub fn publish_message(
@@ -478,6 +452,7 @@ mod tests {
                             panic!("Wrong Topic");
                         }
 
+                        // received value should match sent value
                         match &message {
                             GossipsubMessage::NewTx(tx) => {
                                 if tx != &Transaction::default() {
