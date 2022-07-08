@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::sync::Arc;
 use std::{future::Future, pin::Pin};
 
@@ -48,12 +49,10 @@ impl NetworkOrchestrator {
         tx_block: Sender<BlockBroadcast>,
 
         db: Arc<dyn RelayerDb>,
-    ) -> Self {
-        let p2p_service = FuelP2PService::new(local_keypair, p2p_config)
-            .await
-            .unwrap();
+    ) -> Result<Self, Box<dyn Error>> {
+        let p2p_service = FuelP2PService::new(local_keypair, p2p_config).await?;
 
-        Self {
+        Ok(Self {
             p2p_service,
             rx_request_event,
             tx_block,
@@ -61,7 +60,7 @@ impl NetworkOrchestrator {
             tx_transaction,
             db,
             outbound_responses: Default::default(),
-        }
+        })
     }
 
     pub async fn run(&mut self) {
