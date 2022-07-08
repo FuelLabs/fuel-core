@@ -29,7 +29,7 @@ pub struct Command {
     #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
-    /// Allows RPC Endpoints to arbitrarily modify the VM. Used for local development only
+    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
     #[clap(long = "manual_blocks_enabled")]
     pub manual_blocks_enabled: bool,
 
