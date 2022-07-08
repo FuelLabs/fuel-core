@@ -8,4 +8,5 @@ mod debugger;
 mod health;
 mod helpers;
 mod node_info;
+mod snapshot;
 mod tx;

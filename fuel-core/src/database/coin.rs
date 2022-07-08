@@ -1,6 +1,7 @@
 use crate::{
+    config::chain_config::CoinConfig,
     database::{
-        columns::{self, OWNED_COINS},
+        columns::{self, COIN, OWNED_COINS},
         Database, KvStoreError,
     },
     model::Coin,
@@ -10,6 +11,7 @@ use fuel_core_interfaces::common::{
     fuel_storage::Storage,
     fuel_tx::{Address, AssetId, Bytes32, UtxoId},
 };
+use fuel_core_interfaces::model::Coin as CoinModel;
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -119,5 +121,29 @@ impl Database {
                 .asset_id
                 == asset_id
         })
+    }
+
+    pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
+        let configs = self
+            .iter_all::<Vec<u8>, CoinModel>(COIN, None, None, None)
+            .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
+                let coin = raw_coin?;
+
+                let byte_id = Bytes32::new(coin.0[..32].try_into()?);
+                let output_index = coin.0[32];
+
+                Ok(CoinConfig {
+                    tx_id: Some(byte_id),
+                    output_index: Some(output_index.into()),
+                    block_created: Some(coin.1.block_created),
+                    maturity: Some(coin.1.maturity),
+                    owner: coin.1.owner,
+                    amount: coin.1.amount,
+                    asset_id: coin.1.asset_id,
+                })
+            })
+            .collect::<Result<Vec<CoinConfig>, anyhow::Error>>()?;
+
+        Ok(Some(configs))
     }
 }
