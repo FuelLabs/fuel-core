@@ -1,24 +1,9 @@
-use crate::args::DEFAULT_DB_PATH;
-#[cfg(not(feature = "rocksdb"))]
-use anyhow::{anyhow, Error};
-#[cfg(feature = "rocksdb")]
-use anyhow::{Context, Error};
+use crate::cli::DEFAULT_DB_PATH;
 use clap::Parser;
-#[cfg(feature = "rocksdb")]
-use fuel_core::{
-    config::chain_config::ChainConfig, config::chain_config::StateConfig, database::Database,
-};
-#[cfg(feature = "rocksdb")]
-use std::io;
 use std::path::PathBuf;
 
-#[derive(clap::Subcommand, Clone, Debug)]
-pub enum Snapshot {
-    Snapshot(SnapshotCommand),
-}
-
 #[derive(Debug, Clone, Parser)]
-pub struct SnapshotCommand {
+pub struct Command {
     #[clap(
         name = "DB_PATH",
         long = "db-path",
@@ -32,35 +17,39 @@ pub struct SnapshotCommand {
     pub chain_config: String,
 }
 
-pub async fn exec(command: SnapshotCommand) -> anyhow::Result<(), Error> {
-    #[cfg(not(feature = "rocksdb"))]
-    {
-        Err(anyhow!(
-            "Rocksdb must be enabled to use the database at {}",
-            command.database_path.display()
-        ))
-    }
-    #[cfg(feature = "rocksdb")]
-    {
-        let path = command.database_path;
-        let _config: ChainConfig = command.chain_config.parse()?;
-        let db = Database::open(&path).context(format!(
-            "failed to open database at path {}",
-            path.display()
-        ))?;
+#[cfg(not(feature = "rocksdb"))]
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    Err(anyhow::anyhow!(
+        "Rocksdb must be enabled to use the database at {}",
+        command.database_path.display()
+    ))
+}
 
-        let state_conf = StateConfig::generate_state_config(db)?;
+#[cfg(feature = "rocksdb")]
+pub async fn exec(command: Command) -> anyhow::Result<()> {
+    use anyhow::Context;
+    use fuel_core::{
+        config::chain_config::ChainConfig, config::chain_config::StateConfig, database::Database,
+    };
 
-        let chain_conf = ChainConfig {
-            chain_name: _config.chain_name,
-            block_production: _config.block_production,
-            initial_state: Some(state_conf),
-            transaction_parameters: _config.transaction_parameters,
-        };
+    let path = command.database_path;
+    let _config: ChainConfig = command.chain_config.parse()?;
+    let db = Database::open(&path).context(format!(
+        "failed to open database at path {}",
+        path.display()
+    ))?;
 
-        let stdout = io::stdout().lock();
+    let state_conf = StateConfig::generate_state_config(db)?;
 
-        serde_json::to_writer(stdout, &chain_conf).context("failed to dump snapshot to JSON")?;
-        Ok(())
-    }
+    let chain_conf = ChainConfig {
+        chain_name: _config.chain_name,
+        block_production: _config.block_production,
+        initial_state: Some(state_conf),
+        transaction_parameters: _config.transaction_parameters,
+    };
+
+    let stdout = std::io::stdout().lock();
+
+    serde_json::to_writer(stdout, &chain_conf).context("failed to dump snapshot to JSON")?;
+    Ok(())
 }
