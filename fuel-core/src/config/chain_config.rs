@@ -122,11 +122,11 @@ pub struct StateConfig {
 
 impl StateConfig {
     pub fn generate_state_config(db: Database) -> anyhow::Result<Self> {
-        StateConfig {
+        Ok(StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             height: db.get_block_height()?,
-        }
+        })
     }
 }
 

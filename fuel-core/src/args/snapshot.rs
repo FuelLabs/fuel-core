@@ -49,7 +49,7 @@ pub async fn exec(command: SnapshotCommand) -> anyhow::Result<(), Error> {
             path.display()
         ))?;
 
-        let state_conf = StateConfig::generate_state_config(db);
+        let state_conf = StateConfig::generate_state_config(db)?;
 
         let chain_conf = ChainConfig {
             chain_name: _config.chain_name,

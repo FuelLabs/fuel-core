@@ -63,7 +63,7 @@ async fn snapshot_state_config() {
         .await
         .unwrap();
 
-    let state_conf = StateConfig::generate_state_config(db);
+    let state_conf = StateConfig::generate_state_config(db).unwrap();
 
     // initial state
 
