@@ -86,7 +86,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let relayer = relayer_builder.build()?;
 
     // start modules
-    relayer.start().await?;
+    if config.relayer.eth_client != "none" {
+        relayer.start().await?;
+    }
 
     Ok(Modules {
         txpool: Arc::new(txpool),
