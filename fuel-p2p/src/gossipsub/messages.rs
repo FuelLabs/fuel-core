@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Used to inform `GossipsubCodec` to which GossipsubMessage decode to
 /// GossipTopicTag is decided by checking received TopicHash from the peer
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum GossipTopicTag {
     NewTx,
     NewBlock,
