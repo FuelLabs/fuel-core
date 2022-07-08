@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use std::{env, path::PathBuf, str::FromStr};
-use tracing_subscriber::filter::EnvFilter;
 use tracing::log::warn;
+use tracing_subscriber::filter::EnvFilter;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
