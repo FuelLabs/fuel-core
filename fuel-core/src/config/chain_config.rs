@@ -121,11 +121,11 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config(db: Database) -> Self {
+    pub fn generate_state_config(db: Database) -> anyhow::Result<Self> {
         StateConfig {
-            coins: db.get_coin_config().unwrap_or_default(),
-            contracts: db.get_contract_config().unwrap_or_default(),
-            height: db.get_block_height().unwrap_or_default(),
+            coins: db.get_coin_config()?,
+            contracts: db.get_contract_config()?,
+            height: db.get_block_height()?,
         }
     }
 }
