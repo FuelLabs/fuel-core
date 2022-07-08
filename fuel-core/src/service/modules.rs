@@ -42,7 +42,11 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
+    // create builders
     let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
+    let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
+
+    // initiate fields for builders
     relayer_builder
         .config(config.relayer.clone())
         .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
@@ -52,18 +56,18 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
                 .unwrap(),
         );
 
-    let txpool = fuel_txpool::Service::new(
-        Box::new(database.clone()) as Box<dyn TxPoolDb>,
-        config.txpool.clone(),
-    )?;
+    txpool_builder
+        .config(config.txpool.clone())
+        .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
+        .import_block_event(block_importer.subscribe());
 
     let p2p_mpsc = ();
     let p2p_broadcast_consensus = ();
     let p2p_broadcast_block = ();
 
     block_importer.start().await;
-    txpool.start(block_importer.subscribe()).await;
-    block_producer.start(txpool.sender().clone()).await;
+
+    block_producer.start(txpool_builder.sender().clone()).await;
     bft.start(
         relayer_builder.sender().clone(),
         p2p_broadcast_consensus,
@@ -82,11 +86,13 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     )
     .await;
 
-    // build modules
+    // build services
     let relayer = relayer_builder.build()?;
+    let txpool = txpool_builder.build()?;
 
-    // start modules
+    // start services
     relayer.start().await?;
+    txpool.start().await?;
 
     Ok(Modules {
         txpool: Arc::new(txpool),
