@@ -6,6 +6,8 @@ use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
 
+mod relayer;
+
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
     #[clap(long = "ip", default_value = "127.0.0.1", parse(try_from_str))]
@@ -54,6 +56,9 @@ pub struct Command {
     /// Will reject any transactions with predicates if set to false.
     #[clap(long = "predicates")]
     pub predicates: bool,
+
+    #[clap(flatten)]
+    pub relayer_args: relayer::RelayerArgs,
 }
 
 impl Command {
@@ -70,6 +75,7 @@ impl Command {
             min_gas_price,
             min_byte_price,
             predicates,
+            relayer_args,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -92,7 +98,7 @@ impl Command {
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
-            relayer: Default::default(),
+            relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
         })

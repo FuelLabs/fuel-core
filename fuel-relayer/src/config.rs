@@ -31,77 +31,74 @@ pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// number of da block after which deposits/stakes/validators become finalized
+    /// Number of da block after which deposits/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
-    /// uri address to ethereum client
-    pub eth_client: String,
-    /// ethereum chain_id
+    /// Uri address to ethereum client.
+    pub eth_client: Option<String>,
+    /// Ethereum chain_id.
     pub eth_chain_id: u64,
-    /// contract to publish commit fuel block.  
-    pub eth_v2_block_commit_contract: H160,
-    /// etheruem contract address. Create EthAddress into fuel_types
-    pub eth_v2_contract_addresses: Vec<H160>,
+    /// Contract to publish commit fuel block.  
+    pub eth_v2_commit_contract: Option<H160>,
+    /// Etheruem contract address. Create EthAddress into fuel_types.
+    pub eth_v2_listening_contracts: Vec<H160>,
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
-    pub eth_v2_contract_deployment: DaBlockHeight,
-    /// number of blocks that will be asked at one time from client, used for initial sync
+    pub eth_v2_contracts_deployet: DaBlockHeight,
+    /// Number of blocks that will be asked at one time from client, used for initial sync.
     pub initial_sync_step: usize,
     /// Refresh rate of waiting for eth client to finish its initial sync.
-    pub eth_initial_sync_refresh: Duration,
+    pub initial_sync_refresh: Duration,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: 64,
-            eth_client: String::from("http://localhost:8545"),
+            eth_client: Some(String::from("http://localhost:8545")),
             eth_chain_id: 1, // ethereum mainnet
-            eth_v2_block_commit_contract: H160::from_str(
-                "0x03E4538018285e1c03CCce2F92C9538c87606911",
-            )
-            .unwrap(),
-            eth_v2_contract_addresses: vec![H160::from_str(
+            eth_v2_commit_contract: None,
+            eth_v2_listening_contracts: vec![H160::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contract_deployment: 0,
+            eth_v2_contracts_deployet: 0,
             initial_sync_step: 1000,
-            eth_initial_sync_refresh: Duration::from_secs(5),
+            initial_sync_refresh: Duration::from_secs(5),
         }
     }
 }
 
 impl Config {
-    pub fn eth_v2_contract_deployment(&self) -> DaBlockHeight {
-        self.eth_v2_contract_deployment
+    pub fn eth_v2_contracts_deployet(&self) -> DaBlockHeight {
+        self.eth_v2_contracts_deployet
     }
 
-    pub fn eth_v2_contract_addresses(&self) -> &[H160] {
-        &self.eth_v2_contract_addresses
+    pub fn eth_v2_listening_contracts(&self) -> &[H160] {
+        &self.eth_v2_listening_contracts
     }
 
     pub fn da_finalization(&self) -> DaBlockHeight {
         self.da_finalization
     }
 
-    pub fn eth_client(&self) -> &str {
-        &self.eth_client
+    pub fn eth_client(&self) -> Option<&str> {
+        self.eth_client.as_deref()
     }
 
     pub fn initial_sync_step(&self) -> usize {
         self.initial_sync_step
     }
 
-    pub fn eth_initial_sync_refresh(&self) -> Duration {
-        self.eth_initial_sync_refresh
+    pub fn initial_sync_refresh(&self) -> Duration {
+        self.initial_sync_refresh
     }
 
     pub fn eth_chain_id(&self) -> u64 {
         self.eth_chain_id
     }
 
-    pub fn eth_v2_block_commit_contract(&self) -> H160 {
-        self.eth_v2_block_commit_contract
+    pub fn eth_v2_commit_contract(&self) -> Option<H160> {
+        self.eth_v2_commit_contract
     }
 }
 

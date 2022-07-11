@@ -59,7 +59,7 @@ impl Relayer {
 
         let queue = FinalizationQueue::new(
             ctx.config.eth_chain_id(),
-            ctx.config.eth_v2_block_commit_contract(),
+            ctx.config.eth_v2_commit_contract(),
             &ctx.private_key,
             chain_height,
             last_commited_finalized_fuel_height,
@@ -74,7 +74,7 @@ impl Relayer {
 
     /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
     /// logs watcher with assurence that we didnt miss any events.
-    #[tracing::instrument(skip_all)]
+    //#[tracing::instrument(skip_all)]
     async fn initial_sync<'a, P>(
         &mut self,
         provider: &'a P,
@@ -98,14 +98,14 @@ impl Relayer {
             ) {
                 break;
             }
-            let wait = self.ctx.config.eth_initial_sync_refresh();
+            let wait = self.ctx.config.initial_sync_refresh();
             handle_interrupt!(self, tokio::time::sleep(wait))?;
         }
 
         info!("da client is synced");
 
         let last_finalized_da_height = std::cmp::max(
-            self.ctx.config.eth_v2_contract_deployment(),
+            self.ctx.config.eth_v2_contracts_deployet(),
             self.ctx.db.get_finalized_da_height().await,
         );
         // should be allways more then last finalized_da_heights
@@ -115,7 +115,7 @@ impl Relayer {
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
-        let contracts = self.ctx.config.eth_v2_contract_addresses().to_vec();
+        let contracts = self.ctx.config.eth_v2_listening_contracts().to_vec();
         // on start of contract there is possibility of them being overlapping, so we want to skip for loop
         // with next line
         let best_finalized_block = max(last_finalized_da_height, best_finalized_block);
@@ -396,8 +396,8 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
         let config = Config {
-            eth_v2_contract_deployment: 5,
-            eth_initial_sync_refresh: Duration::from_millis(10),
+            eth_v2_contracts_deployet: 5,
+            initial_sync_refresh: Duration::from_millis(10),
             ..Default::default()
         };
         let (relayer, event, _) = relayer(config).await;
@@ -442,7 +442,7 @@ mod test {
     #[tokio::test]
     pub async fn sync_first_n_finalized_blocks() {
         let config = Config {
-            eth_v2_contract_deployment: 100, // start from block 1
+            eth_v2_contracts_deployet: 100, // start from block 1
             da_finalization: 30,
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
@@ -500,7 +500,7 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync() {
         let config = Config {
-            eth_v2_contract_deployment: 100, // start from block 1
+            eth_v2_contracts_deployet: 100, // start from block 1
             da_finalization: 30,
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
