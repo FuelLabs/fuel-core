@@ -38,7 +38,6 @@ rand = "0.8"
 reqwest = "0.11"
 rstest = { version = "0.13" }
 serde_json = "1.0"
-tempdir = "0.3.7"
 tempfile = "3.3"
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
