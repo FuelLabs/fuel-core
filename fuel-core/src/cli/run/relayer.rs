@@ -8,8 +8,8 @@ use std::time::Duration;
 pub struct RelayerArgs {
     /// Uri address to ethereum client. It can be in format of `http://localhost:8545/` or `ws://localhost:8545/`.
     /// If not set relayer will not start.
-    #[clap(long = "relayer", default_value = "none")]
-    pub eth_client: String,
+    #[clap(long = "relayer")]
+    pub eth_client: Option<String>,
 
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.

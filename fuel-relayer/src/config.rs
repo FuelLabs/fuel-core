@@ -34,7 +34,7 @@ pub struct Config {
     /// Number of da block after which deposits/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
-    pub eth_client: String,
+    pub eth_client: Option<String>,
     /// Ethereum chain_id.
     pub eth_chain_id: u64,
     /// Contract to publish commit fuel block.  
@@ -54,7 +54,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: 64,
-            eth_client: String::from("http://localhost:8545"),
+            eth_client: Some(String::from("http://localhost:8545")),
             eth_chain_id: 1, // ethereum mainnet
             eth_v2_commit_contract: None,
             eth_v2_listening_contracts: vec![H160::from_str(
@@ -81,8 +81,8 @@ impl Config {
         self.da_finalization
     }
 
-    pub fn eth_client(&self) -> &str {
-        &self.eth_client
+    pub fn eth_client(&self) -> Option<&str> {
+        self.eth_client.as_deref()
     }
 
     pub fn initial_sync_step(&self) -> usize {

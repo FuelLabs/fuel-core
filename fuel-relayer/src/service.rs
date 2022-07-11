@@ -157,7 +157,7 @@ impl Service {
         let mut join = self.join.lock().await;
         if join.is_none() {
             if let Some(context) = self.context.lock().await.take() {
-                let uri = context.config.eth_client.clone();
+                let uri = context.config.eth_client.clone().unwrap_or_default();
                 if uri.starts_with("http") {
                     self.run(&mut *join, context, Self::provider_http(&uri))
                         .await

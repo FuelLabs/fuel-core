@@ -91,7 +91,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let txpool = txpool_builder.build()?;
 
     // start services
-    if config.relayer.eth_client != "none" {
+    if config.relayer.eth_client.is_some() {
         relayer.start().await?;
     }
     txpool.start().await?;
