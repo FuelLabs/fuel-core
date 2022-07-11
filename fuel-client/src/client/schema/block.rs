@@ -73,6 +73,22 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct ProduceBlockArgs {
+    pub blocks_to_produce: U64,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    argument_struct = "ProduceBlockArgs",
+    graphql_type = "Mutation"
+)]
+pub struct BlockMutation {
+    #[arguments(blocks_to_produce = &args.blocks_to_produce)]
+    pub produce_block: U64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
