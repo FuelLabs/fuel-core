@@ -515,9 +515,11 @@ mod test {
             data.best_block.number = Some(U64([134]));
 
             data.best_block.number = Some(U64([134]));
-            data.logs_batch = vec![
-                vec![log::tests::eth_log_deposit(136, Address::zeroed(), 10)], //Log::]
-            ];
+            data.logs_batch = vec![vec![log::tests::eth_log_deposit(
+                136,
+                Address::zeroed(),
+                10,
+            )]];
             data.blocks_batch = vec![vec![H256::zero()]];
         }
         pub struct Handle {

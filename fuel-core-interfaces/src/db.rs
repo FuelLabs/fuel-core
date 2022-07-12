@@ -127,7 +127,7 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, FuelBlock,
+            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DaMessage, FuelBlock,
             FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId, ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
@@ -166,8 +166,8 @@ pub mod helpers {
         pub coins: HashMap<UtxoId, Coin>,
         /// Dummy contracts
         pub contract: HashMap<ContractId, Contract>,
-        /// Dummy deposit coins.
-        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
+        /// Dummy da messages.
+        pub messages: HashMap<Bytes32, DaMessage>,
         /// variable for last commited and finalized fuel height
         pub last_commited_finalized_fuel_height: BlockHeight,
     }
@@ -616,7 +616,7 @@ pub mod helpers {
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 coins,
                 contract: HashMap::new(),
-                deposit_coin: HashMap::new(),
+                messages: HashMap::new(),
                 chain_height: BlockHeight::from(0u64),
                 validators_height: 0,
                 finalized_da_height: 0,
@@ -756,35 +756,35 @@ pub mod helpers {
     }
 
     // token deposit. Used by relayer.
-    impl Storage<Bytes32, DepositCoin> for DummyDb {
+    impl Storage<Bytes32, DaMessage> for DummyDb {
         type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
             key: &Bytes32,
-            value: &DepositCoin,
-        ) -> Result<Option<DepositCoin>, Self::Error> {
-            Ok(self.data.lock().deposit_coin.insert(*key, value.clone()))
+            value: &DaMessage,
+        ) -> Result<Option<DaMessage>, Self::Error> {
+            Ok(self.data.lock().messages.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
-            Ok(self.data.lock().deposit_coin.remove(key))
+        fn remove(&mut self, key: &Bytes32) -> Result<Option<DaMessage>, Self::Error> {
+            Ok(self.data.lock().messages.remove(key))
         }
 
         fn get<'a>(
             &'a self,
             key: &Bytes32,
-        ) -> Result<Option<std::borrow::Cow<'a, DepositCoin>>, Self::Error> {
+        ) -> Result<Option<std::borrow::Cow<'a, DaMessage>>, Self::Error> {
             Ok(self
                 .data
                 .lock()
-                .deposit_coin
+                .messages
                 .get(key)
                 .map(|i| Cow::Owned(i.clone())))
         }
 
         fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
-            Ok(self.data.lock().deposit_coin.contains_key(key))
+            Ok(self.data.lock().messages.contains_key(key))
         }
     }
 
@@ -956,13 +956,13 @@ mod tests {
 
     use crate::db::helpers::{DummyDb, CONTRACT_ID1};
     use crate::model::{
-        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, ValidatorId,
+        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DaMessage, ValidatorId,
         ValidatorStake,
     };
     use crate::relayer::StakingDiff;
     use fuel_storage::Storage;
     use fuel_tx::{Contract, Transaction, UtxoId};
-    use fuel_types::{Address, Bytes32, ContractId};
+    use fuel_types::{Address, ContractId};
 
     #[test]
     fn coins_db() {
@@ -1002,17 +1002,19 @@ mod tests {
     #[test]
     fn deposit_coins_db() {
         let db = sample_db();
-        let value = DepositCoin {
+        let value = DaMessage {
             owner: Address::default(),
             amount: 400,
-            asset_id: Default::default(),
-            nonce: Bytes32::default(),
-            deposited_da_height: DaBlockHeight::default(),
+            nonce: 10,
             fuel_block_spend: Some(BlockHeight::default()),
-        };
-        let key = value.id();
+            sender: Address::default(),
+            receipient: Address::default(),
+            data: vec![],
+        }
+        .lock();
+        let key = value.id().clone();
 
-        assert!(execute_test(db, key, value).is_ok());
+        assert!(execute_test(db, key, value.unlock()).is_ok());
     }
 
     #[test]

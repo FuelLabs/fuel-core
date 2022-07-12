@@ -30,6 +30,7 @@ pub struct FuelBlockHeader {
     /// The block producer public key
     pub producer: Address,
     /// Header Metadata
+    #[cfg_attr(feature = "serde", serde(skip_serializing))]
     pub metadata: Option<HeaderMetadata>,
 }
 
