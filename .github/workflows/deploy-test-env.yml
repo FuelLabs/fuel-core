@@ -22,6 +22,9 @@ jobs:
       #- publish-docker-image
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
       - name: Set Environment Variables
         id: set_env_var
         run: |
