@@ -40,7 +40,7 @@ jobs:
         with:
           workflow: Deploy Fuel-Core Ephemeral Test Environment
           repo: FuelLabs/fuel-deployment
-          ref: create-eph-envs-workflows
+          ref: refs/heads/create-eph-envs-workflows
           token: ${{ secrets.REPO_TOKEN }}
           inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ steps.set_env_var.outputs.BRANCH }}", "image-tag": "${{ steps.set_env_var.outputs.IMAGE_TAG }}" }'
         env:
