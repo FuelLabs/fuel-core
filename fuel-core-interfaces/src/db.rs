@@ -1012,9 +1012,8 @@ mod tests {
             data: vec![],
         }
         .lock();
-        let key = value.id().clone();
 
-        assert!(execute_test(db, key, value.unlock()).is_ok());
+        assert!(execute_test(db, *value.id(), value.unlock()).is_ok());
     }
 
     #[test]

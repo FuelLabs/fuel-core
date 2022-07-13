@@ -12,7 +12,6 @@ pub fn keccak256(data: &'static str) -> H256 {
     H256::from_slice(out.as_slice())
 }
 
-//SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)
 pub(crate) static ETH_LOG_DA_MESSAGE: Lazy<H256> =
     Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =

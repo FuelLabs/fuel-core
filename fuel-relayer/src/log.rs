@@ -26,7 +26,7 @@ impl From<&DaMessageLog> for DaMessage {
         Self {
             sender: message.sender,
             receipient: message.receipient,
-            owner: message.owner, // TODO should this be hash of token_id and precision factor
+            owner: message.owner,
             nonce: message.nonce,
             amount: message.amount,
             data: message.data.clone(),
@@ -37,7 +37,7 @@ impl From<&DaMessageLog> for DaMessage {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
-    // Bridge messagefrom da side
+    // Bridge message from da side
     DaMessage(DaMessageLog),
     // save it in validator set
     ValidatorRegistration {
@@ -568,7 +568,7 @@ pub mod tests {
         let owner: Address = rng.gen();
         let nonce: u32 = rng.gen();
         let amount: u32 = rng.gen();
-        let data: Vec<u8> = vec![1u8]; //rng.gen();
+        let data: Vec<u8> = vec![1u8];
 
         let log = eth_log_da_message(
             eth_block,
