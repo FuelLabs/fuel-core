@@ -51,10 +51,9 @@ itertools = "0.10"
 lazy_static = "1.4"
 prometheus = { version = "0.13", optional = true }
 rand = "0.8"
-rocksdb = { version = "0.18", default-features = false, features = [
-    "lz4",
+rocksdb = { version = "0.17", features = [
+    "snappy",
     "multi-threaded-cf",
-    "jemalloc"
 ], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
