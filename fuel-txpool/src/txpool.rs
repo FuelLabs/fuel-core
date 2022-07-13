@@ -5,7 +5,7 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
-    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
+    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast, P2PNetworkInterface},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -141,6 +141,7 @@ impl TxPool {
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
+        network: &mut dyn P2PNetworkInterface,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -164,12 +165,19 @@ impl TxPool {
                             },
                         });
                     }
+                    // From here broadcast new Transaction to peers
+                    let _ = network.send(TxStatusBroadcast {
+                        tx: tx.clone(),
+                        status: TxStatus::Broadcasted,
+                    });
                     let _ = broadcast.send(TxStatusBroadcast {
                         tx,
                         status: TxStatus::Submitted,
                     });
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // @dev should not broadcast tx if error occured
+                }
             }
         }
         res

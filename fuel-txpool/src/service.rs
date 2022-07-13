@@ -1,7 +1,9 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use fuel_core_interfaces::txpool::{
+    self, P2PNetworkInterface, TxPoolDb, TxPoolMpsc, TxStatusBroadcast,
+};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -12,6 +14,7 @@ pub struct ServiceBuilder {
     config: Config,
     broadcast: broadcast::Sender<TxStatusBroadcast>,
     db: Option<Box<dyn TxPoolDb>>,
+    network: Option<Mutex<Box<dyn P2PNetworkInterface>>>,
     import_block_events: Option<broadcast::Receiver<ImportBlockBroadcast>>,
 }
 
@@ -29,6 +32,7 @@ impl ServiceBuilder {
             sender: txpool::Sender::new(sender),
             receiver,
             db: None,
+            network: None,
             broadcast,
             config: Default::default(),
             import_block_events: None,
@@ -48,6 +52,11 @@ impl ServiceBuilder {
         self
     }
 
+    pub fn network_interface(&mut self, network_interface: Box<dyn P2PNetworkInterface>) -> &mut Self {
+        self.network = Some(Mutex::new(network_interface));
+        self
+    }
+
     pub fn import_block_event(
         &mut self,
         import_block_event: broadcast::Receiver<ImportBlockBroadcast>,
@@ -62,7 +71,7 @@ impl ServiceBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Service> {
-        if self.db.is_none() || self.import_block_events.is_none() {
+        if self.db.is_none() || self.import_block_events.is_none() || self.network.is_none() {
             return Err(anyhow!("One of context items are not set"));
         }
         let service = Service::new(
@@ -73,6 +82,7 @@ impl ServiceBuilder {
                 broadcast: self.broadcast,
                 db: Arc::new(self.db.unwrap()),
                 import_block_events: self.import_block_events.unwrap(),
+                network_interface: Arc::new(self.network.unwrap()),
                 config: self.config,
             },
         )?;
@@ -86,6 +96,7 @@ pub struct Context {
     pub db: Arc<Box<dyn TxPoolDb>>,
     pub receiver: mpsc::Receiver<TxPoolMpsc>,
     pub import_block_events: broadcast::Receiver<ImportBlockBroadcast>,
+    pub network_interface: Arc<Mutex<Box<dyn P2PNetworkInterface>>>,
 }
 
 impl Context {
@@ -101,6 +112,7 @@ impl Context {
                     let broadcast = self.broadcast.clone();
                     let db = self.db.clone();
                     let txpool = txpool.clone();
+                    let network = self.network_interface.clone();
 
                     // This is litle bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
@@ -110,7 +122,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert(txpool,db.as_ref().as_ref(),broadcast, txs).await);
+                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), broadcast, network.lock().await.as_mut(), txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -125,7 +137,8 @@ impl Context {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
                         TxPoolMpsc::Remove { ids } => {
-                            TxPool::remove(txpool,broadcast,&ids).await;
+                            TxPool::
+                                remove(txpool,broadcast,&ids).await;
                         }
                         TxPoolMpsc::Stop => {}
                     }});
@@ -329,6 +342,74 @@ pub mod tests {
         assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
         assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
         service.stop().await.unwrap().await.unwrap();
+    }
+
+    use fuel_core_interfaces::common::fuel_tx::Transaction;
+
+    #[derive(Debug, PartialEq)]
+    enum FakeGossipSubBroadcastRequest {
+        NewTx(Arc<Transaction>)
+    }
+
+    struct DummyP2PInterface<'storage> {
+        pub msgs: &'storage mut Vec<FakeGossipSubBroadcastRequest>
+    }
+
+    impl<'storage> DummyP2PInterface<'storage> {
+        fn new(storage : &'storage mut Vec<FakeGossipSubBroadcastRequest>) -> Self {
+            Self {
+                msgs: storage
+            }
+        }
+    }
+
+    impl<'storage> P2PNetworkInterface for DummyP2PInterface<'storage> {
+        fn send(&mut self, msg : TxStatusBroadcast) -> anyhow::Result<()> {
+            let gossip_msg = FakeGossipSubBroadcastRequest::NewTx(msg.tx);
+            
+            self.msgs.push(gossip_msg);
+
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn simple_insert_broadcast() {
+        let mut msgs = vec![];
+
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let network = Box::new(DummyP2PInterface::new(&mut msgs)); 
+        let (_bs, br) = broadcast::channel(10);
+
+        let tx2_hash = *TX_ID2;
+
+        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+
+        let mut builder = ServiceBuilder::new();
+        builder.config(config).db(db).network_interface(network).import_block_event(br);
+        
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1.clone(), tx2.clone()],
+                response,
+            })
+            .await;
+
+            let out = receiver.await.unwrap();
+
+        let msg1 = msgs.get(0).unwrap();
+
+        assert_eq!(&FakeGossipSubBroadcastRequest::NewTx(tx1), msg1);
     }
 
     #[tokio::test]

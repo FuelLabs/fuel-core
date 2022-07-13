@@ -133,6 +133,8 @@ pub enum TxPoolMpsc {
 pub enum TxStatus {
     /// Submitted into txpool.
     Submitted,
+    /// Broadcasting to peers.
+    Broadcasted,
     /// Executed in fuel block.
     Executed,
     /// removed from txpool.
@@ -197,4 +199,8 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
+}
+
+pub trait P2PNetworkInterface: Sync + Send {
+    fn send(&mut self, msg : TxStatusBroadcast) -> anyhow::Result<()>;
 }

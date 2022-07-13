@@ -59,6 +59,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
+        //.network_interface() TODO, pass in fuel-p2p network interface
         .import_block_event(block_importer.subscribe());
 
     let p2p_mpsc = ();
