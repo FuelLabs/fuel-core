@@ -52,7 +52,7 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn set_incoming_txs_and_broadcast(
+    pub fn incoming_txs_and_broadcast(
         &mut self,
         broadcast_txs: mpsc::Sender<TransactionBroadcast>,
         incoming_txs: broadcast::Receiver<TransactionBroadcast>,
@@ -248,7 +248,7 @@ pub mod tests {
         db::helpers::*,
         txpool::{Error as TxpoolError, TxStatus},
     };
-    use tokio::sync::oneshot;
+    use tokio::sync::{mpsc, oneshot};
 
     #[tokio::test]
     async fn test_start_stop() {
@@ -256,11 +256,15 @@ pub mod tests {
         let db = Box::new(DummyDb::filled());
         let (bs, _br) = broadcast::channel(10);
 
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, _rx) = mpsc::channel(100);
+        let (_stx, rtx) = broadcast::channel(100);
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
             .import_block_event(bs.subscribe());
         let service = builder.build().unwrap();
 
@@ -282,6 +286,10 @@ pub mod tests {
         let db = Box::new(DummyDb::filled());
         let (_bs, br) = broadcast::channel(10);
 
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, _rx) = mpsc::channel(100);
+        let (_stx, rtx) = broadcast::channel(100);
+
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx3_hash = *TX_ID3;
@@ -290,7 +298,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -329,6 +341,10 @@ pub mod tests {
         let db = Box::new(DummyDb::filled());
         let (_bs, br) = broadcast::channel(10);
 
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, _rx) = mpsc::channel(100);
+        let (_stx, rtx) = broadcast::channel(100);
+
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
         let tx3_hash = *TX_ID3;
@@ -337,7 +353,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -377,6 +397,10 @@ pub mod tests {
         let db = Box::new(DummyDb::filled());
         let (_bs, br) = broadcast::channel(10);
 
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, _rx) = mpsc::channel(100);
+        let (_stx, rtx) = broadcast::channel(100);
+
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
 
@@ -384,7 +408,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
