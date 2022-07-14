@@ -12,8 +12,8 @@ use crate::{
     },
 };
 use rocksdb::{
-    BoundColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBWithThreadMode, IteratorMode,
-    MultiThreaded, Options, ReadOptions, SliceTransform, WriteBatch,
+    BoundColumnFamily, ColumnFamilyDescriptor, DBWithThreadMode, IteratorMode, MultiThreaded,
+    Options, ReadOptions, SliceTransform, WriteBatch,
 };
 use std::{convert::TryFrom, path::Path, sync::Arc};
 
@@ -31,7 +31,6 @@ impl RocksDb {
 
         let mut opts = Options::default();
         opts.create_if_missing(true);
-        opts.set_compression_type(DBCompressionType::Lz4);
         let db = match DB::open_cf_descriptors(&opts, &path, cf_descriptors) {
             Err(_) => {
                 // setup cfs
