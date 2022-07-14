@@ -1,13 +1,12 @@
-use crate::{
-    config::{Config, DbType},
-    database::Database,
-};
+use crate::database::Database;
 use anyhow::Error as AnyError;
 use modules::Modules;
 use std::{net::SocketAddr, panic};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
+
+pub use crate::config::{Config, DbType};
 
 pub(crate) mod genesis;
 pub mod graph_api;

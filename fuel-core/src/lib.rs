@@ -10,3 +10,5 @@ pub mod tx_pool;
 
 #[cfg(test)]
 pub mod test_utils;
+
+pub use crate::config::chain_config;
