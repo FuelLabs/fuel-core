@@ -394,6 +394,34 @@ pub mod tests {
 
 
     #[tokio::test]
+    async fn insert_from_p2p() {
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
+
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, _rx) = mpsc::channel(100);
+        let (stx, rtx) = broadcast::channel(100);
+
+        let tx1_hash = *TX_ID1;
+
+        let tx1 = DummyDb::dummy_tx(tx1_hash);
+
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
+            .import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
+        let broadcast_tx = TransactionBroadcast::NewTransaction(tx1);
+
+        let res = stx.send(broadcast_tx);
+    }
+
+    #[tokio::test]
     async fn insert_then_broadcast() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
@@ -440,8 +468,9 @@ pub mod tests {
             "First added should be tx1"
         );
         
-        let ret = rx.try_recv();
-        println!("{:?}", ret);
+        let ret = rx.try_recv().unwrap();
+
+        assert_eq!(ret, TransactionBroadcast::NewTransaction((*tx1).clone()));
     }
 
     #[tokio::test]

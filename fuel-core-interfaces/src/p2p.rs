@@ -4,7 +4,7 @@ use fuel_tx::Transaction;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TransactionBroadcast {
     NewTransaction(Transaction),
 }
