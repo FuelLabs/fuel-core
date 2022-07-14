@@ -149,9 +149,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let result = TxPool::insert(txpool, db.as_ref().as_ref(), consumer, None, txs).await;
-
-                            let _ = response.send(result);
+                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), consumer, None, txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -257,6 +255,7 @@ pub mod tests {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
         let (bs, _br) = broadcast::channel(10);
+
 
         let mut builder = ServiceBuilder::new();
         builder
