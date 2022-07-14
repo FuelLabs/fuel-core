@@ -5,11 +5,12 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
-    txpool::{P2PNetworkInterface, TxPoolDb, TxStatus, TxStatusBroadcast},
+    p2p::TransactionBroadcast,
+    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -140,8 +141,8 @@ impl TxPool {
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
-        network: &mut dyn P2PNetworkInterface,
+        consumer: broadcast::Sender<TxStatusBroadcast>,
+        broadcast: Option<mpsc::Sender<TransactionBroadcast>>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -158,7 +159,7 @@ impl TxPool {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        let _ = broadcast.send(TxStatusBroadcast {
+                        let _ = consumer.send(TxStatusBroadcast {
                             tx: removed.clone(),
                             status: TxStatus::SqueezedOut {
                                 reason: Error::Removed,
@@ -166,11 +167,14 @@ impl TxPool {
                         });
                     }
                     // From here broadcast new Transaction to peers
-                    let _ = network.send(TxStatusBroadcast {
-                        tx: tx.clone(),
-                        status: TxStatus::Broadcasted,
-                    });
-                    let _ = broadcast.send(TxStatusBroadcast {
+
+                    if broadcast.is_some() {
+                        let _ = broadcast
+                            .as_ref()
+                            .unwrap()
+                            .send(TransactionBroadcast::NewTransaction((*tx.as_ref()).clone()));
+                    }
+                    let _ = consumer.send(TxStatusBroadcast {
                         tx,
                         status: TxStatus::Submitted,
                     });
