@@ -139,6 +139,7 @@ impl Context {
                     }
                     let consumer = self.consumer.clone();
                     let db = self.db.clone();
+                    let broadcast = self.broadcast_txs.clone();
                     let txpool = txpool.clone();
 
                     // This is litle bit risky but we can always add semaphore to limit number of requests.
@@ -149,7 +150,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), consumer, None, txs).await);
+                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), consumer, Some(broadcast), txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -389,6 +390,58 @@ pub mod tests {
         assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
         assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
         service.stop().await.unwrap().await.unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn insert_then_broadcast() {
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
+
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (tx, mut rx) = mpsc::channel(100);
+        let (_stx, rtx) = broadcast::channel(100);
+
+        let tx1_hash = *TX_ID1;
+
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(db)
+            .incoming_txs_and_broadcast(tx, rtx)
+            .import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
+        let mut subscribe = service.subscribe_ch();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1.clone()],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
+        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
+
+        // we are sure that included tx are already broadcasted.
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx1.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "First added should be tx1"
+        );
+        
+        let ret = rx.try_recv();
+        println!("{:?}", ret);
     }
 
     #[tokio::test]
