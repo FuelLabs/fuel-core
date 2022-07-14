@@ -169,7 +169,11 @@ impl TxPool {
                     // From here broadcast new Transaction to peers
 
                     if broadcast.is_some() {
-                        let _ = broadcast.as_ref().unwrap().send(TransactionBroadcast::NewTransaction((*tx.as_ref()).clone())).await;
+                        let _ = broadcast
+                            .as_ref()
+                            .unwrap()
+                            .send(TransactionBroadcast::NewTransaction((*tx.as_ref()).clone()))
+                            .await;
                     }
                     let _ = consumer.send(TxStatusBroadcast {
                         tx,

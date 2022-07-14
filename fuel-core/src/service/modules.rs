@@ -7,7 +7,7 @@ use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
-    sync::{mpsc, broadcast},
+    sync::{broadcast, mpsc},
     task::JoinHandle,
 };
 

@@ -392,7 +392,6 @@ pub mod tests {
         service.stop().await.unwrap().await.unwrap();
     }
 
-
     #[tokio::test]
     async fn insert_from_p2p() {
         let config = Config::default();
@@ -416,9 +415,28 @@ pub mod tests {
         let service = builder.build().unwrap();
         service.start().await.ok();
 
-        let broadcast_tx = TransactionBroadcast::NewTransaction(tx1);
+        let broadcast_tx = TransactionBroadcast::NewTransaction(tx1.clone());
 
-        let res = stx.send(broadcast_tx);
+        let _res = stx.send(broadcast_tx);
+
+        let _subscribe = service.subscribe_ch();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![Arc::new(tx1)],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
+        // This is an implicit check, because inserting the tx after it was recieved on the
+        // p2p channel should result in an error, make an explicit test though TODO
+        assert_eq!(
+            "Transaction is not inserted. Hash is already known",
+            out[0].as_ref().unwrap_err().to_string()
+        );
     }
 
     #[tokio::test]
@@ -467,7 +485,7 @@ pub mod tests {
             }),
             "First added should be tx1"
         );
-        
+
         let ret = rx.try_recv().unwrap();
 
         assert_eq!(ret, TransactionBroadcast::NewTransaction((*tx1).clone()));
