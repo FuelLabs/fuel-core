@@ -2053,7 +2053,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-executor"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2062,7 +2062,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-importer"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2072,7 +2072,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-producer"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2082,7 +2082,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2131,7 +2131,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2141,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2179,7 +2179,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2245,7 +2245,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "async-trait",
  "bincode",
@@ -2267,7 +2267,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-relayer"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2311,7 +2311,7 @@ checksum = "34b9161e86d434a93088409530a4f71f42e074b3bbcbb7a27bfe666583f92fd7"
 
 [[package]]
 name = "fuel-sync"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2358,7 +2358,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.9.5"
+version = "0.9.6"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2383,9 +2383,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.12.2"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72d7835c37e4f13bc6eecdd946bd1e0485db30175757425fac689e889f8acc20"
+checksum = "7f0fefd1a070f608742ed06141ee717bb3b77df13772506a98493550fafed5fb"
 dependencies = [
  "anyhow",
  "fuel-asm",
