@@ -1,7 +1,10 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::{TransactionBroadcast, P2pRequestEvent}};
+use fuel_core_interfaces::{
+    block_importer::ImportBlockBroadcast,
+    p2p::{P2pRequestEvent, TransactionBroadcast},
+};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -488,7 +491,7 @@ pub mod tests {
 
         let ret = rx.try_recv().unwrap();
 
-        if let P2pRequestEvent::BroadcastNewTransaction{ transaction } = ret {
+        if let P2pRequestEvent::BroadcastNewTransaction { transaction } = ret {
             assert_eq!(tx1, transaction);
         } else {
             panic!("Transaction Broadcast Unwrap Failed");

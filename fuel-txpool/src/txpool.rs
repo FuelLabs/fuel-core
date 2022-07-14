@@ -172,7 +172,9 @@ impl TxPool {
                         let _ = outbox
                             .as_ref()
                             .unwrap()
-                            .send(P2pRequestEvent::BroadcastNewTransaction{ transaction: tx.clone()})
+                            .send(P2pRequestEvent::BroadcastNewTransaction {
+                                transaction: tx.clone(),
+                            })
                             .await;
                     }
                     let _ = consumer.send(TxStatusBroadcast {
