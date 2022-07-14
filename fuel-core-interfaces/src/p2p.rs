@@ -18,6 +18,7 @@ pub enum BlockBroadcast {
     NewBlock(FuelBlock),
 }
 
+#[derive(Debug)]
 pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,

@@ -133,8 +133,6 @@ pub enum TxPoolMpsc {
 pub enum TxStatus {
     /// Submitted into txpool.
     Submitted,
-    /// Broadcasting to peers.
-    Broadcasted,
     /// Executed in fuel block.
     Executed,
     /// removed from txpool.

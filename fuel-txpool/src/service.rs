@@ -1,7 +1,7 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::TransactionBroadcast};
+use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::{TransactionBroadcast, P2pRequestEvent}};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -13,7 +13,7 @@ pub struct ServiceBuilder {
     consumer: broadcast::Sender<TxStatusBroadcast>,
     db: Option<Box<dyn TxPoolDb>>,
     import_block_events: Option<broadcast::Receiver<ImportBlockBroadcast>>,
-    broadcast_txs: Option<mpsc::Sender<TransactionBroadcast>>,
+    network_outbox: Option<mpsc::Sender<P2pRequestEvent>>,
     incoming_txs: Option<broadcast::Receiver<TransactionBroadcast>>,
 }
 
@@ -34,7 +34,7 @@ impl ServiceBuilder {
             consumer,
             config: Default::default(),
             import_block_events: None,
-            broadcast_txs: None,
+            network_outbox: None,
             incoming_txs: None,
         }
     }
@@ -54,10 +54,10 @@ impl ServiceBuilder {
 
     pub fn incoming_txs_and_broadcast(
         &mut self,
-        broadcast_txs: mpsc::Sender<TransactionBroadcast>,
+        network_outbox: mpsc::Sender<P2pRequestEvent>,
         incoming_txs: broadcast::Receiver<TransactionBroadcast>,
     ) -> &mut Self {
-        self.broadcast_txs = Some(broadcast_txs);
+        self.network_outbox = Some(network_outbox);
         self.incoming_txs = Some(incoming_txs);
         self
     }
@@ -78,7 +78,7 @@ impl ServiceBuilder {
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none()
             || self.import_block_events.is_none()
-            || self.broadcast_txs.is_none()
+            || self.network_outbox.is_none()
             || self.incoming_txs.is_none()
         {
             return Err(anyhow!("One of context items are not set"));
@@ -93,7 +93,7 @@ impl ServiceBuilder {
                 import_block_events: self.import_block_events.unwrap(),
                 config: self.config,
                 incoming_txs: self.incoming_txs.unwrap(),
-                broadcast_txs: self.broadcast_txs.unwrap(),
+                network_outbox: self.network_outbox.unwrap(),
             },
         )?;
         Ok(service)
@@ -106,7 +106,7 @@ pub struct Context {
     pub db: Arc<Box<dyn TxPoolDb>>,
     pub receiver: mpsc::Receiver<TxPoolMpsc>,
     pub import_block_events: broadcast::Receiver<ImportBlockBroadcast>,
-    pub broadcast_txs: mpsc::Sender<TransactionBroadcast>,
+    pub network_outbox: mpsc::Sender<P2pRequestEvent>,
     pub incoming_txs: broadcast::Receiver<TransactionBroadcast>,
 }
 
@@ -139,7 +139,7 @@ impl Context {
                     }
                     let consumer = self.consumer.clone();
                     let db = self.db.clone();
-                    let broadcast = self.broadcast_txs.clone();
+                    let network_outbox = self.network_outbox.clone();
                     let txpool = txpool.clone();
 
                     // This is litle bit risky but we can always add semaphore to limit number of requests.
@@ -150,7 +150,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), consumer, Some(broadcast), txs).await);
+                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), consumer, Some(network_outbox), txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -488,7 +488,11 @@ pub mod tests {
 
         let ret = rx.try_recv().unwrap();
 
-        assert_eq!(ret, TransactionBroadcast::NewTransaction((*tx1).clone()));
+        if let P2pRequestEvent::BroadcastNewTransaction{ transaction } = ret {
+            assert_eq!(tx1, transaction);
+        } else {
+            panic!("Transaction Broadcast Unwrap Failed");
+        }
     }
 
     #[tokio::test]
