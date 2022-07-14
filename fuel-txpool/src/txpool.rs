@@ -5,7 +5,7 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
-    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast, P2PNetworkInterface},
+    txpool::{P2PNetworkInterface, TxPoolDb, TxStatus, TxStatusBroadcast},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;

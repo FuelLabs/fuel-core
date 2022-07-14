@@ -52,7 +52,10 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn network_interface(&mut self, network_interface: Box<dyn P2PNetworkInterface>) -> &mut Self {
+    pub fn network_interface(
+        &mut self,
+        network_interface: Box<dyn P2PNetworkInterface>,
+    ) -> &mut Self {
         self.network = Some(Mutex::new(network_interface));
         self
     }
@@ -216,24 +219,50 @@ impl Service {
 
 #[cfg(any(test))]
 pub mod tests {
-
     use super::*;
     use fuel_core_interfaces::{
         db::helpers::*,
+        model::ArcTx,
         txpool::{Error as TxpoolError, TxStatus},
     };
     use tokio::sync::oneshot;
+
+    struct DummyP2PInterface {
+        pub msgs: Arc<Mutex<Vec<ArcTx>>>,
+    }
+
+    impl DummyP2PInterface {
+        fn new(msgs: Arc<Mutex<Vec<ArcTx>>>) -> Self {
+            Self { msgs }
+        }
+    }
+
+    impl Default for DummyP2PInterface {
+        fn default() -> Self {
+            let msgs = Arc::new(Mutex::new(vec![]));
+            Self { msgs }
+        }
+    }
+
+    impl P2PNetworkInterface for DummyP2PInterface {
+        fn send(&mut self, msg: TxStatusBroadcast) -> anyhow::Result<()> {
+            self.msgs.try_lock()?.push(msg.tx);
+            Ok(())
+        }
+    }
 
     #[tokio::test]
     async fn test_start_stop() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let network = Box::new(DummyP2PInterface::default());
         let (bs, _br) = broadcast::channel(10);
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(db)
+            .network_interface(network)
             .import_block_event(bs.subscribe());
         let service = builder.build().unwrap();
 
@@ -253,6 +282,7 @@ pub mod tests {
     async fn test_filter_by_negative() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let network = Box::new(DummyP2PInterface::default());
         let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
@@ -263,7 +293,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .network_interface(network)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -300,6 +334,7 @@ pub mod tests {
     async fn test_find() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let network = Box::new(DummyP2PInterface::default());
         let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
@@ -310,7 +345,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .network_interface(network)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -344,55 +383,25 @@ pub mod tests {
         service.stop().await.unwrap().await.unwrap();
     }
 
-    use fuel_core_interfaces::common::fuel_tx::Transaction;
-
-    #[derive(Debug, PartialEq)]
-    enum FakeGossipSubBroadcastRequest {
-        NewTx(Arc<Transaction>)
-    }
-
-    struct DummyP2PInterface<'storage> {
-        pub msgs: &'storage mut Vec<FakeGossipSubBroadcastRequest>
-    }
-
-    impl<'storage> DummyP2PInterface<'storage> {
-        fn new(storage : &'storage mut Vec<FakeGossipSubBroadcastRequest>) -> Self {
-            Self {
-                msgs: storage
-            }
-        }
-    }
-
-    impl<'storage> P2PNetworkInterface for DummyP2PInterface<'storage> {
-        fn send(&mut self, msg : TxStatusBroadcast) -> anyhow::Result<()> {
-            let gossip_msg = FakeGossipSubBroadcastRequest::NewTx(msg.tx);
-            
-            self.msgs.push(gossip_msg);
-
-            Ok(())
-        }
-    }
-
     #[tokio::test]
     async fn simple_insert_broadcast() {
-        let mut msgs = vec![];
-
-
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
-        let network = Box::new(DummyP2PInterface::new(&mut msgs)); 
+        let msgs = Arc::new(Mutex::new(vec![]));
+        let network = Box::new(DummyP2PInterface::new(msgs.clone()));
         let (_bs, br) = broadcast::channel(10);
 
+        let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).network_interface(network).import_block_event(br);
-        
+        builder
+            .config(config)
+            .db(db)
+            .network_interface(network)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -405,17 +414,20 @@ pub mod tests {
             })
             .await;
 
-            let out = receiver.await.unwrap();
+        receiver.await.unwrap();
 
-        let msg1 = msgs.get(0).unwrap();
+        let msg1 = msgs.lock().await.get(0).unwrap().clone();
+        let msg2 = msgs.lock().await.get(1).unwrap().clone();
 
-        assert_eq!(&FakeGossipSubBroadcastRequest::NewTx(tx1), msg1);
+        assert_eq!(tx1, msg1);
+        assert_eq!(tx2, msg2);
     }
 
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
+        let network = Box::new(DummyP2PInterface::default());
         let (_bs, br) = broadcast::channel(10);
 
         let tx1_hash = *TX_ID1;
@@ -425,7 +437,11 @@ pub mod tests {
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
+        builder
+            .config(config)
+            .db(db)
+            .network_interface(network)
+            .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 

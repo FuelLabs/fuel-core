@@ -202,5 +202,5 @@ pub enum Error {
 }
 
 pub trait P2PNetworkInterface: Sync + Send {
-    fn send(&mut self, msg : TxStatusBroadcast) -> anyhow::Result<()>;
+    fn send(&mut self, msg: TxStatusBroadcast) -> anyhow::Result<()>;
 }
