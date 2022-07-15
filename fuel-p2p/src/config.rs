@@ -3,7 +3,10 @@ use libp2p::{
     identity::Keypair,
     mplex, noise, yamux, Multiaddr, PeerId, Transport,
 };
-use std::{net::IpAddr, time::Duration};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    time::Duration,
+};
 
 pub const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -55,6 +58,31 @@ pub struct P2PConfig {
     pub set_request_timeout: Option<Duration>,
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Option<Duration>,
+}
+
+impl P2PConfig {
+    pub fn default_with_network(network_name: &str) -> Self {
+        P2PConfig {
+            network_name: network_name.into(),
+            address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
+            tcp_port: 4000,
+            max_block_size: 100_000,
+            bootstrap_nodes: vec![],
+            enable_mdns: false,
+            max_peers_connected: 50,
+            allow_private_addresses: true,
+            enable_random_walk: true,
+            connection_idle_timeout: Some(Duration::from_secs(120)),
+            topics: vec![],
+            max_mesh_size: 12,
+            min_mesh_size: 4,
+            ideal_mesh_size: 6,
+            set_request_timeout: None,
+            set_connection_keep_alive: None,
+            info_interval: Some(Duration::from_secs(3)),
+            identify_interval: Some(Duration::from_secs(5)),
+        }
+    }
 }
 
 /// Transport for libp2p communication:

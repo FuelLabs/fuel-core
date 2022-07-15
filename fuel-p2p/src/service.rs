@@ -19,7 +19,7 @@ use libp2p::{
     Multiaddr, PeerId, Swarm,
 };
 use rand::Rng;
-use std::{collections::HashMap, error::Error};
+use std::collections::HashMap;
 
 /// Listens to the events on the p2p network
 /// And forwards them to the Orchestrator
@@ -38,7 +38,7 @@ pub enum FuelP2PEvent {
 }
 
 impl FuelP2PService {
-    pub async fn new(local_keypair: Keypair, config: P2PConfig) -> Result<Self, Box<dyn Error>> {
+    pub async fn new(local_keypair: Keypair, config: P2PConfig) -> anyhow::Result<Self> {
         let local_peer_id = PeerId::from(local_keypair.public());
 
         // configure and build P2P Serivce
