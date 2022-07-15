@@ -23,6 +23,7 @@ pub struct Opt {
     command: Fuel,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Parser)]
 pub enum Fuel {
     Run(run::Command),

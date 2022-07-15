@@ -6,6 +6,7 @@ use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
 
+mod p2p;
 mod relayer;
 
 #[derive(Debug, Clone, Parser)]
@@ -59,6 +60,9 @@ pub struct Command {
 
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
+
+    #[clap(flatten)]
+    pub p2p_args: p2p::P2pArgs,
 }
 
 impl Command {
@@ -76,9 +80,18 @@ impl Command {
             min_byte_price,
             predicates,
             relayer_args,
+            p2p_args,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
+
+        let p2p = {
+            match p2p_args.into() {
+                Ok(value) => value,
+                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            }
+        };
+
         Ok(Config {
             addr,
             database_path,
@@ -101,6 +114,7 @@ impl Command {
             relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
+            p2p,
         })
     }
 }

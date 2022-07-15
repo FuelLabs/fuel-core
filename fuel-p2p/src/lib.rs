@@ -8,4 +8,4 @@ mod peer_info;
 mod request_response;
 mod service;
 pub use config::P2PConfig;
-pub use libp2p::identity::Keypair;
+pub use libp2p::{identity::Keypair, Multiaddr, PeerId};
