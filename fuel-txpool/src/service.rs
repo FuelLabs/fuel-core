@@ -431,19 +431,16 @@ pub mod tests {
         let (response, receiver) = oneshot::channel();
         let _ = service
             .sender()
-            .send(TxPoolMpsc::Insert {
-                txs: vec![Arc::new(tx1)],
+            .send(TxPoolMpsc::Find {
+                ids: vec![tx1_hash],
                 response,
             })
             .await;
         let out = receiver.await.unwrap();
+        
+        let arc_tx1 = Arc::new(tx1);
 
-        // This is an implicit check, because inserting the tx after it was recieved on the
-        // p2p channel should result in an error, make an explicit test though TODO
-        assert_eq!(
-            "Transaction is not inserted. Hash is already known",
-            out[0].as_ref().unwrap_err().to_string()
-        );
+        assert_eq!(arc_tx1, *out[0].as_ref().unwrap().tx());
     }
 
     #[tokio::test]
