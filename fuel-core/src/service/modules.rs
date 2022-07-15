@@ -65,16 +65,15 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .import_block_event(block_importer.subscribe());
 
-    let p2p_mpsc = ();
-    let p2p_broadcast_consensus = ();
-    let p2p_broadcast_block = ();
+    let (tx_request_event, rx_request_event) = mpsc::channel(100);
+    let (tx_block, rx_block) = mpsc::channel(100);
 
     block_importer.start().await;
 
     block_producer.start(txpool_builder.sender().clone()).await;
     bft.start(
         relayer_builder.sender().clone(),
-        p2p_broadcast_consensus,
+        tx_request_event.clone(),
         block_producer.sender().clone(),
         block_importer.sender().clone(),
         block_importer.subscribe(),
@@ -82,8 +81,8 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     .await;
 
     sync.start(
-        p2p_broadcast_block,
-        p2p_mpsc,
+        rx_block,
+        tx_request_event.clone(),
         relayer_builder.sender().clone(),
         bft.sender().clone(),
         block_importer.sender().clone(),
@@ -102,10 +101,8 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
 
-    let (tx_request_event, rx_request_event) = mpsc::channel(100);
     let (tx_consensus, _) = mpsc::channel(100);
     let (tx_transaction, _) = mpsc::channel(100);
-    let (tx_block, _) = mpsc::channel(100);
 
     let network_service = fuel_p2p::orchestrator::Service::new(
         config.p2p.clone(),
