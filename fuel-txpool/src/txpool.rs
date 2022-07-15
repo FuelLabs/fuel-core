@@ -167,7 +167,6 @@ impl TxPool {
                         });
                     }
                     // From here broadcast new Transaction to peers
-
                     if outbox.is_some() {
                         let _ = outbox
                             .as_ref()

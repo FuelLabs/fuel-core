@@ -55,12 +55,15 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn incoming_txs_and_broadcast(
+    pub fn network_outbox(&mut self, network_outbox: mpsc::Sender<P2pRequestEvent>) -> &mut Self {
+        self.network_outbox = Some(network_outbox);
+        self
+    }
+
+    pub fn incoming_txs(
         &mut self,
-        network_outbox: mpsc::Sender<P2pRequestEvent>,
         incoming_txs: broadcast::Receiver<TransactionBroadcast>,
     ) -> &mut Self {
-        self.network_outbox = Some(network_outbox);
         self.incoming_txs = Some(incoming_txs);
         self
     }
@@ -120,7 +123,6 @@ impl Context {
         loop {
             tokio::select! {
                 new_transaction = self.incoming_txs.recv() => {
-                    let txpool = txpool.clone();
                     let consumer = self.consumer.clone();
                     let db = self.db.clone();
                     let txpool = txpool.clone();
@@ -261,14 +263,15 @@ pub mod tests {
         let (bs, _br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, _rx) = mpsc::channel(100);
-        let (_stx, rtx) = broadcast::channel(100);
+        let (network_outbox, _) = mpsc::channel(100);
+        let (_, incoming_txs) = broadcast::channel(100);
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(bs.subscribe());
         let service = builder.build().unwrap();
 
@@ -291,8 +294,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, _rx) = mpsc::channel(100);
-        let (_stx, rtx) = broadcast::channel(100);
+        let (network_outbox, _) = mpsc::channel(100);
+        let (_, incoming_txs) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -305,7 +308,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -346,8 +350,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, _rx) = mpsc::channel(100);
-        let (_stx, rtx) = broadcast::channel(100);
+        let (network_outbox, _) = mpsc::channel(100);
+        let (_, incoming_txs) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -360,7 +364,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -402,25 +407,24 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, _rx) = mpsc::channel(100);
-        let (stx, rtx) = broadcast::channel(100);
+        let (network_outbox, _) = mpsc::channel(100);
+        let (transaction_sender, incoming_txs) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
-
         let tx1 = DummyDb::dummy_tx(tx1_hash);
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
         let broadcast_tx = TransactionBroadcast::NewTransaction(tx1.clone());
-
-        let _res = stx.send(broadcast_tx);
+        let _res = transaction_sender.send(broadcast_tx);
 
         let _subscribe = service.subscribe_ch();
 
@@ -449,8 +453,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, mut rx) = mpsc::channel(100);
-        let (_stx, rtx) = broadcast::channel(100);
+        let (network_outbox, mut rx) = mpsc::channel(100);
+        let (_stx, incoming_txs) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
 
@@ -460,7 +464,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -505,8 +510,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (tx, _rx) = mpsc::channel(100);
-        let (_stx, rtx) = broadcast::channel(100);
+        let (network_outbox, _) = mpsc::channel(100);
+        let (_, incoming_txs) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -518,7 +523,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .incoming_txs_and_broadcast(tx, rtx)
+            .network_outbox(network_outbox)
+            .incoming_txs(incoming_txs)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
