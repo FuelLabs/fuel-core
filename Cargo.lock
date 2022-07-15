@@ -2118,6 +2118,7 @@ dependencies = [
  "fuel-block-producer",
  "fuel-core-bft",
  "fuel-core-interfaces",
+ "fuel-p2p",
  "fuel-relayer",
  "fuel-sync",
  "fuel-txpool",
@@ -2264,6 +2265,7 @@ dependencies = [
 name = "fuel-p2p"
 version = "0.9.4"
 dependencies = [
+ "anyhow",
  "async-trait",
  "bincode",
  "ctor",

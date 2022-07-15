@@ -2,6 +2,7 @@
 use crate::config::Config;
 use crate::database::Database;
 use anyhow::Result;
+use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
@@ -15,6 +16,7 @@ pub struct Modules {
     pub bft: Arc<fuel_core_bft::Service>,
     pub sync: Arc<fuel_sync::Service>,
     pub relayer: Arc<fuel_relayer::Service>,
+    pub network_service: Arc<fuel_p2p::orchestrator::Service>,
 }
 
 impl Modules {
@@ -25,6 +27,7 @@ impl Modules {
             self.block_producer.stop().await,
             self.bft.stop().await,
             self.sync.stop().await,
+            self.network_service.stop().await,
         ]
         .into_iter()
         .flatten()
@@ -96,6 +99,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     }
     txpool.start().await?;
 
+    let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
+    let network_service = fuel_p2p::orchestrator::Service::new(config.p2p.clone(), p2p_db);
+    network_service.start().await?;
+
     Ok(Modules {
         txpool: Arc::new(txpool),
         block_importer: Arc::new(block_importer),
@@ -103,5 +110,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         bft: Arc::new(bft),
         sync: Arc::new(sync),
         relayer: Arc::new(relayer),
+        network_service: Arc::new(network_service),
     })
 }

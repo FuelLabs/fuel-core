@@ -26,6 +26,7 @@ pub struct Config {
     pub bft: fuel_core_bft::Config,
     pub sync: fuel_sync::Config,
     pub relayer: fuel_relayer::Config,
+    pub p2p: fuel_p2p::P2PConfig,
 }
 
 impl Config {
@@ -46,6 +47,7 @@ impl Config {
             bft: Default::default(),
             sync: Default::default(),
             relayer: Default::default(),
+            p2p: fuel_p2p::P2PConfig::default_with_network("test_network"),
         }
     }
 }
