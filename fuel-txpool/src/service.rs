@@ -438,7 +438,7 @@ pub mod tests {
             })
             .await;
         let out = receiver.await.unwrap();
-        
+
         let arc_tx1 = Arc::new(tx1);
 
         assert_eq!(arc_tx1, *out[0].as_ref().unwrap().tx());
