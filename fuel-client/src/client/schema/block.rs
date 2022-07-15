@@ -86,7 +86,7 @@ pub struct ProduceBlockArgs {
 )]
 pub struct BlockMutation {
     #[arguments(blocks_to_produce = &args.blocks_to_produce)]
-    pub produce_block: U64,
+    pub produce_blocks: U64,
 }
 
 #[cfg(test)]

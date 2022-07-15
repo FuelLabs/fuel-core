@@ -308,7 +308,7 @@ impl FuelClient {
             blocks_to_produce: blocks_to_produce.into(),
         });
 
-        let new_height = self.query(query).await?.produce_block;
+        let new_height = self.query(query).await?.produce_blocks;
 
         Ok(new_height.into())
     }
