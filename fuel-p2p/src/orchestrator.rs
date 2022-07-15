@@ -5,7 +5,6 @@ use fuel_core_interfaces::p2p::{
     BlockBroadcast, ConsensusBroadcast, P2pDb, P2pRequestEvent, TransactionBroadcast,
 };
 
-use libp2p::identity::Keypair;
 use libp2p::request_response::RequestId;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
@@ -21,7 +20,6 @@ use crate::{
 };
 
 pub struct NetworkOrchestrator {
-    local_keypair: Keypair,
     p2p_config: P2PConfig,
 
     /// receives messages from different Fuel components
@@ -39,7 +37,6 @@ pub struct NetworkOrchestrator {
 
 impl NetworkOrchestrator {
     pub fn new(
-        local_keypair: Keypair,
         p2p_config: P2PConfig,
         rx_request_event: Receiver<P2pRequestEvent>,
 
@@ -52,7 +49,6 @@ impl NetworkOrchestrator {
         let (tx_outbound_responses, rx_outbound_responses) = tokio::sync::mpsc::channel(100);
 
         Self {
-            local_keypair,
             p2p_config,
             rx_request_event,
             rx_outbound_responses,
@@ -65,8 +61,7 @@ impl NetworkOrchestrator {
     }
 
     pub async fn run(mut self) -> anyhow::Result<Self> {
-        let mut p2p_service =
-            FuelP2PService::new(self.local_keypair.clone(), self.p2p_config.clone()).await?;
+        let mut p2p_service = FuelP2PService::new(self.p2p_config.clone()).await?;
 
         loop {
             tokio::select! {
@@ -148,14 +143,13 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(local_keypair: Keypair, p2p_config: P2PConfig, db: Arc<Box<dyn P2pDb>>) -> Self {
+    pub fn new(p2p_config: P2PConfig, db: Arc<Box<dyn P2pDb>>) -> Self {
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
         let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
         let (tx_block, _) = tokio::sync::mpsc::channel(100);
 
         let network_orchestrator = NetworkOrchestrator::new(
-            local_keypair,
             p2p_config,
             rx_request_event,
             tx_consensus,
@@ -167,7 +161,7 @@ impl Service {
         Self {
             join: Mutex::new(None),
             network_orchestrator: Arc::new(Mutex::new(Some(network_orchestrator))),
-            tx_request_event: tx_request_event.clone(),
+            tx_request_event,
         }
     }
 
@@ -237,11 +231,10 @@ pub mod tests {
     #[tokio::test]
     async fn start_stop_works() {
         let mut p2p_config = P2PConfig::default_with_network("start_stop_works");
-        p2p_config.tcp_port = 4018;
-        let local_keypair = Keypair::generate_secp256k1();
+        p2p_config.tcp_port = 4018; // an unused port
         let db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(FakeDb));
 
-        let service = Service::new(local_keypair, p2p_config, db.clone());
+        let service = Service::new(p2p_config, db.clone());
 
         // Node with p2p service started
         assert!(service.start().await.is_ok());

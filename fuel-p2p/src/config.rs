@@ -19,6 +19,8 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
+    pub local_keypair: Keypair,
+
     /// Name of the Network
     pub network_name: String,
 
@@ -62,7 +64,10 @@ pub struct P2PConfig {
 
 impl P2PConfig {
     pub fn default_with_network(network_name: &str) -> Self {
+        let local_keypair = Keypair::generate_secp256k1();
+
         P2PConfig {
+            local_keypair,
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 4000,

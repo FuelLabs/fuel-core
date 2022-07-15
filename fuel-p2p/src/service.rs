@@ -12,7 +12,6 @@ use crate::{
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{error::PublishError, MessageId, Topic},
-    identity::Keypair,
     multiaddr::Protocol,
     request_response::RequestId,
     swarm::SwarmEvent,
@@ -38,16 +37,12 @@ pub enum FuelP2PEvent {
 }
 
 impl FuelP2PService {
-    pub async fn new(local_keypair: Keypair, config: P2PConfig) -> anyhow::Result<Self> {
-        let local_peer_id = PeerId::from(local_keypair.public());
+    pub async fn new(config: P2PConfig) -> anyhow::Result<Self> {
+        let local_peer_id = PeerId::from(config.local_keypair.public());
 
         // configure and build P2P Serivce
-        let transport = build_transport(local_keypair.clone()).await;
-        let behaviour = FuelBehaviour::new(
-            local_keypair,
-            &config,
-            BincodeCodec::new(config.max_block_size),
-        );
+        let transport = build_transport(config.local_keypair.clone()).await;
+        let behaviour = FuelBehaviour::new(&config, BincodeCodec::new(config.max_block_size));
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
         // set up node's address to listen on
@@ -149,7 +144,8 @@ mod tests {
     use ctor::ctor;
     use fuel_core_interfaces::common::fuel_tx::Transaction;
     use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
-    use libp2p::{gossipsub::Topic, identity::Keypair};
+    use libp2p::gossipsub::Topic;
+    use libp2p::identity::Keypair;
     use std::collections::HashMap;
     use std::{sync::Arc, time::Duration};
     use tokio::sync::{mpsc, oneshot};
@@ -180,9 +176,9 @@ mod tests {
     }
 
     /// helper function for building FuelP2PService    
-    async fn build_fuel_p2p_service(p2p_config: P2PConfig) -> FuelP2PService {
-        let keypair = Keypair::generate_secp256k1();
-        let fuel_p2p_service = FuelP2PService::new(keypair, p2p_config).await.unwrap();
+    async fn build_fuel_p2p_service(mut p2p_config: P2PConfig) -> FuelP2PService {
+        p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
+        let fuel_p2p_service = FuelP2PService::new(p2p_config).await.unwrap();
 
         fuel_p2p_service
     }

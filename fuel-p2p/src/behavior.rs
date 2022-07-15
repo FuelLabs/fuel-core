@@ -18,7 +18,6 @@ use libp2p::{
         error::{PublishError, SubscriptionError},
         Gossipsub, GossipsubEvent, MessageId, TopicHash,
     },
-    identity::Keypair,
     request_response::{
         ProtocolSupport, RequestId, RequestResponse, RequestResponseConfig, RequestResponseEvent,
         RequestResponseMessage, ResponseChannel,
@@ -104,8 +103,8 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(local_keypair: Keypair, p2p_config: &P2PConfig, codec: Codec) -> Self {
-        let local_public_key = local_keypair.public();
+    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> Self {
+        let local_public_key = p2p_config.local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
         let discovery_config = {
@@ -148,7 +147,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: gossipsub::build_gossipsub(&local_keypair, p2p_config),
+            gossipsub: gossipsub::build_gossipsub(&p2p_config.local_keypair, p2p_config),
             peer_info,
             request_response,
 
