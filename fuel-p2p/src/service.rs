@@ -151,38 +151,10 @@ mod tests {
     use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
     use libp2p::{gossipsub::Topic, identity::Keypair};
     use std::collections::HashMap;
-    use std::{
-        net::{IpAddr, Ipv4Addr},
-        sync::Arc,
-        time::Duration,
-    };
+    use std::{sync::Arc, time::Duration};
     use tokio::sync::{mpsc, oneshot};
     use tracing_attributes::instrument;
     use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter};
-
-    /// helper function for building default testing config
-    fn build_p2p_config(network_name: &str) -> P2PConfig {
-        P2PConfig {
-            network_name: network_name.into(),
-            address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
-            tcp_port: 4000,
-            max_block_size: 100_000,
-            bootstrap_nodes: vec![],
-            enable_mdns: false,
-            max_peers_connected: 50,
-            allow_private_addresses: true,
-            enable_random_walk: true,
-            connection_idle_timeout: Some(Duration::from_secs(120)),
-            topics: vec![],
-            max_mesh_size: 12,
-            min_mesh_size: 4,
-            ideal_mesh_size: 6,
-            set_request_timeout: None,
-            set_connection_keep_alive: None,
-            info_interval: Some(Duration::from_secs(3)),
-            identify_interval: Some(Duration::from_secs(5)),
-        }
-    }
 
     /// Conditionally initializes tracing, depending if RUST_LOG env variable is set
     /// Logs to stderr & to a file
@@ -219,7 +191,7 @@ mod tests {
     #[instrument]
     async fn p2p_service_works() {
         let mut fuel_p2p_service =
-            build_fuel_p2p_service(build_p2p_config("p2p_service_works")).await;
+            build_fuel_p2p_service(P2PConfig::default_with_network("p2p_service_works")).await;
 
         loop {
             match fuel_p2p_service.next_event().await {
@@ -241,7 +213,7 @@ mod tests {
     #[instrument]
     async fn nodes_connected_via_mdns() {
         // Node A
-        let mut p2p_config = build_p2p_config("nodes_connected_via_mdns");
+        let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_mdns");
         p2p_config.tcp_port = 4001;
         p2p_config.enable_mdns = true;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
@@ -272,7 +244,7 @@ mod tests {
     #[instrument]
     async fn nodes_connected_via_identify() {
         // Node A
-        let mut p2p_config = build_p2p_config("nodes_connected_via_identify");
+        let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_identify");
         p2p_config.tcp_port = 4003;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -318,7 +290,7 @@ mod tests {
     #[instrument]
     async fn peer_info_updates_work() {
         // Node A
-        let mut p2p_config = build_p2p_config("peer_info_updates_work");
+        let mut p2p_config = P2PConfig::default_with_network("peer_info_updates_work");
         p2p_config.tcp_port = 4006;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -395,7 +367,7 @@ mod tests {
         port_a: u16,
         port_b: u16,
     ) {
-        let mut p2p_config = build_p2p_config("gossipsub_exchanges_messages");
+        let mut p2p_config = P2PConfig::default_with_network("gossipsub_exchanges_messages");
         let topics = vec![
             NEW_TX_GOSSIP_TOPIC.into(),
             NEW_BLOCK_GOSSIP_TOPIC.into(),
@@ -491,7 +463,7 @@ mod tests {
             FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock,
         };
 
-        let mut p2p_config = build_p2p_config("request_response_works");
+        let mut p2p_config = P2PConfig::default_with_network("request_response_works");
 
         // Node A
         p2p_config.tcp_port = 4014;
@@ -578,7 +550,7 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn req_res_outbound_timeout_works() {
-        let mut p2p_config = build_p2p_config("req_res_outbound_timeout_works");
+        let mut p2p_config = P2PConfig::default_with_network("req_res_outbound_timeout_works");
 
         // Node A
         p2p_config.tcp_port = 4016;
