@@ -143,12 +143,15 @@ pub struct Service {
 }
 
 impl Service {
-    pub fn new(p2p_config: P2PConfig, db: Arc<Box<dyn P2pDb>>) -> Self {
-        let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
-        let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
-        let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
-        let (tx_block, _) = tokio::sync::mpsc::channel(100);
-
+    pub fn new(
+        p2p_config: P2PConfig,
+        db: Arc<Box<dyn P2pDb>>,
+        tx_request_event: Sender<P2pRequestEvent>,
+        rx_request_event: Receiver<P2pRequestEvent>,
+        tx_consensus: Sender<ConsensusBroadcast>,
+        tx_transaction: Sender<TransactionBroadcast>,
+        tx_block: Sender<BlockBroadcast>,
+    ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
             p2p_config,
             rx_request_event,
@@ -234,7 +237,20 @@ pub mod tests {
         p2p_config.tcp_port = 4018; // an unused port
         let db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(FakeDb));
 
-        let service = Service::new(p2p_config, db.clone());
+        let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
+        let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
+        let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
+        let (tx_block, _) = tokio::sync::mpsc::channel(100);
+
+        let service = Service::new(
+            p2p_config,
+            db.clone(),
+            tx_request_event,
+            rx_request_event,
+            tx_consensus,
+            tx_transaction,
+            tx_block,
+        );
 
         // Node with p2p service started
         assert!(service.start().await.is_ok());

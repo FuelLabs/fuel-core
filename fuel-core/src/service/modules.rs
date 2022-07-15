@@ -7,6 +7,7 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 pub struct Modules {
@@ -100,7 +101,21 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     txpool.start().await?;
 
     let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
-    let network_service = fuel_p2p::orchestrator::Service::new(config.p2p.clone(), p2p_db);
+
+    let (tx_request_event, rx_request_event) = mpsc::channel(100);
+    let (tx_consensus, _) = mpsc::channel(100);
+    let (tx_transaction, _) = mpsc::channel(100);
+    let (tx_block, _) = mpsc::channel(100);
+
+    let network_service = fuel_p2p::orchestrator::Service::new(
+        config.p2p.clone(),
+        p2p_db,
+        tx_request_event,
+        rx_request_event,
+        tx_consensus,
+        tx_transaction,
+        tx_block,
+    );
     network_service.start().await?;
 
     Ok(Modules {
