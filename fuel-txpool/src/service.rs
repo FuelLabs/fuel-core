@@ -424,11 +424,12 @@ pub mod tests {
         service.start().await.ok();
 
         let broadcast_tx = TransactionBroadcast::NewTransaction(tx1.clone());
-        let _res = transaction_sender.send(broadcast_tx);
+        let res = transaction_sender.send(broadcast_tx).unwrap();
 
-        let _subscribe = service.subscribe_ch();
+        assert_eq!(1, res);
 
         let (response, receiver) = oneshot::channel();
+
         let _ = service
             .sender()
             .send(TxPoolMpsc::Find {
