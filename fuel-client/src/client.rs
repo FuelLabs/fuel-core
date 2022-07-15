@@ -303,7 +303,7 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_block(&self, blocks_to_produce: u64) -> io::Result<u64> {
+    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
         });
