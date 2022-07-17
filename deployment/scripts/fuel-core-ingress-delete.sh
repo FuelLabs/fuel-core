@@ -14,6 +14,7 @@ if [ "${k8s_provider}" == "eks" ]; then
     envsubst < fuel-core-ingress.template > fuel-core-ingress.yaml
     rm fuel-core-ingress.template
     kubectl delete -f fuel-core-ingress.yaml
+    kubectl get ingress -n ${k8s_namespace}
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi

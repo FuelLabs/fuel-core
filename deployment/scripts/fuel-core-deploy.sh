@@ -23,8 +23,9 @@ if [ "${k8s_provider}" == "eks" ]; then
               --wait \
               --timeout 8000s \
               --debug
-    
+
     # Verify Deployment
+    sleep 60
     kubectl rollout status deployment/fuel-core-k8s --namespace ${k8s_namespace} --timeout=120s
     
 else

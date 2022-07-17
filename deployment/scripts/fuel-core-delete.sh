@@ -14,6 +14,8 @@ if [ "${k8s_provider}" == "eks" ]; then
               --wait \
               --timeout 8000s \
               --debug
+    
+    kubectl get pods -n ${k8s_namespace}
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
