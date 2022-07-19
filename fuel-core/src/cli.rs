@@ -81,10 +81,14 @@ pub async fn run_cli() -> Result<()> {
         }
     }
 
-    let opt = opt?;
-
-    match opt.command {
-        Fuel::Run(command) => run::exec(command).await,
-        Fuel::Snapshot(command) => snapshot::exec(command).await,
+    match opt {
+        Ok(opt) => match opt.command {
+            Fuel::Run(command) => run::exec(command).await,
+            Fuel::Snapshot(command) => snapshot::exec(command).await,
+        },
+        Err(e) => {
+            // Prints the error and exits.
+            e.exit()
+        }
     }
 }
