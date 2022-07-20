@@ -83,6 +83,11 @@ impl Sender {
     }
 }
 
+pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
+    let (sender, receiver) = mpsc::channel(buffer);
+    (Sender(sender), receiver)
+}
+
 #[derive(Debug)]
 pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.

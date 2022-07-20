@@ -5,12 +5,11 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
-    p2p::P2pRequestEvent,
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -137,12 +136,20 @@ impl TxPool {
         Ok(())
     }
 
+    pub async fn insert_local(
+        txpool: &RwLock<Self>,
+        db: &dyn TxPoolDb,
+        tx: ArcTx
+    ) -> anyhow::Result<Vec<ArcTx>> {
+        let mut pool = txpool.write().await;
+        pool.insert_inner(tx.clone(), db).await
+    }
+
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        consumer: broadcast::Sender<TxStatusBroadcast>,
-        outbox: Option<mpsc::Sender<P2pRequestEvent>>,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -159,24 +166,14 @@ impl TxPool {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        let _ = consumer.send(TxStatusBroadcast {
+                        let _ = tx_status_sender.send(TxStatusBroadcast {
                             tx: removed.clone(),
                             status: TxStatus::SqueezedOut {
                                 reason: Error::Removed,
                             },
                         });
                     }
-                    // From here broadcast new Transaction to peers
-                    if outbox.is_some() {
-                        let _ = outbox
-                            .as_ref()
-                            .unwrap()
-                            .send(P2pRequestEvent::BroadcastNewTransaction {
-                                transaction: tx.clone(),
-                            })
-                            .await;
-                    }
-                    let _ = consumer.send(TxStatusBroadcast {
+                    let _ = tx_status_sender.send(TxStatusBroadcast {
                         tx,
                         status: TxStatus::Submitted,
                     });
@@ -252,7 +249,7 @@ impl TxPool {
     /// remove transaction from pool needed on user demand. Low priority
     pub async fn remove(
         txpool: &RwLock<Self>,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
         tx_ids: &[TxId],
     ) {
         let mut removed = Vec::new();
@@ -261,7 +258,7 @@ impl TxPool {
             removed.extend(rem.into_iter());
         }
         for tx in removed {
-            let _ = broadcast.send(TxStatusBroadcast {
+            let _ = tx_status_sender.send(TxStatusBroadcast {
                 tx,
                 status: TxStatus::SqueezedOut {
                     reason: Error::Removed,
