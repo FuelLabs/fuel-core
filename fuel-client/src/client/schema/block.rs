@@ -12,23 +12,23 @@ pub struct BlockByIdArgs {
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    argument_struct = "BlockByIdArgs"
+schema_path = "./assets/schema.sdl",
+graphql_type = "Query",
+argument_struct = "BlockByIdArgs"
 )]
 pub struct BlockByIdQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(id = & args.id)]
     pub block: Option<Block>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
+schema_path = "./assets/schema.sdl",
+graphql_type = "Query",
+argument_struct = "ConnectionArgs"
 )]
 pub struct BlocksQuery {
-    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(after = & args.after, before = & args.before, first = & args.first, last = & args.last)]
     pub blocks: BlockConnection,
 }
 
@@ -98,6 +98,15 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
             id: BlockId::default(),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn block_mutation_query_gql_output() {
+        use cynic::MutationBuilder;
+        let operation = BlockMutation::build(ProduceBlockArgs {
+            blocks_to_produce: U64(0)
         });
         insta::assert_snapshot!(operation.query)
     }
