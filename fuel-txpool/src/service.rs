@@ -1,10 +1,7 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast,
-    p2p::{TransactionBroadcast},
-};
+use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::TransactionBroadcast};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -241,7 +238,7 @@ pub mod tests {
         db::helpers::*,
         txpool::{Error as TxpoolError, TxStatus},
     };
-    use tokio::sync::{oneshot};
+    use tokio::sync::oneshot;
 
     #[tokio::test]
     async fn test_start_stop() {

@@ -139,7 +139,7 @@ impl TxPool {
     pub async fn insert_local(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        tx: ArcTx
+        tx: ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
         let mut pool = txpool.write().await;
         pool.insert_inner(tx.clone(), db).await
