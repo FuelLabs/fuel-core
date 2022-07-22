@@ -57,12 +57,14 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         );
 
     // Meant to simulate p2p's channels which hook in to communicate with txpool
+    let (network_sender, _) = mpsc::channel(100);
     let (_, incoming_tx_receiver) = broadcast::channel(100);
 
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
+        .network_sender(network_sender)
         .import_block_event(block_importer.subscribe());
 
     let p2p_mpsc = ();
