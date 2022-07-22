@@ -1,7 +1,7 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::TransactionBroadcast};
+use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::{P2pRequestEvent, TransactionBroadcast}};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -12,8 +12,9 @@ pub struct ServiceBuilder {
     txpool_sender: txpool::Sender,
     txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
     tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+    network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
-    local_tx_receiver: Option<broadcast::Receiver<TransactionBroadcast>>,
+    incoming_tx_receiver: Option<broadcast::Receiver<TransactionBroadcast>>,
 }
 
 impl Default for ServiceBuilder {
@@ -32,8 +33,9 @@ impl ServiceBuilder {
             txpool_sender,
             txpool_receiver,
             tx_status_sender,
+            network_sender: None,
             import_block_receiver: None,
-            local_tx_receiver: None,
+            incoming_tx_receiver: None,
         }
     }
 
@@ -50,11 +52,19 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn local_tx_receiver(
+    pub fn incoming_tx_receiver(
         &mut self,
-        local_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
+        incoming_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
     ) -> &mut Self {
-        self.local_tx_receiver = Some(local_tx_receiver);
+        self.incoming_tx_receiver = Some(incoming_tx_receiver);
+        self
+    }
+
+    pub fn network_sender(
+        &mut self,
+        network_sender: mpsc::Sender<P2pRequestEvent>,
+    ) -> &mut Self {
+        self.network_sender = Some(network_sender);
         self
     }
 
@@ -74,7 +84,8 @@ impl ServiceBuilder {
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none()
             || self.import_block_receiver.is_none()
-            || self.local_tx_receiver.is_none()
+            || self.incoming_tx_receiver.is_none()
+            || self.network_sender.is_none()
         {
             return Err(anyhow!("One of context items are not set"));
         }
@@ -82,12 +93,13 @@ impl ServiceBuilder {
             self.txpool_sender,
             self.tx_status_sender.clone(),
             Context {
+                config: self.config,
                 db: Arc::new(self.db.unwrap()),
                 txpool_receiver: self.txpool_receiver,
                 tx_status_sender: self.tx_status_sender,
                 import_block_receiver: self.import_block_receiver.unwrap(),
-                config: self.config,
-                local_tx_receiver: self.local_tx_receiver.unwrap(),
+                incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
+                network_sender: self.network_sender.unwrap()
             },
         )?;
         Ok(service)
@@ -98,9 +110,10 @@ pub struct Context {
     pub config: Config,
     pub db: Arc<Box<dyn TxPoolDb>>,
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
+    pub network_sender: mpsc::Sender<P2pRequestEvent>,
     pub tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
-    pub local_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
+    pub incoming_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
 }
 
 impl Context {
@@ -109,15 +122,17 @@ impl Context {
 
         loop {
             tokio::select! {
-                new_transaction = self.local_tx_receiver.recv() => {
-                    let db = self.db.clone();
+                new_transaction = self.incoming_tx_receiver.recv() => {
                     let txpool = txpool.clone();
+                    let db = self.db.clone();
+                    let tx_status_sender = self.tx_status_sender.clone();
 
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                         match new_transaction.unwrap() {
                             TransactionBroadcast::NewTransaction ( tx ) => {
-                                TxPool::insert_local(txpool, db.as_ref().as_ref(), Arc::new(tx)).await
+                                let txs = vec!(Arc::new(tx));
+                                TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await
                             }
                         }
                     });
@@ -127,9 +142,10 @@ impl Context {
                     if matches!(event,Some(TxPoolMpsc::Stop) | None) {
                         break;
                     }
-                    let tx_status_sender = self.tx_status_sender.clone();
-                    let db = self.db.clone();
                     let txpool = txpool.clone();
+                    let db = self.db.clone();
+                    let tx_status_sender = self.tx_status_sender.clone();
+                    let network_sender = self.network_sender.clone();
 
                     // This is litle bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
@@ -139,7 +155,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await);
+                            let _ = response.send(TxPool::insert_with_broadcast(txpool, db.as_ref().as_ref(), tx_status_sender, network_sender, txs).await);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -247,13 +263,15 @@ pub mod tests {
         let (bs, _br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (_, local_tx_receiver) = broadcast::channel(100);
+        let (network_sender, _) = mpsc::channel(100);
+        let (_, incoming_tx_receiver) = broadcast::channel(100);
 
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
             .db(db)
-            .local_tx_receiver(local_tx_receiver)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
             .import_block_event(bs.subscribe());
         let service = builder.build().unwrap();
 
@@ -276,7 +294,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (_, local_tx_receiver) = broadcast::channel(100);
+        let (network_sender, _) = mpsc::channel(100);
+        let (_, incoming_tx_receiver) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -289,7 +308,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .local_tx_receiver(local_tx_receiver)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -330,7 +350,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (_, local_tx_receiver) = broadcast::channel(100);
+        let (network_sender, _) = mpsc::channel(100);
+        let (_, incoming_tx_receiver) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -343,7 +364,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .local_tx_receiver(local_tx_receiver)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -385,7 +407,8 @@ pub mod tests {
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (local_tx_sender, local_tx_receiver) = broadcast::channel(100);
+        let (network_sender, _) = mpsc::channel(100);
+        let (local_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx1 = DummyDb::dummy_tx(tx1_hash);
@@ -394,7 +417,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .local_tx_receiver(local_tx_receiver)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -421,13 +445,70 @@ pub mod tests {
     }
 
     #[tokio::test]
+    async fn insert_then_broadcast() {
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
+
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (network_sender, mut rx) = mpsc::channel(100);
+        let (_stx, incoming_txs) = broadcast::channel(100);
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(db)
+            .incoming_tx_receiver(incoming_txs)
+            .network_sender(network_sender)
+            .import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
+        let mut subscribe = service.subscribe_ch();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = service
+            .sender()
+            .send(TxPoolMpsc::Insert {
+                txs: vec![tx1.clone()],
+                response,
+            })
+            .await;
+        let out = receiver.await.unwrap();
+
+        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
+
+        // we are sure that included tx are already broadcasted.
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx1.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "First added should be tx1"
+        );
+
+        let ret = rx.try_recv().unwrap();
+
+        if let P2pRequestEvent::BroadcastNewTransaction { transaction } = ret {
+            assert_eq!(tx1, transaction);
+        } else {
+            panic!("Transaction Broadcast Unwrap Failed");
+        }
+    }
+
+    #[tokio::test]
     async fn test_simple_insert_removal_subscription() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
-        let (_, local_tx_receiver) = broadcast::channel(100);
+        let (network_sender, _) = mpsc::channel(100);
+        let (_, incoming_tx_receiver) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -439,7 +520,8 @@ pub mod tests {
         builder
             .config(config)
             .db(db)
-            .local_tx_receiver(local_tx_receiver)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
             .import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();

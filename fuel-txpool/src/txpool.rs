@@ -6,10 +6,11 @@ use crate::{
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
+    p2p::P2pRequestEvent
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -136,13 +137,25 @@ impl TxPool {
         Ok(())
     }
 
-    pub async fn insert_local(
+    pub async fn insert_with_broadcast(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        tx: ArcTx,
-    ) -> anyhow::Result<Vec<ArcTx>> {
-        let mut pool = txpool.write().await;
-        pool.insert_inner(tx.clone(), db).await
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+        network_sender: mpsc::Sender<P2pRequestEvent>,
+        txs: Vec<ArcTx>,
+    ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
+        let res = Self::insert(txpool, db, tx_status_sender, txs.clone()).await;
+        for (ret, tx) in res.iter().zip(txs.into_iter()) {
+            match ret {
+                Ok(_) => {
+                    let _ = network_sender.send(P2pRequestEvent::BroadcastNewTransaction {
+                        transaction: tx.clone(),
+                    }).await;
+                },
+                Err(_) => {}
+            }
+        }
+        res
     }
 
     /// Import a set of transactions from network gossip or GraphQL endpoints.
@@ -179,7 +192,7 @@ impl TxPool {
                     });
                 }
                 Err(_) => {
-                    // @dev should not broadcast tx if error occured
+                    // @dev should not broadcast tx if error occurred
                 }
             }
         }
