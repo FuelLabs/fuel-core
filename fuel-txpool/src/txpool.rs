@@ -5,8 +5,8 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
+    p2p::P2pRequestEvent,
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
-    p2p::P2pRequestEvent
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
@@ -148,10 +148,12 @@ impl TxPool {
         for (ret, tx) in res.iter().zip(txs.into_iter()) {
             match ret {
                 Ok(_) => {
-                    let _ = network_sender.send(P2pRequestEvent::BroadcastNewTransaction {
-                        transaction: tx.clone(),
-                    }).await;
-                },
+                    let _ = network_sender
+                        .send(P2pRequestEvent::BroadcastNewTransaction {
+                            transaction: tx.clone(),
+                        })
+                        .await;
+                }
                 Err(_) => {}
             }
         }

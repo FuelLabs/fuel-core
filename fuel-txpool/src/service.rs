@@ -1,7 +1,10 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
-use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, p2p::{P2pRequestEvent, TransactionBroadcast}};
+use fuel_core_interfaces::{
+    block_importer::ImportBlockBroadcast,
+    p2p::{P2pRequestEvent, TransactionBroadcast},
+};
 use std::sync::Arc;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
@@ -60,10 +63,7 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn network_sender(
-        &mut self,
-        network_sender: mpsc::Sender<P2pRequestEvent>,
-    ) -> &mut Self {
+    pub fn network_sender(&mut self, network_sender: mpsc::Sender<P2pRequestEvent>) -> &mut Self {
         self.network_sender = Some(network_sender);
         self
     }
@@ -99,7 +99,7 @@ impl ServiceBuilder {
                 tx_status_sender: self.tx_status_sender,
                 import_block_receiver: self.import_block_receiver.unwrap(),
                 incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
-                network_sender: self.network_sender.unwrap()
+                network_sender: self.network_sender.unwrap(),
             },
         )?;
         Ok(service)
