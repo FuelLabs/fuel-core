@@ -53,7 +53,7 @@ impl From<RelayerArgs> for Config {
             eth_chain_id: args.eth_chain_id,
             eth_v2_commit_contract: args.eth_v2_commit_contract,
             eth_v2_listening_contracts: args.eth_v2_listening_contracts,
-            eth_v2_contracts_deployet: args.eth_v2_contracts_deployet,
+            eth_v2_contracts_deployet: args.eth_v2_contracts_deployment,
             initial_sync_step: args.initial_sync_step,
             initial_sync_refresh: Duration::from_secs(args.initial_sync_refresh),
         }
