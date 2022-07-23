@@ -408,7 +408,7 @@ pub mod tests {
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
-        let (local_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+        let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx1 = DummyDb::dummy_tx(tx1_hash);
@@ -424,12 +424,12 @@ pub mod tests {
         service.start().await.ok();
 
         let broadcast_tx = TransactionBroadcast::NewTransaction(tx1.clone());
-        let res = local_tx_sender.send(broadcast_tx).unwrap();
-
+        let mut receiver = service.subscribe_ch();
+        let res = incoming_tx_sender.send(broadcast_tx).unwrap();
+        let _ = receiver.recv().await;
         assert_eq!(1, res);
 
         let (response, receiver) = oneshot::channel();
-
         let _ = service
             .sender()
             .send(TxPoolMpsc::Find {
