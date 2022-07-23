@@ -445,7 +445,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn insert_then_broadcast() {
+    async fn test_insert_from_local_broadcasts_to_p2p() {
         let config = Config::default();
         let db = Box::new(DummyDb::filled());
         let (_bs, br) = broadcast::channel(10);
