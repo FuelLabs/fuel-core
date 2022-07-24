@@ -1,8 +1,9 @@
 use async_trait::async_trait;
+use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
 use fuel_types::{Address, Bytes32};
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
@@ -147,18 +148,50 @@ pub trait RelayerDb:
 pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>;
 
 #[derive(Debug)]
-pub enum RelayerEvent {
+pub enum RelayerRequest {
     //expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
         da_height: DaBlockHeight,
-        response_channel: oneshot::Sender<Result<ValidatorSet, RelayerError>>,
+        response: oneshot::Sender<Result<ValidatorSet, RelayerError>>,
     },
     GetStatus {
         response: oneshot::Sender<RelayerStatus>,
     },
     Stop,
+}
+
+#[derive(Clone, Deref, DerefMut)]
+pub struct Sender(mpsc::Sender<RelayerRequest>);
+
+impl Sender {
+    pub fn new(sender: mpsc::Sender<RelayerRequest>) -> Self {
+        Self(sender)
+    }
+
+    pub async fn get_validator_set(
+        &self,
+        da_height: DaBlockHeight,
+    ) -> anyhow::Result<ValidatorSet> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self
+            .send(RelayerRequest::GetValidatorSet {
+                da_height,
+                response,
+            })
+            .await;
+        receiver
+            .await
+            .map_err(anyhow::Error::from)?
+            .map_err(Into::into)
+    }
+
+    pub async fn get_status(&self) -> anyhow::Result<RelayerStatus> {
+        let (response, receiver) = oneshot::channel();
+        let _ = self.send(RelayerRequest::GetStatus { response }).await;
+        receiver.await.map_err(Into::into)
+    }
 }
 
 pub use thiserror::Error;

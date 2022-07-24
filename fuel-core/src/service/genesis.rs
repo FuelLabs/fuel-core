@@ -1,5 +1,8 @@
 use crate::{
-    config::chain_config::{ChainConfig, ContractConfig, StateConfig},
+    config::{
+        chain_config::{ContractConfig, StateConfig},
+        Config,
+    },
     database::Database,
     service::FuelService,
 };
@@ -16,7 +19,7 @@ use itertools::Itertools;
 
 impl FuelService {
     /// Loads state from the chain config into database
-    pub(crate) fn import_state(config: &ChainConfig, database: &Database) -> Result<()> {
+    pub(crate) fn initialize_state(config: &Config, database: &Database) -> Result<()> {
         // start a db transaction for bulk-writing
         let mut import_tx = database.transaction();
         let database = import_tx.as_mut();
@@ -24,10 +27,9 @@ impl FuelService {
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
             // initialize the chain id
-            database.init_chain_name(config.chain_name.clone())?;
+            database.init(config)?;
 
-            if let Some(initial_state) = &config.initial_state {
-                Self::init_block_height(database, initial_state)?;
+            if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_coin_state(database, initial_state)?;
                 Self::init_contracts(database, initial_state)?;
             }
@@ -36,14 +38,6 @@ impl FuelService {
         // Write transaction to db
         import_tx.commit()?;
 
-        Ok(())
-    }
-
-    /// initialize starting block height if set
-    fn init_block_height(db: &Database, state: &StateConfig) -> Result<()> {
-        if let Some(height) = state.height {
-            db.init_chain_height(height)?;
-        }
         Ok(())
     }
 
@@ -161,7 +155,7 @@ impl FuelService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::chain_config::{CoinConfig, ContractConfig, StateConfig};
+    use crate::config::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
     use crate::config::Config;
     use crate::model::BlockHeight;
     use fuel_core_interfaces::common::{

@@ -1,13 +1,15 @@
+use crate::database::InterpreterStorage;
 use crate::{
+    config::chain_config::ContractConfig,
     database::{
-        columns::{BALANCES, CONTRACTS, CONTRACT_UTXO_ID},
+        columns::{BALANCES, CONTRACTS, CONTRACTS_STATE, CONTRACT_UTXO_ID},
         Database,
     },
     state::{Error, IterDirection, MultiKey},
 };
 use fuel_core_interfaces::common::{
     fuel_tx::UtxoId,
-    fuel_types::Word,
+    fuel_types::{Bytes32, Word},
     fuel_vm::prelude::{AssetId, Contract, ContractId, Storage},
 };
 use std::borrow::Cow;
@@ -66,6 +68,72 @@ impl Database {
             direction,
         )
         .map(|res| res.map(|(key, balance)| (AssetId::new(key[32..].try_into().unwrap()), balance)))
+    }
+
+    pub fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
+        let configs = self
+            .iter_all::<Vec<u8>, Word>(CONTRACTS, None, None, None)
+            .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
+                let contract_id = ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
+
+                let code: Vec<u8> = Storage::<ContractId, Contract>::get(self, &contract_id)?
+                    .unwrap()
+                    .into_owned()
+                    .into();
+
+                let salt = InterpreterStorage::storage_contract_root(self, &contract_id)?
+                    .unwrap()
+                    .into_owned()
+                    .0;
+
+                let state = Some(
+                    self.iter_all::<Vec<u8>, Bytes32>(
+                        CONTRACTS_STATE,
+                        Some(contract_id.as_ref().to_vec()),
+                        None,
+                        None,
+                    )
+                    .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
+                        let safe_res = res?;
+
+                        // We don't need to store ContractId which is the first 32 bytes of this
+                        // key, as this Vec is already attached to that ContractId
+                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
+
+                        Ok((state_key, safe_res.1))
+                    })
+                    .filter(|val| val.is_ok())
+                    .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,
+                );
+
+                let balances = Some(
+                    self.iter_all::<Vec<u8>, u64>(
+                        BALANCES,
+                        Some(contract_id.as_ref().to_vec()),
+                        None,
+                        None,
+                    )
+                    .map(|res| -> Result<(AssetId, u64), anyhow::Error> {
+                        let safe_res = res?;
+
+                        let asset_id = AssetId::new(safe_res.0[32..].try_into()?);
+
+                        Ok((asset_id, safe_res.1))
+                    })
+                    .filter(|val| val.is_ok())
+                    .collect::<Result<Vec<(AssetId, u64)>, anyhow::Error>>()?,
+                );
+
+                Ok(ContractConfig {
+                    code,
+                    salt,
+                    state,
+                    balances,
+                })
+            })
+            .collect::<Result<Vec<ContractConfig>, anyhow::Error>>()?;
+
+        Ok(Some(configs))
     }
 }
 

@@ -12,4 +12,6 @@ pub mod test_helpers;
 
 pub use config::Config;
 pub use relayer::Relayer;
-pub use service::Service;
+pub use service::{Service, ServiceBuilder};
+
+pub use ethers_core::types::{H160, H256};

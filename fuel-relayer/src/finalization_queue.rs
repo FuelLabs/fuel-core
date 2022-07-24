@@ -59,7 +59,7 @@ impl DaBlockDiff {
 impl FinalizationQueue {
     pub fn new(
         chain_id: u64,
-        contract_address: H160,
+        contract_address: Option<H160>,
         private_key: &[u8],
         chain_height: BlockHeight,
         last_commited_finalized_fuel_height: BlockHeight,
@@ -360,7 +360,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -403,7 +403,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -439,7 +439,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -488,7 +488,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -537,7 +537,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -578,7 +578,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -616,7 +616,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -660,7 +660,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(0u64),

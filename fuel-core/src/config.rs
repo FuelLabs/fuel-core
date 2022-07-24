@@ -17,6 +17,7 @@ pub struct Config {
     pub utxo_validation: bool,
     // default to false until predicates have fully stabilized
     pub predicates: bool,
+    pub manual_blocks_enabled: bool,
     pub vm: VMConfig,
     pub txpool: fuel_txpool::Config,
     pub block_importer: fuel_block_importer::Config,
@@ -24,6 +25,7 @@ pub struct Config {
     pub block_executor: fuel_block_executor::Config,
     pub bft: fuel_core_bft::Config,
     pub sync: fuel_sync::Config,
+    pub relayer: fuel_relayer::Config,
 }
 
 impl Config {
@@ -33,6 +35,7 @@ impl Config {
             database_path: Default::default(),
             database_type: DbType::InMemory,
             chain_conf: ChainConfig::local_testnet(),
+            manual_blocks_enabled: false,
             vm: Default::default(),
             utxo_validation: false,
             predicates: false,
@@ -42,6 +45,7 @@ impl Config {
             block_executor: Default::default(),
             bft: Default::default(),
             sync: Default::default(),
+            relayer: Default::default(),
         }
     }
 }

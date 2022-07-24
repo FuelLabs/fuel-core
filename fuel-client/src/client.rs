@@ -24,6 +24,8 @@ use types::{TransactionResponse, TransactionStatus};
 use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
+use self::schema::block::ProduceBlockArgs;
+
 pub mod schema;
 pub mod types;
 
@@ -61,7 +63,7 @@ where
 }
 
 impl FuelClient {
-    pub fn new(url: impl AsRef<str>) -> Result<Self, anyhow::Error> {
+    pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
     }
 
@@ -299,6 +301,16 @@ impl FuelClient {
             .collect();
 
         Ok(receipts?)
+    }
+
+    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+        let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
+            blocks_to_produce: blocks_to_produce.into(),
+        });
+
+        let new_height = self.query(query).await?.produce_blocks;
+
+        Ok(new_height.into())
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {

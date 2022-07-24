@@ -24,7 +24,7 @@ use tracing::{debug, error, info, warn};
 /// there is possibility that they are going to be reverted
 pub struct PendingBlocks {
     signer: LocalWallet,
-    contract_address: H160,
+    contract_address: Option<H160>,
     /// Pending block commits seen on DA layer and waiting to be finalized
     pending_block_commits: VecDeque<PendingBlock>,
     /// Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
@@ -87,7 +87,7 @@ impl PendingBlocks {
     /// Pending blocks at least finalization number of blocks.
     pub fn new(
         chain_id: u64,
-        contract_address: H160,
+        contract_address: Option<H160>,
         private_key: &[u8],
         chain_height: BlockHeight,
         last_commited_finalized_fuel_height: BlockHeight,
@@ -181,6 +181,11 @@ impl PendingBlocks {
     {
         self.set_chain_height(height);
         debug!("Handle new created_block {}", height);
+
+        // if contract is not set there is no point to bundle and send block commits
+        if self.contract_address.is_none() {
+            return;
+        }
 
         let mut bundle = self.bundle(height, db).await.into_iter();
 
@@ -311,80 +316,82 @@ impl PendingBlocks {
     where
         P: Middleware + 'static,
     {
-        let wrapped_block = from_fuel_to_block_header(block);
-        let wrapped_parent = from_fuel_to_block_header(parent);
+        if let Some(contract_address) = self.contract_address {
+            let wrapped_block = from_fuel_to_block_header(block);
+            let wrapped_parent = from_fuel_to_block_header(parent);
 
-        let validators = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(val, _)| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
-            .collect();
-        let stakes = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(_, (stake, _))| (*stake).into())
-            .collect(); // U256
-        let signatures = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(_, (_, sig))| sig.to_vec().into())
-            .collect(); //bytes
-        let withdrawals = block
-            .withdrawals()
-            .iter()
-            .map(|wd| abi::fuel::Withdrawal {
-                owner: H160::from_slice(&wd.0.as_ref()[12..]),
-                token: H160::from_slice(&wd.2.as_ref()[12..]),
-                amount: wd.1.into(),
-                precision: 0,
-                nonce: U256::zero(),
-            })
-            .collect();
+            let validators = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(val, _)| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
+                .collect();
+            let stakes = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(_, (stake, _))| (*stake).into())
+                .collect(); // U256
+            let signatures = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(_, (_, sig))| sig.to_vec().into())
+                .collect(); //bytes
+            let withdrawals = block
+                .withdrawals()
+                .iter()
+                .map(|wd| abi::fuel::Withdrawal {
+                    owner: H160::from_slice(&wd.0.as_ref()[12..]),
+                    token: H160::from_slice(&wd.2.as_ref()[12..]),
+                    amount: wd.1.into(),
+                    precision: 0,
+                    nonce: U256::zero(),
+                })
+                .collect();
 
-        let calldata = {
-            let contract = abi::Fuel::new(self.contract_address, provider.clone());
-            let event = contract.commit_block(
-                block.header.height.into(),
-                <[u8; 32]>::try_from(block.id()).unwrap(),
-                wrapped_block,
-                wrapped_parent,
-                validators,
-                stakes,
-                signatures,
-                withdrawals,
-            );
-            //
-            event.calldata().expect("To have caldata")
-        };
+            let calldata = {
+                let contract = abi::Fuel::new(contract_address, provider.clone());
+                let event = contract.commit_block(
+                    block.header.height.into(),
+                    <[u8; 32]>::try_from(block.id()).unwrap(),
+                    wrapped_block,
+                    wrapped_parent,
+                    validators,
+                    stakes,
+                    signatures,
+                    withdrawals,
+                );
+                //
+                event.calldata().expect("To have caldata")
+            };
 
-        // Escalate gas prices
-        let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
-        let provider =
-            GasEscalatorMiddleware::new(provider.clone(), escalator, Frequency::PerBlock);
+            // Escalate gas prices
+            let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
+            let provider =
+                GasEscalatorMiddleware::new(provider.clone(), escalator, Frequency::PerBlock);
 
-        // Sign transactions with a private key
-        let address = self.signer.address();
-        let provider = SignerMiddleware::new(provider, self.signer.clone());
+            // Sign transactions with a private key
+            let address = self.signer.address();
+            let provider = SignerMiddleware::new(provider, self.signer.clone());
 
-        // Use EthGasStation as the gas oracle
-        // https://github.com/FuelLabs/fuel-core/issues/363
-        // TODO check how this is going to be done in testnet.
-        //let gas_oracle = EthGasStation::new(None);
-        //let provider = GasOracleMiddleware::new(provider, gas_oracle);
+            // Use EthGasStation as the gas oracle
+            // https://github.com/FuelLabs/fuel-core/issues/363
+            // TODO check how this is going to be done in testnet.
+            //let gas_oracle = EthGasStation::new(None);
+            //let provider = GasOracleMiddleware::new(provider, gas_oracle);
 
-        // Manage nonces locally
-        let provider = NonceManagerMiddleware::new(provider, address);
+            // Manage nonces locally
+            let provider = NonceManagerMiddleware::new(provider, address);
 
-        // craft the tx
-        let tx = TransactionRequest::new()
-            .from(address)
-            .to(self.contract_address)
-            .gas_price(20000000001u64)
-            .data(calldata);
-        let _ = provider.send_transaction(tx, None).await?;
+            // craft the tx
+            let tx = TransactionRequest::new()
+                .from(address)
+                .to(contract_address)
+                .gas_price(20000000001u64)
+                .data(calldata);
+            let _ = provider.send_transaction(tx, None).await?;
+        }
         Ok(())
     }
 }
@@ -404,7 +411,7 @@ mod tests {
                 .unwrap();
         PendingBlocks::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &private_key,
             10u64.into(),
             last_commited_fuel_block,

@@ -61,7 +61,7 @@ Info about fuel-relayer structure:
 
 Communication channels that we have:
 * Inbound `fuel_block_importer` with `NewBlockEvent`: new block event from fuel, , mostly send block commit if this client created new fuel block
-* Inbound `requests` with `RelayerEvent`: request for relayer for example for validator set.
+* Inbound `requests` with `RelayerRequest`: request for relayer for example for validator set.
 * `da_block_watcher`: do finalization on this event
 * `logs_watcher`: insert logs into finalization_queue.
 
