@@ -129,7 +129,7 @@ impl Service {
         Ok(provider)
     }
 
-    // internal function to simplify code for different prividers.
+    // internal function to simplify code for different providers.
     async fn run<P>(
         &self,
         join: &mut Option<JoinHandle<Context>>,

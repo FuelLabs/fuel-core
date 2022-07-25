@@ -18,27 +18,30 @@ If you are interested in contributing to Fuel, see our [CONTRIBUTING.md](CONTRIB
 There are several system requirements including clang.
 
 ###### MacOS
+
 ```bash
 brew update
 brew install cmake
 ```
 
 ###### Debian
+
 ```bash
 apt update
 apt install -y cmake pkg-config build-essential git clang libclang-dev
 ```
 
 ###### Arch
-```bash 
+
+```bash
 pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
 ```
 
-## Building 
+## Building
 
 We recommend using `xtask` to build fuel-core:
 
-```
+```sh
 cargo xtask build
 ```
 
@@ -48,7 +51,7 @@ This will run `cargo build` as well as any other custom build processes we have 
 
 The service can listen to an arbitrary socket, as specified in the help command:
 
-```
+```console
 $ ./target/debug/fuel-core --help
 fuel-core 0.1.0
 
@@ -67,7 +70,7 @@ OPTIONS:
 
 #### Example
 
-```
+```console
 $ ./target/debug/fuel-core --ip 127.0.0.1 --port 4000
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
@@ -75,9 +78,11 @@ Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 #### Troubleshooting
 
 If you encounter an error such as
-```
+
+```console
 thread 'main' panicked at 'unable to open database: DatabaseError(Error { message: "Invalid argument: Column families not opened: column-11, column-10, column-9, column-8, column-7, column-6, column-5, column-4, column-3, column-2, column-1, column-0" })', fuel-core/src/main.rs:23:66
 ```
+
 Clear your local database using: `rm -rf ~/.fuel/db`
 
 #### Log level
@@ -87,7 +92,8 @@ The service relies on the environment variable `RUST_LOG`. For more information,
 Human logging can be disabled with the environment variable `HUMAN_LOGGING=false`
 
 ## Docker & Kubernetes
-```
+
+```sh
 # Create Docker Image
 docker build -t fuel-core . -f deployment/Dockerfile
 
@@ -118,14 +124,14 @@ The service expects a mutation defined as `submit` that receives a [Transaction]
 
 This example will execute a script that represents the following sequence of [ASM](https://github.com/FuelLabs/fuel-asm):
 
-```
+```rs
 ADDI(0x10, REG_ZERO, 0xca),
 ADDI(0x11, REG_ZERO, 0xba),
 LOG(0x10, 0x11, REG_ZERO, REG_ZERO),
 RET(REG_ONE),
 ```
 
-```
+```console
 $ cargo run --bin fuel-gql-cli -- transaction submit \
 "{\"Script\":{\"byte_price\":0,\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[],\"receipts_root\":\"0x6114142d12e0f58cfb8c72c270cd0535944fb1ba763dce83c17e882c482224a2\"}}"
 ```

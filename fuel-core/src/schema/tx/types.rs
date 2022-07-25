@@ -238,7 +238,7 @@ impl Transaction {
             .await;
 
         if let Ok(Some(transaction_in_pool)) = receiver.await {
-            let time = transaction_in_pool.submited_time();
+            let time = transaction_in_pool.submitted_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
             let status = db.get_tx_status(&self.0.id())?;

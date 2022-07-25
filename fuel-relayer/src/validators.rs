@@ -7,7 +7,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use tracing::{debug, error, info};
 
 /// It contains list of Validators and its stake and consensus public key.
-/// We dont expect big number of validators in that sense we are okey to have it all in memory
+/// We don't expect big number of validators in that sense we are okay to have it all in memory
 /// for fast access. Data availability height (da_height) represent snapshot height that set represent.
 /// Validator Set is same as it is inside database.
 #[derive(Default)]
@@ -19,7 +19,7 @@ pub struct Validators {
 }
 
 impl Validators {
-    // probably not going to metter a lot we expect for validator stake to be mostly unchanged.
+    // probably not going to matter a lot we expect for validator stake to be mostly unchanged.
     // TODO if it takes a lot of time to load it is good to optimize.
     pub async fn load(&mut self, db: &dyn RelayerDb) {
         self.da_height = db.get_validators_da_height().await;
@@ -34,7 +34,7 @@ impl Validators {
     ) -> Option<HashMap<ValidatorId, (u64, Option<ConsensusId>)>> {
         match self.da_height.cmp(&da_height) {
             std::cmp::Ordering::Less => {
-                // We request validator set that we still didnt finalized or know about.
+                // We request validator set that we still didn't finalized or know about.
                 // Probably there is eth client sync problem
                 error!(
                     "current height {} is less then requested validator set height: {da_height}",
@@ -173,7 +173,7 @@ impl Validators {
                         validators
                             .entry(*validator)
                             .or_insert_with(|| self.set.get(validator).cloned().unwrap_or_default())
-                            // increate stake
+                            // increase stake
                             .0 += stake;
                     }
                 }

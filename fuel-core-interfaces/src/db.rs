@@ -168,8 +168,8 @@ pub mod helpers {
         pub contract: HashMap<ContractId, Contract>,
         /// Dummy deposit coins.
         pub deposit_coin: HashMap<Bytes32, DepositCoin>,
-        /// variable for last commited and finalized fuel height
-        pub last_commited_finalized_fuel_height: BlockHeight,
+        /// variable for last committed and finalized fuel height
+        pub last_committed_finalized_fuel_height: BlockHeight,
     }
 
     impl DummyDb {
@@ -460,7 +460,7 @@ pub mod helpers {
             };
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
-            // dumy tx used for tests
+            // dummy tx used for tests
             let mut txs = vec![
                 fun(Transaction::script(
                     10,
@@ -629,7 +629,7 @@ pub mod helpers {
                 validators: HashMap::new(),
                 staking_diffs: BTreeMap::new(),
                 delegator_index: BTreeMap::new(),
-                last_commited_finalized_fuel_height: BlockHeight::from(0u64),
+                last_committed_finalized_fuel_height: BlockHeight::from(0u64),
             };
 
             Self {
@@ -939,12 +939,12 @@ pub mod helpers {
             self.data.lock().finalized_da_height
         }
 
-        async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight {
-            self.data.lock().last_commited_finalized_fuel_height
+        async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight {
+            self.data.lock().last_committed_finalized_fuel_height
         }
 
-        async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
-            self.data.lock().last_commited_finalized_fuel_height = block_height;
+        async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
+            self.data.lock().last_committed_finalized_fuel_height = block_height;
         }
     }
 }
