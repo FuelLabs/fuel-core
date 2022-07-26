@@ -254,7 +254,7 @@ pub mod tests {
         db::helpers::*,
         txpool::{Error as TxpoolError, TxStatus},
     };
-    use tokio::sync::oneshot;
+    use tokio::sync::{mpsc::error::TryRecvError, oneshot};
 
     #[tokio::test]
     async fn test_start_stop() {
@@ -498,6 +498,40 @@ pub mod tests {
         } else {
             panic!("Transaction Broadcast Unwrap Failed");
         }
+    }
+
+    #[tokio::test]
+    async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
+        let config = Config::default();
+        let db = Box::new(DummyDb::filled());
+        let (_bs, br) = broadcast::channel(10);
+
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (network_sender, mut network_receiver) = mpsc::channel(100);
+        let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+
+        let tx1_hash = *TX_ID1;
+        let tx1 = DummyDb::dummy_tx(tx1_hash);
+
+        let mut builder = ServiceBuilder::new();
+        builder
+            .config(config)
+            .db(db)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
+            .import_block_event(br);
+        let service = builder.build().unwrap();
+        service.start().await.ok();
+
+        let broadcast_tx = TransactionBroadcast::NewTransaction(tx1.clone());
+        let mut receiver = service.subscribe_ch();
+        let res = incoming_tx_sender.send(broadcast_tx).unwrap();
+        let _ = receiver.recv().await;
+        assert_eq!(1, res);
+
+        let ret = network_receiver.try_recv();
+        assert!(ret.is_err());
+        assert_eq!(Some(TryRecvError::Empty), ret.err());
     }
 
     #[tokio::test]
