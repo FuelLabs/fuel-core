@@ -282,7 +282,7 @@ type Mutation {
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
-	produceBlock(blocksToProduce: U64!): U64!
+	produceBlocks(blocksToProduce: U64!): U64!
 }
 
 type NodeInfo {

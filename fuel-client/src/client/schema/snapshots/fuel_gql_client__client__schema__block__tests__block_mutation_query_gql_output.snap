@@ -1,0 +1,8 @@
+---
+source: fuel-client/src/client/schema/block.rs
+expression: operation.query
+---
+mutation Mutation($_0: U64!) {
+  produceBlocks(blocksToProduce: $_0)
+}
+
