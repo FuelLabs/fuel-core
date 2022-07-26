@@ -17,7 +17,7 @@ pub struct BlockByIdArgs {
     argument_struct = "BlockByIdArgs"
 )]
 pub struct BlockByIdQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(id = & args.id)]
     pub block: Option<Block>,
 }
 
@@ -28,7 +28,7 @@ pub struct BlockByIdQuery {
     argument_struct = "ConnectionArgs"
 )]
 pub struct BlocksQuery {
-    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(after = & args.after, before = & args.before, first = & args.first, last = & args.last)]
     pub blocks: BlockConnection,
 }
 
@@ -86,7 +86,7 @@ pub struct ProduceBlockArgs {
 )]
 pub struct BlockMutation {
     #[arguments(blocks_to_produce = &args.blocks_to_produce)]
-    pub produce_block: U64,
+    pub produce_blocks: U64,
 }
 
 #[cfg(test)]
@@ -98,6 +98,15 @@ mod tests {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
             id: BlockId::default(),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn block_mutation_query_gql_output() {
+        use cynic::MutationBuilder;
+        let operation = BlockMutation::build(ProduceBlockArgs {
+            blocks_to_produce: U64(0),
         });
         insta::assert_snapshot!(operation.query)
     }
