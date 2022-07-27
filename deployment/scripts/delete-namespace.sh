@@ -10,7 +10,6 @@ if [ "${k8s_provider}" == "eks" ]; then
     aws eks update-kubeconfig --name ${TF_VAR_eks_cluster_name}
     # Clean Up All Resources in Namespace
     kubectl delete ns ${k8s_namespace}
-    kubectl get ns ${k8s_namespace}
 else
    echo "You have inputted a non-supported kubernetes provider in your .env"
 fi
