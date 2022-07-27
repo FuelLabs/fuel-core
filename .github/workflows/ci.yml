@@ -103,7 +103,7 @@ jobs:
           args: "-p ${{ matrix.package }} ${{ matrix.args }}"
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@master
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
