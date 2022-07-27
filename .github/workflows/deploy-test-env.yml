@@ -28,12 +28,9 @@ jobs:
       - name: Set Environment Variables
         id: set_env_var
         run: |
-          TAG="latest"
-          branch_name=$(git symbolic-ref -q HEAD)
-          branch_name=${branch_name##refs/heads/}
-          branch_name=${branch_name:-HEAD}
-          echo "::set-output name=IMAGE_TAG::${TAG}"
-          echo "::set-output name=BRANCH::${branch_name}"
+          tag="latest"
+          echo "IMAGE_TAG=$(echo $tag)" >> $GITHUB_ENV
+          echo "BRANCH=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
 
       - name: Deploy Fuel-Core Test Environment
         uses: benc-uk/workflow-dispatch@v1
