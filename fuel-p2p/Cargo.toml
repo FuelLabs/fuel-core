@@ -9,7 +9,6 @@ keywords = ["blockchain", "cryptocurrencies", "fuel-p2p", "networking"]
 license = "BUSL-1.1"
 repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel client networking"
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1.52"

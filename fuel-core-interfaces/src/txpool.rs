@@ -110,17 +110,17 @@ pub enum TxPoolMpsc {
         id: TxId,
         response: oneshot::Sender<Option<TxInfo>>,
     },
-    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
+    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
     FindDependent {
         ids: Vec<TxId>,
         response: oneshot::Sender<Vec<Arc<Transaction>>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
     Remove { ids: Vec<TxId> },
-    /// Iterete over `hashes` and return all hashes that we dont have.
+    /// Iterate over `hashes` and return all hashes that we don't have.
     /// Needed when we receive list of new hashed from peer with
     /// **BroadcastTransactionHashes**, so txpool needs to return
-    /// tx that we dont have, and request them from that particular peer.
+    /// tx that we don't have, and request them from that particular peer.
     FilterByNegative {
         ids: Vec<TxId>,
         response: oneshot::Sender<Vec<TxId>>,
@@ -189,7 +189,7 @@ pub enum Error {
     #[error(
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]
-    NotInsertedIoConractOutput,
+    NotInsertedIoContractOutput,
     #[error("Transaction is not inserted. Input output mismatch. Expected coin but output is withdrawal")]
     NotInsertedIoWithdrawalInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]

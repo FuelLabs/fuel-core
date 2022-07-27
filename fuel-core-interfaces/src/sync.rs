@@ -1,7 +1,7 @@
 use tokio::sync::oneshot;
 
 pub enum SyncStatus {
-    Stoped,
+    Stopped,
     InitialSync,
 }
 

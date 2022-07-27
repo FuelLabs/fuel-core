@@ -320,8 +320,8 @@ impl TxMutation {
             vec![Arc::new(tx.clone())]
         };
 
-        // next part can be extracted to saparate endpoint that will trigger block building
-        // just inlude call to txpool.includable
+        // next part can be extracted to separate endpoint that will trigger block building
+        // just include call to txpool.includable
 
         let executor = Executor {
             database: db.clone(),

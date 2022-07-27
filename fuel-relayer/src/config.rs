@@ -26,7 +26,7 @@ pub(crate) static ETH_LOG_WITHDRAWAL: Lazy<H256> =
     Lazy::new(|| keccak256("Withdrawal(address,uint256)"));
 pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
     Lazy::new(|| keccak256("Delegation(address,bytes[],uint256[])"));
-pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
+pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
     Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
 
 #[derive(Clone, Debug)]
@@ -39,11 +39,11 @@ pub struct Config {
     pub eth_chain_id: u64,
     /// Contract to publish commit fuel block.  
     pub eth_v2_commit_contract: Option<H160>,
-    /// Etheruem contract address. Create EthAddress into fuel_types.
+    /// Ethereum contract address. Create EthAddress into fuel_types.
     pub eth_v2_listening_contracts: Vec<H160>,
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
-    pub eth_v2_contracts_deployet: DaBlockHeight,
+    pub eth_v2_contracts_deployment: DaBlockHeight,
     /// Number of blocks that will be asked at one time from client, used for initial sync.
     pub initial_sync_step: usize,
     /// Refresh rate of waiting for eth client to finish its initial sync.
@@ -61,7 +61,7 @@ impl Default for Config {
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contracts_deployet: 0,
+            eth_v2_contracts_deployment: 0,
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
         }
@@ -69,8 +69,8 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn eth_v2_contracts_deployet(&self) -> DaBlockHeight {
-        self.eth_v2_contracts_deployet
+    pub fn eth_v2_contracts_deployment(&self) -> DaBlockHeight {
+        self.eth_v2_contracts_deployment
     }
 
     pub fn eth_v2_listening_contracts(&self) -> &[H160] {
@@ -139,7 +139,7 @@ mod tests {
                 .unwrap()
         );
         assert_eq!(
-            *ETH_FUEL_BLOCK_COMMITED,
+            *ETH_FUEL_BLOCK_COMMITTED,
             H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872")
                 .unwrap()
         );
