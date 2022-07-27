@@ -12,9 +12,9 @@ use tokio::task::JoinHandle;
 pub struct ServiceBuilder {
     config: Config,
     db: Option<Box<dyn TxPoolDb>>,
-    txpool_sender: txpool::Sender,
-    txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
-    tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+    txpool_sender: Option<txpool::Sender>,
+    txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
+    tx_status_sender: Option<broadcast::Sender<TxStatusBroadcast>>,
     network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
     incoming_tx_receiver: Option<broadcast::Receiver<TransactionBroadcast>>,
@@ -28,14 +28,12 @@ impl Default for ServiceBuilder {
 
 impl ServiceBuilder {
     pub fn new() -> Self {
-        let (txpool_sender, txpool_receiver) = txpool::channel(100);
-        let (tx_status_sender, _receiver) = broadcast::channel(100);
         Self {
             config: Default::default(),
             db: None,
-            txpool_sender,
-            txpool_receiver,
-            tx_status_sender,
+            txpool_sender: None,
+            txpool_receiver: None,
+            tx_status_sender: None,
             network_sender: None,
             import_block_receiver: None,
             incoming_tx_receiver: None,
@@ -43,15 +41,30 @@ impl ServiceBuilder {
     }
 
     pub fn sender(&self) -> &txpool::Sender {
-        &self.txpool_sender
+        &self.txpool_sender.as_ref().unwrap()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<TxStatusBroadcast> {
-        self.tx_status_sender.subscribe()
+        self.tx_status_sender.as_ref().unwrap().subscribe()
     }
 
     pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
         self.db = Some(db);
+        self
+    }
+
+    pub fn txpool_sender(&mut self, txpool_sender: txpool::Sender ) -> &mut Self {
+        self.txpool_sender = Some(txpool_sender);
+        self
+    }
+
+    pub fn txpool_receiver(&mut self, txpool_receiver: mpsc::Receiver<TxPoolMpsc>) -> &mut Self {
+        self.txpool_receiver = Some(txpool_receiver);
+        self
+    }
+
+    pub fn tx_status_sender(&mut self, tx_status_sender: broadcast::Sender<TxStatusBroadcast>) -> &mut Self {
+        self.tx_status_sender = Some(tx_status_sender);
         self
     }
 
@@ -82,21 +95,24 @@ impl ServiceBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Service> {
-        if self.db.is_none()
+        if self.db.is_none() 
             || self.import_block_receiver.is_none()
             || self.incoming_tx_receiver.is_none()
             || self.network_sender.is_none()
+            || self.txpool_sender.is_none()
+            || self.tx_status_sender.is_none()
+            || self.txpool_receiver.is_none()
         {
             return Err(anyhow!("One of context items are not set"));
         }
         let service = Service::new(
-            self.txpool_sender,
-            self.tx_status_sender.clone(),
+            self.txpool_sender.unwrap(),
+            self.tx_status_sender.clone().unwrap(),
             Context {
                 config: self.config,
                 db: Arc::new(self.db.unwrap()),
-                txpool_receiver: self.txpool_receiver,
-                tx_status_sender: self.tx_status_sender,
+                txpool_receiver: self.txpool_receiver.unwrap(),
+                tx_status_sender: self.tx_status_sender.unwrap(),
                 import_block_receiver: self.import_block_receiver.unwrap(),
                 incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
                 network_sender: self.network_sender.unwrap(),
