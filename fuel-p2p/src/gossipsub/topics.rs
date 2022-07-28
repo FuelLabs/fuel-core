@@ -8,8 +8,8 @@ pub const NEW_BLOCK_GOSSIP_TOPIC: &str = "new_block";
 pub const CON_VOTE_GOSSIP_TOPIC: &str = "consensus_vote";
 
 /// Holds used Gossipsub Topics
-/// Each field contains TopicHash and GossipTopic itslef
-/// in order to aviod converting GossipTopic to TopicHash on each received message
+/// Each field contains TopicHash and GossipTopic itself
+/// in order to avoid converting GossipTopic to TopicHash on each received message
 #[derive(Debug)]
 pub struct GossipsubTopics {
     new_tx_topic: (TopicHash, GossipTopic),

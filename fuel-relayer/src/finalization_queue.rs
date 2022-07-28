@@ -37,7 +37,7 @@ pub struct FinalizationQueue {
 pub struct DaBlockDiff {
     /// da block height
     pub da_height: DaBlockHeight,
-    /// Validator stake deposit and withdrawel.
+    /// Validator stake deposit and withdrawal.
     pub validators: HashMap<ValidatorId, Option<ConsensusId>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
@@ -62,14 +62,14 @@ impl FinalizationQueue {
         contract_address: Option<H160>,
         private_key: &[u8],
         chain_height: BlockHeight,
-        last_commited_finalized_fuel_height: BlockHeight,
+        last_committed_finalized_fuel_height: BlockHeight,
     ) -> Self {
         let blocks = PendingBlocks::new(
             chain_id,
             contract_address,
             private_key,
             chain_height,
-            last_commited_finalized_fuel_height,
+            last_committed_finalized_fuel_height,
         );
         Self {
             blocks,
@@ -98,7 +98,7 @@ impl FinalizationQueue {
 
     /// Bundle all removed events to apply them in same time when all of them are flushed.
     fn bundle_removed_events(&mut self, event: EthEventLog, da_height: DaBlockHeight) {
-        // agregate all removed events before reverting them.
+        // aggregate all removed events before reverting them.
         // check if we have pending block for removal
         if let Some((last_eth_block, list)) = self.bundled_removed_eth_events.last_mut() {
             // check if last pending block is same as log event that we received.
@@ -155,7 +155,7 @@ impl FinalizationQueue {
                 lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
                 // mark all removed pending block commits as reverted.
                 for event in events {
-                    if let EthEventLog::FuelBlockCommited { block_root, height } = event {
+                    if let EthEventLog::FuelBlockCommitted { block_root, height } = event {
                         self.blocks.handle_block_commit(
                             block_root,
                             height.into(),
@@ -176,7 +176,7 @@ impl FinalizationQueue {
     pub async fn append_eth_log(&mut self, log: Log) {
         let event = EthEventLog::try_from(&log);
         if let Err(err) = event {
-            warn!(target:"relayer", "Eth Event not formated properly:{}",err);
+            warn!(target:"relayer", "Eth Event not formatted properly:{}",err);
             return;
         }
         if log.block_number.is_none() {
@@ -241,7 +241,7 @@ impl FinalizationQueue {
             EthEventLog::ValidatorUnregistration { staking_key } => {
                 last_diff.validators.insert(staking_key, None);
             }
-            EthEventLog::FuelBlockCommited { height, block_root } => {
+            EthEventLog::FuelBlockCommitted { height, block_root } => {
                 self.blocks.handle_block_commit(
                     block_root,
                     (height).into(),
@@ -324,9 +324,10 @@ impl FinalizationQueue {
             self.pending.pop_front();
         }
 
-        let last_commited_fin_fuel_height = self.blocks.handle_da_finalization(finalized_da_height);
+        let last_committed_fin_fuel_height =
+            self.blocks.handle_da_finalization(finalized_da_height);
 
-        db.set_last_commited_finalized_fuel_height(last_commited_fin_fuel_height)
+        db.set_last_committed_finalized_fuel_height(last_committed_fin_fuel_height)
             .await;
         self.finalized_da_height = finalized_da_height;
         // bump validator set to last finalized block

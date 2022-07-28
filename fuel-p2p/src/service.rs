@@ -41,7 +41,7 @@ impl FuelP2PService {
     pub async fn new(local_keypair: Keypair, config: P2PConfig) -> Result<Self, Box<dyn Error>> {
         let local_peer_id = PeerId::from(local_keypair.public());
 
-        // configure and build P2P Serivce
+        // configure and build P2P Service
         let transport = build_transport(local_keypair.clone()).await;
         let behaviour = FuelBehaviour::new(
             local_keypair,
@@ -521,7 +521,7 @@ mod tests {
                 node_a_event = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
-                            // 0. verifies that we've got at least a single peer address to request messsage from
+                            // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
@@ -533,7 +533,7 @@ mod tests {
 
                                 let tx_test_end = tx_test_end.clone();
                                 tokio::spawn(async move {
-                                    // 4. Simulating NetworkOrchestrator receving a message from Node B
+                                    // 4. Simulating NetworkOrchestrator receiving a message from Node B
                                     let response_message = rx_orchestrator.await;
 
                                     if let Ok(sealed_block) = response_message {
@@ -551,7 +551,7 @@ mod tests {
                     tracing::info!("Node A Event: {:?}", node_a_event);
                 },
                 node_b_event = node_b.next_event() => {
-                    // 2. Node B recieves the RequestMessage from Node A initiated by the NetworkOrchestrator
+                    // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::RequestMessage{ request_id, .. }) = node_b_event {
                         let block = FuelBlock {
                             header: FuelBlockHeader::default(),
@@ -598,7 +598,7 @@ mod tests {
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
 
-        // track the request sent in order to aviod duplicate sending
+        // track the request sent in order to avoid duplicate sending
         let mut request_sent = false;
 
         loop {
@@ -606,7 +606,7 @@ mod tests {
                 node_a_event = node_a.next_event() => {
                     if let FuelP2PEvent::Behaviour(FuelBehaviourEvent::PeerInfoUpdated(peer_id)) = node_a_event {
                         if let Some(PeerInfo { peer_addresses, .. }) = node_a.swarm.behaviour().get_peer_info(&peer_id) {
-                            // 0. verifies that we've got at least a single peer address to request messsage from
+                            // 0. verifies that we've got at least a single peer address to request message from
                             if !peer_addresses.is_empty() && !request_sent {
                                 request_sent = true;
 
@@ -626,7 +626,7 @@ mod tests {
                                 let tx_test_end = tx_test_end.clone();
 
                                 tokio::spawn(async move {
-                                    // 3. Simulating NetworkOrchestrator receving a Timeout Error Message!
+                                    // 3. Simulating NetworkOrchestrator receiving a Timeout Error Message!
                                     if (rx_orchestrator.await).is_err() {
                                         let _ = tx_test_end.send(()).await;
                                     }

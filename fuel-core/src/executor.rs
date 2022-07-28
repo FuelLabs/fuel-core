@@ -294,7 +294,7 @@ impl Executor {
                             return Err(TransactionValidityError::CoinHasNotMatured(*utxo_id));
                         }
                     } else {
-                        return Err(TransactionValidityError::CoinDoesntExist(*utxo_id));
+                        return Err(TransactionValidityError::CoinDoesNotExist(*utxo_id));
                     }
                 }
                 Input::Contract { .. } => {}
@@ -363,7 +363,7 @@ impl Executor {
                 let block_created = if self.config.utxo_validation {
                     Storage::<UtxoId, Coin>::get(db, utxo_id)?
                         .ok_or(Error::TransactionValidity(
-                            TransactionValidityError::CoinDoesntExist(*utxo_id),
+                            TransactionValidityError::CoinDoesNotExist(*utxo_id),
                         ))?
                         .block_created
                 } else {
@@ -674,7 +674,7 @@ pub enum TransactionValidityError {
     #[error("Coin has not yet reached maturity")]
     CoinHasNotMatured(UtxoId),
     #[error("The specified coin doesn't exist")]
-    CoinDoesntExist(UtxoId),
+    CoinDoesNotExist(UtxoId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin input type: {0:#x}")]
@@ -1077,7 +1077,7 @@ mod tests {
         assert!(matches!(
             produce_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist(_)
+                TransactionValidityError::CoinDoesNotExist(_)
             ))
         ));
 
@@ -1087,7 +1087,7 @@ mod tests {
         assert!(matches!(
             verify_result,
             Err(Error::TransactionValidity(
-                TransactionValidityError::CoinDoesntExist(_)
+                TransactionValidityError::CoinDoesNotExist(_)
             ))
         ));
     }
