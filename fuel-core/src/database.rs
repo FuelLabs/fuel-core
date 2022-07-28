@@ -132,7 +132,7 @@ impl TxPoolDb for Database {}
 #[async_trait]
 impl P2pDb for Database {
     async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
-        <Self as RelayerDb>::get_sealed_block(&self, height).await
+        <Self as RelayerDb>::get_sealed_block(self, height).await
     }
 }
 

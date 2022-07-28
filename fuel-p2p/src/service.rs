@@ -41,9 +41,8 @@ impl FuelP2PService {
         let local_peer_id = PeerId::from(config.local_keypair.public());
 
         // configure and build P2P Service
-        let transport = build_transport(local_keypair.clone()).await;
+        let transport = build_transport(config.local_keypair.clone()).await;
         let behaviour = FuelBehaviour::new(
-            local_keypair,
             &config,
             BincodeCodec::new(config.max_block_size),
         );
