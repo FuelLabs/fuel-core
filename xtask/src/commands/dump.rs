@@ -8,7 +8,7 @@ use std::{
 };
 
 // stored in the root of the workspace
-const SCHEMA_URL: &str = "../fuel-client/assets/schema.sdl";
+const SCHEMA_URL: &str = "../fuel-gql-client/assets/schema.sdl";
 
 #[derive(Debug, Parser)]
 pub struct DumpCommand {}
