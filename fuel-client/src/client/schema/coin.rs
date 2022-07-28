@@ -121,7 +121,7 @@ pub struct CoinsToSpendArgs {
     spend_query: Vec<SpendQueryElementInput>,
     /// The max number of utxos that can be used
     max_inputs: Option<i32>,
-    /// A list of UtxoIds to exlude from the selection
+    /// A list of UtxoIds to exclude from the selection
     excluded_ids: Option<Vec<UtxoId>>,
 }
 

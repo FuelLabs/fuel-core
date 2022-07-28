@@ -184,7 +184,7 @@ pub struct BlockMutation;
 
 #[Object]
 impl BlockMutation {
-    async fn produce_block(
+    async fn produce_blocks(
         &self,
         ctx: &Context<'_>,
         blocks_to_produce: U64,

@@ -294,7 +294,7 @@ mod tests {
     }
 
     #[test]
-    fn exists_doesnt_check_data_store_after_intentional_removal_from_view() {
+    fn exists_does_not_check_data_store_after_intentional_removal_from_view() {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];

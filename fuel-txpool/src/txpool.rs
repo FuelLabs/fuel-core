@@ -57,7 +57,7 @@ impl TxPool {
         }
 
         let mut max_limit_hit = false;
-        // check if we are hiting limit of pool
+        // check if we are hitting limit of pool
         if self.by_hash.len() >= self.config.max_tx {
             max_limit_hit = true;
             // limit is hit, check if we can push out lowest priced tx
@@ -71,7 +71,7 @@ impl TxPool {
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
         self.by_gas_price.insert(&tx);
 
-        // if some transaction were removed so we dont need to check limit
+        // if some transaction were removed so we don't need to check limit
         if rem.is_empty() {
             if max_limit_hit {
                 //remove last tx from sort
@@ -189,7 +189,7 @@ impl TxPool {
         txpool.read().await.txs().get(hash).cloned()
     }
 
-    /// find all dependent tx and return them with requsted dependencies in one list sorted by Price.
+    /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
     pub async fn find_dependent(txpool: &RwLock<Self>, hashes: &[TxId]) -> Vec<ArcTx> {
         let mut seen = HashMap::new();
         {
@@ -208,7 +208,7 @@ impl TxPool {
         list
     }
 
-    /// Iterete over `hashes` and return all hashes that we dont have.
+    /// Iterate over `hashes` and return all hashes that we don't have.
     pub async fn filter_by_negative(txpool: &RwLock<Self>, tx_ids: &[TxId]) -> Vec<TxId> {
         let mut res = Vec::new();
         let pool = txpool.read().await;
@@ -418,7 +418,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn underpriced_tx1_not_included_coin_colision() {
+    async fn underpriced_tx1_not_included_coin_collision() {
         let config = Config::default();
         let db = DummyDb::filled();
 
