@@ -5,6 +5,7 @@ use fuel_tx::Transaction;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum TransactionBroadcast {
     NewTransaction(Transaction),
 }
@@ -18,6 +19,7 @@ pub enum BlockBroadcast {
     NewBlock(FuelBlock),
 }
 
+#[derive(Debug)]
 pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,

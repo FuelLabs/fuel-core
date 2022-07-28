@@ -7,8 +7,10 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{broadcast, mpsc},
+    task::JoinHandle,
+};
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
@@ -60,9 +62,15 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
                 .unwrap(),
         );
 
+    // Meant to simulate p2p's channels which hook in to communicate with txpool
+    let network_sender = ();
+    let incoming_tx_receiver = ();
+
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
+        .incoming_tx_receiver(incoming_tx_receiver)
+        .network_sender(network_sender)
         .import_block_event(block_importer.subscribe());
 
     let (tx_request_event, rx_request_event) = mpsc::channel(100);

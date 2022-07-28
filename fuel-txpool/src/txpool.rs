@@ -5,11 +5,12 @@ use crate::{
 };
 use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
+    p2p::P2pRequestEvent,
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -136,11 +137,52 @@ impl TxPool {
         Ok(())
     }
 
+    pub async fn insert_with_broadcast(
+        txpool: &RwLock<Self>,
+        db: &dyn TxPoolDb,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+        network_sender: mpsc::Sender<P2pRequestEvent>,
+        txs: Vec<ArcTx>,
+    ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
+        let mut res = Vec::new();
+        for tx in txs.iter() {
+            let mut pool = txpool.write().await;
+            res.push(pool.insert_inner(tx.clone(), db).await)
+        }
+        for (ret, tx) in res.iter().zip(txs.into_iter()) {
+            match ret {
+                Ok(removed) => {
+                    for removed in removed {
+                        let _ = tx_status_sender.send(TxStatusBroadcast {
+                            tx: removed.clone(),
+                            status: TxStatus::SqueezedOut {
+                                reason: Error::Removed,
+                            },
+                        });
+                    }
+                    let _ = tx_status_sender.send(TxStatusBroadcast {
+                        tx: tx.clone(),
+                        status: TxStatus::Submitted,
+                    });
+                    let _ = network_sender
+                        .send(P2pRequestEvent::BroadcastNewTransaction {
+                            transaction: tx.clone(),
+                        })
+                        .await;
+                }
+                Err(_) => {
+                    // @dev should not broadcast tx if error occurred
+                }
+            }
+        }
+        res
+    }
+
     /// Import a set of transactions from network gossip or GraphQL endpoints.
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -157,19 +199,21 @@ impl TxPool {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        let _ = broadcast.send(TxStatusBroadcast {
+                        let _ = tx_status_sender.send(TxStatusBroadcast {
                             tx: removed.clone(),
                             status: TxStatus::SqueezedOut {
                                 reason: Error::Removed,
                             },
                         });
                     }
-                    let _ = broadcast.send(TxStatusBroadcast {
+                    let _ = tx_status_sender.send(TxStatusBroadcast {
                         tx,
                         status: TxStatus::Submitted,
                     });
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // @dev should not broadcast tx if error occurred
+                }
             }
         }
         res
@@ -238,7 +282,7 @@ impl TxPool {
     /// remove transaction from pool needed on user demand. Low priority
     pub async fn remove(
         txpool: &RwLock<Self>,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
         tx_ids: &[TxId],
     ) {
         let mut removed = Vec::new();
@@ -247,7 +291,7 @@ impl TxPool {
             removed.extend(rem.into_iter());
         }
         for tx in removed {
-            let _ = broadcast.send(TxStatusBroadcast {
+            let _ = tx_status_sender.send(TxStatusBroadcast {
                 tx,
                 status: TxStatus::SqueezedOut {
                     reason: Error::Removed,
