@@ -42,10 +42,7 @@ impl FuelP2PService {
 
         // configure and build P2P Service
         let transport = build_transport(config.local_keypair.clone()).await;
-        let behaviour = FuelBehaviour::new(
-            &config,
-            BincodeCodec::new(config.max_block_size),
-        );
+        let behaviour = FuelBehaviour::new(&config, BincodeCodec::new(config.max_block_size));
         let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
 
         // set up node's address to listen on
