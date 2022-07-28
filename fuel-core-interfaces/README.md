@@ -1,5 +1,5 @@
 
-## Interfaces
+# Fuel Core Interfaces
 
 Binding parts of the project and specifying their interfaces. It allows decoupling of components and libraries and more sensible standalone parts.
 

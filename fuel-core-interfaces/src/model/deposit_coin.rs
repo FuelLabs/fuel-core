@@ -1,7 +1,7 @@
 use super::{BlockHeight, DaBlockHeight};
 use fuel_types::{Address, AssetId, Bytes32, Word};
 
-/// Probably going to be supperseaded with bridge message https://github.com/FuelLabs/fuel-core/issues/366
+/// Probably going to be superseded with bridge message https://github.com/FuelLabs/fuel-core/issues/366
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct DepositCoin {

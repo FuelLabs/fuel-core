@@ -72,7 +72,7 @@ pub mod columns {
     pub const TOKEN_DEPOSITS: u32 = 14;
     /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
-    /// contain diff between da blocks it contains new registeres consensus key and new delegate sets.
+    /// contain diff between da blocks it contains new registers consensus key and new delegate sets.
     pub const STAKING_DIFFS: u32 = 16;
     /// Maps delegate address with validator_set_diff index where last delegate change happened
     pub const DELEGATES_INDEX: u32 = 17;
@@ -358,7 +358,7 @@ impl RelayerDb for Database {
         }
         db.set_validators_da_height(da_height).await;
         if let Err(err) = db.commit() {
-            panic!("apply_validator_diffs database currupted: {:?}", err);
+            panic!("apply_validator_diffs database corrupted: {:?}", err);
         }
     }
 
@@ -366,7 +366,7 @@ impl RelayerDb for Database {
         match self.get_block_height() {
             Ok(res) => res.expect("get_block_height value should be always present and set"),
             Err(err) => {
-                panic!("get_block_height database curruption, err:{:?}", err);
+                panic!("get_block_height database corruption, err:{:?}", err);
             }
         }
     }
@@ -389,7 +389,7 @@ impl RelayerDb for Database {
                     .expect("get_finalized_da_height value should be always present and set");
             }
             Err(err) => {
-                panic!("get_finalized_da_height database curruption, err:{:?}", err);
+                panic!("get_finalized_da_height database corruption, err:{:?}", err);
             }
         }
     }
@@ -408,36 +408,39 @@ impl RelayerDb for Database {
             }
             Err(err) => {
                 panic!(
-                    "get_validators_da_height database curruption, err:{:?}",
+                    "get_validators_da_height database corruption, err:{:?}",
                     err
                 );
             }
         }
     }
 
-    async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight {
-        match self.get(metadata::LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY, METADATA) {
+    async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight {
+        match self.get(
+            metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
+            METADATA,
+        ) {
             Ok(res) => {
                 return res
-                    .expect("set_last_commited_finalized_fuel_height value should be always present and set");
+                    .expect("set_last_committed_finalized_fuel_height value should be always present and set");
             }
             Err(err) => {
                 panic!(
-                    "set_last_commited_finalized_fuel_height database curruption, err:{:?}",
+                    "set_last_committed_finalized_fuel_height database corruption, err:{:?}",
                     err
                 );
             }
         }
     }
 
-    async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
+    async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
         if let Err(err) = self.insert(
-            metadata::LAST_COMMITED_FINALIZED_BLOCK_HEIGHT_KEY,
+            metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
             METADATA,
             block_height,
         ) {
             panic!(
-                "set_last_commited_finalized_fuel_height should always succeed: {:?}",
+                "set_last_committed_finalized_fuel_height should always succeed: {:?}",
                 err
             );
         }
