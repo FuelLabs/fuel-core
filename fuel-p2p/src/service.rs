@@ -39,7 +39,7 @@ pub enum FuelP2PEvent {
 impl FuelP2PService {
     pub async fn new(config: P2PConfig) -> anyhow::Result<Self> {
         let local_peer_id = PeerId::from(config.local_keypair.public());
-        
+
         // configure and build P2P Service
         let transport = build_transport(local_keypair.clone()).await;
         let behaviour = FuelBehaviour::new(
