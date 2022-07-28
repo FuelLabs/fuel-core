@@ -54,15 +54,15 @@ macro_rules! handle_interrupt {
 impl Relayer {
     pub async fn new(ctx: Context) -> Self {
         let chain_height = ctx.db.get_chain_height().await;
-        let last_commited_finalized_fuel_height =
-            ctx.db.get_last_commited_finalized_fuel_height().await;
+        let last_committed_finalized_fuel_height =
+            ctx.db.get_last_committed_finalized_fuel_height().await;
 
         let queue = FinalizationQueue::new(
             ctx.config.eth_chain_id(),
             ctx.config.eth_v2_commit_contract(),
             &ctx.private_key,
             chain_height,
-            last_commited_finalized_fuel_height,
+            last_committed_finalized_fuel_height,
         );
 
         Self {
@@ -72,8 +72,8 @@ impl Relayer {
         }
     }
 
-    /// Initial syncing from ethereum logs into fuel database. It does overlapping syncronization and returns
-    /// logs watcher with assurence that we didnt miss any events.
+    /// Initial syncing from ethereum logs into fuel database. It does overlapping synchronization and returns
+    /// logs watcher with assurance that we didn't miss any events.
     //#[tracing::instrument(skip_all)]
     async fn initial_sync<'a, P>(
         &mut self,
@@ -105,10 +105,10 @@ impl Relayer {
         info!("da client is synced");
 
         let last_finalized_da_height = std::cmp::max(
-            self.ctx.config.eth_v2_contracts_deployet(),
+            self.ctx.config.eth_v2_contracts_deployment(),
             self.ctx.db.get_finalized_da_height().await,
         );
-        // should be allways more then last finalized_da_heights
+        // should be always more then last finalized_da_heights
 
         let best_finalized_block = (provider.get_block_number().await?.as_u64() as u32)
             - self.ctx.config.da_finalization();
@@ -129,7 +129,7 @@ impl Relayer {
             if (start - last_finalized_da_height) % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
                 == 0
             {
-                info!("geting log from height:{}", start);
+                info!("getting log from height:{}", start);
             }
 
             // TODO  can be parallelized
@@ -145,7 +145,7 @@ impl Relayer {
         }
 
         // TODO probably not needed now. but after some time we will need to do sync to best block here.
-        // it depends on how much time it is needed to tranverse first part of this function
+        // it depends on how much time it is needed to traverse first part of this function
         // and how much lag happened in meantime.
 
         let mut watchers: Option<(FilterWatcher<_, _>, FilterWatcher<_, _>)>;
@@ -196,7 +196,7 @@ impl Relayer {
                 break;
             }
             // If not the same, stop listening to events and do 2,3,4 steps again.
-            // empty pending and do overlaping sync again.
+            // empty pending and do overlapping sync again.
             // Assume this will not happen very often.
         }
 
@@ -396,7 +396,7 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
         let config = Config {
-            eth_v2_contracts_deployet: 5,
+            eth_v2_contracts_deployment: 5,
             initial_sync_refresh: Duration::from_millis(10),
             ..Default::default()
         };
@@ -442,7 +442,7 @@ mod test {
     #[tokio::test]
     pub async fn sync_first_n_finalized_blocks() {
         let config = Config {
-            eth_v2_contracts_deployet: 100, // start from block 1
+            eth_v2_contracts_deployment: 100, // start from block 1
             da_finalization: 30,
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
@@ -500,7 +500,7 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync() {
         let config = Config {
-            eth_v2_contracts_deployet: 100, // start from block 1
+            eth_v2_contracts_deployment: 100, // start from block 1
             da_finalization: 30,
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
@@ -556,7 +556,7 @@ mod test {
                         }
                         _ => panic!("wrong trigger:{:?} we expected get logs 1", trigger),
                     },
-                    // get second batch of logs. for initialy sync
+                    // get second batch of logs. for initial sync
                     3 => match trigger {
                         TriggerType::GetLogs(filter) => {
                             match filter.block_option {
@@ -604,7 +604,7 @@ mod test {
                         }
                         _ => panic!("wrong trigger:{:?} we expected get logs 6", trigger),
                     },
-                    // get best eth block to syncornize log watcher
+                    // get best eth block to synchronize log watcher
                     7 => {
                         assert_eq!(
                             TriggerType::GetBlockNumber,
@@ -612,7 +612,7 @@ mod test {
                             "We need to get Best eth block number to check that it is not changed"
                         )
                     }
-                    // get best eth block hash to syncronize log watcher
+                    // get best eth block hash to synchronize log watcher
                     8 => {
                         assert_eq!(
                             TriggerType::GetBlock(BlockId::Number(BlockNumber::Number(U64([134])))),

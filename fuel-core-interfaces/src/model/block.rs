@@ -114,10 +114,10 @@ impl FuelBlock {
         }
     }
 
-    /* TODO for functions bellow, they are mostly going to be removed
-    https://github.com/FuelLabs/fuel-core/issues/364 */
+    // TODO for functions bellow, they are mostly going to be removed
+    // https://github.com/FuelLabs/fuel-core/issues/364
 
-    pub fn transaction_data_lenght(&self) -> usize {
+    pub fn transaction_data_length(&self) -> usize {
         self.transactions.len() * 100
     }
 
@@ -142,7 +142,7 @@ impl FuelBlock {
     }
 }
 
-/// This structure is ceated as placeholder for future usage.
+/// This structure is created as placeholder for future usage.
 /// It represent commitment for next child block
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
