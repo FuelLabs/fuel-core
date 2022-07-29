@@ -67,9 +67,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (tx_status_sender, mut tx_status_reciever) = broadcast::channel(100);
 
     // Remove once tx_consensus events are used
-    tokio::spawn(async move {
-        while (tx_status_reciever.recv().await).is_ok() {}
-    });
+    tokio::spawn(async move { while (tx_status_reciever.recv().await).is_ok() {} });
 
     let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
