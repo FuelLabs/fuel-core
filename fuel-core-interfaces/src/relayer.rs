@@ -36,12 +36,12 @@ impl StakingDiff {
     }
 }
 
-// Database has two main functionalities, ValidatorSet and TokenDeposits.
-// From relayer perspective TokenDeposits are just insert when they get finalized.
+// Database has two main functionalities, ValidatorSet and Bridge Message.
+// From relayer perspective messages are just inserted when they get finalized.
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
+     Storage<Bytes32, DaMessage, Error = KvStoreError> // bridge messages
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -49,12 +49,12 @@ pub trait RelayerDb:
     + Sync
 {
 
-    /// deposit token to database. Token deposits are not revertable.
-    async fn insert_coin_deposit(
+    /// add bridge message to database. Messages are not revertible.
+    async fn insert_da_message(
         &mut self,
-        deposit: DepositCoin,
+        message: &CheckedDaMessage,
     ) {
-        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit.id(),&deposit);
+        let _ = Storage::<Bytes32, DaMessage>::insert(self,message.id(),message.as_ref());
     }
 
     /// Insert difference make on staking in this particular DA height.
@@ -199,8 +199,8 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorId,
-        ValidatorStake,
+        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
+        ValidatorId, ValidatorStake,
     },
 };
 
