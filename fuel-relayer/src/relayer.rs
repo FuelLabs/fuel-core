@@ -110,8 +110,8 @@ impl Relayer {
         );
         // should be always more then last finalized_da_heights
 
-        let best_finalized_block = (provider.get_block_number().await?.as_u64() as u32)
-            - self.ctx.config.da_finalization();
+        let best_finalized_block =
+            provider.get_block_number().await?.as_u64() - self.ctx.config.da_finalization();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value

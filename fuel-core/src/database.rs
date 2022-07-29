@@ -317,7 +317,7 @@ impl RelayerDb for Database {
                 use byteorder::{BigEndian, ReadBytesExt};
                 use std::io::Cursor;
                 let mut i = Cursor::new(i);
-                Self(i.read_u32::<BigEndian>().unwrap_or_default())
+                Self(i.read_u64::<BigEndian>().unwrap_or_default())
             }
         }
         let mut out = Vec::new();

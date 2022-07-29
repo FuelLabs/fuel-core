@@ -5,6 +5,7 @@ use ethers_core::{
     abi::RawLog,
     types::{Log, U256},
 };
+use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
     common::fuel_types::{Address, Bytes32, Word},
     model::{ConsensusId, DaMessage, ValidatorId},
@@ -14,22 +15,24 @@ use fuel_core_interfaces::{
 #[derive(Debug, Clone, PartialEq)]
 pub struct DaMessageLog {
     pub sender: Address,
-    pub receipient: Address,
+    pub recipient: Address,
     pub owner: Address,
     pub nonce: Word,
     pub amount: Word,
     pub data: Vec<u8>,
+    pub da_height: DaBlockHeight,
 }
 
 impl From<&DaMessageLog> for DaMessage {
     fn from(message: &DaMessageLog) -> Self {
         Self {
             sender: message.sender,
-            recipient: message.receipient,
+            recipient: message.recipient,
             owner: message.owner,
             nonce: message.nonce,
             amount: message.amount,
             data: message.data.clone(),
+            da_height: message.da_height,
             fuel_block_spend: None,
         }
     }
@@ -95,7 +98,7 @@ impl TryFrom<&Log> for EthEventLog {
                 let data = message.data.to_vec();
                 let nonce = message.nonce;
                 let owner = Address::from(message.owner);
-                let receipient = Address::from(message.recipient);
+                let recipient = Address::from(message.recipient);
                 let sender = Address::from(message.sender);
 
                 Self::DaMessage(DaMessageLog {
@@ -103,8 +106,12 @@ impl TryFrom<&Log> for EthEventLog {
                     data,
                     nonce,
                     sender,
-                    receipient,
+                    recipient,
                     owner,
+                    // Safety: logs without block numbers are rejected by
+                    // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
+                    // If block_number is none, that means the log is pending.
+                    da_height: log.block_number.unwrap().as_u64(),
                 })
             }
             n if n == *config::ETH_LOG_VALIDATOR_REGISTRATION => {
@@ -591,11 +598,12 @@ pub mod tests {
             fuel_log.unwrap(),
             EthEventLog::DaMessage(DaMessageLog {
                 sender,
-                receipient,
+                recipient: receipient,
                 owner,
                 nonce: nonce as u64,
                 amount: amount as u64,
                 data,
+                da_height: eth_block
             }),
             "Decoded log does not match data we encoded"
         );

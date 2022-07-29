@@ -8,7 +8,7 @@ use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::{Address, Bytes32},
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, DaMessage, DaMessageChecked, SealedFuelBlock,
+        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
         ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
@@ -43,7 +43,7 @@ pub struct DaBlockDiff {
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     /// erc-20 pending deposit.
-    pub messages: HashMap<Bytes32, DaMessageChecked>,
+    pub messages: HashMap<Bytes32, CheckedDaMessage>,
 }
 
 impl DaBlockDiff {
@@ -175,13 +175,13 @@ impl FinalizationQueue {
 
     /// Handle eth log events
     pub async fn append_eth_log(&mut self, log: Log) {
+        if log.block_number.is_none() {
+            error!(target:"relayer", "Block number not found in eth log");
+            return;
+        }
         let event = EthEventLog::try_from(&log);
         if let Err(err) = event {
             warn!(target:"relayer", "Eth Event not formatted properly:{}",err);
-            return;
-        }
-        if log.block_number.is_none() {
-            error!(target:"relayer", "Block number not found in eth log");
             return;
         }
         let removed = log.removed.unwrap_or(false);
@@ -349,7 +349,7 @@ mod tests {
     use rand::{Rng, SeedableRng};
 
     #[tokio::test]
-    pub async fn check_token_deposits_on_multiple_eth_blocks() {
+    pub async fn check_messages_on_multiple_eth_blocks() {
         let mut rng = StdRng::seed_from_u64(3020);
 
         let acc1: Address = rng.gen();
@@ -382,14 +382,17 @@ mod tests {
 
         if let EthEventLog::DaMessage(message) = &deposit1_db {
             let msg = DaMessage::from(message).check();
+            assert_eq!(msg.da_height, 0);
             assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::DaMessage(message) = &deposit2_db {
             let msg = DaMessage::from(message).check();
+            assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::DaMessage(message) = &deposit3_db {
             let msg = DaMessage::from(message).check();
+            assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
     }
@@ -427,7 +430,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn check_deposit_and_validator_finalization() {
+    pub async fn check_message_and_validator_finalization() {
         let mut rng = StdRng::seed_from_u64(3020);
         let v1: ValidatorId = rng.gen();
         let c1: ConsensusId = rng.gen();
@@ -435,7 +438,7 @@ mod tests {
         let c2: ConsensusId = rng.gen();
 
         let acc1: Address = rng.gen();
-        let receipient = rng.gen();
+        let recipient = rng.gen();
         let sender = rng.gen();
 
         let mut queue = FinalizationQueue::new(
@@ -447,11 +450,29 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
+        let test_da_message = DaMessage {
+            sender: acc1,
+            recipient,
+            owner: sender,
+            nonce: 40,
+            amount: 0,
+            data: vec![],
+            da_height: 2,
+            fuel_block_spend: None,
+        };
         queue
             .append_eth_logs(vec![
                 eth_log_validator_registration(1, v1, c1),
                 eth_log_validator_registration(2, v2, c2),
-                eth_log_da_message(2, acc1, receipient, sender, 40, 0, vec![]),
+                eth_log_da_message(
+                    2,
+                    test_da_message.sender,
+                    test_da_message.recipient,
+                    test_da_message.owner,
+                    test_da_message.nonce as u32,
+                    test_da_message.amount as u32,
+                    test_da_message.data.clone(),
+                ),
                 eth_log_validator_unregistration(3, v1),
             ])
             .await;
@@ -466,6 +487,11 @@ mod tests {
         queue.commit_diffs(&mut db, 2).await;
         assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
         assert_eq!(db.data.lock().messages.len(), 1,);
+        // ensure committed message id matches message id from the log
+        assert_eq!(
+            db.data.lock().messages.values().next().unwrap().id(),
+            test_da_message.id()
+        );
 
         queue.commit_diffs(&mut db, 3).await;
         assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, None)),);

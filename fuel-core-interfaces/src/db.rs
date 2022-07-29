@@ -744,7 +744,7 @@ pub mod helpers {
         }
     }
 
-    // token deposit. Used by relayer.
+    // bridge message. Used by relayer.
     impl Storage<Bytes32, DaMessage> for DummyDb {
         type Error = crate::db::KvStoreError;
 
@@ -989,7 +989,7 @@ mod tests {
     }
 
     #[test]
-    fn deposit_coins_db() {
+    fn da_message_db() {
         let db = sample_db();
         let value = DaMessage {
             owner: Address::default(),
@@ -999,10 +999,11 @@ mod tests {
             sender: Address::default(),
             recipient: Address::default(),
             data: vec![],
+            da_height: Default::default(),
         }
         .check();
 
-        assert!(execute_test(db, *value.id(), value.unlock()).is_ok());
+        assert!(execute_test(db, *value.id(), DaMessage::from(value)).is_ok());
     }
 
     #[test]

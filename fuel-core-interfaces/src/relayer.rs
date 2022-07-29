@@ -52,7 +52,7 @@ pub trait RelayerDb:
     /// deposit token to database. Token deposits are not revertable.
     async fn insert_da_message(
         &mut self,
-        message: &DaMessageChecked,
+        message: &CheckedDaMessage,
     ) {
         let _ = Storage::<Bytes32, DaMessage>::insert(self,message.id(),message.as_ref());
     }
@@ -199,7 +199,7 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, DaMessage, DaMessageChecked, SealedFuelBlock,
+        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
         ValidatorId, ValidatorStake,
     },
 };

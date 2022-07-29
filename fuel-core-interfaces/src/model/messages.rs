@@ -1,4 +1,5 @@
 use super::BlockHeight;
+use crate::model::DaBlockHeight;
 use core::ops::Deref;
 use fuel_crypto::Hasher;
 use fuel_types::{Address, Bytes32, Word};
@@ -13,11 +14,13 @@ pub struct DaMessage {
     pub nonce: Word,
     pub amount: Word,
     pub data: Vec<u8>,
+    /// The block height from the parent da layer that originated this message
+    pub da_height: DaBlockHeight,
     pub fuel_block_spend: Option<BlockHeight>,
 }
 
 impl DaMessage {
-    fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> Bytes32 {
         let mut hasher = Hasher::default();
         hasher.input(self.sender);
         hasher.input(self.recipient);
@@ -28,35 +31,37 @@ impl DaMessage {
         hasher.digest()
     }
 
-    pub fn check(self) -> DaMessageChecked {
+    pub fn check(self) -> CheckedDaMessage {
         let id = self.id();
-        DaMessageChecked { message: self, id }
+        CheckedDaMessage { message: self, id }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct DaMessageChecked {
+pub struct CheckedDaMessage {
     message: DaMessage,
     id: Bytes32,
 }
 
-impl DaMessageChecked {
+impl CheckedDaMessage {
     pub fn id(&self) -> &Bytes32 {
         &self.id
     }
+}
 
-    pub fn unlock(self) -> DaMessage {
-        self.message
+impl From<CheckedDaMessage> for DaMessage {
+    fn from(checked_message: CheckedDaMessage) -> Self {
+        checked_message.message
     }
 }
 
-impl AsRef<DaMessage> for DaMessageChecked {
+impl AsRef<DaMessage> for CheckedDaMessage {
     fn as_ref(&self) -> &DaMessage {
         &self.message
     }
 }
 
-impl Deref for DaMessageChecked {
+impl Deref for CheckedDaMessage {
     type Target = DaMessage;
 
     fn deref(&self) -> &Self::Target {

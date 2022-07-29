@@ -13,7 +13,7 @@ pub use messages::*;
 pub use txpool::{ArcTx, TxInfo};
 pub use vote::ConsensusVote;
 
-pub type DaBlockHeight = u32;
+pub type DaBlockHeight = u64;
 pub type ValidatorStake = u64;
 
 /// Validator address used for registration of validator on DA layer
