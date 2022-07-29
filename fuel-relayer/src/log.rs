@@ -25,7 +25,7 @@ impl From<&DaMessageLog> for DaMessage {
     fn from(message: &DaMessageLog) -> Self {
         Self {
             sender: message.sender,
-            receipient: message.receipient,
+            recipient: message.receipient,
             owner: message.owner,
             nonce: message.nonce,
             amount: message.amount,

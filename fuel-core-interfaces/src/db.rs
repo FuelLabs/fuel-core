@@ -997,10 +997,10 @@ mod tests {
             nonce: 10,
             fuel_block_spend: Some(BlockHeight::default()),
             sender: Address::default(),
-            receipient: Address::default(),
+            recipient: Address::default(),
             data: vec![],
         }
-        .lock();
+        .check();
 
         assert!(execute_test(db, *value.id(), value.unlock()).is_ok());
     }

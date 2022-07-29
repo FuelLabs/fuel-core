@@ -8,7 +8,7 @@ use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::{Address, Bytes32},
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, DaMessage, DaMessageLocked, SealedFuelBlock,
+        BlockHeight, ConsensusId, DaBlockHeight, DaMessage, DaMessageChecked, SealedFuelBlock,
         ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
@@ -43,7 +43,7 @@ pub struct DaBlockDiff {
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     /// erc-20 pending deposit.
-    pub messages: HashMap<Bytes32, DaMessageLocked>,
+    pub messages: HashMap<Bytes32, DaMessageChecked>,
 }
 
 impl DaBlockDiff {
@@ -210,7 +210,7 @@ impl FinalizationQueue {
         let last_diff = self.pending.back_mut().unwrap();
         match fuel_event {
             EthEventLog::DaMessage(message) => {
-                let msg = DaMessage::from(&message).lock();
+                let msg = DaMessage::from(&message).check();
                 last_diff.messages.insert(*msg.id(), msg);
             }
             EthEventLog::Deposit { .. } => {
@@ -381,15 +381,15 @@ mod tests {
         let diff2 = queue.pending[1].clone();
 
         if let EthEventLog::DaMessage(message) = &deposit1_db {
-            let msg = DaMessage::from(message).lock();
+            let msg = DaMessage::from(message).check();
             assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::DaMessage(message) = &deposit2_db {
-            let msg = DaMessage::from(message).lock();
+            let msg = DaMessage::from(message).check();
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::DaMessage(message) = &deposit3_db {
-            let msg = DaMessage::from(message).lock();
+            let msg = DaMessage::from(message).check();
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
     }
