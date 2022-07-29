@@ -46,7 +46,7 @@ async fn produce_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_block(5).await.unwrap();
+    let new_height = client.produce_blocks(5).await.unwrap();
 
     assert_eq!(5, new_height);
 
@@ -85,7 +85,7 @@ async fn produce_block_negative() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_block(5).await;
+    let new_height = client.produce_blocks(5).await;
 
     assert_eq!(
         "Response errors; Manual Blocks must be enabled to use this endpoint",

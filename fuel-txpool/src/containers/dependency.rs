@@ -12,12 +12,13 @@ use tracing::warn;
 /// about depth of connection
 #[derive(Debug, Clone)]
 pub struct Dependency {
-    /// maping of all UtxoId relationships in txpool
+    /// mapping of all UtxoId relationships in txpool
     coins: HashMap<UtxoId, CoinState>,
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
     /// max depth of dependency.
     max_depth: usize,
+    // TODO: add mapping of message id relationships in txpool
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +112,9 @@ impl Dependency {
                                 check.push(*origin.tx_id());
                             }
                         }
+                        Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                            // Message inputs do not depend on any other fuel transactions
+                        }
                     }
                 }
             }
@@ -188,9 +192,9 @@ impl Dependency {
                         return Err(Error::NotInsertedIoWrongAssetId.into());
                     }
                 }
-                Output::Contract { .. } => return Err(Error::NotInsertedIoConractOutput.into()),
-                Output::Withdrawal { .. } => {
-                    return Err(Error::NotInsertedIoWithdrawalInput.into());
+                Output::Contract { .. } => return Err(Error::NotInsertedIoContractOutput.into()),
+                Output::Message { .. } => {
+                    return Err(Error::NotInsertedIoMessageInput.into());
                 }
                 Output::Change {
                     to,
@@ -226,7 +230,7 @@ impl Dependency {
                     // else do nothing, everything is variable and can be only check on execution
                 }
                 Output::ContractCreated { .. } => {
-                    return Err(Error::NotInsertedIoConractOutput.into())
+                    return Err(Error::NotInsertedIoContractOutput.into())
                 }
             };
         } else {
@@ -235,11 +239,11 @@ impl Dependency {
         Ok(())
     }
 
-    /// Check for colision. Used only inside insert function.
-    /// Id doesn't change any dependency it just checks if it has posibility to be included.
+    /// Check for collision. Used only inside insert function.
+    /// Id doesn't change any dependency it just checks if it has possibility to be included.
     /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
     #[allow(clippy::type_complexity)]
-    fn check_for_colision<'a>(
+    fn check_for_collision<'a>(
         &'a self,
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
@@ -251,7 +255,7 @@ impl Dependency {
         Vec<TxId>,
     )> {
         let mut collided: Vec<TxId> = Vec::new();
-        // iterate over all inputs and check for colision
+        // iterate over all inputs and check for collision
         let mut max_depth = 0;
         let mut db_coins: HashMap<UtxoId, CoinState> = HashMap::new();
         let mut db_contracts: HashMap<ContractId, ContractState> = HashMap::new();
@@ -315,8 +319,11 @@ impl Dependency {
 
                     // yey we got our coin
                 }
+                Input::MessagePredicate { .. } | Input::MessageSigned { .. } => {
+                    // TODO: handle message id collision between transactions
+                }
                 Input::Contract { contract_id, .. } => {
-                    // Does contract exist. We dont need to do any check here other then if contract_id exist or not.
+                    // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
                         if tx.gas_price() > state.gas_price {
@@ -387,7 +394,8 @@ impl Dependency {
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
-        let (max_depth, db_coins, db_contracts, collided) = self.check_for_colision(txs, db, tx)?;
+        let (max_depth, db_coins, db_contracts, collided) =
+            self.check_for_collision(txs, db, tx)?;
 
         // now we are sure that transaction can be included. remove all collided transactions
         let mut removed_tx = Vec::new();
@@ -414,6 +422,9 @@ impl Dependency {
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.insert(tx.id());
                     }
+                }
+                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                    // no dag relationship exists between txs due to input messages
                 }
             }
         }
@@ -450,7 +461,7 @@ impl Dependency {
                         },
                     );
                 }
-                Output::Withdrawal { .. } => {
+                Output::Message { .. } => {
                     // withdrawal does nothing and it should not be found in dependency.
                 }
                 Output::Contract { .. } => {
@@ -474,7 +485,7 @@ impl Dependency {
         // recursively remove all transactions that depend on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
-                Output::Withdrawal { .. } | Output::Contract { .. } => {
+                Output::Message { .. } | Output::Contract { .. } => {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -548,6 +559,9 @@ impl Dependency {
                     if rem_contract {
                         self.contracts.remove(contract_id);
                     }
+                }
+                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                    // TODO: unlink message_id <-> tx_id
                 }
             }
         }
@@ -661,21 +675,20 @@ mod tests {
         assert!(out.is_err(), "test6 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoConractOutput),
+            Some(&Error::NotInsertedIoContractOutput),
             "test6"
         );
 
-        let output = Output::Withdrawal {
-            to: Default::default(),
-            amount: Default::default(),
-            asset_id: Default::default(),
+        let output = Output::Message {
+            recipient: Default::default(),
+            amount: 0,
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test7 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWithdrawalInput),
+            Some(&Error::NotInsertedIoMessageInput),
             "test7"
         );
 
@@ -688,7 +701,7 @@ mod tests {
         assert!(out.is_err(), "test8 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoConractOutput),
+            Some(&Error::NotInsertedIoContractOutput),
             "test8"
         );
     }

@@ -168,8 +168,8 @@ pub mod helpers {
         pub contract: HashMap<ContractId, Contract>,
         /// Dummy da messages.
         pub messages: HashMap<Bytes32, DaMessage>,
-        /// variable for last commited and finalized fuel height
-        pub last_commited_finalized_fuel_height: BlockHeight,
+        /// variable for last committed and finalized fuel height
+        pub last_committed_finalized_fuel_height: BlockHeight,
     }
 
     impl DummyDb {
@@ -192,7 +192,6 @@ pub mod helpers {
             let tx1 = Transaction::Script {
                 gas_price: TX1_GAS_PRICE,
                 gas_limit: 1_000_000,
-                byte_price: TX1_BYTE_PRICE,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -231,7 +230,6 @@ pub mod helpers {
             let tx1_faulty = Transaction::Script {
                 gas_price: 10,
                 gas_limit: 1_000_000,
-                byte_price: 10,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -263,7 +261,6 @@ pub mod helpers {
             let tx2 = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
-                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -296,7 +293,6 @@ pub mod helpers {
             let tx2_faulty = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
-                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -336,7 +332,6 @@ pub mod helpers {
             let tx3 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
-                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -370,7 +365,6 @@ pub mod helpers {
             let tx4 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
-                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -403,7 +397,6 @@ pub mod helpers {
             let tx5 = Transaction::Script {
                 gas_price: 5, //lower then tx1
                 gas_limit: 1_000_000,
-                byte_price: 5,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -460,12 +453,11 @@ pub mod helpers {
             };
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
-            // dumy tx used for tests
+            // dummy tx used for tests
             let mut txs = vec![
                 fun(Transaction::script(
                     10,
                     1000,
-                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -480,7 +472,6 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
-                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -495,7 +486,6 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
-                    10,
                     0,
                     script,
                     Vec::new(),
@@ -510,7 +500,6 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
-                    10,
                     0,
                     Vec::new(),
                     Vec::new(),
@@ -629,7 +618,7 @@ pub mod helpers {
                 validators: HashMap::new(),
                 staking_diffs: BTreeMap::new(),
                 delegator_index: BTreeMap::new(),
-                last_commited_finalized_fuel_height: BlockHeight::from(0u64),
+                last_committed_finalized_fuel_height: BlockHeight::from(0u64),
             };
 
             Self {
@@ -939,12 +928,12 @@ pub mod helpers {
             self.data.lock().finalized_da_height
         }
 
-        async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight {
-            self.data.lock().last_commited_finalized_fuel_height
+        async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight {
+            self.data.lock().last_committed_finalized_fuel_height
         }
 
-        async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight) {
-            self.data.lock().last_commited_finalized_fuel_height = block_height;
+        async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
+            self.data.lock().last_committed_finalized_fuel_height = block_height;
         }
     }
 }

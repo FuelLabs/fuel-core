@@ -45,7 +45,6 @@ async fn dry_run() {
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
-    let byte_price = 0;
     let maturity = 0;
 
     let script = vec![
@@ -62,7 +61,6 @@ async fn dry_run() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
-        byte_price,
         maturity,
         script,
         vec![],
@@ -93,7 +91,6 @@ async fn submit() {
     let gas_price = 0;
     let gas_limit = 1_000_000;
     let maturity = 0;
-    let byte_price = 0;
 
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
@@ -109,7 +106,6 @@ async fn submit() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
-        byte_price,
         maturity,
         script,
         vec![],
@@ -135,7 +131,7 @@ async fn transaction_status_submitted() {
     // This test should ensure a transaction's status is Submitted while it is in the mempool
     // This test should also ensure a transaction's time of submission is correct in the returned status
     // Currently blocked until https://github.com/FuelLabs/fuel-core/issues/50 is resolved
-    // as execution must be seperate from submission for a tx to persist inside of the txpool
+    // as execution must be separate from submission for a tx to persist inside of the txpool
     // Merge with the submit_utxo_verified_tx test once utxo_verification is the default
     todo!();
 }
@@ -459,7 +455,6 @@ impl TestContext {
         let tx = Transaction::Script {
             gas_price: 0,
             gas_limit: 1_000_000,
-            byte_price: 0,
             maturity: 0,
             receipts_root: Default::default(),
             script,
@@ -503,7 +498,6 @@ async fn initialize_client(db: Database) -> FuelClient {
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
     fuel_tx::Transaction::script(
-        0,
         0,
         0,
         0,

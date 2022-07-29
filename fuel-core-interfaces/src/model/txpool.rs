@@ -8,14 +8,14 @@ pub type ArcTx = Arc<Transaction>;
 #[derive(Debug, Clone)]
 pub struct TxInfo {
     tx: ArcTx,
-    submited_time: DateTime<Utc>,
+    submitted_time: DateTime<Utc>,
 }
 
 impl TxInfo {
     pub fn new(tx: ArcTx) -> Self {
         Self {
             tx,
-            submited_time: Utc::now(),
+            submitted_time: Utc::now(),
         }
     }
 
@@ -23,8 +23,8 @@ impl TxInfo {
         &self.tx
     }
 
-    pub fn submited_time(&self) -> DateTime<Utc> {
-        self.submited_time
+    pub fn submitted_time(&self) -> DateTime<Utc> {
+        self.submitted_time
     }
 }
 
