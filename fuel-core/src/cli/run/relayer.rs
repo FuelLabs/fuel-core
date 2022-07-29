@@ -22,7 +22,7 @@ pub struct RelayerArgs {
 
     /// Number of da block after which messages/stakes/validators become finalized.
     #[clap(long = "relayer-da-finalization", default_value = "64")]
-    pub da_finalization: u32,
+    pub da_finalization: u64,
 
     /// contract to publish commit fuel block.  
     #[clap(long = "relayer-v2-commit-contract", parse(try_from_str = parse_h160))]

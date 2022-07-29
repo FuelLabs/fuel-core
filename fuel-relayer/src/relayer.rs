@@ -110,8 +110,8 @@ impl Relayer {
         );
         // should be always more then last finalized_da_heights
 
-        let best_finalized_block = (provider.get_block_number().await?.as_u64() as u32)
-            - self.ctx.config.da_finalization();
+        let best_finalized_block =
+            provider.get_block_number().await?.as_u64() - self.ctx.config.da_finalization();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
@@ -515,9 +515,11 @@ mod test {
             data.best_block.number = Some(U64([134]));
 
             data.best_block.number = Some(U64([134]));
-            data.logs_batch = vec![
-                vec![log::tests::eth_log_deposit(136, Address::zeroed(), 10)], //Log::]
-            ];
+            data.logs_batch = vec![vec![log::tests::eth_log_deposit(
+                136,
+                Address::zeroed(),
+                10,
+            )]];
             data.blocks_batch = vec![vec![H256::zero()]];
         }
         pub struct Handle {
