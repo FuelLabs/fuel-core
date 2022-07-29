@@ -156,8 +156,6 @@ pub enum Error {
     NoMetadata,
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
-    #[error("Transaction is not inserted. The byte price is too low.")]
-    NotInsertedBytePriceTooLow,
     #[error(
         "Transaction is not inserted. More priced tx {0:#x} already spend this UTXO output: {1:#x}"
     )]
@@ -190,8 +188,10 @@ pub enum Error {
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]
     NotInsertedIoContractOutput,
-    #[error("Transaction is not inserted. Input output mismatch. Expected coin but output is withdrawal")]
-    NotInsertedIoWithdrawalInput,
+    #[error(
+        "Transaction is not inserted. Input output mismatch. Expected coin but output is message"
+    )]
+    NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
     // small todo for now it can pass but in future we should include better messages

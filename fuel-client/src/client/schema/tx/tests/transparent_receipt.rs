@@ -1,6 +1,6 @@
 use crate::client::schema::{
     contract::ContractIdFragment, schema, Address, AssetId, Bytes32, ConversionError,
-    ConversionError::MissingField, HexString, U64,
+    ConversionError::MissingField, HexString, MessageId, U64,
 };
 use fuel_types::Word;
 
@@ -30,6 +30,10 @@ pub struct Receipt {
     pub result: Option<U64>,
     pub gas_used: Option<U64>,
     pub data: Option<HexString>,
+    pub message_id: Option<MessageId>,
+    pub sender: Option<Address>,
+    pub recipient: Option<Address>,
+    pub nonce: Option<Bytes32>,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
@@ -45,6 +49,7 @@ pub enum ReceiptType {
     Transfer,
     TransferOut,
     ScriptResult,
+    MessageOut,
 }
 
 impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
@@ -315,6 +320,40 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                 gas_used: schema
                     .gas_used
                     .ok_or_else(|| MissingField("gas_used".to_string()))?
+                    .into(),
+            },
+            ReceiptType::MessageOut => fuel_tx::Receipt::MessageOut {
+                message_id: schema
+                    .message_id
+                    .ok_or_else(|| MissingField("message_id".to_string()))?
+                    .into(),
+                sender: schema
+                    .sender
+                    .ok_or_else(|| MissingField("sender".to_string()))?
+                    .into(),
+                recipient: schema
+                    .recipient
+                    .ok_or_else(|| MissingField("recipient".to_string()))?
+                    .into(),
+                amount: schema
+                    .amount
+                    .ok_or_else(|| MissingField("amount".to_string()))?
+                    .into(),
+                nonce: schema
+                    .nonce
+                    .ok_or_else(|| MissingField("nonce".to_string()))?
+                    .into(),
+                len: schema
+                    .len
+                    .ok_or_else(|| MissingField("len".to_string()))?
+                    .into(),
+                digest: schema
+                    .digest
+                    .ok_or_else(|| MissingField("digest".to_string()))?
+                    .into(),
+                data: schema
+                    .data
+                    .ok_or_else(|| MissingField("data".to_string()))?
                     .into(),
             },
         })
