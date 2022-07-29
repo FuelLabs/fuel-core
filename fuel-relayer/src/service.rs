@@ -96,7 +96,7 @@ pub struct Context {
     pub receiver: mpsc::Receiver<RelayerRequest>,
     /// Private.
     pub private_key: Vec<u8>,
-    /// Db connector to apply stake and token deposit.
+    /// Db connector to apply stake and messages.
     pub db: Box<dyn RelayerDb>,
     /// Notification of new block event.
     pub new_block_event: broadcast::Receiver<ImportBlockBroadcast>,

@@ -42,7 +42,7 @@ pub struct DaBlockDiff {
     pub validators: HashMap<ValidatorId, Option<ConsensusId>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
-    /// erc-20 pending deposit.
+    /// bridge messages (e.g. erc20 or nft assets)
     pub messages: HashMap<Bytes32, CheckedDaMessage>,
 }
 
@@ -365,32 +365,32 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let deposit1 = eth_log_da_message(0, acc1, receipient, owner, 0, 10, vec![]);
-        let deposit2 = eth_log_da_message(1, acc1, receipient, owner, 1, 14, vec![]);
-        let deposit3 = eth_log_da_message(1, acc1, receipient, owner, 2, 16, vec![]);
+        let message1 = eth_log_da_message(0, acc1, receipient, owner, 0, 10, vec![]);
+        let message2 = eth_log_da_message(1, acc1, receipient, owner, 1, 14, vec![]);
+        let message3 = eth_log_da_message(1, acc1, receipient, owner, 2, 16, vec![]);
 
-        let deposit1_db = EthEventLog::try_from(&deposit1).unwrap();
-        let deposit2_db = EthEventLog::try_from(&deposit2).unwrap();
-        let deposit3_db = EthEventLog::try_from(&deposit3).unwrap();
+        let message1_db = EthEventLog::try_from(&message1).unwrap();
+        let message2_db = EthEventLog::try_from(&message2).unwrap();
+        let message3_db = EthEventLog::try_from(&message3).unwrap();
 
         queue
-            .append_eth_logs(vec![deposit1, deposit2, deposit3])
+            .append_eth_logs(vec![message1, message2, message3])
             .await;
 
         let diff1 = queue.pending[0].clone();
         let diff2 = queue.pending[1].clone();
 
-        if let EthEventLog::DaMessage(message) = &deposit1_db {
+        if let EthEventLog::DaMessage(message) = &message1_db {
             let msg = DaMessage::from(message).check();
             assert_eq!(msg.da_height, 0);
             assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
         }
-        if let EthEventLog::DaMessage(message) = &deposit2_db {
+        if let EthEventLog::DaMessage(message) = &message2_db {
             let msg = DaMessage::from(message).check();
             assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
-        if let EthEventLog::DaMessage(message) = &deposit3_db {
+        if let EthEventLog::DaMessage(message) = &message3_db {
             let msg = DaMessage::from(message).check();
             assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));

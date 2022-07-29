@@ -36,12 +36,12 @@ impl StakingDiff {
     }
 }
 
-// Database has two main functionalities, ValidatorSet and TokenDeposits.
-// From relayer perspective TokenDeposits are just insert when they get finalized.
+// Database has two main functionalities, ValidatorSet and Bridge Message.
+// From relayer perspective messages are just inserted when they get finalized.
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<Bytes32, DaMessage, Error = KvStoreError> // token deposit
+     Storage<Bytes32, DaMessage, Error = KvStoreError> // bridge messages
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -49,7 +49,7 @@ pub trait RelayerDb:
     + Sync
 {
 
-    /// deposit token to database. Token deposits are not revertable.
+    /// add bridge message to database. Messages are not revertible.
     async fn insert_da_message(
         &mut self,
         message: &CheckedDaMessage,
