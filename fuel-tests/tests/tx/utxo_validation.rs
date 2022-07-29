@@ -217,7 +217,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
             )
             .gas_limit(1000 + i as u64)
             .add_unsigned_coin_input(
-                secret.clone(),
+                secret,
                 rng.gen(),
                 rng.gen_range(1..1000),
                 Default::default(),
