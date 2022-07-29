@@ -122,6 +122,7 @@ pub mod helpers {
     use fuel_tx::{
         Address, Bytes32, ContractId, Input, Metadata, Output, Transaction, TxId, UtxoId,
     };
+    use fuel_types::MessageId;
     use fuel_vm::prelude::Contract;
     use std::collections::HashMap;
 
@@ -734,6 +735,30 @@ pub mod helpers {
 
         fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
             Ok(self.data.lock().contract.contains_key(key))
+        }
+    }
+
+    impl Storage<MessageId, DaMessage> for DummyDb {
+        type Error = crate::db::Error;
+
+        fn insert(
+            &mut self,
+            _key: &MessageId,
+            _value: &DaMessage,
+        ) -> Result<Option<DaMessage>, Self::Error> {
+            todo!()
+        }
+
+        fn remove(&mut self, _key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
+            todo!()
+        }
+
+        fn get<'a>(&'a self, _key: &MessageId) -> Result<Option<Cow<'a, DaMessage>>, Self::Error> {
+            todo!()
+        }
+
+        fn contains_key(&self, _key: &MessageId) -> Result<bool, Self::Error> {
+            todo!()
         }
     }
 

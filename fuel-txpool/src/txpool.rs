@@ -250,8 +250,133 @@ impl TxPool {
 
 #[cfg(test)]
 pub mod tests {
+    mod helpers {
+        use fuel_core_interfaces::common::fuel_storage::Storage;
+        use fuel_core_interfaces::common::fuel_tx::{
+            Contract, ContractId, MessageId, Transaction, TxId, UtxoId,
+        };
+        use fuel_core_interfaces::db;
+        use fuel_core_interfaces::db::KvStoreError;
+        use fuel_core_interfaces::model::{Coin, DaMessage};
+        use std::borrow::Cow;
+        use std::collections::HashMap;
+        use std::sync::{Arc, Mutex};
+        use fuel_core_interfaces::txpool::TxPoolDb;
+
+        #[derive(Default)]
+        pub(crate) struct Data {
+            pub tx: HashMap<TxId, Arc<Transaction>>,
+            pub coins: HashMap<UtxoId, Coin>,
+            pub messages: HashMap<MessageId, DaMessage>,
+        }
+
+        #[derive(Default)]
+        pub(crate) struct MockDb {
+            pub data: Arc<Mutex<Data>>,
+        }
+
+        impl Storage<UtxoId, Coin> for MockDb {
+            type Error = KvStoreError;
+
+            fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
+            }
+
+            fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.remove(key))
+            }
+
+            fn get<'a>(
+                &'a self,
+                key: &UtxoId,
+            ) -> Result<Option<std::borrow::Cow<'a, Coin>>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .coins
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
+            }
+
+            fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.contains_key(key))
+            }
+        }
+
+        impl Storage<ContractId, Contract> for MockDb {
+            type Error = db::Error;
+
+            fn insert(
+                &mut self,
+                key: &ContractId,
+                value: &Contract,
+            ) -> Result<Option<Contract>, Self::Error> {
+                todo!()
+            }
+
+            fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
+                todo!()
+            }
+
+            fn get<'a>(
+                &'a self,
+                key: &ContractId,
+            ) -> Result<Option<Cow<'a, Contract>>, Self::Error> {
+                todo!()
+            }
+
+            fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
+                todo!()
+            }
+        }
+
+        impl Storage<MessageId, DaMessage> for MockDb {
+            type Error = db::Error;
+
+            fn insert(
+                &mut self,
+                key: &MessageId,
+                value: &DaMessage,
+            ) -> Result<Option<DaMessage>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .messages
+                    .insert(*key, value.clone()))
+            }
+
+            fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
+                Ok(self.data.lock().unwrap().messages.remove(key))
+            }
+
+            fn get<'a>(
+                &'a self,
+                key: &MessageId,
+            ) -> Result<Option<Cow<'a, DaMessage>>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .messages
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
+            }
+
+            fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
+                Ok(self.data.lock().unwrap().messages.contains_key(key))
+            }
+        }
+
+        impl TxPoolDb for MockDb {}
+    }
+
     use super::*;
     use crate::Error;
+    use fuel_core_interfaces::common::fuel_storage::Storage;
+    use fuel_core_interfaces::common::fuel_tx::{Address, Input, TransactionBuilder};
+    use fuel_core_interfaces::common::fuel_types::MessageId;
     use fuel_core_interfaces::{common::fuel_tx::UtxoId, db::helpers::*, model::CoinStatus};
     use std::cmp::Reverse;
     use std::sync::Arc;
@@ -646,4 +771,46 @@ pub mod tests {
         let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
     }
+
+    #[tokio::test]
+    async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
+        let mut db = helpers::MockDb::default();
+
+        let da_message_id = MessageId::from([5u8; 32]);
+
+        db.insert(&da_message_id, &Default::default()).unwrap();
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(Input::message_predicate(
+                da_message_id.clone().into(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ))
+            .finalize();
+
+        let mut txpool = RwLock::new(TxPool::new(Default::default()));
+        let out = txpool.write().await.insert_inner(Arc::new(tx.clone()), &db).await;
+        assert!(out.is_ok());
+
+        let returned_tx = TxPool::find_one(&txpool, &tx.id()).await;
+        let tx_info = returned_tx.unwrap();
+        assert_eq!(tx_info.tx().id(), tx.id());
+    }
+
+    #[tokio::test]
+    async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {}
+
+    #[tokio::test]
+    async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id_input(
+    ) {
+    }
+
+    #[tokio::test]
+    async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {}
 }

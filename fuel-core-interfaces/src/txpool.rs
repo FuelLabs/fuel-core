@@ -1,12 +1,13 @@
 use crate::{
     db::{Error as DbStateError, KvStoreError},
-    model::Coin,
     model::TxInfo,
+    model::{Coin, DaMessage},
 };
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
 use fuel_tx::{ContractId, UtxoId};
 use fuel_tx::{Transaction, TxId};
+use fuel_types::MessageId;
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
@@ -15,6 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
+    + Storage<MessageId, DaMessage, Error = DbStateError>
     + Send
     + Sync
 {

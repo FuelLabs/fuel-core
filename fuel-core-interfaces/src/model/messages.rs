@@ -6,7 +6,7 @@ use fuel_types::{Address, Bytes32, Word};
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct DaMessage {
     pub sender: Address,
     pub recipient: Address,
