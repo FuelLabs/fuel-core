@@ -69,6 +69,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (tx_status_sender, _) = broadcast::channel(100);
     let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
+    // Ok so plug these into something
+    let (tx_consensus, _) = mpsc::channel(100);
+    let (tx_transaction, _) = mpsc::channel(100);
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
@@ -114,9 +117,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     txpool.start().await?;
 
     let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
-
-    let (tx_consensus, _) = mpsc::channel(100);
-    let (tx_transaction, _) = mpsc::channel(100);
 
     let network_service = fuel_p2p::orchestrator::Service::new(
         config.p2p.clone(),

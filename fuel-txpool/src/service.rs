@@ -41,7 +41,7 @@ impl ServiceBuilder {
     }
 
     pub fn sender(&self) -> &txpool::Sender {
-        &self.txpool_sender.as_ref().unwrap()
+        self.txpool_sender.as_ref().unwrap()
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<TxStatusBroadcast> {
