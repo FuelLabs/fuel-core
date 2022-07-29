@@ -64,14 +64,14 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         );
 
     // Meant to simulate p2p's channels which hook in to communicate with txpool
-    let (network_sender, _) = mpsc::channel(100);
     let (_, incoming_tx_receiver) = broadcast::channel(100);
     let (tx_status_sender, _) = broadcast::channel(100);
     let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
     // Ok so plug these into something
-    let (tx_consensus, _) = mpsc::channel(100);
-    let (tx_transaction, _) = mpsc::channel(100);
+    let (tx_consensus, incoming_tx_reciever) = mpsc::channel(100);
+    let (tx_transaction, network_sender) = mpsc::channel(100);
+
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
