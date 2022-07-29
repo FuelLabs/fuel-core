@@ -53,7 +53,7 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn txpool_sender(&mut self, txpool_sender: txpool::Sender ) -> &mut Self {
+    pub fn txpool_sender(&mut self, txpool_sender: txpool::Sender) -> &mut Self {
         self.txpool_sender = Some(txpool_sender);
         self
     }
@@ -63,7 +63,10 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn tx_status_sender(&mut self, tx_status_sender: broadcast::Sender<TxStatusBroadcast>) -> &mut Self {
+    pub fn tx_status_sender(
+        &mut self,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+    ) -> &mut Self {
         self.tx_status_sender = Some(tx_status_sender);
         self
     }
@@ -95,7 +98,7 @@ impl ServiceBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Service> {
-        if self.db.is_none() 
+        if self.db.is_none()
             || self.import_block_receiver.is_none()
             || self.incoming_tx_receiver.is_none()
             || self.network_sender.is_none()
@@ -281,6 +284,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
         let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let mut builder = ServiceBuilder::new();
         builder
@@ -288,7 +293,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(bs.subscribe());
+            .import_block_event(bs.subscribe())
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
 
         assert!(service.start().await.is_ok(), "start service");
@@ -312,6 +320,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
         let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -326,7 +336,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -368,6 +381,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
         let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -382,7 +397,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -425,6 +443,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
         let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx1 = DummyDb::dummy_tx(tx1_hash);
@@ -435,7 +455,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -469,6 +492,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, mut rx) = mpsc::channel(100);
         let (_stx, incoming_txs) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
@@ -479,7 +504,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_txs)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -525,6 +553,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, mut network_receiver) = mpsc::channel(100);
         let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx1 = DummyDb::dummy_tx(tx1_hash);
@@ -535,7 +565,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
@@ -559,6 +592,8 @@ pub mod tests {
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
         let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
@@ -572,7 +607,10 @@ pub mod tests {
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
             .network_sender(network_sender)
-            .import_block_event(br);
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
         let service = builder.build().unwrap();
         service.start().await.ok();
 

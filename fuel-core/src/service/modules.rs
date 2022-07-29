@@ -4,6 +4,7 @@ use crate::database::Database;
 use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::relayer::RelayerDb;
+use fuel_core_interfaces::txpool;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
@@ -63,15 +64,20 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         );
 
     // Meant to simulate p2p's channels which hook in to communicate with txpool
-    let network_sender = ();
-    let incoming_tx_receiver = ();
+    let (network_sender, _) = mpsc::channel(100);
+    let (_, incoming_tx_receiver) = broadcast::channel(100);
+    let (tx_status_sender, _) = broadcast::channel(100);
+    let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
         .network_sender(network_sender)
-        .import_block_event(block_importer.subscribe());
+        .import_block_event(block_importer.subscribe())
+        .tx_status_sender(tx_status_sender)
+        .txpool_sender(txpool_sender)
+        .txpool_receiver(txpool_receiver);
 
     let (tx_request_event, rx_request_event) = mpsc::channel(100);
     let (tx_block, rx_block) = mpsc::channel(100);
