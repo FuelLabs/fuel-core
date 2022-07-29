@@ -49,8 +49,6 @@ impl TxPool {
 
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
-        // verify byte price is at least the minimum
-        self.verify_tx_min_byte_price(&tx)?;
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into());
@@ -125,13 +123,6 @@ impl TxPool {
     fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
         if tx.gas_price() < self.config.min_gas_price {
             return Err(Error::NotInsertedGasPriceTooLow);
-        }
-        Ok(())
-    }
-
-    fn verify_tx_min_byte_price(&mut self, tx: &Transaction) -> Result<(), Error> {
-        if tx.byte_price() < self.config.min_byte_price {
-            return Err(Error::NotInsertedBytePriceTooLow);
         }
         Ok(())
     }
@@ -654,25 +645,5 @@ pub mod tests {
 
         let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-    }
-
-    #[tokio::test]
-    async fn tx_below_min_byte_price_is_not_insertable() {
-        let config = Config {
-            min_byte_price: TX1_BYTE_PRICE + 1,
-            ..Config::default()
-        };
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-
-        let mut txpool = TxPool::new(config);
-
-        let err = txpool.insert_inner(tx1, &db).await.err().unwrap();
-        assert!(matches!(
-            err.root_cause().downcast_ref::<Error>().unwrap(),
-            Error::NotInsertedBytePriceTooLow
-        ));
     }
 }

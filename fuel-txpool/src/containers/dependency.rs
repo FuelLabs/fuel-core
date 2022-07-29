@@ -18,6 +18,7 @@ pub struct Dependency {
     contracts: HashMap<ContractId, ContractState>,
     /// max depth of dependency.
     max_depth: usize,
+    // TODO: add mapping of message id relationships in txpool
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +112,9 @@ impl Dependency {
                                 check.push(*origin.tx_id());
                             }
                         }
+                        Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                            // Message inputs do not depend on any other fuel transactions
+                        }
                     }
                 }
             }
@@ -189,8 +193,8 @@ impl Dependency {
                     }
                 }
                 Output::Contract { .. } => return Err(Error::NotInsertedIoContractOutput.into()),
-                Output::Withdrawal { .. } => {
-                    return Err(Error::NotInsertedIoWithdrawalInput.into());
+                Output::Message { .. } => {
+                    return Err(Error::NotInsertedIoMessageInput.into());
                 }
                 Output::Change {
                     to,
@@ -315,6 +319,9 @@ impl Dependency {
 
                     // yey we got our coin
                 }
+                Input::MessagePredicate { .. } | Input::MessageSigned { .. } => {
+                    // TODO: handle message id collision between transactions
+                }
                 Input::Contract { contract_id, .. } => {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
@@ -416,6 +423,9 @@ impl Dependency {
                         state.used_by.insert(tx.id());
                     }
                 }
+                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                    // no dag relationship exists between txs due to input messages
+                }
             }
         }
 
@@ -451,7 +461,7 @@ impl Dependency {
                         },
                     );
                 }
-                Output::Withdrawal { .. } => {
+                Output::Message { .. } => {
                     // withdrawal does nothing and it should not be found in dependency.
                 }
                 Output::Contract { .. } => {
@@ -475,7 +485,7 @@ impl Dependency {
         // recursively remove all transactions that depend on the outputs of the current tx
         for (index, output) in tx.outputs().iter().enumerate() {
             match output {
-                Output::Withdrawal { .. } | Output::Contract { .. } => {
+                Output::Message { .. } | Output::Contract { .. } => {
                     // no other transactions can depend on these types of outputs
                 }
                 Output::Coin { .. } | Output::Change { .. } | Output::Variable { .. } => {
@@ -549,6 +559,9 @@ impl Dependency {
                     if rem_contract {
                         self.contracts.remove(contract_id);
                     }
+                }
+                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
+                    // TODO: unlink message_id <-> tx_id
                 }
             }
         }
@@ -666,17 +679,16 @@ mod tests {
             "test6"
         );
 
-        let output = Output::Withdrawal {
-            to: Default::default(),
-            amount: Default::default(),
-            asset_id: Default::default(),
+        let output = Output::Message {
+            recipient: Default::default(),
+            amount: 0,
         };
 
         let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test7 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
-            Some(&Error::NotInsertedIoWithdrawalInput),
+            Some(&Error::NotInsertedIoMessageInput),
             "test7"
         );
 
