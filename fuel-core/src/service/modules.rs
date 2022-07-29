@@ -64,26 +64,25 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         );
 
     // Meant to simulate p2p's channels which hook in to communicate with txpool
-    let (_, incoming_tx_receiver) = broadcast::channel(100);
     let (tx_status_sender, _) = broadcast::channel(100);
     let (txpool_sender, txpool_receiver) = txpool::channel(100);
 
     // Ok so plug these into something
-    let (tx_consensus, incoming_tx_reciever) = mpsc::channel(100);
-    let (tx_transaction, network_sender) = mpsc::channel(100);
+    let (tx_consensus, _) = mpsc::channel(100);
+    let (tx_transaction, incoming_tx_reciever) = broadcast::channel(100);
+
+    let (tx_request_event, rx_request_event) = mpsc::channel(100);
+    let (tx_block, rx_block) = mpsc::channel(100);
 
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        .incoming_tx_receiver(incoming_tx_receiver)
-        .network_sender(network_sender)
+        .incoming_tx_receiver(incoming_tx_reciever)
+        .network_sender(tx_request_event.clone())
         .import_block_event(block_importer.subscribe())
         .tx_status_sender(tx_status_sender)
         .txpool_sender(txpool_sender)
         .txpool_receiver(txpool_receiver);
-
-    let (tx_request_event, rx_request_event) = mpsc::channel(100);
-    let (tx_block, rx_block) = mpsc::channel(100);
 
     block_importer.start().await;
 

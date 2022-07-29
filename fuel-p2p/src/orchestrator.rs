@@ -5,12 +5,6 @@ use fuel_core_interfaces::p2p::{
     BlockBroadcast, ConsensusBroadcast, P2pDb, P2pRequestEvent, TransactionBroadcast,
 };
 
-use libp2p::request_response::RequestId;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tracing::warn;
-
 use crate::{
     behavior::FuelBehaviourEvent,
     config::P2PConfig,
@@ -18,6 +12,12 @@ use crate::{
     request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
     service::{FuelP2PEvent, FuelP2PService},
 };
+use libp2p::request_response::RequestId;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tracing::warn;
 
 pub struct NetworkOrchestrator {
     p2p_config: P2PConfig,
@@ -28,7 +28,7 @@ pub struct NetworkOrchestrator {
 
     // senders
     tx_consensus: Sender<ConsensusBroadcast>,
-    tx_transaction: Sender<TransactionBroadcast>,
+    tx_transaction: broadcast::Sender<TransactionBroadcast>,
     tx_block: Sender<BlockBroadcast>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
 
@@ -41,7 +41,7 @@ impl NetworkOrchestrator {
         rx_request_event: Receiver<P2pRequestEvent>,
 
         tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
+        tx_transaction: broadcast::Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
 
         db: Arc<Box<dyn P2pDb>>,
@@ -149,7 +149,7 @@ impl Service {
         tx_request_event: Sender<P2pRequestEvent>,
         rx_request_event: Receiver<P2pRequestEvent>,
         tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
+        tx_transaction: broadcast::Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
     ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
@@ -239,7 +239,7 @@ pub mod tests {
 
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
-        let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
+        let (tx_transaction, _) = tokio::sync::broadcast::channel(100);
         let (tx_block, _) = tokio::sync::mpsc::channel(100);
 
         let service = Service::new(
