@@ -30,8 +30,11 @@ jobs:
           k8s="eks"
           config="fuel-dev1"
           env="fueldevsway.env"
+          branch_name=$(git symbolic-ref -q HEAD)
+          branch_name=${branch_name##refs/heads/}
+          branch_name=${branch_name:-HEAD}
           echo "IMAGE_TAG=$(echo $tag)" >> $GITHUB_ENV
-          echo "BRANCH=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          echo "BRANCH=$(echo $branch_name)" >> $GITHUB_ENV
           echo "K8S=$(echo $k8s)" >> $GITHUB_ENV
           echo "CONFIG=$(echo $config)" >> $GITHUB_ENV
           echo "ENV=$(echo $env)" >> $GITHUB_ENV
