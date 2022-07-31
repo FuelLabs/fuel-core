@@ -8,7 +8,6 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -39,7 +38,7 @@ jobs:
           echo "ENV=$(echo $env)" >> $GITHUB_ENV
       
       - name: Deploy Ephemeral Test Environment
-        id: set_env_v
+        id: deploy_eph_env
         run: |
           curl \
             -X POST \
