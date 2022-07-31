@@ -2342,6 +2342,7 @@ dependencies = [
  "insta",
  "itertools",
  "rand 0.8.5",
+ "reqwest",
  "rstest",
  "serde_json",
  "tempfile",
