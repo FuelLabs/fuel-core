@@ -46,6 +46,7 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
             https://api.github.com/repos/FuelLabs/fuel-deployment/actions/workflows/deploy-test-env.yml/dispatches \
-            -d '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ steps.set_env_var.outputs.BRANCH }}", "image-tag": "${{ steps.set_env_var.outputs.IMAGE_TAG }}" }'
+            -d '{"ref":"master","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ steps.set_env_var.outputs.BRANCH }}", "image-tag": "${{ steps.set_env_var.outputs.IMAGE_TAG }}" }}'
+
 
 
