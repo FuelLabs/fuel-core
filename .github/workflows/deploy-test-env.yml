@@ -3,6 +3,8 @@ name: Deploy Ephemeral Test Environment
 on:
   workflow_dispatch:
   push:
+    branches:
+      - create-eph-envs-workflows
   pull_request:
 
 concurrency:
