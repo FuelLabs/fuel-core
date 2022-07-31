@@ -53,7 +53,7 @@ jobs:
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
         run: |
-          - (! grep "openssl-sys" Cargo.lock &> /dev/null) && echo "openssl not found"
+          - { (grep "openssl-sys" Cargo.lock &> /dev/null && exit 2) || test $? = 1; } && echo "openssl not found"
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@master
         if: always() && github.ref == 'refs/heads/master'
