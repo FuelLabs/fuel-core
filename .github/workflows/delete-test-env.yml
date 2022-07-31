@@ -3,8 +3,6 @@ name: Delete Ephemeral Test Environment
 on:
   workflow_dispatch:
   push:
-    branches:
-      - create-eph-envs-workflows
   pull_request:
 
 env:
@@ -13,9 +11,6 @@ env:
 jobs:
   # Delete Ephemeral Test Environment
   delete-test-enviromment:
-    #if: github.ref == 'refs/heads/master'
-    #needs:
-      #- publish-docker-image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -27,7 +22,10 @@ jobs:
           k8s="eks"
           config="fuel-dev1"
           env="fueldevsway.env"
-          echo "BRANCH=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          branch_name=$(git symbolic-ref -q HEAD)
+          branch_name=${branch_name##refs/heads/}
+          branch_name=${branch_name:-HEAD}
+          echo "BRANCH=$(echo $branch_name)" >> $GITHUB_ENV
           echo "K8S=$(echo $k8s)" >> $GITHUB_ENV
           echo "CONFIG=$(echo $config)" >> $GITHUB_ENV
           echo "ENV=$(echo $env)" >> $GITHUB_ENV

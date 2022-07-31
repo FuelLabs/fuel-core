@@ -13,11 +13,8 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Deploy Latest Fuel-Core Release
+  # Deploy Test Fuel-Core Environment
   deploy-test-enviromment:
-    #if: github.ref == 'refs/heads/master'
-    #needs:
-      #- publish-docker-image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
