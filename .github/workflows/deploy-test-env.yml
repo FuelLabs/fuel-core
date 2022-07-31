@@ -29,20 +29,23 @@ jobs:
         id: set_env_var
         run: |
           tag="latest"
+          k8s="eks"
+          config="fuel-dev1"
+          env="fueldevsway.env"
           echo "IMAGE_TAG=$(echo $tag)" >> $GITHUB_ENV
           echo "BRANCH=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-
-      - name: Deploy Fuel-Core Test Environment
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: Deploy Fuel-Core Ephemeral Test Environment
-          repo: FuelLabs/fuel-deployment
-          ref: refs/heads/master
-          token: ${{ secrets.REPO_TOKEN }}
-          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ steps.set_env_var.outputs.BRANCH }}", "image-tag": "${{ steps.set_env_var.outputs.IMAGE_TAG }}" }'
-        env:
-          K8S: 'eks'
-          CONFIG: 'fuel-dev1'
-          ENV: 'fueldevsway.env'
+          echo "K8S=$(echo $k8s)" >> $GITHUB_ENV
+          echo "CONFIG=$(echo $config)" >> $GITHUB_ENV
+          echo "ENV=$(echo $env)" >> $GITHUB_ENV
+      
+      - name: Deploy Ephemeral Test Environment
+        id: set_env_v
+        run: |
+          curl \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
+            https://api.github.com/repos/FuelLabs/fuel-deployment/actions/workflows/deploy-test-env.yml/dispatches \
+            -d '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ steps.set_env_var.outputs.BRANCH }}", "image-tag": "${{ steps.set_env_var.outputs.IMAGE_TAG }}" }'
 
 
