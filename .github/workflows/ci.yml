@@ -52,8 +52,8 @@ jobs:
       - uses: actions/checkout@v3
       # ensure openssl hasn't crept into the dep tree
       - name: Check if openssl is included
-        run: |
-          - ./.github/workflows/scripts/verify_openssl.sh
+        run: ./.github/workflows/scripts/verify_openssl.sh
+
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@master
         if: always() && github.ref == 'refs/heads/master'
