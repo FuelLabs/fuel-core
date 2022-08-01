@@ -319,8 +319,11 @@ impl Dependency {
 
                     // yey we got our coin
                 }
-                Input::MessagePredicate { .. } | Input::MessageSigned { .. } => {
-                    // TODO: handle message id collision between transactions
+                Input::MessagePredicate { message_id, .. }
+                | Input::MessageSigned { message_id, .. } => {
+                    if db.message(*message_id)?.is_none() {
+                        return Err(Error::NotInsertedMessageUnknown.into());
+                    }
                 }
                 Input::Contract { contract_id, .. } => {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
