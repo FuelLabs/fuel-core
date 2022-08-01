@@ -4,6 +4,7 @@ use crate::{
     Config, Error,
 };
 use fuel_core_interfaces::{
+    common::fuel_tx::{Input, MessageId},
     model::{ArcTx, TxInfo},
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
@@ -45,6 +46,18 @@ impl TxPool {
     ) -> anyhow::Result<Vec<ArcTx>> {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into());
+        }
+
+        for input in tx.inputs() {
+            match input {
+                Input::MessagePredicate { message_id, .. }
+                | Input::MessageSigned { message_id, .. } => {
+                    if db.message(*message_id)?.is_none() {
+                        return Err(Error::NotInsertedMessageUnknown.into());
+                    }
+                }
+                _ => {}
+            }
         }
 
         // verify gas price is at least the minimum
@@ -927,7 +940,7 @@ pub mod tests {
             let out = txpool
                 .write()
                 .await
-                .insert_inner(Arc::new(low_tx.clone()), &db)
+                .insert_inner(Arc::new(tx.clone()), &db)
                 .await;
             assert!(out.is_ok());
         }

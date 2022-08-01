@@ -27,6 +27,11 @@ pub trait TxPoolDb:
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
         Storage::<ContractId, Contract>::contains_key(self, &contract_id)
     }
+
+    fn message(&self, message_id: MessageId) -> Result<Option<DaMessage>, DbStateError> {
+        Storage::<MessageId, DaMessage>::get(self, &message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
+    }
 }
 
 #[derive(Clone, Deref, DerefMut)]
@@ -150,6 +155,8 @@ pub struct TxStatusBroadcast {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("Transaction is not inserted. Transaction id does not match any received message from the DA layer.")]
+    NotInsertedMessageUnknown,
     #[error("Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
