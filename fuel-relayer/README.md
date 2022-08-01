@@ -24,7 +24,7 @@ Second finality that we have is related to fuel block attestation time limit, ho
 Example of sliding window:
 ![Sliding Window](../docs/diagrams/fuel_v2_relayer_sliding_window.jpg)
 
-* Problem: How to choose when token deposit event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
+* Problem: How to choose when bridge message event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
 * Solution: introduce `da_height` variable inside fuel block header that will tell at what block we are including validator delegation/withdrawal and token deposits.
 
 There are few rules that `da_height` (da as data availability) need to follow and can be enforced with v2 contract:
@@ -73,7 +73,7 @@ On the database side we have:
 * `StakingDIffs` table: for every da_block it contain staking diff. Staking diff contains un/registration of validator and delegations
 * `ValidatorSet` table: validator set at last finalized da block.
 * `DelegatesIndex` table: One delegation has a list of validators and delegation stakes, when undelegating or adding a new delegation, the old delegation needs to be removed. This index contains list of blocks where delegation happened so that we can traverse it and get that old delegation.
-* `DepositCoin`: table of finalized coins. It will become the table of messages in the new bridging architecture.
+* `DaMessage`: table of finalized bridge messages.
 
 And some DB variables:
 

@@ -4,6 +4,7 @@ use crate::executor::Executor;
 use crate::model::{BlockHeight, FuelBlockDb};
 use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
 use crate::state::IterDirection;
+use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
@@ -81,6 +82,13 @@ impl TxQuery {
                 } else {
                     (0, IterDirection::Forward)
                 };
+
+                if (first.is_some() && before.is_some())
+                    || (after.is_some() && before.is_some())
+                    || (last.is_some() && after.is_some())
+                {
+                    return Err(anyhow!("Wrong argument combination"));
+                }
 
                 let block_id;
                 let tx_id;
@@ -161,7 +169,7 @@ impl TxQuery {
                     )
                 }));
 
-                Ok::<Connection<SortedTxCursor, Transaction>, KvStoreError>(connection)
+                Ok::<Connection<SortedTxCursor, Transaction>, anyhow::Error>(connection)
             },
         )
         .await
@@ -192,6 +200,13 @@ impl TxQuery {
                 } else {
                     (0, IterDirection::Forward)
                 };
+
+                if (first.is_some() && before.is_some())
+                    || (after.is_some() && before.is_some())
+                    || (last.is_some() && after.is_some())
+                {
+                    return Err(anyhow!("Wrong argument combination"));
+                }
 
                 let after = after.map(OwnedTransactionIndexCursor::from);
                 let before = before.map(OwnedTransactionIndexCursor::from);
@@ -246,7 +261,7 @@ impl TxQuery {
                         .map(|item| Edge::new(HexString::from(item.0), Transaction(item.1))),
                 );
 
-                Ok::<Connection<HexString, Transaction>, KvStoreError>(connection)
+                Ok::<Connection<HexString, Transaction>, anyhow::Error>(connection)
             },
         )
         .await

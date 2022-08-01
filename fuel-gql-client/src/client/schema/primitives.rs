@@ -93,6 +93,7 @@ fuel_type_scalar!(AssetId, AssetId);
 fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
+fuel_type_scalar!(MessageId, MessageId);
 
 #[derive(cynic::Scalar, Debug, Clone, Default)]
 pub struct UtxoId(pub HexFormatted<fuel_tx::UtxoId>);

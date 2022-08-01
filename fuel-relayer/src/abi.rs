@@ -7,5 +7,10 @@ pub mod validators {
     super::abigen!(ValidatorSet, "abi/ValidatorSet.json");
 }
 
+pub mod bridge {
+    super::abigen!(Message, "abi/IFuelMessageOutbox.json");
+}
+
+pub use bridge::Message;
 pub use fuel::Fuel;
 pub use validators::ValidatorSet;

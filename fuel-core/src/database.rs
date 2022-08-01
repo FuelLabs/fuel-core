@@ -41,7 +41,7 @@ pub mod code_root;
 pub mod coin;
 pub mod contracts;
 pub mod delegates_index;
-pub mod deposit_coin;
+pub mod message;
 pub mod metadata;
 mod receipts;
 pub mod staking_diffs;
@@ -69,7 +69,7 @@ pub mod columns {
     pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
-    pub const TOKEN_DEPOSITS: u32 = 14;
+    pub const DA_MESSAGES: u32 = 14;
     /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
     /// contain diff between da blocks it contains new registers consensus key and new delegate sets.
@@ -317,7 +317,7 @@ impl RelayerDb for Database {
                 use byteorder::{BigEndian, ReadBytesExt};
                 use std::io::Cursor;
                 let mut i = Cursor::new(i);
-                Self(i.read_u32::<BigEndian>().unwrap_or_default())
+                Self(i.read_u64::<BigEndian>().unwrap_or_default())
             }
         }
         let mut out = Vec::new();
