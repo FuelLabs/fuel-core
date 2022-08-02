@@ -173,6 +173,10 @@ pub enum Error {
         "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
     )]
     NotInsertedCollisionContractId(ContractId),
+    #[error(
+        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
+    )]
+    NotInsertedCollisionMessageId(TxId, MessageId),
     #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}")]
     NotInsertedOutputNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
@@ -193,6 +197,8 @@ pub enum Error {
     NotInsertedIoWrongAmount,
     #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
     NotInsertedIoWrongAssetId,
+    #[error("Transaction is not inserted. The computed message id doesn't match the provided message id.")]
+    NotInsertedIoWrongMessageId,
     #[error(
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]

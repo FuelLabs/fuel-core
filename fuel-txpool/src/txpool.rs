@@ -251,21 +251,23 @@ impl TxPool {
 #[cfg(test)]
 pub mod tests {
     mod helpers {
-        use fuel_core_interfaces::common::fuel_storage::Storage;
-        use fuel_core_interfaces::common::fuel_tx::{
-            Contract, ContractId, MessageId, Transaction, TxId, UtxoId,
+        use fuel_core_interfaces::{
+            common::{
+                fuel_storage::Storage,
+                fuel_tx::{Contract, ContractId, MessageId, UtxoId},
+            },
+            db::{self, KvStoreError},
+            model::{Coin, DaMessage},
+            txpool::TxPoolDb,
         };
-        use fuel_core_interfaces::db;
-        use fuel_core_interfaces::db::KvStoreError;
-        use fuel_core_interfaces::model::{Coin, DaMessage};
-        use fuel_core_interfaces::txpool::TxPoolDb;
-        use std::borrow::Cow;
-        use std::collections::HashMap;
-        use std::sync::{Arc, Mutex};
+        use std::{
+            borrow::Cow,
+            collections::HashMap,
+            sync::{Arc, Mutex},
+        };
 
         #[derive(Default)]
         pub(crate) struct Data {
-            pub tx: HashMap<TxId, Arc<Transaction>>,
             pub coins: HashMap<UtxoId, Coin>,
             pub contracts: HashMap<ContractId, Contract>,
             pub messages: HashMap<MessageId, DaMessage>,
@@ -287,10 +289,7 @@ pub mod tests {
                 Ok(self.data.lock().unwrap().coins.remove(key))
             }
 
-            fn get<'a>(
-                &'a self,
-                key: &UtxoId,
-            ) -> Result<Option<std::borrow::Cow<'a, Coin>>, Self::Error> {
+            fn get<'a>(&'a self, key: &UtxoId) -> Result<Option<Cow<'a, Coin>>, Self::Error> {
                 Ok(self
                     .data
                     .lock()
@@ -313,7 +312,12 @@ pub mod tests {
                 key: &ContractId,
                 value: &Contract,
             ) -> Result<Option<Contract>, Self::Error> {
-                Ok(self.data.lock().unwrap().contracts.insert(*key, value.clone()))
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .insert(*key, value.clone()))
             }
 
             fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
@@ -382,8 +386,9 @@ pub mod tests {
     use super::*;
     use crate::Error;
     use fuel_core_interfaces::common::fuel_storage::Storage;
-    use fuel_core_interfaces::common::fuel_tx::{Address, Input, TransactionBuilder};
+    use fuel_core_interfaces::common::fuel_tx::{Input, TransactionBuilder};
     use fuel_core_interfaces::common::fuel_types::MessageId;
+    use fuel_core_interfaces::model::DaMessage;
     use fuel_core_interfaces::{common::fuel_tx::UtxoId, db::helpers::*, model::CoinStatus};
     use std::cmp::Reverse;
     use std::sync::Arc;
@@ -785,7 +790,7 @@ pub mod tests {
         let da_message_id = MessageId::from([5u8; 32]);
         db.insert(&da_message_id, &Default::default()).unwrap();
 
-        let mut txpool = RwLock::new(TxPool::new(Default::default()));
+        let txpool = RwLock::new(TxPool::new(Default::default()));
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_input(Input::message_predicate(
@@ -815,11 +820,11 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
-        let mut db = helpers::MockDb::default();
+        let db = helpers::MockDb::default();
         // Do not insert any DA messages into the DB to ensure there is no matching message for the
         // tx.
 
-        let mut txpool = RwLock::new(TxPool::new(Default::default()));
+        let txpool = RwLock::new(TxPool::new(Default::default()));
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_input(Input::message_predicate(
@@ -846,63 +851,62 @@ pub mod tests {
     #[tokio::test]
     async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id() {
         let mut db = helpers::MockDb::default();
-        let da_message_id = MessageId::from([5u8; 32]);
-        db.insert(&da_message_id, &Default::default()).unwrap();
+        let message_amount = 10_000;
+        let message = DaMessage {
+            amount: message_amount,
+            ..Default::default()
+        };
+        let da_message_id = message.id();
 
-        let mut txpool = RwLock::new(TxPool::new(Default::default()));
-        let gas_price_high = 1_000_000_u64;
-        let gas_price_low = 1_000_u64;
+        db.insert(&da_message_id, &message).unwrap();
+
+        let txpool = RwLock::new(TxPool::new(Default::default()));
+        let conflicting_message_input = Input::message_predicate(
+            da_message_id.clone(),
+            message.sender,
+            message.recipient,
+            message.amount,
+            message.nonce,
+            message.owner,
+            message.data,
+            Default::default(),
+            Default::default(),
+        );
+        let gas_price_high = 2u64;
+        let gas_price_low = 1u64;
 
         // Insert a tx for the message id with a high gas amount
-        {
-            let tx = TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::message_predicate(
-                    da_message_id.clone().into(),
-                    Default::default(),
-                    Default::default(),
-                    gas_price_high,
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                ))
-                .finalize();
+        let tx_high = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_high)
+            .add_input(conflicting_message_input.clone())
+            .finalize();
 
-            let out = txpool
-                .write()
-                .await
-                .insert_inner(Arc::new(tx.clone()), &db)
-                .await;
-            assert!(out.is_ok());
-        }
+        let out = txpool
+            .write()
+            .await
+            .insert_inner(Arc::new(tx_high.clone()), &db)
+            .await;
+        out.expect("expected successful insertion");
 
         // Insert a tx for the message id with a low gas amount
         // Because the new transaction's id matches an existing transaction, we compare the gas
         // prices of both the new and existing transactions. Since the existing transaction's gas
         // price is higher, we must now reject the new transaction.
-        {
-            let tx = TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::message_predicate(
-                    da_message_id.clone().into(),
-                    Default::default(),
-                    Default::default(),
-                    gas_price_low,
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                ))
-                .finalize();
+        let tx_low = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_low)
+            .add_input(conflicting_message_input)
+            .finalize();
 
-            let out = txpool
-                .write()
-                .await
-                .insert_inner(Arc::new(tx.clone()), &db)
-                .await;
-            assert!(out.is_err());
-        }
+        let out = txpool
+            .write()
+            .await
+            .insert_inner(Arc::new(tx_low.clone()), &db)
+            .await;
+        assert!(out.is_err());
+        assert!(matches!(
+            out.unwrap_err().downcast_ref::<Error>(),
+            Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &da_message_id
+        ));
     }
 
     #[tokio::test]
@@ -911,7 +915,7 @@ pub mod tests {
         let da_message_id = MessageId::from([5u8; 32]);
         db.insert(&da_message_id, &Default::default()).unwrap();
 
-        let mut txpool = RwLock::new(TxPool::new(Default::default()));
+        let txpool = RwLock::new(TxPool::new(Default::default()));
         let gas_price_high = 1_000_000_u64;
         let gas_price_low = 1_000_u64;
 

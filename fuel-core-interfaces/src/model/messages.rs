@@ -24,8 +24,8 @@ impl DaMessage {
         let mut hasher = Hasher::default();
         hasher.input(self.sender);
         hasher.input(self.recipient);
-        hasher.input(self.owner);
         hasher.input(self.nonce.to_be_bytes());
+        hasher.input(self.owner);
         hasher.input(self.amount.to_be_bytes());
         hasher.input(&self.data);
         MessageId::from(*hasher.digest())

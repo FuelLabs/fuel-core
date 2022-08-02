@@ -1,5 +1,6 @@
 use crate::{types::*, Error};
 use anyhow::anyhow;
+use fuel_core_interfaces::common::fuel_types::MessageId;
 use fuel_core_interfaces::{
     common::fuel_tx::{Input, Output, UtxoId},
     model::{ArcTx, Coin, CoinStatus, TxInfo},
@@ -16,9 +17,10 @@ pub struct Dependency {
     coins: HashMap<UtxoId, CoinState>,
     /// Contract-> Tx mapping.
     contracts: HashMap<ContractId, ContractState>,
+    /// messageId -> tx mapping
+    messages: HashMap<MessageId, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
-    // TODO: add mapping of message id relationships in txpool
 }
 
 #[derive(Debug, Clone)]
@@ -55,11 +57,20 @@ impl ContractState {
     }
 }
 
+/// Always in database. No need for optional spenders, as this state would just be removed from
+/// the hashmap if the message id isn't being spent.
+#[derive(Debug, Clone)]
+pub struct MessageState {
+    spent_by: TxId,
+    gas_price: GasPrice,
+}
+
 impl Dependency {
     pub fn new(max_depth: usize) -> Self {
         Self {
             coins: HashMap::new(),
             contracts: HashMap::new(),
+            messages: HashMap::new(),
             max_depth,
         }
     }
@@ -239,6 +250,41 @@ impl Dependency {
         Ok(())
     }
 
+    /// Verifies the integrity of the message ID
+    fn check_if_message_input_matches_id(input: &Input) -> anyhow::Result<()> {
+        match input {
+            Input::MessageSigned {
+                message_id,
+                sender,
+                recipient,
+                nonce,
+                owner,
+                amount,
+                data,
+                ..
+            }
+            | Input::MessagePredicate {
+                message_id,
+                sender,
+                recipient,
+                nonce,
+                owner,
+                amount,
+                data,
+                ..
+            } => {
+                let computed_id =
+                    Input::compute_message_id(&sender, &recipient, *nonce, &owner, *amount, &data);
+                if message_id != &computed_id {
+                    return Err(Error::NotInsertedIoWrongMessageId.into());
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
     /// Check for collision. Used only inside insert function.
     /// Id doesn't change any dependency it just checks if it has possibility to be included.
     /// Returns: (max_depth, db_coins, db_contracts, collided_transactions);
@@ -252,6 +298,7 @@ impl Dependency {
         usize,
         HashMap<UtxoId, CoinState>,
         HashMap<ContractId, ContractState>,
+        HashMap<MessageId, MessageState>,
         Vec<TxId>,
     )> {
         let mut collided: Vec<TxId> = Vec::new();
@@ -259,6 +306,7 @@ impl Dependency {
         let mut max_depth = 0;
         let mut db_coins: HashMap<UtxoId, CoinState> = HashMap::new();
         let mut db_contracts: HashMap<ContractId, ContractState> = HashMap::new();
+        let mut db_messages: HashMap<MessageId, MessageState> = HashMap::new();
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
@@ -321,9 +369,33 @@ impl Dependency {
                 }
                 Input::MessagePredicate { message_id, .. }
                 | Input::MessageSigned { message_id, .. } => {
+                    Self::check_if_message_input_matches_id(input)?;
                     if db.message(*message_id)?.is_none() {
                         return Err(Error::NotInsertedMessageUnknown.into());
                     }
+                    // check mapping of message id to tx id,
+                    // if conflict - compare gas price
+                    // return conflict if any
+
+                    if let Some(state) = self.messages.get(message_id) {
+                        // some other is already attempting to spend this message, compare gas price
+                        if state.gas_price >= tx.gas_price() {
+                            return Err(Error::NotInsertedCollisionMessageId(
+                                state.spent_by,
+                                *message_id,
+                            )
+                            .into());
+                        } else {
+                            collided.push(state.spent_by);
+                        }
+                    }
+                    db_messages.insert(
+                        *message_id,
+                        MessageState {
+                            spent_by: tx.id(),
+                            gas_price: tx.gas_price(),
+                        },
+                    );
                 }
                 Input::Contract { contract_id, .. } => {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
@@ -386,7 +458,7 @@ impl Dependency {
             // collision of other outputs is not possible.
         }
 
-        Ok((max_depth, db_coins, db_contracts, collided))
+        Ok((max_depth, db_coins, db_contracts, db_messages, collided))
     }
 
     /// insert tx inside dependency
@@ -397,7 +469,7 @@ impl Dependency {
         db: &dyn TxPoolDb,
         tx: &'a ArcTx,
     ) -> anyhow::Result<Vec<ArcTx>> {
-        let (max_depth, db_coins, db_contracts, collided) =
+        let (max_depth, db_coins, db_contracts, db_messages, collided) =
             self.check_for_collision(txs, db, tx)?;
 
         // now we are sure that transaction can be included. remove all collided transactions
@@ -426,9 +498,7 @@ impl Dependency {
                         state.used_by.insert(tx.id());
                     }
                 }
-                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
-                    // no dag relationship exists between txs due to input messages
-                }
+                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {}
             }
         }
 
@@ -437,6 +507,8 @@ impl Dependency {
         // for contracts from db that are not found in dependency, we already inserted used_by
         // and are okay to just extend current list
         self.contracts.extend(db_contracts.into_iter());
+        // insert / overwrite all applicable message id spending relations
+        self.messages.extend(db_messages.into_iter());
 
         // iterate over all outputs and insert them, marking them as available.
         for (index, output) in tx.outputs().iter().enumerate() {
