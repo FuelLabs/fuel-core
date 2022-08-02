@@ -915,69 +915,65 @@ pub mod tests {
     #[tokio::test]
     async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
         let mut db = helpers::MockDb::default();
-        let da_message_id = MessageId::from([5u8; 32]);
-        db.insert(&da_message_id, &Default::default()).unwrap();
+        let message_amount = 10_000;
+        let message = DaMessage {
+            amount: message_amount,
+            ..Default::default()
+        };
+        let da_message_id = message.id();
+
+        db.insert(&da_message_id, &message).unwrap();
 
         let txpool = RwLock::new(TxPool::new(Default::default()));
-        let gas_price_high = 1_000_000_u64;
-        let gas_price_low = 1_000_u64;
+
+        let conflicting_message_input = Input::message_predicate(
+            da_message_id.clone(),
+            message.sender,
+            message.recipient,
+            message.amount,
+            message.nonce,
+            message.owner,
+            message.data,
+            Default::default(),
+            Default::default(),
+        );
+        let gas_price_high = 2u64;
+        let gas_price_low = 1u64;
 
         // Insert a tx for the message id with a low gas amount
-        {
-            let tx = TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::message_predicate(
-                    da_message_id.clone().into(),
-                    Default::default(),
-                    Default::default(),
-                    gas_price_low,
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                ))
-                .finalize();
+        let tx_low = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_low)
+            .add_input(conflicting_message_input.clone())
+            .finalize();
 
-            let out = txpool
-                .write()
-                .await
-                .insert_inner(Arc::new(tx.clone()), &db)
-                .await;
-            assert!(out.is_ok());
-        }
+        let out = txpool
+            .write()
+            .await
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await;
+        assert!(out.is_ok());
 
         // Insert a tx for the message id with a high gas amount
         // Because the new transaction's id matches an existing transaction, we compare the gas
         // prices of both the new and existing transactions. Since the existing transaction's gas
         // price is lower, we accept the new transaction and squeeze out the old transaction.
-        {
-            let tx = TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::message_predicate(
-                    da_message_id.clone().into(),
-                    Default::default(),
-                    Default::default(),
-                    gas_price_high,
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                    Default::default(),
-                ))
-                .finalize();
+        let tx_high = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_high)
+            .add_input(conflicting_message_input)
+            .finalize();
 
-            let out = txpool
-                .write()
-                .await
-                .insert_inner(Arc::new(tx.clone()), &db)
-                .await;
-            assert!(out.is_ok());
+        let out = txpool
+            .write()
+            .await
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await;
+        assert!(out.is_ok());
 
-            let mut squeezed_out_txs = out.unwrap();
-            assert_eq!(squeezed_out_txs.len(), 1);
+        let mut squeezed_out_txs = out.unwrap();
+        assert_eq!(squeezed_out_txs.len(), 1);
 
-            let old_tx = squeezed_out_txs.pop();
-            assert!(old_tx.is_some());
-            assert_eq!(old_tx.unwrap().gas_price(), gas_price_low);
-        }
+        let old_tx = squeezed_out_txs.pop();
+        assert!(old_tx.is_some());
+        assert_eq!(old_tx.unwrap().id(), tx_low.id());
     }
 }
