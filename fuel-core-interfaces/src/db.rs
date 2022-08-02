@@ -168,7 +168,7 @@ pub mod helpers {
         /// Dummy contracts
         pub contract: HashMap<ContractId, Contract>,
         /// Dummy da messages.
-        pub messages: HashMap<Bytes32, DaMessage>,
+        pub messages: HashMap<MessageId, DaMessage>,
         /// variable for last committed and finalized fuel height
         pub last_committed_finalized_fuel_height: BlockHeight,
     }
@@ -738,30 +738,6 @@ pub mod helpers {
         }
     }
 
-    impl Storage<MessageId, DaMessage> for DummyDb {
-        type Error = crate::db::Error;
-
-        fn insert(
-            &mut self,
-            _key: &MessageId,
-            _value: &DaMessage,
-        ) -> Result<Option<DaMessage>, Self::Error> {
-            todo!()
-        }
-
-        fn remove(&mut self, _key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
-            todo!()
-        }
-
-        fn get<'a>(&'a self, _key: &MessageId) -> Result<Option<Cow<'a, DaMessage>>, Self::Error> {
-            todo!()
-        }
-
-        fn contains_key(&self, _key: &MessageId) -> Result<bool, Self::Error> {
-            todo!()
-        }
-    }
-
     impl TxPoolDb for DummyDb {
         fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
             Ok(self.data.lock().coins.get(utxo_id).cloned())
@@ -773,24 +749,24 @@ pub mod helpers {
     }
 
     // bridge message. Used by relayer.
-    impl Storage<Bytes32, DaMessage> for DummyDb {
-        type Error = crate::db::KvStoreError;
+    impl Storage<MessageId, DaMessage> for DummyDb {
+        type Error = KvStoreError;
 
         fn insert(
             &mut self,
-            key: &Bytes32,
+            key: &MessageId,
             value: &DaMessage,
         ) -> Result<Option<DaMessage>, Self::Error> {
             Ok(self.data.lock().messages.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &Bytes32) -> Result<Option<DaMessage>, Self::Error> {
+        fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
             Ok(self.data.lock().messages.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            key: &Bytes32,
+            key: &MessageId,
         ) -> Result<Option<std::borrow::Cow<'a, DaMessage>>, Self::Error> {
             Ok(self
                 .data
@@ -800,7 +776,7 @@ pub mod helpers {
                 .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
+        fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
             Ok(self.data.lock().messages.contains_key(key))
         }
     }

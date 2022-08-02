@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
-use fuel_types::{Address, Bytes32};
+use fuel_types::{Address, MessageId};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
@@ -41,7 +41,7 @@ impl StakingDiff {
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<Bytes32, DaMessage, Error = KvStoreError> // bridge messages
+     Storage<MessageId, DaMessage, Error = KvStoreError> // bridge messages
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -54,7 +54,7 @@ pub trait RelayerDb:
         &mut self,
         message: &CheckedDaMessage,
     ) {
-        let _ = Storage::<Bytes32, DaMessage>::insert(self,message.id(),message.as_ref());
+        let _ = Storage::<MessageId, DaMessage>::insert(self,message.id(),message.as_ref());
     }
 
     /// Insert difference make on staking in this particular DA height.

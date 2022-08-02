@@ -267,6 +267,7 @@ pub mod tests {
         pub(crate) struct Data {
             pub tx: HashMap<TxId, Arc<Transaction>>,
             pub coins: HashMap<UtxoId, Coin>,
+            pub contracts: HashMap<ContractId, Contract>,
             pub messages: HashMap<MessageId, DaMessage>,
         }
 
@@ -312,27 +313,33 @@ pub mod tests {
                 key: &ContractId,
                 value: &Contract,
             ) -> Result<Option<Contract>, Self::Error> {
-                todo!()
+                Ok(self.data.lock().unwrap().contracts.insert(*key, value.clone()))
             }
 
             fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
-                todo!()
+                Ok(self.data.lock().unwrap().contracts.remove(key))
             }
 
             fn get<'a>(
                 &'a self,
                 key: &ContractId,
             ) -> Result<Option<Cow<'a, Contract>>, Self::Error> {
-                todo!()
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
             }
 
             fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-                todo!()
+                Ok(self.data.lock().unwrap().contracts.contains_key(key))
             }
         }
 
         impl Storage<MessageId, DaMessage> for MockDb {
-            type Error = db::Error;
+            type Error = db::KvStoreError;
 
             fn insert(
                 &mut self,

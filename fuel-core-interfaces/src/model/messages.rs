@@ -2,7 +2,7 @@ use super::BlockHeight;
 use crate::model::DaBlockHeight;
 use core::ops::Deref;
 use fuel_crypto::Hasher;
-use fuel_types::{Address, Bytes32, Word};
+use fuel_types::{Address, MessageId, Word};
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -20,7 +20,7 @@ pub struct DaMessage {
 }
 
 impl DaMessage {
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> MessageId {
         let mut hasher = Hasher::default();
         hasher.input(self.sender);
         hasher.input(self.recipient);
@@ -28,7 +28,7 @@ impl DaMessage {
         hasher.input(self.nonce.to_be_bytes());
         hasher.input(self.amount.to_be_bytes());
         hasher.input(&self.data);
-        hasher.digest()
+        MessageId::from(*hasher.digest())
     }
 
     pub fn check(self) -> CheckedDaMessage {
@@ -40,11 +40,11 @@ impl DaMessage {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct CheckedDaMessage {
     message: DaMessage,
-    id: Bytes32,
+    id: MessageId,
 }
 
 impl CheckedDaMessage {
-    pub fn id(&self) -> &Bytes32 {
+    pub fn id(&self) -> &MessageId {
         &self.id
     }
 }
