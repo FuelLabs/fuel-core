@@ -99,7 +99,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     }
     txpool.start().await?;
 
-    let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
+    let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
 
     let (tx_consensus, _) = mpsc::channel(100);
     let (tx_transaction, _) = mpsc::channel(100);

@@ -32,7 +32,7 @@ pub struct NetworkOrchestrator {
     tx_block: Sender<BlockBroadcast>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
 
-    db: Arc<Box<dyn P2pDb>>,
+    db: Arc<dyn P2pDb>,
 }
 
 impl NetworkOrchestrator {
@@ -44,7 +44,7 @@ impl NetworkOrchestrator {
         tx_transaction: Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
 
-        db: Arc<Box<dyn P2pDb>>,
+        db: Arc<dyn P2pDb>,
     ) -> Self {
         let (tx_outbound_responses, rx_outbound_responses) = tokio::sync::mpsc::channel(100);
 
@@ -145,7 +145,7 @@ pub struct Service {
 impl Service {
     pub fn new(
         p2p_config: P2PConfig,
-        db: Arc<Box<dyn P2pDb>>,
+        db: Arc<dyn P2pDb>,
         tx_request_event: Sender<P2pRequestEvent>,
         rx_request_event: Receiver<P2pRequestEvent>,
         tx_consensus: Sender<ConsensusBroadcast>,
@@ -235,7 +235,7 @@ pub mod tests {
     async fn start_stop_works() {
         let mut p2p_config = P2PConfig::default_with_network("start_stop_works");
         p2p_config.tcp_port = 4018; // an unused port
-        let db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(FakeDb));
+        let db: Arc<dyn P2pDb> = Arc::new(FakeDb);
 
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
