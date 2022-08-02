@@ -787,20 +787,23 @@ pub mod tests {
     #[tokio::test]
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         let mut db = helpers::MockDb::default();
-        let da_message_id = MessageId::from([5u8; 32]);
+        let message = DaMessage {
+            ..Default::default()
+        };
+        let da_message_id = message.id();
         db.insert(&da_message_id, &Default::default()).unwrap();
 
         let txpool = RwLock::new(TxPool::new(Default::default()));
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_input(Input::message_predicate(
-                da_message_id.clone().into(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
+                da_message_id.clone(),
+                message.sender,
+                message.recipient,
+                message.amount,
+                message.nonce,
+                message.owner,
+                message.data,
                 Default::default(),
                 Default::default(),
             ))
