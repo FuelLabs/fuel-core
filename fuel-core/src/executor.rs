@@ -741,6 +741,7 @@ mod tests {
             util::test_helpers::TestBuilder as TxBuilder,
         },
     };
+    use fuel_core_interfaces::model::DaMessage;
     use itertools::Itertools;
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
@@ -1573,6 +1574,58 @@ mod tests {
         let tx_id = tx.id();
 
         let database = Database::default();
+        let executor = Executor {
+            database: database.clone(),
+            config: Config::local_node(),
+        };
+
+        let mut block = FuelBlock {
+            header: Default::default(),
+            transactions: vec![tx],
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        for idx in 0..2 {
+            let id = UtxoId::new(tx_id, idx);
+            let maybe_utxo = Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+            assert!(maybe_utxo.is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn unspent_message_succeeds_when_msg_da_height_lt_block_da_height() {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let input_amount = 1000;
+
+        let message = DaMessage {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            owner: rng.gen(),
+            nonce: rng.gen(),
+            amount: input_amount,
+            data: vec![],
+            da_height: 0,
+            fuel_block_spend: None,
+        };
+
+        let tx: Transaction = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_message_input(
+                rng.gen(),
+                message.sender,
+                message.recipient,
+                message.amount,
+                message.nonce,
+                vec![],
+            )
+            .finalize();
+        let tx_id = tx.id();
+
+        let database = Database::default();
+
         let executor = Executor {
             database: database.clone(),
             config: Config::local_node(),
