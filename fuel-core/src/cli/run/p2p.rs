@@ -23,7 +23,7 @@ pub struct P2pArgs {
     pub address: Option<IpAddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "port", default_value = "4000")]
+    #[clap(long = "peering-port", default_value = "4001")]
     pub port: u16,
 
     /// Max Block size
