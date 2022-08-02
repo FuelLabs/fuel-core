@@ -46,7 +46,31 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
+  prevent-openssl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      # ensure openssl hasn't crept into the dep tree
+      - name: Check if openssl is included
+        run: ./.github/workflows/scripts/verify_openssl.sh
+
+      - name: Notify if Job Fails
+        uses: ravsamhq/notify-slack-action@master
+        if: always() && github.ref == 'refs/heads/master'
+        with:
+          status: ${{ job.status }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: '{workflow} has {status_message}'
+          message_format: '{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}> : <{run_url}|View Run Results>'
+          footer: ''
+          notify_when: 'failure'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+
   cargo-verifications:
+    needs:
+      - lint-toml-files
+      - prevent-openssl
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -98,7 +122,6 @@ jobs:
   publish-crates:
     # Only do this job if publishing a release
     needs:
-      - lint-toml-files
       - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
@@ -154,21 +177,12 @@ jobs:
 
   publish-docker-image:
     needs:
-      - lint-toml-files
       - cargo-verifications
-
-    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
-      # This is a way to make this job run after publish-crates even if it's skipped on master or pr branches
-      # https://stackoverflow.com/a/69252812/680811
-      - name: fail if any dependent jobs failed
-        if: ${{ contains(needs.*.result, 'failure') }}
-        run: exit 1
-
       - name: Checkout repository
         uses: actions/checkout@v3
 
