@@ -4,6 +4,7 @@ use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
     fuel_types::{Address, AssetId, Bytes32, Salt},
 };
+use fuel_core_interfaces::model::DaMessage;
 use itertools::Itertools;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,7 @@ pub struct ChainConfig {
     pub block_production: ProductionStrategy,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
+    pub da_messages: Option<Vec<DaMessage>>,
     pub transaction_parameters: ConsensusParameters,
 }
 
@@ -29,6 +31,7 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             block_production: ProductionStrategy::Instant,
             transaction_parameters: ConsensusParameters::DEFAULT,
+            da_messages: None,
             initial_state: None,
         }
     }
@@ -63,6 +66,7 @@ impl ChainConfig {
 
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
+            da_messages: None,
             block_production: ProductionStrategy::Instant,
             initial_state: Some(StateConfig {
                 coins: Some(initial_coins),

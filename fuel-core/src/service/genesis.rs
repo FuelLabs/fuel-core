@@ -15,6 +15,7 @@ use fuel_core_interfaces::{
     },
     model::{Coin, CoinStatus},
 };
+use fuel_core_interfaces::model::DaMessage;
 use itertools::Itertools;
 
 impl FuelService {
@@ -32,6 +33,10 @@ impl FuelService {
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_coin_state(database, initial_state)?;
                 Self::init_contracts(database, initial_state)?;
+            }
+
+            if let Some(da_msgs) = &config.chain_conf.da_messages {
+                Self::init_da_messages(database, da_msgs)?;
             }
         }
 
@@ -133,6 +138,16 @@ impl FuelService {
             for (key, value) in contract_state {
                 MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(db, contract_id, key, value)?;
             }
+        }
+        Ok(())
+    }
+
+    fn init_da_messages(
+        db: &mut Database,
+        msgs: &Vec<DaMessage>,
+    ) -> Result<()> {
+        for msg in msgs {
+            Storage::<Bytes32, DaMessage>::insert(db, &msg.id(), &msg)?;
         }
         Ok(())
     }

@@ -44,6 +44,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let chain_conf = ChainConfig {
         chain_name: config.chain_name,
         block_production: config.block_production,
+        da_messages: None,
         initial_state: Some(state_conf),
         transaction_parameters: config.transaction_parameters,
     };
