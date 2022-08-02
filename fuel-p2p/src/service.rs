@@ -146,6 +146,7 @@ mod tests {
     use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
     use libp2p::gossipsub::Topic;
     use libp2p::identity::Keypair;
+    use libp2p::{Multiaddr, PeerId};
     use std::collections::HashMap;
     use std::{sync::Arc, time::Duration};
     use tokio::sync::{mpsc, oneshot};
@@ -181,6 +182,11 @@ mod tests {
         let fuel_p2p_service = FuelP2PService::new(p2p_config).await.unwrap();
 
         fuel_p2p_service
+    }
+
+    /// attaches PeerId to the Multiaddr
+    fn build_bootstrap_node(peer_id: PeerId, address: Multiaddr) -> Multiaddr {
+        format!("{}/p2p/{}", address, peer_id).parse().unwrap()
     }
 
     #[tokio::test]
@@ -251,7 +257,10 @@ mod tests {
 
         // Node B
         p2p_config.tcp_port = 4004;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+            node_a.local_peer_id,
+            node_a_address.clone().unwrap(),
+        )];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // Node C
@@ -297,7 +306,10 @@ mod tests {
 
         // Node B
         p2p_config.tcp_port = 4007;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+            node_a.local_peer_id,
+            node_a_address.clone().unwrap(),
+        )];
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 
         loop {
@@ -394,7 +406,10 @@ mod tests {
 
         // Node B
         p2p_config.tcp_port = port_b;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+            node_a.local_peer_id,
+            node_a_address.clone().unwrap(),
+        )];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         loop {
@@ -472,7 +487,10 @@ mod tests {
 
         // Node B
         p2p_config.tcp_port = 4015;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+            node_a.local_peer_id,
+            node_a_address.clone().unwrap(),
+        )];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let (tx_test_end, mut rx_test_end) = mpsc::channel(1);
@@ -561,7 +579,10 @@ mod tests {
 
         // Node B
         p2p_config.tcp_port = 4017;
-        p2p_config.bootstrap_nodes = vec![(node_a.local_peer_id, node_a_address.clone().unwrap())];
+        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+            node_a.local_peer_id,
+            node_a_address.clone().unwrap(),
+        )];
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);

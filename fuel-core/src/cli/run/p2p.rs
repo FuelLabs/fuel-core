@@ -1,13 +1,12 @@
 use std::{
     net::{IpAddr, Ipv4Addr},
     path::PathBuf,
-    str::FromStr,
     time::Duration,
 };
 
 use clap::Args;
 
-use fuel_p2p::{Keypair, Multiaddr, P2PConfig, PeerId};
+use fuel_p2p::{Keypair, Multiaddr, P2PConfig};
 
 #[derive(Debug, Clone, Args)]
 pub struct P2pArgs {
@@ -31,9 +30,10 @@ pub struct P2pArgs {
     #[clap(long = "max_block_size", default_value = "100_000")]
     pub max_block_size: usize,
 
-    /// Path to the location of where bootstrap nodes are listed
+    /// Addresses of the bootstrap nodes
+    /// They should contain PeerId at the end of the specified Multiaddr
     #[clap(long = "bootstrap_nodes")]
-    pub bootstrap_nodes: Option<PathBuf>,
+    pub bootstrap_nodes: Option<Vec<Multiaddr>>,
 
     /// Allow nodes to be discoverable on the local network
     #[clap(long = "enable_mdns")]
@@ -48,7 +48,7 @@ pub struct P2pArgs {
     pub enable_random_walk: bool,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
-    /// xcept for the ones stored in `bootstrap_nodes`
+    /// except for the ones stored in `bootstrap_nodes`
     #[clap(long = "allow_private_addresses")]
     pub allow_private_addresses: bool,
 
@@ -102,27 +102,6 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             }
         };
 
-        let bootstrap_nodes = {
-            match args.bootstrap_nodes {
-                Some(path) => std::fs::read_to_string(path)?
-                    .lines()
-                    .map(|line| {
-                        let mut item = line.split_whitespace();
-
-                        match (item.next(), item.next()) {
-                            (Some(peer_id), Some(multiaddr)) => {
-                                Ok((PeerId::from_str(peer_id)?, Multiaddr::from_str(multiaddr)?))
-                            }
-                            _ => Err(anyhow::anyhow!("Incorrect format of bootstrap nodes")),
-                        }
-                    })
-                    .filter_map(|v| v.ok())
-                    .collect(),
-
-                _ => vec![],
-            }
-        };
-
         Ok(P2PConfig {
             local_keypair,
             network_name: args.network,
@@ -131,7 +110,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             tcp_port: args.port,
             max_block_size: args.max_block_size,
-            bootstrap_nodes,
+            bootstrap_nodes: args.bootstrap_nodes.unwrap_or(vec![]),
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,

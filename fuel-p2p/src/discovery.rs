@@ -342,7 +342,7 @@ mod tests {
 
     /// helper function for building Discovery Behaviour for testing
     fn build_fuel_discovery(
-        bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
+        bootstrap_nodes: Vec<Multiaddr>,
     ) -> (Swarm<DiscoveryBehaviour>, Multiaddr, PeerId) {
         let keypair = Keypair::generate_secp256k1();
         let public_key = keypair.public();
@@ -390,7 +390,15 @@ mod tests {
         let (first_swarm, first_peer_addr, first_peer_id) = build_fuel_discovery(vec![]);
 
         let mut discovery_swarms = (0..num_of_swarms - 1)
-            .map(|_| build_fuel_discovery(vec![(first_peer_id, first_peer_addr.clone())]))
+            .map(|_| {
+                build_fuel_discovery(vec![format!(
+                    "{}/p2p/{}",
+                    first_peer_addr.clone(),
+                    first_peer_id
+                )
+                .parse()
+                .unwrap()])
+            })
             .collect::<VecDeque<_>>();
 
         discovery_swarms.push_front((first_swarm, first_peer_addr, first_peer_id));

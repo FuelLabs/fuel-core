@@ -34,7 +34,7 @@ pub struct P2PConfig {
     pub max_block_size: usize,
 
     // `DiscoveryBehaviour` related fields
-    pub bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
+    pub bootstrap_nodes: Vec<Multiaddr>,
     pub enable_mdns: bool,
     pub max_peers_connected: usize,
     pub allow_private_addresses: bool,
