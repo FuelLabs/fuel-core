@@ -729,7 +729,7 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
-    use fuel_core_interfaces::model::DaMessage;
+    use fuel_core_interfaces::model::{CheckedDaMessage, DaMessage};
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -1599,67 +1599,106 @@ mod tests {
         }
     }
 
+    /// Helper to build transactions with a message for some of the message tests
+    fn make_tx(rng: &mut StdRng, message: &CheckedDaMessage) -> Transaction {
+        TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(rng.gen(), rng.gen(), 1000, AssetId::default(), 0)
+            .add_output(Output::Change {
+                to: Default::default(),
+                amount: 0,
+                asset_id: AssetId::default(),
+            })
+            .add_unsigned_message_input(
+                rng.gen(),
+                message.sender,
+                message.recipient,
+                message.nonce,
+                message.amount,
+                vec![],
+            )
+            .finalize()
+    }
+
+    /// Helper to build database and executor for some of the message tests
+    async fn make_executor(coins: &[&Input], messages: &[&CheckedDaMessage]) -> Executor {
+        let mut database = Database::default();
+
+        for message in messages {
+            database.insert_da_message(message).await;
+        }
+
+        for coin in coins {
+            if let Input::CoinSigned {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                ..
+            }
+            | Input::CoinPredicate {
+                utxo_id,
+                owner,
+                amount,
+                asset_id,
+                ..
+            } = coin
+            {
+                Storage::<UtxoId, Coin>::insert(
+                    &mut database,
+                    &utxo_id,
+                    &Coin {
+                        owner: *owner,
+                        amount: *amount,
+                        asset_id: *asset_id,
+                        maturity: Default::default(),
+                        status: CoinStatus::Unspent,
+                        block_created: BlockHeight::from(0u64),
+                    },
+                )
+                .unwrap();
+            }
+        }
+
+        Executor {
+            database,
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        }
+    }
+
     #[tokio::test]
     async fn unspent_message_succeeds_when_msg_da_height_lt_block_da_height() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let input_amount = 1000;
 
         let message = (DaMessage {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),
             nonce: rng.gen(),
-            amount: input_amount,
+            amount: 1000,
             data: vec![],
             da_height: 0,
             fuel_block_spend: None,
         })
         .check();
 
-        let tx: Transaction = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                vec![],
-            )
-            .finalize();
+        let tx = make_tx(&mut rng, &message);
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![tx],
+            transactions: vec![tx.clone()],
         };
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        executor
+        make_executor(&[&tx.inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Production)
             .await
             .expect("block execution failed unexpectedly");
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        executor
+        make_executor(&[&tx.inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Validation)
             .await
             .expect("block validation failed unexpectedly");
@@ -1682,45 +1721,39 @@ mod tests {
         .check();
 
         let tx: Transaction = TransactionBuilder::script(vec![], vec![])
+            .add_unsigned_coin_input(rng.gen(), rng.gen(), 1000, AssetId::default(), 0)
+            .add_output(Output::Change {
+                to: Default::default(),
+                amount: 0,
+                asset_id: AssetId::default(),
+            })
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
                 message.recipient,
-                message.amount,
                 message.nonce,
+                message.amount,
                 vec![],
             )
             .finalize();
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![tx],
+            transactions: vec![tx.clone()],
         };
 
-        let executor = Executor {
-            database: Database::default(),
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&tx.inputs()[0]], &[])
+            .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let executor = Executor {
-            database: Database::default(),
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&tx.inputs()[0]], &[])
+            .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
     }
 
@@ -1741,129 +1774,65 @@ mod tests {
         })
         .check();
 
-        let tx: Transaction = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                vec![],
-            )
-            .finalize();
+        let tx = make_tx(&mut rng, &message);
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![tx],
+            transactions: vec![tx.clone()],
         };
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&tx.inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&tx.inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
     }
 
     #[tokio::test]
     async fn message_fails_when_spending_already_spent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let input_amount = 1000;
 
         let message = (DaMessage {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),
             nonce: rng.gen(),
-            amount: input_amount,
+            amount: 1000,
             data: vec![],
-            da_height: 1, // Block has zero da_height
+            da_height: 0,
             fuel_block_spend: None,
         })
         .check();
 
-        let tx1: Transaction = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                vec![],
-            )
-            .finalize();
-
-        let tx2: Transaction = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                vec![],
-            )
-            .finalize();
+        let txs = vec![make_tx(&mut rng, &message), make_tx(&mut rng, &message)];
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![tx1, tx2],
+            transactions: txs.clone(),
         };
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&txs[0].inputs()[0], &txs[1].inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let mut database = Database::default();
-        database.insert_da_message(&message).await;
-
-        let executor = Executor {
-            database,
-            config: Config {
-                utxo_validation: true,
-                ..Config::local_node()
-            },
-        };
-
-        let res = executor
+        let res = make_executor(&[&txs[0].inputs()[0], &txs[1].inputs()[0]], &[&message])
+            .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
+        dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
+
+        panic!();
     }
 }
