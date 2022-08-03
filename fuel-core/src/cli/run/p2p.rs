@@ -34,7 +34,7 @@ pub struct P2pArgs {
     /// Addresses of the bootstrap nodes
     /// They should contain PeerId at the end of the specified Multiaddr
     #[clap(long = "bootstrap_nodes")]
-    pub bootstrap_nodes: Option<Vec<Multiaddr>>,
+    pub bootstrap_nodes: Vec<Multiaddr>,
 
     /// Allow nodes to be discoverable on the local network
     #[clap(long = "enable_mdns")]
@@ -67,7 +67,7 @@ pub struct P2pArgs {
     pub identify_interval: u64,
 
     /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics")]
+    #[clap(long = "topics", default_values = &["new_tx", "new_block", "consensus_vote"])]
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol
@@ -111,7 +111,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             tcp_port: args.peering_port,
             max_block_size: args.max_block_size,
-            bootstrap_nodes: args.bootstrap_nodes.unwrap_or_default(),
+            bootstrap_nodes: args.bootstrap_nodes,
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,
