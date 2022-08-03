@@ -15,7 +15,8 @@ pub struct P2pArgs {
     pub keypair: Option<PathBuf>,
 
     /// The name of the p2p Network
-    #[clap(long = "network")]
+    /// If this value is not provided the p2p network won't start
+    #[clap(long = "network", default_value = "")]
     pub network: String,
 
     /// p2p network's IP Address
@@ -70,15 +71,15 @@ pub struct P2pArgs {
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol
-    #[clap(long = "max_mesh_size")]
+    #[clap(long = "max_mesh_size", default_value = "12")]
     pub max_mesh_size: usize,
 
     /// Choose min mesh size for gossipsub protocol
-    #[clap(long = "min_mesh_size")]
+    #[clap(long = "min_mesh_size", default_value = "4")]
     pub min_mesh_size: usize,
 
     /// Choose ideal mesh size for gossipsub protocol
-    #[clap(long = "ideal_mesh_size")]
+    #[clap(long = "ideal_mesh_size", default_value = "6")]
     pub ideal_mesh_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
