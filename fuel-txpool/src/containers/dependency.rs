@@ -1,8 +1,10 @@
 use crate::{types::*, Error};
 use anyhow::anyhow;
-use fuel_core_interfaces::common::fuel_types::MessageId;
 use fuel_core_interfaces::{
-    common::fuel_tx::{Input, Output, UtxoId},
+    common::{
+        fuel_tx::{Input, Output, UtxoId},
+        fuel_types::MessageId,
+    },
     model::{ArcTx, Coin, CoinStatus, TxInfo},
     txpool::TxPoolDb,
 };

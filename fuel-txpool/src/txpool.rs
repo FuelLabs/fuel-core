@@ -408,8 +408,7 @@ pub mod tests {
         db::helpers::*,
         model::{CoinStatus, DaMessage},
     };
-    use std::cmp::Reverse;
-    use std::sync::Arc;
+    use std::{cmp::Reverse, sync::Arc};
 
     #[tokio::test]
     async fn simple_insertion() {

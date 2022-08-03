@@ -5,9 +5,8 @@ use crate::{
 };
 use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
-use fuel_core_interfaces::common::fuel_types::MessageId;
 use fuel_core_interfaces::{
-    common::fuel_tx::Address,
+    common::{fuel_tx::Address, fuel_types::MessageId},
     model::{
         BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
         ValidatorId, ValidatorStake,
