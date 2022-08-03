@@ -1637,7 +1637,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         executor
@@ -1650,7 +1653,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         executor
@@ -1693,7 +1699,10 @@ mod tests {
 
         let executor = Executor {
             database: Database::default(),
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
@@ -1703,7 +1712,10 @@ mod tests {
 
         let executor = Executor {
             database: Database::default(),
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
@@ -1750,7 +1762,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
@@ -1763,7 +1778,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
@@ -1821,7 +1839,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
@@ -1834,7 +1855,10 @@ mod tests {
 
         let executor = Executor {
             database,
-            config: Config::local_node(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
         };
 
         let res = executor
