@@ -7,15 +7,15 @@ use crate::{
     service::FuelService,
 };
 use anyhow::Result;
+use fuel_core_interfaces::model::DaMessage;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{MerkleStorage, Storage},
-        fuel_tx::{Contract, UtxoId},
+        fuel_tx::{Contract, MessageId, UtxoId},
         fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
     },
     model::{Coin, CoinStatus},
 };
-use fuel_core_interfaces::model::DaMessage;
 use itertools::Itertools;
 
 impl FuelService {
@@ -142,12 +142,9 @@ impl FuelService {
         Ok(())
     }
 
-    fn init_da_messages(
-        db: &mut Database,
-        msgs: &Vec<DaMessage>,
-    ) -> Result<()> {
+    fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
         for msg in msgs {
-            Storage::<Bytes32, DaMessage>::insert(db, &msg.id(), &msg)?;
+            Storage::<MessageId, DaMessage>::insert(db, &msg.id(), msg)?;
         }
 
         Ok(())
