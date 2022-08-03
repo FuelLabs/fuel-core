@@ -95,17 +95,11 @@ impl DiscoveryConfig {
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
         let bootstrap_nodes = bootstrap_nodes
             .into_iter()
-            .filter_map(|node| {
-                if let Some(peer_id) = PeerId::try_from_multiaddr(&node) {
-                    Some((peer_id, node))
-                } else {
-                    None
-                }
-            })
+            .filter_map(|node| PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node)))
             .collect::<Vec<_>>();
 
         for (peer_id, address) in &bootstrap_nodes {
-            kademlia.add_address(&peer_id, address.clone());
+            kademlia.add_address(peer_id, address.clone());
         }
 
         if let Err(e) = kademlia.bootstrap() {
