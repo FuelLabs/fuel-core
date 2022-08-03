@@ -25,10 +25,10 @@ pub struct P2pArgs {
 
     /// p2p network's TCP Port
     #[clap(long = "peering-port", default_value = "4001")]
-    pub port: u16,
+    pub peering_port: u16,
 
     /// Max Block size
-    #[clap(long = "max_block_size", default_value = "100_000")]
+    #[clap(long = "max_block_size", default_value = "100000")]
     pub max_block_size: usize,
 
     /// Addresses of the bootstrap nodes
@@ -54,7 +54,7 @@ pub struct P2pArgs {
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "allow_private_addresses", default_value = "120")]
+    #[clap(long = "connection_idle_timeout  ", default_value = "120")]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
@@ -67,7 +67,7 @@ pub struct P2pArgs {
     pub identify_interval: u64,
 
     /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics", default_value = "new_tx, new_block, consensus_vote")]
+    #[clap(long = "topics")]
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol
@@ -109,7 +109,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             address: args
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
-            tcp_port: args.port,
+            tcp_port: args.peering_port,
             max_block_size: args.max_block_size,
             bootstrap_nodes: args.bootstrap_nodes.unwrap_or_default(),
             enable_mdns: args.enable_mdns,
