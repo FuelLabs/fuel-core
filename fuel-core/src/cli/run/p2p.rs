@@ -110,7 +110,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             tcp_port: args.port,
             max_block_size: args.max_block_size,
-            bootstrap_nodes: args.bootstrap_nodes.unwrap_or(vec![]),
+            bootstrap_nodes: args.bootstrap_nodes.unwrap_or_default(),
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,
