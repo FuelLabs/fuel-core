@@ -115,12 +115,13 @@ impl Executor {
 
             if self.config.utxo_validation {
                 // validate transaction has at least one coin
-                self.verify_tx_has_at_least_one_coin(tx)?;
+                self.verify_tx_has_at_least_one_coin_or_message(tx)?;
                 // validate utxos exist and maturity is properly set
                 self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
                 // validate transaction signature
                 tx.validate_input_signature()
                     .map_err(TransactionValidityError::from)?;
+                // verify that brindge messages exist
             }
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
@@ -345,11 +346,15 @@ impl Executor {
     ///
     /// TODO: This verification really belongs in fuel-tx, and can be removed once
     ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
-    fn verify_tx_has_at_least_one_coin(&self, tx: &Transaction) -> Result<(), Error> {
-        if tx.inputs().iter().filter(|input| input.is_coin()).count() == 0 {
-            Err(TransactionValidityError::NoCoinInput(tx.id()).into())
-        } else {
+    fn verify_tx_has_at_least_one_coin_or_message(&self, tx: &Transaction) -> Result<(), Error> {
+        if tx
+            .inputs()
+            .iter()
+            .any(|input| input.is_coin() || input.is_message())
+        {
             Ok(())
+        } else {
+            Err(TransactionValidityError::NoCoinInput(tx.id()).into())
         }
     }
 
@@ -1602,12 +1607,6 @@ mod tests {
     /// Helper to build transactions with a message for some of the message tests
     fn make_tx(rng: &mut StdRng, message: &CheckedDaMessage) -> Transaction {
         TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_coin_input(rng.gen(), rng.gen(), 1000, AssetId::default(), 0)
-            .add_output(Output::Change {
-                to: Default::default(),
-                amount: 0,
-                asset_id: AssetId::default(),
-            })
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
@@ -1620,43 +1619,11 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    async fn make_executor(coins: &[&Input], messages: &[&CheckedDaMessage]) -> Executor {
+    async fn make_executor(messages: &[&CheckedDaMessage]) -> Executor {
         let mut database = Database::default();
 
         for message in messages {
             database.insert_da_message(message).await;
-        }
-
-        for coin in coins {
-            if let Input::CoinSigned {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                ..
-            }
-            | Input::CoinPredicate {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                ..
-            } = coin
-            {
-                Storage::<UtxoId, Coin>::insert(
-                    &mut database,
-                    &utxo_id,
-                    &Coin {
-                        owner: *owner,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                        maturity: Default::default(),
-                        status: CoinStatus::Unspent,
-                        block_created: BlockHeight::from(0u64),
-                    },
-                )
-                .unwrap();
-            }
         }
 
         Executor {
@@ -1691,13 +1658,13 @@ mod tests {
             transactions: vec![tx.clone()],
         };
 
-        make_executor(&[&tx.inputs()[0]], &[&message])
+        make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await
             .expect("block execution failed unexpectedly");
 
-        make_executor(&[&tx.inputs()[0]], &[&message])
+        make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await
@@ -1720,36 +1687,21 @@ mod tests {
         })
         .check();
 
-        let tx: Transaction = TransactionBuilder::script(vec![], vec![])
-            .add_unsigned_coin_input(rng.gen(), rng.gen(), 1000, AssetId::default(), 0)
-            .add_output(Output::Change {
-                to: Default::default(),
-                amount: 0,
-                asset_id: AssetId::default(),
-            })
-            .add_unsigned_message_input(
-                rng.gen(),
-                message.sender,
-                message.recipient,
-                message.nonce,
-                message.amount,
-                vec![],
-            )
-            .finalize();
+        let tx = make_tx(&mut rng, &message);
 
         let mut block = FuelBlock {
             header: Default::default(),
             transactions: vec![tx.clone()],
         };
 
-        let res = make_executor(&[&tx.inputs()[0]], &[])
+        let res = make_executor(&[]) // No messages in the db
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
         dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let res = make_executor(&[&tx.inputs()[0]], &[])
+        let res = make_executor(&[]) // No messages in the db
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
@@ -1774,21 +1726,19 @@ mod tests {
         })
         .check();
 
-        let tx = make_tx(&mut rng, &message);
-
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![tx.clone()],
+            transactions: vec![make_tx(&mut rng, &message)],
         };
 
-        let res = make_executor(&[&tx.inputs()[0]], &[&message])
+        let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
         dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let res = make_executor(&[&tx.inputs()[0]], &[&message])
+        let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
@@ -1812,21 +1762,19 @@ mod tests {
         })
         .check();
 
-        let txs = vec![make_tx(&mut rng, &message), make_tx(&mut rng, &message)];
-
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: txs.clone(),
+            transactions: vec![make_tx(&mut rng, &message), make_tx(&mut rng, &message)],
         };
 
-        let res = make_executor(&[&txs[0].inputs()[0], &txs[1].inputs()[0]], &[&message])
+        let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
         dbg!(&res);
         assert!(matches!(res, Err(_))); // TODO
 
-        let res = make_executor(&[&txs[0].inputs()[0], &txs[1].inputs()[0]], &[&message])
+        let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
