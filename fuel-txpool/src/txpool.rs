@@ -385,11 +385,14 @@ pub mod tests {
 
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::common::fuel_storage::Storage;
-    use fuel_core_interfaces::common::fuel_tx::{Input, TransactionBuilder};
-    use fuel_core_interfaces::common::fuel_types::MessageId;
-    use fuel_core_interfaces::model::DaMessage;
-    use fuel_core_interfaces::{common::fuel_tx::UtxoId, db::helpers::*, model::CoinStatus};
+    use fuel_core_interfaces::{
+        common::{
+            fuel_storage::Storage,
+            fuel_tx::{TransactionBuilder, UtxoId},
+        },
+        db::helpers::*,
+        model::{CoinStatus, DaMessage},
+    };
     use std::cmp::Reverse;
     use std::sync::Arc;
 
@@ -786,74 +789,51 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
-        let mut db = helpers::MockDb::default();
         let message = DaMessage {
             ..Default::default()
         };
         let da_message_id = message.id();
-        db.insert(&da_message_id, &Default::default()).unwrap();
-
-        let txpool = RwLock::new(TxPool::new(Default::default()));
 
         let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(Input::message_predicate(
-                da_message_id.clone(),
-                message.sender,
-                message.recipient,
-                message.amount,
-                message.nonce,
-                message.owner,
-                message.data,
-                Default::default(),
-                Default::default(),
-            ))
+            .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
-        let out = txpool
-            .write()
-            .await
-            .insert_inner(Arc::new(tx.clone()), &db)
-            .await;
-        assert!(out.is_ok());
+        let mut db = helpers::MockDb::default();
+        db.insert(&da_message_id, &Default::default()).unwrap();
+        let mut txpool = TxPool::new(Default::default());
 
-        let returned_tx = TxPool::find_one(&txpool, &tx.id()).await;
+        txpool
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        let returned_tx = TxPool::find_one(&RwLock::new(txpool), &tx.id()).await;
         let tx_info = returned_tx.unwrap();
         assert_eq!(tx_info.tx().id(), tx.id());
     }
 
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(helpers::create_message_predicate_from_message(
+                &Default::default(),
+            ))
+            .finalize();
+
         let db = helpers::MockDb::default();
         // Do not insert any DA messages into the DB to ensure there is no matching message for the
         // tx.
 
-        let txpool = RwLock::new(TxPool::new(Default::default()));
+        let mut txpool = TxPool::new(Default::default());
 
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(Input::message_predicate(
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ))
-            .finalize();
-
-        let out = txpool
-            .write()
-            .await
+        txpool
             .insert_inner(Arc::new(tx.clone()), &db)
-            .await;
-        assert!(out.is_err());
+            .await
+            .expect_err("should fail");
     }
 
     #[tokio::test]
     async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id() {
-        let mut db = helpers::MockDb::default();
         let message_amount = 10_000;
         let message = DaMessage {
             amount: message_amount,
@@ -861,60 +841,49 @@ pub mod tests {
         };
         let da_message_id = message.id();
 
-        db.insert(&da_message_id, &message).unwrap();
-
-        let txpool = RwLock::new(TxPool::new(Default::default()));
-        let conflicting_message_input = Input::message_predicate(
-            da_message_id.clone(),
-            message.sender,
-            message.recipient,
-            message.amount,
-            message.nonce,
-            message.owner,
-            message.data,
-            Default::default(),
-            Default::default(),
-        );
+        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
         let gas_price_low = 1u64;
 
-        // Insert a tx for the message id with a high gas amount
         let tx_high = TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_high)
             .add_input(conflicting_message_input.clone())
             .finalize();
 
-        let out = txpool
-            .write()
-            .await
-            .insert_inner(Arc::new(tx_high.clone()), &db)
-            .await;
-        out.expect("expected successful insertion");
-
-        // Insert a tx for the message id with a low gas amount
-        // Because the new transaction's id matches an existing transaction, we compare the gas
-        // prices of both the new and existing transactions. Since the existing transaction's gas
-        // price is higher, we must now reject the new transaction.
         let tx_low = TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price_low)
             .add_input(conflicting_message_input)
             .finalize();
 
-        let out = txpool
-            .write()
+        let mut db = helpers::MockDb::default();
+        db.insert(&da_message_id, &message).unwrap();
+
+        let mut txpool = TxPool::new(Default::default());
+
+        // Insert a tx for the message id with a high gas amount
+        txpool
+            .insert_inner(Arc::new(tx_high.clone()), &db)
             .await
+            .expect("expected successful insertion");
+
+        // Insert a tx for the message id with a low gas amount
+        // Because the new transaction's id matches an existing transaction, we compare the gas
+        // prices of both the new and existing transactions. Since the existing transaction's gas
+        // price is higher, we must now reject the new transaction.
+        let err = txpool
             .insert_inner(Arc::new(tx_low.clone()), &db)
-            .await;
-        assert!(out.is_err());
+            .await
+            .expect_err("expected failure");
+
+        // check error
         assert!(matches!(
-            out.unwrap_err().downcast_ref::<Error>(),
+            err.downcast_ref::<Error>(),
             Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &da_message_id
         ));
     }
 
     #[tokio::test]
     async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
-        let mut db = helpers::MockDb::default();
         let message_amount = 10_000;
         let message = DaMessage {
             amount: message_amount,
@@ -922,21 +891,7 @@ pub mod tests {
         };
         let da_message_id = message.id();
 
-        db.insert(&da_message_id, &message).unwrap();
-
-        let txpool = RwLock::new(TxPool::new(Default::default()));
-
-        let conflicting_message_input = Input::message_predicate(
-            da_message_id.clone(),
-            message.sender,
-            message.recipient,
-            message.amount,
-            message.nonce,
-            message.owner,
-            message.data,
-            Default::default(),
-            Default::default(),
-        );
+        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
         let gas_price_low = 1u64;
 
@@ -946,12 +901,15 @@ pub mod tests {
             .add_input(conflicting_message_input.clone())
             .finalize();
 
-        let out = txpool
-            .write()
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+
+        let mut txpool = TxPool::new(Default::default());
+
+        txpool
+            .insert_inner(Arc::new(tx_low.clone()), &db)
             .await
-            .insert_inner(Arc::new(tx.clone()), &db)
-            .await;
-        assert!(out.is_ok());
+            .expect("should succeed");
 
         // Insert a tx for the message id with a high gas amount
         // Because the new transaction's id matches an existing transaction, we compare the gas
@@ -962,18 +920,13 @@ pub mod tests {
             .add_input(conflicting_message_input)
             .finalize();
 
-        let out = txpool
-            .write()
+        let squeezed_out_txs = txpool
+            .insert_inner(Arc::new(tx_high.clone()), &db)
             .await
-            .insert_inner(Arc::new(tx.clone()), &db)
-            .await;
-        assert!(out.is_ok());
+            .expect("should succeed");
 
         let mut squeezed_out_txs = out.unwrap();
         assert_eq!(squeezed_out_txs.len(), 1);
-
-        let old_tx = squeezed_out_txs.pop();
-        assert!(old_tx.is_some());
-        assert_eq!(old_tx.unwrap().id(), tx_low.id());
+        assert_eq!(squeezed_out_txs[0].id(), tx_low.id());
     }
 }

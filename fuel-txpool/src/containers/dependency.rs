@@ -274,7 +274,7 @@ impl Dependency {
                 ..
             } => {
                 let computed_id =
-                    Input::compute_message_id(&sender, &recipient, *nonce, &owner, *amount, &data);
+                    Input::compute_message_id(sender, recipient, *nonce, owner, *amount, data);
                 if message_id != &computed_id {
                     return Err(Error::NotInsertedIoWrongMessageId.into());
                 }
@@ -602,18 +602,14 @@ impl Dependency {
                     // 1. coin state was already removed if parent tx was also removed, no cleanup required.
                     // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
                     // 3. coin state can be removed if this is a database coin, as no other txs are involved.
-                    let mut rem_coin = false;
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         if !state.is_in_database() {
                             // case 2
                             state.is_spend_by = None;
                         } else {
                             // case 3
-                            rem_coin = true;
+                            self.coins.remove(utxo_id);
                         }
-                    }
-                    if rem_coin {
-                        self.coins.remove(utxo_id);
                     }
                 }
                 Input::Contract { contract_id, .. } => {
@@ -623,7 +619,6 @@ impl Dependency {
                     // 2. contract state exists and this tx needs to be removed as a user of it.
                     // 2.a. contract state can be removed if it's from the database and this is the
                     //      last tx to use it, since no other txs are involved.
-                    let mut rem_contract = false;
                     if let Some(state) = self.contracts.get_mut(contract_id) {
                         state.used_by.remove(&tx.id());
                         // if contract list is empty and is in db, flag contract state for removal.
