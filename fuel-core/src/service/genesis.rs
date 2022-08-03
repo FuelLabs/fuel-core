@@ -149,6 +149,7 @@ impl FuelService {
         for msg in msgs {
             Storage::<Bytes32, DaMessage>::insert(db, &msg.id(), &msg)?;
         }
+
         Ok(())
     }
 
