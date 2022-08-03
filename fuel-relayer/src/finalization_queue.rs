@@ -6,7 +6,7 @@ use crate::{
 use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    common::fuel_tx::{Address, Bytes32},
+    common::{fuel_tx::Address, fuel_types::MessageId},
     model::{
         BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
         ValidatorId, ValidatorStake,
@@ -43,7 +43,7 @@ pub struct DaBlockDiff {
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     /// bridge messages (e.g. erc20 or nft assets)
-    pub messages: HashMap<Bytes32, CheckedDaMessage>,
+    pub messages: HashMap<MessageId, CheckedDaMessage>,
 }
 
 impl DaBlockDiff {

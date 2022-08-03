@@ -250,11 +250,165 @@ impl TxPool {
 
 #[cfg(test)]
 pub mod tests {
+    mod helpers {
+        use fuel_core_interfaces::common::fuel_tx::Input;
+        use fuel_core_interfaces::{
+            common::{
+                fuel_storage::Storage,
+                fuel_tx::{Contract, ContractId, MessageId, UtxoId},
+            },
+            db::{self, KvStoreError},
+            model::{Coin, DaMessage},
+            txpool::TxPoolDb,
+        };
+        use std::{
+            borrow::Cow,
+            collections::HashMap,
+            sync::{Arc, Mutex},
+        };
+
+        #[derive(Default)]
+        pub(crate) struct Data {
+            pub coins: HashMap<UtxoId, Coin>,
+            pub contracts: HashMap<ContractId, Contract>,
+            pub messages: HashMap<MessageId, DaMessage>,
+        }
+
+        #[derive(Default)]
+        pub(crate) struct MockDb {
+            pub data: Arc<Mutex<Data>>,
+        }
+
+        impl Storage<UtxoId, Coin> for MockDb {
+            type Error = KvStoreError;
+
+            fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
+            }
+
+            fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.remove(key))
+            }
+
+            fn get<'a>(&'a self, key: &UtxoId) -> Result<Option<Cow<'a, Coin>>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .coins
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
+            }
+
+            fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
+                Ok(self.data.lock().unwrap().coins.contains_key(key))
+            }
+        }
+
+        impl Storage<ContractId, Contract> for MockDb {
+            type Error = db::Error;
+
+            fn insert(
+                &mut self,
+                key: &ContractId,
+                value: &Contract,
+            ) -> Result<Option<Contract>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .insert(*key, value.clone()))
+            }
+
+            fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
+                Ok(self.data.lock().unwrap().contracts.remove(key))
+            }
+
+            fn get<'a>(
+                &'a self,
+                key: &ContractId,
+            ) -> Result<Option<Cow<'a, Contract>>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
+            }
+
+            fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
+                Ok(self.data.lock().unwrap().contracts.contains_key(key))
+            }
+        }
+
+        impl Storage<MessageId, DaMessage> for MockDb {
+            type Error = db::KvStoreError;
+
+            fn insert(
+                &mut self,
+                key: &MessageId,
+                value: &DaMessage,
+            ) -> Result<Option<DaMessage>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .messages
+                    .insert(*key, value.clone()))
+            }
+
+            fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
+                Ok(self.data.lock().unwrap().messages.remove(key))
+            }
+
+            fn get<'a>(
+                &'a self,
+                key: &MessageId,
+            ) -> Result<Option<Cow<'a, DaMessage>>, Self::Error> {
+                Ok(self
+                    .data
+                    .lock()
+                    .unwrap()
+                    .messages
+                    .get(key)
+                    .map(|i| Cow::Owned(i.clone())))
+            }
+
+            fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
+                Ok(self.data.lock().unwrap().messages.contains_key(key))
+            }
+        }
+
+        impl TxPoolDb for MockDb {}
+
+        pub(crate) fn create_message_predicate_from_message(message: &DaMessage) -> Input {
+            Input::message_predicate(
+                message.id(),
+                message.sender,
+                message.recipient,
+                message.amount,
+                message.nonce,
+                message.owner,
+                message.data.clone(),
+                Default::default(),
+                Default::default(),
+            )
+        }
+    }
+
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::{common::fuel_tx::UtxoId, db::helpers::*, model::CoinStatus};
-    use std::cmp::Reverse;
-    use std::sync::Arc;
+    use fuel_core_interfaces::{
+        common::{
+            fuel_storage::Storage,
+            fuel_tx::{TransactionBuilder, UtxoId},
+        },
+        db::helpers::*,
+        model::{CoinStatus, DaMessage},
+    };
+    use std::{cmp::Reverse, sync::Arc};
 
     #[tokio::test]
     async fn simple_insertion() {
@@ -645,5 +799,234 @@ pub mod tests {
 
         let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+    }
+
+    #[tokio::test]
+    async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
+        let message = DaMessage {
+            ..Default::default()
+        };
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(helpers::create_message_predicate_from_message(&message))
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+        let mut txpool = TxPool::new(Default::default());
+
+        txpool
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        let returned_tx = TxPool::find_one(&RwLock::new(txpool), &tx.id()).await;
+        let tx_info = returned_tx.unwrap();
+        assert_eq!(tx_info.tx().id(), tx.id());
+    }
+
+    #[tokio::test]
+    async fn tx_rejected_when_input_message_id_is_spent() {
+        let message = DaMessage {
+            fuel_block_spend: Some(1u64.into()),
+            ..Default::default()
+        };
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(helpers::create_message_predicate_from_message(&message))
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+        let mut txpool = TxPool::new(Default::default());
+
+        let err = txpool
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await
+            .expect_err("should fail");
+
+        // check error
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedInputMessageIdSpent(msg_id)) if msg_id == &message.id()
+        ));
+    }
+
+    #[tokio::test]
+    async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
+        let message = DaMessage::default();
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(helpers::create_message_predicate_from_message(&message))
+            .finalize();
+
+        let db = helpers::MockDb::default();
+        // Do not insert any DA messages into the DB to ensure there is no matching message for the
+        // tx.
+
+        let mut txpool = TxPool::new(Default::default());
+
+        let err = txpool
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await
+            .expect_err("should fail");
+
+        // check error
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedInputMessageUnknown(msg_id)) if msg_id == &message.id()
+        ));
+    }
+
+    #[tokio::test]
+    async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id() {
+        let message_amount = 10_000;
+        let message = DaMessage {
+            amount: message_amount,
+            ..Default::default()
+        };
+
+        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
+        let gas_price_high = 2u64;
+        let gas_price_low = 1u64;
+
+        let tx_high = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_high)
+            .add_input(conflicting_message_input.clone())
+            .finalize();
+
+        let tx_low = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_low)
+            .add_input(conflicting_message_input)
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+
+        let mut txpool = TxPool::new(Default::default());
+
+        // Insert a tx for the message id with a high gas amount
+        txpool
+            .insert_inner(Arc::new(tx_high.clone()), &db)
+            .await
+            .expect("expected successful insertion");
+
+        // Insert a tx for the message id with a low gas amount
+        // Because the new transaction's id matches an existing transaction, we compare the gas
+        // prices of both the new and existing transactions. Since the existing transaction's gas
+        // price is higher, we must now reject the new transaction.
+        let err = txpool
+            .insert_inner(Arc::new(tx_low.clone()), &db)
+            .await
+            .expect_err("expected failure");
+
+        // check error
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &message.id()
+        ));
+    }
+
+    #[tokio::test]
+    async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
+        let message_amount = 10_000;
+        let message = DaMessage {
+            amount: message_amount,
+            ..Default::default()
+        };
+
+        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
+        let gas_price_high = 2u64;
+        let gas_price_low = 1u64;
+
+        // Insert a tx for the message id with a low gas amount
+        let tx_low = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_low)
+            .add_input(conflicting_message_input.clone())
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+
+        let mut txpool = TxPool::new(Default::default());
+
+        txpool
+            .insert_inner(Arc::new(tx_low.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        // Insert a tx for the message id with a high gas amount
+        // Because the new transaction's id matches an existing transaction, we compare the gas
+        // prices of both the new and existing transactions. Since the existing transaction's gas
+        // price is lower, we accept the new transaction and squeeze out the old transaction.
+        let tx_high = TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price_high)
+            .add_input(conflicting_message_input)
+            .finalize();
+
+        let squeezed_out_txs = txpool
+            .insert_inner(Arc::new(tx_high.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        assert_eq!(squeezed_out_txs.len(), 1);
+        assert_eq!(squeezed_out_txs[0].id(), tx_low.id());
+    }
+
+    #[tokio::test]
+    async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
+        // tx1 (message 1, message 2) gas_price 2
+        // tx2 (message 1) gas_price 3
+        //   squeezes tx1 with higher gas price
+        // tx3 (message 2) gas_price 1
+        //   works since tx1 is no longer part of txpool state even though gas price is less
+
+        let message_1 = DaMessage {
+            amount: 10_000,
+            ..Default::default()
+        };
+        let message_2 = DaMessage {
+            amount: 20_000,
+            ..Default::default()
+        };
+
+        let message_input_1 = helpers::create_message_predicate_from_message(&message_1);
+        let message_input_2 = helpers::create_message_predicate_from_message(&message_2);
+
+        // Insert a tx for the message id with a low gas amount
+        let tx_1 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(2)
+            .add_input(message_input_1.clone())
+            .add_input(message_input_2.clone())
+            .finalize();
+
+        let tx_2 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(3)
+            .add_input(message_input_1.clone())
+            .finalize();
+
+        let tx_3 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(1)
+            .add_input(message_input_2.clone())
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message_1.id(), &message_1).unwrap();
+        db.insert(&message_2.id(), &message_2).unwrap();
+        let mut txpool = TxPool::new(Default::default());
+
+        txpool
+            .insert_inner(Arc::new(tx_1.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        txpool
+            .insert_inner(Arc::new(tx_2.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        txpool
+            .insert_inner(Arc::new(tx_3.clone()), &db)
+            .await
+            .expect("should succeed");
     }
 }
