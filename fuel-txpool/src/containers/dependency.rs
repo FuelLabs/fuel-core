@@ -371,13 +371,17 @@ impl Dependency {
                 }
                 Input::MessagePredicate { message_id, .. }
                 | Input::MessageSigned { message_id, .. } => {
+                    // verify message id integrity
                     Self::check_if_message_input_matches_id(input)?;
-                    if db.message(*message_id)?.is_none() {
-                        return Err(Error::NotInsertedMessageUnknown.into());
+                    // since message id is derived, we don't need to double check all the fields
+                    if let Some(msg) = db.message(*message_id)? {
+                        // return an error if spent block is set
+                        if msg.fuel_block_spend.is_some() {
+                            return Err(Error::NotInsertedInputMessageIdSpent(*message_id).into());
+                        }
+                    } else {
+                        return Err(Error::NotInsertedInputMessageUnknown(*message_id).into());
                     }
-                    // check mapping of message id to tx id,
-                    // if conflict - compare gas price
-                    // return conflict if any
 
                     if let Some(state) = self.messages.get(message_id) {
                         // some other is already attempting to spend this message, compare gas price

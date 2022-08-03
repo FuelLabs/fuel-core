@@ -813,7 +813,7 @@ pub mod tests {
             .finalize();
 
         let mut db = helpers::MockDb::default();
-        db.insert(&da_message_id, &Default::default()).unwrap();
+        db.insert(&message.id(), &message).unwrap();
         let mut txpool = TxPool::new(Default::default());
 
         txpool
@@ -824,6 +824,33 @@ pub mod tests {
         let returned_tx = TxPool::find_one(&RwLock::new(txpool), &tx.id()).await;
         let tx_info = returned_tx.unwrap();
         assert_eq!(tx_info.tx().id(), tx.id());
+    }
+
+    #[tokio::test]
+    async fn tx_rejected_when_input_message_id_is_spent() {
+        let message = DaMessage {
+            fuel_block_spend: Some(1u64.into()),
+            ..Default::default()
+        };
+
+        let tx = TransactionBuilder::script(vec![], vec![])
+            .add_input(helpers::create_message_predicate_from_message(&message))
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message.id(), &message).unwrap();
+        let mut txpool = TxPool::new(Default::default());
+
+        let err = txpool
+            .insert_inner(Arc::new(tx.clone()), &db)
+            .await
+            .expect_err("should fail");
+
+        // check error
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedInputMessageIdSpent(msg_id)) if msg_id == &message.id()
+        ));
     }
 
     #[tokio::test]
@@ -853,7 +880,6 @@ pub mod tests {
             amount: message_amount,
             ..Default::default()
         };
-        let da_message_id = message.id();
 
         let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
@@ -870,7 +896,7 @@ pub mod tests {
             .finalize();
 
         let mut db = helpers::MockDb::default();
-        db.insert(&da_message_id, &message).unwrap();
+        db.insert(&message.id(), &message).unwrap();
 
         let mut txpool = TxPool::new(Default::default());
 
@@ -892,7 +918,7 @@ pub mod tests {
         // check error
         assert!(matches!(
             err.downcast_ref::<Error>(),
-            Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &da_message_id
+            Some(Error::NotInsertedCollisionMessageId(tx_id, msg_id)) if tx_id == &tx_high.id() && msg_id == &message.id()
         ));
     }
 

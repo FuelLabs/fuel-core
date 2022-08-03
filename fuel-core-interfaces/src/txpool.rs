@@ -155,8 +155,6 @@ pub struct TxStatusBroadcast {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
-    #[error("Transaction is not inserted. Transaction id does not match any received message from the DA layer.")]
-    NotInsertedMessageUnknown,
     #[error("Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
@@ -187,6 +185,10 @@ pub enum Error {
     NotInsertedInputUtxoIdNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
+    #[error("Transaction is not inserted. Message is spent: {0:#x}")]
+    NotInsertedInputMessageIdSpent(MessageId),
+    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
+    NotInsertedInputMessageUnknown(MessageId),
     #[error(
         "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
     )]
