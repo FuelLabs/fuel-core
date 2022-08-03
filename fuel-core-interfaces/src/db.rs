@@ -188,9 +188,6 @@ pub mod helpers {
             // one higher gas_price transfer tx4 then tx2
             // tx5 that depends on tx1 contract
             // tx6 same as tx1 but without coin output
-            // tx that has message input inside db
-            // tx that has message input not inside db
-            // tx that has conflicting message id
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
             let tx1 = Transaction::Script {
