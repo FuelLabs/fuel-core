@@ -22,15 +22,15 @@ In order to stop and remove the fuel-core container, run at your command line:
 docker-compose down
 ```
 
-Note: Linx, Unix, and Windows operating systems are supported for docker-compose deployment option.
+Note: Linux, Unix, and Windows operating systems are supported for docker-compose deployment option.
 
-# Fuel Client Deployment on Kubernetes (k8s)
+## Fuel Client Deployment on Kubernetes (k8s)
 
 In order to deploy Fuel Client on k8s you must:
 
 1) Deploy [fuel-core helm chart][fuel-helm-chart] to your k8s cluster
 
-## Prerequisites
+### Prerequisites
 
 Before proceeding make sure to have these software packages installed on your machine:
 
@@ -43,11 +43,13 @@ Before proceeding make sure to have these software packages installed on your ma
 4) [gettext][gettext-cli]: Install gettext for your OS
 
 5) AWS (for EKS deployment only):
+
 - [aws cli v2][aws-cli]: Install latest version of aws cli v2
 
 - [aws-iam-authenticator][iam-auth]: Install to authenticate to EKS cluster via AWS IAM
 
 - IAM user(s) with AWS access keys with following IAM access:
+
 ```json
 {
     "Version": "2012-10-17",
@@ -100,33 +102,33 @@ Before proceeding make sure to have these software packages installed on your ma
 
 Note: Currently only Linux and Unix operating systems are supported for terraform creation of a k8s cluster.
 
-## Deploying to k8s Cluster
+### Deploying to k8s Cluster
 
-### k8s Cluster Configuration
+#### k8s Cluster Configuration
 
 The current k8s cluster configuration is based on a single [env][env-file] file.
 
 You will need to customize the following environment variables as needed (for variables not needed - keep the defaults):
 
-| ENV Variable                   |  Script Usage             | Description                                                                                       |
-|--------------------------------|---------------------------|---------------------------------------------------------------------------------------------------|
-| k8s_provider                   |  all                      | your kubernetes provider name, possible options: eks                                              |
-| k8s_namespace                  |  fuel-core-deploy         | your kubernetes namespace for fuel-core deployment                                                |
-| fuel_core_ingress_dns          |  fuel-core-ingress-deploy | the custom dns address for the fuel-core ingress                                                  | 
-| fuel_core_ingress_http_port    |  fuel-core-ingress-deploy | the custom port for the fuel-core ingress                                                         |    
-| fuel_core_image_repository     |  fuel-core-deploy         | fuel-core ghcr image registry URI                                                                 |   
-| fuel_core_image_tag            |  fuel-core-deploy         | fuel-core ghcr image tag                                                                          | 
-| fuel_core_pod_replicas         |  fuel-core-deploy         | number of fuel-core pod replicas                                                                  | 
-| pvc_storage_class              |  fuel-core-deploy         | Storage class for the persistent volume                                                           | 
-| pvc_storage_requests           |  fuel-core-deploy         | Th size of the request for the persistent volume                                                  |
+| ENV Variable                | Script Usage             | Description                                          |
+|-----------------------------|--------------------------|------------------------------------------------------|
+| k8s_provider                | all                      | your kubernetes provider name, possible options: eks |
+| k8s_namespace               | fuel-core-deploy         | your kubernetes namespace for fuel-core deployment   |
+| fuel_core_ingress_dns       | fuel-core-ingress-deploy | the custom dns address for the fuel-core ingress     |
+| fuel_core_ingress_http_port | fuel-core-ingress-deploy | the custom port for the fuel-core ingress            |
+| fuel_core_image_repository  | fuel-core-deploy         | fuel-core ghcr image registry URI                    |
+| fuel_core_image_tag         | fuel-core-deploy         | fuel-core ghcr image tag                             |
+| fuel_core_pod_replicas      | fuel-core-deploy         | number of fuel-core pod replicas                     |
+| pvc_storage_class           | fuel-core-deploy         | Storage class for the persistent volume              |
+| pvc_storage_requests        | fuel-core-deploy         | Th size of the request for the persistent volume     |
 
 Notes:
 
 - fuel-core-deploy refers to [fuel-core-deploy][fuel-deploy-script] script
 
-## Deploying Fuel Client on k8s
+### Deploying Fuel Client on k8s
 
-Now that the k8s cluster is setup - you can deploy the fuel-core helm chart via the [fuel-core-deploy][fuel-deploy-script]. 
+Now that the k8s cluster is setup - you can deploy the fuel-core helm chart via the [fuel-core-deploy][fuel-deploy-script].
 
 ```bash
   ./fuel-core-deploy.sh
@@ -155,9 +157,9 @@ NAME                                       DESIRED   CURRENT   READY   AGE
 replicaset.apps/fuel-core-k8s-5f58c6fcbd   1         1         1       131m 
 ```
 
-If the "STATUS" is deployed, the fuel-core helm chart has been deployed successfully. 
+If the "STATUS" is deployed, the fuel-core helm chart has been deployed successfully.
 
-Having fuel-core pod(s) running and a service associated with an External IP, load balancer DNS address 
+Having fuel-core pod(s) running and a service associated with an External IP, load balancer DNS address
 further means the helm chart was deployed successfully.
 
 If the helm chart deployments fails and/or the fuel-core pod(s) are not healthy, then you will need to delete the helm chart via [fuel-core-delete][fuel-delete-script] script:
@@ -168,7 +170,7 @@ If the helm chart deployments fails and/or the fuel-core pod(s) are not healthy,
 
 Then re-run the fuel-core-deploy script.
 
-## Deploying Fuel Ingress on k8s
+### Deploying Fuel Ingress on k8s
 
 In order to serve external HTTP and/or HTTPS traffic, provide load balancing, and SSL termination to your newly deployed fuel-core pod, an [ingress][ingress-def] k8s object must be deployed.
 
@@ -176,7 +178,7 @@ Before deploying your fuel ingress, you must select a 'fuel_core_ingress_dns' en
 
 Additionally 'fuel_core_ingress_http_port' env parameter must be selected for the http port, the default is port 80.
 
-In order to support SSL certificate creation for your custom ingress DNS, you must select an 'letsencrypt_email' env which is an email address you have access to renew your letsencrypt certificate when needed. [Certificate manager][cert-manager] is used to issue the custom certificate via letsnencrypt 
+In order to support SSL certificate creation for your custom ingress DNS, you must select an 'letsencrypt_email' env which is an email address you have access to renew your letsencrypt certificate when needed. [Certificate manager][cert-manager] is used to issue the custom certificate via letsencrypt
 
 For fuel ingress is deployed via [fuel-core-ingress-deploy][fuel-core-ingress-deploy] script:
 
@@ -190,7 +192,7 @@ It will take several minutes for ingress to be deployed and an external address 
 % kubectl get ingress -n fuel-core
 NAME                CLASS    HOSTS              ADDRESS                                                    PORTS     AGE
 fuel-core-ingress   <none>   node.example.io   xxxxxxxxxxxxxxxxxxxxxxxxxxxxx.elb.us-east-1.amazonaws.com   80, 443   3d21h
-``` 
+```
 
 Create a DNS record based on that ADDRESS value in your DNS registrar and your fuel-core application will now be served at your DNS address.
 

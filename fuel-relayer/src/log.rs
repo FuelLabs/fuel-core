@@ -62,7 +62,7 @@ pub enum EthEventLog {
         delegates: Vec<ValidatorId>,
         amounts: Vec<u64>,
     },
-    FuelBlockCommited {
+    FuelBlockCommitted {
         block_root: Bytes32,
         height: Word,
     },
@@ -223,9 +223,9 @@ impl TryFrom<&Log> for EthEventLog {
                         .collect(),
                 }
             }
-            n if n == *config::ETH_FUEL_BLOCK_COMMITED => {
+            n if n == *config::ETH_FUEL_BLOCK_COMMITTED => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for FuelBlockCommited"));
+                    return Err(anyhow!("Malformed topics for FuelBlockCommitted"));
                 }
                 let block_root = unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
 
@@ -233,7 +233,7 @@ impl TryFrom<&Log> for EthEventLog {
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;
 
-                Self::FuelBlockCommited { block_root, height }
+                Self::FuelBlockCommitted { block_root, height }
             }
             _ => Self::Unknown,
         };
@@ -386,7 +386,7 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_fuel_block_commited(
+    pub fn eth_log_fuel_block_committed(
         eth_block: u64,
         block_root: Bytes32,
         fuel_height: u32,
@@ -394,7 +394,7 @@ pub mod tests {
         let t = log_default(
             eth_block,
             vec![
-                *config::ETH_FUEL_BLOCK_COMMITED,
+                *config::ETH_FUEL_BLOCK_COMMITTED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
             ],
@@ -405,7 +405,7 @@ pub mod tests {
 
     fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
         Log {
-            address: H160::zero(), // we dont check or use this
+            address: H160::zero(), // we don't check or use this
             topics,
             data: EthersBytes(data),
             block_hash: None,
@@ -552,13 +552,13 @@ pub mod tests {
     }
 
     #[test]
-    fn eth_event_fuel_block_comit_from_log() {
+    fn eth_event_fuel_block_commit_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block = rng.gen();
         let block_root = rng.gen();
         let height: u32 = rng.gen();
 
-        let log = eth_log_fuel_block_commited(eth_block, block_root, height);
+        let log = eth_log_fuel_block_committed(eth_block, block_root, height);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -570,7 +570,7 @@ pub mod tests {
         let height = height as u64;
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::FuelBlockCommited { block_root, height },
+            EthEventLog::FuelBlockCommitted { block_root, height },
             "Decoded log does not match data we encoded"
         );
     }
