@@ -806,7 +806,6 @@ pub mod tests {
         let message = DaMessage {
             ..Default::default()
         };
-        let da_message_id = message.id();
 
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_input(helpers::create_message_predicate_from_message(&message))
@@ -855,10 +854,9 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
+        let message = DaMessage::default();
         let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(helpers::create_message_predicate_from_message(
-                &Default::default(),
-            ))
+            .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
         let db = helpers::MockDb::default();
@@ -867,10 +865,16 @@ pub mod tests {
 
         let mut txpool = TxPool::new(Default::default());
 
-        txpool
+        let err = txpool
             .insert_inner(Arc::new(tx.clone()), &db)
             .await
             .expect_err("should fail");
+
+        // check error
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedInputMessageUnknown(msg_id)) if msg_id == &message.id()
+        ));
     }
 
     #[tokio::test]
