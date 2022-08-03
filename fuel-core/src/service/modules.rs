@@ -113,7 +113,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         tx_transaction,
         tx_block,
     );
-    network_service.start().await?;
+
+    if !config.p2p.network_name.is_empty() {
+        network_service.start().await?;
+    }
 
     Ok(Modules {
         txpool: Arc::new(txpool),
