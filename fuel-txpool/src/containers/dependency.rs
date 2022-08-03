@@ -623,15 +623,13 @@ impl Dependency {
                         state.used_by.remove(&tx.id());
                         // if contract list is empty and is in db, flag contract state for removal.
                         if state.used_by.is_empty() && state.is_in_database() {
-                            rem_contract = true;
+                            self.contracts.remove(contract_id);
                         }
                     }
-                    if rem_contract {
-                        self.contracts.remove(contract_id);
-                    }
                 }
-                Input::MessageSigned { .. } | Input::MessagePredicate { .. } => {
-                    // TODO: unlink message_id <-> tx_id
+                Input::MessageSigned { message_id, .. }
+                | Input::MessagePredicate { message_id, .. } => {
+                    self.messages.remove(message_id);
                 }
             }
         }

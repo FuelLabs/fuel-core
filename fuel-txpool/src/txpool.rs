@@ -251,6 +251,7 @@ impl TxPool {
 #[cfg(test)]
 pub mod tests {
     mod helpers {
+        use fuel_core_interfaces::common::fuel_tx::Input;
         use fuel_core_interfaces::{
             common::{
                 fuel_storage::Storage,
@@ -381,6 +382,20 @@ pub mod tests {
         }
 
         impl TxPoolDb for MockDb {}
+
+        pub(crate) fn create_message_predicate_from_message(message: &DaMessage) -> Input {
+            Input::message_predicate(
+                message.id(),
+                message.sender,
+                message.recipient,
+                message.amount,
+                message.nonce,
+                message.owner,
+                message.data.clone(),
+                Default::default(),
+                Default::default(),
+            )
+        }
     }
 
     use super::*;
@@ -889,7 +904,6 @@ pub mod tests {
             amount: message_amount,
             ..Default::default()
         };
-        let da_message_id = message.id();
 
         let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
@@ -925,8 +939,65 @@ pub mod tests {
             .await
             .expect("should succeed");
 
-        let mut squeezed_out_txs = out.unwrap();
         assert_eq!(squeezed_out_txs.len(), 1);
         assert_eq!(squeezed_out_txs[0].id(), tx_low.id());
+    }
+
+    #[tokio::test]
+    async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
+        // tx1 (message 1, message 2) gas_price 2
+        // tx2 (message 1) gas_price 3
+        //   squeezes tx1 with higher gas price
+        // tx3 (message 2) gas_price 1
+        //   works since tx1 is no longer part of txpool state even though gas price is less
+
+        let message_1 = DaMessage {
+            amount: 10_000,
+            ..Default::default()
+        };
+        let message_2 = DaMessage {
+            amount: 20_000,
+            ..Default::default()
+        };
+
+        let message_input_1 = helpers::create_message_predicate_from_message(&message_1);
+        let message_input_2 = helpers::create_message_predicate_from_message(&message_2);
+
+        // Insert a tx for the message id with a low gas amount
+        let tx_1 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(2)
+            .add_input(message_input_1.clone())
+            .add_input(message_input_2.clone())
+            .finalize();
+
+        let tx_2 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(3)
+            .add_input(message_input_1.clone())
+            .finalize();
+
+        let tx_3 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(1)
+            .add_input(message_input_2.clone())
+            .finalize();
+
+        let mut db = helpers::MockDb::default();
+        db.insert(&message_1.id(), &message_1).unwrap();
+        db.insert(&message_2.id(), &message_2).unwrap();
+        let mut txpool = TxPool::new(Default::default());
+
+        txpool
+            .insert_inner(Arc::new(tx_1.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        txpool
+            .insert_inner(Arc::new(tx_2.clone()), &db)
+            .await
+            .expect("should succeed");
+
+        txpool
+            .insert_inner(Arc::new(tx_3.clone()), &db)
+            .await
+            .expect("should succeed");
     }
 }
