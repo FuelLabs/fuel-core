@@ -89,6 +89,8 @@ fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
+    use tracing::log::kv::Source;
+
     use super::*;
 
     #[test]
@@ -118,7 +120,7 @@ mod tests {
 
         // remove the second message with its given id
         let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &second_id).unwrap();
-        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
-        assert_eq!(owned_msg_ids.len(), 0);
+        let owned_msg_ids = db.owned_message_ids(da_msg.owner, None, None);
+        assert_eq!(owned_msg_ids.count(), 0);
     }
 }
