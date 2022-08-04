@@ -19,6 +19,9 @@ impl Storage<MessageId, DaMessage> for Database {
         key: &MessageId,
         value: &DaMessage,
     ) -> Result<Option<DaMessage>, KvStoreError> {
+        // insert primary record
+        let result = Database::insert(self, key.as_ref(), columns::DA_MESSAGES, value.clone())?;
+
         // insert secondary record by owner
         Database::insert(
             self,
@@ -27,9 +30,7 @@ impl Storage<MessageId, DaMessage> for Database {
             true,
         )?;
 
-        // insert primary record
-        Database::insert(self, key.as_ref(), columns::DA_MESSAGES, value.clone())
-            .map_err(Into::into)
+        Ok(result)
     }
 
     fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, KvStoreError> {
