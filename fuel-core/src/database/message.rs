@@ -105,8 +105,8 @@ mod tests {
         let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &second_id, &da_msg).unwrap();
 
         // verify that 2 message IDs are associated with a single Owner
-        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
-        assert_eq!(owned_msg_ids.len(), 2);
+        let owned_msg_ids = db.owned_message_ids(da_msg.owner, None, None);
+        assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
         let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &first_id).unwrap();
