@@ -3065,8 +3065,12 @@ dependencies = [
  "deadpool",
  "futures",
  "http-types",
+ "js-sys",
  "log",
  "rustls 0.18.1",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5923,6 +5927,7 @@ dependencies = [
  "rustls 0.18.1",
  "serde",
  "serde_json",
+ "web-sys",
 ]
 
 [[package]]

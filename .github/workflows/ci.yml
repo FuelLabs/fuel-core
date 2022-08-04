@@ -94,6 +94,8 @@ jobs:
             args: --all-targets --all-features
           - command: make
             args: check --locked
+          - command: check
+            args: --locked --target wasm32-unknown-unknown --package fuel-gql-client
           - command: test
             args: --tests --all-features --workspace
           - command: test
