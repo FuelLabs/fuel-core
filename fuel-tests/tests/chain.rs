@@ -40,37 +40,14 @@ async fn test_da_messages() {
         fuel_block_spend: Some(1u64.into()),
         ..Default::default()
     };
-/*
-    let msg2 = DaMessage {
-        fuel_block_spend: Some(6u64.into()),
-        ..Default::default()
-    };
-
-    let msg3 = DaMessage {
-        fuel_block_spend: Some(10u64.into()),
-        ..Default::default()
-    };
-*/
     let tx1 = TransactionBuilder::script(vec![], vec![])
         .add_input(create_message_predicate_from_message(&msg1))
         .finalize();
-/*
-    let tx2 = TransactionBuilder::script(vec![], vec![])
-        .add_input(create_message_predicate_from_message(&msg2))
-        .finalize();
 
-    let tx3 = TransactionBuilder::script(vec![], vec![])
-        .add_input(create_message_predicate_from_message(&msg3))
-        .finalize();
-*/
-    let test_msgs = vec![msg1];
-
-    node_config.chain_conf.da_messages = Some(test_msgs);
+    node_config.chain_conf.da_messages = Some(vec![msg1]);
 
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
     client.submit(&tx1).await.unwrap();
-    // client.submit(&tx2).await.unwrap();
-    // client.submit(&tx3).await.unwrap();
 }

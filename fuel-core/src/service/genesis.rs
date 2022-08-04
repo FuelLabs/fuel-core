@@ -143,14 +143,9 @@ impl FuelService {
         Ok(())
     }
 
-    async fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
+    fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
         for msg in msgs {
-            let checked_msg = CheckMessage {
-                message: msg,
-                id: msg.id()
-            };
-            
-            db.insert_da_message(checked_msg).await;
+            Storage::<MessageId, DaMessage>::insert(db, &msg.id(), msg)?;
         }
 
         Ok(())
