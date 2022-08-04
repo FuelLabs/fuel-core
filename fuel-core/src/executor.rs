@@ -5,7 +5,10 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use chrono::Utc;
-use fuel_core_interfaces::common::fuel_tx::{CheckedTransaction, TransactionFee};
+use fuel_core_interfaces::{
+    common::fuel_tx::{CheckedTransaction, TransactionFee},
+    model::DaMessage,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -23,6 +26,7 @@ use fuel_core_interfaces::{
     },
     model::FuelBlockHeader,
 };
+use fuel_types::MessageId;
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
@@ -117,11 +121,15 @@ impl Executor {
                 // validate transaction has at least one coin
                 self.verify_tx_has_at_least_one_coin_or_message(tx)?;
                 // validate utxos exist and maturity is properly set
-                self.verify_input_state(block_db_transaction.deref(), tx, block.header.height)?;
+                self.verify_input_state(
+                    block_db_transaction.deref(),
+                    tx,
+                    block.header.height,
+                    block.header.number,
+                )?;
                 // validate transaction signature
                 tx.validate_input_signature()
                     .map_err(TransactionValidityError::from)?;
-                // verify that brindge messages exist
             }
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
@@ -192,7 +200,11 @@ impl Executor {
             )?;
 
             // change the spent status of the tx inputs
-            self.spend_inputs(vm_result.tx(), block_db_transaction.deref_mut())?;
+            self.spend_inputs(
+                vm_result.tx(),
+                block_db_transaction.deref_mut(),
+                block.header.height,
+            )?;
 
             // persist any outputs
             self.persist_outputs(
@@ -289,6 +301,7 @@ impl Executor {
         db: &Database,
         transaction: &Transaction,
         block_height: BlockHeight,
+        block_da_height: BlockHeight,
     ) -> Result<(), TransactionValidityError> {
         for input in transaction.inputs() {
             match input {
@@ -305,9 +318,22 @@ impl Executor {
                     }
                 }
                 Input::Contract { .. } => {}
-                // TODO: message validation waiting on db storage of messages + genesis
-                Input::MessageSigned { .. } => {}
-                Input::MessagePredicate { .. } => {}
+                Input::MessageSigned { message_id, .. }
+                | Input::MessagePredicate { message_id, .. } => {
+                    if let Some(message) = Storage::<MessageId, DaMessage>::get(db, &message_id)? {
+                        if message.fuel_block_spend.is_some() {
+                            return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
+                        }
+                        if BlockHeight::from(message.da_height) > block_da_height {
+                            return Err(TransactionValidityError::MessageSpendTooEarly(
+                                *message_id,
+                            ));
+                        }
+                    } else {
+                        println!("NOTFOUND {message_id:?}");
+                        return Err(TransactionValidityError::MessageDoesNotExist(*message_id));
+                    }
+                }
             }
         }
 
@@ -359,48 +385,102 @@ impl Executor {
     }
 
     /// Mark inputs as spent
-    fn spend_inputs(&self, tx: &Transaction, db: &mut Database) -> Result<(), Error> {
+    fn spend_inputs(
+        &self,
+        tx: &Transaction,
+        db: &mut Database,
+        block_height: BlockHeight,
+    ) -> Result<(), Error> {
         for input in tx.inputs() {
-            if let Input::CoinSigned {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                maturity,
-                ..
-            }
-            | Input::CoinPredicate {
-                utxo_id,
-                owner,
-                amount,
-                asset_id,
-                maturity,
-                ..
-            } = input
-            {
-                let block_created = if self.config.utxo_validation {
-                    Storage::<UtxoId, Coin>::get(db, utxo_id)?
-                        .ok_or(Error::TransactionValidity(
-                            TransactionValidityError::CoinDoesNotExist(*utxo_id),
-                        ))?
-                        .block_created
-                } else {
-                    // if utxo validation is disabled, just assign this new input to the original block
-                    Default::default()
-                };
-
-                Storage::<UtxoId, Coin>::insert(
-                    db,
+            match input {
+                Input::CoinSigned {
                     utxo_id,
-                    &Coin {
-                        owner: *owner,
-                        amount: *amount,
-                        asset_id: *asset_id,
-                        maturity: (*maturity).into(),
-                        status: CoinStatus::Spent,
-                        block_created,
-                    },
-                )?;
+                    owner,
+                    amount,
+                    asset_id,
+                    maturity,
+                    ..
+                }
+                | Input::CoinPredicate {
+                    utxo_id,
+                    owner,
+                    amount,
+                    asset_id,
+                    maturity,
+                    ..
+                } => {
+                    let block_created = if self.config.utxo_validation {
+                        Storage::<UtxoId, Coin>::get(db, utxo_id)?
+                            .ok_or(Error::TransactionValidity(
+                                TransactionValidityError::CoinDoesNotExist(*utxo_id),
+                            ))?
+                            .block_created
+                    } else {
+                        // if utxo validation is disabled, just assign this new input to the original block
+                        Default::default()
+                    };
+
+                    Storage::<UtxoId, Coin>::insert(
+                        db,
+                        utxo_id,
+                        &Coin {
+                            owner: *owner,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                            maturity: (*maturity).into(),
+                            status: CoinStatus::Spent,
+                            block_created,
+                        },
+                    )?;
+                }
+                Input::MessageSigned {
+                    message_id,
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    owner,
+                    data,
+                    ..
+                }
+                | Input::MessagePredicate {
+                    message_id,
+                    sender,
+                    recipient,
+                    amount,
+                    nonce,
+                    owner,
+                    data,
+                    ..
+                } => {
+                    let da_height = if self.config.utxo_validation {
+                        Storage::<MessageId, DaMessage>::get(db, &message_id)?
+                            .ok_or(Error::TransactionValidity(
+                                TransactionValidityError::MessageDoesNotExist(*message_id),
+                            ))?
+                            .da_height
+                    } else {
+                        // if utxo validation is disabled, just assignto the original block
+                        Default::default()
+                    };
+
+                    println!("INSERT {message_id:?}");
+                    Storage::<MessageId, DaMessage>::insert(
+                        db,
+                        &message_id,
+                        &DaMessage {
+                            da_height,
+                            fuel_block_spend: Some(block_height),
+                            sender: *sender,
+                            recipient: *recipient,
+                            owner: *owner,
+                            nonce: *nonce,
+                            amount: *amount,
+                            data: data.clone(),
+                        },
+                    )?;
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -651,6 +731,12 @@ pub enum TransactionValidityError {
     CoinHasNotMatured(UtxoId),
     #[error("The specified coin doesn't exist")]
     CoinDoesNotExist(UtxoId),
+    #[error("The specified message was already spent")]
+    MessageAlreadySpent(MessageId),
+    #[error("Message is not yet spendable, as it's DA height is newer than this block allows")]
+    MessageSpendTooEarly(MessageId),
+    #[error("The specified message doesn't exist")]
+    MessageDoesNotExist(MessageId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
     #[error("The transaction must have at least one coin input type: {0:#x}")]
@@ -1604,9 +1690,20 @@ mod tests {
         }
     }
 
-    /// Helper to build transactions with a message for some of the message tests
-    fn make_tx(rng: &mut StdRng, message: &CheckedDaMessage) -> Transaction {
-        TransactionBuilder::script(vec![], vec![])
+    /// Helper to build transactions and a message in it for some of the message tests
+    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, CheckedDaMessage) {
+        let mut message = DaMessage {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            owner: rng.gen(),
+            nonce: rng.gen(),
+            amount: 1000,
+            data: vec![],
+            da_height,
+            fuel_block_spend: None,
+        };
+
+        let tx = TransactionBuilder::script(vec![], vec![])
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
@@ -1615,7 +1712,15 @@ mod tests {
                 message.amount,
                 vec![],
             )
-            .finalize()
+            .finalize();
+
+        if let Input::MessageSigned { owner, .. } = tx.inputs()[0] {
+            message.owner = owner;
+        } else {
+            unreachable!();
+        }
+
+        (tx, message.check())
     }
 
     /// Helper to build database and executor for some of the message tests
@@ -1639,19 +1744,7 @@ mod tests {
     async fn unspent_message_succeeds_when_msg_da_height_lt_block_da_height() {
         let mut rng = StdRng::seed_from_u64(2322);
 
-        let message = (DaMessage {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            owner: rng.gen(),
-            nonce: rng.gen(),
-            amount: 1000,
-            data: vec![],
-            da_height: 0,
-            fuel_block_spend: None,
-        })
-        .check();
-
-        let tx = make_tx(&mut rng, &message);
+        let (tx, message) = make_tx_and_message(&mut rng, 0);
 
         let mut block = FuelBlock {
             header: Default::default(),
@@ -1675,19 +1768,7 @@ mod tests {
     async fn message_fails_when_spending_nonexistent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
 
-        let message = (DaMessage {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            owner: rng.gen(),
-            nonce: rng.gen(),
-            amount: 1000,
-            data: vec![],
-            da_height: 0,
-            fuel_block_spend: None,
-        })
-        .check();
-
-        let tx = make_tx(&mut rng, &message);
+        let (tx, _message) = make_tx_and_message(&mut rng, 0);
 
         let mut block = FuelBlock {
             header: Default::default(),
@@ -1698,89 +1779,93 @@ mod tests {
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageDoesNotExist(_)
+            ))
+        ));
 
         let res = make_executor(&[]) // No messages in the db
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageDoesNotExist(_)
+            ))
+        ));
     }
 
     #[tokio::test]
     async fn message_fails_when_spending_da_height_gt_block_da_height() {
         let mut rng = StdRng::seed_from_u64(2322);
-        let input_amount = 1000;
 
-        let message = (DaMessage {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            owner: rng.gen(),
-            nonce: rng.gen(),
-            amount: input_amount,
-            data: vec![],
-            da_height: 1, // Block has zero da_height
-            fuel_block_spend: None,
-        })
-        .check();
+        let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![make_tx(&mut rng, &message)],
+            transactions: vec![tx],
         };
 
         let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageSpendTooEarly(_)
+            ))
+        ));
 
         let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageSpendTooEarly(_)
+            ))
+        ));
     }
 
     #[tokio::test]
     async fn message_fails_when_spending_already_spent_message_id() {
         let mut rng = StdRng::seed_from_u64(2322);
 
-        let message = (DaMessage {
-            sender: rng.gen(),
-            recipient: rng.gen(),
-            owner: rng.gen(),
-            nonce: rng.gen(),
-            amount: 1000,
-            data: vec![],
-            da_height: 0,
-            fuel_block_spend: None,
-        })
-        .check();
+        // Create two transactions with the same message
+        let (tx1, message) = make_tx_and_message(&mut rng, 0);
+        let (mut tx2, _) = make_tx_and_message(&mut rng, 0);
+        tx2.inputs_mut()[0] = tx1.inputs()[0].clone();
 
         let mut block = FuelBlock {
             header: Default::default(),
-            transactions: vec![make_tx(&mut rng, &message), make_tx(&mut rng, &message)],
+            transactions: vec![tx1, tx2],
         };
 
         let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Production)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageAlreadySpent(_)
+            ))
+        ));
 
         let res = make_executor(&[&message])
             .await
             .execute(&mut block, ExecutionMode::Validation)
             .await;
-        dbg!(&res);
-        assert!(matches!(res, Err(_))); // TODO
-
-        panic!();
+        assert!(matches!(
+            res,
+            Err(Error::TransactionValidity(
+                TransactionValidityError::MessageAlreadySpent(_)
+            ))
+        ));
     }
 }
