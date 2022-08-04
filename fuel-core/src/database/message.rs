@@ -86,3 +86,39 @@ fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
         .copied()
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn owned_message_ids() {
+        let mut db = Database::default();
+        let da_msg = DaMessage::default();
+
+        // insert a message with the first id
+        let first_id = MessageId::new([1; 32]);
+        let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &first_id, &da_msg).unwrap();
+
+        // insert a message with the second id with the same Owner
+        let second_id = MessageId::new([2; 32]);
+        let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &second_id, &da_msg).unwrap();
+
+        // verify that 2 message IDs are associated with a single Owner
+        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
+        assert_eq!(owned_msg_ids.len(), 2);
+
+        // remove the first message with its given id
+        let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &first_id).unwrap();
+
+        // verify that only second ID is left
+        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
+        assert_eq!(owned_msg_ids.first().unwrap().as_ref().unwrap(), &second_id);
+        assert_eq!(owned_msg_ids.len(), 1);
+
+        // remove the second message with its given id
+        let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &second_id).unwrap();
+        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
+        assert_eq!(owned_msg_ids.len(), 0);
+    }
+}
