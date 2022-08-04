@@ -1,3 +1,4 @@
+use fuel_core_interfaces::relayer::RelayerDb;
 use crate::{
     config::{
         chain_config::{ContractConfig, StateConfig},
@@ -142,9 +143,14 @@ impl FuelService {
         Ok(())
     }
 
-    fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
+    async fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
         for msg in msgs {
-            Storage::<MessageId, DaMessage>::insert(db, &msg.id(), msg)?;
+            let checked_msg = CheckMessage {
+                message: msg,
+                id: msg.id()
+            };
+            
+            db.insert_da_message(checked_msg).await;
         }
 
         Ok(())
