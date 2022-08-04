@@ -320,7 +320,7 @@ impl Executor {
                 Input::Contract { .. } => {}
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    if let Some(message) = Storage::<MessageId, DaMessage>::get(db, &message_id)? {
+                    if let Some(message) = Storage::<MessageId, DaMessage>::get(db, message_id)? {
                         if message.fuel_block_spend.is_some() {
                             return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
                         }
@@ -454,7 +454,7 @@ impl Executor {
                     ..
                 } => {
                     let da_height = if self.config.utxo_validation {
-                        Storage::<MessageId, DaMessage>::get(db, &message_id)?
+                        Storage::<MessageId, DaMessage>::get(db, message_id)?
                             .ok_or(Error::TransactionValidity(
                                 TransactionValidityError::MessageDoesNotExist(*message_id),
                             ))?
@@ -467,7 +467,7 @@ impl Executor {
                     println!("INSERT {message_id:?}");
                     Storage::<MessageId, DaMessage>::insert(
                         db,
-                        &message_id,
+                        message_id,
                         &DaMessage {
                             da_height,
                             fuel_block_spend: Some(block_height),
