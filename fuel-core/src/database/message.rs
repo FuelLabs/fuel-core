@@ -89,8 +89,6 @@ fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use tracing::log::kv::Source;
-
     use super::*;
 
     #[test]
