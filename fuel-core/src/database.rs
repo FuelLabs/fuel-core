@@ -76,10 +76,12 @@ pub mod columns {
     pub const STAKING_DIFFS: u32 = 16;
     /// Maps delegate address with validator_set_diff index where last delegate change happened
     pub const DELEGATES_INDEX: u32 = 17;
+    // (Owner, MessageId) => true
+    pub const OWNED_MESSAGE_IDS: u32 = 18;
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 18;
+    pub const COLUMN_NUM: u32 = 19;
 }
 
 #[derive(Clone, Debug)]
