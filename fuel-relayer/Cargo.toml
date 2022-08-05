@@ -15,16 +15,16 @@ async-trait = "0.1"
 bytes = "1.1"
 chrono = "0.4"
 env_logger = "0.9"
-ethers-contract = { version = "0.13", default-features = false, features = [
+ethers-contract = { version = "0.17", default-features = false, features = [
     "abigen",
 ] }
-ethers-core = { version = "0.13", default-features = false }
-ethers-middleware = { version = "0.13", default-features = false }
-ethers-providers = { version = "0.13", default-features = false, features = [
+ethers-core = { version = "0.17", default-features = false }
+ethers-middleware = { version = "0.17", default-features = false }
+ethers-providers = { version = "0.17", default-features = false, features = [
     "ws",
     "rustls",
 ] }
-ethers-signers = { version = "0.13", default-features = false }
+ethers-signers = { version = "0.17", default-features = false }
 features = "0.10"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.9.5" }
 futures = "0.3"
