@@ -17,6 +17,10 @@ type BalanceConnection {
 	A list of edges.
 	"""
 	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
 }
 
 """
@@ -28,7 +32,7 @@ type BalanceEdge {
 	"""
 	cursor: String!
 	"""
-	"The item at the end of the edge
+	The item at the end of the edge
 	"""
 	node: Balance!
 }
@@ -57,6 +61,10 @@ type BlockConnection {
 	A list of edges.
 	"""
 	edges: [BlockEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Block!]!
 }
 
 """
@@ -68,7 +76,7 @@ type BlockEdge {
 	"""
 	cursor: String!
 	"""
-	"The item at the end of the edge
+	The item at the end of the edge
 	"""
 	node: Block!
 }
@@ -116,6 +124,10 @@ type CoinConnection {
 	A list of edges.
 	"""
 	edges: [CoinEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Coin!]!
 }
 
 """
@@ -127,7 +139,7 @@ type CoinEdge {
 	"""
 	cursor: String!
 	"""
-	"The item at the end of the edge
+	The item at the end of the edge
 	"""
 	node: Coin!
 }
@@ -162,11 +174,12 @@ type ConsensusParameters {
 	maxGasPerTx: U64!
 	maxScriptLength: U64!
 	maxScriptDataLength: U64!
-	maxStaticContracts: U64!
 	maxStorageSlots: U64!
 	maxPredicateLength: U64!
 	maxPredicateDataLength: U64!
 	gasPriceFactor: U64!
+	gasPerByte: U64!
+	maxMessageDataLength: U64!
 }
 
 type Contract {
@@ -190,6 +203,10 @@ type ContractBalanceConnection {
 	A list of edges.
 	"""
 	edges: [ContractBalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ContractBalance!]!
 }
 
 """
@@ -201,7 +218,7 @@ type ContractBalanceEdge {
 	"""
 	cursor: String!
 	"""
-	"The item at the end of the edge
+	The item at the end of the edge
 	"""
 	node: ContractBalance!
 }
@@ -244,7 +261,7 @@ type FailureStatus {
 scalar HexString
 
 
-union Input = | InputCoin | InputContract
+union Input = InputCoin | InputContract | InputMessage
 
 type InputCoin {
 	utxoId: UtxoId!
@@ -264,6 +281,26 @@ type InputContract {
 	contract: Contract!
 }
 
+type InputMessage {
+	messageId: MessageId!
+	sender: Address!
+	recipient: Address!
+	amount: U64!
+	nonce: U64!
+	owner: Address!
+	witnessIndex: Int!
+	data: HexString!
+	predicate: HexString!
+	predicateData: HexString!
+}
+
+
+scalar MessageId
+
+type MessageOutput {
+	recipient: Address!
+	amount: U64!
+}
 
 type Mutation {
 	startSession: ID!
@@ -296,7 +333,7 @@ type NodeInfo {
 	nodeVersion: String!
 }
 
-union Output = | CoinOutput | ContractOutput | WithdrawalOutput | ChangeOutput | VariableOutput | ContractCreated
+union Output = CoinOutput | ContractOutput | MessageOutput | ChangeOutput | VariableOutput | ContractCreated
 
 """
 A separate `Breakpoint` type to be used as an output, as a single
@@ -389,6 +426,10 @@ type Receipt {
 	result: U64
 	gasUsed: U64
 	data: HexString
+	messageId: MessageId
+	sender: Address
+	recipient: Address
+	nonce: Bytes32
 }
 
 enum ReceiptType {
@@ -402,6 +443,7 @@ enum ReceiptType {
 	TRANSFER
 	TRANSFER_OUT
 	SCRIPT_RESULT
+	MESSAGE_OUT
 }
 
 enum ReturnType {
@@ -451,7 +493,6 @@ type Transaction {
 	inputContracts: [Contract!]!
 	gasPrice: U64!
 	gasLimit: U64!
-	bytePrice: U64!
 	maturity: U64!
 	isScript: Boolean!
 	inputs: [Input!]!
@@ -465,7 +506,6 @@ type Transaction {
 	bytecodeWitnessIndex: Int
 	bytecodeLength: U64
 	salt: Salt
-	staticContracts: [Contract!]
 	storageSlots: [HexString!]
 	"""
 	Return the transaction bytes using canonical encoding
@@ -482,6 +522,10 @@ type TransactionConnection {
 	A list of edges.
 	"""
 	edges: [TransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Transaction!]!
 }
 
 """
@@ -493,26 +537,20 @@ type TransactionEdge {
 	"""
 	cursor: String!
 	"""
-	"The item at the end of the edge
+	The item at the end of the edge
 	"""
 	node: Transaction!
 }
 
 scalar TransactionId
 
-union TransactionStatus = | SubmittedStatus | SuccessStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | FailureStatus
 
 scalar U64
 
 scalar UtxoId
 
 type VariableOutput {
-	to: Address!
-	amount: U64!
-	assetId: AssetId!
-}
-
-type WithdrawalOutput {
 	to: Address!
 	amount: U64!
 	assetId: AssetId!

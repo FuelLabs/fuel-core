@@ -12,11 +12,8 @@ pub fn keccak256(data: &'static str) -> H256 {
     H256::from_slice(out.as_slice())
 }
 
-pub(crate) static ETH_LOG_ASSET_DEPOSIT: Lazy<H256> =
-    Lazy::new(|| keccak256("DepositMade(uint32,address,address,uint8,uint256,uint256)"));
-#[allow(dead_code)]
-pub(crate) static ETH_LOG_ASSET_WITHDRAWAL: Lazy<H256> =
-    Lazy::new(|| keccak256("WithdrawalMade(address,address,address,uint256)"));
+pub(crate) static ETH_LOG_DA_MESSAGE: Lazy<H256> =
+    Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
     Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_UNREGISTRATION: Lazy<H256> =
@@ -26,12 +23,12 @@ pub(crate) static ETH_LOG_WITHDRAWAL: Lazy<H256> =
     Lazy::new(|| keccak256("Withdrawal(address,uint256)"));
 pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
     Lazy::new(|| keccak256("Delegation(address,bytes[],uint256[])"));
-pub(crate) static ETH_FUEL_BLOCK_COMMITED: Lazy<H256> =
+pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
     Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Number of da block after which deposits/stakes/validators become finalized.
+    /// Number of da block after which messages/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
     pub eth_client: Option<String>,
@@ -39,11 +36,11 @@ pub struct Config {
     pub eth_chain_id: u64,
     /// Contract to publish commit fuel block.  
     pub eth_v2_commit_contract: Option<H160>,
-    /// Etheruem contract address. Create EthAddress into fuel_types.
+    /// Ethereum contract address. Create EthAddress into fuel_types.
     pub eth_v2_listening_contracts: Vec<H160>,
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
-    pub eth_v2_contracts_deployet: DaBlockHeight,
+    pub eth_v2_contracts_deployment: DaBlockHeight,
     /// Number of blocks that will be asked at one time from client, used for initial sync.
     pub initial_sync_step: usize,
     /// Refresh rate of waiting for eth client to finish its initial sync.
@@ -61,7 +58,7 @@ impl Default for Config {
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contracts_deployet: 0,
+            eth_v2_contracts_deployment: 0,
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
         }
@@ -69,8 +66,8 @@ impl Default for Config {
 }
 
 impl Config {
-    pub fn eth_v2_contracts_deployet(&self) -> DaBlockHeight {
-        self.eth_v2_contracts_deployet
+    pub fn eth_v2_contracts_deployment(&self) -> DaBlockHeight {
+        self.eth_v2_contracts_deployment
     }
 
     pub fn eth_v2_listening_contracts(&self) -> &[H160] {
@@ -109,13 +106,8 @@ mod tests {
     #[test]
     pub fn test_function_signatures() {
         assert_eq!(
-            *ETH_LOG_ASSET_DEPOSIT,
-            H256::from_str("0x34dccbe410bb771d28929a3f1ada2323bfb6ae501200c02dc871b287fb558759")
-                .unwrap()
-        );
-        assert_eq!(
-            *ETH_LOG_ASSET_WITHDRAWAL,
-            H256::from_str("0x779c18fbb35b88ab773ee6b3d87e1d10eb58021e64e0d7808db646f49403d20b")
+            *ETH_LOG_DA_MESSAGE,
+            H256::from_str("0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2")
                 .unwrap()
         );
         assert_eq!(
@@ -139,7 +131,7 @@ mod tests {
                 .unwrap()
         );
         assert_eq!(
-            *ETH_FUEL_BLOCK_COMMITED,
+            *ETH_FUEL_BLOCK_COMMITTED,
             H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872")
                 .unwrap()
         );

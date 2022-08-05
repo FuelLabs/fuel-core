@@ -14,15 +14,15 @@ pub struct RelayerArgs {
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
     #[clap(long = "relayer-v2-deployment", default_value = "0")]
-    pub eth_v2_contracts_deployet: DaBlockHeight,
+    pub eth_v2_contracts_deployment: DaBlockHeight,
 
-    /// etheruem contract address. Create EthAddress into fuel_types
+    /// Ethereum contract address. Create EthAddress into fuel_types
     #[clap(long = "relayer-v2-listening-contracts", parse(try_from_str = parse_h160))]
     pub eth_v2_listening_contracts: Vec<H160>,
 
     /// Number of da block after which messages/stakes/validators become finalized.
     #[clap(long = "relayer-da-finalization", default_value = "64")]
-    pub da_finalization: u32,
+    pub da_finalization: u64,
 
     /// contract to publish commit fuel block.  
     #[clap(long = "relayer-v2-commit-contract", parse(try_from_str = parse_h160))]
@@ -53,7 +53,7 @@ impl From<RelayerArgs> for Config {
             eth_chain_id: args.eth_chain_id,
             eth_v2_commit_contract: args.eth_v2_commit_contract,
             eth_v2_listening_contracts: args.eth_v2_listening_contracts,
-            eth_v2_contracts_deployet: args.eth_v2_contracts_deployet,
+            eth_v2_contracts_deployment: args.eth_v2_contracts_deployment,
             initial_sync_step: args.initial_sync_step,
             initial_sync_refresh: Duration::from_secs(args.initial_sync_refresh),
         }

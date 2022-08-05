@@ -1,5 +1,6 @@
 ---
 source: fuel-core/src/config/chain_config.rs
+assertion_line: 290
 expression: json
 ---
 {
@@ -26,10 +27,11 @@ expression: json
     "max_gas_per_tx": 100000000,
     "max_script_length": 1048576,
     "max_script_data_length": 1048576,
-    "max_static_contracts": 255,
     "max_storage_slots": 255,
     "max_predicate_length": 1048576,
     "max_predicate_data_length": 1048576,
-    "gas_price_factor": 1000000000
+    "gas_price_factor": 1000000000,
+    "gas_per_byte": 4,
+    "max_message_data_length": 1048576
   }
 }

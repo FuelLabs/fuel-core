@@ -45,7 +45,6 @@ async fn test_database_metrics() {
             0,
             1000000,
             0,
-            0,
             script,
             vec![],
             vec![],

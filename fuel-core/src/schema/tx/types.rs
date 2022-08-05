@@ -194,10 +194,6 @@ impl Transaction {
         self.0.gas_limit().into()
     }
 
-    async fn byte_price(&self) -> U64 {
-        self.0.byte_price().into()
-    }
-
     async fn maturity(&self) -> U64 {
         self.0.maturity().into()
     }
@@ -238,7 +234,7 @@ impl Transaction {
             .await;
 
         if let Ok(Some(transaction_in_pool)) = receiver.await {
-            let time = transaction_in_pool.submited_time();
+            let time = transaction_in_pool.submitted_time();
             Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
         } else {
             let status = db.get_tx_status(&self.0.id())?;
@@ -292,15 +288,6 @@ impl Transaction {
         match self.0 {
             fuel_tx::Transaction::Script { .. } => None,
             fuel_tx::Transaction::Create { salt, .. } => Some(salt.into()),
-        }
-    }
-
-    async fn static_contracts(&self) -> Option<Vec<Contract>> {
-        match &self.0 {
-            fuel_tx::Transaction::Script { .. } => None,
-            fuel_tx::Transaction::Create {
-                static_contracts, ..
-            } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
         }
     }
 

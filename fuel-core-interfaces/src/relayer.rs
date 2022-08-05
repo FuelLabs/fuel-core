@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
-use fuel_types::{Address, Bytes32};
+use fuel_types::{Address, MessageId};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct StakingDiff {
-    /// Validator registration, it is pair of old consensu key and new one, where consensus address
+    /// Validator registration, it is pair of old consensus key and new one, where consensus address
     /// if registered is Some or None if unregistration happened.
     pub validators: HashMap<ValidatorId, ValidatorDiff>,
     /// Register changes for all delegations inside one da block.
@@ -36,12 +36,12 @@ impl StakingDiff {
     }
 }
 
-// Database has two main functionalities, ValidatorSet and TokenDeposits.
-// From relayer perspective TokenDeposits are just insert when they get finalized.
-// But for ValidatorSet, It is litle bit different.
+// Database has two main functionalities, ValidatorSet and Bridge Message.
+// From relayer perspective messages are just inserted when they get finalized.
+// But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
+     Storage<MessageId, DaMessage, Error = KvStoreError> // bridge messages
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -49,12 +49,12 @@ pub trait RelayerDb:
     + Sync
 {
 
-    /// deposit token to database. Token deposits are not revertable
-    async fn insert_coin_deposit(
+    /// add bridge message to database. Messages are not revertible.
+    async fn insert_da_message(
         &mut self,
-        deposit: DepositCoin,
+        message: &CheckedDaMessage,
     ) {
-        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit.id(),&deposit);
+        let _ = Storage::<MessageId, DaMessage>::insert(self,message.id(),message.as_ref());
     }
 
     /// Insert difference make on staking in this particular DA height.
@@ -126,23 +126,23 @@ pub trait RelayerDb:
     /// Set data availability block height that corresponds to current_validator_set
     async fn set_validators_da_height(&self, block: DaBlockHeight);
 
-    /// Assume it is allways set as initialization of database.
+    /// Assume it is always set as initialization of database.
     async fn get_validators_da_height(&self) -> DaBlockHeight;
 
     /// set finalized da height that represent last block from da layer that got finalized.
     async fn set_finalized_da_height(&self, block: DaBlockHeight);
 
-    /// Assume it is allways set as initialization of database.
+    /// Assume it is always set as initialization of database.
     async fn get_finalized_da_height(&self) -> DaBlockHeight;
 
-    /// Until blocks gets commited to da layer it is expected for it to still contains consensus
-    /// votes and be saved in database until commitment is send to da layer and finalization pariod passes.
-    /// In case that commited_finalized_fuel_height is zero we need to return genesis block.
-    async fn get_last_commited_finalized_fuel_height(&self) -> BlockHeight;
+    /// Until blocks gets committed to da layer it is expected for it to still contains consensus
+    /// votes and be saved in database until commitment is send to da layer and finalization period passes.
+    /// In case that committed_finalized_fuel_height is zero we need to return genesis block.
+    async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight;
 
-    /// Set last commited finalized fuel height this means we are safe to remove consensus votes from db
+    /// Set last committed finalized fuel height this means we are safe to remove consensus votes from db
     /// as from this moment they are not needed any more 
-    async fn set_last_commited_finalized_fuel_height(&self, block_height: BlockHeight);
+    async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight);
 }
 
 pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>;
@@ -199,8 +199,8 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorId,
-        ValidatorStake,
+        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
+        ValidatorId, ValidatorStake,
     },
 };
 
@@ -222,9 +222,9 @@ pub enum DaSyncState {
     RelayerSyncing,
     /// fetch last N blocks to get their logs. Parse them and save them inside pending state
     /// in parallel start receiving logs from stream and overlap them. when first fetch is finished
-    /// discard all logs from log stream and start receiving new onews.
-    OverlapingSync,
-    /// We have all past logs ready and can just listen to new ones commint from eth
+    /// discard all logs from log stream and start receiving new ones.
+    OverlappingSync,
+    /// We have all past logs ready and can just listen to new ones coming from eth.
     Synced,
 }
 
