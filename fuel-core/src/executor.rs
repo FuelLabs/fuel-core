@@ -18,7 +18,7 @@ use fuel_core_interfaces::{
             Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
             ValidationError,
         },
-        fuel_types::{bytes::SerializableVec, ContractId},
+        fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{
             consts::REG_SP,
             prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
@@ -26,7 +26,6 @@ use fuel_core_interfaces::{
     },
     model::FuelBlockHeader,
 };
-use fuel_types::MessageId;
 use std::{
     error::Error as StdError,
     ops::{Deref, DerefMut},
@@ -380,7 +379,7 @@ impl Executor {
         {
             Ok(())
         } else {
-            Err(TransactionValidityError::NoCoinInput(tx.id()).into())
+            Err(TransactionValidityError::NoCoinOrMessageInput(tx.id()).into())
         }
     }
 
@@ -738,8 +737,8 @@ pub enum TransactionValidityError {
     MessageDoesNotExist(MessageId),
     #[error("Contract output index isn't valid: {0:#x}")]
     InvalidContractInputIndex(UtxoId),
-    #[error("The transaction must have at least one coin input type: {0:#x}")]
-    NoCoinInput(TxId),
+    #[error("The transaction must have at least one coin or message input type: {0:#x}")]
+    NoCoinOrMessageInput(TxId),
     #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
     PredicateExecutionDisabled(TxId),
     #[error(
@@ -1277,7 +1276,7 @@ mod tests {
         // assert block failed to validate when transaction didn't contain any coin inputs
         assert!(matches!(
             err,
-            Error::TransactionValidity(TransactionValidityError::NoCoinInput(id)) if id == tx_id
+            Error::TransactionValidity(TransactionValidityError::NoCoinOrMessageInput(id)) if id == tx_id
         ));
     }
 

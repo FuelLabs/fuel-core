@@ -2151,7 +2151,6 @@ dependencies = [
  "fuel-relayer",
  "fuel-sync",
  "fuel-txpool",
- "fuel-types",
  "futures",
  "graphql-parser",
  "hex",
