@@ -329,7 +329,6 @@ impl Executor {
                             ));
                         }
                     } else {
-                        println!("NOTFOUND {message_id:?}");
                         return Err(TransactionValidityError::MessageDoesNotExist(*message_id));
                     }
                 }
