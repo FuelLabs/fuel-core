@@ -464,7 +464,6 @@ impl Executor {
                         Default::default()
                     };
 
-                    println!("INSERT {message_id:?}");
                     Storage::<MessageId, DaMessage>::insert(
                         db,
                         message_id,
