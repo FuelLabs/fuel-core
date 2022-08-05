@@ -1,4 +1,3 @@
-use fuel_core_interfaces::relayer::RelayerDb;
 use crate::{
     config::{
         chain_config::{ContractConfig, StateConfig},
@@ -168,6 +167,8 @@ impl FuelService {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
     use crate::config::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
     use crate::config::Config;
@@ -177,6 +178,7 @@ mod tests {
         fuel_types::{Address, AssetId, Word},
     };
     use itertools::Itertools;
+    use lazy_static::__Deref;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     #[tokio::test]
@@ -364,6 +366,34 @@ mod tests {
             .into_owned();
 
         assert_eq!(test_value, ret)
+    }
+
+    #[tokio::test]
+    async fn tests_init_da_msgs() {
+        let mut rng = StdRng::seed_from_u64(32492);
+        let mut config = Config::local_node();
+
+        let msg = DaMessage {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            owner: rng.gen(),
+            nonce: rng.gen(),
+            amount: rng.gen(),
+            data: vec![rng.gen()],
+            ..Default::default()
+        };
+
+        config.chain_conf.da_messages = Some(vec![msg.clone()]);
+
+        let db = Database::default();
+
+        FuelService::initialize_state(&config, &db).unwrap();
+
+        let msg2 = Storage::<MessageId, DaMessage>::get(&db, &msg.id())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(&msg, msg2.deref());
     }
 
     #[tokio::test]

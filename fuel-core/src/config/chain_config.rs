@@ -1,10 +1,13 @@
 use super::serialization::{HexNumber, HexType};
 use crate::{database::Database, model::BlockHeight};
-use fuel_core_interfaces::common::{
-    fuel_tx::ConsensusParameters,
-    fuel_types::{Address, AssetId, Bytes32, Salt},
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx::ConsensusParameters,
+        fuel_types::{Address, AssetId, Bytes32, Salt},
+        fuel_vm::fuel_types::Word,
+    },
+    model::{DaBlockHeight, DaMessage},
 };
-use fuel_core_interfaces::model::DaMessage;
 use itertools::Itertools;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
@@ -118,6 +121,8 @@ pub struct StateConfig {
     pub coins: Option<Vec<CoinConfig>>,
     /// Contract state
     pub contracts: Option<Vec<ContractConfig>>,
+    /// Da Messages
+    pub msgs: Option<Vec<DaMessageConfig>>,
     /// Starting block height (useful for flattened fork networks)
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
@@ -129,6 +134,8 @@ impl StateConfig {
         Ok(StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
+            /// TODO if you see this in reivie yell at me
+            msgs: None,
             height: db.get_block_height()?,
         })
     }
@@ -174,6 +181,24 @@ pub struct ContractConfig {
     #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
     #[serde(default)]
     pub balances: Option<Vec<(AssetId, u64)>>,
+}
+
+#[skip_serializing_none]
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct DaMessageConfig {
+    pub sender: Address,
+    pub recipient: Address,
+    pub owner: Address,
+    #[serde_as(as = "HexNumber")]
+    pub nonce: Word,
+    #[serde_as(as = "HexNumber")]
+    pub amount: Word,
+    pub data: Vec<u8>,
+    /// The block height from the parent da layer that originated this message
+    #[serde_as(as = "HexNumber")]
+    pub da_height: DaBlockHeight,
+    pub fuel_block_spend: Option<BlockHeight>,
 }
 
 #[cfg(test)]
