@@ -111,7 +111,6 @@ impl MessageQuery {
                 let compare_end = end.map(|v| v.into());
 
                 let message_ids = message_ids
-                    .map(|msg_id| msg_id.into())
                     .take_while(|r| {
                         if let (Ok(next), Some(end)) = (r, &compare_end) {
                             if next == end {
