@@ -13,7 +13,7 @@ use std::borrow::Cow;
 
 use crate::{database::Database, state::IterDirection};
 
-use super::scalars::{Address, MessageId, OwnerAndMessageIdCursor, U64};
+use super::scalars::{Address, MessageId, OwnerAndMessageId, U64};
 
 pub struct DaMessage(pub(crate) model::DaMessage);
 
@@ -162,9 +162,8 @@ impl MessageQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<
-        Connection<OwnerAndMessageIdCursor, DaMessage, EmptyFields, EmptyFields>,
-    > {
+    ) -> async_graphql::Result<Connection<OwnerAndMessageId, DaMessage, EmptyFields, EmptyFields>>
+    {
         let db = ctx.data_unchecked::<Database>().clone();
 
         connection::query(
@@ -172,8 +171,8 @@ impl MessageQuery {
             before,
             first,
             last,
-            |after: Option<OwnerAndMessageIdCursor>,
-             before: Option<OwnerAndMessageIdCursor>,
+            |after: Option<OwnerAndMessageId>,
+             before: Option<OwnerAndMessageId>,
              first,
              last| async move {
                 let (records_to_fetch, direction) = if let Some(first) = first {
@@ -220,7 +219,7 @@ impl MessageQuery {
                     })
                     .take(records_to_fetch);
 
-                let mut message_ids: Vec<OwnerAndMessageIdCursor> = message_ids.try_collect()?;
+                let mut message_ids: Vec<OwnerAndMessageId> = message_ids.try_collect()?;
                 if direction == IterDirection::Forward {
                     message_ids.reverse();
                 }
@@ -248,7 +247,7 @@ impl MessageQuery {
                         },
                     ));
 
-                Ok::<Connection<OwnerAndMessageIdCursor, DaMessage>, anyhow::Error>(connection)
+                Ok::<Connection<OwnerAndMessageId, DaMessage>, anyhow::Error>(connection)
             },
         )
         .await
