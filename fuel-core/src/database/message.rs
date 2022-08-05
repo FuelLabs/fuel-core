@@ -1,5 +1,6 @@
 use crate::{
     database::{columns, Database, KvStoreError},
+    schema::scalars::OwnerAndMessageIdCursor,
     state::{Error, IterDirection},
 };
 use fuel_core_interfaces::{
@@ -75,6 +76,29 @@ impl Database {
                 MessageId::new(unsafe { *Bytes32::from_slice_unchecked(&key[32..64]) })
             })
         })
+    }
+
+    pub fn all_owners_and_message_ids(
+        &self,
+        start: Option<OwnerAndMessageIdCursor>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<OwnerAndMessageIdCursor, Error>> + '_ {
+        let start = start.map(|v| owner_msg_id_key(&v.owner.into(), &v.message_id.into()));
+        self.iter_all::<Vec<u8>, bool>(columns::OWNED_MESSAGE_IDS, None, start, direction)
+            .map(|res| {
+                res.map(|(key, _)| {
+                    // Safety: key is always 64 bytes
+                    unsafe {
+                        OwnerAndMessageIdCursor {
+                            owner: Address::from_slice_unchecked(&key[0..32]).into(),
+                            message_id: MessageId::new(*Bytes32::from_slice_unchecked(
+                                &key[32..64],
+                            ))
+                            .into(),
+                        }
+                    }
+                })
+            })
     }
 }
 
