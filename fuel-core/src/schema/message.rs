@@ -129,7 +129,7 @@ impl MessageQuery {
                 let messages: Vec<Cow<model::DaMessage>> = message_ids
                     .iter()
                     .map(|msg_id| {
-                        Storage::<fuel_types::MessageId, model::DaMessage>::get(&db, msg_id.into())
+                        Storage::<fuel_types::MessageId, model::DaMessage>::get(&db, msg_id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?
                     })
