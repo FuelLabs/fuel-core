@@ -106,7 +106,6 @@ impl MessageQuery {
                 }
 
                 let message_ids = message_ids.take(records_to_fetch + 1);
-
                 let message_ids: Vec<fuel_types::MessageId> = message_ids.try_collect()?;
                 let has_next_page = message_ids.len() > records_to_fetch;
 
@@ -181,14 +180,11 @@ impl MessageQuery {
                 }
 
                 let start;
-                let end;
 
                 if direction == IterDirection::Forward {
                     start = after;
-                    end = before;
                 } else {
                     start = before;
-                    end = after;
                 }
 
                 let mut message_ids = db.all_owners_and_message_ids(start.clone(), Some(direction));
@@ -198,24 +194,13 @@ impl MessageQuery {
                     started = message_ids.next();
                 }
 
-                let message_ids = message_ids
-                    .take_while(|r| {
-                        if let (Ok(next), Some(end)) = (r, &end) {
-                            if next.message_id.0 == end.message_id.0 {
-                                return false;
-                            }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch);
+                let message_ids = message_ids.take(records_to_fetch + 1);
+                let message_ids: Vec<OwnerAndMessageId> = message_ids.try_collect()?;
+                let has_next_page = message_ids.len() > records_to_fetch;
 
-                let mut message_ids: Vec<OwnerAndMessageId> = message_ids.try_collect()?;
-                if direction == IterDirection::Forward {
-                    message_ids.reverse();
-                }
-
-                let messages: Vec<Cow<model::DaMessage>> = message_ids
+                let mut messages: Vec<Cow<model::DaMessage>> = message_ids
                     .iter()
+                    .take(records_to_fetch)
                     .map(|value| {
                         Storage::<fuel_types::MessageId, model::DaMessage>::get(
                             &db,
@@ -226,8 +211,11 @@ impl MessageQuery {
                     })
                     .try_collect()?;
 
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= messages.len());
+                if direction == IterDirection::Forward {
+                    messages.reverse();
+                }
+
+                let mut connection = Connection::new(started.is_some(), has_next_page);
 
                 connection
                     .edges

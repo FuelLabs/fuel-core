@@ -33,7 +33,7 @@ async fn messages() {
         ..Default::default()
     };
 
-    // store the messaages
+    // store the messages
     let first_id = MessageId::new([1; 32]);
     let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &first_id, &first_msg).unwrap();
 
