@@ -18,14 +18,20 @@ async fn messages() {
     let owner_b = Address::new([2; 32]);
 
     // create some messages for owner A
-    let mut first_msg = DaMessage::default();
-    first_msg.owner = owner_a;
-    let mut second_msg = DaMessage::default();
-    second_msg.owner = owner_a;
+    let mut first_msg = DaMessage {
+        owner: owner_a,
+        ..Default::default()
+    };
+    let mut second_msg = DaMessage {
+        owner: owner_a,
+        ..Default::default()
+    };
 
     // create a message for owner B
-    let mut third_msg = DaMessage::default();
-    third_msg.owner = owner_b;
+    let mut third_msg = DaMessage {
+        owner: owner_b,
+        ..Default::default()
+    };
 
     // store the messaages
     let first_id = MessageId::new([1; 32]);
