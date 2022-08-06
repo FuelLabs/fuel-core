@@ -446,6 +446,10 @@ impl FuelClient {
 
         Ok(balances)
     }
+
+    // pub async fn messages(
+    //     &self
+    // ) -> io::Result<PaginatedResult<schema::>>
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
