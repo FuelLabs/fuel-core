@@ -1,12 +1,13 @@
 use crate::{
     db::{Error as DbStateError, KvStoreError},
-    model::Coin,
     model::TxInfo,
+    model::{Coin, DaMessage},
 };
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
 use fuel_tx::{ContractId, UtxoId};
 use fuel_tx::{Transaction, TxId};
+use fuel_types::MessageId;
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
@@ -15,6 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
+    + Storage<MessageId, DaMessage, Error = KvStoreError>
     + Send
     + Sync
 {
@@ -24,6 +26,11 @@ pub trait TxPoolDb:
 
     fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
         Storage::<ContractId, Contract>::contains_key(self, &contract_id)
+    }
+
+    fn message(&self, message_id: MessageId) -> Result<Option<DaMessage>, KvStoreError> {
+        Storage::<MessageId, DaMessage>::get(self, &message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
     }
 }
 
@@ -164,6 +171,10 @@ pub enum Error {
         "Transaction is not inserted. More priced tx has created contract with ContractId {0:#x}"
     )]
     NotInsertedCollisionContractId(ContractId),
+    #[error(
+        "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
+    )]
+    NotInsertedCollisionMessageId(TxId, MessageId),
     #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}")]
     NotInsertedOutputNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
@@ -174,6 +185,10 @@ pub enum Error {
     NotInsertedInputUtxoIdNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO is spent: {0:#x}")]
     NotInsertedInputUtxoIdSpent(UtxoId),
+    #[error("Transaction is not inserted. Message is spent: {0:#x}")]
+    NotInsertedInputMessageIdSpent(MessageId),
+    #[error("Transaction is not inserted. Message id {0:#x} does not match any received message from the DA layer.")]
+    NotInsertedInputMessageUnknown(MessageId),
     #[error(
         "Transaction is not inserted. UTXO requires Contract input {0:#x} that is priced lower"
     )]
@@ -184,6 +199,8 @@ pub enum Error {
     NotInsertedIoWrongAmount,
     #[error("Transaction is not inserted. Input output mismatch. Coin output asset_id does not match expected inputs")]
     NotInsertedIoWrongAssetId,
+    #[error("Transaction is not inserted. The computed message id doesn't match the provided message id.")]
+    NotInsertedIoWrongMessageId,
     #[error(
         "Transaction is not inserted. Input output mismatch. Expected coin but output is contract"
     )]

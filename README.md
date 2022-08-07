@@ -77,6 +77,8 @@ Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 
 #### Troubleshooting
 
+##### Outdated database
+
 If you encounter an error such as
 
 ```console
@@ -84,6 +86,15 @@ thread 'main' panicked at 'unable to open database: DatabaseError(Error { messag
 ```
 
 Clear your local database using: `rm -rf ~/.fuel/db`
+
+##### File descriptor limits
+
+On some macOS versions the default file descriptor limit is quite low, which can lead to IO errors with messages like `Too many open files` or even `fatal runtime error: Rust cannot catch foreign exceptions` when RocksDB encounters these issues. Use the following command to increase the open file limit. Note that this only affects the current shell session, so consider adding it to `~/.zshrc`.
+
+```bash
+ulimit -n 10240
+```
+
 
 #### Log level
 
