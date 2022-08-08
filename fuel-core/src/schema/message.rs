@@ -89,13 +89,11 @@ impl MessageQuery {
                     return Err(anyhow!("Wrong argument combination"));
                 }
 
-                let start;
-
-                if direction == IterDirection::Forward {
-                    start = after;
+                let start = if direction == IterDirection::Forward {
+                    after
                 } else {
-                    start = before;
-                }
+                    before
+                };
 
                 let mut message_ids =
                     db.owned_message_ids(owner.into(), start.map(Into::into), Some(direction));
@@ -179,13 +177,11 @@ impl MessageQuery {
                     return Err(anyhow!("Wrong argument combination"));
                 }
 
-                let start;
-
-                if direction == IterDirection::Forward {
-                    start = after;
+                let start = if direction == IterDirection::Forward {
+                    after
                 } else {
-                    start = before;
-                }
+                     before
+                };
 
                 let mut message_ids = db.all_owners_and_message_ids(start.clone(), Some(direction));
                 let mut started = None;
