@@ -457,6 +457,19 @@ impl FuelClient {
 
         Ok(messages)
     }
+
+    pub async fn messages_by_owner(
+        &self,
+        owner: &str,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::message::DaMessage, String>> {
+        let owner: schema::Address = owner.parse()?;
+        let query = schema::message::OwnedDaMessageQuery::build(&(owner, request).into());
+
+        let messages = self.query(query).await?.messages_by_owner.into();
+
+        Ok(messages)
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]

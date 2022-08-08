@@ -56,5 +56,35 @@ async fn messages() {
     // verify that there are 3 messages stored in total
     assert_eq!(result.results.len(), 3);
 
-    // get the messages by owner
+    // get the messages from Owner A
+    let result = client
+        .messages_by_owner(
+            &format!("{:?}", owner_a),
+            PaginationRequest {
+                cursor: None,
+                results: 5,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+
+    // verify that Owner A has 2 messages
+    assert_eq!(result.results.len(), 2);
+
+    // get the messages from Owner B
+    let result = client
+        .messages_by_owner(
+            &format!("{:?}", owner_b),
+            PaginationRequest {
+                cursor: None,
+                results: 5,
+                direction: PageDirection::Forward,
+            },
+        )
+        .await
+        .unwrap();
+
+    // verify that Owner B has 1 message
+    assert_eq!(result.results.len(), 1);
 }

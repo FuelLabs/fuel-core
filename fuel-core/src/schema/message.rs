@@ -60,7 +60,7 @@ impl MessageQuery {
     async fn messages_by_owner(
         &self,
         ctx: &Context<'_>,
-        owner: Address,
+        #[graphql(desc = "address of the owner")] owner: Address,
         first: Option<i32>,
         after: Option<String>,
         last: Option<i32>,
@@ -97,6 +97,7 @@ impl MessageQuery {
 
                 let mut message_ids =
                     db.owned_message_ids(owner.into(), start.map(Into::into), Some(direction));
+
                 let mut started = None;
                 if start.is_some() {
                     // skip initial result
