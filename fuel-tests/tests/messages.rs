@@ -2,7 +2,7 @@ use fuel_core::{config::Config, database::Database, service::FuelService};
 use fuel_core_interfaces::common::fuel_storage::Storage;
 use fuel_core_interfaces::model::DaMessage;
 use fuel_crypto::fuel_types::{Address, MessageId};
-use fuel_gql_client::client::FuelClient;
+use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 
 #[tokio::test]
 async fn messages() {
@@ -11,7 +11,7 @@ async fn messages() {
     let srv = FuelService::from_database(db.clone(), Config::local_node())
         .await
         .unwrap();
-    let _client = FuelClient::from(srv.bound_address);
+    let client = FuelClient::from(srv.bound_address);
 
     // create some owners
     let owner_a = Address::new([1; 32]);
@@ -44,6 +44,17 @@ async fn messages() {
     let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &third_id, &third_msg).unwrap();
 
     // get the messages
+    let result = client
+        .messages(PaginationRequest {
+            cursor: None,
+            results: 5,
+            direction: PageDirection::Forward,
+        })
+        .await
+        .unwrap();
+
+    // verify that there are 3 messages stored in total
+    assert_eq!(result.results.len(), 3);
 
     // get the messages by owner
 }

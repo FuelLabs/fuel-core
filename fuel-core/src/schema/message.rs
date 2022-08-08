@@ -47,7 +47,7 @@ impl DaMessage {
         self.0.da_height.into()
     }
 
-    async fn fuel_block_spend(&self) -> Option<u64> {
+    async fn fuel_block_spend(&self) -> Option<U64> {
         self.0.fuel_block_spend.map(|v| v.into())
     }
 }

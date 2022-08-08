@@ -447,9 +447,16 @@ impl FuelClient {
         Ok(balances)
     }
 
-    // pub async fn messages(
-    //     &self
-    // ) -> io::Result<PaginatedResult<schema::>>
+    pub async fn messages(
+        &self,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::message::DaMessage, String>> {
+        let query = schema::message::DaMessageQuery::build(&request.into());
+
+        let messages = self.query(query).await?.messages.into();
+
+        Ok(messages)
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
