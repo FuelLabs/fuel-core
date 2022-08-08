@@ -251,7 +251,7 @@ type DaMessage {
 	nonce: U64!
 	data: [Int!]!
 	daHeight: U64!
-	fuelBlockSpend: Int
+	fuelBlockSpend: U64
 }
 
 type DaMessageConnection {
