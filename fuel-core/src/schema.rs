@@ -41,6 +41,6 @@ pub fn build_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         Query::default(),
         Mutation::default(),
         EmptySubscription::default(),
-        ["TransactionConnection", "DaMessageConnection"],
+        ["TransactionConnection", "MessageConnection"],
     )
 }

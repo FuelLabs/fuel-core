@@ -3,7 +3,7 @@ use crate::client::schema::{schema, Address, U64};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DaMessage {
+pub struct Message {
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
@@ -20,23 +20,23 @@ pub struct DaMessage {
     graphql_type = "Query",
     argument_struct = "OwnedMessagesConnectionArgs"
 )]
-pub struct OwnedDaMessageQuery {
+pub struct OwnedMessageQuery {
     #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
-    pub messages: DaMessageConnection,
+    pub messages: MessageConnection,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DaMessageConnection {
-    pub edges: Vec<DaMessageEdge>,
+pub struct MessageConnection {
+    pub edges: Vec<MessageEdge>,
     pub page_info: PageInfo,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct DaMessageEdge {
+pub struct MessageEdge {
     pub cursor: String,
-    pub node: DaMessage,
+    pub node: Message,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -75,8 +75,8 @@ impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnect
     }
 }
 
-impl From<DaMessageConnection> for PaginatedResult<DaMessage, String> {
-    fn from(conn: DaMessageConnection) -> Self {
+impl From<MessageConnection> for PaginatedResult<Message, String> {
+    fn from(conn: MessageConnection) -> Self {
         PaginatedResult {
             cursor: conn.page_info.end_cursor,
             has_next_page: conn.page_info.has_next_page,
@@ -94,7 +94,7 @@ mod tests {
     fn owned_message_query_gql_output() {
         use cynic::QueryBuilder;
 
-        let operation = OwnedDaMessageQuery::build(OwnedMessagesConnectionArgs {
+        let operation = OwnedMessageQuery::build(OwnedMessagesConnectionArgs {
             owner: Some(Address::default()),
             after: None,
             before: None,
