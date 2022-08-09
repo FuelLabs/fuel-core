@@ -668,6 +668,7 @@ mod tests {
             owner: Address::default(),
             amount: 10,
             asset_id: AssetId::default(),
+            tx_pointer: Default::default(),
             witness_index: 0,
             maturity: 0,
         };

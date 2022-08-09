@@ -80,6 +80,7 @@ async fn balance() {
             asset_id: coin.asset_id.into(),
             maturity: coin.maturity.into(),
             witness_index: 0,
+            tx_pointer: Default::default(),
         });
     }
     let tx = tx
