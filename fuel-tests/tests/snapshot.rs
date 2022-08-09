@@ -1,6 +1,6 @@
 use fuel_core::{
     config::{
-        chain_config::{CoinConfig, ContractConfig, DaMessageConfig, StateConfig},
+        chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
         Config,
     },
     database::Database,
@@ -56,7 +56,7 @@ async fn snapshot_state_config() {
             })
             .collect(),
         ),
-        messages: Some(vec![DaMessageConfig {
+        messages: Some(vec![MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),

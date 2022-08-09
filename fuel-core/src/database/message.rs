@@ -1,5 +1,5 @@
 use crate::{
-    config::chain_config::DaMessageConfig,
+    config::chain_config::MessageConfig,
     database::{columns, Database, KvStoreError},
     state::{Error, IterDirection},
 };
@@ -79,13 +79,23 @@ impl Database {
         })
     }
 
-    pub fn get_message_config(&self) -> Result<Option<Vec<DaMessageConfig>>, anyhow::Error> {
-        let configs = self
-            .iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, None, None)
-            .map(|msg| -> Result<DaMessageConfig, anyhow::Error> {
-                let msg = msg?.1;
+    pub fn all_messages(
+        &self,
+        start: Option<MessageId>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
+        let start = start.map(|v| v.deref().to_vec());
+        self.iter_all::<Vec<u8>, Message>(columns::MESSAGES, None, start, direction)
+            .map(|res| res.map(|(_, message)| message))
+    }
 
-                Ok(DaMessageConfig {
+    pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
+        let configs = self
+            .all_messages(None, None)
+            .map(|msg| -> Result<MessageConfig, Error> {
+                let msg = msg?;
+
+                Ok(MessageConfig {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     owner: msg.owner,
@@ -95,19 +105,9 @@ impl Database {
                     da_height: msg.da_height,
                 })
             })
-            .collect::<Result<Vec<DaMessageConfig>, anyhow::Error>>()?;
+            .collect::<Result<Vec<MessageConfig>, Error>>()?;
 
         Ok(Some(configs))
-    }
-
-    pub fn all_messages(
-        &self,
-        start: Option<MessageId>,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
-        let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(columns::MESSAGES, None, start, direction)
-            .map(|res| res.map(|(_, message)| message))
     }
 }
 

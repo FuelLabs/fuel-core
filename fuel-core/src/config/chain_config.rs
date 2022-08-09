@@ -1,13 +1,12 @@
 use super::serialization::{HexNumber, HexType};
 use crate::{database::Database, model::BlockHeight};
-use fuel_core_interfaces::model::DaMessage;
 use fuel_core_interfaces::{
     common::{
         fuel_tx::ConsensusParameters,
         fuel_types::{Address, AssetId, Bytes32, Salt},
         fuel_vm::fuel_types::Word,
     },
-    model::DaBlockHeight,
+    model::{DaBlockHeight, Message},
 };
 use itertools::Itertools;
 use rand::{rngs::StdRng, SeedableRng};
@@ -120,7 +119,7 @@ pub struct StateConfig {
     /// Contract state
     pub contracts: Option<Vec<ContractConfig>>,
     /// Messages from Layer 1
-    pub messages: Option<Vec<DaMessageConfig>>,
+    pub messages: Option<Vec<MessageConfig>>,
     /// Starting block height (useful for flattened fork networks)
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
@@ -182,8 +181,8 @@ pub struct ContractConfig {
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct DaMessageConfig {
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct MessageConfig {
     pub sender: Address,
     pub recipient: Address,
     pub owner: Address,
@@ -197,9 +196,9 @@ pub struct DaMessageConfig {
     pub da_height: DaBlockHeight,
 }
 
-impl From<DaMessageConfig> for DaMessage {
-    fn from(msg: DaMessageConfig) -> Self {
-        DaMessage {
+impl From<MessageConfig> for Message {
+    fn from(msg: MessageConfig) -> Self {
+        Message {
             sender: msg.sender,
             recipient: msg.recipient,
             owner: msg.owner,

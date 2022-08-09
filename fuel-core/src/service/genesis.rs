@@ -7,7 +7,7 @@ use crate::{
     service::FuelService,
 };
 use anyhow::Result;
-use fuel_core_interfaces::model::DaMessage;
+use fuel_core_interfaces::model::Message;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{MerkleStorage, Storage},
@@ -142,7 +142,7 @@ impl FuelService {
     fn init_da_messages(db: &mut Database, state: &StateConfig) -> Result<()> {
         if let Some(message_state) = &state.messages {
             for msg in message_state {
-                let message = DaMessage {
+                let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
                     owner: msg.owner,
@@ -153,7 +153,7 @@ impl FuelService {
                     fuel_block_spend: None,
                 };
 
-                Storage::<MessageId, DaMessage>::insert(db, &message.id(), &message)?;
+                Storage::<MessageId, Message>::insert(db, &message.id(), &message)?;
             }
         }
 
@@ -181,7 +181,7 @@ mod tests {
 
     use super::*;
     use crate::config::chain_config::{
-        ChainConfig, CoinConfig, ContractConfig, DaMessageConfig, StateConfig,
+        ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig,
     };
     use crate::config::Config;
     use crate::model::BlockHeight;
@@ -189,6 +189,7 @@ mod tests {
         fuel_asm::Opcode,
         fuel_types::{Address, AssetId, Word},
     };
+    use fuel_core_interfaces::model::Message;
     use itertools::Itertools;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
@@ -384,7 +385,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(32492);
         let mut config = Config::local_node();
 
-        let msg = DaMessageConfig {
+        let msg = MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),
@@ -403,9 +404,9 @@ mod tests {
 
         FuelService::initialize_state(&config, &db).unwrap();
 
-        let expected_msg: DaMessage = msg.into();
+        let expected_msg: Message = msg.into();
 
-        let ret_msg = Storage::<MessageId, DaMessage>::get(&db, &expected_msg.id())
+        let ret_msg = Storage::<MessageId, Message>::get(&db, &expected_msg.id())
             .unwrap()
             .unwrap()
             .into_owned();
