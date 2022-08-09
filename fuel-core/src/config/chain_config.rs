@@ -132,8 +132,7 @@ impl StateConfig {
         Ok(StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
-            /// TODO if you see this in reivie yell at me
-            messages: None,
+            messages: db.get_message_config()?,
             height: db.get_block_height()?,
         })
     }

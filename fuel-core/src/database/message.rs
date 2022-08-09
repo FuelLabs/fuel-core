@@ -1,4 +1,5 @@
 use crate::{
+    config::chain_config::DaMessageConfig,
     database::{columns, Database, KvStoreError},
     state::{Error, IterDirection},
 };
@@ -75,6 +76,27 @@ impl Database {
                 MessageId::new(unsafe { *Bytes32::from_slice_unchecked(&key[32..64]) })
             })
         })
+    }
+
+    pub fn get_message_config(&self) -> Result<Option<Vec<DaMessageConfig>>, anyhow::Error> {
+        let configs = self.
+            iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, None, None)
+            .map(|msg| -> Result<DaMessageConfig, anyhow::Error> {
+                let msg = msg?.1;
+
+                Ok(DaMessageConfig {
+                    sender: msg.sender,
+                    recipient: msg.recipient,
+                    owner: msg.owner,
+                    nonce: msg.nonce,
+                    amount: msg.amount,
+                    data: msg.data,
+                    da_height: msg.da_height
+                })
+            })
+            .collect::<Result<Vec<DaMessageConfig>, anyhow::Error>>()?;
+        
+        Ok(Some(configs))
     }
 }
 
