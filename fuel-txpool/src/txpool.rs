@@ -857,7 +857,7 @@ pub mod tests {
             .finalize();
 
         let db = helpers::MockDb::default();
-        // Do not insert any DA messages into the DB to ensure there is no matching message for the
+        // Do not insert any messages into the DB to ensure there is no matching message for the
         // tx.
 
         let mut txpool = TxPool::new(Default::default());
