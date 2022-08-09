@@ -183,13 +183,17 @@ pub struct ContractConfig {
 #[serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
 pub struct MessageConfig {
+    #[serde_as(as = "HexType")]
     pub sender: Address,
+    #[serde_as(as = "HexType")]
     pub recipient: Address,
+    #[serde_as(as = "HexType")]
     pub owner: Address,
     #[serde_as(as = "HexNumber")]
     pub nonce: Word,
     #[serde_as(as = "HexNumber")]
     pub amount: Word,
+    #[serde_as(as = "HexType")]
     pub data: Vec<u8>,
     /// The block height from the parent da layer that originated this message
     #[serde_as(as = "HexNumber")]
@@ -337,6 +341,21 @@ mod tests {
         assert_eq!(config, deserialized_config);
     }
 
+    #[test]
+    fn snapshot_simple_message_state() {
+        let config = test_message_config();
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        insta::assert_snapshot!(json);
+    }
+
+    #[test]
+    fn can_roundtrip_simple_message_state() {
+        let config = test_message_config();
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        assert_eq!(config, deserialized_config);
+    }
+
     fn test_config_contract(state: bool, balances: bool) -> ChainConfig {
         let mut rng = StdRng::seed_from_u64(1);
         let state = if state {
@@ -390,6 +409,26 @@ mod tests {
                     owner,
                     amount,
                     asset_id,
+                }]),
+                ..Default::default()
+            }),
+            ..ChainConfig::local_testnet()
+        }
+    }
+
+    fn test_message_config() -> ChainConfig {
+        let mut rng = StdRng::seed_from_u64(1);
+
+        ChainConfig {
+            initial_state: Some(StateConfig {
+                messages: Some(vec![MessageConfig {
+                    sender: rng.gen(),
+                    recipient: rng.gen(),
+                    owner: rng.gen(),
+                    nonce: rng.gen(),
+                    amount: rng.gen(),
+                    data: vec![rng.gen()],
+                    da_height: rng.gen(),
                 }]),
                 ..Default::default()
             }),
