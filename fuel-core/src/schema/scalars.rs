@@ -56,28 +56,6 @@ impl SortedTxCursor {
         }
     }
 }
-#[derive(Clone, Debug)]
-pub struct OwnerAndMessageId {
-    pub owner: Address,
-    pub message_id: MessageId,
-}
-
-impl CursorType for OwnerAndMessageId {
-    type Error = String;
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        let (owner, msg_id) = s.split_once('#').ok_or("Incorrect format provided")?;
-
-        Ok(OwnerAndMessageId {
-            owner: Address::from_str(owner)?,
-            message_id: MessageId::from_str(msg_id)?,
-        })
-    }
-
-    fn encode_cursor(&self) -> String {
-        format!("{}#{}", self.owner, self.message_id)
-    }
-}
 
 impl CursorType for SortedTxCursor {
     type Error = String;
