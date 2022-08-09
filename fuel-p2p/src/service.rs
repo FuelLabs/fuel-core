@@ -216,12 +216,10 @@ mod tests {
     async fn nodes_connected_via_mdns() {
         // Node A
         let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_mdns");
-        p2p_config.tcp_port = 4001;
         p2p_config.enable_mdns = true;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // Node B
-        p2p_config.tcp_port = 4002;
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 
         loop {
@@ -247,7 +245,6 @@ mod tests {
     async fn nodes_connected_via_identify() {
         // Node A
         let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_identify");
-        p2p_config.tcp_port = 4003;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
@@ -256,7 +253,6 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4004;
         p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
@@ -264,7 +260,6 @@ mod tests {
         let mut node_b = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // Node C
-        p2p_config.tcp_port = 4005;
         let mut node_c = build_fuel_p2p_service(p2p_config).await;
 
         loop {
@@ -296,7 +291,6 @@ mod tests {
     async fn peer_info_updates_work() {
         // Node A
         let mut p2p_config = P2PConfig::default_with_network("peer_info_updates_work");
-        p2p_config.tcp_port = 4006;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
@@ -305,7 +299,6 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4007;
         p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
@@ -339,42 +332,32 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_tx() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default())),
-            4008,
-            4009,
-        )
+        gossipsub_broadcast(GossipsubBroadcastRequest::NewTx(Arc::new(
+            Transaction::default(),
+        )))
         .await;
     }
 
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_vote() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::ConsensusVote(Arc::new(ConsensusVote::default())),
-            4010,
-            4011,
-        )
+        gossipsub_broadcast(GossipsubBroadcastRequest::ConsensusVote(Arc::new(
+            ConsensusVote::default(),
+        )))
         .await;
     }
 
     #[tokio::test]
     #[instrument]
     async fn gossipsub_broadcast_block() {
-        gossipsub_broadcast(
-            GossipsubBroadcastRequest::NewBlock(Arc::new(FuelBlock::default())),
-            4012,
-            4013,
-        )
+        gossipsub_broadcast(GossipsubBroadcastRequest::NewBlock(Arc::new(
+            FuelBlock::default(),
+        )))
         .await;
     }
 
     /// Reusable helper function for Broadcasting Gossipsub requests
-    async fn gossipsub_broadcast(
-        broadcast_request: GossipsubBroadcastRequest,
-        port_a: u16,
-        port_b: u16,
-    ) {
+    async fn gossipsub_broadcast(broadcast_request: GossipsubBroadcastRequest) {
         let mut p2p_config = P2PConfig::default_with_network("gossipsub_exchanges_messages");
         let topics = vec![
             NEW_TX_GOSSIP_TOPIC.into(),
@@ -395,7 +378,6 @@ mod tests {
         let mut message_sent = false;
 
         // Node A
-        p2p_config.tcp_port = port_a;
         p2p_config.topics = topics.clone();
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
@@ -405,7 +387,6 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = port_b;
         p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
@@ -477,7 +458,6 @@ mod tests {
         let mut p2p_config = P2PConfig::default_with_network("request_response_works");
 
         // Node A
-        p2p_config.tcp_port = 4014;
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {
@@ -486,7 +466,6 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4015;
         p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
@@ -567,7 +546,6 @@ mod tests {
         let mut p2p_config = P2PConfig::default_with_network("req_res_outbound_timeout_works");
 
         // Node A
-        p2p_config.tcp_port = 4016;
         // setup request timeout to 0 in order for the Request to fail
         p2p_config.set_request_timeout = Some(Duration::from_secs(0));
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
@@ -578,7 +556,6 @@ mod tests {
         };
 
         // Node B
-        p2p_config.tcp_port = 4017;
         p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),

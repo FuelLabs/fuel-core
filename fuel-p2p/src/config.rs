@@ -70,7 +70,7 @@ impl P2PConfig {
             local_keypair,
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
-            tcp_port: 4000,
+            tcp_port: 0,
             max_block_size: 100_000,
             bootstrap_nodes: vec![],
             enable_mdns: false,
