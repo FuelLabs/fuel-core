@@ -1,13 +1,13 @@
 mod balances;
 mod blocks;
 mod chain;
-mod messages;
 mod coin;
 mod contract;
 mod dap;
 mod debugger;
 mod health;
 mod helpers;
+mod messages;
 mod node_info;
 mod snapshot;
 mod tx;

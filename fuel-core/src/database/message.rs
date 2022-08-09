@@ -79,8 +79,8 @@ impl Database {
     }
 
     pub fn get_message_config(&self) -> Result<Option<Vec<DaMessageConfig>>, anyhow::Error> {
-        let configs = self.
-            iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, None, None)
+        let configs = self
+            .iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, None, None)
             .map(|msg| -> Result<DaMessageConfig, anyhow::Error> {
                 let msg = msg?.1;
 
@@ -91,11 +91,11 @@ impl Database {
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data,
-                    da_height: msg.da_height
+                    da_height: msg.da_height,
                 })
             })
             .collect::<Result<Vec<DaMessageConfig>, anyhow::Error>>()?;
-        
+
         Ok(Some(configs))
     }
 }
