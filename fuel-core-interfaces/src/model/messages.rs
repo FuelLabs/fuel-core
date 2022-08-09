@@ -7,7 +7,7 @@ use fuel_types::{Address, MessageId, Word};
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct DaMessage {
+pub struct Message {
     pub sender: Address,
     pub recipient: Address,
     pub owner: Address,
@@ -19,7 +19,7 @@ pub struct DaMessage {
     pub fuel_block_spend: Option<BlockHeight>,
 }
 
-impl DaMessage {
+impl Message {
     pub fn id(&self) -> MessageId {
         let mut hasher = Hasher::default();
         hasher.input(self.sender);
@@ -31,38 +31,38 @@ impl DaMessage {
         MessageId::from(*hasher.digest())
     }
 
-    pub fn check(self) -> CheckedDaMessage {
+    pub fn check(self) -> CheckedMessage {
         let id = self.id();
-        CheckedDaMessage { message: self, id }
+        CheckedMessage { message: self, id }
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct CheckedDaMessage {
-    message: DaMessage,
+pub struct CheckedMessage {
+    message: Message,
     id: MessageId,
 }
 
-impl CheckedDaMessage {
+impl CheckedMessage {
     pub fn id(&self) -> &MessageId {
         &self.id
     }
 }
 
-impl From<CheckedDaMessage> for DaMessage {
-    fn from(checked_message: CheckedDaMessage) -> Self {
+impl From<CheckedMessage> for Message {
+    fn from(checked_message: CheckedMessage) -> Self {
         checked_message.message
     }
 }
 
-impl AsRef<DaMessage> for CheckedDaMessage {
-    fn as_ref(&self) -> &DaMessage {
+impl AsRef<Message> for CheckedMessage {
+    fn as_ref(&self) -> &Message {
         &self.message
     }
 }
 
-impl Deref for CheckedDaMessage {
-    type Target = DaMessage;
+impl Deref for CheckedMessage {
+    type Target = Message;
 
     fn deref(&self) -> &Self::Target {
         &self.message

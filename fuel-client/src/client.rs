@@ -451,9 +451,9 @@ impl FuelClient {
         &self,
         owner: Option<&str>,
         request: PaginationRequest<String>,
-    ) -> io::Result<PaginatedResult<schema::message::DaMessage, String>> {
+    ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
         let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
-        let query = schema::message::OwnedDaMessageQuery::build(&(owner, request).into());
+        let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
 
         let messages = self.query(query).await?.messages.into();
 

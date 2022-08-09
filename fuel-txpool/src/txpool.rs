@@ -258,7 +258,7 @@ pub mod tests {
                 fuel_tx::{Contract, ContractId, MessageId, UtxoId},
             },
             db::{self, KvStoreError},
-            model::{Coin, DaMessage},
+            model::{Coin, Message},
             txpool::TxPoolDb,
         };
         use std::{
@@ -271,7 +271,7 @@ pub mod tests {
         pub(crate) struct Data {
             pub coins: HashMap<UtxoId, Coin>,
             pub contracts: HashMap<ContractId, Contract>,
-            pub messages: HashMap<MessageId, DaMessage>,
+            pub messages: HashMap<MessageId, Message>,
         }
 
         #[derive(Default)]
@@ -343,14 +343,14 @@ pub mod tests {
             }
         }
 
-        impl Storage<MessageId, DaMessage> for MockDb {
+        impl Storage<MessageId, Message> for MockDb {
             type Error = db::KvStoreError;
 
             fn insert(
                 &mut self,
                 key: &MessageId,
-                value: &DaMessage,
-            ) -> Result<Option<DaMessage>, Self::Error> {
+                value: &Message,
+            ) -> Result<Option<Message>, Self::Error> {
                 Ok(self
                     .data
                     .lock()
@@ -359,14 +359,11 @@ pub mod tests {
                     .insert(*key, value.clone()))
             }
 
-            fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
+            fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
                 Ok(self.data.lock().unwrap().messages.remove(key))
             }
 
-            fn get<'a>(
-                &'a self,
-                key: &MessageId,
-            ) -> Result<Option<Cow<'a, DaMessage>>, Self::Error> {
+            fn get<'a>(&'a self, key: &MessageId) -> Result<Option<Cow<'a, Message>>, Self::Error> {
                 Ok(self
                     .data
                     .lock()
@@ -383,7 +380,7 @@ pub mod tests {
 
         impl TxPoolDb for MockDb {}
 
-        pub(crate) fn create_message_predicate_from_message(message: &DaMessage) -> Input {
+        pub(crate) fn create_message_predicate_from_message(message: &Message) -> Input {
             Input::message_predicate(
                 message.id(),
                 message.sender,
@@ -406,7 +403,7 @@ pub mod tests {
             fuel_tx::{TransactionBuilder, UtxoId},
         },
         db::helpers::*,
-        model::{CoinStatus, DaMessage},
+        model::{CoinStatus, Message},
     };
     use std::{cmp::Reverse, sync::Arc};
 
@@ -803,7 +800,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
-        let message = DaMessage {
+        let message = Message {
             ..Default::default()
         };
 
@@ -827,7 +824,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_rejected_when_input_message_id_is_spent() {
-        let message = DaMessage {
+        let message = Message {
             fuel_block_spend: Some(1u64.into()),
             ..Default::default()
         };
@@ -854,13 +851,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
-        let message = DaMessage::default();
+        let message = Message::default();
         let tx = TransactionBuilder::script(vec![], vec![])
             .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
         let db = helpers::MockDb::default();
-        // Do not insert any DA messages into the DB to ensure there is no matching message for the
+        // Do not insert any messages into the DB to ensure there is no matching message for the
         // tx.
 
         let mut txpool = TxPool::new(Default::default());
@@ -880,7 +877,7 @@ pub mod tests {
     #[tokio::test]
     async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id() {
         let message_amount = 10_000;
-        let message = DaMessage {
+        let message = Message {
             amount: message_amount,
             ..Default::default()
         };
@@ -929,7 +926,7 @@ pub mod tests {
     #[tokio::test]
     async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
         let message_amount = 10_000;
-        let message = DaMessage {
+        let message = Message {
             amount: message_amount,
             ..Default::default()
         };
@@ -980,11 +977,11 @@ pub mod tests {
         // tx3 (message 2) gas_price 1
         //   works since tx1 is no longer part of txpool state even though gas price is less
 
-        let message_1 = DaMessage {
+        let message_1 = Message {
             amount: 10_000,
             ..Default::default()
         };
-        let message_2 = DaMessage {
+        let message_2 = Message {
             amount: 20_000,
             ..Default::default()
         };

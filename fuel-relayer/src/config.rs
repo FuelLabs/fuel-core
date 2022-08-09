@@ -12,7 +12,7 @@ pub fn keccak256(data: &'static str) -> H256 {
     H256::from_slice(out.as_slice())
 }
 
-pub(crate) static ETH_LOG_DA_MESSAGE: Lazy<H256> =
+pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
     Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
     Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     pub fn test_function_signatures() {
         assert_eq!(
-            *ETH_LOG_DA_MESSAGE,
+            *ETH_LOG_MESSAGE,
             H256::from_str("0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2")
                 .unwrap()
         );

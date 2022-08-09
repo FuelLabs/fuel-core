@@ -7,21 +7,21 @@ use fuel_core_interfaces::{
         fuel_storage::Storage,
         fuel_types::{Address, Bytes32, MessageId},
     },
-    model::DaMessage,
+    model::Message,
 };
 use std::borrow::Cow;
 use std::ops::Deref;
 
-impl Storage<MessageId, DaMessage> for Database {
+impl Storage<MessageId, Message> for Database {
     type Error = KvStoreError;
 
     fn insert(
         &mut self,
         key: &MessageId,
-        value: &DaMessage,
-    ) -> Result<Option<DaMessage>, KvStoreError> {
+        value: &Message,
+    ) -> Result<Option<Message>, KvStoreError> {
         // insert primary record
-        let result = Database::insert(self, key.as_ref(), columns::DA_MESSAGES, value.clone())?;
+        let result = Database::insert(self, key.as_ref(), columns::MESSAGES, value.clone())?;
 
         // insert secondary record by owner
         Database::insert(
@@ -34,13 +34,13 @@ impl Storage<MessageId, DaMessage> for Database {
         Ok(result)
     }
 
-    fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, KvStoreError> {
-        let result: Option<DaMessage> = Database::remove(self, key.as_ref(), columns::DA_MESSAGES)?;
+    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, KvStoreError> {
+        let result: Option<Message> = Database::remove(self, key.as_ref(), columns::MESSAGES)?;
 
-        if let Some(da_msg) = &result {
+        if let Some(message) = &result {
             Database::remove::<bool>(
                 self,
-                &owner_msg_id_key(&da_msg.owner, key),
+                &owner_msg_id_key(&message.owner, key),
                 columns::OWNED_MESSAGE_IDS,
             )?;
         }
@@ -48,12 +48,12 @@ impl Storage<MessageId, DaMessage> for Database {
         Ok(result)
     }
 
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<DaMessage>>, KvStoreError> {
-        Database::get(self, key.as_ref(), columns::DA_MESSAGES).map_err(Into::into)
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, KvStoreError> {
+        Database::get(self, key.as_ref(), columns::MESSAGES).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &MessageId) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), columns::DA_MESSAGES).map_err(Into::into)
+        Database::exists(self, key.as_ref(), columns::MESSAGES).map_err(Into::into)
     }
 }
 
@@ -82,9 +82,9 @@ impl Database {
         &self,
         start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<DaMessage, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, start, direction)
+        self.iter_all::<Vec<u8>, Message>(columns::MESSAGES, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 }
@@ -106,31 +106,31 @@ mod tests {
     #[test]
     fn owned_message_ids() {
         let mut db = Database::default();
-        let da_msg = DaMessage::default();
+        let message = Message::default();
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);
-        let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &first_id, &da_msg).unwrap();
+        let _ = Storage::<MessageId, Message>::insert(&mut db, &first_id, &message).unwrap();
 
         // insert a message with the second id with the same Owner
         let second_id = MessageId::new([2; 32]);
-        let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &second_id, &da_msg).unwrap();
+        let _ = Storage::<MessageId, Message>::insert(&mut db, &second_id, &message).unwrap();
 
         // verify that 2 message IDs are associated with a single Owner
-        let owned_msg_ids = db.owned_message_ids(da_msg.owner, None, None);
+        let owned_msg_ids = db.owned_message_ids(message.owner, None, None);
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
-        let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &first_id).unwrap();
+        let _ = Storage::<MessageId, Message>::remove(&mut db, &first_id).unwrap();
 
         // verify that only second ID is left
-        let owned_msg_ids: Vec<_> = db.owned_message_ids(da_msg.owner, None, None).collect();
+        let owned_msg_ids: Vec<_> = db.owned_message_ids(message.owner, None, None).collect();
         assert_eq!(owned_msg_ids.first().unwrap().as_ref().unwrap(), &second_id);
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
-        let _ = Storage::<MessageId, DaMessage>::remove(&mut db, &second_id).unwrap();
-        let owned_msg_ids = db.owned_message_ids(da_msg.owner, None, None);
+        let _ = Storage::<MessageId, Message>::remove(&mut db, &second_id).unwrap();
+        let owned_msg_ids = db.owned_message_ids(message.owner, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
 }

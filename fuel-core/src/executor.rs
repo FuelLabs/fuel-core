@@ -7,7 +7,7 @@ use crate::{
 use chrono::Utc;
 use fuel_core_interfaces::{
     common::fuel_tx::{CheckedTransaction, TransactionFee},
-    model::DaMessage,
+    model::Message,
 };
 use fuel_core_interfaces::{
     common::{
@@ -319,7 +319,7 @@ impl Executor {
                 Input::Contract { .. } => {}
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    if let Some(message) = Storage::<MessageId, DaMessage>::get(db, message_id)? {
+                    if let Some(message) = Storage::<MessageId, Message>::get(db, message_id)? {
                         if message.fuel_block_spend.is_some() {
                             return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
                         }
@@ -452,7 +452,7 @@ impl Executor {
                     ..
                 } => {
                     let da_height = if self.config.utxo_validation {
-                        Storage::<MessageId, DaMessage>::get(db, message_id)?
+                        Storage::<MessageId, Message>::get(db, message_id)?
                             .ok_or(Error::TransactionValidity(
                                 TransactionValidityError::MessageDoesNotExist(*message_id),
                             ))?
@@ -462,10 +462,10 @@ impl Executor {
                         Default::default()
                     };
 
-                    Storage::<MessageId, DaMessage>::insert(
+                    Storage::<MessageId, Message>::insert(
                         db,
                         message_id,
-                        &DaMessage {
+                        &Message {
                             da_height,
                             fuel_block_spend: Some(block_height),
                             sender: *sender,
@@ -817,7 +817,7 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
-    use fuel_core_interfaces::model::{CheckedDaMessage, DaMessage};
+    use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -1688,8 +1688,8 @@ mod tests {
     }
 
     /// Helper to build transactions and a message in it for some of the message tests
-    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, CheckedDaMessage) {
-        let mut message = DaMessage {
+    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, CheckedMessage) {
+        let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),
@@ -1721,11 +1721,11 @@ mod tests {
     }
 
     /// Helper to build database and executor for some of the message tests
-    async fn make_executor(messages: &[&CheckedDaMessage]) -> Executor {
+    async fn make_executor(messages: &[&CheckedMessage]) -> Executor {
         let mut database = Database::default();
 
         for message in messages {
-            database.insert_da_message(message).await;
+            database.insert_message(message).await;
         }
 
         Executor {

@@ -41,7 +41,7 @@ impl StakingDiff {
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<MessageId, DaMessage, Error = KvStoreError> // bridge messages
+     Storage<MessageId, Message, Error = KvStoreError> // bridge messages
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -50,11 +50,11 @@ pub trait RelayerDb:
 {
 
     /// add bridge message to database. Messages are not revertible.
-    async fn insert_da_message(
+    async fn insert_message(
         &mut self,
-        message: &CheckedDaMessage,
+        message: &CheckedMessage,
     ) {
-        let _ = Storage::<MessageId, DaMessage>::insert(self,message.id(),message.as_ref());
+        let _ = Storage::<MessageId, Message>::insert(self,message.id(),message.as_ref());
     }
 
     /// Insert difference make on staking in this particular DA height.
@@ -199,7 +199,7 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
+        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
         ValidatorId, ValidatorStake,
     },
 };

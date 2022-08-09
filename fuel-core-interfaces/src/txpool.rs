@@ -1,7 +1,7 @@
 use crate::{
     db::{Error as DbStateError, KvStoreError},
     model::TxInfo,
-    model::{Coin, DaMessage},
+    model::{Coin, Message},
 };
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
@@ -16,7 +16,7 @@ use tokio::sync::{mpsc, oneshot};
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
     + Storage<ContractId, Contract, Error = DbStateError>
-    + Storage<MessageId, DaMessage, Error = KvStoreError>
+    + Storage<MessageId, Message, Error = KvStoreError>
     + Send
     + Sync
 {
@@ -28,9 +28,8 @@ pub trait TxPoolDb:
         Storage::<ContractId, Contract>::contains_key(self, &contract_id)
     }
 
-    fn message(&self, message_id: MessageId) -> Result<Option<DaMessage>, KvStoreError> {
-        Storage::<MessageId, DaMessage>::get(self, &message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
+    fn message(&self, message_id: MessageId) -> Result<Option<Message>, KvStoreError> {
+        Storage::<MessageId, Message>::get(self, &message_id).map(|t| t.map(|t| t.as_ref().clone()))
     }
 }
 
