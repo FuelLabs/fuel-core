@@ -1,3 +1,4 @@
+use fuel_core::{config::Config, database::Database, service::FuelService};
 use fuel_core::{
     config::{
         chain_config::{DaMessageConfig, StateConfig},
@@ -5,16 +6,15 @@ use fuel_core::{
     },
     service::FuelService,
 };
-use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use fuel_crypto::SecretKey;
-use fuel_gql_client::client::FuelClient;
-use rand::{rngs::StdRng, Rng, SeedableRng};
-use std::ops::Deref;
-use fuel_core::{config::Config, database::Database, service::FuelService};
 use fuel_core_interfaces::common::fuel_storage::Storage;
+use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
 use fuel_core_interfaces::model::DaMessage;
 use fuel_crypto::fuel_types::{Address, MessageId};
+use fuel_crypto::SecretKey;
+use fuel_gql_client::client::FuelClient;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use rand::{rngs::StdRng, Rng, SeedableRng};
+use std::ops::Deref;
 
 #[tokio::test]
 async fn can_submit_genesis_message() {

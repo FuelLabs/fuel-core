@@ -98,6 +98,7 @@ impl Database {
             .collect::<Result<Vec<DaMessageConfig>, anyhow::Error>>()?;
 
         Ok(Some(configs))
+    }
 
     pub fn all_messages(
         &self,
