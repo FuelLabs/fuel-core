@@ -238,6 +238,7 @@ async fn coins_to_spend() {
             })
             .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client

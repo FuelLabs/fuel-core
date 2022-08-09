@@ -1,12 +1,13 @@
 use super::serialization::{HexNumber, HexType};
 use crate::{database::Database, model::BlockHeight};
+use fuel_core_interfaces::model::DaMessage;
 use fuel_core_interfaces::{
     common::{
         fuel_tx::ConsensusParameters,
         fuel_types::{Address, AssetId, Bytes32, Salt},
         fuel_vm::fuel_types::Word,
     },
-    model::{DaBlockHeight, DaMessage},
+    model::DaBlockHeight,
 };
 use itertools::Itertools;
 use rand::{rngs::StdRng, SeedableRng};
@@ -24,7 +25,6 @@ pub struct ChainConfig {
     pub block_production: ProductionStrategy,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
-    pub da_messages: Option<Vec<DaMessage>>,
     pub transaction_parameters: ConsensusParameters,
 }
 
@@ -34,7 +34,6 @@ impl Default for ChainConfig {
             chain_name: "local".into(),
             block_production: ProductionStrategy::Instant,
             transaction_parameters: ConsensusParameters::DEFAULT,
-            da_messages: None,
             initial_state: None,
         }
     }
@@ -69,7 +68,6 @@ impl ChainConfig {
 
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
-            da_messages: None,
             block_production: ProductionStrategy::Instant,
             initial_state: Some(StateConfig {
                 coins: Some(initial_coins),
@@ -121,8 +119,8 @@ pub struct StateConfig {
     pub coins: Option<Vec<CoinConfig>>,
     /// Contract state
     pub contracts: Option<Vec<ContractConfig>>,
-    /// Da Messages
-    pub msgs: Option<Vec<DaMessageConfig>>,
+    /// Messages from Layer 1
+    pub messages: Option<Vec<DaMessageConfig>>,
     /// Starting block height (useful for flattened fork networks)
     #[serde_as(as = "Option<HexNumber>")]
     #[serde(default)]
@@ -135,7 +133,7 @@ impl StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,
             /// TODO if you see this in reivie yell at me
-            msgs: None,
+            messages: None,
             height: db.get_block_height()?,
         })
     }
@@ -198,7 +196,21 @@ pub struct DaMessageConfig {
     /// The block height from the parent da layer that originated this message
     #[serde_as(as = "HexNumber")]
     pub da_height: DaBlockHeight,
-    pub fuel_block_spend: Option<BlockHeight>,
+}
+
+impl From<DaMessageConfig> for DaMessage {
+    fn from(msg: DaMessageConfig) -> Self {
+        DaMessage {
+            sender: msg.sender,
+            recipient: msg.recipient,
+            owner: msg.owner,
+            nonce: msg.nonce,
+            amount: msg.amount,
+            data: msg.data,
+            da_height: msg.da_height,
+            fuel_block_spend: None,
+        }
+    }
 }
 
 #[cfg(test)]

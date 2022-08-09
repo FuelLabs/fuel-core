@@ -1,7 +1,7 @@
 mod balances;
 mod blocks;
 mod chain;
-mod chain_conf;
+mod messages;
 mod coin;
 mod contract;
 mod dap;

@@ -33,10 +33,7 @@ impl FuelService {
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_coin_state(database, initial_state)?;
                 Self::init_contracts(database, initial_state)?;
-            }
-
-            if let Some(da_msgs) = &config.chain_conf.da_messages {
-                Self::init_da_messages(database, da_msgs)?;
+                Self::init_da_messages(database, initial_state)?;
             }
         }
 
@@ -142,9 +139,22 @@ impl FuelService {
         Ok(())
     }
 
-    fn init_da_messages(db: &mut Database, msgs: &Vec<DaMessage>) -> Result<()> {
-        for msg in msgs {
-            Storage::<MessageId, DaMessage>::insert(db, &msg.id(), msg)?;
+    fn init_da_messages(db: &mut Database, state: &StateConfig) -> Result<()> {
+        if let Some(message_state) = &state.messages {
+            for msg in message_state {
+                let message = DaMessage {
+                    sender: msg.sender,
+                    recipient: msg.recipient,
+                    owner: msg.owner,
+                    nonce: msg.nonce,
+                    amount: msg.amount,
+                    data: msg.data.clone(),
+                    da_height: msg.da_height,
+                    fuel_block_spend: None,
+                };
+
+                Storage::<MessageId, DaMessage>::insert(db, &message.id(), &message)?;
+            }
         }
 
         Ok(())
@@ -170,7 +180,9 @@ mod tests {
     use std::vec;
 
     use super::*;
-    use crate::config::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
+    use crate::config::chain_config::{
+        ChainConfig, CoinConfig, ContractConfig, DaMessageConfig, StateConfig,
+    };
     use crate::config::Config;
     use crate::model::BlockHeight;
     use fuel_core_interfaces::common::{
@@ -178,7 +190,6 @@ mod tests {
         fuel_types::{Address, AssetId, Word},
     };
     use itertools::Itertools;
-    use lazy_static::__Deref;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
     #[tokio::test]
@@ -373,27 +384,33 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(32492);
         let mut config = Config::local_node();
 
-        let msg = DaMessage {
+        let msg = DaMessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
             owner: rng.gen(),
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],
-            ..Default::default()
+            da_height: 0,
         };
 
-        config.chain_conf.da_messages = Some(vec![msg.clone()]);
+        config.chain_conf.initial_state = Some(StateConfig {
+            messages: Some(vec![msg.clone()]),
+            ..Default::default()
+        });
 
         let db = Database::default();
 
         FuelService::initialize_state(&config, &db).unwrap();
 
-        let msg2 = Storage::<MessageId, DaMessage>::get(&db, &msg.id())
-            .unwrap()
-            .unwrap();
+        let expected_msg: DaMessage = msg.into();
 
-        assert_eq!(&msg, msg2.deref());
+        let ret_msg = Storage::<MessageId, DaMessage>::get(&db, &expected_msg.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert_eq!(expected_msg, ret_msg);
     }
 
     #[tokio::test]

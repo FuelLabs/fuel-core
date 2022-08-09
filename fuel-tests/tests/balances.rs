@@ -42,6 +42,7 @@ async fn balance() {
             })
             .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client
@@ -142,6 +143,7 @@ async fn first_5_balances() {
                 })
                 .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client
