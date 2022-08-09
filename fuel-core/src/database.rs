@@ -262,7 +262,7 @@ impl InterpreterStorage for Database {
         Ok(height.into())
     }
 
-    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
+    fn timestamp(&self, _height: u32) -> Result<Word, Self::DataError> {
         todo!()
     }
 
