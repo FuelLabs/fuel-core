@@ -243,6 +243,46 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
+type DaMessage {
+	amount: U64!
+	sender: Address!
+	recipient: Address!
+	owner: Address!
+	nonce: U64!
+	data: [Int!]!
+	daHeight: U64!
+	fuelBlockSpend: U64
+}
+
+type DaMessageConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [DaMessageEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [DaMessage!]!
+}
+
+"""
+An edge in a connection.
+"""
+type DaMessageEdge {
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+	"""
+	The item at the end of the edge
+	"""
+	node: DaMessage!
+}
+
 """
 Implement the DateTime<Utc> scalar
 
@@ -399,6 +439,7 @@ type Query {
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
+	messages(owner: Address, first: Int, after: String, last: Int, before: String): DaMessageConnection!
 }
 
 type Receipt {
