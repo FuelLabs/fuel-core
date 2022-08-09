@@ -49,7 +49,7 @@ async fn messages_returns_messages_for_all_owners() {
         results: 5,
         direction: PageDirection::Forward,
     };
-    let result = client.messages(request).await.unwrap();
+    let result = client.messages(None, request).await.unwrap();
 
     // verify that there are 3 messages stored in total
     assert_eq!(result.results.len(), 3);
@@ -102,7 +102,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner A
     let result = client
-        .messages_by_owner(&owner_a.to_string(), request.clone())
+        .messages(Some(&owner_a.to_string()), request.clone())
         .await
         .unwrap();
 
@@ -111,7 +111,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // get the messages from Owner B
     let result = client
-        .messages_by_owner(&owner_b.to_string(), request.clone())
+        .messages(Some(&owner_b.to_string()), request.clone())
         .await
         .unwrap();
 
@@ -135,7 +135,7 @@ async fn messages_empty_results_for_owner_with_no_messages() {
     };
 
     let result = client
-        .messages_by_owner(&owner.to_string(), request)
+        .messages(Some(&owner.to_string()), request)
         .await
         .unwrap();
 

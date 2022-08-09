@@ -1,6 +1,5 @@
 use crate::{
     database::{columns, Database, KvStoreError},
-    schema::scalars::OwnerAndMessageId,
     state::{Error, IterDirection},
 };
 use fuel_core_interfaces::{
@@ -11,6 +10,7 @@ use fuel_core_interfaces::{
     model::DaMessage,
 };
 use std::borrow::Cow;
+use std::ops::Deref;
 
 impl Storage<MessageId, DaMessage> for Database {
     type Error = KvStoreError;
@@ -78,27 +78,14 @@ impl Database {
         })
     }
 
-    pub fn all_owners_and_message_ids(
+    pub fn all_messages(
         &self,
-        start: Option<OwnerAndMessageId>,
+        start: Option<MessageId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<OwnerAndMessageId, Error>> + '_ {
-        let start = start.map(|v| owner_msg_id_key(&v.owner.into(), &v.message_id.into()));
-        self.iter_all::<Vec<u8>, bool>(columns::OWNED_MESSAGE_IDS, None, start, direction)
-            .map(|res| {
-                res.map(|(key, _)| {
-                    // Safety: key is always 64 bytes
-                    unsafe {
-                        OwnerAndMessageId {
-                            owner: Address::from_slice_unchecked(&key[0..32]).into(),
-                            message_id: MessageId::new(*Bytes32::from_slice_unchecked(
-                                &key[32..64],
-                            ))
-                            .into(),
-                        }
-                    }
-                })
-            })
+    ) -> impl Iterator<Item = Result<DaMessage, Error>> + '_ {
+        let start = start.map(|v| v.deref().to_vec());
+        self.iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, start, direction)
+            .map(|res| res.map(|(_, message)| message))
     }
 }
 

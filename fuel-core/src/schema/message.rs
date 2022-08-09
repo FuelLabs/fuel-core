@@ -1,3 +1,5 @@
+use super::scalars::{Address, MessageId, U64};
+use crate::{database::Database, state::IterDirection};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{self, Connection, Edge, EmptyFields},
@@ -9,11 +11,6 @@ use fuel_core_interfaces::{
     model,
 };
 use itertools::Itertools;
-use std::borrow::Cow;
-
-use crate::{database::Database, state::IterDirection};
-
-use super::scalars::{Address, MessageId, OwnerAndMessageId, U64};
 
 pub struct DaMessage(pub(crate) model::DaMessage);
 
@@ -60,7 +57,7 @@ impl MessageQuery {
     async fn messages_by_owner(
         &self,
         ctx: &Context<'_>,
-        #[graphql(desc = "address of the owner")] owner: Address,
+        #[graphql(desc = "address of the owner")] owner: Option<Address>,
         first: Option<i32>,
         after: Option<String>,
         last: Option<i32>,
@@ -95,28 +92,42 @@ impl MessageQuery {
                     before
                 };
 
-                let mut message_ids =
-                    db.owned_message_ids(owner.into(), start.map(Into::into), Some(direction));
+                let (mut messages, has_next_page, has_previous_page) = if let Some(owner) = owner {
+                    let mut message_ids =
+                        db.owned_message_ids(owner.into(), start.map(Into::into), Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = message_ids.next();
+                    }
+                    let message_ids = message_ids.take(records_to_fetch + 1);
+                    let message_ids: Vec<fuel_types::MessageId> = message_ids.try_collect()?;
+                    let has_next_page = message_ids.len() > records_to_fetch;
 
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = message_ids.next();
-                }
-
-                let message_ids = message_ids.take(records_to_fetch + 1);
-                let message_ids: Vec<fuel_types::MessageId> = message_ids.try_collect()?;
-                let has_next_page = message_ids.len() > records_to_fetch;
-
-                let mut messages: Vec<Cow<model::DaMessage>> = message_ids
-                    .iter()
-                    .take(records_to_fetch)
-                    .map(|msg_id| {
-                        Storage::<fuel_types::MessageId, model::DaMessage>::get(&db, msg_id)
-                            .transpose()
-                            .ok_or(KvStoreError::NotFound)?
-                    })
-                    .try_collect()?;
+                    let messages: Vec<model::DaMessage> = message_ids
+                        .iter()
+                        .take(records_to_fetch)
+                        .map(|msg_id| {
+                            Storage::<fuel_types::MessageId, model::DaMessage>::get(&db, msg_id)
+                                .transpose()
+                                .ok_or(KvStoreError::NotFound)?
+                                .map(|f| f.into_owned())
+                        })
+                        .try_collect()?;
+                    (messages, has_next_page, started.is_some())
+                } else {
+                    let mut messages = db.all_messages(start.map(Into::into), Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = messages.next();
+                    }
+                    let messages: Vec<model::DaMessage> =
+                        messages.take(records_to_fetch + 1).try_collect()?;
+                    let has_next_page = messages.len() > records_to_fetch;
+                    let messages = messages.into_iter().take(records_to_fetch).collect();
+                    (messages, has_next_page, started.is_some())
+                };
 
                 // reverse after filtering next page test record to maintain consistent ordering
                 // in the response regardless of whether first or last was used.
@@ -124,105 +135,15 @@ impl MessageQuery {
                     messages.reverse();
                 }
 
-                let mut connection = Connection::new(started.is_some(), has_next_page);
+                let mut connection = Connection::new(has_previous_page, has_next_page);
 
-                connection
-                    .edges
-                    .extend(
-                        messages
-                            .into_iter()
-                            .zip(message_ids)
-                            .map(|(message, msg_id)| {
-                                Edge::new(msg_id.into(), DaMessage(message.into_owned()))
-                            }),
-                    );
+                connection.edges.extend(
+                    messages
+                        .into_iter()
+                        .map(|message| Edge::new(message.id().into(), DaMessage(message))),
+                );
 
                 Ok::<Connection<MessageId, DaMessage>, anyhow::Error>(connection)
-            },
-        )
-        .await
-    }
-
-    async fn messages(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<i32>,
-        after: Option<String>,
-        last: Option<i32>,
-        before: Option<String>,
-    ) -> async_graphql::Result<Connection<OwnerAndMessageId, DaMessage, EmptyFields, EmptyFields>>
-    {
-        let db = ctx.data_unchecked::<Database>().clone();
-
-        connection::query(
-            after,
-            before,
-            first,
-            last,
-            |after: Option<OwnerAndMessageId>,
-             before: Option<OwnerAndMessageId>,
-             first,
-             last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
-
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
-
-                let start = if direction == IterDirection::Forward {
-                    after
-                } else {
-                     before
-                };
-
-                let mut message_ids = db.all_owners_and_message_ids(start.clone(), Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = message_ids.next();
-                }
-
-                let message_ids = message_ids.take(records_to_fetch + 1);
-                let message_ids: Vec<OwnerAndMessageId> = message_ids.try_collect()?;
-                let has_next_page = message_ids.len() > records_to_fetch;
-
-                let mut messages: Vec<Cow<model::DaMessage>> = message_ids
-                    .iter()
-                    .take(records_to_fetch)
-                    .map(|value| {
-                        Storage::<fuel_types::MessageId, model::DaMessage>::get(
-                            &db,
-                            &value.message_id.into(),
-                        )
-                        .transpose()
-                        .ok_or(KvStoreError::NotFound)?
-                    })
-                    .try_collect()?;
-
-                if direction == IterDirection::Forward {
-                    messages.reverse();
-                }
-
-                let mut connection = Connection::new(started.is_some(), has_next_page);
-
-                connection
-                    .edges
-                    .extend(messages.into_iter().zip(message_ids).map(
-                        |(message, owner_msg_id)| {
-                            Edge::new(owner_msg_id, DaMessage(message.into_owned()))
-                        },
-                    ));
-
-                Ok::<Connection<OwnerAndMessageId, DaMessage>, anyhow::Error>(connection)
             },
         )
         .await

@@ -1,5 +1,5 @@
 use super::{PageDirection, PageInfo, PaginatedResult, PaginationRequest};
-use crate::client::schema::{schema, Address, ConnectionArgs, U64};
+use crate::client::schema::{schema, Address, U64};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -12,17 +12,6 @@ pub struct DaMessage {
     pub data: Vec<i32>,
     pub da_height: U64,
     pub fuel_block_spend: Option<U64>,
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
-)]
-pub struct DaMessageQuery {
-    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
-    pub messages: DaMessageConnection,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -53,7 +42,7 @@ pub struct DaMessageEdge {
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct OwnedMessagesConnectionArgs {
     /// Filter messages based on an owner
-    pub owner: Address,
+    pub owner: Option<Address>,
     /// Skip until coin id (forward pagination)
     pub after: Option<String>,
     /// Skip until coin id (backward pagination)
@@ -65,8 +54,8 @@ pub struct OwnedMessagesConnectionArgs {
     pub last: Option<i32>,
 }
 
-impl From<(Address, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {
-    fn from(r: (Address, PaginationRequest<String>)) -> Self {
+impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {
+    fn from(r: (Option<Address>, PaginationRequest<String>)) -> Self {
         match r.1.direction {
             PageDirection::Forward => OwnedMessagesConnectionArgs {
                 owner: r.0,
@@ -102,18 +91,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn da_message_query_gql_output() {
-        use cynic::QueryBuilder;
-        let operation = DaMessageQuery::build(ConnectionArgs::default());
-        insta::assert_snapshot!(operation.query)
-    }
-
-    #[test]
-    fn owned_da_message_query_gql_output() {
+    fn owned_message_query_gql_output() {
         use cynic::QueryBuilder;
 
         let operation = OwnedDaMessageQuery::build(OwnedMessagesConnectionArgs {
-            owner: Address::default(),
+            owner: Some(Address::default()),
             after: None,
             before: None,
             first: None,
