@@ -12,10 +12,10 @@ use fuel_core_interfaces::{
 };
 use itertools::Itertools;
 
-pub struct DaMessage(pub(crate) model::DaMessage);
+pub struct Message(pub(crate) model::Message);
 
 #[Object]
-impl DaMessage {
+impl Message {
     async fn amount(&self) -> U64 {
         self.0.amount.into()
     }
@@ -62,7 +62,7 @@ impl MessageQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<MessageId, DaMessage, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<MessageId, Message, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>().clone();
 
         connection::query(
@@ -104,11 +104,11 @@ impl MessageQuery {
                     let message_ids: Vec<fuel_types::MessageId> = message_ids.try_collect()?;
                     let has_next_page = message_ids.len() > records_to_fetch;
 
-                    let messages: Vec<model::DaMessage> = message_ids
+                    let messages: Vec<model::Message> = message_ids
                         .iter()
                         .take(records_to_fetch)
                         .map(|msg_id| {
-                            Storage::<fuel_types::MessageId, model::DaMessage>::get(&db, msg_id)
+                            Storage::<fuel_types::MessageId, model::Message>::get(&db, msg_id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|f| f.into_owned())
@@ -122,7 +122,7 @@ impl MessageQuery {
                         // skip initial result
                         started = messages.next();
                     }
-                    let messages: Vec<model::DaMessage> =
+                    let messages: Vec<model::Message> =
                         messages.take(records_to_fetch + 1).try_collect()?;
                     let has_next_page = messages.len() > records_to_fetch;
                     let messages = messages.into_iter().take(records_to_fetch).collect();
@@ -140,10 +140,10 @@ impl MessageQuery {
                 connection.edges.extend(
                     messages
                         .into_iter()
-                        .map(|message| Edge::new(message.id().into(), DaMessage(message))),
+                        .map(|message| Edge::new(message.id().into(), Message(message))),
                 );
 
-                Ok::<Connection<MessageId, DaMessage>, anyhow::Error>(connection)
+                Ok::<Connection<MessageId, Message>, anyhow::Error>(connection)
             },
         )
         .await

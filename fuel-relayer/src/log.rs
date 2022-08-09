@@ -8,12 +8,12 @@ use ethers_core::{
 use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
     common::fuel_types::{Address, Bytes32, Word},
-    model::{ConsensusId, DaMessage, ValidatorId},
+    model::{ConsensusId, Message, ValidatorId},
 };
 
 /// Bridge message send from da to fuel network.
 #[derive(Debug, Clone, PartialEq)]
-pub struct DaMessageLog {
+pub struct MessageLog {
     pub sender: Address,
     pub recipient: Address,
     pub owner: Address,
@@ -23,8 +23,8 @@ pub struct DaMessageLog {
     pub da_height: DaBlockHeight,
 }
 
-impl From<&DaMessageLog> for DaMessage {
-    fn from(message: &DaMessageLog) -> Self {
+impl From<&MessageLog> for Message {
+    fn from(message: &MessageLog) -> Self {
         Self {
             sender: message.sender,
             recipient: message.recipient,
@@ -41,7 +41,7 @@ impl From<&DaMessageLog> for DaMessage {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EthEventLog {
     // Bridge message from da side
-    DaMessage(DaMessageLog),
+    Message(MessageLog),
     // save it in validator set
     ValidatorRegistration {
         staking_key: ValidatorId,
@@ -83,9 +83,9 @@ impl TryFrom<&Log> for EthEventLog {
         }
 
         let log = match log.topics[0] {
-            n if n == *config::ETH_LOG_DA_MESSAGE => {
+            n if n == *config::ETH_LOG_MESSAGE => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for DaMessage"));
+                    return Err(anyhow!("Malformed topics for Message"));
                 }
 
                 let raw_log = RawLog {
@@ -101,7 +101,7 @@ impl TryFrom<&Log> for EthEventLog {
                 let recipient = Address::from(message.recipient);
                 let sender = Address::from(message.sender);
 
-                Self::DaMessage(DaMessageLog {
+                Self::Message(MessageLog {
                     amount,
                     data,
                     nonce,
@@ -338,7 +338,7 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_da_message(
+    pub fn eth_log_message(
         eth_block: u64,
         sender: Address,
         receipient: Address,
@@ -369,7 +369,7 @@ pub mod tests {
         log_default(
             eth_block,
             vec![
-                *config::ETH_LOG_DA_MESSAGE,
+                *config::ETH_LOG_MESSAGE,
                 H256::from_slice(sender.as_ref()),
                 H256::from_slice(receipient.as_ref()),
             ],
@@ -567,7 +567,7 @@ pub mod tests {
     }
 
     #[test]
-    fn eth_event_da_message_try_from_log() {
+    fn eth_event_message_try_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block: u64 = rng.gen();
         let sender: Address = rng.gen();
@@ -577,7 +577,7 @@ pub mod tests {
         let amount: u32 = rng.gen();
         let data: Vec<u8> = vec![1u8];
 
-        let log = eth_log_da_message(
+        let log = eth_log_message(
             eth_block,
             sender,
             receipient,
@@ -596,7 +596,7 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::DaMessage(DaMessageLog {
+            EthEventLog::Message(MessageLog {
                 sender,
                 recipient: receipient,
                 owner,

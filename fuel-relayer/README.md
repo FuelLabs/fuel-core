@@ -73,7 +73,7 @@ On the database side we have:
 * `StakingDIffs` table: for every da_block it contain staking diff. Staking diff contains un/registration of validator and delegations
 * `ValidatorSet` table: validator set at last finalized da block.
 * `DelegatesIndex` table: One delegation has a list of validators and delegation stakes, when undelegating or adding a new delegation, the old delegation needs to be removed. This index contains list of blocks where delegation happened so that we can traverse it and get that old delegation.
-* `DaMessage`: table of finalized bridge messages.
+* `Message`: table of finalized bridge messages.
 
 And some DB variables:
 

@@ -1,6 +1,6 @@
 use fuel_core::{config::Config, database::Database, service::FuelService};
 use fuel_core_interfaces::common::fuel_storage::Storage;
-use fuel_core_interfaces::model::DaMessage;
+use fuel_core_interfaces::model::Message;
 use fuel_crypto::fuel_types::{Address, MessageId};
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 
@@ -18,30 +18,30 @@ async fn messages_returns_messages_for_all_owners() {
     let owner_b = Address::new([2; 32]);
 
     // create some messages for owner A
-    let first_msg = DaMessage {
+    let first_msg = Message {
         owner: owner_a,
         ..Default::default()
     };
-    let second_msg = DaMessage {
+    let second_msg = Message {
         owner: owner_a,
         ..Default::default()
     };
 
     // create a message for owner B
-    let third_msg = DaMessage {
+    let third_msg = Message {
         owner: owner_b,
         ..Default::default()
     };
 
     // store the messages
     let first_id = MessageId::new([1; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &first_id, &first_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &first_id, &first_msg).unwrap();
 
     let second_id = MessageId::new([2; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &second_id, &second_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &second_id, &second_msg).unwrap();
 
     let third_id = MessageId::new([3; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &third_id, &third_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &third_id, &third_msg).unwrap();
 
     // get the messages
     let request = PaginationRequest {
@@ -69,30 +69,30 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     let owner_b = Address::new([2; 32]);
 
     // create some messages for owner A
-    let first_msg = DaMessage {
+    let first_msg = Message {
         owner: owner_a,
         ..Default::default()
     };
-    let second_msg = DaMessage {
+    let second_msg = Message {
         owner: owner_a,
         ..Default::default()
     };
 
     // create a message for owner B
-    let third_msg = DaMessage {
+    let third_msg = Message {
         owner: owner_b,
         ..Default::default()
     };
 
     // store the messages
     let first_id = MessageId::new([1; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &first_id, &first_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &first_id, &first_msg).unwrap();
 
     let second_id = MessageId::new([2; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &second_id, &second_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &second_id, &second_msg).unwrap();
 
     let third_id = MessageId::new([3; 32]);
-    let _ = Storage::<MessageId, DaMessage>::insert(&mut db, &third_id, &third_msg).unwrap();
+    let _ = Storage::<MessageId, Message>::insert(&mut db, &third_id, &third_msg).unwrap();
 
     let request = PaginationRequest {
         cursor: None,

@@ -69,7 +69,7 @@ pub mod columns {
     pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
-    pub const DA_MESSAGES: u32 = 14;
+    pub const MESSAGES: u32 = 14;
     /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
     /// contain diff between da blocks it contains new registers consensus key and new delegate sets.

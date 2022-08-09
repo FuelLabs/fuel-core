@@ -243,7 +243,7 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
-type DaMessage {
+type Message {
 	amount: U64!
 	sender: Address!
 	recipient: Address!
@@ -254,7 +254,7 @@ type DaMessage {
 	fuelBlockSpend: U64
 }
 
-type DaMessageConnection {
+type MessageConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -262,17 +262,17 @@ type DaMessageConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [DaMessageEdge!]!
+	edges: [MessageEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [DaMessage!]!
+	nodes: [Message!]!
 }
 
 """
 An edge in a connection.
 """
-type DaMessageEdge {
+type MessageEdge {
 	"""
 	A cursor for use in pagination
 	"""
@@ -280,7 +280,7 @@ type DaMessageEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: DaMessage!
+	node: Message!
 }
 
 """
@@ -439,7 +439,7 @@ type Query {
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
-	messages(owner: Address, first: Int, after: String, last: Int, before: String): DaMessageConnection!
+	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 }
 
 type Receipt {
