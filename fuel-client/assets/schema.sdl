@@ -439,7 +439,7 @@ type Query {
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
-	messagesByOwner(owner: Address, first: Int, after: String, last: Int, before: String): DaMessageConnection!
+	messages(owner: Address, first: Int, after: String, last: Int, before: String): DaMessageConnection!
 }
 
 type Receipt {

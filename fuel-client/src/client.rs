@@ -455,7 +455,7 @@ impl FuelClient {
         let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
         let query = schema::message::OwnedDaMessageQuery::build(&(owner, request).into());
 
-        let messages = self.query(query).await?.messages_by_owner.into();
+        let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
     }

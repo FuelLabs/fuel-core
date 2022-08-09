@@ -4,7 +4,7 @@ assertion_line: 105
 expression: operation.query
 ---
 query Query($_0: Address, $_1: Int, $_2: String, $_3: Int, $_4: String) {
-  messagesByOwner(owner: $_0, first: $_1, after: $_2, last: $_3, before: $_4) {
+  messages(owner: $_0, first: $_1, after: $_2, last: $_3, before: $_4) {
     edges {
       cursor
       node {

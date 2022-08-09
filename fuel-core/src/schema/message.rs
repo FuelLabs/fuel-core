@@ -54,7 +54,7 @@ pub struct MessageQuery {}
 
 #[Object]
 impl MessageQuery {
-    async fn messages_by_owner(
+    async fn messages(
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "address of the owner")] owner: Option<Address>,

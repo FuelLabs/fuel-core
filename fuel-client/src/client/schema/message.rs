@@ -22,7 +22,7 @@ pub struct DaMessage {
 )]
 pub struct OwnedDaMessageQuery {
     #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
-    pub messages_by_owner: DaMessageConnection,
+    pub messages: DaMessageConnection,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
