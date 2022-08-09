@@ -11,6 +11,7 @@ use fuel_core_interfaces::{
     model::DaMessage,
 };
 use std::borrow::Cow;
+use std::ops::Deref;
 
 impl Storage<MessageId, DaMessage> for Database {
     type Error = KvStoreError;
@@ -97,6 +98,15 @@ impl Database {
             .collect::<Result<Vec<DaMessageConfig>, anyhow::Error>>()?;
 
         Ok(Some(configs))
+
+    pub fn all_messages(
+        &self,
+        start: Option<MessageId>,
+        direction: Option<IterDirection>,
+    ) -> impl Iterator<Item = Result<DaMessage, Error>> + '_ {
+        let start = start.map(|v| v.deref().to_vec());
+        self.iter_all::<Vec<u8>, DaMessage>(columns::DA_MESSAGES, None, start, direction)
+            .map(|res| res.map(|(_, message)| message))
     }
 }
 
