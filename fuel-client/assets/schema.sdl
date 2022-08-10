@@ -369,7 +369,6 @@ type NodeInfo {
 	predicates: Boolean!
 	vmBacktrace: Boolean!
 	minGasPrice: U64!
-	minBytePrice: U64!
 	maxTx: U64!
 	maxDepth: U64!
 	nodeVersion: String!
