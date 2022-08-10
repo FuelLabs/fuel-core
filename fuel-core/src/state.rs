@@ -51,7 +51,7 @@ pub trait KeyValueStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
+    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_>;
 }
 
 #[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]

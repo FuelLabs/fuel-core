@@ -50,7 +50,7 @@ impl KeyValueStore for MemoryStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
+    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_> {
         // clone entire set so we can drop the lock
         let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
             .inner
@@ -78,10 +78,11 @@ impl KeyValueStore for MemoryStore {
         if let Some(start) = start {
             Box::new(
                 copy.into_iter()
-                    .skip_while(move |(key, _)| key.as_slice() != start.as_slice()),
+                    .skip_while(move |(key, _)| key.as_slice() != start.as_slice())
+                    .map(Ok),
             )
         } else {
-            Box::new(copy.into_iter())
+            Box::new(copy.into_iter().map(Ok))
         }
     }
 }
