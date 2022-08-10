@@ -1032,7 +1032,15 @@ mod tests {
         Storage::<UtxoId, Coin>::insert(&mut db, &spent_utxo_id, &coin).unwrap();
 
         // create an input referring to a coin that is already spent
-        let input = Input::coin_signed(spent_utxo_id, owner, amount, asset_id, 0, 0);
+        let input = Input::coin_signed(
+            spent_utxo_id,
+            owner,
+            amount,
+            asset_id,
+            Default::default(),
+            0,
+            0,
+        );
         let output = Output::Change {
             to: owner,
             amount: 0,
@@ -1102,6 +1110,7 @@ mod tests {
                     SecretKey::random(&mut rng),
                     rng.gen(),
                     10,
+                    Default::default(),
                     Default::default(),
                     0,
                 )
@@ -1324,6 +1333,7 @@ mod tests {
                     SecretKey::random(&mut rng),
                     rng.gen(),
                     100,
+                    Default::default(),
                     Default::default(),
                     0,
                 )

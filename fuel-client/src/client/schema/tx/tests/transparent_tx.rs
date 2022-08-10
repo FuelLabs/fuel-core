@@ -3,7 +3,7 @@ use crate::client::schema::{
     schema,
     tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
     Address, AssetId, Bytes32, ConnectionArgs, ConversionError, HexString, MessageId, PageInfo,
-    Salt, TransactionId, UtxoId, U64,
+    Salt, TransactionId, TxPointer, UtxoId, U64,
 };
 use core::convert::{TryFrom, TryInto};
 use fuel_tx::StorageSlot;
@@ -173,6 +173,7 @@ pub struct InputCoin {
     pub owner: Address,
     pub amount: U64,
     pub asset_id: AssetId,
+    pub tx_pointer: TxPointer,
     pub witness_index: i32,
     pub maturity: U64,
     pub predicate: HexString,
@@ -185,6 +186,7 @@ pub struct InputContract {
     pub utxo_id: UtxoId,
     pub balance_root: Bytes32,
     pub state_root: Bytes32,
+    pub tx_pointer: TxPointer,
     pub contract: ContractIdFragment,
 }
 
@@ -215,6 +217,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         owner: coin.owner.into(),
                         amount: coin.amount.into(),
                         asset_id: coin.asset_id.into(),
+                        tx_pointer: coin.tx_pointer.into(),
                         witness_index: coin.witness_index.try_into()?,
                         maturity: coin.maturity.into(),
                     }
@@ -225,6 +228,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         amount: coin.amount.into(),
                         asset_id: coin.asset_id.into(),
                         maturity: coin.maturity.into(),
+                        tx_pointer: coin.tx_pointer.into(),
                         predicate: coin.predicate.into(),
                         predicate_data: coin.predicate_data.into(),
                     }
@@ -234,6 +238,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                 utxo_id: contract.utxo_id.into(),
                 balance_root: contract.balance_root.into(),
                 state_root: contract.state_root.into(),
+                tx_pointer: contract.tx_pointer.into(),
                 contract_id: contract.contract.id.into(),
             },
             Input::InputMessage(message) => {

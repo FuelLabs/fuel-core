@@ -464,6 +464,7 @@ impl TestContext {
                 owner: from,
                 amount,
                 asset_id: Default::default(),
+                tx_pointer: Default::default(),
                 witness_index: 0,
                 maturity: 0,
             }],

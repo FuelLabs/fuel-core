@@ -8,6 +8,7 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use async_trait::async_trait;
+use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
@@ -259,6 +260,10 @@ impl InterpreterStorage for Database {
     fn block_height(&self) -> Result<u32, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         Ok(height.into())
+    }
+
+    fn timestamp(&self, _height: u32) -> Result<Word, Self::DataError> {
+        todo!()
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {

@@ -32,12 +32,14 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 rng.gen(),
                 1000 + i,
                 Default::default(),
+                Default::default(),
                 0,
             )
             .add_input(Input::Contract {
                 utxo_id: Default::default(),
                 balance_root: Default::default(),
                 state_root: Default::default(),
+                tx_pointer: Default::default(),
                 contract_id,
             })
             .add_output(Output::Change {
@@ -134,6 +136,7 @@ async fn dry_run_override_utxo_validation() {
         rng.gen(),
         1000,
         AssetId::default(),
+        Default::default(),
         0,
         Default::default(),
     ))
@@ -142,6 +145,7 @@ async fn dry_run_override_utxo_validation() {
         rng.gen(),
         rng.gen(),
         asset_id,
+        Default::default(),
         0,
         Default::default(),
     ))
@@ -177,6 +181,7 @@ async fn dry_run_no_utxo_validation_override() {
         rng.gen(),
         1000,
         AssetId::default(),
+        Default::default(),
         0,
         Default::default(),
     ))
@@ -185,6 +190,7 @@ async fn dry_run_no_utxo_validation_override() {
         rng.gen(),
         rng.gen(),
         asset_id,
+        Default::default(),
         0,
         Default::default(),
     ))
@@ -220,6 +226,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 secret,
                 rng.gen(),
                 rng.gen_range(1..1000),
+                Default::default(),
                 Default::default(),
                 0,
             )
