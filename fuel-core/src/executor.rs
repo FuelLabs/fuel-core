@@ -89,6 +89,13 @@ impl Executor {
         };
 
         let mut block_db_transaction = self.database.transaction();
+        // Insert the current headers (including time, block height, producer into the db tx)
+        Storage::<Bytes32, FuelBlockDb>::insert(
+            block_db_transaction.deref_mut(),
+            &Bytes32::zeroed(), // use id of zero as current block
+            &block.to_db_block(),
+        )?;
+
         let mut txs_merkle = MerkleTree::new();
         let mut tx_status = vec![];
         let mut coinbase = 0u64;
@@ -283,6 +290,12 @@ impl Executor {
             finalized_block_id,
             &mut tx_status,
             block_db_transaction.deref_mut(),
+        )?;
+
+        // cleanup unfinalized headers (block height + time + producer)
+        Storage::<Bytes32, FuelBlockDb>::remove(
+            block_db_transaction.deref_mut(),
+            &Bytes32::zeroed(),
         )?;
 
         // insert block into database
@@ -817,6 +830,7 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
+    use chrono::TimeZone;
     use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{
@@ -1947,7 +1961,11 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(1234);
 
         // return current block height
-        let script = vec![Opcode::BHEI(0x10), Opcode::RET(0x10)];
+        let script = vec![
+            Opcode::BHEI(0x10),
+            Opcode::TIME(0x11, 0x10),
+            Opcode::RET(0x11),
+        ];
         let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
             .gas_limit(10000)
             .add_unsigned_coin_input(
@@ -1962,10 +1980,12 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
+        let time = rng.gen_range(1u32..u32::MAX);
 
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: block_height.into(),
+                time: Utc.timestamp(time as i64, 0),
                 ..Default::default()
             },
             transactions: vec![tx.clone()],
@@ -2005,6 +2025,7 @@ mod tests {
         let receipts = Storage::<Bytes32, Vec<Receipt>>::get(&database, &tx.id())
             .unwrap()
             .unwrap();
-        assert_eq!(block_height as u64, receipts[0].val().unwrap());
+
+        assert_eq!(time as u64, receipts[0].val().unwrap());
     }
 }
