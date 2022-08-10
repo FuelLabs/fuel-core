@@ -262,8 +262,15 @@ impl InterpreterStorage for Database {
         Ok(height.into())
     }
 
-    fn timestamp(&self, _height: u32) -> Result<Word, Self::DataError> {
-        todo!()
+    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
+        let id = self.block_hash(height)?;
+        let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
+        block
+            .headers
+            .time
+            .timestamp()
+            .try_into()
+            .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
