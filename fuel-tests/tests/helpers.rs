@@ -1,9 +1,6 @@
 use fuel_core::{
-    config::{
-        chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
-        Config,
-    },
-    service::FuelService,
+    chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{fuel_tx::Contract, fuel_tx::Transaction, fuel_vm::prelude::*};
 use fuel_gql_client::client::FuelClient;

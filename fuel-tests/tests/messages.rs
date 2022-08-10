@@ -1,9 +1,6 @@
 use fuel_core::{
-    config::{
-        chain_config::{MessageConfig, StateConfig},
-        Config,
-    },
-    service::FuelService,
+    chain_config::{MessageConfig, StateConfig},
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
 use fuel_crypto::fuel_types::Address;

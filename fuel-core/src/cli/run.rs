@@ -1,7 +1,7 @@
 use crate::cli::DEFAULT_DB_PATH;
 use crate::FuelService;
 use clap::Parser;
-use fuel_core::config::{Config, DbType, VMConfig};
+use fuel_core::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
