@@ -1,5 +1,5 @@
 use crate::{
-    config::chain_config::MessageConfig,
+    chain_config::MessageConfig,
     database::{columns, Database, KvStoreError},
     state::{Error, IterDirection},
 };

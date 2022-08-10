@@ -1,9 +1,6 @@
 use fuel_core::{
-    config::{
-        chain_config::{CoinConfig, StateConfig},
-        Config,
-    },
-    service::FuelService,
+    chain_config::{CoinConfig, StateConfig},
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{
     fuel_tx::{AssetId, Input, Output},

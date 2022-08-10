@@ -205,10 +205,12 @@ impl Database {
     {
         self.data
             .iter_all(column, prefix, start, direction.unwrap_or_default())
-            .map(|(key, value)| {
-                let key = K::from(key);
-                let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
-                Ok((key, value))
+            .map(|val| {
+                val.and_then(|(key, value)| {
+                    let key = K::from(key);
+                    let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                    Ok((key, value))
+                })
             })
     }
 

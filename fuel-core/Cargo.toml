@@ -51,7 +51,7 @@ itertools = "0.10"
 lazy_static = "1.4"
 prometheus = { version = "0.13", optional = true }
 rand = "0.8"
-rocksdb = { version = "0.18", default-features = false, features = [
+rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",
     "multi-threaded-cf",
     "jemalloc"

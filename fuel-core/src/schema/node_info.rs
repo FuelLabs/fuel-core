@@ -1,5 +1,5 @@
 use super::scalars::U64;
-use crate::config::Config;
+use crate::service::Config;
 use async_graphql::{Context, Object};
 
 pub struct NodeInfo {
