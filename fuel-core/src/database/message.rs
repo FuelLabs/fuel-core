@@ -1,4 +1,5 @@
 use crate::{
+    config::chain_config::MessageConfig,
     database::{columns, Database, KvStoreError},
     state::{Error, IterDirection},
 };
@@ -86,6 +87,27 @@ impl Database {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all::<Vec<u8>, Message>(columns::MESSAGES, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
+    }
+
+    pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
+        let configs = self
+            .all_messages(None, None)
+            .map(|msg| -> Result<MessageConfig, Error> {
+                let msg = msg?;
+
+                Ok(MessageConfig {
+                    sender: msg.sender,
+                    recipient: msg.recipient,
+                    owner: msg.owner,
+                    nonce: msg.nonce,
+                    amount: msg.amount,
+                    data: msg.data,
+                    da_height: msg.da_height,
+                })
+            })
+            .collect::<Result<Vec<MessageConfig>, Error>>()?;
+
+        Ok(Some(configs))
     }
 }
 

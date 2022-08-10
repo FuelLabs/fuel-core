@@ -51,7 +51,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: 64,
-            eth_client: Some(String::from("http://localhost:8545")),
+            // Some(String::from("http://localhost:8545"))
+            eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
             eth_v2_commit_contract: None,
             eth_v2_listening_contracts: vec![H160::from_str(

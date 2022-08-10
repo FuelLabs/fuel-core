@@ -7,10 +7,11 @@ use crate::{
     service::FuelService,
 };
 use anyhow::Result;
+use fuel_core_interfaces::model::Message;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{MerkleStorage, Storage},
-        fuel_tx::{Contract, UtxoId},
+        fuel_tx::{Contract, MessageId, UtxoId},
         fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
     },
     model::{Coin, CoinStatus},
@@ -32,6 +33,7 @@ impl FuelService {
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_coin_state(database, initial_state)?;
                 Self::init_contracts(database, initial_state)?;
+                Self::init_da_messages(database, initial_state)?;
             }
         }
 
@@ -137,6 +139,27 @@ impl FuelService {
         Ok(())
     }
 
+    fn init_da_messages(db: &mut Database, state: &StateConfig) -> Result<()> {
+        if let Some(message_state) = &state.messages {
+            for msg in message_state {
+                let message = Message {
+                    sender: msg.sender,
+                    recipient: msg.recipient,
+                    owner: msg.owner,
+                    nonce: msg.nonce,
+                    amount: msg.amount,
+                    data: msg.data.clone(),
+                    da_height: msg.da_height,
+                    fuel_block_spend: None,
+                };
+
+                Storage::<MessageId, Message>::insert(db, &message.id(), &message)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn init_contract_balance(
         db: &mut Database,
         contract_id: &ContractId,
@@ -154,14 +177,19 @@ impl FuelService {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
-    use crate::config::chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig};
+    use crate::config::chain_config::{
+        ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig,
+    };
     use crate::config::Config;
     use crate::model::BlockHeight;
     use fuel_core_interfaces::common::{
         fuel_asm::Opcode,
         fuel_types::{Address, AssetId, Word},
     };
+    use fuel_core_interfaces::model::Message;
     use itertools::Itertools;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 
@@ -350,6 +378,40 @@ mod tests {
             .into_owned();
 
         assert_eq!(test_value, ret)
+    }
+
+    #[tokio::test]
+    async fn tests_init_da_msgs() {
+        let mut rng = StdRng::seed_from_u64(32492);
+        let mut config = Config::local_node();
+
+        let msg = MessageConfig {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            owner: rng.gen(),
+            nonce: rng.gen(),
+            amount: rng.gen(),
+            data: vec![rng.gen()],
+            da_height: 0,
+        };
+
+        config.chain_conf.initial_state = Some(StateConfig {
+            messages: Some(vec![msg.clone()]),
+            ..Default::default()
+        });
+
+        let db = Database::default();
+
+        FuelService::initialize_state(&config, &db).unwrap();
+
+        let expected_msg: Message = msg.into();
+
+        let ret_msg = Storage::<MessageId, Message>::get(&db, &expected_msg.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+
+        assert_eq!(expected_msg, ret_msg);
     }
 
     #[tokio::test]
