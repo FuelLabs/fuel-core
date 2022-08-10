@@ -1,6 +1,5 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 275
 expression: operation.query
 ---
 query Query($_0: TransactionId!) {
@@ -19,6 +18,7 @@ query Query($_0: TransactionId!) {
         owner
         amount
         assetId
+        txPointer
         witnessIndex
         maturity
         predicate
@@ -28,6 +28,7 @@ query Query($_0: TransactionId!) {
         utxoId
         balanceRoot
         stateRoot
+        txPointer
         contract {
           id
         }

@@ -119,6 +119,30 @@ impl LowerHex for UtxoId {
     }
 }
 
+#[derive(cynic::Scalar, Debug, Clone, Default)]
+pub struct TxPointer(pub HexFormatted<fuel_tx::TxPointer>);
+
+impl FromStr for TxPointer {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b = HexFormatted::<fuel_tx::TxPointer>::from_str(s)?;
+        Ok(TxPointer(b))
+    }
+}
+
+impl From<TxPointer> for fuel_tx::TxPointer {
+    fn from(s: TxPointer) -> Self {
+        s.0 .0
+    }
+}
+
+impl LowerHex for TxPointer {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        LowerHex::fmt(&self.0 .0, f)
+    }
+}
+
 #[derive(cynic::Scalar, Debug, Clone)]
 pub struct HexString(pub Bytes);
 

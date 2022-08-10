@@ -268,6 +268,7 @@ type InputCoin {
 	owner: Address!
 	amount: U64!
 	assetId: AssetId!
+	txPointer: TxPointer!
 	witnessIndex: Int!
 	maturity: U64!
 	predicate: HexString!
@@ -278,6 +279,7 @@ type InputContract {
 	utxoId: UtxoId!
 	balanceRoot: Bytes32!
 	stateRoot: Bytes32!
+	txPointer: TxPointer!
 	contract: Contract!
 }
 
@@ -586,6 +588,8 @@ type TransactionEdge {
 scalar TransactionId
 
 union TransactionStatus = SubmittedStatus | SuccessStatus | FailureStatus
+
+scalar TxPointer
 
 scalar U64
 
