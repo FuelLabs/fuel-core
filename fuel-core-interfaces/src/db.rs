@@ -71,7 +71,6 @@ pub mod helpers {
 
     // constants
     pub const TX1_GAS_PRICE: u64 = 10u64;
-    pub const TX1_BYTE_PRICE: u64 = 5u64;
     lazy_static! {
         pub static ref TX_ID_DB1: TxId =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")

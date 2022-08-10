@@ -88,8 +88,6 @@ spec:
           {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
-            - "--min-byte-price"
-            - "{{ .Values.app.min_byte_price }}"
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:

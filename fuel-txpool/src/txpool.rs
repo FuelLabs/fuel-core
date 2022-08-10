@@ -783,23 +783,6 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn tx_above_min_byte_price_is_insertable() {
-        let config = Config {
-            min_byte_price: TX1_BYTE_PRICE,
-            ..Config::default()
-        };
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-    }
-
-    #[tokio::test]
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         let message = Message {
             ..Default::default()
