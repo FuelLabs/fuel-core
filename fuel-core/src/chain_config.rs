@@ -1,4 +1,3 @@
-use super::serialization::{HexNumber, HexType};
 use crate::{database::Database, model::BlockHeight};
 use fuel_core_interfaces::{
     common::{
@@ -12,7 +11,10 @@ use itertools::Itertools;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, skip_serializing_none};
+use serialization::{HexNumber, HexType};
 use std::{io::ErrorKind, path::PathBuf, str::FromStr};
+
+pub mod serialization;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
