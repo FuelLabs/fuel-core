@@ -1,10 +1,7 @@
 use crate::{
-    config::{
-        chain_config::{ContractConfig, StateConfig},
-        Config,
-    },
+    chain_config::{ContractConfig, StateConfig},
     database::Database,
-    service::FuelService,
+    service::{config::Config, FuelService},
 };
 use anyhow::Result;
 use fuel_core_interfaces::model::Message;
@@ -180,11 +177,11 @@ mod tests {
     use std::vec;
 
     use super::*;
-    use crate::config::chain_config::{
+    use crate::chain_config::{
         ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig,
     };
-    use crate::config::Config;
     use crate::model::BlockHeight;
+    use crate::service::config::Config;
     use fuel_core_interfaces::common::{
         fuel_asm::Opcode,
         fuel_types::{Address, AssetId, Word},

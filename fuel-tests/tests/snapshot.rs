@@ -1,10 +1,7 @@
 use fuel_core::{
-    config::{
-        chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
-        Config,
-    },
+    chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
     database::Database,
-    service::FuelService,
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::{
     common::{

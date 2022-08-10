@@ -1,10 +1,10 @@
-use crate::config::Config;
 use crate::database::Database;
 use crate::executor::{ExecutionMode, Executor};
 use crate::schema::{
     scalars::{BlockId, U64},
     tx::types::Transaction,
 };
+use crate::service::Config;
 use crate::{
     database::KvStoreError,
     model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
