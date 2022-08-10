@@ -11,7 +11,6 @@ async fn node_info() {
         utxo_validation,
         predicates,
         vm_backtrace,
-        min_byte_price,
         min_gas_price,
         max_depth,
         max_tx,
@@ -22,7 +21,6 @@ async fn node_info() {
     assert_eq!(predicates, node_config.predicates);
     assert_eq!(vm_backtrace, node_config.vm.backtrace);
     assert_eq!(min_gas_price, node_config.txpool.min_gas_price.into());
-    assert_eq!(min_byte_price, node_config.txpool.min_byte_price.into());
     assert_eq!(max_depth, node_config.txpool.max_depth.into());
     assert_eq!(max_tx, node_config.txpool.max_tx.into());
 }

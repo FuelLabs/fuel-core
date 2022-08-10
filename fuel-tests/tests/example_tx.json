@@ -1,6 +1,5 @@
 {
     "Script": {
-        "byte_price": 0,
         "gas_price": 0,
         "gas_limit": 1000000,
         "maturity": 0,
