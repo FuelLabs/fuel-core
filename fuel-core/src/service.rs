@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
-pub use config::{Config, DbType};
+pub use config::{Config, DbType, VMConfig};
 
 pub mod config;
 pub(crate) mod genesis;
