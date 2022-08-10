@@ -1,3 +1,4 @@
+use crate::model::ArcTx;
 use crate::{
     db::{Error as DbStateError, KvStoreError},
     model::TxInfo,
@@ -52,40 +53,40 @@ impl Sender {
 
     pub async fn find(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Option<TxInfo>>> {
         let (response, receiver) = oneshot::channel();
-        let _ = self.send(TxPoolMpsc::Find { ids, response }).await;
+        self.send(TxPoolMpsc::Find { ids, response }).await?;
         receiver.await.map_err(Into::into)
     }
 
     pub async fn find_one(&self, id: TxId) -> anyhow::Result<Option<TxInfo>> {
         let (response, receiver) = oneshot::channel();
-        let _ = self.send(TxPoolMpsc::FindOne { id, response }).await;
+        self.send(TxPoolMpsc::FindOne { id, response }).await?;
         receiver.await.map_err(Into::into)
     }
 
     pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
-        let _ = self.send(TxPoolMpsc::FindDependent { ids, response }).await;
+        self.send(TxPoolMpsc::FindDependent { ids, response })
+            .await?;
         receiver.await.map_err(Into::into)
     }
 
     pub async fn filter_by_negative(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<TxId>> {
         let (response, receiver) = oneshot::channel();
-        let _ = self
-            .send(TxPoolMpsc::FilterByNegative { ids, response })
-            .await;
+        self.send(TxPoolMpsc::FilterByNegative { ids, response })
+            .await?;
         receiver.await.map_err(Into::into)
     }
 
     pub async fn includable(&self) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
-        let _ = self.send(TxPoolMpsc::Includable { response }).await;
+        self.send(TxPoolMpsc::Includable { response }).await?;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<()> {
-        self.send(TxPoolMpsc::Remove { ids })
-            .await
-            .map_err(Into::into)
+    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::Remove { ids, response }).await?;
+        receiver.await.map_err(Into::into)
     }
 }
 
@@ -122,7 +123,10 @@ pub enum TxPoolMpsc {
         response: oneshot::Sender<Vec<Arc<Transaction>>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
-    Remove { ids: Vec<TxId> },
+    Remove {
+        ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+    },
     /// Iterate over `hashes` and return all hashes that we don't have.
     /// Needed when we receive list of new hashed from peer with
     /// **BroadcastTransactionHashes**, so txpool needs to return

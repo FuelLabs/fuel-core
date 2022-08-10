@@ -231,20 +231,21 @@ impl TxPool {
         txpool: &RwLock<Self>,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
         tx_ids: &[TxId],
-    ) {
+    ) -> Vec<ArcTx> {
         let mut removed = Vec::new();
         for tx_id in tx_ids {
             let rem = { txpool.write().await.remove_by_tx_id(tx_id) };
             removed.extend(rem.into_iter());
         }
-        for tx in removed {
+        for tx in &removed {
             let _ = broadcast.send(TxStatusBroadcast {
-                tx,
+                tx: tx.clone(),
                 status: TxStatus::SqueezedOut {
                     reason: Error::Removed,
                 },
             });
         }
+        removed
     }
 }
 
