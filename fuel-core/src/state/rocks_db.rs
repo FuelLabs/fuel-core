@@ -1,5 +1,6 @@
 #[cfg(feature = "prometheus")]
 use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
+use crate::state::KVItem;
 use crate::{
     database::{
         columns,
@@ -166,7 +167,7 @@ impl KeyValueStore for RocksDb {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = crate::state::Result<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> Box<dyn Iterator<Item = KVItem> + '_> {
         let iter_mode = start.as_ref().map_or_else(
             || {
                 prefix.as_ref().map_or_else(
@@ -195,7 +196,7 @@ impl KeyValueStore for RocksDb {
             .db
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
             .map(|item| {
-                item.and_then(|(key, value)| {
+                item.map(|(key, value)| {
                     let value_as_vec = value.to_vec();
                     let key_as_vec = key.to_vec();
                     #[cfg(feature = "prometheus")]
@@ -205,7 +206,7 @@ impl KeyValueStore for RocksDb {
                             .bytes_read_meter
                             .inc_by(key_as_vec.len() as u64 + value_as_vec.len() as u64);
                     }
-                    Ok((key_as_vec, value_as_vec))
+                    (key_as_vec, value_as_vec)
                 })
                 .map_err(|e| Error::DatabaseError(Box::new(e)))
             });
