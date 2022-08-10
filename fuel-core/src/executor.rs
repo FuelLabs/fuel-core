@@ -1875,4 +1875,136 @@ mod tests {
             ))
         ));
     }
+
+    #[tokio::test]
+    async fn get_block_height_returns_current_executing_block() {
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        // return current block height
+        let script = vec![Opcode::BHEI(0x10), Opcode::RET(0x10)];
+        let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
+            .gas_limit(10000)
+            .add_unsigned_coin_input(
+                rng.gen(),
+                rng.gen(),
+                1000,
+                AssetId::zeroed(),
+                Default::default(),
+                0,
+            )
+            .finalize();
+
+        // setup block
+        let block_height = rng.gen_range(5u32..1000u32);
+
+        let mut block = FuelBlock {
+            header: FuelBlockHeader {
+                height: block_height.into(),
+                ..Default::default()
+            },
+            transactions: vec![tx.clone()],
+        };
+
+        // setup db with coin to spend
+        let mut database = Database::default();
+        let coin_input = &tx.inputs()[0];
+        Storage::<UtxoId, Coin>::insert(
+            &mut database,
+            coin_input.utxo_id().unwrap(),
+            &Coin {
+                owner: *coin_input.input_owner().unwrap(),
+                amount: coin_input.amount().unwrap(),
+                asset_id: *coin_input.asset_id().unwrap(),
+                maturity: (coin_input.maturity().unwrap()).into(),
+                block_created: 0u64.into(),
+                status: CoinStatus::Unspent,
+            },
+        )
+        .unwrap();
+
+        // make executor with db
+        let executor = Executor {
+            database: database.clone(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(&database, &tx.id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(block_height as u64, receipts[0].val().unwrap());
+    }
+
+    #[tokio::test]
+    async fn get_time_returns_current_executing_block_time() {
+        let mut rng = StdRng::seed_from_u64(1234);
+
+        // return current block height
+        let script = vec![Opcode::BHEI(0x10), Opcode::RET(0x10)];
+        let tx = TransactionBuilder::script(script.into_iter().collect(), vec![])
+            .gas_limit(10000)
+            .add_unsigned_coin_input(
+                rng.gen(),
+                rng.gen(),
+                1000,
+                AssetId::zeroed(),
+                Default::default(),
+                0,
+            )
+            .finalize();
+
+        // setup block
+        let block_height = rng.gen_range(5u32..1000u32);
+
+        let mut block = FuelBlock {
+            header: FuelBlockHeader {
+                height: block_height.into(),
+                ..Default::default()
+            },
+            transactions: vec![tx.clone()],
+        };
+
+        // setup db with coin to spend
+        let mut database = Database::default();
+        let coin_input = &tx.inputs()[0];
+        Storage::<UtxoId, Coin>::insert(
+            &mut database,
+            coin_input.utxo_id().unwrap(),
+            &Coin {
+                owner: *coin_input.input_owner().unwrap(),
+                amount: coin_input.amount().unwrap(),
+                asset_id: *coin_input.asset_id().unwrap(),
+                maturity: (coin_input.maturity().unwrap()).into(),
+                block_created: 0u64.into(),
+                status: CoinStatus::Unspent,
+            },
+        )
+        .unwrap();
+
+        // make executor with db
+        let executor = Executor {
+            database: database.clone(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await
+            .unwrap();
+
+        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(&database, &tx.id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(block_height as u64, receipts[0].val().unwrap());
+    }
 }
