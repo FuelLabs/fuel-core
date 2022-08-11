@@ -1,6 +1,7 @@
 name: Delete Ephemeral Test Environment
 
 on:
+  pull_request:
   pull_request_target:
     types: [closed]
 
