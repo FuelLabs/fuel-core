@@ -382,7 +382,7 @@ pub mod tests {
         block_root: Bytes32,
         fuel_height: u32,
     ) -> Log {
-        let t = log_default(
+        log_default(
             eth_block,
             vec![
                 *config::ETH_FUEL_BLOCK_COMMITTED,
@@ -390,8 +390,7 @@ pub mod tests {
                 H256::from_low_u64_be(fuel_height as u64),
             ],
             Bytes::new(),
-        );
-        t
+        )
     }
 
     fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
