@@ -33,6 +33,7 @@ jobs:
           K8S: 'eks'
           CONFIG: 'fuel-dev1'
           ENV: 'fueldevsway.env'
-
-
+          DEPLOYMENT_VERSION: "28e629888524e01331c41f53a455276dc85c67e3"
+          IMAGE_TAG: "latest"
+          NAMESPACE: "create-eph-envs-workflows"
 
