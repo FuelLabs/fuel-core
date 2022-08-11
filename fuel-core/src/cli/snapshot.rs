@@ -28,9 +28,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 #[cfg(feature = "rocksdb")]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
-    use fuel_core::{
-        config::chain_config::ChainConfig, config::chain_config::StateConfig, database::Database,
-    };
+    use fuel_core::{chain_config::ChainConfig, chain_config::StateConfig, database::Database};
 
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;

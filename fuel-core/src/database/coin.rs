@@ -1,5 +1,5 @@
 use crate::{
-    config::chain_config::CoinConfig,
+    chain_config::CoinConfig,
     database::{
         columns::{self, COIN, OWNED_COINS},
         Database, KvStoreError,

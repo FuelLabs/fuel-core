@@ -1,11 +1,10 @@
 use crate::helpers::TestContext;
 use chrono::Utc;
 use fuel_core::{
-    config::Config,
     database::Database,
     executor::{ExecutionMode, Executor},
     model::{FuelBlock, FuelBlockHeader},
-    service::FuelService,
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{
     fuel_tx,
@@ -45,7 +44,6 @@ async fn dry_run() {
 
     let gas_price = 0;
     let gas_limit = 1_000_000;
-    let byte_price = 0;
     let maturity = 0;
 
     let script = vec![
@@ -62,7 +60,6 @@ async fn dry_run() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
-        byte_price,
         maturity,
         script,
         vec![],
@@ -93,7 +90,6 @@ async fn submit() {
     let gas_price = 0;
     let gas_limit = 1_000_000;
     let maturity = 0;
-    let byte_price = 0;
 
     let script = vec![
         Opcode::ADDI(0x10, REG_ZERO, 0xca),
@@ -109,7 +105,6 @@ async fn submit() {
     let tx = fuel_tx::Transaction::script(
         gas_price,
         gas_limit,
-        byte_price,
         maturity,
         script,
         vec![],
@@ -459,7 +454,6 @@ impl TestContext {
         let tx = Transaction::Script {
             gas_price: 0,
             gas_limit: 1_000_000,
-            byte_price: 0,
             maturity: 0,
             receipts_root: Default::default(),
             script,
@@ -469,6 +463,7 @@ impl TestContext {
                 owner: from,
                 amount,
                 asset_id: Default::default(),
+                tx_pointer: Default::default(),
                 witness_index: 0,
                 maturity: 0,
             }],
@@ -503,7 +498,6 @@ async fn initialize_client(db: Database) -> FuelClient {
 // add random val for unique tx
 fn create_mock_tx(val: u64) -> Transaction {
     fuel_tx::Transaction::script(
-        0,
         0,
         0,
         0,

@@ -1,6 +1,6 @@
 use crate::database::InterpreterStorage;
 use crate::{
-    config::chain_config::ContractConfig,
+    chain_config::ContractConfig,
     database::{
         columns::{BALANCES, CONTRACTS, CONTRACTS_STATE, CONTRACT_UTXO_ID},
         Database,

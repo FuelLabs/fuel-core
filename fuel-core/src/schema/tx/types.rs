@@ -194,10 +194,6 @@ impl Transaction {
         self.0.gas_limit().into()
     }
 
-    async fn byte_price(&self) -> U64 {
-        self.0.byte_price().into()
-    }
-
     async fn maturity(&self) -> U64 {
         self.0.maturity().into()
     }
@@ -292,15 +288,6 @@ impl Transaction {
         match self.0 {
             fuel_tx::Transaction::Script { .. } => None,
             fuel_tx::Transaction::Create { salt, .. } => Some(salt.into()),
-        }
-    }
-
-    async fn static_contracts(&self) -> Option<Vec<Contract>> {
-        match &self.0 {
-            fuel_tx::Transaction::Script { .. } => None,
-            fuel_tx::Transaction::Create {
-                static_contracts, ..
-            } => Some(static_contracts.iter().cloned().map(Into::into).collect()),
         }
     }
 

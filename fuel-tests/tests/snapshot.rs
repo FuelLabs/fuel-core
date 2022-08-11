@@ -1,10 +1,7 @@
-use fuel_core::database::Database;
 use fuel_core::{
-    config::{
-        chain_config::{CoinConfig, ContractConfig, StateConfig},
-        Config,
-    },
-    service::FuelService,
+    chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
+    database::Database,
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::{
     common::{
@@ -13,9 +10,11 @@ use fuel_core_interfaces::{
     },
     model::BlockHeight,
 };
+use rand::{rngs::StdRng, Rng, SeedableRng};
 
 #[tokio::test]
 async fn snapshot_state_config() {
+    let mut rng = StdRng::seed_from_u64(1234);
     let db = Database::default();
 
     let owner = Address::default();
@@ -54,6 +53,15 @@ async fn snapshot_state_config() {
             })
             .collect(),
         ),
+        messages: Some(vec![MessageConfig {
+            sender: rng.gen(),
+            recipient: rng.gen(),
+            owner: rng.gen(),
+            nonce: rng.gen_range(0..1000),
+            amount: rng.gen_range(0..1000),
+            data: vec![],
+            da_height: rng.gen_range(0..1000),
+        }]),
     };
 
     config.chain_conf.initial_state = Some(starting_state.clone());
@@ -84,4 +92,6 @@ async fn snapshot_state_config() {
     assert_eq!(state_conf.height, starting_state.height);
 
     assert_eq!(state_conf.contracts, starting_state.contracts);
+
+    assert_eq!(state_conf.messages, starting_state.messages)
 }

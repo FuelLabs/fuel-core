@@ -1,9 +1,6 @@
 use fuel_core::{
-    config::{
-        chain_config::{CoinConfig, StateConfig},
-        Config,
-    },
-    service::FuelService,
+    chain_config::{CoinConfig, StateConfig},
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{
     fuel_tx::{AssetId, Input, Output},
@@ -42,6 +39,7 @@ async fn balance() {
             })
             .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client
@@ -80,6 +78,7 @@ async fn balance() {
             asset_id: coin.asset_id.into(),
             maturity: coin.maturity.into(),
             witness_index: 0,
+            tx_pointer: Default::default(),
         });
     }
     let tx = tx
@@ -142,6 +141,7 @@ async fn first_5_balances() {
                 })
                 .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client

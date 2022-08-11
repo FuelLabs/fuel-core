@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)]
-use crate::config::Config;
 use crate::database::Database;
+use crate::service::Config;
 use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::relayer::RelayerDb;
