@@ -12,7 +12,7 @@ use fuel_core_interfaces::{
 };
 
 /// Bridge message send from da to fuel network.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct MessageLog {
     pub sender: Address,
     pub recipient: Address,
@@ -38,7 +38,7 @@ impl From<&MessageLog> for Message {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EthEventLog {
     // Bridge message from da side
     Message(MessageLog),
