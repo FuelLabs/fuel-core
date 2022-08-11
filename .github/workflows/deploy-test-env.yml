@@ -2,7 +2,7 @@ name: Deploy Ephemeral Test Environment
 
 on:
   pull_request_target:
-    types: [opened, synchronize]
+    types: [opened]
 
 env:
   REGISTRY: ghcr.io
