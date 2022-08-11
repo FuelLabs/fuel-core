@@ -24,7 +24,6 @@ jobs:
           branch_name=$(git symbolic-ref -q HEAD)
           branch_name=${branch_name##refs/heads/}
           branch_name=${branch_name:-HEAD}
-          echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
          
       - name: Deploy Ephemeral Test Environment
         id: deploy_eph_env
