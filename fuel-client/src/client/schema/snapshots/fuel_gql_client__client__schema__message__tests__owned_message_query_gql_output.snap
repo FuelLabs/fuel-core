@@ -1,0 +1,29 @@
+---
+source: fuel-client/src/client/schema/message.rs
+assertion_line: 105
+expression: operation.query
+---
+query Query($_0: Address, $_1: Int, $_2: String, $_3: Int, $_4: String) {
+  messages(owner: $_0, first: $_1, after: $_2, last: $_3, before: $_4) {
+    edges {
+      cursor
+      node {
+        amount
+        sender
+        recipient
+        owner
+        nonce
+        data
+        daHeight
+        fuelBlockSpend
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      startCursor
+    }
+  }
+}
+

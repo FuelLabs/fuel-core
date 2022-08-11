@@ -1,7 +1,7 @@
-use crate::config::Config;
 use crate::database::columns::METADATA;
 use crate::database::Database;
 use crate::model::BlockHeight;
+use crate::service::config::Config;
 use crate::state::Error;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";

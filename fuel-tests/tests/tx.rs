@@ -1,11 +1,10 @@
 use crate::helpers::TestContext;
 use chrono::Utc;
 use fuel_core::{
-    config::Config,
     database::Database,
     executor::{ExecutionMode, Executor},
     model::{FuelBlock, FuelBlockHeader},
-    service::FuelService,
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{
     fuel_tx,
@@ -464,6 +463,7 @@ impl TestContext {
                 owner: from,
                 amount,
                 asset_id: Default::default(),
+                tx_pointer: Default::default(),
                 witness_index: 0,
                 maturity: 0,
             }],

@@ -1,8 +1,8 @@
 use super::modules::Modules;
-use crate::config::Config;
 use crate::database::Database;
 use crate::schema::{build_schema, dap, CoreSchema};
 use crate::service::metrics::metrics;
+use crate::service::Config;
 use anyhow::Result;
 use async_graphql::{
     extensions::Tracing, http::playground_source, http::GraphQLPlaygroundConfig, Request, Response,

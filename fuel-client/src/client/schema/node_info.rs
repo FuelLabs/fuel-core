@@ -7,7 +7,6 @@ pub struct NodeInfo {
     pub predicates: bool,
     pub vm_backtrace: bool,
     pub min_gas_price: U64,
-    pub min_byte_price: U64,
     pub max_tx: U64,
     pub max_depth: U64,
     pub node_version: String,

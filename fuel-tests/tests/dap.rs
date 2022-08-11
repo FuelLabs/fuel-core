@@ -1,4 +1,4 @@
-use fuel_core::{config::Config, service::FuelService};
+use fuel_core::service::{Config, FuelService};
 use fuel_core_interfaces::common::fuel_vm::{consts::*, prelude::*};
 use fuel_gql_client::client::FuelClient;
 use std::convert::TryInto;

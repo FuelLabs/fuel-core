@@ -71,7 +71,6 @@ pub mod helpers {
 
     // constants
     pub const TX1_GAS_PRICE: u64 = 10u64;
-    pub const TX1_BYTE_PRICE: u64 = 5u64;
     lazy_static! {
         pub static ref TX_ID_DB1: TxId =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -128,8 +127,9 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DaMessage, FuelBlock,
-            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId, ValidatorStake,
+            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, FuelBlock,
+            FuelBlockConsensus, FuelBlockHeader, Message, SealedFuelBlock, ValidatorId,
+            ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
@@ -167,8 +167,8 @@ pub mod helpers {
         pub coins: HashMap<UtxoId, Coin>,
         /// Dummy contracts
         pub contract: HashMap<ContractId, Contract>,
-        /// Dummy da messages.
-        pub messages: HashMap<MessageId, DaMessage>,
+        /// Dummy messages.
+        pub messages: HashMap<MessageId, Message>,
         /// variable for last committed and finalized fuel height
         pub last_committed_finalized_fuel_height: BlockHeight,
     }
@@ -202,6 +202,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -240,6 +241,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -271,6 +273,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -303,6 +306,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -342,6 +346,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -375,6 +380,7 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 200,
                     asset_id: Default::default(),
+                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -406,6 +412,7 @@ pub mod helpers {
                     utxo_id: UtxoId::default(),
                     balance_root: Bytes32::default(),
                     state_root: Bytes32::default(),
+                    tx_pointer: Default::default(),
                     contract_id: *CONTRACT_ID1,
                 }],
                 outputs: vec![
@@ -746,25 +753,25 @@ pub mod helpers {
     }
 
     // bridge message. Used by relayer.
-    impl Storage<MessageId, DaMessage> for DummyDb {
+    impl Storage<MessageId, Message> for DummyDb {
         type Error = KvStoreError;
 
         fn insert(
             &mut self,
             key: &MessageId,
-            value: &DaMessage,
-        ) -> Result<Option<DaMessage>, Self::Error> {
+            value: &Message,
+        ) -> Result<Option<Message>, Self::Error> {
             Ok(self.data.lock().messages.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &MessageId) -> Result<Option<DaMessage>, Self::Error> {
+        fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
             Ok(self.data.lock().messages.remove(key))
         }
 
         fn get<'a>(
             &'a self,
             key: &MessageId,
-        ) -> Result<Option<std::borrow::Cow<'a, DaMessage>>, Self::Error> {
+        ) -> Result<Option<std::borrow::Cow<'a, Message>>, Self::Error> {
             Ok(self
                 .data
                 .lock()
@@ -946,7 +953,7 @@ mod tests {
 
     use crate::db::helpers::{DummyDb, CONTRACT_ID1};
     use crate::model::{
-        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DaMessage, ValidatorId,
+        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, Message, ValidatorId,
         ValidatorStake,
     };
     use crate::relayer::StakingDiff;
@@ -990,9 +997,9 @@ mod tests {
     }
 
     #[test]
-    fn da_message_db() {
+    fn message_db() {
         let db = sample_db();
-        let value = DaMessage {
+        let value = Message {
             owner: Address::default(),
             amount: 400,
             nonce: 10,
@@ -1004,7 +1011,7 @@ mod tests {
         }
         .check();
 
-        assert!(execute_test(db, *value.id(), DaMessage::from(value)).is_ok());
+        assert!(execute_test(db, *value.id(), Message::from(value)).is_ok());
     }
 
     #[test]

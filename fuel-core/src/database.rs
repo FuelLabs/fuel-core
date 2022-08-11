@@ -8,6 +8,7 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use async_trait::async_trait;
+use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
@@ -69,7 +70,7 @@ pub mod columns {
     pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
-    pub const DA_MESSAGES: u32 = 14;
+    pub const MESSAGES: u32 = 14;
     /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
     /// contain diff between da blocks it contains new registers consensus key and new delegate sets.
@@ -204,10 +205,12 @@ impl Database {
     {
         self.data
             .iter_all(column, prefix, start, direction.unwrap_or_default())
-            .map(|(key, value)| {
-                let key = K::from(key);
-                let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
-                Ok((key, value))
+            .map(|val| {
+                val.and_then(|(key, value)| {
+                    let key = K::from(key);
+                    let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                    Ok((key, value))
+                })
             })
     }
 
@@ -259,6 +262,17 @@ impl InterpreterStorage for Database {
     fn block_height(&self) -> Result<u32, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         Ok(height.into())
+    }
+
+    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
+        let id = self.block_hash(height)?;
+        let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
+        block
+            .headers
+            .time
+            .timestamp()
+            .try_into()
+            .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
