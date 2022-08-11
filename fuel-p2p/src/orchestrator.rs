@@ -137,8 +137,11 @@ impl NetworkOrchestrator {
 }
 
 pub struct Service {
-    join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
+    /// Network Orchestrator that handles p2p network and inter-module communication
     network_orchestrator: Arc<Mutex<Option<NetworkOrchestrator>>>,
+    /// Holds the spawned task when Netowrk Orchestrator is started
+    join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
+    /// Used for notifying the Network Orchestrator to stop
     tx_request_event: Sender<P2pRequestEvent>,
 }
 
