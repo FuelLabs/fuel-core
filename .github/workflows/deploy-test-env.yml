@@ -23,7 +23,7 @@ jobs:
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
           branch_name=$(git symbolic-ref -q HEAD)
           branch_name=${branch_name##refs/heads/}
-          branch_name=${branch_name:-HEAD
+          branch_name=${branch_name:-HEAD}
           echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
          
       - name: Deploy Ephemeral Test Environment
