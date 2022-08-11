@@ -18,10 +18,7 @@ jobs:
       - name: Set Environment Variables
         id: set_env_var
         run: |
-          branch_name=$(git symbolic-ref -q HEAD)
-          branch_name=${branch_name##refs/heads/}
-          branch_name=${branch_name:-HEAD}
-          echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
+          branch_name="test"
          
       - name: Deploy Ephemeral Test Environment
         id: deploy_eph_env
