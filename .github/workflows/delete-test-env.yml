@@ -2,7 +2,6 @@ name: Delete Ephemeral Test Environment
 
 on:
   workflow_dispatch:
-  push:
   pull_request:
 
 concurrency:
@@ -23,17 +22,13 @@ jobs:
       - name: Set Environment Variables
         id: set_env_var
         run: |
-          k8s="eks"
-          config="fuel-dev1"
-          env="fueldevsway.env"
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
           branch_name=$(git symbolic-ref -q HEAD)
           branch_name=${branch_name##refs/heads/}
           branch_name=${branch_name:-HEAD}
-          echo "BRANCH=$(echo $branch_name)" >> $GITHUB_ENV
-          echo "K8S=$(echo $k8s)" >> $GITHUB_ENV
-          echo "CONFIG=$(echo $config)" >> $GITHUB_ENV
-          echo "ENV=$(echo $env)" >> $GITHUB_ENV
-      
+          echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+     
       - name: Delete Ephemeral Test Environment
         id: delete_eph_env
         run: |
@@ -42,6 +37,9 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
             https://api.github.com/repos/FuelLabs/fuel-deployment/actions/workflows/delete-test-env.yml/dispatches \
-            -d '{"ref":"modify-delete-test-env-workflow","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.BRANCH }}" }}'
-
+            -d '{"ref":"master","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "namespace": "${{ env.NAMESPACE }}" }}'
+        env:
+          K8S: 'eks'
+          CONFIG: 'fuel-dev1'
+          ENV: 'fueldevsway.env'
 

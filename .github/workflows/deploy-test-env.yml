@@ -2,9 +2,6 @@ name: Deploy Ephemeral Test Environment
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - create-eph-envs-workflows
   pull_request:
 
 concurrency:
@@ -25,19 +22,14 @@ jobs:
       - name: Set Environment Variables
         id: set_env_var
         run: |
-          tag="latest"
-          k8s="eks"
-          config="fuel-dev1"
-          env="fueldevsway.env"
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
           branch_name=$(git symbolic-ref -q HEAD)
           branch_name=${branch_name##refs/heads/}
           branch_name=${branch_name:-HEAD}
-          echo "IMAGE_TAG=$(echo $tag)" >> $GITHUB_ENV
-          echo "BRANCH=$(echo $branch_name)" >> $GITHUB_ENV
-          echo "K8S=$(echo $k8s)" >> $GITHUB_ENV
-          echo "CONFIG=$(echo $config)" >> $GITHUB_ENV
-          echo "ENV=$(echo $env)" >> $GITHUB_ENV
-      
+          echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
+          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+         
       - name: Deploy Ephemeral Test Environment
         id: deploy_eph_env
         run: |
@@ -46,7 +38,12 @@ jobs:
             -H "Accept: application/vnd.github.v3+json" \
             -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
             https://api.github.com/repos/FuelLabs/fuel-deployment/actions/workflows/deploy-test-env.yml/dispatches \
-            -d '{"ref":"master","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.BRANCH }}", "image-tag": "${{ env.IMAGE_TAG }}" }}'
+            -d '{"ref":"master","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}" }}'
+        env:
+          K8S: 'eks'
+          CONFIG: 'fuel-dev1'
+          ENV: 'fueldevsway.env'
+
 
 
 
