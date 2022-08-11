@@ -18,13 +18,10 @@ jobs:
       - name: Set Environment Variables
         id: set_env_var
         run: |
-          tag=(`echo $GITHUB_SHA | cut -c1-7`)
           branch_name=$(git symbolic-ref -q HEAD)
           branch_name=${branch_name##refs/heads/}
           branch_name=${branch_name:-HEAD}
           echo "NAMESPACE=$(echo $branch_name)" >> $GITHUB_ENV
-          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
-          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
          
       - name: Deploy Ephemeral Test Environment
         id: deploy_eph_env
