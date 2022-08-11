@@ -109,7 +109,7 @@ pub enum MockMiddlewareError {
     Internal,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum TriggerType<'a> {
     Syncing,
     GetBlockNumber,

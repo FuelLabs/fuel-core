@@ -210,9 +210,7 @@ mod tests {
     /// helper function for building FuelP2PService    
     async fn build_fuel_p2p_service(p2p_config: P2PConfig) -> FuelP2PService {
         let keypair = Keypair::generate_secp256k1();
-        let fuel_p2p_service = FuelP2PService::new(keypair, p2p_config).await.unwrap();
-
-        fuel_p2p_service
+        FuelP2PService::new(keypair, p2p_config).await.unwrap()
     }
 
     #[tokio::test]

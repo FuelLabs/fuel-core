@@ -166,7 +166,7 @@ pub struct Coin {
     pub status: CoinStatus,
 }
 
-#[derive(cynic::Enum, Clone, Copy, Debug, PartialEq)]
+#[derive(cynic::Enum, Clone, Copy, Debug, Eq, PartialEq)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum CoinStatus {
     Unspent,

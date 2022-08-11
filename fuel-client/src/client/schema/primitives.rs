@@ -192,7 +192,7 @@ impl Display for Bytes {
     }
 }
 
-#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq)]
 pub struct U64(pub u64);
 impl_scalar!(U64, schema::U64);
 
