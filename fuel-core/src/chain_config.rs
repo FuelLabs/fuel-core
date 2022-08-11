@@ -20,7 +20,7 @@ pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
 #[skip_serializing_none]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
     pub block_production: ProductionStrategy,
@@ -103,7 +103,7 @@ impl FromStr for ChainConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub enum ProductionStrategy {
     Instant,
     Manual,
@@ -114,7 +114,7 @@ pub enum ProductionStrategy {
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
 #[skip_serializing_none]
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct StateConfig {
     /// Spendable coins
     pub coins: Option<Vec<CoinConfig>>,
@@ -141,7 +141,7 @@ impl StateConfig {
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct CoinConfig {
     /// auto-generated if None
     #[serde_as(as = "Option<HexType>")]
@@ -167,7 +167,7 @@ pub struct CoinConfig {
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ContractConfig {
     #[serde_as(as = "HexType")]
     pub code: Vec<u8>,
@@ -183,7 +183,7 @@ pub struct ContractConfig {
 
 #[skip_serializing_none]
 #[serde_as]
-#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 pub struct MessageConfig {
     #[serde_as(as = "HexType")]
     pub sender: Address,

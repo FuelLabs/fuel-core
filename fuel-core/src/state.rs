@@ -56,7 +56,7 @@ pub trait KeyValueStore {
     ) -> Box<dyn Iterator<Item = KVItem> + '_>;
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
 pub enum IterDirection {
     Forward,
     Reverse,
