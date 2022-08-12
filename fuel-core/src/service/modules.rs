@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)]
-use crate::config::Config;
 use crate::database::Database;
+use crate::service::Config;
 use anyhow::Result;
 use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
@@ -91,7 +91,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let txpool = txpool_builder.build()?;
 
     // start services
-    relayer.start().await?;
+    if config.relayer.eth_client.is_some() {
+        relayer.start().await?;
+    }
     txpool.start().await?;
 
     Ok(Modules {

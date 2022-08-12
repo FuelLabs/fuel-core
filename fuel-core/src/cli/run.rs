@@ -1,10 +1,12 @@
 use crate::cli::DEFAULT_DB_PATH;
 use crate::FuelService;
 use clap::Parser;
-use fuel_core::config::{Config, DbType, VMConfig};
+use fuel_core::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
+
+mod relayer;
 
 #[derive(Debug, Clone, Parser)]
 pub struct Command {
@@ -29,6 +31,10 @@ pub struct Command {
     #[clap(name = "CHAIN_CONFIG", long = "chain", default_value = "local_testnet")]
     pub chain_config: String,
 
+    /// Allows GraphQL Endpoints to arbitrarily advanced blocks. Should be used for local development only
+    #[clap(long = "manual_blocks_enabled")]
+    pub manual_blocks_enabled: bool,
+
     /// Enable logging of backtraces from vm errors
     #[clap(long = "vm-backtrace")]
     pub vm_backtrace: bool,
@@ -42,14 +48,13 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
-    /// The minimum allowed byte price
-    #[clap(long = "min-byte-price", default_value = "0")]
-    pub min_byte_price: u64,
-
     /// Enable predicate execution on transaction inputs.
     /// Will reject any transactions with predicates if set to false.
     #[clap(long = "predicates")]
     pub predicates: bool,
+
+    #[clap(flatten)]
+    pub relayer_args: relayer::RelayerArgs,
 }
 
 impl Command {
@@ -61,10 +66,11 @@ impl Command {
             database_type,
             chain_config,
             vm_backtrace,
+            manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
-            min_byte_price,
             predicates,
+            relayer_args,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -74,19 +80,19 @@ impl Command {
             database_type,
             chain_conf: chain_config.as_str().parse()?,
             utxo_validation,
+            manual_blocks_enabled,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
             txpool: fuel_txpool::Config {
                 min_gas_price,
-                min_byte_price,
                 ..Default::default()
             },
             predicates,
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
-            relayer: Default::default(),
+            relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
         })

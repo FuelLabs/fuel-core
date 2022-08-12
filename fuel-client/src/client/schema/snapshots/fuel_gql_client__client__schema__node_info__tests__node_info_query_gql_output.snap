@@ -1,5 +1,6 @@
 ---
 source: fuel-client/src/client/schema/node_info.rs
+assertion_line: 29
 expression: operation.query
 ---
 query Query {
@@ -8,7 +9,6 @@ query Query {
     predicates
     vmBacktrace
     minGasPrice
-    minBytePrice
     maxTx
     maxDepth
     nodeVersion

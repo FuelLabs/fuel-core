@@ -93,6 +93,7 @@ fuel_type_scalar!(AssetId, AssetId);
 fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
+fuel_type_scalar!(MessageId, MessageId);
 
 #[derive(cynic::Scalar, Debug, Clone, Default)]
 pub struct UtxoId(pub HexFormatted<fuel_tx::UtxoId>);
@@ -113,6 +114,30 @@ impl From<UtxoId> for fuel_tx::UtxoId {
 }
 
 impl LowerHex for UtxoId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        LowerHex::fmt(&self.0 .0, f)
+    }
+}
+
+#[derive(cynic::Scalar, Debug, Clone, Default)]
+pub struct TxPointer(pub HexFormatted<fuel_tx::TxPointer>);
+
+impl FromStr for TxPointer {
+    type Err = ConversionError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let b = HexFormatted::<fuel_tx::TxPointer>::from_str(s)?;
+        Ok(TxPointer(b))
+    }
+}
+
+impl From<TxPointer> for fuel_tx::TxPointer {
+    fn from(s: TxPointer) -> Self {
+        s.0 .0
+    }
+}
+
+impl LowerHex for TxPointer {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         LowerHex::fmt(&self.0 .0, f)
     }
@@ -167,7 +192,7 @@ impl Display for Bytes {
     }
 }
 
-#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq)]
 pub struct U64(pub u64);
 impl_scalar!(U64, schema::U64);
 

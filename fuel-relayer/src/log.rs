@@ -5,38 +5,43 @@ use ethers_core::{
     abi::RawLog,
     types::{Log, U256},
 };
+use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
-    common::fuel_types::{Address, AssetId, Bytes32, Word},
-    model::{ConsensusId, DepositCoin, ValidatorId},
+    common::fuel_types::{Address, Bytes32, Word},
+    model::{ConsensusId, Message, ValidatorId},
 };
 
-/// This is going to be superseded with MessageLog: https://github.com/FuelLabs/fuel-core/issues/366
-#[derive(Debug, Clone, PartialEq)]
-pub struct AssetDepositLog {
-    pub account: Address,
-    pub token: AssetId,
+/// Bridge message send from da to fuel network.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct MessageLog {
+    pub sender: Address,
+    pub recipient: Address,
+    pub owner: Address,
+    pub nonce: Word,
     pub amount: Word,
-    pub precision_factor: u8,
-    pub block_number: u32,
-    pub deposit_nonce: Bytes32,
+    pub data: Vec<u8>,
+    pub da_height: DaBlockHeight,
 }
 
-impl From<&AssetDepositLog> for DepositCoin {
-    fn from(asset: &AssetDepositLog) -> Self {
+impl From<&MessageLog> for Message {
+    fn from(message: &MessageLog) -> Self {
         Self {
-            owner: asset.account,
-            amount: asset.amount,
-            asset_id: asset.token, // TODO should this be hash of token_id and precision factor
-            nonce: asset.deposit_nonce,
-            deposited_da_height: asset.block_number,
+            sender: message.sender,
+            recipient: message.recipient,
+            owner: message.owner,
+            nonce: message.nonce,
+            amount: message.amount,
+            data: message.data.clone(),
+            da_height: message.da_height,
             fuel_block_spend: None,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum EthEventLog {
-    AssetDeposit(AssetDepositLog),
+    // Bridge message from da side
+    Message(MessageLog),
     // save it in validator set
     ValidatorRegistration {
         staking_key: ValidatorId,
@@ -62,16 +67,12 @@ pub enum EthEventLog {
         delegates: Vec<ValidatorId>,
         amounts: Vec<u64>,
     },
-    FuelBlockCommited {
+    FuelBlockCommitted {
         block_root: Bytes32,
         height: Word,
     },
     Unknown,
 }
-
-/// block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
-/// data is packet as three 256bit/32bytes values
-const ASSET_DEPOSIT_DATA_LEN: usize = 32 + 32 + 32;
 
 impl TryFrom<&Log> for EthEventLog {
     type Error = anyhow::Error;
@@ -82,58 +83,35 @@ impl TryFrom<&Log> for EthEventLog {
         }
 
         let log = match log.topics[0] {
-            n if n == *config::ETH_LOG_ASSET_DEPOSIT => {
-                if log.topics.len() != 4 {
-                    return Err(anyhow!("Malformed topics for AssetDeposit"));
-                }
-                let account = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
-                let token = unsafe { AssetId::from_slice_unchecked(log.topics[2].as_ref()) };
-
-                if !log.topics[3][..24].iter().all(|&b| b == 0) {
-                    return Err(anyhow!(
-                        "Malformed amount for AssetDeposit. Amount bigger then u64",
-                    ));
-                }
-                let amount = <[u8; 8]>::try_from(&log.topics[3][24..])
-                    .map(u64::from_be_bytes)
-                    .expect("We have checked slice bounds");
-
-                // data is contains: block_number(32bits) | precisionFactor(8bits) | depositNonce(256bits)
-                let data = &log.data.0;
-
-                if data.len() != ASSET_DEPOSIT_DATA_LEN {
-                    return Err(anyhow!(
-                        "Malformed data length for AssetDeposit: {}",
-                        data.len()
-                    ));
-                }
-                if !data[..28].iter().all(|&b| b == 0) {
-                    return Err(anyhow!(
-                        "Malformed amount for AssetDeposit. Amount bigger then u64",
-                    ));
+            n if n == *config::ETH_LOG_MESSAGE => {
+                if log.topics.len() != 3 {
+                    return Err(anyhow!("Malformed topics for Message"));
                 }
 
-                let block_number = <[u8; 4]>::try_from(&data[28..32])
-                    .map(u32::from_be_bytes)
-                    .expect("We have checked slice bounds");
+                let raw_log = RawLog {
+                    topics: log.topics.clone(),
+                    data: log.data.to_vec(),
+                };
 
-                if !data[32..63].iter().all(|&b| b == 0) {
-                    return Err(anyhow!(
-                        "Malformed amount for AssetDeposit. Amount bigger then u64",
-                    ));
-                }
+                let message = abi::bridge::SentMessageFilter::decode_log(&raw_log)?;
+                let amount = message.amount;
+                let data = message.data.to_vec();
+                let nonce = message.nonce;
+                let owner = Address::from(message.owner);
+                let recipient = Address::from(message.recipient);
+                let sender = Address::from(message.sender);
 
-                let precision_factor = data[63];
-
-                let deposit_nonce = unsafe { Bytes32::from_slice_unchecked(&data[64..]) };
-
-                Self::AssetDeposit(AssetDepositLog {
-                    block_number,
-                    account,
+                Self::Message(MessageLog {
                     amount,
-                    token,
-                    precision_factor,
-                    deposit_nonce,
+                    data,
+                    nonce,
+                    sender,
+                    recipient,
+                    owner,
+                    // Safety: logs without block numbers are rejected by
+                    // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
+                    // If block_number is none, that means the log is pending.
+                    da_height: log.block_number.unwrap().as_u64(),
                 })
             }
             n if n == *config::ETH_LOG_VALIDATOR_REGISTRATION => {
@@ -223,9 +201,9 @@ impl TryFrom<&Log> for EthEventLog {
                         .collect(),
                 }
             }
-            n if n == *config::ETH_FUEL_BLOCK_COMMITED => {
+            n if n == *config::ETH_FUEL_BLOCK_COMMITTED => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for FuelBlockCommited"));
+                    return Err(anyhow!("Malformed topics for FuelBlockCommitted"));
                 }
                 let block_root = unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
 
@@ -233,7 +211,7 @@ impl TryFrom<&Log> for EthEventLog {
                     .map(u32::from_be_bytes)
                     .expect("Slice bounds are predefined") as u64;
 
-                Self::FuelBlockCommited { block_root, height }
+                Self::FuelBlockCommitted { block_root, height }
             }
             _ => Self::Unknown,
         };
@@ -334,11 +312,15 @@ pub mod tests {
             del_data.extend(&bytes);
         }
 
+        // index for first item
         data.extend(H256::from_low_u64_be(64).as_ref());
+        // index of end of del data
         data.extend(H256::from_low_u64_be(64 + del_data.len() as u64).as_ref());
 
+        // del data
         data.extend(del_data);
 
+        // index of end of amount data
         data.extend(H256::from_low_u64_be(amounts.len() as u64).as_ref());
         for amount in amounts {
             data.extend(H256::from_low_u64_be(amount).as_ref());
@@ -356,56 +338,64 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_asset_deposit(
+    pub fn eth_log_message(
         eth_block: u64,
-        account: Address,
-        token: AssetId,
-        block_number: u32,
-        amount: Word,
-        deposit_nonce: Bytes32,
-        precision_factor: u8,
+        sender: Address,
+        receipient: Address,
+        owner: Address,
+        nonce: u32,
+        amount: u32,
+        data: Vec<u8>,
     ) -> Log {
-        //block_number(32bits) | precision_factor(256bits) | depositNonce(256bits)
-        // 32+32+32
-        let mut b = BytesMut::new();
-        b.resize(ASSET_DEPOSIT_DATA_LEN, 0);
-        //let mut b: [u8; 68] = [0; 68];
-        b[28..32].copy_from_slice(&block_number.to_be_bytes());
-        // 4..28 are zeroes
-        b[63] = precision_factor;
-        b[64..96].copy_from_slice(deposit_nonce.as_ref());
+        let mut b: Vec<u8> = Vec::new();
+        // owner nonce amount data
+        // 32 + 32 + 32 + dyn
+
+        b.extend(owner.as_ref());
+        b.extend(H256::from_low_u64_be(nonce as u64).as_ref());
+        b.extend(H256::from_low_u64_be(amount as u64).as_ref());
+        b.extend(H256::from_low_u64_be(128).as_ref());
+        b.extend(H256::from_low_u64_be(data.len() as u64).as_ref());
+
+        // data takes as lest 32 bytes;
+        let data_size = ((data.len() / 32) + 1) * 32;
+        let start = b.len();
+        // resize buffer to be able to extend data.
+        b.resize(b.len() + data_size, 0);
+        for (i, data) in data.iter().enumerate() {
+            b[start + i] = *data;
+        }
+
         log_default(
             eth_block,
             vec![
-                *config::ETH_LOG_ASSET_DEPOSIT,
-                H256::from_slice(account.as_ref()),
-                H256::from_slice(token.as_ref()),
-                H256::from_low_u64_be(amount),
+                *config::ETH_LOG_MESSAGE,
+                H256::from_slice(sender.as_ref()),
+                H256::from_slice(receipient.as_ref()),
             ],
-            b.freeze(),
+            BytesMut::from_iter(b.into_iter()).freeze(),
         )
     }
 
-    pub fn eth_log_fuel_block_commited(
+    pub fn eth_log_fuel_block_committed(
         eth_block: u64,
         block_root: Bytes32,
         fuel_height: u32,
     ) -> Log {
-        let t = log_default(
+        log_default(
             eth_block,
             vec![
-                *config::ETH_FUEL_BLOCK_COMMITED,
+                *config::ETH_FUEL_BLOCK_COMMITTED,
                 H256::from_slice(block_root.as_ref()),
                 H256::from_low_u64_be(fuel_height as u64),
             ],
             Bytes::new(),
-        );
-        t
+        )
     }
 
     fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
         Log {
-            address: H160::zero(), // we dont check or use this
+            address: H160::zero(), // we don't check or use this
             topics,
             data: EthersBytes(data),
             block_hash: None,
@@ -552,13 +542,13 @@ pub mod tests {
     }
 
     #[test]
-    fn eth_event_fuel_block_comit_from_log() {
+    fn eth_event_fuel_block_commit_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block = rng.gen();
         let block_root = rng.gen();
         let height: u32 = rng.gen();
 
-        let log = eth_log_fuel_block_commited(eth_block, block_root, height);
+        let log = eth_log_fuel_block_committed(eth_block, block_root, height);
         assert_eq!(
             Some(U64([eth_block])),
             log.block_number,
@@ -570,30 +560,30 @@ pub mod tests {
         let height = height as u64;
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::FuelBlockCommited { block_root, height },
+            EthEventLog::FuelBlockCommitted { block_root, height },
             "Decoded log does not match data we encoded"
         );
     }
 
     #[test]
-    fn eth_event_asset_deposit_try_from_log() {
+    fn eth_event_message_try_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
-        let eth_block = rng.gen();
-        let account = rng.gen();
-        let token = rng.gen();
-        let block_number: u32 = rng.gen();
-        let amount = rng.gen();
-        let deposit_nonce = rng.gen();
-        let precision_factor = rng.gen();
+        let eth_block: u64 = rng.gen();
+        let sender: Address = rng.gen();
+        let receipient: Address = rng.gen();
+        let owner: Address = rng.gen();
+        let nonce: u32 = rng.gen();
+        let amount: u32 = rng.gen();
+        let data: Vec<u8> = vec![1u8];
 
-        let log = eth_log_asset_deposit(
+        let log = eth_log_message(
             eth_block,
-            account,
-            token,
-            block_number,
+            sender,
+            receipient,
+            owner,
+            nonce,
             amount,
-            deposit_nonce,
-            precision_factor,
+            data.clone(),
         );
         assert_eq!(
             Some(U64([eth_block])),
@@ -605,13 +595,14 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::AssetDeposit(AssetDepositLog {
-                account,
-                token,
-                block_number,
-                precision_factor,
-                amount,
-                deposit_nonce
+            EthEventLog::Message(MessageLog {
+                sender,
+                recipient: receipient,
+                owner,
+                nonce: nonce as u64,
+                amount: amount as u64,
+                data,
+                da_height: eth_block
             }),
             "Decoded log does not match data we encoded"
         );

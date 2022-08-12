@@ -102,7 +102,7 @@ impl Context {
                     let db = self.db.clone();
                     let txpool = txpool.clone();
 
-                    // This is litle bit risky but we can always add semaphore to limit number of requests.
+                    // This is little bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
@@ -124,8 +124,8 @@ impl Context {
                         TxPoolMpsc::FilterByNegative { ids, response } => {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
-                        TxPoolMpsc::Remove { ids } => {
-                            TxPool::remove(txpool,broadcast,&ids).await;
+                        TxPoolMpsc::Remove { ids, response } => {
+                            let _ = response.send(TxPool::remove(txpool,broadcast,&ids).await);
                         }
                         TxPoolMpsc::Stop => {}
                     }});
@@ -264,7 +264,7 @@ pub mod tests {
             .await;
         let out = receiver.await.unwrap();
 
-        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
 
@@ -278,7 +278,7 @@ pub mod tests {
             .await;
         let out = receiver.await.unwrap();
 
-        assert_eq!(out.len(), 1, "Shoud be len 1:{:?}", out);
+        assert_eq!(out.len(), 1, "Should be len 1:{:?}", out);
         assert_eq!(out[0], tx3_hash, "Found tx id match{:?}", out);
         service.stop().await.unwrap().await.unwrap();
     }
@@ -311,7 +311,7 @@ pub mod tests {
             .await;
         let out = receiver.await.unwrap();
 
-        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
         assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
         assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
         let (response, receiver) = oneshot::channel();
@@ -323,7 +323,7 @@ pub mod tests {
             })
             .await;
         let out = receiver.await.unwrap();
-        assert_eq!(out.len(), 2, "Shoud be len 2:{:?}", out);
+        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
         assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
         let id = out[0].as_ref().unwrap().id();
         assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
@@ -382,12 +382,15 @@ pub mod tests {
         );
 
         // remove them
+        let (response, receiver) = oneshot::channel();
         let _ = service
             .sender()
             .send(TxPoolMpsc::Remove {
                 ids: vec![tx1_hash, tx2_hash],
+                response,
             })
             .await;
+        let _rem = receiver.await.unwrap();
 
         assert_eq!(
             tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,

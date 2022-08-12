@@ -24,13 +24,13 @@ use tracing::{debug, error, info, warn};
 /// there is possibility that they are going to be reverted
 pub struct PendingBlocks {
     signer: LocalWallet,
-    contract_address: H160,
+    contract_address: Option<H160>,
     /// Pending block commits seen on DA layer and waiting to be finalized
     pending_block_commits: VecDeque<PendingBlock>,
-    /// Highest known chain height, used to check if we are seeing lag between block commits and our fule chain
+    /// Highest known chain height, used to check if we are seeing lag between block commits and our fuel chain
     chain_height: BlockHeight,
-    /// Last known commited and finalized fuel height that is known by client.
-    last_commited_finalized_fuel_height: BlockHeight,
+    /// Last known committed and finalized fuel height that is known by client.
+    last_committed_finalized_fuel_height: BlockHeight,
 }
 
 struct PendingBlock {
@@ -41,7 +41,7 @@ struct PendingBlock {
 }
 
 impl PendingBlock {
-    pub fn new_commited_block(
+    pub fn new_committed_block(
         da_height: DaBlockHeight,
         block_height: BlockHeight,
         block_root: Bytes32,
@@ -87,10 +87,10 @@ impl PendingBlocks {
     /// Pending blocks at least finalization number of blocks.
     pub fn new(
         chain_id: u64,
-        contract_address: H160,
+        contract_address: Option<H160>,
         private_key: &[u8],
         chain_height: BlockHeight,
-        last_commited_finalized_fuel_height: BlockHeight,
+        last_committed_finalized_fuel_height: BlockHeight,
     ) -> Self {
         // it is some random key for now
         let sk = SigningKey::from_bytes(private_key).unwrap();
@@ -102,7 +102,7 @@ impl PendingBlocks {
             contract_address,
             chain_height,
             pending_block_commits: VecDeque::new(),
-            last_commited_finalized_fuel_height,
+            last_committed_finalized_fuel_height,
         }
     }
 
@@ -117,9 +117,9 @@ impl PendingBlocks {
         // iterate over all pending blocks and finalize some\
         self.pending_block_commits.retain(|block| {
             if block.da_height <= finalized_da_height {
-                self.last_commited_finalized_fuel_height = BlockHeight::from(max(
+                self.last_committed_finalized_fuel_height = BlockHeight::from(max(
                     u64::from(block.block_height),
-                    u64::from(self.last_commited_finalized_fuel_height),
+                    u64::from(self.last_committed_finalized_fuel_height),
                 ));
 
                 false
@@ -127,7 +127,7 @@ impl PendingBlocks {
                 true
             }
         });
-        self.last_commited_finalized_fuel_height
+        self.last_committed_finalized_fuel_height
     }
 
     pub fn handle_block_commit(
@@ -148,8 +148,8 @@ impl PendingBlocks {
         to_height: BlockHeight,
         db: &mut dyn RelayerDb,
     ) -> Vec<Arc<SealedFuelBlock>> {
-        // if queue is empty check last_finalized_commited fuel block and send all newest ones that we know about.
-        let mut from_height = self.last_commited_finalized_fuel_height;
+        // if queue is empty check last_finalized_committed fuel block and send all newest ones that we know about.
+        let mut from_height = self.last_committed_finalized_fuel_height;
         //get blocks range that start from last pending queue item that is not reverted and goes to current block.
         for pending in self.pending_block_commits.iter() {
             if !pending.reverted {
@@ -164,13 +164,13 @@ impl PendingBlocks {
             if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
                 bundle.push(sealed_block.clone());
             } else {
-                panic!("All not commited blocks should have its seal and blocks inside db");
+                panic!("All not committed blocks should have its seal and blocks inside db");
             }
         }
         bundle
     }
 
-    /// When new block is created by this client, bundle all not commited blocks and send it to contract.
+    /// When new block is created by this client, bundle all not committed blocks and send it to contract.
     pub async fn commit<P>(
         &mut self,
         height: BlockHeight,
@@ -181,6 +181,11 @@ impl PendingBlocks {
     {
         self.set_chain_height(height);
         debug!("Handle new created_block {}", height);
+
+        // if contract is not set there is no point to bundle and send block commits
+        if self.contract_address.is_none() {
+            return;
+        }
 
         let mut bundle = self.bundle(height, db).await.into_iter();
 
@@ -203,7 +208,7 @@ impl PendingBlocks {
         }
     }
 
-    /// Handle commited block from contract.
+    /// Handle committed block from contract.
     fn handle_block_commit_append(
         &mut self,
         block_root: Bytes32,
@@ -211,13 +216,13 @@ impl PendingBlocks {
         da_height: DaBlockHeight,
     ) {
         if self.pending_block_commits.is_empty() {
-            let lcffh = self.last_commited_finalized_fuel_height;
+            let lcffh = self.last_committed_finalized_fuel_height;
             if lcffh + 1u64.into() != height {
                 error!("Missing block commitments between last finalized commitment {lcffh} to new height {height}")
             }
             // no pending commits, add one
             self.pending_block_commits
-                .push_front(PendingBlock::new_commited_block(
+                .push_front(PendingBlock::new_committed_block(
                     da_height, height, block_root,
                 ));
             return;
@@ -227,9 +232,9 @@ impl PendingBlocks {
         let back_height = self.pending_block_commits.back().unwrap().block_height;
 
         if height < back_height {
-            // This case means that we somehow skipped block commit and didnt receive it in expected order.
+            // This case means that we somehow skipped block commit and didn't receive it in expected order.
             error!(
-                "Commited block {height} is lower then current lowest pending block {back_height}."
+                "Committed block {height} is lower then current lowest pending block {back_height}."
             );
         } else if height > front_height {
             // check if we are lagging against da layer
@@ -242,15 +247,15 @@ impl PendingBlocks {
             // new block received. Happy path
             if height == front_height + BlockHeight::from(1u64) {
                 self.pending_block_commits
-                    .push_front(PendingBlock::new_commited_block(
+                    .push_front(PendingBlock::new_committed_block(
                         da_height, height, block_root,
                     ));
             } else {
-                error!("Commited block height {height} should be only increased by one from current height {front_height}.");
+                error!("Committed block height {height} should be only increased by one from current height {front_height}.");
             }
         } else {
             // happens if reverted commit is again visible
-            // iterate over pending blocks and set reverted commit as commited.
+            // iterate over pending blocks and set reverted commit as committed.
             for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
                     if !pending.reverted {
@@ -275,7 +280,7 @@ impl PendingBlocks {
         if self.pending_block_commits.is_empty() {
             // nothing to revert
             error!("Revert for height {height} received while pending block queue is empty and LFCFB is {}",
-                self.last_commited_finalized_fuel_height);
+                self.last_committed_finalized_fuel_height);
             return;
         }
 
@@ -288,7 +293,7 @@ impl PendingBlocks {
         } else if height > front_height {
             error!("Something unexpected happened.Reverted block commits are not something found in the future.");
         } else {
-            // happy path. iterate over pending blocks and set it as commited.
+            // happy path. iterate over pending blocks and set it as committed.
             for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
                     if pending.reverted {
@@ -311,80 +316,82 @@ impl PendingBlocks {
     where
         P: Middleware + 'static,
     {
-        let wrapped_block = from_fuel_to_block_header(block);
-        let wrapped_parent = from_fuel_to_block_header(parent);
+        if let Some(contract_address) = self.contract_address {
+            let wrapped_block = from_fuel_to_block_header(block);
+            let wrapped_parent = from_fuel_to_block_header(parent);
 
-        let validators = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(val, _)| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
-            .collect();
-        let stakes = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(_, (stake, _))| (*stake).into())
-            .collect(); // U256
-        let signatures = block
-            .consensus
-            .validators
-            .iter()
-            .map(|(_, (_, sig))| sig.to_vec().into())
-            .collect(); //bytes
-        let withdrawals = block
-            .withdrawals()
-            .iter()
-            .map(|wd| abi::fuel::Withdrawal {
-                owner: H160::from_slice(&wd.0.as_ref()[12..]),
-                token: H160::from_slice(&wd.2.as_ref()[12..]),
-                amount: wd.1.into(),
-                precision: 0,
-                nonce: U256::zero(),
-            })
-            .collect();
+            let validators = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(val, _)| H160::from_slice(&val.as_ref()[12..])) // TODO check if this needs to do keccak then 12..
+                .collect();
+            let stakes = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(_, (stake, _))| (*stake).into())
+                .collect(); // U256
+            let signatures = block
+                .consensus
+                .validators
+                .iter()
+                .map(|(_, (_, sig))| sig.to_vec().into())
+                .collect(); //bytes
+            let withdrawals = block
+                .withdrawals()
+                .iter()
+                .map(|wd| abi::fuel::Withdrawal {
+                    owner: H160::from_slice(&wd.0.as_ref()[12..]),
+                    token: H160::from_slice(&wd.2.as_ref()[12..]),
+                    amount: wd.1.into(),
+                    precision: 0,
+                    nonce: U256::zero(),
+                })
+                .collect();
 
-        let calldata = {
-            let contract = abi::Fuel::new(self.contract_address, provider.clone());
-            let event = contract.commit_block(
-                block.header.height.into(),
-                <[u8; 32]>::try_from(block.id()).unwrap(),
-                wrapped_block,
-                wrapped_parent,
-                validators,
-                stakes,
-                signatures,
-                withdrawals,
-            );
-            //
-            event.calldata().expect("To have caldata")
-        };
+            let calldata = {
+                let contract = abi::Fuel::new(contract_address, provider.clone());
+                let event = contract.commit_block(
+                    block.header.height.into(),
+                    <[u8; 32]>::try_from(block.id()).unwrap(),
+                    wrapped_block,
+                    wrapped_parent,
+                    validators,
+                    stakes,
+                    signatures,
+                    withdrawals,
+                );
+                //
+                event.calldata().expect("To have calldata")
+            };
 
-        // Escalate gas prices
-        let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
-        let provider =
-            GasEscalatorMiddleware::new(provider.clone(), escalator, Frequency::PerBlock);
+            // Escalate gas prices
+            let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
+            let provider =
+                GasEscalatorMiddleware::new(provider.clone(), escalator, Frequency::PerBlock);
 
-        // Sign transactions with a private key
-        let address = self.signer.address();
-        let provider = SignerMiddleware::new(provider, self.signer.clone());
+            // Sign transactions with a private key
+            let address = self.signer.address();
+            let provider = SignerMiddleware::new(provider, self.signer.clone());
 
-        // Use EthGasStation as the gas oracle
-        // https://github.com/FuelLabs/fuel-core/issues/363
-        // TODO check how this is going to be done in testnet.
-        //let gas_oracle = EthGasStation::new(None);
-        //let provider = GasOracleMiddleware::new(provider, gas_oracle);
+            // Use EthGasStation as the gas oracle
+            // https://github.com/FuelLabs/fuel-core/issues/363
+            // TODO check how this is going to be done in testnet.
+            //let gas_oracle = EthGasStation::new(None);
+            //let provider = GasOracleMiddleware::new(provider, gas_oracle);
 
-        // Manage nonces locally
-        let provider = NonceManagerMiddleware::new(provider, address);
+            // Manage nonces locally
+            let provider = NonceManagerMiddleware::new(provider, address);
 
-        // craft the tx
-        let tx = TransactionRequest::new()
-            .from(address)
-            .to(self.contract_address)
-            .gas_price(20000000001u64)
-            .data(calldata);
-        let _ = provider.send_transaction(tx, None).await?;
+            // craft the tx
+            let tx = TransactionRequest::new()
+                .from(address)
+                .to(contract_address)
+                .gas_price(20000000001u64)
+                .data(calldata);
+            let _ = provider.send_transaction(tx, None).await?;
+        }
         Ok(())
     }
 }
@@ -398,16 +405,16 @@ mod tests {
     use super::*;
     use tracing_test::traced_test;
 
-    pub fn block_commit(last_commited_fuel_block: BlockHeight) -> PendingBlocks {
+    pub fn block_commit(last_committed_fuel_block: BlockHeight) -> PendingBlocks {
         let private_key =
             hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
                 .unwrap();
         PendingBlocks::new(
             0,
-            H160::zero(),
+            Some(H160::zero()),
             &private_key,
             10u64.into(),
-            last_commited_fuel_block,
+            last_committed_fuel_block,
         )
     }
 
@@ -452,7 +459,7 @@ mod tests {
         blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
         blocks.handle_block_commit(b2, 0u64.into(), 9, IsReverted::False);
         assert!(logs_contain(
-            "Commited block 0 is lower then current lowest pending block 2."
+            "Committed block 0 is lower then current lowest pending block 2."
         ))
     }
 
@@ -468,7 +475,7 @@ mod tests {
         blocks.handle_block_commit(b1, 2u64.into(), 9, IsReverted::False);
         blocks.handle_block_commit(b2, 4u64.into(), 10, IsReverted::False);
         assert!(logs_contain(
-            "Commited block height 4 should be only increased by one from current height 2"
+            "Committed block height 4 should be only increased by one from current height 2"
         ))
     }
 
@@ -573,7 +580,7 @@ mod tests {
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
         assert_eq!(out[0].header.height, 1u64.into(), "First should be 1");
-        assert_eq!(out[1].header.height, 2u64.into(), "Seocnd should be 2");
+        assert_eq!(out[1].header.height, 2u64.into(), "Second should be 2");
         assert_eq!(out[2].header.height, 3u64.into(), "Third should be 3");
     }
 
@@ -594,7 +601,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "All not commited blocks should have its seal and blocks inside db")]
+    #[should_panic(expected = "All not committed blocks should have its seal and blocks inside db")]
     async fn bundle_should_panic_if_sealed_block_is_missing() {
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(DummyDb::filled());

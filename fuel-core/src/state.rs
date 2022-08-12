@@ -40,6 +40,8 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
     }
 }
 
+pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
+
 pub trait KeyValueStore {
     fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
     fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
@@ -51,10 +53,10 @@ pub trait KeyValueStore {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_>;
+    ) -> Box<dyn Iterator<Item = KVItem> + '_>;
 }
 
-#[derive(Copy, Clone, Debug, PartialOrd, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialOrd, Eq, PartialEq)]
 pub enum IterDirection {
     Forward,
     Reverse,

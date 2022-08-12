@@ -24,6 +24,8 @@ use types::{TransactionResponse, TransactionStatus};
 use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
+use self::schema::block::ProduceBlockArgs;
+
 pub mod schema;
 pub mod types;
 
@@ -301,6 +303,16 @@ impl FuelClient {
         Ok(receipts?)
     }
 
+    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+        let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
+            blocks_to_produce: blocks_to_produce.into(),
+        });
+
+        let new_height = self.query(query).await?.produce_blocks;
+
+        Ok(new_height.into())
+    }
+
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
         let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
 
@@ -433,6 +445,19 @@ impl FuelClient {
         let balances = self.query(query).await?.contract_balances.into();
 
         Ok(balances)
+    }
+
+    pub async fn messages(
+        &self,
+        owner: Option<&str>,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
+        let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
+        let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
+
+        let messages = self.query(query).await?.messages.into();
+
+        Ok(messages)
     }
 }
 

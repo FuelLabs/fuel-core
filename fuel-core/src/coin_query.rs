@@ -12,9 +12,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum CoinQueryError {
-    #[error("store error occured")]
+    #[error("store error occurred")]
     KvStoreError(KvStoreError),
-    #[error("state error occured")]
+    #[error("state error occurred")]
     StateError(state::Error),
     #[error("enough coins could not be found")]
     NotEnoughCoins,

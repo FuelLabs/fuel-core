@@ -16,7 +16,7 @@ use std::collections::HashMap;
 pub struct FuelBlockHeader {
     /// Fuel block height.
     pub height: BlockHeight,
-    /// The layer 1 height of deposits and events to include since the last layer 1 block number.
+    /// The layer 1 height of messages and events to include since the last layer 1 block number.
     /// This is not meant to represent the layer 1 block this was committed to. Validators will need
     /// to have some rules in place to ensure the block number was chosen in a reasonable way. For
     /// example, they should verify that the block number satisfies the finality requirements of the
@@ -34,6 +34,7 @@ pub struct FuelBlockHeader {
     /// The block producer public key
     pub producer: Address,
     /// Header Metadata
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub metadata: Option<HeaderMetadata>,
 }
 
@@ -128,10 +129,10 @@ impl FuelBlock {
         }
     }
 
-    /* TODO for functions bellow, they are mostly going to be removed
-    https://github.com/FuelLabs/fuel-core/issues/364 */
+    // TODO for functions bellow, they are mostly going to be removed
+    // https://github.com/FuelLabs/fuel-core/issues/364
 
-    pub fn transaction_data_lenght(&self) -> usize {
+    pub fn transaction_data_length(&self) -> usize {
         self.transactions.len() * 100
     }
 
@@ -156,7 +157,7 @@ impl FuelBlock {
     }
 }
 
-/// This structure is ceated as placeholder for future usage.
+/// This structure is created as placeholder for future usage.
 /// It represent commitment for next child block
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

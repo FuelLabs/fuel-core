@@ -11,11 +11,12 @@ pub struct ConsensusParameters {
     pub max_gas_per_tx: U64,
     pub max_script_length: U64,
     pub max_script_data_length: U64,
-    pub max_static_contracts: U64,
     pub max_storage_slots: U64,
     pub max_predicate_length: U64,
     pub max_predicate_data_length: U64,
     pub gas_price_factor: U64,
+    pub gas_per_byte: U64,
+    pub max_message_data_length: U64,
 }
 
 impl From<ConsensusParameters> for TxConsensusParameters {
@@ -28,11 +29,12 @@ impl From<ConsensusParameters> for TxConsensusParameters {
             max_gas_per_tx: params.max_gas_per_tx.into(),
             max_script_length: params.max_script_length.into(),
             max_script_data_length: params.max_script_data_length.into(),
-            max_static_contracts: params.max_static_contracts.into(),
             max_storage_slots: params.max_storage_slots.into(),
             max_predicate_length: params.max_predicate_length.into(),
             max_predicate_data_length: params.max_predicate_data_length.into(),
             gas_price_factor: params.gas_price_factor.into(),
+            gas_per_byte: params.gas_per_byte.into(),
+            max_message_data_length: params.max_message_data_length.into(),
         }
     }
 }

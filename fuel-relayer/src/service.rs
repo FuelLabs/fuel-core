@@ -96,7 +96,7 @@ pub struct Context {
     pub receiver: mpsc::Receiver<RelayerRequest>,
     /// Private.
     pub private_key: Vec<u8>,
-    /// Db connector to apply stake and token deposit.
+    /// Db connector to apply stake and messages.
     pub db: Box<dyn RelayerDb>,
     /// Notification of new block event.
     pub new_block_event: broadcast::Receiver<ImportBlockBroadcast>,
@@ -129,7 +129,7 @@ impl Service {
         Ok(provider)
     }
 
-    // internal function to simplify code for different prividers.
+    // internal function to simplify code for different providers.
     async fn run<P>(
         &self,
         join: &mut Option<JoinHandle<Context>>,
@@ -157,7 +157,7 @@ impl Service {
         let mut join = self.join.lock().await;
         if join.is_none() {
             if let Some(context) = self.context.lock().await.take() {
-                let uri = context.config.eth_client.clone();
+                let uri = context.config.eth_client.clone().unwrap_or_default();
                 if uri.starts_with("http") {
                     self.run(&mut *join, context, Self::provider_http(&uri))
                         .await

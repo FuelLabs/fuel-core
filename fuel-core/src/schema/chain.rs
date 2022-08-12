@@ -1,6 +1,6 @@
 use crate::{
-    config::Config, database::Database, model::FuelBlockDb, schema::block::Block,
-    schema::scalars::U64,
+    database::Database, model::FuelBlockDb, schema::block::Block, schema::scalars::U64,
+    service::Config,
 };
 use async_graphql::{Context, Object};
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
@@ -41,10 +41,6 @@ impl ConsensusParameters {
         self.0.max_script_data_length.into()
     }
 
-    async fn max_static_contracts(&self) -> U64 {
-        self.0.max_static_contracts.into()
-    }
-
     async fn max_storage_slots(&self) -> U64 {
         self.0.max_storage_slots.into()
     }
@@ -59,6 +55,14 @@ impl ConsensusParameters {
 
     async fn gas_price_factor(&self) -> U64 {
         self.0.gas_price_factor.into()
+    }
+
+    async fn gas_per_byte(&self) -> U64 {
+        self.0.gas_per_byte.into()
+    }
+
+    async fn max_message_data_length(&self) -> U64 {
+        self.0.max_message_data_length.into()
     }
 }
 

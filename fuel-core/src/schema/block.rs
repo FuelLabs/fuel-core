@@ -1,13 +1,16 @@
 use crate::database::Database;
+use crate::executor::{ExecutionMode, Executor};
 use crate::schema::{
     scalars::{BlockId, U64},
     tx::types::Transaction,
 };
+use crate::service::Config;
 use crate::{
     database::KvStoreError,
-    model::{BlockHeight, FuelBlockDb},
+    model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
     state::IterDirection,
 };
+use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
@@ -118,6 +121,13 @@ impl BlockQuery {
                     (0, IterDirection::Forward)
                 };
 
+                if (first.is_some() && before.is_some())
+                    || (after.is_some() && before.is_some())
+                    || (last.is_some() && after.is_some())
+                {
+                    return Err(anyhow!("Wrong argument combination"));
+                }
+
                 let start;
                 let end;
 
@@ -169,9 +179,59 @@ impl BlockQuery {
                     Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
                 }));
 
-                Ok::<Connection<usize, Block>, KvStoreError>(connection)
+                Ok::<Connection<usize, Block>, anyhow::Error>(connection)
             },
         )
         .await
+    }
+}
+
+#[derive(Default)]
+pub struct BlockMutation;
+
+#[Object]
+impl BlockMutation {
+    async fn produce_blocks(
+        &self,
+        ctx: &Context<'_>,
+        blocks_to_produce: U64,
+    ) -> async_graphql::Result<U64> {
+        let db = ctx.data_unchecked::<Database>();
+        let cfg = ctx.data_unchecked::<Config>().clone();
+
+        if !cfg.manual_blocks_enabled {
+            return Err(anyhow!("Manual Blocks must be enabled to use this endpoint").into());
+        }
+
+        let executor = Executor {
+            database: db.clone(),
+            config: cfg.clone(),
+        };
+
+        let iterate: u64 = blocks_to_produce.into();
+
+        for _ in 0..iterate {
+            let current_height = db.get_block_height()?.unwrap_or_default();
+            let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+            let new_block_height = current_height + 1u32.into();
+
+            let mut block = FuelBlock {
+                header: FuelBlockHeader {
+                    height: new_block_height,
+                    parent_hash: current_hash,
+                    time: Utc::now(),
+                    ..Default::default()
+                },
+                transactions: vec![],
+            };
+
+            executor
+                .execute(&mut block, ExecutionMode::Production)
+                .await?;
+        }
+
+        db.get_block_height()?
+            .map(|new_height| Ok(new_height.into()))
+            .ok_or("Block height not found")?
     }
 }

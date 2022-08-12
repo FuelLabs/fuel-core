@@ -228,7 +228,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
                 return Err(ResponseError::ResponseChannelDoesNotExist);
             }
             (Err(e), _) => {
-                debug!("Failed to convert to IntedmediateResponse with {:?}", e);
+                debug!("Failed to convert to IntermediateResponse with {:?}", e);
                 return Err(ResponseError::ConversionToIntermediateFailed);
             }
         }

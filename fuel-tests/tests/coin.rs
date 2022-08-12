@@ -1,11 +1,8 @@
 use fuel_core::{
-    config::{
-        chain_config::{CoinConfig, StateConfig},
-        Config,
-    },
+    chain_config::{CoinConfig, StateConfig},
     database::Database,
     model::{Coin, CoinStatus},
-    service::FuelService,
+    service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
@@ -238,6 +235,7 @@ async fn coins_to_spend() {
             })
             .collect(),
         ),
+        messages: None,
     });
 
     // setup server & client

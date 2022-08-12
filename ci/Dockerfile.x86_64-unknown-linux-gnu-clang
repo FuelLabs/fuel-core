@@ -1,10 +1,4 @@
-FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main-centos
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main
 
-RUN yum -y update && \
-    yum -y install centos-release-scl && \
-    yum-config-manager --enable rhel-server-rhscl-8-rpms && \
-    yum -y install llvm-toolset-7.0
-
-COPY centos-entrypoint /usr/bin/entrypoint.sh
-RUN chmod +x /usr/bin/entrypoint.sh
-ENTRYPOINT [ "/usr/bin/entrypoint.sh" ]
+RUN apt-get update && \
+    apt-get install --assume-yes clang libclang-dev binutils-aarch64-linux-gnu
