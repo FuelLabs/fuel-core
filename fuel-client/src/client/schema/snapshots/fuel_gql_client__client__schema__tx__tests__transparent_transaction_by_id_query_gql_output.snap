@@ -1,14 +1,11 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 273
 expression: operation.query
-
 ---
 query Query($_0: TransactionId!) {
   transaction(id: $_0) {
     gasLimit
     gasPrice
-    bytePrice
     id
     inputAssetIds
     inputContracts {
@@ -21,6 +18,7 @@ query Query($_0: TransactionId!) {
         owner
         amount
         assetId
+        txPointer
         witnessIndex
         maturity
         predicate
@@ -30,9 +28,22 @@ query Query($_0: TransactionId!) {
         utxoId
         balanceRoot
         stateRoot
+        txPointer
         contract {
           id
         }
+      }
+      ... on InputMessage {
+        messageId
+        sender
+        recipient
+        amount
+        nonce
+        owner
+        witnessIndex
+        data
+        predicate
+        predicateData
       }
     }
     isScript
@@ -48,10 +59,9 @@ query Query($_0: TransactionId!) {
         balanceRoot
         stateRoot
       }
-      ... on WithdrawalOutput {
-        to
+      ... on MessageOutput {
+        recipient
         amount
-        assetId
       }
       ... on ChangeOutput {
         to
@@ -128,13 +138,14 @@ query Query($_0: TransactionId!) {
       result
       gasUsed
       data
+      messageId
+      sender
+      recipient
+      nonce
     }
     script
     scriptData
     salt
-    staticContracts {
-      id
-    }
     storageSlots
     bytecodeWitnessIndex
     bytecodeLength

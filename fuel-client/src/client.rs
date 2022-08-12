@@ -446,6 +446,19 @@ impl FuelClient {
 
         Ok(balances)
     }
+
+    pub async fn messages(
+        &self,
+        owner: Option<&str>,
+        request: PaginationRequest<String>,
+    ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
+        let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
+        let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
+
+        let messages = self.query(query).await?.messages.into();
+
+        Ok(messages)
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
