@@ -1,6 +1,6 @@
 #![allow(clippy::let_unit_value)]
-use crate::config::Config;
 use crate::database::Database;
+use crate::service::Config;
 use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::relayer::RelayerDb;
@@ -119,7 +119,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     }
     txpool.start().await?;
 
-    let p2p_db: Arc<Box<dyn P2pDb>> = Arc::new(Box::new(database.clone()));
+    let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
 
     let network_service = fuel_p2p::orchestrator::Service::new(
         config.p2p.clone(),
@@ -130,7 +130,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         tx_transaction,
         tx_block,
     );
-    network_service.start().await?;
+
+    if !config.p2p.network_name.is_empty() {
+        network_service.start().await?;
+    }
 
     Ok(Modules {
         txpool: Arc::new(txpool),

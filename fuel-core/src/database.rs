@@ -8,6 +8,7 @@ use crate::state::{
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use async_trait::async_trait;
+use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
@@ -42,7 +43,7 @@ pub mod code_root;
 pub mod coin;
 pub mod contracts;
 pub mod delegates_index;
-pub mod deposit_coin;
+pub mod message;
 pub mod metadata;
 mod receipts;
 pub mod staking_diffs;
@@ -70,17 +71,19 @@ pub mod columns {
     pub const BLOCKS: u32 = 12;
     // maps block id -> block hash
     pub const BLOCK_IDS: u32 = 13;
-    pub const TOKEN_DEPOSITS: u32 = 14;
+    pub const MESSAGES: u32 = 14;
     /// contain current validator stake and it consensus_key if set.
     pub const VALIDATOR_SET: u32 = 15;
     /// contain diff between da blocks it contains new registers consensus key and new delegate sets.
     pub const STAKING_DIFFS: u32 = 16;
     /// Maps delegate address with validator_set_diff index where last delegate change happened
     pub const DELEGATES_INDEX: u32 = 17;
+    // (Owner, MessageId) => true
+    pub const OWNED_MESSAGE_IDS: u32 = 18;
 
     // Number of columns
     #[cfg(feature = "rocksdb")]
-    pub const COLUMN_NUM: u32 = 18;
+    pub const COLUMN_NUM: u32 = 19;
 }
 
 #[derive(Clone, Debug)]
@@ -209,10 +212,12 @@ impl Database {
     {
         self.data
             .iter_all(column, prefix, start, direction.unwrap_or_default())
-            .map(|(key, value)| {
-                let key = K::from(key);
-                let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
-                Ok((key, value))
+            .map(|val| {
+                val.and_then(|(key, value)| {
+                    let key = K::from(key);
+                    let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                    Ok((key, value))
+                })
             })
     }
 
@@ -264,6 +269,17 @@ impl InterpreterStorage for Database {
     fn block_height(&self) -> Result<u32, Error> {
         let height = self.get_block_height()?.unwrap_or_default();
         Ok(height.into())
+    }
+
+    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
+        let id = self.block_hash(height)?;
+        let block = Storage::<Bytes32, FuelBlockDb>::get(self, &id)?.unwrap_or_default();
+        block
+            .headers
+            .time
+            .timestamp()
+            .try_into()
+            .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
@@ -324,7 +340,7 @@ impl RelayerDb for Database {
                 use byteorder::{BigEndian, ReadBytesExt};
                 use std::io::Cursor;
                 let mut i = Cursor::new(i);
-                Self(i.read_u32::<BigEndian>().unwrap_or_default())
+                Self(i.read_u64::<BigEndian>().unwrap_or_default())
             }
         }
         let mut out = Vec::new();

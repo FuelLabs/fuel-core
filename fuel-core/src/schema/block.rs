@@ -1,10 +1,10 @@
-use crate::config::Config;
 use crate::database::Database;
 use crate::executor::{ExecutionMode, Executor};
 use crate::schema::{
     scalars::{BlockId, U64},
     tx::types::Transaction,
 };
+use crate::service::Config;
 use crate::{
     database::KvStoreError,
     model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
@@ -121,6 +121,13 @@ impl BlockQuery {
                     (0, IterDirection::Forward)
                 };
 
+                if (first.is_some() && before.is_some())
+                    || (after.is_some() && before.is_some())
+                    || (last.is_some() && after.is_some())
+                {
+                    return Err(anyhow!("Wrong argument combination"));
+                }
+
                 let start;
                 let end;
 
@@ -172,7 +179,7 @@ impl BlockQuery {
                     Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
                 }));
 
-                Ok::<Connection<usize, Block>, KvStoreError>(connection)
+                Ok::<Connection<usize, Block>, anyhow::Error>(connection)
             },
         )
         .await

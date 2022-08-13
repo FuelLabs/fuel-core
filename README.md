@@ -77,6 +77,8 @@ Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 
 #### Troubleshooting
 
+##### Outdated database
+
 If you encounter an error such as
 
 ```console
@@ -84,6 +86,15 @@ thread 'main' panicked at 'unable to open database: DatabaseError(Error { messag
 ```
 
 Clear your local database using: `rm -rf ~/.fuel/db`
+
+##### File descriptor limits
+
+On some macOS versions the default file descriptor limit is quite low, which can lead to IO errors with messages like `Too many open files` or even `fatal runtime error: Rust cannot catch foreign exceptions` when RocksDB encounters these issues. Use the following command to increase the open file limit. Note that this only affects the current shell session, so consider adding it to `~/.zshrc`.
+
+```bash
+ulimit -n 10240
+```
+
 
 #### Log level
 
@@ -133,5 +144,5 @@ RET(REG_ONE),
 
 ```console
 $ cargo run --bin fuel-gql-cli -- transaction submit \
-"{\"Script\":{\"byte_price\":0,\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[],\"receipts_root\":\"0x6114142d12e0f58cfb8c72c270cd0535944fb1ba763dce83c17e882c482224a2\"}}"
+"{\"Script\":{\"gas_price\":0,\"gas_limit\":1000000,\"maturity\":0,\"script\":[80,64,0,202,80,68,0,186,51,65,16,0,36,4,0,0],\"script_data\":[],\"inputs\":[],\"outputs\":[],\"witnesses\":[],\"receipts_root\":\"0x6114142d12e0f58cfb8c72c270cd0535944fb1ba763dce83c17e882c482224a2\"}}"
 ```
