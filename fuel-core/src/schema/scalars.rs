@@ -3,12 +3,17 @@ use crate::model::BlockHeight;
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };
-use fuel_core_interfaces::common::{fuel_tx, fuel_types};
+use fuel_core_interfaces::common::fuel_types;
 use std::{
     convert::TryInto,
     fmt::{Display, Formatter},
     str::FromStr,
 };
+pub use tx_pointer::TxPointer;
+pub use utxo_id::UtxoId;
+
+pub mod tx_pointer;
+pub mod utxo_id;
 
 /// Need our own u64 type since GraphQL integers are restricted to i32.
 #[derive(Copy, Clone, Debug, derive_more::Into, derive_more::From)]
@@ -133,65 +138,6 @@ impl FromStr for HexString {
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
         Ok(HexString(bytes))
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct UtxoId(pub(crate) fuel_tx::UtxoId);
-
-#[Scalar(name = "UtxoId")]
-impl ScalarType for UtxoId {
-    fn parse(value: Value) -> InputValueResult<Self> {
-        if let Value::String(value) = &value {
-            UtxoId::from_str(value.as_str()).map_err(Into::into)
-        } else {
-            Err(InputValueError::expected_type(value))
-        }
-    }
-
-    fn to_value(&self) -> Value {
-        Value::String(self.to_string())
-    }
-}
-
-impl FromStr for UtxoId {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        fuel_tx::UtxoId::from_str(s)
-            .map(Self)
-            .map_err(str::to_owned)
-    }
-}
-
-impl Display for UtxoId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let s = format!("{:#x}", self.0);
-        s.fmt(f)
-    }
-}
-
-impl From<UtxoId> for fuel_tx::UtxoId {
-    fn from(s: UtxoId) -> Self {
-        s.0
-    }
-}
-
-impl From<fuel_tx::UtxoId> for UtxoId {
-    fn from(utxo_id: fuel_tx::UtxoId) -> Self {
-        Self(utxo_id)
-    }
-}
-
-impl CursorType for UtxoId {
-    type Error = String;
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        Self::from_str(s)
-    }
-
-    fn encode_cursor(&self) -> String {
-        self.to_string()
     }
 }
 

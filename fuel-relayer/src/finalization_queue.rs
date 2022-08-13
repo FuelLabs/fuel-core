@@ -8,7 +8,7 @@ use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::{fuel_tx::Address, fuel_types::MessageId},
     model::{
-        BlockHeight, CheckedDaMessage, ConsensusId, DaBlockHeight, DaMessage, SealedFuelBlock,
+        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
         ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
@@ -43,7 +43,7 @@ pub struct DaBlockDiff {
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
     /// bridge messages (e.g. erc20 or nft assets)
-    pub messages: HashMap<MessageId, CheckedDaMessage>,
+    pub messages: HashMap<MessageId, CheckedMessage>,
 }
 
 impl DaBlockDiff {
@@ -209,8 +209,8 @@ impl FinalizationQueue {
         }
         let last_diff = self.pending.back_mut().unwrap();
         match fuel_event {
-            EthEventLog::DaMessage(message) => {
-                let msg = DaMessage::from(&message).check();
+            EthEventLog::Message(message) => {
+                let msg = Message::from(&message).check();
                 last_diff.messages.insert(*msg.id(), msg);
             }
             EthEventLog::Deposit { .. } => {
@@ -315,8 +315,8 @@ impl FinalizationQueue {
             }
 
             // push finalized assets to db
-            for (_, da_message) in diff.messages.iter() {
-                db.insert_da_message(da_message).await
+            for (_, message) in diff.messages.iter() {
+                db.insert_message(message).await
             }
 
             // insert height index into delegations.
@@ -365,9 +365,9 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let message1 = eth_log_da_message(0, acc1, receipient, owner, 0, 10, vec![]);
-        let message2 = eth_log_da_message(1, acc1, receipient, owner, 1, 14, vec![]);
-        let message3 = eth_log_da_message(1, acc1, receipient, owner, 2, 16, vec![]);
+        let message1 = eth_log_message(0, acc1, receipient, owner, 0, 10, vec![]);
+        let message2 = eth_log_message(1, acc1, receipient, owner, 1, 14, vec![]);
+        let message3 = eth_log_message(1, acc1, receipient, owner, 2, 16, vec![]);
 
         let message1_db = EthEventLog::try_from(&message1).unwrap();
         let message2_db = EthEventLog::try_from(&message2).unwrap();
@@ -380,18 +380,18 @@ mod tests {
         let diff1 = queue.pending[0].clone();
         let diff2 = queue.pending[1].clone();
 
-        if let EthEventLog::DaMessage(message) = &message1_db {
-            let msg = DaMessage::from(message).check();
+        if let EthEventLog::Message(message) = &message1_db {
+            let msg = Message::from(message).check();
             assert_eq!(msg.da_height, 0);
             assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
         }
-        if let EthEventLog::DaMessage(message) = &message2_db {
-            let msg = DaMessage::from(message).check();
+        if let EthEventLog::Message(message) = &message2_db {
+            let msg = Message::from(message).check();
             assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
-        if let EthEventLog::DaMessage(message) = &message3_db {
-            let msg = DaMessage::from(message).check();
+        if let EthEventLog::Message(message) = &message3_db {
+            let msg = Message::from(message).check();
             assert_eq!(msg.da_height, 1);
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
@@ -450,7 +450,7 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let test_da_message = DaMessage {
+        let test_message = Message {
             sender: acc1,
             recipient,
             owner: sender,
@@ -464,14 +464,14 @@ mod tests {
             .append_eth_logs(vec![
                 eth_log_validator_registration(1, v1, c1),
                 eth_log_validator_registration(2, v2, c2),
-                eth_log_da_message(
+                eth_log_message(
                     2,
-                    test_da_message.sender,
-                    test_da_message.recipient,
-                    test_da_message.owner,
-                    test_da_message.nonce as u32,
-                    test_da_message.amount as u32,
-                    test_da_message.data.clone(),
+                    test_message.sender,
+                    test_message.recipient,
+                    test_message.owner,
+                    test_message.nonce as u32,
+                    test_message.amount as u32,
+                    test_message.data.clone(),
                 ),
                 eth_log_validator_unregistration(3, v1),
             ])
@@ -490,7 +490,7 @@ mod tests {
         // ensure committed message id matches message id from the log
         assert_eq!(
             db.data.lock().messages.values().next().unwrap().id(),
-            test_da_message.id()
+            test_message.id()
         );
 
         queue.commit_diffs(&mut db, 3).await;

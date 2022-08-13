@@ -1,12 +1,10 @@
-pub mod chain_config;
-pub mod serialization;
-
-use chain_config::ChainConfig;
+use crate::chain_config::ChainConfig;
 use std::{
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 use strum_macros::{Display, EnumString, EnumVariantNames};
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
@@ -55,7 +53,7 @@ pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(Clone, Debug, Display, PartialEq, EnumString, EnumVariantNames)]
+#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,

@@ -1,3 +1,4 @@
+use crate::schema::scalars::TxPointer;
 use crate::schema::{
     contract::Contract,
     scalars::{Address, AssetId, Bytes32, ContractId, HexString, MessageId, UtxoId, U64},
@@ -17,6 +18,7 @@ pub struct InputCoin {
     owner: Address,
     amount: U64,
     asset_id: AssetId,
+    tx_pointer: TxPointer,
     witness_index: u8,
     maturity: U64,
     predicate: HexString,
@@ -41,6 +43,10 @@ impl InputCoin {
         self.asset_id
     }
 
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
+    }
+
     async fn witness_index(&self) -> u8 {
         self.witness_index
     }
@@ -62,6 +68,7 @@ pub struct InputContract {
     utxo_id: UtxoId,
     balance_root: Bytes32,
     state_root: Bytes32,
+    tx_pointer: TxPointer,
     contract_id: ContractId,
 }
 
@@ -77,6 +84,10 @@ impl InputContract {
 
     async fn state_root(&self) -> Bytes32 {
         self.state_root
+    }
+
+    async fn tx_pointer(&self) -> TxPointer {
+        self.tx_pointer
     }
 
     async fn contract(&self) -> Contract {
@@ -148,6 +159,7 @@ impl From<&fuel_tx::Input> for Input {
                 owner,
                 amount,
                 asset_id,
+                tx_pointer,
                 witness_index,
                 maturity,
             } => Input::Coin(InputCoin {
@@ -155,6 +167,7 @@ impl From<&fuel_tx::Input> for Input {
                 owner: Address(*owner),
                 amount: (*amount).into(),
                 asset_id: AssetId(*asset_id),
+                tx_pointer: TxPointer(*tx_pointer),
                 witness_index: *witness_index,
                 maturity: (*maturity).into(),
                 predicate: HexString(Default::default()),
@@ -165,6 +178,7 @@ impl From<&fuel_tx::Input> for Input {
                 owner,
                 amount,
                 asset_id,
+                tx_pointer,
                 maturity,
                 predicate,
                 predicate_data,
@@ -173,6 +187,7 @@ impl From<&fuel_tx::Input> for Input {
                 owner: Address(*owner),
                 amount: (*amount).into(),
                 asset_id: AssetId(*asset_id),
+                tx_pointer: TxPointer(*tx_pointer),
                 witness_index: Default::default(),
                 maturity: (*maturity).into(),
                 predicate: HexString(predicate.clone()),
@@ -182,11 +197,13 @@ impl From<&fuel_tx::Input> for Input {
                 utxo_id,
                 balance_root,
                 state_root,
+                tx_pointer,
                 contract_id,
             } => Input::Contract(InputContract {
                 utxo_id: UtxoId(*utxo_id),
                 balance_root: Bytes32(*balance_root),
                 state_root: Bytes32(*state_root),
+                tx_pointer: TxPointer(*tx_pointer),
                 contract_id: ContractId(*contract_id),
             }),
             fuel_tx::Input::MessageSigned {
