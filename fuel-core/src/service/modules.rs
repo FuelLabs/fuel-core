@@ -66,7 +66,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // Meant to simulate p2p's channels which hook in to communicate with txpool
     let (tx_status_sender, mut tx_status_reciever) = broadcast::channel(100);
 
-    // Remove once tx_status events are used
+    // Remove once tx_consensus events are used
     tokio::spawn(async move { while (tx_status_reciever.recv().await).is_ok() {} });
 
     let (txpool_sender, txpool_receiver) = txpool::channel(100);
