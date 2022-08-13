@@ -60,7 +60,7 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> abi::fuel::Blo
         producer: H160::from_slice(&fuel_block.header.producer.as_ref()[12..]),
         previous_block_root: <[u8; 32]>::try_from(fuel_block.id()).unwrap(),
         height: fuel_block.header.height.into(),
-        block_number: fuel_block.header.number.into(), // TODO
+        block_number: fuel_block.header.number as u32, // TODO
         digest_root: [0; 32],
         digest_hash: [0; 32],
         digest_length: 0,

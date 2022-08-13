@@ -2092,6 +2092,7 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "async-trait",
+ "chrono",
  "fuel-core-interfaces",
  "parking_lot 0.12.1",
  "tokio",

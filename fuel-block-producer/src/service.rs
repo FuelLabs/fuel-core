@@ -4,6 +4,7 @@ use crate::ports::{Relayer, TxPool};
 use crate::Config;
 use fuel_core_interfaces::block_producer::BlockProducerBroadcast;
 use fuel_core_interfaces::block_producer::BlockProducerMpsc;
+use fuel_core_interfaces::executor::Executor;
 use std::sync::Arc;
 use tokio::{
     sync::{broadcast, mpsc, Mutex},
@@ -39,6 +40,7 @@ impl Service {
         &self,
         txpool: Box<dyn TxPool>,
         relayer: Box<dyn Relayer>,
+        executor: Box<dyn Executor>,
         db: Box<dyn BlockProducerDatabase>,
     ) -> bool {
         let mut join = self.join.lock().await;
@@ -50,6 +52,7 @@ impl Service {
                     db,
                     relayer,
                     txpool,
+                    executor,
                 };
                 *join = Some(tokio::spawn(task.spawn()));
                 return true;

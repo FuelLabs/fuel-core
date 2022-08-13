@@ -5,18 +5,15 @@ use crate::{
     tx_pool::TransactionStatus,
 };
 use chrono::Utc;
-use fuel_core_interfaces::{
-    common::fuel_tx::{CheckedTransaction, TransactionFee},
-    model::Message,
-};
+use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
-            Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
-            ValidationError,
+            Address, AssetId, Bytes32, CheckedTransaction, Input, Output, Receipt, Transaction,
+            TransactionFee, TxId, UtxoId, ValidationError,
         },
         fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{
@@ -24,7 +21,9 @@ use fuel_core_interfaces::{
             prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
         },
     },
+    executor::{Error, ExecutionMode, Executor as Trait, TransactionValidityError},
     model::FuelBlockHeader,
+    model::Message,
 };
 use std::{
     error::Error as StdError,
@@ -38,13 +37,6 @@ use tracing::{debug, warn};
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionMode {
-    Production,
-    #[allow(dead_code)]
-    Validation,
-}
 
 pub struct Executor {
     pub database: Database,
@@ -313,7 +305,7 @@ impl Executor {
         db: &Database,
         transaction: &Transaction,
         block_height: BlockHeight,
-        block_da_height: BlockHeight,
+        block_da_height: DaBlockHeight,
     ) -> Result<(), TransactionValidityError> {
         for input in transaction.inputs() {
             match input {
@@ -336,7 +328,7 @@ impl Executor {
                         if message.fuel_block_spend.is_some() {
                             return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
                         }
-                        if BlockHeight::from(message.da_height) > block_da_height {
+                        if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
                             ));
@@ -729,100 +721,6 @@ impl Executor {
             db.update_tx_status(tx_id, status.clone())?;
         }
         Ok(())
-    }
-}
-
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum TransactionValidityError {
-    #[error("Coin input was already spent")]
-    CoinAlreadySpent(UtxoId),
-    #[error("Coin has not yet reached maturity")]
-    CoinHasNotMatured(UtxoId),
-    #[error("The specified coin doesn't exist")]
-    CoinDoesNotExist(UtxoId),
-    #[error("The specified message was already spent")]
-    MessageAlreadySpent(MessageId),
-    #[error("Message is not yet spendable, as it's DA height is newer than this block allows")]
-    MessageSpendTooEarly(MessageId),
-    #[error("The specified message doesn't exist")]
-    MessageDoesNotExist(MessageId),
-    #[error("Contract output index isn't valid: {0:#x}")]
-    InvalidContractInputIndex(UtxoId),
-    #[error("The transaction must have at least one coin or message input type: {0:#x}")]
-    NoCoinOrMessageInput(TxId),
-    #[error("The transaction contains predicate inputs which aren't enabled: {0:#x}")]
-    PredicateExecutionDisabled(TxId),
-    #[error(
-        "The transaction contains a predicate which failed to validate: TransactionId({0:#x})"
-    )]
-    InvalidPredicate(TxId),
-    #[error("Transaction validity: {0:#?}")]
-    Validation(#[from] ValidationError),
-    #[error("Datastore error occurred")]
-    DataStoreError(Box<dyn StdError + Send + Sync>),
-}
-
-impl From<KvStoreError> for TransactionValidityError {
-    fn from(e: KvStoreError) -> Self {
-        Self::DataStoreError(Box::new(e))
-    }
-}
-
-#[derive(Error, Debug)]
-#[non_exhaustive]
-pub enum Error {
-    #[error("Transaction id was already used: {0:#x}")]
-    TransactionIdCollision(Bytes32),
-    #[error("output already exists")]
-    OutputAlreadyExists,
-    #[error("The computed fee caused an integer overflow")]
-    FeeOverflow,
-    #[error("Invalid transaction: {0}")]
-    TransactionValidity(#[from] TransactionValidityError),
-    #[error("corrupted block state")]
-    CorruptedBlockState(Box<dyn StdError + Send + Sync>),
-    #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
-    MissingTransactionData {
-        block_id: Bytes32,
-        transaction_id: Bytes32,
-    },
-    #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
-    VmExecution {
-        error: fuel_core_interfaces::common::fuel_vm::prelude::InterpreterError,
-        transaction_id: Bytes32,
-    },
-    #[error(transparent)]
-    InvalidTransaction(#[from] ValidationError),
-    #[error("Execution error with backtrace")]
-    Backtrace(Box<FuelBacktrace>),
-    #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
-    InvalidTransactionOutcome { transaction_id: Bytes32 },
-    #[error("Transaction root is invalid")]
-    InvalidTransactionRoot,
-    #[error("The amount of charged fees is invalid")]
-    InvalidFeeAmount,
-    #[error("Block id is invalid")]
-    InvalidBlockId,
-    #[error("No matching utxo for contract id ${0:#x}")]
-    ContractUtxoMissing(ContractId),
-}
-
-impl From<FuelBacktrace> for Error {
-    fn from(e: FuelBacktrace) -> Self {
-        Error::Backtrace(Box::new(e))
-    }
-}
-
-impl From<KvStoreError> for Error {
-    fn from(e: KvStoreError) -> Self {
-        Error::CorruptedBlockState(Box::new(e))
-    }
-}
-
-impl From<crate::state::Error> for Error {
-    fn from(e: crate::state::Error) -> Self {
-        Error::CorruptedBlockState(Box::new(e))
     }
 }
 

@@ -6,6 +6,8 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::Utc;
+use fuel_core_interfaces::common::fuel_tx::CheckedTransaction;
+use fuel_core_interfaces::executor::{ExecutionMode, Executor};
 use fuel_core_interfaces::{
     block_producer::BlockProducerMpsc,
     common::{fuel_tx::Transaction, fuel_types::Bytes32},
@@ -20,7 +22,7 @@ mod transaction_selector;
 
 /// The default distance to trail the DA layer. We trail the finalized da height by some
 /// margin to ensure all peers have adequate time to finalize the same blocks.
-pub const DA_HEIGHT_TRAIL: u32 = 10;
+pub const DA_HEIGHT_TRAIL: u64 = 10;
 
 pub struct Task {
     pub receiver: mpsc::Receiver<BlockProducerMpsc>,
@@ -28,6 +30,7 @@ pub struct Task {
     pub db: Box<dyn BlockProducerDatabase>,
     pub relayer: Box<dyn Relayer>,
     pub txpool: Box<dyn TxPool>,
+    pub executor: Box<dyn Executor>,
 }
 
 impl Task {
@@ -76,6 +79,8 @@ impl Task {
         //  - select best txs based on factors like:
         //      1. fees
         //      2. parallel throughput
+        //  - Execute block with production mode to correctly malleate txs outputs and block headers
+        //  - Sign block with production key
 
         let previous_block_info = self.previous_block_info(height).await?;
         let new_da_height = self
@@ -85,23 +90,26 @@ impl Task {
             .relayer
             .get_block_production_key(self.config.validator_id, new_da_height)
             .await?;
-        let best_transactions = self.select_best_transactions().await?;
-        let transactions_root = FuelBlockHeader::transactions_root(&best_transactions);
+        let best_transactions = self.select_best_transactions(height).await?;
 
         let header = FuelBlockHeader {
             height,
             number: new_da_height,
             parent_hash: previous_block_info.hash,
             prev_root: previous_block_info.transaction_root,
-            transactions_root,
+            transactions_root: Default::default(),
             time: Utc::now(),
             producer: producer_id,
             metadata: None,
         };
-        let block = FuelBlock {
+        let mut block = FuelBlock {
             header,
-            transactions: best_transactions,
+            transactions: best_transactions.into_iter().map(Into::into).collect(),
         };
+        self.executor
+            .execute(&mut block, ExecutionMode::Production)
+            .await?;
+
         Ok(block)
     }
 
@@ -119,9 +127,23 @@ impl Task {
         Ok(max(trailed_best_height, previous_da_height))
     }
 
-    async fn select_best_transactions(&self) -> Result<Vec<Transaction>> {
+    async fn select_best_transactions(
+        &self,
+        block_height: BlockHeight,
+    ) -> Result<Vec<CheckedTransaction>> {
         let includable_txs = self.txpool.get_includable_txs().await?;
-        select_transactions(includable_txs, &self.config)
+        // TODO: The transaction pool should return transactions that are already checked
+        let includable_txs = includable_txs
+            .into_iter()
+            .map(|tx| {
+                CheckedTransaction::check(
+                    (*tx).clone(),
+                    block_height.into(),
+                    &self.config.consensus_params,
+                )
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(select_transactions(includable_txs, &self.config))
     }
 
     async fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {

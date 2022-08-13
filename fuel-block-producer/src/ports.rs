@@ -1,9 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use fuel_core_interfaces::{
-    common::{fuel_tx::Transaction, fuel_types::Address},
-    model::DaBlockHeight,
-};
+use fuel_core_interfaces::common::fuel_tx::{CheckedTransaction, Transaction};
+use fuel_core_interfaces::{common::fuel_types::Address, model::DaBlockHeight};
 use std::sync::Arc;
 
 #[async_trait]

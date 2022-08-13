@@ -1,5 +1,5 @@
 use crate::database::Database;
-use crate::executor::{ExecutionMode, Executor};
+use crate::executor::Executor;
 use crate::schema::{
     scalars::{BlockId, U64},
     tx::types::Transaction,
@@ -16,7 +16,10 @@ use async_graphql::{
     Context, Object,
 };
 use chrono::{DateTime, Utc};
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
+use fuel_core_interfaces::{
+    common::{fuel_storage::Storage, fuel_tx, fuel_types},
+    executor::ExecutionMode,
+};
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::convert::TryInto;
