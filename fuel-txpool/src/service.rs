@@ -188,8 +188,9 @@ impl Context {
                         TxPoolMpsc::FilterByNegative { ids, response } => {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
-                        TxPoolMpsc::Remove { ids, response } => {
-                            let _ = response.send(TxPool::remove(txpool,broadcast,&ids).await);
+                        TxPoolMpsc::Remove { ids } => {
+                            TxPool::
+                                remove(txpool, tx_status_sender, &ids).await;
                         }
                         TxPoolMpsc::Stop => {}
                     }});
@@ -647,15 +648,12 @@ pub mod tests {
         );
 
         // remove them
-        let (response, receiver) = oneshot::channel();
         let _ = service
             .sender()
             .send(TxPoolMpsc::Remove {
                 ids: vec![tx1_hash, tx2_hash],
-                response,
             })
             .await;
-        let _rem = receiver.await.unwrap();
 
         assert_eq!(
             tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,

@@ -1,12 +1,13 @@
 use std::{
     net::{IpAddr, Ipv4Addr},
     path::PathBuf,
+    str::FromStr,
     time::Duration,
 };
 
 use clap::Args;
 
-use fuel_p2p::{Keypair, Multiaddr, P2PConfig};
+use fuel_p2p::{Keypair, Multiaddr, P2PConfig, PeerId};
 
 #[derive(Debug, Clone, Args)]
 pub struct P2pArgs {
@@ -15,8 +16,7 @@ pub struct P2pArgs {
     pub keypair: Option<PathBuf>,
 
     /// The name of the p2p Network
-    /// If this value is not provided the p2p network won't start
-    #[clap(long = "network", default_value = "")]
+    #[clap(long = "network")]
     pub network: String,
 
     /// p2p network's IP Address
@@ -24,17 +24,16 @@ pub struct P2pArgs {
     pub address: Option<IpAddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "peering-port", default_value = "4001")]
-    pub peering_port: u16,
+    #[clap(long = "port", default_value = "4000")]
+    pub port: u16,
 
     /// Max Block size
-    #[clap(long = "max_block_size", default_value = "100000")]
+    #[clap(long = "max_block_size", default_value = "100_000")]
     pub max_block_size: usize,
 
-    /// Addresses of the bootstrap nodes
-    /// They should contain PeerId at the end of the specified Multiaddr
+    /// Path to the location of where bootstrap nodes are listed
     #[clap(long = "bootstrap_nodes")]
-    pub bootstrap_nodes: Vec<Multiaddr>,
+    pub bootstrap_nodes: Option<PathBuf>,
 
     /// Allow nodes to be discoverable on the local network
     #[clap(long = "enable_mdns")]
@@ -49,12 +48,12 @@ pub struct P2pArgs {
     pub enable_random_walk: bool,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
-    /// except for the ones stored in `bootstrap_nodes`
+    /// xcept for the ones stored in `bootstrap_nodes`
     #[clap(long = "allow_private_addresses")]
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection_idle_timeout  ", default_value = "120")]
+    #[clap(long = "allow_private_addresses", default_value = "120")]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
@@ -67,19 +66,19 @@ pub struct P2pArgs {
     pub identify_interval: u64,
 
     /// Choose which topics to subscribe to via gossipsub protocol
-    #[clap(long = "topics", default_values = &["new_tx", "new_block", "consensus_vote"])]
+    #[clap(long = "topics", default_value = "new_tx, new_block, consensus_vote")]
     pub topics: Vec<String>,
 
     /// Choose max mesh size for gossipsub protocol
-    #[clap(long = "max_mesh_size", default_value = "12")]
+    #[clap(long = "max_mesh_size")]
     pub max_mesh_size: usize,
 
     /// Choose min mesh size for gossipsub protocol
-    #[clap(long = "min_mesh_size", default_value = "4")]
+    #[clap(long = "min_mesh_size")]
     pub min_mesh_size: usize,
 
     /// Choose ideal mesh size for gossipsub protocol
-    #[clap(long = "ideal_mesh_size", default_value = "6")]
+    #[clap(long = "ideal_mesh_size")]
     pub ideal_mesh_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
@@ -103,15 +102,36 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             }
         };
 
+        let bootstrap_nodes = {
+            match args.bootstrap_nodes {
+                Some(path) => std::fs::read_to_string(path)?
+                    .lines()
+                    .map(|line| {
+                        let mut item = line.split_whitespace();
+
+                        match (item.next(), item.next()) {
+                            (Some(peer_id), Some(multiaddr)) => {
+                                Ok((PeerId::from_str(peer_id)?, Multiaddr::from_str(multiaddr)?))
+                            }
+                            _ => Err(anyhow::anyhow!("Incorrect format of bootstrap nodes")),
+                        }
+                    })
+                    .filter_map(|v| v.ok())
+                    .collect(),
+
+                _ => vec![],
+            }
+        };
+
         Ok(P2PConfig {
             local_keypair,
             network_name: args.network,
             address: args
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
-            tcp_port: args.peering_port,
+            tcp_port: args.port,
             max_block_size: args.max_block_size,
-            bootstrap_nodes: args.bootstrap_nodes,
+            bootstrap_nodes,
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,

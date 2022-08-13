@@ -1,10 +1,12 @@
-use crate::chain_config::ChainConfig;
+pub mod chain_config;
+pub mod serialization;
+
+use chain_config::ChainConfig;
 use std::{
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 use strum_macros::{Display, EnumString, EnumVariantNames};
-
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,

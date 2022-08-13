@@ -21,25 +21,19 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
     let transactions = (1..=10)
         .into_iter()
         .map(|i| {
+            let secret = SecretKey::random(&mut rng);
             TransactionBuilder::script(
                 Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
             .gas_limit(100)
             .gas_price(1)
-            .add_unsigned_coin_input(
-                SecretKey::random(&mut rng),
-                rng.gen(),
-                1000 + i,
-                Default::default(),
-                Default::default(),
-                0,
-            )
+            .byte_price(1)
+            .add_unsigned_coin_input(rng.gen(), &secret, 1000 + i, Default::default(), 0)
             .add_input(Input::Contract {
                 utxo_id: Default::default(),
                 balance_root: Default::default(),
                 state_root: Default::default(),
-                tx_pointer: Default::default(),
                 contract_id,
             })
             .add_output(Output::Change {
@@ -102,10 +96,12 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     )
     .gas_limit(100)
     .gas_price(1)
+    .byte_price(1)
     .finalize();
 
     // initialize node with higher minimum gas price
     let mut test_builder = TestSetupBuilder::new(2322u64);
+    test_builder.min_byte_price = 10;
     test_builder.min_gas_price = 10;
     let TestContext { client, .. } = test_builder.finalize().await;
 
@@ -135,7 +131,6 @@ async fn dry_run_override_utxo_validation() {
         rng.gen(),
         1000,
         AssetId::default(),
-        Default::default(),
         0,
         Default::default(),
     ))
@@ -144,7 +139,6 @@ async fn dry_run_override_utxo_validation() {
         rng.gen(),
         rng.gen(),
         asset_id,
-        Default::default(),
         0,
         Default::default(),
     ))
@@ -180,7 +174,6 @@ async fn dry_run_no_utxo_validation_override() {
         rng.gen(),
         1000,
         AssetId::default(),
-        Default::default(),
         0,
         Default::default(),
     ))
@@ -189,7 +182,6 @@ async fn dry_run_no_utxo_validation_override() {
         rng.gen(),
         rng.gen(),
         asset_id,
-        Default::default(),
         0,
         Default::default(),
     ))
@@ -222,10 +214,9 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
             )
             .gas_limit(1000 + i as u64)
             .add_unsigned_coin_input(
-                secret,
                 rng.gen(),
+                &secret,
                 rng.gen_range(1..1000),
-                Default::default(),
                 Default::default(),
                 0,
             )

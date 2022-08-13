@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
-use fuel_types::{Address, MessageId};
+use fuel_types::{Address, Bytes32};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
@@ -36,12 +36,12 @@ impl StakingDiff {
     }
 }
 
-// Database has two main functionalities, ValidatorSet and Bridge Message.
-// From relayer perspective messages are just inserted when they get finalized.
+// Database has two main functionalities, ValidatorSet and TokenDeposits.
+// From relayer perspective TokenDeposits are just insert when they get finalized.
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<MessageId, Message, Error = KvStoreError> // bridge messages
+     Storage<Bytes32, DepositCoin, Error = KvStoreError> // token deposit
     + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
     + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
     + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
@@ -49,12 +49,12 @@ pub trait RelayerDb:
     + Sync
 {
 
-    /// add bridge message to database. Messages are not revertible.
-    async fn insert_message(
+    /// deposit token to database. Token deposits are not revertable.
+    async fn insert_coin_deposit(
         &mut self,
-        message: &CheckedMessage,
+        deposit: DepositCoin,
     ) {
-        let _ = Storage::<MessageId, Message>::insert(self,message.id(),message.as_ref());
+        let _ = Storage::<Bytes32, DepositCoin>::insert(self,&deposit.id(),&deposit);
     }
 
     /// Insert difference make on staking in this particular DA height.
@@ -199,8 +199,8 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
-        ValidatorId, ValidatorStake,
+        BlockHeight, ConsensusId, DaBlockHeight, DepositCoin, SealedFuelBlock, ValidatorId,
+        ValidatorStake,
     },
 };
 

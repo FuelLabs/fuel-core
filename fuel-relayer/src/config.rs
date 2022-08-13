@@ -12,8 +12,11 @@ pub fn keccak256(data: &'static str) -> H256 {
     H256::from_slice(out.as_slice())
 }
 
-pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
-    Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
+pub(crate) static ETH_LOG_ASSET_DEPOSIT: Lazy<H256> =
+    Lazy::new(|| keccak256("DepositMade(uint32,address,address,uint8,uint256,uint256)"));
+#[allow(dead_code)]
+pub(crate) static ETH_LOG_ASSET_WITHDRAWAL: Lazy<H256> =
+    Lazy::new(|| keccak256("WithdrawalMade(address,address,address,uint256)"));
 pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
     Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_UNREGISTRATION: Lazy<H256> =
@@ -28,7 +31,7 @@ pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// Number of da block after which messages/stakes/validators become finalized.
+    /// Number of da block after which deposits/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
     pub eth_client: Option<String>,
@@ -51,8 +54,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: 64,
-            // Some(String::from("http://localhost:8545"))
-            eth_client: None,
+            eth_client: Some(String::from("http://localhost:8545")),
             eth_chain_id: 1, // ethereum mainnet
             eth_v2_commit_contract: None,
             eth_v2_listening_contracts: vec![H160::from_str(
@@ -107,8 +109,13 @@ mod tests {
     #[test]
     pub fn test_function_signatures() {
         assert_eq!(
-            *ETH_LOG_MESSAGE,
-            H256::from_str("0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2")
+            *ETH_LOG_ASSET_DEPOSIT,
+            H256::from_str("0x34dccbe410bb771d28929a3f1ada2323bfb6ae501200c02dc871b287fb558759")
+                .unwrap()
+        );
+        assert_eq!(
+            *ETH_LOG_ASSET_WITHDRAWAL,
+            H256::from_str("0x779c18fbb35b88ab773ee6b3d87e1d10eb58021e64e0d7808db646f49403d20b")
                 .unwrap()
         );
         assert_eq!(

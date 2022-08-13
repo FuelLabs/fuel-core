@@ -71,6 +71,7 @@ pub mod helpers {
 
     // constants
     pub const TX1_GAS_PRICE: u64 = 10u64;
+    pub const TX1_BYTE_PRICE: u64 = 5u64;
     lazy_static! {
         pub static ref TX_ID_DB1: TxId =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -121,15 +122,13 @@ pub mod helpers {
     use fuel_tx::{
         Address, Bytes32, ContractId, Input, Metadata, Output, Transaction, TxId, UtxoId,
     };
-    use fuel_types::MessageId;
     use fuel_vm::prelude::Contract;
     use std::collections::HashMap;
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, FuelBlock,
-            FuelBlockConsensus, FuelBlockHeader, Message, SealedFuelBlock, ValidatorId,
-            ValidatorStake,
+            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, FuelBlock,
+            FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock, ValidatorId, ValidatorStake,
         },
         relayer::{RelayerDb, StakingDiff},
         txpool::TxPoolDb,
@@ -167,8 +166,8 @@ pub mod helpers {
         pub coins: HashMap<UtxoId, Coin>,
         /// Dummy contracts
         pub contract: HashMap<ContractId, Contract>,
-        /// Dummy messages.
-        pub messages: HashMap<MessageId, Message>,
+        /// Dummy deposit coins.
+        pub deposit_coin: HashMap<Bytes32, DepositCoin>,
         /// variable for last committed and finalized fuel height
         pub last_committed_finalized_fuel_height: BlockHeight,
     }
@@ -193,6 +192,7 @@ pub mod helpers {
             let tx1 = Transaction::Script {
                 gas_price: TX1_GAS_PRICE,
                 gas_limit: 1_000_000,
+                byte_price: TX1_BYTE_PRICE,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -202,7 +202,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -232,6 +231,7 @@ pub mod helpers {
             let tx1_faulty = Transaction::Script {
                 gas_price: 10,
                 gas_limit: 1_000_000,
+                byte_price: 10,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -241,7 +241,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -264,6 +263,7 @@ pub mod helpers {
             let tx2 = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
+                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -273,7 +273,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -297,6 +296,7 @@ pub mod helpers {
             let tx2_faulty = Transaction::Script {
                 gas_price: 9,
                 gas_limit: 1_000_001,
+                byte_price: 9,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -306,7 +306,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -337,6 +336,7 @@ pub mod helpers {
             let tx3 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
+                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -346,7 +346,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 100,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -371,6 +370,7 @@ pub mod helpers {
             let tx4 = Transaction::Script {
                 gas_price: 20, // more then tx1
                 gas_limit: 1_000_001,
+                byte_price: 20,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -380,7 +380,6 @@ pub mod helpers {
                     owner: Address::default(),
                     amount: 200,
                     asset_id: Default::default(),
-                    tx_pointer: Default::default(),
                     witness_index: 0,
                     maturity: 0,
                 }],
@@ -404,6 +403,7 @@ pub mod helpers {
             let tx5 = Transaction::Script {
                 gas_price: 5, //lower then tx1
                 gas_limit: 1_000_000,
+                byte_price: 5,
                 maturity: 0,
                 receipts_root: Default::default(),
                 script,
@@ -412,7 +412,6 @@ pub mod helpers {
                     utxo_id: UtxoId::default(),
                     balance_root: Bytes32::default(),
                     state_root: Bytes32::default(),
-                    tx_pointer: Default::default(),
                     contract_id: *CONTRACT_ID1,
                 }],
                 outputs: vec![
@@ -466,6 +465,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -480,6 +480,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script.clone(),
                     Vec::new(),
@@ -494,6 +495,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     script,
                     Vec::new(),
@@ -508,6 +510,7 @@ pub mod helpers {
                 fun(Transaction::script(
                     10,
                     1000,
+                    10,
                     0,
                     Vec::new(),
                     Vec::new(),
@@ -613,7 +616,7 @@ pub mod helpers {
                 tx: HashMap::from_iter(txs.into_iter().map(|tx| (tx.id(), Arc::new(tx)))),
                 coins,
                 contract: HashMap::new(),
-                messages: HashMap::new(),
+                deposit_coin: HashMap::new(),
                 chain_height: BlockHeight::from(0u64),
                 validators_height: 0,
                 finalized_da_height: 0,
@@ -752,36 +755,36 @@ pub mod helpers {
         }
     }
 
-    // bridge message. Used by relayer.
-    impl Storage<MessageId, Message> for DummyDb {
-        type Error = KvStoreError;
+    // token deposit. Used by relayer.
+    impl Storage<Bytes32, DepositCoin> for DummyDb {
+        type Error = crate::db::KvStoreError;
 
         fn insert(
             &mut self,
-            key: &MessageId,
-            value: &Message,
-        ) -> Result<Option<Message>, Self::Error> {
-            Ok(self.data.lock().messages.insert(*key, value.clone()))
+            key: &Bytes32,
+            value: &DepositCoin,
+        ) -> Result<Option<DepositCoin>, Self::Error> {
+            Ok(self.data.lock().deposit_coin.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
-            Ok(self.data.lock().messages.remove(key))
+        fn remove(&mut self, key: &Bytes32) -> Result<Option<DepositCoin>, Self::Error> {
+            Ok(self.data.lock().deposit_coin.remove(key))
         }
 
         fn get<'a>(
             &'a self,
-            key: &MessageId,
-        ) -> Result<Option<std::borrow::Cow<'a, Message>>, Self::Error> {
+            key: &Bytes32,
+        ) -> Result<Option<std::borrow::Cow<'a, DepositCoin>>, Self::Error> {
             Ok(self
                 .data
                 .lock()
-                .messages
+                .deposit_coin
                 .get(key)
                 .map(|i| Cow::Owned(i.clone())))
         }
 
-        fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
-            Ok(self.data.lock().messages.contains_key(key))
+        fn contains_key(&self, key: &Bytes32) -> Result<bool, Self::Error> {
+            Ok(self.data.lock().deposit_coin.contains_key(key))
         }
     }
 
@@ -953,13 +956,13 @@ mod tests {
 
     use crate::db::helpers::{DummyDb, CONTRACT_ID1};
     use crate::model::{
-        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, Message, ValidatorId,
+        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, DepositCoin, ValidatorId,
         ValidatorStake,
     };
     use crate::relayer::StakingDiff;
     use fuel_storage::Storage;
     use fuel_tx::{Contract, Transaction, UtxoId};
-    use fuel_types::{Address, ContractId};
+    use fuel_types::{Address, Bytes32, ContractId};
 
     #[test]
     fn coins_db() {
@@ -997,21 +1000,19 @@ mod tests {
     }
 
     #[test]
-    fn message_db() {
+    fn deposit_coins_db() {
         let db = sample_db();
-        let value = Message {
+        let value = DepositCoin {
             owner: Address::default(),
             amount: 400,
-            nonce: 10,
+            asset_id: Default::default(),
+            nonce: Bytes32::default(),
+            deposited_da_height: DaBlockHeight::default(),
             fuel_block_spend: Some(BlockHeight::default()),
-            sender: Address::default(),
-            recipient: Address::default(),
-            data: vec![],
-            da_height: Default::default(),
-        }
-        .check();
+        };
+        let key = value.id();
 
-        assert!(execute_test(db, *value.id(), Message::from(value)).is_ok());
+        assert!(execute_test(db, key, value).is_ok());
     }
 
     #[test]

@@ -18,7 +18,6 @@ pub mod block;
 pub mod chain;
 pub mod coin;
 pub mod contract;
-pub mod message;
 pub mod node_info;
 pub mod primitives;
 pub mod tx;
@@ -222,7 +221,7 @@ pub struct OutputBreakpoint {
 }
 
 /// Generic graphql pagination query args
-#[derive(cynic::FragmentArguments, Debug, Default)]
+#[derive(cynic::FragmentArguments, Debug)]
 pub struct ConnectionArgs {
     /// Skip until cursor (forward pagination)
     pub after: Option<String>,

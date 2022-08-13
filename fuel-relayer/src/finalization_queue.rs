@@ -1,15 +1,14 @@
 use crate::{
-    log::EthEventLog,
+    log::{AssetDepositLog, EthEventLog},
     pending_blocks::{IsReverted, PendingBlocks},
     validators::Validators,
 };
 use ethers_core::types::{Log, H160};
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    common::{fuel_tx::Address, fuel_types::MessageId},
+    common::fuel_tx::{Address, Bytes32},
     model::{
-        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
-        ValidatorId, ValidatorStake,
+        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
     },
     relayer::{RelayerDb, StakingDiff, ValidatorDiff},
 };
@@ -42,8 +41,8 @@ pub struct DaBlockDiff {
     pub validators: HashMap<ValidatorId, Option<ConsensusId>>,
     // Delegation diff contains new delegation list, if we did just withdrawal option will be None.
     pub delegations: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>>,
-    /// bridge messages (e.g. erc20 or nft assets)
-    pub messages: HashMap<MessageId, CheckedMessage>,
+    /// erc-20 pending deposit.
+    pub assets: HashMap<Bytes32, AssetDepositLog>,
 }
 
 impl DaBlockDiff {
@@ -52,7 +51,7 @@ impl DaBlockDiff {
             da_height,
             validators: HashMap::new(),
             delegations: HashMap::new(),
-            messages: HashMap::new(),
+            assets: HashMap::new(),
         }
     }
 }
@@ -175,13 +174,13 @@ impl FinalizationQueue {
 
     /// Handle eth log events
     pub async fn append_eth_log(&mut self, log: Log) {
-        if log.block_number.is_none() {
-            error!(target:"relayer", "Block number not found in eth log");
-            return;
-        }
         let event = EthEventLog::try_from(&log);
         if let Err(err) = event {
             warn!(target:"relayer", "Eth Event not formatted properly:{}",err);
+            return;
+        }
+        if log.block_number.is_none() {
+            error!(target:"relayer", "Block number not found in eth log");
             return;
         }
         let removed = log.removed.unwrap_or(false);
@@ -209,9 +208,8 @@ impl FinalizationQueue {
         }
         let last_diff = self.pending.back_mut().unwrap();
         match fuel_event {
-            EthEventLog::Message(message) => {
-                let msg = Message::from(&message).check();
-                last_diff.messages.insert(*msg.id(), msg);
+            EthEventLog::AssetDeposit(deposit) => {
+                last_diff.assets.insert(deposit.deposit_nonce, deposit);
             }
             EthEventLog::Deposit { .. } => {
                 // It is fine to do nothing. This is only related to contract,
@@ -315,8 +313,8 @@ impl FinalizationQueue {
             }
 
             // push finalized assets to db
-            for (_, message) in diff.messages.iter() {
-                db.insert_message(message).await
+            for (_, deposit) in diff.assets.iter() {
+                db.insert_coin_deposit(deposit.into()).await
             }
 
             // insert height index into delegations.
@@ -344,17 +342,22 @@ mod tests {
 
     use super::*;
     use crate::log::tests::*;
-    use fuel_core_interfaces::{common::fuel_types::Address, db::helpers::DummyDb};
+    use fuel_core_interfaces::{
+        common::fuel_types::{Address, AssetId},
+        db::helpers::DummyDb,
+    };
     use rand::rngs::StdRng;
     use rand::{Rng, SeedableRng};
 
     #[tokio::test]
-    pub async fn check_messages_on_multiple_eth_blocks() {
+    pub async fn check_token_deposits_on_multiple_eth_blocks() {
         let mut rng = StdRng::seed_from_u64(3020);
 
         let acc1: Address = rng.gen();
-        let receipient = rng.gen();
-        let owner = rng.gen();
+        let token1 = AssetId::zeroed();
+        let nonce1: Bytes32 = rng.gen();
+        let nonce2: Bytes32 = rng.gen();
+        let nonce3: Bytes32 = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -365,35 +368,29 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let message1 = eth_log_message(0, acc1, receipient, owner, 0, 10, vec![]);
-        let message2 = eth_log_message(1, acc1, receipient, owner, 1, 14, vec![]);
-        let message3 = eth_log_message(1, acc1, receipient, owner, 2, 16, vec![]);
+        let deposit1 = eth_log_asset_deposit(0, acc1, token1, 0, 10, nonce1, 0);
+        let deposit2 = eth_log_asset_deposit(1, acc1, token1, 1, 20, nonce2, 0);
+        let deposit3 = eth_log_asset_deposit(1, acc1, token1, 1, 40, nonce3, 0);
 
-        let message1_db = EthEventLog::try_from(&message1).unwrap();
-        let message2_db = EthEventLog::try_from(&message2).unwrap();
-        let message3_db = EthEventLog::try_from(&message3).unwrap();
+        let deposit1_db = EthEventLog::try_from(&deposit1).unwrap();
+        let deposit2_db = EthEventLog::try_from(&deposit2).unwrap();
+        let deposit3_db = EthEventLog::try_from(&deposit3).unwrap();
 
         queue
-            .append_eth_logs(vec![message1, message2, message3])
+            .append_eth_logs(vec![deposit1, deposit2, deposit3])
             .await;
 
         let diff1 = queue.pending[0].clone();
         let diff2 = queue.pending[1].clone();
 
-        if let EthEventLog::Message(message) = &message1_db {
-            let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 0);
-            assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
+        if let EthEventLog::AssetDeposit(deposit) = &deposit1_db {
+            assert_eq!(diff1.assets.get(&nonce1), Some(deposit),);
         }
-        if let EthEventLog::Message(message) = &message2_db {
-            let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 1);
-            assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
+        if let EthEventLog::AssetDeposit(deposit) = &deposit2_db {
+            assert_eq!(diff2.assets.get(&nonce2), Some(deposit),);
         }
-        if let EthEventLog::Message(message) = &message3_db {
-            let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 1);
-            assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
+        if let EthEventLog::AssetDeposit(deposit) = &deposit3_db {
+            assert_eq!(diff2.assets.get(&nonce3), Some(deposit),);
         }
     }
 
@@ -430,7 +427,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn check_message_and_validator_finalization() {
+    pub async fn check_deposit_and_validator_finalization() {
         let mut rng = StdRng::seed_from_u64(3020);
         let v1: ValidatorId = rng.gen();
         let c1: ConsensusId = rng.gen();
@@ -438,8 +435,8 @@ mod tests {
         let c2: ConsensusId = rng.gen();
 
         let acc1: Address = rng.gen();
-        let recipient = rng.gen();
-        let sender = rng.gen();
+        let token1 = AssetId::zeroed();
+        let nonce1: Bytes32 = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -450,53 +447,31 @@ mod tests {
             BlockHeight::from(0u64),
         );
 
-        let test_message = Message {
-            sender: acc1,
-            recipient,
-            owner: sender,
-            nonce: 40,
-            amount: 0,
-            data: vec![],
-            da_height: 2,
-            fuel_block_spend: None,
-        };
         queue
             .append_eth_logs(vec![
                 eth_log_validator_registration(1, v1, c1),
                 eth_log_validator_registration(2, v2, c2),
-                eth_log_message(
-                    2,
-                    test_message.sender,
-                    test_message.recipient,
-                    test_message.owner,
-                    test_message.nonce as u32,
-                    test_message.amount as u32,
-                    test_message.data.clone(),
-                ),
+                eth_log_asset_deposit(2, acc1, token1, 1, 40, nonce1, 0),
                 eth_log_validator_unregistration(3, v1),
             ])
             .await;
 
         let mut db = DummyDb::filled();
+        //let db_ref = &mut db as &mut dyn RelayerDb;
 
         queue.commit_diffs(&mut db, 1).await;
         assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, Some(c1))),);
         assert_eq!(db.data.lock().validators.get(&v2), None,);
-        assert_eq!(db.data.lock().messages.len(), 0,);
+        assert_eq!(db.data.lock().deposit_coin.len(), 0,);
 
         queue.commit_diffs(&mut db, 2).await;
         assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
-        // ensure committed message id matches message id from the log
-        assert_eq!(
-            db.data.lock().messages.values().next().unwrap().id(),
-            test_message.id()
-        );
+        assert_eq!(db.data.lock().deposit_coin.len(), 1,);
 
         queue.commit_diffs(&mut db, 3).await;
         assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, None)),);
         assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
+        assert_eq!(db.data.lock().deposit_coin.len(), 1,);
     }
 
     #[tokio::test]

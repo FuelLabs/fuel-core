@@ -1,5 +1,5 @@
 use super::scalars::U64;
-use crate::service::Config;
+use crate::config::Config;
 use async_graphql::{Context, Object};
 
 pub struct NodeInfo {
@@ -7,6 +7,7 @@ pub struct NodeInfo {
     predicates: bool,
     vm_backtrace: bool,
     min_gas_price: U64,
+    min_byte_price: U64,
     max_tx: U64,
     max_depth: U64,
     node_version: String,
@@ -28,6 +29,10 @@ impl NodeInfo {
 
     async fn min_gas_price(&self) -> U64 {
         self.min_gas_price
+    }
+
+    async fn min_byte_price(&self) -> U64 {
+        self.min_byte_price
     }
 
     async fn max_tx(&self) -> U64 {
@@ -64,6 +69,7 @@ impl NodeQuery {
             predicates: *predicates,
             vm_backtrace: vm.backtrace,
             min_gas_price: txpool.min_gas_price.into(),
+            min_byte_price: txpool.min_byte_price.into(),
             max_tx: (txpool.max_tx as u64).into(),
             max_depth: (txpool.max_depth as u64).into(),
             node_version: VERSION.to_owned(),

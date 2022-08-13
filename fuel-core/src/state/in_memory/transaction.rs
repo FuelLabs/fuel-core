@@ -4,7 +4,6 @@ use crate::state::{
     TransactionError, TransactionResult, WriteOperation,
 };
 use itertools::{EitherOrBoth, Itertools};
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -99,7 +98,7 @@ impl KeyValueStore for MemoryTransactionView {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_> {
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         // iterate over inmemory + db while also filtering deleted entries
         let changes = self.changes.clone();
         Box::new(
@@ -110,19 +109,10 @@ impl KeyValueStore for MemoryTransactionView {
                 .merge_join_by(
                     self.data_source.iter_all(column, prefix, start, direction),
                     move |i, j| {
-                        if let (Ok(i), Ok(j)) = (i, j) {
-                            if IterDirection::Forward == direction {
-                                i.0.cmp(&j.0)
-                            } else {
-                                j.0.cmp(&i.0)
-                            }
+                        if IterDirection::Forward == direction {
+                            i.0.cmp(&j.0)
                         } else {
-                            // prioritize errors from db result first
-                            if j.is_err() {
-                                Ordering::Greater
-                            } else {
-                                Ordering::Less
-                            }
+                            j.0.cmp(&i.0)
                         }
                     },
                 )
@@ -135,19 +125,14 @@ impl KeyValueStore for MemoryTransactionView {
                     }
                 })
                 // filter entries which have been deleted over the course of this transaction
-                .filter(move |item| {
-                    if let Ok((key, _)) = item {
-                        !matches!(
-                            changes
-                                .lock()
-                                .expect("poisoned")
-                                .get(&column_key(key, column)),
-                            Some(WriteOperation::Remove(_, _))
-                        )
-                    } else {
-                        // ensure errors are propagated
-                        true
-                    }
+                .filter(move |(key, _)| {
+                    !matches!(
+                        changes
+                            .lock()
+                            .expect("poisoned")
+                            .get(&column_key(key, column)),
+                        Some(WriteOperation::Remove(_, _))
+                    )
                 }),
         )
     }
@@ -396,11 +381,10 @@ mod tests {
             view.put(vec![i], 0, vec![2]).unwrap();
         });
 
-        let ret: Vec<_> = view
+        let ret = view
             .iter_all(0, None, None, IterDirection::Forward)
-            .map_ok(|(k, _)| k[0])
-            .try_collect()
-            .unwrap();
+            .map(|(k, _)| k[0])
+            .collect_vec();
         // verify
         assert_eq!(ret, vec![0, 2, 3, 4, 6, 8, 9])
     }
@@ -419,11 +403,10 @@ mod tests {
             view.put(vec![i], 0, vec![2]).unwrap();
         });
 
-        let ret: Vec<_> = view
+        let ret = view
             .iter_all(0, None, None, IterDirection::Reverse)
-            .map_ok(|(k, _)| k[0])
-            .try_collect()
-            .unwrap();
+            .map(|(k, _)| k[0])
+            .collect_vec();
         // verify
         assert_eq!(ret, vec![9, 8, 6, 4, 3, 2, 0])
     }
@@ -442,12 +425,11 @@ mod tests {
             view.put(vec![i], 0, vec![0xB]).unwrap();
         });
 
-        let ret: Vec<_> = view
+        let ret = view
             .iter_all(0, None, None, IterDirection::Forward)
             // return all the values from the iterator
-            .map_ok(|(_, v)| v[0])
-            .try_collect()
-            .unwrap();
+            .map(|(_, v)| v[0])
+            .collect_vec();
         // verify
         assert_eq!(ret, vec![0xB, 0xB, 0xB, 0xB, 0xB])
     }
@@ -465,12 +447,11 @@ mod tests {
         let _ = view.delete(&[0], 0).unwrap();
         let _ = view.delete(&[6], 0).unwrap();
 
-        let ret: Vec<_> = view
+        let ret = view
             .iter_all(0, None, None, IterDirection::Forward)
             // return all the values from the iterator
-            .map_ok(|(k, _)| k[0])
-            .try_collect()
-            .unwrap();
+            .map(|(k, _)| k[0])
+            .collect_vec();
         // verify
         assert_eq!(ret, vec![2, 4, 8])
     }

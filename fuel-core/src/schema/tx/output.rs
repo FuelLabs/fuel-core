@@ -7,7 +7,7 @@ use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx, fuel_types};
 pub enum Output {
     Coin(CoinOutput),
     Contract(ContractOutput),
-    Message(MessageOutput),
+    Withdrawal(WithdrawalOutput),
     Change(ChangeOutput),
     Variable(VariableOutput),
     ContractCreated(ContractCreated),
@@ -34,19 +34,20 @@ impl CoinOutput {
     }
 }
 
-pub struct MessageOutput {
-    amount: Word,
-    recipient: fuel_types::Address,
-}
+pub struct WithdrawalOutput(CoinOutput);
 
 #[Object]
-impl MessageOutput {
-    async fn recipient(&self) -> Address {
-        self.recipient.into()
+impl WithdrawalOutput {
+    async fn to(&self) -> Address {
+        self.0.to.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.amount.into()
+        self.0.amount.into()
+    }
+
+    async fn asset_id(&self) -> AssetId {
+        self.0.asset_id.into()
     }
 }
 
@@ -142,10 +143,15 @@ impl From<&fuel_tx::Output> for Output {
                 balance_root: *balance_root,
                 state_root: *state_root,
             }),
-            fuel_tx::Output::Message { recipient, amount } => Output::Message(MessageOutput {
-                recipient: *recipient,
+            fuel_tx::Output::Withdrawal {
+                to,
+                amount,
+                asset_id,
+            } => Output::Withdrawal(WithdrawalOutput(CoinOutput {
+                to: *to,
                 amount: *amount,
-            }),
+                asset_id: *asset_id,
+            })),
             fuel_tx::Output::Change {
                 to,
                 amount,

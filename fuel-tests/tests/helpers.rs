@@ -1,6 +1,9 @@
 use fuel_core::{
-    chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
-    service::{Config, FuelService},
+    config::{
+        chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
+        Config,
+    },
+    service::FuelService,
 };
 use fuel_core_interfaces::common::{fuel_tx::Contract, fuel_tx::Transaction, fuel_vm::prelude::*};
 use fuel_gql_client::client::FuelClient;
@@ -29,6 +32,7 @@ pub struct TestSetupBuilder {
     pub contracts: HashMap<ContractId, ContractConfig>,
     pub initial_coins: Vec<CoinConfig>,
     pub min_gas_price: u64,
+    pub min_byte_price: u64,
     pub predicates: bool,
 }
 
@@ -114,6 +118,7 @@ impl TestSetupBuilder {
             utxo_validation: true,
             predicates: self.predicates,
             txpool: fuel_txpool::Config {
+                min_byte_price: self.min_byte_price,
                 min_gas_price: self.min_gas_price,
                 ..Default::default()
             },
@@ -145,6 +150,7 @@ impl Default for TestSetupBuilder {
             contracts: Default::default(),
             initial_coins: vec![],
             min_gas_price: 0,
+            min_byte_price: 0,
             predicates: false,
         }
     }

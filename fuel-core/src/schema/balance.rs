@@ -2,7 +2,6 @@ use crate::database::{Database, KvStoreError};
 use crate::model::{Coin as CoinModel, CoinStatus};
 use crate::schema::scalars::{Address, AssetId, U64};
 use crate::state::{Error, IterDirection};
-use anyhow::anyhow;
 use async_graphql::InputObject;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
@@ -144,13 +143,6 @@ impl BalanceQuery {
                     (0, IterDirection::Forward)
                 };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
-
                 let after = after.map(fuel_tx::AssetId::from);
                 let before = before.map(fuel_tx::AssetId::from);
 
@@ -207,7 +199,7 @@ impl BalanceQuery {
                         .map(|item| Edge::new(item.asset_id.into(), item)),
                 );
 
-                Ok::<Connection<AssetId, Balance>, anyhow::Error>(connection)
+                Ok::<Connection<AssetId, Balance>, KvStoreError>(connection)
             },
         )
         .await

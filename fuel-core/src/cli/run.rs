@@ -1,7 +1,7 @@
 use crate::cli::DEFAULT_DB_PATH;
 use crate::FuelService;
 use clap::Parser;
-use fuel_core::service::{Config, DbType, VMConfig};
+use fuel_core::config::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
@@ -49,6 +49,10 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
+    /// The minimum allowed byte price
+    #[clap(long = "min-byte-price", default_value = "0")]
+    pub min_byte_price: u64,
+
     /// Enable predicate execution on transaction inputs.
     /// Will reject any transactions with predicates if set to false.
     #[clap(long = "predicates")]
@@ -73,6 +77,7 @@ impl Command {
             manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
+            min_byte_price,
             predicates,
             relayer_args,
             p2p_args,
@@ -99,6 +104,7 @@ impl Command {
             },
             txpool: fuel_txpool::Config {
                 min_gas_price,
+                min_byte_price,
                 ..Default::default()
             },
             predicates,

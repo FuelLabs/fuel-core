@@ -1,11 +1,10 @@
 use crate::{
     coin_query::{random_improve, SpendQueryElement},
+    config::Config,
     database::{Database, KvStoreError},
     schema::scalars::{Address, AssetId, UtxoId, U64},
-    service::Config,
     state::IterDirection,
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Enum, InputObject, Object,
@@ -114,13 +113,6 @@ impl CoinQuery {
                     (0, IterDirection::Forward)
                 };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
-
                 let after = after.map(fuel_tx::UtxoId::from);
                 let before = before.map(fuel_tx::UtxoId::from);
 
@@ -189,7 +181,7 @@ impl CoinQuery {
                         .map(|item| Edge::new(UtxoId::from(item.0), item)),
                 );
 
-                Ok::<Connection<UtxoId, Coin>, anyhow::Error>(connection)
+                Ok::<Connection<UtxoId, Coin>, KvStoreError>(connection)
             },
         )
         .await

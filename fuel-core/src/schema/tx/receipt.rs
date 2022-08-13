@@ -1,4 +1,3 @@
-use crate::schema::scalars::MessageId;
 use crate::schema::{
     contract::Contract,
     scalars::{Address, AssetId, Bytes32, HexString, U64},
@@ -19,7 +18,6 @@ pub enum ReceiptType {
     Transfer,
     TransferOut,
     ScriptResult,
-    MessageOut,
 }
 
 impl From<&fuel_tx::Receipt> for ReceiptType {
@@ -35,7 +33,6 @@ impl From<&fuel_tx::Receipt> for ReceiptType {
             fuel_tx::Receipt::Transfer { .. } => ReceiptType::Transfer,
             fuel_tx::Receipt::TransferOut { .. } => ReceiptType::TransferOut,
             fuel_tx::Receipt::ScriptResult { .. } => ReceiptType::ScriptResult,
-            fuel_tx::Receipt::MessageOut { .. } => ReceiptType::MessageOut,
         }
     }
 }
@@ -115,18 +112,6 @@ impl Receipt {
     }
     async fn data(&self) -> Option<HexString> {
         self.0.data().map(|d| d.to_vec().into())
-    }
-    async fn message_id(&self) -> Option<MessageId> {
-        self.0.message_id().copied().map(MessageId)
-    }
-    async fn sender(&self) -> Option<Address> {
-        self.0.sender().copied().map(Address)
-    }
-    async fn recipient(&self) -> Option<Address> {
-        self.0.recipient().copied().map(Address)
-    }
-    async fn nonce(&self) -> Option<Bytes32> {
-        self.0.nonce().copied().map(Bytes32)
     }
 }
 

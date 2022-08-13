@@ -7,7 +7,6 @@ pub mod coin;
 pub mod contract;
 pub mod dap;
 pub mod health;
-pub mod message;
 pub mod node_info;
 pub mod scalars;
 pub mod tx;
@@ -24,7 +23,6 @@ pub struct Query(
     contract::ContractQuery,
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
-    message::MessageQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -41,6 +39,6 @@ pub fn build_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
         Query::default(),
         Mutation::default(),
         EmptySubscription::default(),
-        ["TransactionConnection", "MessageConnection"],
+        ["TransactionConnection"],
     )
 }

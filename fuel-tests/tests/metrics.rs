@@ -1,4 +1,7 @@
-use fuel_core::{service::Config, service::DbType, service::FuelService};
+use fuel_core::{
+    config::{Config, DbType},
+    service::FuelService,
+};
 use fuel_core_interfaces::common::{
     fuel_tx,
     fuel_tx::{Address, AssetId},
@@ -41,6 +44,7 @@ async fn test_database_metrics() {
         .submit(&fuel_tx::Transaction::script(
             0,
             1000000,
+            0,
             0,
             script,
             vec![],

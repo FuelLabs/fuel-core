@@ -46,16 +46,11 @@ impl ConcreteStorage {
         &mut self,
         txs: &[Transaction],
         storage: DatabaseTransaction,
-    ) -> anyhow::Result<ID> {
+    ) -> Result<ID, InterpreterError> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
         let tx = txs.first().cloned().unwrap_or_default();
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            storage.get_block_height()?.unwrap_or_default().into(),
-            &self.params,
-        )?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -64,7 +59,7 @@ impl ConcreteStorage {
             });
 
         let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
-        vm.transact(checked_tx)?;
+        vm.transact(tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
 
@@ -77,7 +72,7 @@ impl ConcreteStorage {
         self.db.remove(id).is_some()
     }
 
-    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
+    pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> Result<(), InterpreterError> {
         let tx = self
             .tx
             .get(id)
@@ -85,14 +80,8 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            storage.get_block_height()?.unwrap_or_default().into(),
-            &self.params,
-        )?;
-
         let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
-        vm.transact(checked_tx)?;
+        vm.transact(tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -292,22 +281,13 @@ impl DapMutation {
             .map_err(|_| async_graphql::Error::new("Invalid transaction JSON"))?;
 
         let mut locked = ctx.data_unchecked::<GraphStorage>().lock().await;
-
-        let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
-
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            db.get_block_height()?.unwrap_or_default().into(),
-            &locked.params,
-        )?;
-
         let vm = locked
             .vm
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
         let state_ref = vm
-            .transact(checked_tx)
+            .transact(tx)
             .map_err(|err| async_graphql::Error::new(format!("Transaction failed: {err:?}")))?;
 
         let json_receipts = state_ref

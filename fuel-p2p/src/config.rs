@@ -34,7 +34,7 @@ pub struct P2PConfig {
     pub max_block_size: usize,
 
     // `DiscoveryBehaviour` related fields
-    pub bootstrap_nodes: Vec<Multiaddr>,
+    pub bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
     pub enable_mdns: bool,
     pub max_peers_connected: usize,
     pub allow_private_addresses: bool,
@@ -70,7 +70,7 @@ impl P2PConfig {
             local_keypair,
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
-            tcp_port: 0,
+            tcp_port: 4000,
             max_block_size: 100_000,
             bootstrap_nodes: vec![],
             enable_mdns: false,

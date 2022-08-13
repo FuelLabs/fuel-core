@@ -1,6 +1,5 @@
 #[cfg(feature = "prometheus")]
 use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
-use crate::state::KVItem;
 use crate::{
     database::{
         columns,
@@ -167,7 +166,7 @@ impl KeyValueStore for RocksDb {
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
-    ) -> Box<dyn Iterator<Item = KVItem> + '_> {
+    ) -> Box<dyn Iterator<Item = (Vec<u8>, Vec<u8>)> + '_> {
         let iter_mode = start.as_ref().map_or_else(
             || {
                 prefix.as_ref().map_or_else(
@@ -195,32 +194,23 @@ impl KeyValueStore for RocksDb {
         let iter = self
             .db
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
-            .map(|item| {
-                item.map(|(key, value)| {
-                    let value_as_vec = value.to_vec();
-                    let key_as_vec = key.to_vec();
-                    #[cfg(feature = "prometheus")]
-                    {
-                        DATABASE_METRICS.read_meter.inc();
-                        DATABASE_METRICS
-                            .bytes_read_meter
-                            .inc_by(key_as_vec.len() as u64 + value_as_vec.len() as u64);
-                    }
-                    (key_as_vec, value_as_vec)
-                })
-                .map_err(|e| Error::DatabaseError(Box::new(e)))
+            .map(|(key, value)| {
+                let value_as_vec = value.to_vec();
+                let key_as_vec = key.to_vec();
+                #[cfg(feature = "prometheus")]
+                {
+                    DATABASE_METRICS.read_meter.inc();
+                    DATABASE_METRICS
+                        .bytes_read_meter
+                        .inc_by(key_as_vec.len() as u64 + value_as_vec.len() as u64);
+                }
+                (key_as_vec, value_as_vec)
             });
 
         if let Some(prefix) = prefix {
             let prefix = prefix.to_vec();
             // end iterating when we've gone outside the prefix
-            Box::new(iter.take_while(move |item| {
-                if let Ok((key, _)) = item {
-                    key.starts_with(prefix.as_slice())
-                } else {
-                    true
-                }
-            }))
+            Box::new(iter.take_while(move |(key, _)| key.starts_with(prefix.as_slice())))
         } else {
             Box::new(iter)
         }
