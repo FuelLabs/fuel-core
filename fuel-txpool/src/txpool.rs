@@ -395,7 +395,8 @@ pub mod tests {
 
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::common::fuel_tx::{Address, Input, Output};
+    use fuel_core_interfaces::common::fuel_tx::{Input, Output};
+    use fuel_core_interfaces::model::{BlockHeight, Coin};
     use fuel_core_interfaces::{
         common::{
             fuel_storage::Storage,
@@ -603,14 +604,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn dependent_tx5_contract_input_inserted() {
-        let config = Config::default();
+        let mut txpool = TxPool::new(Config::default());
         let db = DummyDb::filled();
 
         let tx1_hash = *TX_ID1;
         let tx5_hash = *TX_ID5;
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx5 = Arc::new(DummyDb::dummy_tx(tx5_hash));
-        let mut txpool = TxPool::new(config);
 
         let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be Ok:{:?}", out);
@@ -620,132 +620,47 @@ pub mod tests {
 
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
-        let config = Config::default();
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx3_hash = *TX_ID3;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
-        let tx3 = Arc::new(DummyDb::dummy_tx(tx3_hash));
-
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        assert!(out.is_ok(), "Tx2 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx3, &db).await;
-        assert!(out.is_ok(), "Tx3 should be okay:{:?}", out);
-        let vec = out.ok().unwrap();
-        assert_eq!(vec.len(), 2, "Tx1 and Tx2 should be removed:{:?}", vec);
-        assert_eq!(vec[0].id(), tx1_hash, "Tx1 id should be removed");
-        assert_eq!(vec[1].id(), tx2_hash, "Tx2 id should be removed");
-    }
-
-    #[tokio::test]
-    async fn tx_limit_hit() {
-        let config = Config {
-            max_tx: 1,
-            max_depth: 10,
-            ..Default::default()
-        };
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        let t: Error = out.unwrap_err().downcast().unwrap();
-        assert_eq!(t, Error::NotInsertedLimitHit, "Tx2 should hit number limit");
-    }
-
-    #[tokio::test]
-    async fn tx2_depth_hit() {
-        let config = Config {
-            max_tx: 10,
-            max_depth: 1,
-            ..Default::default()
-        };
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        let t: Error = out.unwrap_err().downcast().unwrap();
-        assert_eq!(t, Error::NotInsertedMaxDepth, "Tx2 should hit max depth");
-    }
-
-    #[tokio::test]
-    async fn sorted_out_tx1_2_4() {
-        let config = Config::default();
-        let db = DummyDb::filled();
-
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx4_hash = *TX_ID4;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
-        let tx4 = Arc::new(DummyDb::dummy_tx(tx4_hash));
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        assert!(out.is_ok(), "Tx2 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx4, &db).await;
-        assert!(out.is_ok(), "Tx4 should be OK, get err:{:?}", out);
-
-        let txs = txpool.sorted_includable();
-
-        assert_eq!(txs.len(), 3, "Should have 3 txs");
-        assert_eq!(txs[0].id(), tx4_hash, "First should be tx4");
-        assert_eq!(txs[1].id(), tx1_hash, "Second should be tx1");
-        assert_eq!(txs[2].id(), tx2_hash, "Third should be tx2");
-    }
-
-    #[tokio::test]
-    async fn find_dependent_tx1_tx2() {
         let mut txpool = TxPool::new(Config::default());
-        let db = helpers::MockDb::default();
+        let mut db = helpers::MockDb::default();
 
         let tx0 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_output(Output::Coin {
-                    amount: 100,
-                    to: Address::default(),
+                    amount: Default::default(),
+                    to: Default::default(),
                     asset_id: Default::default(),
                 })
                 .finalize(),
         );
+        db.insert(
+            &UtxoId::new(tx0.id(), 0),
+            &Coin {
+                owner: Default::default(),
+                amount: Default::default(),
+                asset_id: Default::default(),
+                maturity: Default::default(),
+                status: CoinStatus::Unspent,
+                block_created: BlockHeight::default(),
+            },
+        )
+        .expect("unable to insert seed coin data");
+
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(Input::CoinSigned {
                     utxo_id: UtxoId::new(tx0.id(), 0),
                     owner: Default::default(),
-                    amount: 100,
+                    amount: Default::default(),
                     asset_id: Default::default(),
                     tx_pointer: Default::default(),
                     witness_index: Default::default(),
                     maturity: Default::default(),
                 })
                 .add_output(Output::Coin {
-                    amount: 100,
-                    to: Address::default(),
+                    amount: Default::default(),
+                    to: Default::default(),
                     asset_id: Default::default(),
                 })
                 .finalize(),
@@ -756,7 +671,21 @@ pub mod tests {
                 .add_input(Input::CoinSigned {
                     utxo_id: UtxoId::new(tx1.id(), 0),
                     owner: Default::default(),
-                    amount: 100,
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx3 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx0.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
                     asset_id: Default::default(),
                     tx_pointer: Default::default(),
                     witness_index: Default::default(),
@@ -768,7 +697,238 @@ pub mod tests {
         txpool
             .insert_inner(tx0.clone(), &db)
             .await
+            .expect("Tx0 should be OK");
+        txpool
+            .insert_inner(tx1.clone(), &db)
+            .await
+            .expect("Tx1 should be OK");
+        txpool
+            .insert_inner(tx2.clone(), &db)
+            .await
+            .expect("Tx2 should be OK");
+        let vec = txpool
+            .insert_inner(tx3.clone(), &db)
+            .await
+            .expect("Tx3 should be OK");
+        assert_eq!(vec.len(), 2, "Tx1 and Tx2 should be removed:{:?}", vec);
+        assert_eq!(vec[0].id(), tx1.id(), "Tx1 id should be removed");
+        assert_eq!(vec[1].id(), tx2.id(), "Tx2 id should be removed");
+    }
+
+    #[tokio::test]
+    async fn tx_limit_hit() {
+        let mut txpool = TxPool::new(Config {
+            max_tx: 1,
+            ..Default::default()
+        });
+        let db = helpers::MockDb::default();
+
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx1.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx1, &db)
+            .await
+            .expect("Tx1 should be OK");
+
+        let err = txpool
+            .insert_inner(tx2, &db)
+            .await
+            .expect_err("expected insertion failure");
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedLimitHit)
+        ));
+    }
+
+    #[tokio::test]
+    async fn tx2_depth_hit() {
+        let mut txpool = TxPool::new(Config {
+            max_depth: 1,
+            ..Default::default()
+        });
+        let db = helpers::MockDb::default();
+
+        let tx0 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx0.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx1.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx0, &db)
+            .await
+            .expect("Tx1 should be OK");
+        txpool
+            .insert_inner(tx1, &db)
+            .await
+            .expect("Tx1 should be OK");
+
+        let err = txpool
+            .insert_inner(tx2, &db)
+            .await
+            .expect_err("expected insertion failure");
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedMaxDepth)
+        ));
+    }
+
+    #[tokio::test]
+    async fn sorted_out_tx1_2_4() {
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
+
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(9)
+                .finalize(),
+        );
+        let tx4 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx1.clone(), &db)
+            .await
             .expect("Tx1 should be OK, get err:{:?}");
+        txpool
+            .insert_inner(tx2.clone(), &db)
+            .await
+            .expect("Tx2 should be OK, get err:{:?}");
+        txpool
+            .insert_inner(tx4.clone(), &db)
+            .await
+            .expect("Tx4 should be OK, get err:{:?}");
+
+        let txs = txpool.sorted_includable();
+
+        assert_eq!(txs.len(), 3, "Should have 3 txs");
+        assert_eq!(txs[0].id(), tx4.id(), "First should be tx4");
+        assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
+        assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
+    }
+
+    #[tokio::test]
+    async fn find_dependent_tx1_tx2() {
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
+
+        let tx0 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx0.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(9)
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx1.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx0.clone(), &db)
+            .await
+            .expect("Tx0 should be OK, get err:{:?}");
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
@@ -819,7 +979,10 @@ pub mod tests {
             .gas_price(gas_price)
             .finalize();
 
-        let err = txpool.insert_inner(Arc::new(tx), &db).await.err().unwrap();
+        let err = txpool
+            .insert_inner(Arc::new(tx), &db)
+            .await
+            .expect_err("expected insertion failure");
         assert!(matches!(
             err.root_cause().downcast_ref::<Error>().unwrap(),
             Error::NotInsertedGasPriceTooLow
