@@ -5,7 +5,7 @@ members = [
   "fuel-block-executor",
   "fuel-block-importer",
   "fuel-block-producer",
-  "fuel-gql-client",
+  "fuel-client",
   "fuel-core",
   "fuel-core-bft",
   "fuel-core-interfaces",
