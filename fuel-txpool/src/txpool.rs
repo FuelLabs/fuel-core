@@ -128,13 +128,6 @@ impl TxPool {
         Ok(())
     }
 
-    fn verify_tx_min_byte_price(&mut self, tx: &Transaction) -> Result<(), Error> {
-        if tx.byte_price() < self.config.min_byte_price {
-            return Err(Error::NotInsertedBytePriceTooLow);
-        }
-        Ok(())
-    }
-
     pub async fn insert_with_broadcast(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
@@ -289,7 +282,7 @@ impl TxPool {
             removed.extend(rem.into_iter());
         }
         for tx in &removed {
-            let _ = broadcast.send(TxStatusBroadcast {
+            let _ = tx_status_sender.send(TxStatusBroadcast {
                 tx: tx.clone(),
                 status: TxStatus::SqueezedOut {
                     reason: Error::Removed,
