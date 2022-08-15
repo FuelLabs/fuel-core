@@ -52,7 +52,7 @@ This will run `cargo build` as well as any other custom build processes we have 
 The service can be launched by executing `fuel-core run`. The list of options for running can be accessed via the `help` option:
 
 ```console
-$ ./target/debug/fuel-core run --helpfuel-core-run 
+$ ./target/debug/fuel-core run --help
 
 USAGE:
     fuel-core run [OPTIONS]
