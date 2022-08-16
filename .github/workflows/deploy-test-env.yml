@@ -1,9 +1,5 @@
 name: Deploy Ephemeral Test Environment
 
-on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-
 env:
   REGISTRY: ghcr.io
 

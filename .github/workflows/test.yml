@@ -1,0 +1,27 @@
+name: Deploy Ephemeral Test Environment
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # Deploy Test Fuel-Core Environment
+  deploy-test-enviromment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set Environment Variables
+        id: set_env_var
+        run: |
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
+          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          branch_name=$(git symbolic-ref -q HEAD)
+          branch_name=${branch_name##refs/heads/}
+          echo $branch_name
+
