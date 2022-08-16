@@ -405,6 +405,7 @@ pub mod tests {
         db::helpers::*,
         model::{CoinStatus, Message},
     };
+    use std::str::FromStr;
     use std::{cmp::Reverse, sync::Arc};
 
     #[tokio::test]
@@ -501,17 +502,34 @@ pub mod tests {
 
     #[tokio::test]
     async fn try_to_insert_tx2_missing_utxo() {
-        let config = Config::default();
-        let db = DummyDb::filled();
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
 
-        let tx2_hash = *TX_ID2;
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let nonexistent_id =
+            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
+                .unwrap();
+        let tx = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(nonexistent_id, 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .finalize(),
+        );
 
-        let mut txpool = TxPool::new(config);
-
-        let out = txpool.insert_inner(tx2, &db).await;
-        assert!(out.is_err(), "Tx2 should be error");
-        assert_eq!(out.err().unwrap().to_string(),"Transaction is not inserted. UTXO is not existing: 0x000000000000000000000000000000000000000000000000000000000000001000",);
+        let err = txpool
+            .insert_inner(tx, &db)
+            .await
+            .expect_err("Tx should be error");
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(nonexistent_id, 0)
+        ));
     }
 
     #[tokio::test]
