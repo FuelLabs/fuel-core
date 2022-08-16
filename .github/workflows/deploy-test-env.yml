@@ -53,6 +53,8 @@ jobs:
 
   # Deploy Test Fuel-Core Environment
   deploy-test-enviromment:
+    needs:
+      - publish-docker-image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
