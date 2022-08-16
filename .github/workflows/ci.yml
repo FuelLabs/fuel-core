@@ -97,9 +97,8 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@v1
-        with:
-          key: '${{ matrix.command }} ${{ matrix.args }}'
+      - name: sccache action
+        uses: visvirial/sccache-action@v1
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
