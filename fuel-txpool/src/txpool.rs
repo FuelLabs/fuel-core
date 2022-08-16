@@ -523,7 +523,7 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_output(Output::Coin {
-                    amount: 100,
+                    amount: Default::default(),
                     to: Default::default(),
                     asset_id: Default::default(),
                 })
@@ -533,7 +533,7 @@ pub mod tests {
             &UtxoId::new(tx0.id(), 0),
             &Coin {
                 owner: Default::default(),
-                amount: 100,
+                amount: Default::default(),
                 asset_id: Default::default(),
                 maturity: Default::default(),
                 status: CoinStatus::Spent,
@@ -547,7 +547,7 @@ pub mod tests {
                 .add_input(Input::CoinSigned {
                     utxo_id: UtxoId::new(tx0.id(), 0),
                     owner: Default::default(),
-                    amount: 100,
+                    amount: Default::default(),
                     asset_id: Default::default(),
                     tx_pointer: Default::default(),
                     witness_index: Default::default(),
