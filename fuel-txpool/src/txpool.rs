@@ -482,22 +482,24 @@ pub mod tests {
 
     #[tokio::test]
     async fn not_inserted_known_tx() {
-        let config = Config::default();
-        let db = DummyDb::filled();
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
 
-        let tx1 = *TX_ID1;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1));
+        let tx = Arc::new(TransactionBuilder::script(vec![], vec![]).finalize());
 
-        let mut txpool = TxPool::new(config);
+        txpool
+            .insert_inner(tx.clone(), &db)
+            .await
+            .expect("Tx1 should be OK");
 
-        let out = txpool.insert_inner(tx1.clone(), &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_err(), "Second insertion of Tx1 should be error");
-        assert_eq!(
-            out.err().unwrap().to_string(),
-            "Transaction is not inserted. Hash is already known"
-        );
+        let err = txpool
+            .insert_inner(tx, &db)
+            .await
+            .expect_err("Second insertion of Tx1 should be error");
+        assert!(matches!(
+            err.downcast_ref::<Error>(),
+            Some(Error::NotInsertedTxKnown)
+        ));
     }
 
     #[tokio::test]
