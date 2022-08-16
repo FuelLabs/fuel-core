@@ -402,7 +402,6 @@ pub mod tests {
             fuel_storage::Storage,
             fuel_tx::{TransactionBuilder, UtxoId},
         },
-        db::helpers::*,
         model::{CoinStatus, Message},
     };
     use std::str::FromStr;
@@ -410,28 +409,51 @@ pub mod tests {
 
     #[tokio::test]
     async fn simple_insertion() {
-        let config = Config::default();
-        let db = DummyDb::filled();
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
 
-        let tx1_hash = *TX_ID1;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
+        let tx = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
 
-        let mut txpool = TxPool::new(config);
-        let out = txpool.insert_inner(tx1, &db).await;
+        let out = txpool.insert_inner(tx, &db).await;
         assert!(out.is_ok(), "Transaction should be OK, get err:{:?}", out);
     }
 
     #[tokio::test]
     async fn simple_dependency_tx1_tx2() {
-        let config = Config::default();
-        let db = DummyDb::filled();
+        let mut txpool = TxPool::new(Config::default());
+        let db = helpers::MockDb::default();
 
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_output(Output::Coin {
+                    amount: Default::default(),
+                    to: Default::default(),
+                    asset_id: Default::default(),
+                })
+                .finalize(),
+        );
 
-        let mut txpool = TxPool::new(config);
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(Input::CoinSigned {
+                    utxo_id: UtxoId::new(tx1.id(), 0),
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    tx_pointer: Default::default(),
+                    witness_index: Default::default(),
+                    maturity: Default::default(),
+                })
+                .finalize(),
+        );
 
         let out = txpool.insert_inner(tx1, &db).await;
         assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
