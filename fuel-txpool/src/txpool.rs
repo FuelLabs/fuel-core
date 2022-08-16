@@ -882,7 +882,7 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_output(Output::ContractCreated {
-                    contract_id: contract_id.clone(),
+                    contract_id,
                     state_root: Contract::default_state_root(),
                 })
                 .finalize(),
@@ -895,7 +895,7 @@ pub mod tests {
                     balance_root: Default::default(),
                     state_root: Default::default(),
                     tx_pointer: Default::default(),
-                    contract_id: contract_id.clone(),
+                    contract_id,
                 })
                 .finalize(),
         );
@@ -925,7 +925,7 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_output(Output::ContractCreated {
-                    contract_id: contract_id.clone(),
+                    contract_id,
                     state_root: Contract::default_state_root(),
                 })
                 .finalize(),
@@ -938,7 +938,7 @@ pub mod tests {
                     balance_root: Default::default(),
                     state_root: Default::default(),
                     tx_pointer: Default::default(),
-                    contract_id: contract_id.clone(),
+                    contract_id,
                 })
                 .finalize(),
         );
