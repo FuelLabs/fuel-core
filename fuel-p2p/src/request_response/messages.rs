@@ -10,7 +10,7 @@ pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";
 /// Currently the only and the biggest message is RequestBlock(BlockHeight)
 pub(crate) const MAX_REQUEST_SIZE: usize = 8;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, Copy)]
 pub enum RequestMessage {
     RequestBlock(BlockHeight),
 }
@@ -46,7 +46,7 @@ pub enum RequestError {
     NoPeersConnected,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ResponseError {
     ResponseChannelDoesNotExist,
     SendingResponseFailed,

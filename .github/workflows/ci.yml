@@ -242,7 +242,9 @@ jobs:
       - lint-toml-files
       - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
+    continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
         job:
           - os: ubuntu-latest

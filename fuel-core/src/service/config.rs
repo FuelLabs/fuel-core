@@ -53,7 +53,7 @@ pub struct VMConfig {
     pub backtrace: bool,
 }
 
-#[derive(Clone, Debug, Display, PartialEq, EnumString, EnumVariantNames)]
+#[derive(Clone, Debug, Display, Eq, PartialEq, EnumString, EnumVariantNames)]
 #[strum(serialize_all = "kebab_case")]
 pub enum DbType {
     InMemory,
