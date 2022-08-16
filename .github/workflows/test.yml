@@ -1,15 +1,12 @@
-name: Deploy Ephemeral Test Environment
+name: TESTING
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
-  # Deploy Test Fuel-Core Environment
-  deploy-test-enviromment:
+  # TEST
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,7 +18,6 @@ jobs:
           tag=(`echo $GITHUB_SHA | cut -c1-7`)
           echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-          branch_name=$(git symbolic-ref -q HEAD)
-          branch_name=${branch_name##refs/heads/}
-          echo $branch_name
+          echo "BRANCH_NAME=$(echo ${GITHUB_HEAD_REF})"
+          echo $BRANCH_NAME
 
