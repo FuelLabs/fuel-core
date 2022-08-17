@@ -98,16 +98,19 @@ jobs:
         with:
           toolchain: stable
       - name: sccache action
-        uses: visvirial/sccache-action@v1
+        uses: Voxelot/sccache-action@master
         with:
-          cache-key: ${{ github.ref }}${{ matrix.command }}${{ matrix.args }}
+          cache-key: ${{ matrix.command }}-${{ matrix.args }}-${{ github.ref }}
+          # fallback to master branch cache if missing
+          restore-keys: |
+            ${{ matrix.command }}-${{ matrix.args }}-refs/heads/sccache-test
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
           command: ${{ matrix.command }}
           args: ${{ matrix.args }}
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@master
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
