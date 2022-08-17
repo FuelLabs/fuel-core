@@ -251,7 +251,7 @@ impl TxPool {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::mock_db::helpers::MockDb;
+    use crate::MockDb;
     mod helpers {
         use fuel_core_interfaces::{common::fuel_tx::Input, model::Message};
 
