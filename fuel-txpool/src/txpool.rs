@@ -253,7 +253,11 @@ impl TxPool {
 pub mod tests {
     use crate::MockDb;
     mod helpers {
-        use fuel_core_interfaces::{common::fuel_tx::Input, model::Message};
+        use crate::types::TxId;
+        use fuel_core_interfaces::{
+            common::fuel_tx::{Contract, ContractId, Input, Output, UtxoId},
+            model::Message,
+        };
 
         pub(crate) fn create_message_predicate_from_message(message: &Message) -> Input {
             Input::message_predicate(
@@ -268,14 +272,54 @@ pub mod tests {
                 Default::default(),
             )
         }
+
+        pub(crate) fn create_coin_input(tx_id: TxId, output_index: u8) -> Input {
+            Input::CoinSigned {
+                utxo_id: UtxoId::new(tx_id, output_index),
+                owner: Default::default(),
+                amount: Default::default(),
+                asset_id: Default::default(),
+                tx_pointer: Default::default(),
+                witness_index: Default::default(),
+                maturity: Default::default(),
+            }
+        }
+
+        pub(crate) fn create_coin_output() -> Output {
+            Output::Coin {
+                amount: Default::default(),
+                to: Default::default(),
+                asset_id: Default::default(),
+            }
+        }
+
+        pub(crate) fn create_contract_input(tx_id: TxId, output_index: u8) -> Input {
+            Input::Contract {
+                utxo_id: UtxoId::new(tx_id, output_index),
+                balance_root: Default::default(),
+                state_root: Default::default(),
+                tx_pointer: Default::default(),
+                contract_id: Default::default(),
+            }
+        }
+
+        pub(crate) fn create_contract_output(contract_id: ContractId) -> Output {
+            Output::ContractCreated {
+                contract_id,
+                state_root: Contract::default_state_root(),
+            }
+        }
     }
 
     use super::*;
+    use crate::txpool::tests::helpers::{
+        create_coin_input, create_coin_output, create_contract_input, create_contract_output,
+    };
     use crate::Error;
     use fuel_core_interfaces::{
         common::{
             fuel_storage::Storage,
-            fuel_tx::{Contract, Input, Output, TransactionBuilder, UtxoId},
+            fuel_tx::{TransactionBuilder, UtxoId},
         },
         model::{BlockHeight, Coin, CoinStatus, Message},
     };
@@ -289,11 +333,7 @@ pub mod tests {
 
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
 
@@ -308,25 +348,13 @@ pub mod tests {
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
 
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
                 .finalize(),
         );
 
@@ -365,43 +393,17 @@ pub mod tests {
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
-                .add_output(Output::ContractCreated {
-                    contract_id,
-                    state_root: Contract::default_state_root(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
+                .add_output(create_coin_output())
+                .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
 
         let tx_faulty = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::ContractCreated {
-                    contract_id,
-                    state_root: Contract::default_state_root(),
-                })
+                .add_input(create_coin_input(tx.id(), 0))
+                .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
 
@@ -448,33 +450,14 @@ pub mod tests {
         .unwrap();
         let tx_faulty = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::ContractCreated {
-                    contract_id,
-                    state_root: Contract::default_state_root(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
+                .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
 
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx_faulty.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx_faulty.id(), 0))
                 .finalize(),
         );
 
@@ -525,15 +508,7 @@ pub mod tests {
                 .unwrap();
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(nonexistent_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(nonexistent_id, 0))
                 .finalize(),
         );
 
@@ -570,15 +545,7 @@ pub mod tests {
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
                 .finalize(),
         );
 
@@ -616,29 +583,13 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
                 .finalize(),
         );
 
@@ -662,39 +613,19 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
                 .finalize(),
         );
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
                 .finalize(),
         );
 
@@ -726,22 +657,16 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_output(Output::ContractCreated {
-                    contract_id,
-                    state_root: Contract::default_state_root(),
-                })
+                .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(11)
-                .add_input(Input::Contract {
-                    utxo_id: Default::default(),
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
-                    tx_pointer: Default::default(),
-                    contract_id,
-                })
+                .add_input(create_contract_input(
+                    Default::default(),
+                    Default::default(),
+                ))
                 .finalize(),
         );
 
@@ -769,20 +694,12 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_output(Output::ContractCreated {
-                    contract_id,
-                    state_root: Contract::default_state_root(),
-                })
+                .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::Contract {
-                    utxo_id: Default::default(),
-                    balance_root: Default::default(),
-                    state_root: Default::default(),
-                    tx_pointer: Default::default(),
                     contract_id,
                 })
                 .finalize(),
@@ -819,19 +736,6 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
                 .finalize(),
         );
         let tx2 = Arc::new(
@@ -851,15 +755,7 @@ pub mod tests {
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(db_tx_id, 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(db_tx_id, 0))
                 .finalize(),
         );
 
@@ -890,29 +786,12 @@ pub mod tests {
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_input(create_contract_input(tx1.id(), 0))
                 .finalize(),
         );
 
@@ -941,42 +820,18 @@ pub mod tests {
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx2.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx2.id(), 0))
                 .finalize(),
         );
 
@@ -1049,44 +904,20 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
-                .add_output(Output::Coin {
-                    amount: Default::default(),
-                    to: Default::default(),
-                    asset_id: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx2.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx2.id(), 0))
                 .finalize(),
         );
 
@@ -1171,8 +1002,9 @@ pub mod tests {
             .await
             .expect("should succeed");
 
-        let returned_tx = TxPool::find_one(&RwLock::new(txpool), &tx.id()).await;
-        let tx_info = returned_tx.unwrap();
+        let tx_info = TxPool::find_one(&RwLock::new(txpool), &tx.id())
+            .await
+            .unwrap();
         assert_eq!(tx_info.tx().id(), tx.id());
     }
 
