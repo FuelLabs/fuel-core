@@ -395,14 +395,12 @@ pub mod tests {
 
     use super::*;
     use crate::Error;
-    use fuel_core_interfaces::common::fuel_tx::{Contract, Input, Output};
-    use fuel_core_interfaces::model::{BlockHeight, Coin};
     use fuel_core_interfaces::{
         common::{
             fuel_storage::Storage,
-            fuel_tx::{TransactionBuilder, UtxoId},
+            fuel_tx::{Contract, Input, Output, TransactionBuilder, UtxoId},
         },
-        model::{CoinStatus, Message},
+        model::{BlockHeight, Coin, CoinStatus, Message},
     };
     use std::str::FromStr;
     use std::{cmp::Reverse, sync::Arc};
@@ -1161,7 +1159,7 @@ pub mod tests {
         let txs = txpool.sorted_includable();
 
         assert_eq!(txs.len(), 3, "Should have 3 txs");
-        assert_eq!(txs[0].id(), tx3.id(), "First should be tx4");
+        assert_eq!(txs[0].id(), tx3.id(), "First should be tx3");
         assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
         assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
     }
@@ -1243,14 +1241,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_at_least_min_gas_price_is_insertable() {
-        let gas_price = 10;
         let mut txpool = TxPool::new(Config {
-            min_gas_price: gas_price,
+            min_gas_price: 10,
             ..Default::default()
         });
         let db = helpers::MockDb::default();
         let tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .gas_price(10)
             .finalize();
 
         let out = txpool.insert_inner(Arc::new(tx), &db).await;
@@ -1259,14 +1256,13 @@ pub mod tests {
 
     #[tokio::test]
     async fn tx_below_min_gas_price_is_not_insertable() {
-        let gas_price = 10;
         let mut txpool = TxPool::new(Config {
-            min_gas_price: gas_price + 1,
+            min_gas_price: 11,
             ..Default::default()
         });
         let db = helpers::MockDb::default();
         let tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(gas_price)
+            .gas_price(10)
             .finalize();
 
         let err = txpool
