@@ -700,8 +700,10 @@ pub mod tests {
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                    contract_id,
-                })
+                .add_input(create_contract_input(
+                    Default::default(),
+                    Default::default(),
+                ))
                 .finalize(),
         );
 
@@ -735,21 +737,14 @@ pub mod tests {
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .add_input(Input::CoinSigned {
+                .add_input(create_coin_input(db_tx_id, 0))
+                .add_output(create_coin_output())
                 .finalize(),
         );
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
-                .add_input(Input::CoinSigned {
-                    utxo_id: UtxoId::new(tx1.id(), 0),
-                    owner: Default::default(),
-                    amount: Default::default(),
-                    asset_id: Default::default(),
-                    tx_pointer: Default::default(),
-                    witness_index: Default::default(),
-                    maturity: Default::default(),
-                })
+                .add_input(create_coin_input(tx1.id(), 0))
                 .finalize(),
         );
         let tx3 = Arc::new(
