@@ -103,7 +103,7 @@ jobs:
           cache-key: ${{ matrix.command }}-${{ matrix.args }}-${{ github.ref }}
           # fallback to master branch cache if missing
           restore-keys: |
-            ${{ matrix.command }}-${{ matrix.args }}-refs/heads/sccache-test
+            ${{ matrix.command }}-${{ matrix.args }}-refs/heads/Voxelot/sccache-test
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
