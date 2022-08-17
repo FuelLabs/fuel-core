@@ -54,7 +54,7 @@ pub struct P2pArgs {
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection_idle_timeout  ", default_value = "120")]
+    #[clap(long = "connection_idle_timeout", default_value = "120")]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
