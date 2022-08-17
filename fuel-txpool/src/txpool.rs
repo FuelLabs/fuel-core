@@ -418,7 +418,7 @@ pub mod tests {
             .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
-            .insert_inner(tx_faulty.clone(), &db)
+            .insert_inner(tx_faulty, &db)
             .await
             .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
@@ -554,7 +554,7 @@ pub mod tests {
         );
 
         let err = txpool
-            .insert_inner(tx.clone(), &db)
+            .insert_inner(tx, &db)
             .await
             .expect_err("Tx should be Err, got Ok");
         assert!(matches!(
