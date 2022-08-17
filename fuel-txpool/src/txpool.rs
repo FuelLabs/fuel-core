@@ -337,8 +337,10 @@ pub mod tests {
                 .finalize(),
         );
 
-        let out = txpool.insert_inner(tx, &db).await;
-        assert!(out.is_ok(), "Transaction should be OK, get err:{:?}", out);
+        txpool
+            .insert_inner(tx, &db)
+            .await
+            .expect("Transaction should be OK, got Err");
     }
 
     #[tokio::test]
@@ -351,17 +353,20 @@ pub mod tests {
                 .add_output(create_coin_output())
                 .finalize(),
         );
-
         let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(create_coin_input(tx1.id(), 0))
                 .finalize(),
         );
 
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        assert!(out.is_ok(), "Tx2 dependent should be OK, get err:{:?}", out);
+        txpool
+            .insert_inner(tx1, &db)
+            .await
+            .expect("Tx1 should be OK, got Err");
+        txpool
+            .insert_inner(tx2, &db)
+            .await
+            .expect("Tx2 dependent should be OK, got Err");
     }
 
     #[tokio::test]
@@ -410,13 +415,12 @@ pub mod tests {
         txpool
             .insert_inner(tx, &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
             .insert_inner(tx_faulty.clone(), &db)
             .await
-            .expect_err("Tx2 should be err");
-        println!("{:?}", err);
+            .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedCollisionContractId(id)) if id == &contract_id
@@ -464,12 +468,12 @@ pub mod tests {
         txpool
             .insert_inner(tx_faulty.clone(), &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
             .insert_inner(tx, &db)
             .await
-            .expect_err("Tx2 should be err");
+            .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(tx_faulty.id(), 0)
@@ -486,12 +490,12 @@ pub mod tests {
         txpool
             .insert_inner(tx.clone(), &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
             .insert_inner(tx, &db)
             .await
-            .expect_err("Second insertion of Tx1 should be error");
+            .expect_err("Second insertion of Tx1 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedTxKnown)
@@ -515,7 +519,7 @@ pub mod tests {
         let err = txpool
             .insert_inner(tx, &db)
             .await
-            .expect_err("Tx should be error");
+            .expect_err("Tx should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(nonexistent_id, 0)
@@ -523,7 +527,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn tx1_try_to_use_spent_coin() {
+    async fn tx_try_to_use_spent_coin() {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
@@ -543,16 +547,16 @@ pub mod tests {
         )
         .expect("unable to insert seed coin data");
 
-        let tx1 = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(create_coin_input(db_tx_id, 0))
                 .finalize(),
         );
 
         let err = txpool
-            .insert_inner(tx1.clone(), &db)
+            .insert_inner(tx.clone(), &db)
             .await
-            .expect_err("Tx1 should be err");
+            .expect_err("Tx should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedInputUtxoIdSpent(id)) if id == &UtxoId::new(db_tx_id, 0)
@@ -560,7 +564,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn more_priced_tx3_removes_tx1() {
+    async fn higher_priced_tx_removes_lower_priced_tx() {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
@@ -596,12 +600,12 @@ pub mod tests {
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
-            .expect("Tx1 should be okay");
+            .expect("Tx1 should be Ok, got Err");
 
         let vec = txpool
             .insert_inner(tx2, &db)
             .await
-            .expect("Tx2 should be okay");
+            .expect("Tx2 should be Ok, got Err");
         assert_eq!(vec[0].id(), tx1.id(), "Tx1 id should be removed");
     }
 
@@ -632,16 +636,16 @@ pub mod tests {
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
-            .expect("Tx1 should be okay");
+            .expect("Tx1 should be Ok, got Err");
         txpool
             .insert_inner(tx2.clone(), &db)
             .await
-            .expect("Tx2 should be okay");
+            .expect("Tx2 should be Ok, got Err");
 
         let err = txpool
             .insert_inner(tx3.clone(), &db)
             .await
-            .expect_err("Tx3 should be err");
+            .expect_err("Tx3 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id() && utxo_id == &UtxoId::new(tx1.id(), 0)
@@ -649,7 +653,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn overpriced_tx5_contract_input_not_inserted() {
+    async fn overpriced_tx_contract_input_not_inserted() {
         let mut txpool = TxPool::new(Default::default());
         let db = MockDb::default();
 
@@ -673,12 +677,12 @@ pub mod tests {
         txpool
             .insert_inner(tx1, &db)
             .await
-            .expect("Tx1 should be okay");
+            .expect("Tx1 should be Ok, got err");
 
         let err = txpool
             .insert_inner(tx2, &db)
             .await
-            .expect_err("Tx2 should be Err");
+            .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedContractPricedLower(id)) if id == &contract_id
@@ -707,10 +711,14 @@ pub mod tests {
                 .finalize(),
         );
 
-        let out = txpool.insert_inner(tx1, &db).await;
-        assert!(out.is_ok(), "Tx1 should be Ok:{:?}", out);
-        let out = txpool.insert_inner(tx2, &db).await;
-        assert!(out.is_ok(), "Tx5 should be Ok:{:?}", out);
+        txpool
+            .insert_inner(tx1, &db)
+            .await
+            .expect("Tx1 should be Ok, got Err");
+        txpool
+            .insert_inner(tx2, &db)
+            .await
+            .expect("Tx2 should be Ok, got Err");
     }
 
     #[tokio::test]
@@ -757,15 +765,15 @@ pub mod tests {
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be OK, got Err");
         txpool
             .insert_inner(tx2.clone(), &db)
             .await
-            .expect("Tx2 should be OK");
+            .expect("Tx2 should be OK, got Err");
         let vec = txpool
             .insert_inner(tx3.clone(), &db)
             .await
-            .expect("Tx3 should be OK");
+            .expect("Tx3 should be OK, got Err");
         assert_eq!(vec.len(), 2, "Tx1 and Tx2 should be removed:{:?}", vec);
         assert_eq!(vec[0].id(), tx1.id(), "Tx1 id should be removed");
         assert_eq!(vec[1].id(), tx2.id(), "Tx2 id should be removed");
@@ -793,7 +801,7 @@ pub mod tests {
         txpool
             .insert_inner(tx1, &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be OK, got Err");
 
         let err = txpool
             .insert_inner(tx2, &db)
@@ -833,16 +841,16 @@ pub mod tests {
         txpool
             .insert_inner(tx1, &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be OK, got Err");
         txpool
             .insert_inner(tx2, &db)
             .await
-            .expect("Tx1 should be OK");
+            .expect("Tx1 should be OK, got Err");
 
         let err = txpool
             .insert_inner(tx3, &db)
             .await
-            .expect_err("expected insertion failure");
+            .expect_err("Tx3 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedMaxDepth)
@@ -873,15 +881,15 @@ pub mod tests {
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
-            .expect("Tx1 should be OK, get err:{:?}");
+            .expect("Tx1 should be Ok, got Err");
         txpool
             .insert_inner(tx2.clone(), &db)
             .await
-            .expect("Tx2 should be OK, get err:{:?}");
+            .expect("Tx2 should be Ok, got Err");
         txpool
             .insert_inner(tx3.clone(), &db)
             .await
-            .expect("Tx4 should be OK, get err:{:?}");
+            .expect("Tx4 should be Ok, got Err");
 
         let txs = txpool.sorted_includable();
 
@@ -919,15 +927,15 @@ pub mod tests {
         txpool
             .insert_inner(tx1.clone(), &db)
             .await
-            .expect("Tx0 should be OK, get err:{:?}");
+            .expect("Tx0 should be Ok, got Err");
         txpool
             .insert_inner(tx2.clone(), &db)
             .await
-            .expect("Tx1 should be OK, get err:{:?}");
+            .expect("Tx1 should be Ok, got Err");
         txpool
             .insert_inner(tx3.clone(), &db)
             .await
-            .expect("Tx2 should be OK, get err:{:?}");
+            .expect("Tx2 should be Ok, got Err");
 
         let mut seen = HashMap::new();
         txpool
@@ -953,8 +961,10 @@ pub mod tests {
             .gas_price(10)
             .finalize();
 
-        let out = txpool.insert_inner(Arc::new(tx), &db).await;
-        assert!(out.is_ok(), "Tx1 should be OK, get err:{:?}", out);
+        txpool
+            .insert_inner(Arc::new(tx), &db)
+            .await
+            .expect("Tx should be Ok, got Err");
     }
 
     #[tokio::test]
