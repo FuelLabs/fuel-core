@@ -49,29 +49,28 @@ This will run `cargo build` as well as any other custom build processes we have 
 
 ## Running
 
-The service can listen to an arbitrary socket, as specified in the help command:
+The service can be launched by executing `fuel-core run`. The list of options for running can be accessed via the `help` option:
 
 ```console
-$ ./target/debug/fuel-core --help
-fuel-core 0.1.0
+$ ./target/debug/fuel-core run --help
 
 USAGE:
-    fuel-core [OPTIONS]
-
-FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+    fuel-core run [OPTIONS]
 
 OPTIONS:
-        --ip <ip>              [default: 127.0.0.1]
-        --port <port>          [default: 4000]
-        --db-path <file path>  [default: None]
+        --chain <CHAIN_CONFIG>
+            Specify either an alias to a built-in configuration or filepath to a JSON file [default:
+            local_testnet]
+        ...
 ```
+
+
+For many development puposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
 
 #### Example
 
 ```console
-$ ./target/debug/fuel-core --ip 127.0.0.1 --port 4000
+$ ./target/debug/fuel-core run --db-type in-memory
 Jul 12 23:28:47.238  INFO fuel_core: Binding GraphQL provider to 127.0.0.1:4000
 ```
 

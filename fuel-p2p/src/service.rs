@@ -545,7 +545,7 @@ mod tests {
 
         // Node A
         // setup request timeout to 0 in order for the Request to fail
-        p2p_config.set_request_timeout = Some(Duration::from_secs(0));
+        p2p_config.set_request_timeout = Duration::from_secs(0);
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         let node_a_address = match node_a.next_event().await {

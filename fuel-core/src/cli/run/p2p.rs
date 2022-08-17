@@ -54,7 +54,7 @@ pub struct P2pArgs {
     pub allow_private_addresses: bool,
 
     /// Choose how long will connection keep alive if idle
-    #[clap(long = "connection_idle_timeout  ", default_value = "120")]
+    #[clap(long = "connection_idle_timeout", default_value = "120")]
     pub connection_idle_timeout: u64,
 
     /// Choose how often to recieve PeerInfo from other nodes
@@ -83,12 +83,12 @@ pub struct P2pArgs {
     pub ideal_mesh_size: usize,
 
     /// Choose timeout for sent requests in RequestResponse protocol
-    #[clap(long = "request_timeout")]
-    pub request_timeout: Option<u64>,
+    #[clap(long = "request_timeout", default_value = "20")]
+    pub request_timeout: u64,
 
     /// Choose how long RequestResponse protocol connections will live if idle
-    #[clap(long = "connection_keep_alive")]
-    pub connection_keep_alive: Option<u64>,
+    #[clap(long = "connection_keep_alive", default_value = "20")]
+    pub connection_keep_alive: u64,
 }
 
 impl From<P2pArgs> for anyhow::Result<P2PConfig> {
@@ -121,8 +121,8 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             max_mesh_size: args.max_mesh_size,
             min_mesh_size: args.min_mesh_size,
             ideal_mesh_size: args.ideal_mesh_size,
-            set_request_timeout: args.request_timeout.map(Duration::from_secs),
-            set_connection_keep_alive: args.connection_keep_alive.map(Duration::from_secs),
+            set_request_timeout: Duration::from_secs(args.request_timeout),
+            set_connection_keep_alive: Duration::from_secs(args.connection_keep_alive),
             info_interval: Some(Duration::from_secs(args.info_interval)),
             identify_interval: Some(Duration::from_secs(args.identify_interval)),
         })
