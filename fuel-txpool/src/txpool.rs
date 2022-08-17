@@ -403,7 +403,6 @@ pub mod tests {
                 .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
-
         let tx_faulty = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
@@ -458,7 +457,6 @@ pub mod tests {
                 .add_output(create_contract_output(contract_id))
                 .finalize(),
         );
-
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(create_coin_input(tx_faulty.id(), 0))
