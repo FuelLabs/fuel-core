@@ -99,8 +99,8 @@ jobs:
           toolchain: stable
       - name: sccache action
         uses: visvirial/sccache-action@v1
-#        with:
-#          cache-key: ${{ matrix.command }}${{ matrix.args }}
+        with:
+          cache-key: ${{ github.ref }}${{ matrix.command }}${{ matrix.args }}
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
