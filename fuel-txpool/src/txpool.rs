@@ -522,7 +522,7 @@ pub mod tests {
             .expect_err("Tx should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
-            Some(Error::NotInsertedInputUtxoIdNotExisting(id)) if id == &UtxoId::new(nonexistent_id, 0)
+            Some(Error::NotInsertedInputUtxoIdNotExisting(utxo_id)) if utxo_id == &UtxoId::new(nonexistent_id, 0)
         ));
     }
 
@@ -559,7 +559,7 @@ pub mod tests {
             .expect_err("Tx should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
-            Some(Error::NotInsertedInputUtxoIdSpent(id)) if id == &UtxoId::new(db_tx_id, 0)
+            Some(Error::NotInsertedInputUtxoIdSpent(utxo_id)) if utxo_id == &UtxoId::new(db_tx_id, 0)
         ));
     }
 
@@ -801,12 +801,12 @@ pub mod tests {
         txpool
             .insert_inner(tx1, &db)
             .await
-            .expect("Tx1 should be OK, got Err");
+            .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
             .insert_inner(tx2, &db)
             .await
-            .expect_err("expected insertion failure");
+            .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
             Some(Error::NotInsertedLimitHit)
