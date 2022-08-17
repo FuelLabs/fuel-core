@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 
-pub const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
+const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Maximum number of frames buffered per substream.
 const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
@@ -57,9 +57,9 @@ pub struct P2PConfig {
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
-    pub set_request_timeout: Option<Duration>,
+    pub set_request_timeout: Duration,
     /// Sets the keep-alive timeout of idle connections.
-    pub set_connection_keep_alive: Option<Duration>,
+    pub set_connection_keep_alive: Duration,
 }
 
 impl P2PConfig {
@@ -82,8 +82,8 @@ impl P2PConfig {
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,
-            set_request_timeout: None,
-            set_connection_keep_alive: None,
+            set_request_timeout: REQ_RES_TIMEOUT,
+            set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
         }

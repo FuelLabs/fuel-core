@@ -1,6 +1,6 @@
 use crate::{
     codecs::NetworkCodec,
-    config::{P2PConfig, REQ_RES_TIMEOUT},
+    config::P2PConfig,
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     gossipsub::{
         self,
@@ -131,13 +131,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
-        req_res_config
-            .set_request_timeout(p2p_config.set_request_timeout.unwrap_or(REQ_RES_TIMEOUT));
-        req_res_config.set_connection_keep_alive(
-            p2p_config
-                .set_connection_keep_alive
-                .unwrap_or(REQ_RES_TIMEOUT),
-        );
+        req_res_config.set_request_timeout(p2p_config.set_request_timeout);
+        req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
 
         let request_response =
             RequestResponse::new(codec.clone(), req_res_protocol, req_res_config);
