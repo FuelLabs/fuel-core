@@ -179,9 +179,7 @@ mod tests {
     /// helper function for building FuelP2PService    
     async fn build_fuel_p2p_service(mut p2p_config: P2PConfig) -> FuelP2PService {
         p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
-        let fuel_p2p_service = FuelP2PService::new(p2p_config).await.unwrap();
-
-        fuel_p2p_service
+        FuelP2PService::new(p2p_config).await.unwrap()
     }
 
     /// attaches PeerId to the Multiaddr
