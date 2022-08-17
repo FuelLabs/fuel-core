@@ -251,132 +251,9 @@ impl TxPool {
 
 #[cfg(test)]
 pub mod tests {
+    use crate::mock_db::helpers::MockDb;
     mod helpers {
-        use fuel_core_interfaces::common::fuel_tx::Input;
-        use fuel_core_interfaces::{
-            common::{
-                fuel_storage::Storage,
-                fuel_tx::{Contract, ContractId, MessageId, UtxoId},
-            },
-            db::{self, KvStoreError},
-            model::{Coin, Message},
-            txpool::TxPoolDb,
-        };
-        use std::{
-            borrow::Cow,
-            collections::HashMap,
-            sync::{Arc, Mutex},
-        };
-
-        #[derive(Default)]
-        pub(crate) struct Data {
-            pub coins: HashMap<UtxoId, Coin>,
-            pub contracts: HashMap<ContractId, Contract>,
-            pub messages: HashMap<MessageId, Message>,
-        }
-
-        #[derive(Default)]
-        pub(crate) struct MockDb {
-            pub data: Arc<Mutex<Data>>,
-        }
-
-        impl Storage<UtxoId, Coin> for MockDb {
-            type Error = KvStoreError;
-
-            fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
-                Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
-            }
-
-            fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
-                Ok(self.data.lock().unwrap().coins.remove(key))
-            }
-
-            fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, Self::Error> {
-                Ok(self
-                    .data
-                    .lock()
-                    .unwrap()
-                    .coins
-                    .get(key)
-                    .map(|i| Cow::Owned(i.clone())))
-            }
-
-            fn contains_key(&self, key: &UtxoId) -> Result<bool, Self::Error> {
-                Ok(self.data.lock().unwrap().coins.contains_key(key))
-            }
-        }
-
-        impl Storage<ContractId, Contract> for MockDb {
-            type Error = db::Error;
-
-            fn insert(
-                &mut self,
-                key: &ContractId,
-                value: &Contract,
-            ) -> Result<Option<Contract>, Self::Error> {
-                Ok(self
-                    .data
-                    .lock()
-                    .unwrap()
-                    .contracts
-                    .insert(*key, value.clone()))
-            }
-
-            fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
-                Ok(self.data.lock().unwrap().contracts.remove(key))
-            }
-
-            fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Self::Error> {
-                Ok(self
-                    .data
-                    .lock()
-                    .unwrap()
-                    .contracts
-                    .get(key)
-                    .map(|i| Cow::Owned(i.clone())))
-            }
-
-            fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-                Ok(self.data.lock().unwrap().contracts.contains_key(key))
-            }
-        }
-
-        impl Storage<MessageId, Message> for MockDb {
-            type Error = db::KvStoreError;
-
-            fn insert(
-                &mut self,
-                key: &MessageId,
-                value: &Message,
-            ) -> Result<Option<Message>, Self::Error> {
-                Ok(self
-                    .data
-                    .lock()
-                    .unwrap()
-                    .messages
-                    .insert(*key, value.clone()))
-            }
-
-            fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
-                Ok(self.data.lock().unwrap().messages.remove(key))
-            }
-
-            fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
-                Ok(self
-                    .data
-                    .lock()
-                    .unwrap()
-                    .messages
-                    .get(key)
-                    .map(|i| Cow::Owned(i.clone())))
-            }
-
-            fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
-                Ok(self.data.lock().unwrap().messages.contains_key(key))
-            }
-        }
-
-        impl TxPoolDb for MockDb {}
+        use fuel_core_interfaces::{common::fuel_tx::Input, model::Message};
 
         pub(crate) fn create_message_predicate_from_message(message: &Message) -> Input {
             Input::message_predicate(
@@ -408,7 +285,7 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insertion() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -427,7 +304,7 @@ pub mod tests {
     #[tokio::test]
     async fn simple_dependency_tx1_tx2() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -462,7 +339,7 @@ pub mod tests {
     #[tokio::test]
     async fn faulty_t2_collided_on_contract_id_from_tx1() {
         let mut txpool = TxPool::new(Default::default());
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
 
         let db_tx_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -547,7 +424,7 @@ pub mod tests {
     #[tokio::test]
     async fn fails_to_insert_tx2_with_missing_utxo_dependency_on_faulty_tx1() {
         let mut txpool = TxPool::new(Default::default());
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
 
         let db_tx_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -619,7 +496,7 @@ pub mod tests {
     #[tokio::test]
     async fn not_inserted_known_tx() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx = Arc::new(TransactionBuilder::script(vec![], vec![]).finalize());
 
@@ -641,7 +518,7 @@ pub mod tests {
     #[tokio::test]
     async fn try_to_insert_tx2_missing_utxo() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let nonexistent_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
@@ -673,7 +550,7 @@ pub mod tests {
     #[tokio::test]
     async fn tx1_try_to_use_spent_coin() {
         let mut txpool = TxPool::new(Default::default());
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
 
         let db_tx_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -718,7 +595,7 @@ pub mod tests {
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1() {
         let mut txpool = TxPool::new(Default::default());
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
 
         let db_tx_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -780,7 +657,7 @@ pub mod tests {
     #[tokio::test]
     async fn underpriced_tx1_not_included_coin_collision() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -843,7 +720,7 @@ pub mod tests {
     #[tokio::test]
     async fn overpriced_tx5_contract_input_not_inserted() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let contract_id = ContractId::default();
         let tx1 = Arc::new(
@@ -886,7 +763,7 @@ pub mod tests {
     #[tokio::test]
     async fn dependent_contract_input_inserted() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let contract_id = ContractId::default();
         let tx1 = Arc::new(
@@ -920,7 +797,7 @@ pub mod tests {
     #[tokio::test]
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         let mut txpool = TxPool::new(Default::default());
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
 
         let db_tx_id =
             TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
@@ -1009,7 +886,7 @@ pub mod tests {
             max_tx: 1,
             ..Default::default()
         });
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -1060,7 +937,7 @@ pub mod tests {
             max_depth: 1,
             ..Default::default()
         });
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -1125,7 +1002,7 @@ pub mod tests {
     #[tokio::test]
     async fn sorted_out_tx1_2_4() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -1167,7 +1044,7 @@ pub mod tests {
     #[tokio::test]
     async fn find_dependent_tx1_tx2() {
         let mut txpool = TxPool::new(Default::default());
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -1245,7 +1122,7 @@ pub mod tests {
             min_gas_price: 10,
             ..Default::default()
         });
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
         let tx = TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
             .finalize();
@@ -1260,7 +1137,7 @@ pub mod tests {
             min_gas_price: 11,
             ..Default::default()
         });
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
         let tx = TransactionBuilder::script(vec![], vec![])
             .gas_price(10)
             .finalize();
@@ -1285,7 +1162,7 @@ pub mod tests {
             .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
         db.insert(&message.id(), &message).unwrap();
         let mut txpool = TxPool::new(Default::default());
 
@@ -1310,7 +1187,7 @@ pub mod tests {
             .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
         db.insert(&message.id(), &message).unwrap();
         let mut txpool = TxPool::new(Default::default());
 
@@ -1333,7 +1210,7 @@ pub mod tests {
             .add_input(helpers::create_message_predicate_from_message(&message))
             .finalize();
 
-        let db = helpers::MockDb::default();
+        let db = MockDb::default();
         // Do not insert any messages into the DB to ensure there is no matching message for the
         // tx.
 
@@ -1373,7 +1250,7 @@ pub mod tests {
             .add_input(conflicting_message_input)
             .finalize();
 
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
         db.insert(&message.id(), &message).unwrap();
 
         let mut txpool = TxPool::new(Default::default());
@@ -1418,7 +1295,7 @@ pub mod tests {
             .add_input(conflicting_message_input.clone())
             .finalize();
 
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
         db.insert(&message.id(), &message).unwrap();
 
         let mut txpool = TxPool::new(Default::default());
@@ -1483,7 +1360,7 @@ pub mod tests {
             .add_input(message_input_2.clone())
             .finalize();
 
-        let mut db = helpers::MockDb::default();
+        let mut db = MockDb::default();
         db.insert(&message_1.id(), &message_1).unwrap();
         db.insert(&message_2.id(), &message_2).unwrap();
         let mut txpool = TxPool::new(Default::default());
