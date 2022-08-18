@@ -1,6 +1,6 @@
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed},
-    identity::Keypair,
+    identity::{secp256k1::SecretKey, Keypair},
     mplex, noise, yamux, Multiaddr, PeerId, Transport,
 };
 use std::{
@@ -62,6 +62,14 @@ pub struct P2PConfig {
     pub set_connection_keep_alive: Duration,
 }
 
+/// Takes secret key bytes generated outside of libp2p.
+/// And converts it into libp2p's `Keypair::Secp256k1`.
+pub fn convert_to_libp2p_keypair(secret_key_bytes: impl AsMut<[u8]>) -> anyhow::Result<Keypair> {
+    let secret_key = SecretKey::from_bytes(secret_key_bytes)?;
+
+    Ok(Keypair::Secp256k1(secret_key.into()))
+}
+
 impl P2PConfig {
     pub fn default_with_network(network_name: &str) -> Self {
         let local_keypair = Keypair::generate_secp256k1();
@@ -94,7 +102,7 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub async fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) async fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
         let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
