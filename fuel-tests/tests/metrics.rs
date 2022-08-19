@@ -1,8 +1,10 @@
 use fuel_core_interfaces::common::{
-    service::Config, service::DbType, service::FuelService,
     fuel_tx,
     fuel_tx::{Address, AssetId},
     fuel_vm::{consts::*, prelude::*},
+    service::Config,
+    service::DbType,
+    service::FuelService,
 };
 use fuel_gql_client::client::FuelClient;
 use tempfile::TempDir;

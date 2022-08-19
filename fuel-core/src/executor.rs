@@ -11,8 +11,8 @@ use fuel_core_interfaces::{
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
-            Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
-            ValidationError, CheckedTransaction, TransactionFee,
+            Address, AssetId, Bytes32, CheckedTransaction, Input, Output, Receipt, Transaction,
+            TransactionFee, TxId, UtxoId, ValidationError,
         },
         fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{

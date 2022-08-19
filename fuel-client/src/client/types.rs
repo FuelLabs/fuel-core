@@ -1,6 +1,6 @@
 use crate::client::schema::{
     tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus},
-    ConversionError
+    ConversionError,
 };
 use chrono::{DateTime, Utc};
 use fuel_tx::Transaction;

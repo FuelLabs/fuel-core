@@ -4,13 +4,7 @@ use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    fmt,
-    io::BufWriter,
-    sync::Arc,
-    time::Duration,
-    fmt::Debug, str::FromStr,
-};
+use std::{fmt, fmt::Debug, io::BufWriter, str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::sync::Mutex;
 

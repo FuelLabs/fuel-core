@@ -7,8 +7,8 @@ use crate::{
         metadata::{DB_VERSION, DB_VERSION_KEY},
     },
     state::{
-        BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
-        WriteOperation, KVItem,
+        BatchOperations, ColumnId, Error, IterDirection, KVItem, KeyValueStore,
+        TransactableStorage, WriteOperation,
     },
 };
 use rocksdb::{

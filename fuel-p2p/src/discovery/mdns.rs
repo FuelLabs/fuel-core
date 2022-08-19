@@ -1,8 +1,9 @@
-use futures::{ future::BoxFuture, FutureExt, };
+use futures::{future::BoxFuture, FutureExt};
 use libp2p::{
-    mdns::Mdns, Multiaddr, PeerId,
+    mdns::Mdns,
     mdns::{MdnsConfig, MdnsEvent},
     swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters},
+    Multiaddr, PeerId,
 };
 use std::task::{Context, Poll};
 use tracing::warn;

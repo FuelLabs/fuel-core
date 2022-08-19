@@ -1,7 +1,7 @@
 pub use fuel_core_interfaces::common::{
-    fuel_types::Word,
     fuel_tx::ContractId,
     fuel_tx::{Transaction, TxId},
+    fuel_types::Word,
 };
 
 pub type GasPrice = Word;

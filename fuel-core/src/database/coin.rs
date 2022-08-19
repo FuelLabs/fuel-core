@@ -9,8 +9,8 @@ use crate::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_tx::{Address, AssetId, Bytes32, UtxoId},
         fuel_storage::Storage,
+        fuel_tx::{Address, AssetId, Bytes32, UtxoId},
     },
     model::Coin as CoinModel,
 };

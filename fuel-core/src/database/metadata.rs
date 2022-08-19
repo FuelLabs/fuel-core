@@ -1,8 +1,5 @@
 use crate::{
-    database::columns::METADATA,
-    database::Database,
-    model::BlockHeight,
-    service::config::Config,
+    database::columns::METADATA, database::Database, model::BlockHeight, service::config::Config,
     state::Error,
 };
 

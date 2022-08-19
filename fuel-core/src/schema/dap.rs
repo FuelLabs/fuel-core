@@ -1,5 +1,5 @@
 use crate::{
-    database::{Database, transactional::DatabaseTransaction},
+    database::{transactional::DatabaseTransaction, Database},
     schema::scalars::U64,
 };
 use async_graphql::{Context, Object, SchemaBuilder, ID};

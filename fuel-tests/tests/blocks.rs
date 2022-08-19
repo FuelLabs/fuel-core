@@ -6,10 +6,9 @@ use fuel_core::{
     service::{Config, FuelService},
 };
 // use fuel_core_interfaces::common::fuel_tx;
-use fuel_core_interfaces::common::{fuel_tx, fuel_storage::Storage, fuel_types};
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use fuel_gql_client::client::{
-    types::TransactionStatus,
-    FuelClient, PageDirection, PaginationRequest,
+    types::TransactionStatus, FuelClient, PageDirection, PaginationRequest,
 };
 use itertools::{rev, Itertools};
 

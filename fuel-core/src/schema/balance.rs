@@ -7,7 +7,7 @@ use crate::{
 use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
-    Context, Object, InputObject,
+    Context, InputObject, Object,
 };
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;

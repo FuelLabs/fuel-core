@@ -1,10 +1,7 @@
 use clap::Args;
 use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_relayer::{Config, H160};
-use std::{
-    str::FromStr,
-    time::Duration,
-};
+use std::{str::FromStr, time::Duration};
 
 #[derive(Debug, Clone, Args)]
 pub struct RelayerArgs {

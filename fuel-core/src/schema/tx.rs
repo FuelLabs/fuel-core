@@ -11,21 +11,16 @@ use async_graphql::{
 };
 use fuel_core_interfaces::{
     common::{
-    fuel_storage::Storage,
-    fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx},
-    fuel_types,
-    fuel_vm::prelude::Deserializable,
+        fuel_storage::Storage,
+        fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx},
+        fuel_types,
+        fuel_vm::prelude::Deserializable,
     },
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
 use itertools::Itertools;
-use std::{
-    borrow::Cow,
-    iter,
-    ops::Deref,
-    sync::Arc,
-};
+use std::{borrow::Cow, iter, ops::Deref, sync::Arc};
 use tokio::sync::{oneshot, Mutex};
 use types::Transaction;
 

@@ -1,15 +1,12 @@
 use super::schema;
-use crate::client::schema::{ConversionError::{self, HexStringPrefixError}};
+use crate::client::schema::ConversionError::{self, HexStringPrefixError};
 use core::fmt;
 use cynic::impl_scalar;
 use fuel_tx::InstructionResult;
-use serde::{
-    de::Error,
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     fmt::{Debug, Display, Formatter, LowerHex},
-    str::FromStr
+    str::FromStr,
 };
 
 pub type DateTime = chrono::DateTime<chrono::Utc>;

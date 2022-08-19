@@ -1,10 +1,10 @@
 use crate::{
-    codecs::bincode::BincodeCodec,
-    request_response::messages::OutboundResponse,
     behavior::{FuelBehaviour, FuelBehaviourEvent},
+    codecs::bincode::BincodeCodec,
     config::{build_transport, P2PConfig},
     gossipsub::messages::GossipsubBroadcastRequest,
     peer_info::PeerInfo,
+    request_response::messages::OutboundResponse,
     request_response::messages::{
         RequestError, RequestMessage, ResponseChannelItem, ResponseError,
     },

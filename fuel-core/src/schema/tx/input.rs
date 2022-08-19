@@ -1,6 +1,8 @@
 use crate::schema::{
     contract::Contract,
-    scalars::{Address, AssetId, Bytes32, ContractId, HexString, MessageId, UtxoId, U64, TxPointer},
+    scalars::{
+        Address, AssetId, Bytes32, ContractId, HexString, MessageId, TxPointer, UtxoId, U64,
+    },
 };
 use async_graphql::{Object, Union};
 use fuel_core_interfaces::common::fuel_tx;
