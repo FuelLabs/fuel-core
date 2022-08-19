@@ -100,7 +100,7 @@ jobs:
       - name: sccache action
         uses: Voxelot/sccache-action@master
         with:
-          cache-key: ${{ matrix.command }}-${{ matrix.args }}-${{ github.ref }}
+          cache-key: ${{ matrix.command }}-${{ matrix.args }}-${{ github.ref }}-test
           # fallback to master branch cache if missing
           restore-keys: |
             ${{ matrix.command }}-${{ matrix.args }}-refs/pull/565/merge
