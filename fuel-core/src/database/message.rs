@@ -10,8 +10,10 @@ use fuel_core_interfaces::{
     },
     model::Message,
 };
-use std::borrow::Cow;
-use std::ops::Deref;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 impl Storage<MessageId, Message> for Database {
     type Error = KvStoreError;

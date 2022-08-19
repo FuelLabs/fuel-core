@@ -1,5 +1,7 @@
-use crate::schema::contract::Contract;
-use crate::schema::scalars::{Address, AssetId, Bytes32, U64};
+use crate::schema::{
+    contract::Contract,
+    scalars::{Address, AssetId, Bytes32, U64},
+};
 use async_graphql::{Object, Union};
 use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx, fuel_types};
 

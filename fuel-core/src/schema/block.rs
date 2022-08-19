@@ -1,14 +1,14 @@
-use crate::database::Database;
-use crate::executor::{ExecutionMode, Executor};
-use crate::schema::{
-    scalars::{BlockId, U64},
-    tx::types::Transaction,
-};
-use crate::service::Config;
 use crate::{
+    database::Database,
+    executor::{ExecutionMode, Executor},
+    schema::{
+        scalars::{BlockId, U64},
+        tx::types::Transaction,
+    },
     database::KvStoreError,
     model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
     state::IterDirection,
+    service::Config,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -18,8 +18,10 @@ use async_graphql::{
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;
-use std::borrow::Cow;
-use std::convert::TryInto;
+use std::{
+    borrow::Cow,
+    convert::TryInto,
+};
 
 use super::scalars::Address;
 

@@ -1,11 +1,15 @@
 use super::block::BlockIdFragment;
-use crate::client::schema::{
-    schema, Address, ConnectionArgs, ConversionError, HexString, PageInfo, TransactionId,
+use crate::client::{
+    PageDirection, PaginatedResult, PaginationRequest,
+    types::TransactionResponse,
+    schema::{
+        schema, Address, ConnectionArgs, 
+        ConversionError, HexString, PageInfo, TransactionId,
+    },
 };
-use crate::client::types::TransactionResponse;
-use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
-use fuel_types::bytes::Deserializable;
-use fuel_types::Bytes32;
+use fuel_types::{
+    bytes::Deserializable,
+    Bytes32};
 use std::convert::{TryFrom, TryInto};
 
 #[derive(cynic::FragmentArguments, Debug)]

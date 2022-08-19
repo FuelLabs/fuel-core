@@ -4,10 +4,12 @@ use crate::state::{
     TransactionError, TransactionResult, WriteOperation,
 };
 use itertools::{EitherOrBoth, Itertools};
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub struct MemoryTransactionView {

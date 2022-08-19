@@ -7,8 +7,10 @@ use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
-use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::{
+    cmp::Reverse,
+    collections::HashMap, 
+};
 use tokio::sync::{broadcast, RwLock};
 
 #[derive(Debug, Clone)]

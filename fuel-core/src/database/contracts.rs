@@ -1,9 +1,8 @@
-use crate::database::InterpreterStorage;
 use crate::{
     chain_config::ContractConfig,
     database::{
         columns::{BALANCES, CONTRACTS, CONTRACTS_STATE, CONTRACT_UTXO_ID},
-        Database,
+        Database, InterpreterStorage,
     },
     state::{Error, IterDirection, MultiKey},
 };

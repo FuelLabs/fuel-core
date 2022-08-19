@@ -1,7 +1,6 @@
-use crate::schema::scalars::MessageId;
 use crate::schema::{
     contract::Contract,
-    scalars::{Address, AssetId, Bytes32, HexString, U64},
+    scalars::{Address, AssetId, Bytes32, HexString, U64, MessageId},
 };
 use async_graphql::{Enum, Object};
 use derive_more::Display;

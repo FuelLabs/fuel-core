@@ -1,12 +1,13 @@
-use crate::database::{Database, KvStoreError};
-use crate::model::{Coin as CoinModel, CoinStatus};
-use crate::schema::scalars::{Address, AssetId, U64};
-use crate::state::{Error, IterDirection};
+use crate::{
+    database::{Database, KvStoreError},
+    model::{Coin as CoinModel, CoinStatus},
+    schema::scalars::{Address, AssetId, U64},
+    state::{Error, IterDirection},
+};
 use anyhow::anyhow;
-use async_graphql::InputObject;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
-    Context, Object,
+    Context, Object, InputObject,
 };
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;

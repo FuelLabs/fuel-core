@@ -3,17 +3,18 @@ use crate::database::columns::COLUMN_NUM;
 use crate::database::transactional::DatabaseTransaction;
 use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
-use crate::state::rocks_db::RocksDb;
 use crate::state::{
+    rocks_db::RocksDb,
     in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
 };
 use async_trait::async_trait;
-use fuel_core_interfaces::common::fuel_asm::Word;
+// use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage,
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
+        fuel_asm::Word,
     },
     model::{
         BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,

@@ -3,8 +3,7 @@ use fuel_core::{
     service::{Config, FuelService},
 };
 use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use fuel_crypto::fuel_types::Address;
-use fuel_crypto::SecretKey;
+use fuel_crypto::{ fuel_types::{Address, SecretKey} };
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::ops::Deref;

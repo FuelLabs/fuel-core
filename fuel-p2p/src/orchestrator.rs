@@ -1,6 +1,8 @@
-use std::error::Error;
-use std::sync::Arc;
-use std::{future::Future, pin::Pin};
+use std::{
+    error::Error,
+    sync::Arc,
+    future::Future, pin::Pin
+};
 
 use fuel_core_interfaces::{
     p2p::{BlockBroadcast, ConsensusBroadcast, P2pRequestEvent, TransactionBroadcast},

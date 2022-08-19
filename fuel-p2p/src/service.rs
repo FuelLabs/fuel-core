@@ -1,6 +1,6 @@
-use crate::codecs::bincode::BincodeCodec;
-use crate::request_response::messages::OutboundResponse;
 use crate::{
+    codecs::bincode::BincodeCodec,
+    request_response::messages::OutboundResponse,
     behavior::{FuelBehaviour, FuelBehaviourEvent},
     config::{build_transport, P2PConfig},
     gossipsub::messages::GossipsubBroadcastRequest,

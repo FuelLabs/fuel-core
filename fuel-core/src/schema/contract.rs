@@ -1,6 +1,8 @@
-use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
-use crate::state::IterDirection;
+use crate::{
+    database::{Database, KvStoreError},
+    schema::scalars::{AssetId, ContractId, HexString, Salt, U64},
+    state::IterDirection,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},

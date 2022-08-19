@@ -22,8 +22,10 @@ use axum::{
 };
 use serde_json::json;
 use std::net::{SocketAddr, TcpListener};
-use tokio::signal::unix::SignalKind;
-use tokio::task::JoinHandle;
+use tokio::{
+    signal::unix::SignalKind,
+    task::JoinHandle
+};
 use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
 use tracing::info;
 

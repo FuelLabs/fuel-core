@@ -4,14 +4,13 @@ use crate::{
     service::{config::Config, FuelService},
 };
 use anyhow::Result;
-use fuel_core_interfaces::model::Message;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{MerkleStorage, Storage},
         fuel_tx::{Contract, MessageId, UtxoId},
         fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
     },
-    model::{Coin, CoinStatus},
+    model::{Coin, CoinStatus, Message},
 };
 use itertools::Itertools;
 

@@ -6,17 +6,13 @@ use crate::{
 };
 use chrono::Utc;
 use fuel_core_interfaces::{
-    common::fuel_tx::{CheckedTransaction, TransactionFee},
-    model::Message,
-};
-use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
             Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
-            ValidationError,
+            ValidationError, CheckedTransaction, TransactionFee,
         },
         fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{
@@ -24,7 +20,7 @@ use fuel_core_interfaces::{
             prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
         },
     },
-    model::FuelBlockHeader,
+    model::{FuelBlockHeader, Message},
 };
 use std::{
     error::Error as StdError,

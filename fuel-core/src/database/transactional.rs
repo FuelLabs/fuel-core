@@ -1,5 +1,7 @@
-use crate::database::Database;
-use crate::state::in_memory::transaction::MemoryTransactionView;
+use crate::{
+    database::Database,
+    state::in_memory::transaction::MemoryTransactionView,
+};
 use std::{
     fmt::Debug,
     ops::{Deref, DerefMut},
