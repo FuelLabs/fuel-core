@@ -25,7 +25,6 @@ harness = true
 
 [dependencies]
 async-std = "1.12"
-time = { version = "0.3", features = ["serde"] }
 fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-features = false }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 fuel-crypto = { version = "0.6", features = ["random"] }
@@ -39,6 +38,7 @@ reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"
 rstest = { version = "0.13" }
 serde_json = "1.0"
 tempfile = "3.3"
+time = { version = "0.3", features = ["serde"] }
 tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [features]
