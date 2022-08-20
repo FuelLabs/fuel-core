@@ -213,7 +213,7 @@ impl FinalizationQueue {
                 let msg = Message::from(&message).check();
                 last_diff.messages.insert(*msg.id(), msg);
             }
-            EthEventLog::Deposit { .. } => {
+            EthEventLog::StakingDeposit { .. } => {
                 // It is fine to do nothing. This is only related to contract,
                 // only possible usage for this is as additional information for user.
             }
