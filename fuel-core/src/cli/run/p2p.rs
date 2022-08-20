@@ -6,7 +6,7 @@ use std::{
 
 use clap::Args;
 
-use fuel_p2p::{Keypair, Multiaddr, P2PConfig};
+use fuel_p2p::{config::P2PConfig, Multiaddr};
 
 #[derive(Debug, Clone, Args)]
 pub struct P2pArgs {
@@ -96,10 +96,21 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
         let local_keypair = {
             match args.keypair {
                 Some(path) => {
-                    let mut bytes = std::fs::read(path)?;
-                    Keypair::secp256k1_from_der(&mut bytes)?
+                    let phrase = std::fs::read_to_string(path)?;
+
+                    let secret_key = fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
+                        &phrase,
+                        "m/44'/60'/0'/0/0",
+                    )?;
+
+                    fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
-                _ => Keypair::generate_secp256k1(),
+                _ => {
+                    let mut rand = fuel_crypto::rand::thread_rng();
+                    let secret_key = fuel_crypto::SecretKey::random(&mut rand);
+
+                    fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
+                }
             }
         };
 

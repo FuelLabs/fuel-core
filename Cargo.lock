@@ -2117,6 +2117,7 @@ dependencies = [
  "fuel-block-producer",
  "fuel-core-bft",
  "fuel-core-interfaces",
+ "fuel-crypto",
  "fuel-p2p",
  "fuel-relayer",
  "fuel-sync",
