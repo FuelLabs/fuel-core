@@ -257,8 +257,6 @@ dependencies = [
  "async-stream",
  "async-trait",
  "bytes",
- "chrono",
- "chrono-tz",
  "fast_chemail",
  "fnv",
  "futures-util",
@@ -275,6 +273,7 @@ dependencies = [
  "static_assertions",
  "tempfile",
  "thiserror",
+ "time 0.3.11",
  "tracing",
  "tracing-futures",
 ]
@@ -910,28 +909,6 @@ dependencies = [
  "serde",
  "time 0.1.44",
  "winapi",
-]
-
-[[package]]
-name = "chrono-tz"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29c39203181991a7dd4343b8005bd804e7a9a37afb8ac070e43771e8c820bbde"
-dependencies = [
- "chrono",
- "chrono-tz-build",
- "phf",
-]
-
-[[package]]
-name = "chrono-tz-build"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f509c3a87b33437b05e2458750a0700e5bdd6956176773e6c7d6dd15a283a0c"
-dependencies = [
- "parse-zoneinfo",
- "phf",
- "phf_codegen",
 ]
 
 [[package]]
@@ -2107,7 +2084,6 @@ dependencies = [
  "axum",
  "bincode",
  "byteorder",
- "chrono",
  "clap",
  "derive_more",
  "dirs",
@@ -2137,6 +2113,7 @@ dependencies = [
  "strum_macros 0.21.1",
  "tempfile",
  "thiserror",
+ "time 0.3.11",
  "tokio",
  "tower-http",
  "tower-layer",
@@ -2161,7 +2138,6 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "chrono",
  "derive_more",
  "fuel-asm",
  "fuel-crypto",
@@ -2175,6 +2151,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "serde",
  "thiserror",
+ "time 0.3.11",
  "tokio",
 ]
 
@@ -2307,7 +2284,6 @@ name = "fuel-tests"
 version = "0.0.0"
 dependencies = [
  "async-std",
- "chrono",
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-crypto",
@@ -2321,6 +2297,7 @@ dependencies = [
  "rstest",
  "serde_json",
  "tempfile",
+ "time 0.3.11",
  "tokio",
 ]
 
@@ -4047,15 +4024,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parse-zoneinfo"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c705f256449c60da65e11ff6626e0c16a0a0b96aaa348de61376b249bc340f41"
-dependencies = [
- "regex",
-]
-
-[[package]]
 name = "password-hash"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4146,45 +4114,6 @@ checksum = "e9567389417feee6ce15dd6527a8a1ecac205ef62c2932bcf3d9f6fc5b78b414"
 dependencies = [
  "futures",
  "rustc_version 0.4.0",
-]
-
-[[package]]
-name = "phf"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4724fa946c8d1e7cd881bd3dbee63ce32fc1e9e191e35786b3dc1320a3f68131"
-dependencies = [
- "phf_shared",
-]
-
-[[package]]
-name = "phf_codegen"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32ba0c43d7a1b6492b2924a62290cfd83987828af037b0743b38e6ab092aee58"
-dependencies = [
- "phf_generator",
- "phf_shared",
-]
-
-[[package]]
-name = "phf_generator"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b450720b6f75cfbfabc195814bd3765f337a4f9a83186f8537297cac12f6705"
-dependencies = [
- "phf_shared",
- "rand 0.8.5",
-]
-
-[[package]]
-name = "phf_shared"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9dd5609d4b2df87167f908a32e1b146ce309c16cf35df76bc11f440b756048e4"
-dependencies = [
- "siphasher",
- "uncased",
 ]
 
 [[package]]
@@ -5280,12 +5209,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "siphasher"
-version = "0.3.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
-
-[[package]]
 name = "slab"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5671,7 +5594,7 @@ dependencies = [
  "libc",
  "standback",
  "stdweb",
- "time-macros",
+ "time-macros 0.1.1",
  "version_check",
  "winapi",
 ]
@@ -5685,6 +5608,8 @@ dependencies = [
  "itoa",
  "libc",
  "num_threads",
+ "serde",
+ "time-macros 0.2.4",
 ]
 
 [[package]]
@@ -5696,6 +5621,12 @@ dependencies = [
  "proc-macro-hack",
  "time-macros-impl",
 ]
+
+[[package]]
+name = "time-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "time-macros-impl"
@@ -6079,15 +6010,6 @@ dependencies = [
  "crunchy",
  "hex",
  "static_assertions",
-]
-
-[[package]]
-name = "uncased"
-version = "0.9.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b01702b0fd0b3fadcf98e098780badda8742d4f4a7676615cad90e8ac73622"
-dependencies = [
- "version_check",
 ]
 
 [[package]]

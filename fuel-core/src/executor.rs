@@ -4,7 +4,6 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use chrono::Utc;
 use fuel_core_interfaces::{
     common::fuel_tx::{CheckedTransaction, TransactionFee},
     model::Message,
@@ -32,6 +31,7 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
+use time::OffsetDateTime;
 use tracing::{debug, warn};
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
@@ -58,7 +58,12 @@ impl Executor {
 
         for tx in txs.iter() {
             // set status to submitted
-            db.update_tx_status(&tx.id(), TransactionStatus::Submitted { time: Utc::now() })?;
+            db.update_tx_status(
+                &tx.id(),
+                TransactionStatus::Submitted {
+                    time: OffsetDateTime::now_utc(),
+                },
+            )?;
         }
 
         // setup and execute block
@@ -70,7 +75,7 @@ impl Executor {
             header: FuelBlockHeader {
                 height: new_block_height,
                 parent_hash: current_hash,
-                time: Utc::now(),
+                time: OffsetDateTime::now_utc(),
                 ..Default::default()
             },
             transactions: txs.into_iter().map(|t| t.as_ref().clone()).collect(),
@@ -830,7 +835,6 @@ impl From<crate::state::Error> for Error {
 mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
-    use chrono::TimeZone;
     use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{
@@ -850,6 +854,7 @@ mod tests {
     use itertools::Itertools;
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
+    use time::OffsetDateTime;
 
     fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)
@@ -1985,7 +1990,7 @@ mod tests {
         let mut block = FuelBlock {
             header: FuelBlockHeader {
                 height: block_height.into(),
-                time: Utc.timestamp(time as i64, 0),
+                time: OffsetDateTime::from_unix_timestamp(time as i64).unwrap(),
                 ..Default::default()
             },
             transactions: vec![tx.clone()],

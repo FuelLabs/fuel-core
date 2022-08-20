@@ -1,5 +1,4 @@
 use crate::helpers::TestContext;
-use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::{ExecutionMode, Executor},
@@ -16,6 +15,7 @@ use fuel_gql_client::client::{
 use itertools::Itertools;
 use rand::Rng;
 use std::io;
+use time::OffsetDateTime;
 
 mod predicates;
 mod utxo_validation;
@@ -310,7 +310,7 @@ async fn get_transactions_from_manual_blocks() {
     let mut first_test_block = FuelBlock {
         header: FuelBlockHeader {
             height: 1u32.into(),
-            time: Utc::now(),
+            time: OffsetDateTime::now_utc(),
             ..Default::default()
         },
 
@@ -322,7 +322,7 @@ async fn get_transactions_from_manual_blocks() {
     let mut second_test_block = FuelBlock {
         header: FuelBlockHeader {
             height: 2u32.into(),
-            time: Utc::now(),
+            time: OffsetDateTime::now_utc(),
             ..Default::default()
         },
         // set the last 5 ids of the manually saved txs

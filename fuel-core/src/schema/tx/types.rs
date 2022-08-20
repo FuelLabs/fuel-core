@@ -10,7 +10,6 @@ use crate::{
     tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{Context, Enum, Object, Union};
-use chrono::{DateTime, Utc};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage, fuel_tx, fuel_types, fuel_types::bytes::SerializableVec,
@@ -21,6 +20,7 @@ use fuel_core_interfaces::{
 };
 use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;
+use time::OffsetDateTime;
 use tokio::sync::oneshot;
 
 pub struct ProgramState {
@@ -76,18 +76,18 @@ pub enum TransactionStatus {
     Failed(FailureStatus),
 }
 
-pub struct SubmittedStatus(DateTime<Utc>);
+pub struct SubmittedStatus(OffsetDateTime);
 
 #[Object]
 impl SubmittedStatus {
-    async fn time(&self) -> DateTime<Utc> {
+    async fn time(&self) -> OffsetDateTime {
         self.0
     }
 }
 
 pub struct SuccessStatus {
     block_id: fuel_types::Bytes32,
-    time: DateTime<Utc>,
+    time: OffsetDateTime,
     result: VmProgramState,
 }
 
@@ -102,7 +102,7 @@ impl SuccessStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> DateTime<Utc> {
+    async fn time(&self) -> OffsetDateTime {
         self.time
     }
 
@@ -113,7 +113,7 @@ impl SuccessStatus {
 
 pub struct FailureStatus {
     block_id: fuel_types::Bytes32,
-    time: DateTime<Utc>,
+    time: OffsetDateTime,
     reason: String,
     state: Option<VmProgramState>,
 }
@@ -129,7 +129,7 @@ impl FailureStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> DateTime<Utc> {
+    async fn time(&self) -> OffsetDateTime {
         self.time
     }
 

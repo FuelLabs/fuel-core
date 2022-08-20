@@ -65,9 +65,9 @@ impl From<KvStoreError> for InterpreterError {
 pub mod helpers {
 
     use async_trait::async_trait;
-    use chrono::Utc;
     use lazy_static::lazy_static;
     use parking_lot::Mutex;
+    use time::OffsetDateTime;
 
     // constants
     pub const TX1_GAS_PRICE: u64 = 10u64;
@@ -588,7 +588,7 @@ pub mod helpers {
                 block: FuelBlock {
                     header: FuelBlockHeader {
                         number: BlockHeight::from(2u64),
-                        time: Utc::now(),
+                        time: OffsetDateTime::now_utc(),
                         ..Default::default()
                     },
                     transactions: Vec::new(),

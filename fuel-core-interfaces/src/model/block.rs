@@ -1,11 +1,12 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
-use chrono::{DateTime, TimeZone, Utc};
 use core::ops::Deref;
 use fuel_crypto::Hasher;
 use fuel_tx::{Address, AssetId, Bytes32, Transaction};
 use fuel_types::Word;
 use std::collections::HashMap;
+use time::macros::{datetime, offset};
+use time::OffsetDateTime;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,8 +26,8 @@ pub struct FuelBlockHeader {
     pub prev_root: Bytes32,
     /// Merkle root of transactions.
     pub transactions_root: Bytes32,
-    /// The block producer time
-    pub time: DateTime<Utc>,
+    /// The block producer time in Utc
+    pub time: OffsetDateTime,
     /// The block producer public key
     pub producer: Address,
     /// Header Metadata
@@ -51,7 +52,7 @@ impl FuelBlockHeader {
         hasher.input(self.parent_hash.as_ref());
         hasher.input(self.prev_root.as_ref());
         hasher.input(self.transactions_root.as_ref());
-        hasher.input(self.time.timestamp_millis().to_be_bytes());
+        hasher.input(self.time.millisecond().to_be_bytes());
         hasher.input(self.producer.as_ref());
         hasher.digest()
     }
@@ -68,7 +69,7 @@ impl FuelBlockHeader {
 impl Default for FuelBlockHeader {
     fn default() -> Self {
         Self {
-            time: Utc.timestamp(0, 0),
+            time: datetime!(1970-01-01 0:00).assume_offset(offset!(utc)),
             height: BlockHeight::default(),
             number: BlockHeight::default(),
             parent_hash: Bytes32::default(),

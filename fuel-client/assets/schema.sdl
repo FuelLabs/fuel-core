@@ -244,9 +244,12 @@ type ContractOutput {
 }
 
 """
-Implement the DateTime<Utc> scalar
+A datetime with timezone offset.
 
-The input/output is a string in RFC3339 format.
+The input is a string in RFC3339 format, e.g. "2022-01-12T04:00:19.12345Z"
+or "2022-01-12T04:00:19+03:00". The output is also a string in RFC3339
+format, but it is always normalized to the UTC (Z) offset, e.g.
+"2022-01-12T04:00:19.12345Z".
 """
 scalar DateTime
 

@@ -15,11 +15,11 @@ use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
-use chrono::{DateTime, Utc};
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::convert::TryInto;
+use time::OffsetDateTime;
 
 use super::scalars::Address;
 
@@ -50,7 +50,7 @@ impl Block {
             .collect()
     }
 
-    async fn time(&self) -> DateTime<Utc> {
+    async fn time(&self) -> OffsetDateTime {
         self.0.headers.time
     }
 
@@ -219,7 +219,7 @@ impl BlockMutation {
                 header: FuelBlockHeader {
                     height: new_block_height,
                     parent_hash: current_hash,
-                    time: Utc::now(),
+                    time: OffsetDateTime::now_utc(),
                     ..Default::default()
                 },
                 transactions: vec![],

@@ -1,21 +1,21 @@
-use chrono::{DateTime, Utc};
 use fuel_tx::Transaction;
 use std::ops::Deref;
 use std::sync::Arc;
+use time::OffsetDateTime;
 
 pub type ArcTx = Arc<Transaction>;
 
 #[derive(Debug, Clone)]
 pub struct TxInfo {
     tx: ArcTx,
-    submitted_time: DateTime<Utc>,
+    submitted_time: OffsetDateTime,
 }
 
 impl TxInfo {
     pub fn new(tx: ArcTx) -> Self {
         Self {
             tx,
-            submitted_time: Utc::now(),
+            submitted_time: OffsetDateTime::now_utc(),
         }
     }
 
@@ -23,7 +23,7 @@ impl TxInfo {
         &self.tx
     }
 
-    pub fn submitted_time(&self) -> DateTime<Utc> {
+    pub fn submitted_time(&self) -> OffsetDateTime {
         self.submitted_time
     }
 }

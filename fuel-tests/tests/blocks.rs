@@ -1,4 +1,3 @@
-use chrono::{TimeZone, Utc};
 use fuel_core::{
     database::Database,
     model::{FuelBlockDb, FuelBlockHeader},
@@ -10,6 +9,7 @@ use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
 use fuel_gql_client::client::types::TransactionStatus;
 use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
 use itertools::{rev, Itertools};
+use time::OffsetDateTime;
 
 #[tokio::test]
 async fn block() {
@@ -123,7 +123,7 @@ async fn block_connection_first_5() {
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
                 height: i.into(),
-                time: Utc.timestamp(i.into(), 0),
+                time: OffsetDateTime::from_unix_timestamp(i.into()).unwrap(),
                 ..Default::default()
             },
             transactions: vec![],
@@ -168,7 +168,7 @@ async fn block_connection_last_5() {
         .map(|i| FuelBlockDb {
             headers: FuelBlockHeader {
                 height: i.into(),
-                time: Utc.timestamp(i.into(), 0),
+                time: OffsetDateTime::from_unix_timestamp(i.into()).unwrap(),
                 ..Default::default()
             },
             transactions: vec![],
