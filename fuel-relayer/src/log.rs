@@ -52,7 +52,7 @@ pub enum EthEventLog {
         staking_key: ValidatorId,
     },
     // do nothing. maybe used it for stats or info data.
-    Deposit {
+    StakingDeposit {
         depositor: Address, // It is 24bytes address from ethereum
         amount: Word,
     },
@@ -148,7 +148,7 @@ impl TryFrom<&Log> for EthEventLog {
                     .map(u64::from_be_bytes)
                     .expect("We have checked slice bounds");
 
-                Self::Deposit { depositor, amount }
+                Self::StakingDeposit { depositor, amount }
             }
             n if n == *config::ETH_LOG_WITHDRAWAL => {
                 if log.topics.len() != 3 {
@@ -498,7 +498,7 @@ pub mod tests {
 
         assert_eq!(
             fuel_log.unwrap(),
-            EthEventLog::Deposit { depositor, amount },
+            EthEventLog::StakingDeposit { depositor, amount },
             "Decoded log does not match data we encoded"
         );
     }
