@@ -1,8 +1,9 @@
 use anyhow::Error;
 use ethers_core::{
     k256::ecdsa::SigningKey,
-    types::{TransactionRequest, H160, U256},
+    types::{TransactionRequest, U256},
 };
+use fuel_core_interfaces::common::fuel_types::Bytes20;
 use ethers_middleware::{
     gas_escalator::{Frequency, GasEscalatorMiddleware, GeometricGasPrice},
     NonceManagerMiddleware, SignerMiddleware,
@@ -24,7 +25,7 @@ use tracing::{debug, error, info, warn};
 /// there is possibility that they are going to be reverted
 pub struct PendingBlocks {
     signer: LocalWallet,
-    contract_address: Option<H160>,
+    contract_address: Option<Bytes20>,
     /// Pending block commits seen on DA layer and waiting to be finalized
     pending_block_commits: VecDeque<PendingBlock>,
     /// Highest known chain height, used to check if we are seeing lag between block commits and our fuel chain
@@ -57,7 +58,7 @@ impl PendingBlock {
 
 pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> abi::fuel::BlockHeader {
     let block = abi::fuel::BlockHeader {
-        producer: H160::from_slice(&fuel_block.header.producer.as_ref()[12..]),
+        producer: Bytes20::from_slice(&fuel_block.header.producer.as_ref()[12..]),
         previous_block_root: <[u8; 32]>::try_from(fuel_block.id()).unwrap(),
         height: fuel_block.header.height.into(),
         block_number: fuel_block.header.number.into(), // TODO
@@ -87,7 +88,7 @@ impl PendingBlocks {
     /// Pending blocks at least finalization number of blocks.
     pub fn new(
         chain_id: u64,
-        contract_address: Option<H160>,
+        contract_address: Option<Bytes20>,
         private_key: &[u8],
         chain_height: BlockHeight,
         last_committed_finalized_fuel_height: BlockHeight,

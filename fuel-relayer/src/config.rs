@@ -1,5 +1,6 @@
-use ethers_core::types::{H160, H256};
+use ethers_core::types::{H256};
 use fuel_core_interfaces::model::DaBlockHeight;
+use fuel_core_interfaces::common::fuel_types::Bytes20;
 use once_cell::sync::Lazy;
 use sha3::{Digest, Keccak256};
 use std::{str::FromStr, time::Duration};
@@ -35,9 +36,9 @@ pub struct Config {
     /// Ethereum chain_id.
     pub eth_chain_id: u64,
     /// Contract to publish commit fuel block.  
-    pub eth_v2_commit_contract: Option<H160>,
+    pub eth_v2_commit_contract: Option<Bytes20>,
     /// Ethereum contract address. Create EthAddress into fuel_types.
-    pub eth_v2_listening_contracts: Vec<H160>,
+    pub eth_v2_listening_contracts: Vec<Bytes20>,
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
     pub eth_v2_contracts_deployment: DaBlockHeight,
@@ -55,7 +56,7 @@ impl Default for Config {
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
             eth_v2_commit_contract: None,
-            eth_v2_listening_contracts: vec![H160::from_str(
+            eth_v2_listening_contracts: vec![Bytes20::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
@@ -71,7 +72,7 @@ impl Config {
         self.eth_v2_contracts_deployment
     }
 
-    pub fn eth_v2_listening_contracts(&self) -> &[H160] {
+    pub fn eth_v2_listening_contracts(&self) -> &[Bytes20] {
         &self.eth_v2_listening_contracts
     }
 
@@ -95,7 +96,7 @@ impl Config {
         self.eth_chain_id
     }
 
-    pub fn eth_v2_commit_contract(&self) -> Option<H160> {
+    pub fn eth_v2_commit_contract(&self) -> Option<Bytes20> {
         self.eth_v2_commit_contract
     }
 }

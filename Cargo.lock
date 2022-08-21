@@ -2357,9 +2357,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8485da19cae4529a5fc7736b9a300a5443bed0bfac9fd88c94e0978cf437ef2a"
+checksum = "56401a22fd943e25c3ad2c776181ede580ce29177f35a0fc28e3e836656e0393"
 dependencies = [
  "rand 0.8.5",
  "serde",

@@ -3,7 +3,8 @@ use crate::{
     pending_blocks::{IsReverted, PendingBlocks},
     validators::Validators,
 };
-use ethers_core::types::{Log, H160};
+use fuel_core_interfaces::common::fuel_types::Bytes20;
+use ethers_core::types::Log;
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::{fuel_tx::Address, fuel_types::MessageId},
@@ -60,7 +61,7 @@ impl DaBlockDiff {
 impl FinalizationQueue {
     pub fn new(
         chain_id: u64,
-        contract_address: Option<H160>,
+        contract_address: Option<Bytes20>, 
         private_key: &[u8],
         chain_height: BlockHeight,
         last_committed_finalized_fuel_height: BlockHeight,
@@ -358,7 +359,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -407,7 +408,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -443,7 +444,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -514,7 +515,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -563,7 +564,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -604,7 +605,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -642,7 +643,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(10u64),
@@ -686,7 +687,7 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
-            Some(H160::zero()),
+            Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
             BlockHeight::from(0u64),
