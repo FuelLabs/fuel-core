@@ -1,9 +1,7 @@
 pub mod middleware;
 pub use middleware::*;
 
-use fuel_core_interfaces::{
-    block_importer::ImportBlockBroadcast, db::helpers::DummyDb, relayer::RelayerRequest,
-};
+use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, relayer::RelayerRequest};
 use tokio::sync::{broadcast, mpsc};
 
 use crate::mock_db::MockDb;

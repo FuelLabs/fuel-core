@@ -34,6 +34,15 @@ pub(crate) struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 
+impl MockDb {
+    pub fn tap_sealed_blocks_mut<F, R>(&mut self, func: F) -> R
+    where
+        F: Fn(&mut HashMap<BlockHeight, Arc<SealedFuelBlock>>) -> R,
+    {
+        func(&mut self.data.lock().unwrap().sealed_blocks)
+    }
+}
+
 impl Storage<MessageId, Message> for MockDb {
     type Error = KvStoreError;
 

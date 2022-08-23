@@ -399,7 +399,6 @@ impl PendingBlocks {
 #[cfg(test)]
 mod tests {
     use chrono::Utc;
-    use fuel_core_interfaces::db::helpers::DummyDb;
     use rand::{prelude::StdRng, Rng, SeedableRng};
 
     use super::*;
@@ -594,28 +593,18 @@ mod tests {
             },
         };
 
-        let mut block1 = block.clone();
-        block1.block.header.height = 1u64.into();
-        let mut block2 = block.clone();
-        block2.block.header.height = 2u64.into();
-        let mut block3 = block.clone();
-        block3.block.header.height = 3u64.into();
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = block.clone();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = block.clone();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = block.clone();
+            block3.block.header.height = 3u64.into();
 
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(1u64.into(), Arc::new(block1));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(2u64.into(), Arc::new(block2));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(3u64.into(), Arc::new(block3));
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+        });
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
@@ -649,28 +638,18 @@ mod tests {
             },
         };
 
-        let mut block1 = block.clone();
-        block1.block.header.height = 1u64.into();
-        let mut block2 = block.clone();
-        block2.block.header.height = 2u64.into();
-        let mut block3 = block.clone();
-        block3.block.header.height = 3u64.into();
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = block.clone();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = block.clone();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = block.clone();
+            block3.block.header.height = 3u64.into();
 
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(1u64.into(), Arc::new(block1));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(2u64.into(), Arc::new(block2));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(3u64.into(), Arc::new(block3));
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+        });
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
@@ -715,35 +694,21 @@ mod tests {
             },
         };
 
-        let mut block1 = block.clone();
-        block1.block.header.height = 1u64.into();
-        let mut block2 = block.clone();
-        block2.block.header.height = 2u64.into();
-        let mut block3 = block.clone();
-        block3.block.header.height = 3u64.into();
-        let mut block4 = block.clone();
-        block4.block.header.height = 4u64.into();
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = block.clone();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = block.clone();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = block.clone();
+            block3.block.header.height = 3u64.into();
+            let mut block4 = block.clone();
+            block4.block.header.height = 4u64.into();
 
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(1u64.into(), Arc::new(block1));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(2u64.into(), Arc::new(block2));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(3u64.into(), Arc::new(block3));
-        db.data
-            .lock()
-            .unwrap()
-            .sealed_blocks
-            .insert(4u64.into(), Arc::new(block4));
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+            sealed_blocks.insert(4u64.into(), Arc::new(block4));
+        });
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
