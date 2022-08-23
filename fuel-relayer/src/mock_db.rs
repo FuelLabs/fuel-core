@@ -82,12 +82,7 @@ impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
         key: &ValidatorId,
         value: &(ValidatorStake, Option<ConsensusId>),
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .validators
-            .insert(*key, value.clone()))
+        Ok(self.data.lock().unwrap().validators.insert(*key, *value))
     }
 
     fn remove(
@@ -107,7 +102,7 @@ impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
             .unwrap()
             .validators
             .get(key)
-            .map(|i| Cow::Owned(i.clone())))
+            .map(|i| Cow::Owned(*i)))
     }
 
     fn contains_key(&self, key: &ValidatorId) -> Result<bool, Self::Error> {
