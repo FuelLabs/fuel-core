@@ -1,18 +1,22 @@
 use async_trait::async_trait;
 
-use std::borrow::Cow;
-use std::collections::{BTreeMap, HashMap};
-use std::sync::{Arc, Mutex};
-
-use fuel_core_interfaces::common::fuel_tx::Address;
-use fuel_core_interfaces::model::{
-    BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    sync::{Arc, Mutex},
 };
-use fuel_core_interfaces::relayer::{RelayerDb, StakingDiff, ValidatorSet};
+
 use fuel_core_interfaces::{
-    common::{fuel_storage::Storage, fuel_tx::MessageId},
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::{Address, MessageId},
+    },
     db::KvStoreError,
-    model::Message,
+    model::{
+        BlockHeight, ConsensusId, DaBlockHeight, Message, SealedFuelBlock, ValidatorId,
+        ValidatorStake,
+    },
+    relayer::{RelayerDb, StakingDiff, ValidatorSet},
 };
 
 #[derive(Default)]

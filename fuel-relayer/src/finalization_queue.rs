@@ -342,11 +342,9 @@ impl FinalizationQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::log::tests::*;
-    use crate::mock_db::MockDb;
+    use crate::{log::tests::*, mock_db::MockDb};
     use fuel_core_interfaces::common::fuel_types::Address;
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     #[tokio::test]
     pub async fn check_messages_on_multiple_eth_blocks() {
