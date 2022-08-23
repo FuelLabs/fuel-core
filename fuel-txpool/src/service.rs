@@ -203,10 +203,10 @@ impl Service {
 
 #[cfg(any(test))]
 pub mod tests {
-
     use super::*;
+    use crate::MockDb;
     use fuel_core_interfaces::{
-        db::helpers::*,
+        common::fuel_tx::TransactionBuilder,
         txpool::{Error as TxpoolError, TxStatus},
     };
     use tokio::sync::oneshot;
@@ -214,7 +214,7 @@ pub mod tests {
     #[tokio::test]
     async fn test_start_stop() {
         let config = Config::default();
-        let db = Box::new(DummyDb::filled());
+        let db = Box::new(MockDb::default());
         let (bs, _br) = broadcast::channel(10);
 
         let mut builder = ServiceBuilder::new();
@@ -239,26 +239,35 @@ pub mod tests {
     #[tokio::test]
     async fn test_filter_by_negative() {
         let config = Config::default();
-        let db = Box::new(DummyDb::filled());
+        let db = Box::new(MockDb::default());
         let (_bs, br) = broadcast::channel(10);
-
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx3_hash = *TX_ID3;
-
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
         let mut builder = ServiceBuilder::new();
         builder.config(config).db(db).import_block_event(br);
         let service = builder.build().unwrap();
         service.start().await.ok();
 
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .finalize(),
+        );
+        let tx3 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(30)
+                .finalize(),
+        );
+
         let (response, receiver) = oneshot::channel();
         let _ = service
             .sender()
             .send(TxPoolMpsc::Insert {
-                txs: vec![tx1, tx2],
+                txs: vec![tx1.clone(), tx2.clone()],
                 response,
             })
             .await;
@@ -272,29 +281,38 @@ pub mod tests {
         let _ = service
             .sender()
             .send(TxPoolMpsc::FilterByNegative {
-                ids: vec![tx1_hash, tx3_hash],
+                ids: vec![tx1.id(), tx2.id(), tx3.id()],
                 response,
             })
             .await;
         let out = receiver.await.unwrap();
 
         assert_eq!(out.len(), 1, "Should be len 1:{:?}", out);
-        assert_eq!(out[0], tx3_hash, "Found tx id match{:?}", out);
+        assert_eq!(out[0], tx3.id(), "Found tx id match{:?}", out);
         service.stop().await.unwrap().await.unwrap();
     }
 
     #[tokio::test]
     async fn test_find() {
         let config = Config::default();
-        let db = Box::new(DummyDb::filled());
+        let db = Box::new(MockDb::default());
         let (_bs, br) = broadcast::channel(10);
 
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-        let tx3_hash = *TX_ID3;
-
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .finalize(),
+        );
+        let tx3 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(30)
+                .finalize(),
+        );
 
         let mut builder = ServiceBuilder::new();
         builder.config(config).db(db).import_block_event(br);
@@ -305,7 +323,7 @@ pub mod tests {
         let _ = service
             .sender()
             .send(TxPoolMpsc::Insert {
-                txs: vec![tx1, tx2],
+                txs: vec![tx1.clone(), tx2.clone()],
                 response,
             })
             .await;
@@ -318,7 +336,7 @@ pub mod tests {
         let _ = service
             .sender()
             .send(TxPoolMpsc::Find {
-                ids: vec![tx1_hash, tx3_hash],
+                ids: vec![tx1.id(), tx3.id()],
                 response,
             })
             .await;
@@ -326,7 +344,7 @@ pub mod tests {
         assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
         assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
         let id = out[0].as_ref().unwrap().id();
-        assert_eq!(id, tx1_hash, "Found tx id match{:?}", out);
+        assert_eq!(id, tx1.id(), "Found tx id match{:?}", out);
         assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
         service.stop().await.unwrap().await.unwrap();
     }
@@ -334,14 +352,19 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Config::default();
-        let db = Box::new(DummyDb::filled());
+        let db = Box::new(MockDb::default());
         let (_bs, br) = broadcast::channel(10);
 
-        let tx1_hash = *TX_ID1;
-        let tx2_hash = *TX_ID2;
-
-        let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
-        let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .finalize(),
+        );
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .finalize(),
+        );
 
         let mut builder = ServiceBuilder::new();
         builder.config(config).db(db).import_block_event(br);
@@ -386,7 +409,7 @@ pub mod tests {
         let _ = service
             .sender()
             .send(TxPoolMpsc::Remove {
-                ids: vec![tx1_hash, tx2_hash],
+                ids: vec![tx1.id(), tx2.id()],
                 response,
             })
             .await;
