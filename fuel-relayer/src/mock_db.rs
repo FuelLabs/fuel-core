@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 use fuel_core_interfaces::common::fuel_tx::Address;
@@ -20,7 +20,7 @@ pub(crate) struct Data {
     pub messages: HashMap<MessageId, Message>,
     pub validators: HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
     pub delegator_index: HashMap<Address, Vec<DaBlockHeight>>,
-    pub staking_diffs: HashMap<DaBlockHeight, StakingDiff>,
+    pub staking_diffs: BTreeMap<DaBlockHeight, StakingDiff>,
 
     pub chain_height: BlockHeight,
     pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
@@ -223,5 +223,26 @@ impl RelayerDb for MockDb {
             .lock()
             .unwrap()
             .last_committed_finalized_fuel_height = block_height;
+    }
+
+    async fn get_staking_diffs(
+        &self,
+        from_da_height: DaBlockHeight,
+        to_da_height: Option<DaBlockHeight>,
+    ) -> Vec<(DaBlockHeight, StakingDiff)> {
+        let mut out = Vec::new();
+        let diffs = &self.data.lock().unwrap().staking_diffs;
+        // in BTreeMap iteration are done on sorted items.
+        for (block, diff) in diffs {
+            if *block >= from_da_height {
+                if let Some(end_block) = to_da_height {
+                    if *block > end_block {
+                        break;
+                    }
+                }
+                out.push((*block, diff.clone()));
+            }
+        }
+        out
     }
 }
