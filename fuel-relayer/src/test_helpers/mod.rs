@@ -6,6 +6,7 @@ use fuel_core_interfaces::{
 };
 use tokio::sync::{broadcast, mpsc};
 
+use crate::mock_db::MockDb;
 use crate::{service::Context, Config, Relayer};
 
 pub async fn relayer(
@@ -15,7 +16,7 @@ pub async fn relayer(
     mpsc::Sender<RelayerRequest>,
     broadcast::Sender<ImportBlockBroadcast>,
 ) {
-    let db = Box::new(DummyDb::filled());
+    let db = Box::new(MockDb::default());
     let (request_sender, receiver) = mpsc::channel(10);
     let (broadcast_tx, new_block_event) = broadcast::channel(100);
     let private_key =

@@ -398,11 +398,13 @@ impl PendingBlocks {
 
 #[cfg(test)]
 mod tests {
-
+    use chrono::Utc;
     use fuel_core_interfaces::db::helpers::DummyDb;
     use rand::{prelude::StdRng, Rng, SeedableRng};
 
     use super::*;
+    use crate::mock_db::MockDb;
+    use fuel_core_interfaces::model::{FuelBlock, FuelBlockConsensus, FuelBlockHeader};
     use tracing_test::traced_test;
 
     pub fn block_commit(last_committed_fuel_block: BlockHeight) -> PendingBlocks {
@@ -575,7 +577,45 @@ mod tests {
     #[tokio::test]
     async fn bundle_on_empty_pending_queue() {
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
+
+        let block = SealedFuelBlock {
+            block: FuelBlock {
+                header: FuelBlockHeader {
+                    number: BlockHeight::from(2u64),
+                    time: Utc::now(),
+                    ..Default::default()
+                },
+                transactions: Vec::new(),
+            },
+            consensus: FuelBlockConsensus {
+                required_stake: 10,
+                ..Default::default()
+            },
+        };
+
+        let mut block1 = block.clone();
+        block1.block.header.height = 1u64.into();
+        let mut block2 = block.clone();
+        block2.block.header.height = 2u64.into();
+        let mut block3 = block.clone();
+        block3.block.header.height = 3u64.into();
+
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(1u64.into(), Arc::new(block1));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(2u64.into(), Arc::new(block2));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(3u64.into(), Arc::new(block3));
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
@@ -591,8 +631,46 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
+
+        let block = SealedFuelBlock {
+            block: FuelBlock {
+                header: FuelBlockHeader {
+                    number: BlockHeight::from(2u64),
+                    time: Utc::now(),
+                    ..Default::default()
+                },
+                transactions: Vec::new(),
+            },
+            consensus: FuelBlockConsensus {
+                required_stake: 10,
+                ..Default::default()
+            },
+        };
+
+        let mut block1 = block.clone();
+        block1.block.header.height = 1u64.into();
+        let mut block2 = block.clone();
+        block2.block.header.height = 2u64.into();
+        let mut block3 = block.clone();
+        block3.block.header.height = 3u64.into();
+
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(1u64.into(), Arc::new(block1));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(2u64.into(), Arc::new(block2));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(3u64.into(), Arc::new(block3));
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
@@ -604,7 +682,7 @@ mod tests {
     #[should_panic(expected = "All not committed blocks should have its seal and blocks inside db")]
     async fn bundle_should_panic_if_sealed_block_is_missing() {
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
 
         blocks.bundle(10u64.into(), db.as_mut()).await;
     }
@@ -617,10 +695,55 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::False);
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::True);
+
+        let block = SealedFuelBlock {
+            block: FuelBlock {
+                header: FuelBlockHeader {
+                    number: BlockHeight::from(2u64),
+                    time: Utc::now(),
+                    ..Default::default()
+                },
+                transactions: Vec::new(),
+            },
+            consensus: FuelBlockConsensus {
+                required_stake: 10,
+                ..Default::default()
+            },
+        };
+
+        let mut block1 = block.clone();
+        block1.block.header.height = 1u64.into();
+        let mut block2 = block.clone();
+        block2.block.header.height = 2u64.into();
+        let mut block3 = block.clone();
+        block3.block.header.height = 3u64.into();
+        let mut block4 = block.clone();
+        block4.block.header.height = 4u64.into();
+
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(1u64.into(), Arc::new(block1));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(2u64.into(), Arc::new(block2));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(3u64.into(), Arc::new(block3));
+        db.data
+            .lock()
+            .unwrap()
+            .sealed_blocks
+            .insert(4u64.into(), Arc::new(block4));
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
