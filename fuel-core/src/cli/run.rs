@@ -5,7 +5,8 @@ use fuel_core::service::{Config, DbType, VMConfig};
 use std::{env, io, net, path::PathBuf};
 use strum::VariantNames;
 use tracing::{info, trace};
-
+#[cfg(feature = "p2p")]
+mod p2p;
 mod relayer;
 
 #[derive(Debug, Clone, Parser)]
@@ -55,6 +56,10 @@ pub struct Command {
 
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
+
+    #[cfg(feature = "p2p")]
+    #[clap(flatten)]
+    pub p2p_args: p2p::P2pArgs,
 }
 
 impl Command {
@@ -71,9 +76,20 @@ impl Command {
             min_gas_price,
             predicates,
             relayer_args,
+            #[cfg(feature = "p2p")]
+            p2p_args,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
+
+        #[cfg(feature = "p2p")]
+        let p2p = {
+            match p2p_args.into() {
+                Ok(value) => value,
+                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            }
+        };
+
         Ok(Config {
             addr,
             database_path,
@@ -95,6 +111,8 @@ impl Command {
             relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
+            #[cfg(feature = "p2p")]
+            p2p,
         })
     }
 }

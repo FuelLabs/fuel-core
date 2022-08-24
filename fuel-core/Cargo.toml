@@ -40,6 +40,8 @@ fuel-core-bft = { path = "../fuel-core-bft", version = "0.10.1" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
     "serde",
 ] }
+fuel-crypto = { version = "0.6", default-features = false, features = [ "random" ] }
+fuel-p2p = { path = "../fuel-p2p", version = "0.10.1", optional = true }
 fuel-relayer = { path = "../fuel-relayer", version = "0.10.1" }
 fuel-sync = { path = "../fuel-sync", version = "0.10.1" }
 fuel-txpool = { path = "../fuel-txpool", version = "0.10.1" }
@@ -87,3 +89,4 @@ prometheus = ["dep:prometheus"]
 default = ["rocksdb", "prometheus", "debug"]
 debug = ["fuel-core-interfaces/debug"]
 test-helpers = []
+p2p = ["dep:fuel-p2p"]
