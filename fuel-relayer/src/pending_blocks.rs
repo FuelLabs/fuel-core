@@ -398,11 +398,9 @@ impl PendingBlocks {
 
 #[cfg(test)]
 mod tests {
-
-    use fuel_core_interfaces::db::helpers::DummyDb;
-    use rand::{prelude::StdRng, Rng, SeedableRng};
-
     use super::*;
+    use crate::mock_db::MockDb;
+    use rand::{prelude::StdRng, Rng, SeedableRng};
     use tracing_test::traced_test;
 
     pub fn block_commit(last_committed_fuel_block: BlockHeight) -> PendingBlocks {
@@ -575,7 +573,20 @@ mod tests {
     #[tokio::test]
     async fn bundle_on_empty_pending_queue() {
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
+
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = SealedFuelBlock::default();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = SealedFuelBlock::default();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = SealedFuelBlock::default();
+            block3.block.header.height = 3u64.into();
+
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+        });
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
@@ -591,8 +602,21 @@ mod tests {
         let b1 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
+
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = SealedFuelBlock::default();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = SealedFuelBlock::default();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = SealedFuelBlock::default();
+            block3.block.header.height = 3u64.into();
+
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+        });
 
         let out = blocks.bundle(3u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 2, "We should have bundled 2 blocks");
@@ -604,7 +628,7 @@ mod tests {
     #[should_panic(expected = "All not committed blocks should have its seal and blocks inside db")]
     async fn bundle_should_panic_if_sealed_block_is_missing() {
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
 
         blocks.bundle(10u64.into(), db.as_mut()).await;
     }
@@ -617,10 +641,26 @@ mod tests {
         let b2 = rng.gen();
 
         let mut blocks = block_commit(1u64.into());
-        let mut db = Box::new(DummyDb::filled());
+        let mut db = Box::new(MockDb::default());
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::False);
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::True);
+
+        db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let mut block1 = SealedFuelBlock::default();
+            block1.block.header.height = 1u64.into();
+            let mut block2 = SealedFuelBlock::default();
+            block2.block.header.height = 2u64.into();
+            let mut block3 = SealedFuelBlock::default();
+            block3.block.header.height = 3u64.into();
+            let mut block4 = SealedFuelBlock::default();
+            block4.block.header.height = 4u64.into();
+
+            sealed_blocks.insert(1u64.into(), Arc::new(block1));
+            sealed_blocks.insert(2u64.into(), Arc::new(block2));
+            sealed_blocks.insert(3u64.into(), Arc::new(block3));
+            sealed_blocks.insert(4u64.into(), Arc::new(block4));
+        });
 
         let out = blocks.bundle(4u64.into(), db.as_mut()).await;
         assert_eq!(out.len(), 3, "We should have bundled 3 blocks");
