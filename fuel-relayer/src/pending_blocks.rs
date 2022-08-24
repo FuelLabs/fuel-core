@@ -398,12 +398,9 @@ impl PendingBlocks {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
-    use rand::{prelude::StdRng, Rng, SeedableRng};
-
     use super::*;
     use crate::mock_db::MockDb;
-    use fuel_core_interfaces::model::{FuelBlock, FuelBlockConsensus, FuelBlockHeader};
+    use rand::{prelude::StdRng, Rng, SeedableRng};
     use tracing_test::traced_test;
 
     pub fn block_commit(last_committed_fuel_block: BlockHeight) -> PendingBlocks {
@@ -578,22 +575,9 @@ mod tests {
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(MockDb::default());
 
-        let block = SealedFuelBlock {
-            block: FuelBlock {
-                header: FuelBlockHeader {
-                    number: BlockHeight::from(2u64),
-                    time: Utc::now(),
-                    ..Default::default()
-                },
-                transactions: Vec::new(),
-            },
-            consensus: FuelBlockConsensus {
-                required_stake: 10,
-                ..Default::default()
-            },
-        };
-
         db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let block = SealedFuelBlock::default();
+
             let mut block1 = block.clone();
             block1.block.header.height = 1u64.into();
             let mut block2 = block.clone();
@@ -623,22 +607,9 @@ mod tests {
         let mut db = Box::new(MockDb::default());
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
 
-        let block = SealedFuelBlock {
-            block: FuelBlock {
-                header: FuelBlockHeader {
-                    number: BlockHeight::from(2u64),
-                    time: Utc::now(),
-                    ..Default::default()
-                },
-                transactions: Vec::new(),
-            },
-            consensus: FuelBlockConsensus {
-                required_stake: 10,
-                ..Default::default()
-            },
-        };
-
         db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let block = SealedFuelBlock::default();
+
             let mut block1 = block.clone();
             block1.block.header.height = 1u64.into();
             let mut block2 = block.clone();
@@ -679,22 +650,9 @@ mod tests {
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::False);
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::True);
 
-        let block = SealedFuelBlock {
-            block: FuelBlock {
-                header: FuelBlockHeader {
-                    number: BlockHeight::from(2u64),
-                    time: Utc::now(),
-                    ..Default::default()
-                },
-                transactions: Vec::new(),
-            },
-            consensus: FuelBlockConsensus {
-                required_stake: 10,
-                ..Default::default()
-            },
-        };
-
         db.tap_sealed_blocks_mut(|sealed_blocks| {
+            let block = SealedFuelBlock::default();
+
             let mut block1 = block.clone();
             block1.block.header.height = 1u64.into();
             let mut block2 = block.clone();
