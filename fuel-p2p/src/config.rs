@@ -1,11 +1,14 @@
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed},
-    identity::Keypair,
+    identity::{secp256k1::SecretKey, Keypair},
     mplex, noise, yamux, Multiaddr, PeerId, Transport,
 };
-use std::{net::IpAddr, time::Duration};
+use std::{
+    net::{IpAddr, Ipv4Addr},
+    time::Duration,
+};
 
-pub const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
+const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Maximum number of frames buffered per substream.
 const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
@@ -16,6 +19,8 @@ const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
+    pub local_keypair: Keypair,
+
     /// Name of the Network
     pub network_name: String,
 
@@ -29,7 +34,7 @@ pub struct P2PConfig {
     pub max_block_size: usize,
 
     // `DiscoveryBehaviour` related fields
-    pub bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
+    pub bootstrap_nodes: Vec<Multiaddr>,
     pub enable_mdns: bool,
     pub max_peers_connected: usize,
     pub allow_private_addresses: bool,
@@ -52,16 +57,52 @@ pub struct P2PConfig {
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
-    pub set_request_timeout: Option<Duration>,
+    pub set_request_timeout: Duration,
     /// Sets the keep-alive timeout of idle connections.
-    pub set_connection_keep_alive: Option<Duration>,
+    pub set_connection_keep_alive: Duration,
+}
+
+/// Takes secret key bytes generated outside of libp2p.
+/// And converts it into libp2p's `Keypair::Secp256k1`.
+pub fn convert_to_libp2p_keypair(secret_key_bytes: impl AsMut<[u8]>) -> anyhow::Result<Keypair> {
+    let secret_key = SecretKey::from_bytes(secret_key_bytes)?;
+
+    Ok(Keypair::Secp256k1(secret_key.into()))
+}
+
+impl P2PConfig {
+    pub fn default_with_network(network_name: &str) -> Self {
+        let local_keypair = Keypair::generate_secp256k1();
+
+        P2PConfig {
+            local_keypair,
+            network_name: network_name.into(),
+            address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
+            tcp_port: 0,
+            max_block_size: 100_000,
+            bootstrap_nodes: vec![],
+            enable_mdns: false,
+            max_peers_connected: 50,
+            allow_private_addresses: true,
+            enable_random_walk: true,
+            connection_idle_timeout: Some(Duration::from_secs(120)),
+            topics: vec![],
+            max_mesh_size: 12,
+            min_mesh_size: 4,
+            ideal_mesh_size: 6,
+            set_request_timeout: REQ_RES_TIMEOUT,
+            set_connection_keep_alive: REQ_RES_TIMEOUT,
+            info_interval: Some(Duration::from_secs(3)),
+            identify_interval: Some(Duration::from_secs(5)),
+        }
+    }
 }
 
 /// Transport for libp2p communication:
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub async fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) async fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
         let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);

@@ -5,6 +5,9 @@ use std::{
 };
 use strum_macros::{Display, EnumString, EnumVariantNames};
 
+#[cfg(feature = "p2p")]
+use fuel_p2p;
+
 #[derive(Clone, Debug)]
 pub struct Config {
     pub addr: SocketAddr,
@@ -24,6 +27,8 @@ pub struct Config {
     pub bft: fuel_core_bft::Config,
     pub sync: fuel_sync::Config,
     pub relayer: fuel_relayer::Config,
+    #[cfg(feature = "p2p")]
+    pub p2p: fuel_p2p::config::P2PConfig,
 }
 
 impl Config {
@@ -44,6 +49,8 @@ impl Config {
             bft: Default::default(),
             sync: Default::default(),
             relayer: Default::default(),
+            #[cfg(feature = "p2p")]
+            p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
         }
     }
 }
