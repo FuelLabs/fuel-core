@@ -576,13 +576,11 @@ mod tests {
         let mut db = Box::new(MockDb::default());
 
         db.tap_sealed_blocks_mut(|sealed_blocks| {
-            let block = SealedFuelBlock::default();
-
-            let mut block1 = block.clone();
+            let mut block1 = SealedFuelBlock::default();
             block1.block.header.height = 1u64.into();
-            let mut block2 = block.clone();
+            let mut block2 = SealedFuelBlock::default();
             block2.block.header.height = 2u64.into();
-            let mut block3 = block.clone();
+            let mut block3 = SealedFuelBlock::default();
             block3.block.header.height = 3u64.into();
 
             sealed_blocks.insert(1u64.into(), Arc::new(block1));
@@ -608,13 +606,11 @@ mod tests {
         blocks.handle_block_commit(b1, 2u64.into(), 2, IsReverted::False);
 
         db.tap_sealed_blocks_mut(|sealed_blocks| {
-            let block = SealedFuelBlock::default();
-
-            let mut block1 = block.clone();
+            let mut block1 = SealedFuelBlock::default();
             block1.block.header.height = 1u64.into();
-            let mut block2 = block.clone();
+            let mut block2 = SealedFuelBlock::default();
             block2.block.header.height = 2u64.into();
-            let mut block3 = block.clone();
+            let mut block3 = SealedFuelBlock::default();
             block3.block.header.height = 3u64.into();
 
             sealed_blocks.insert(1u64.into(), Arc::new(block1));
@@ -651,15 +647,13 @@ mod tests {
         blocks.handle_block_commit(b2, 3u64.into(), 3, IsReverted::True);
 
         db.tap_sealed_blocks_mut(|sealed_blocks| {
-            let block = SealedFuelBlock::default();
-
-            let mut block1 = block.clone();
+            let mut block1 = SealedFuelBlock::default();
             block1.block.header.height = 1u64.into();
-            let mut block2 = block.clone();
+            let mut block2 = SealedFuelBlock::default();
             block2.block.header.height = 2u64.into();
-            let mut block3 = block.clone();
+            let mut block3 = SealedFuelBlock::default();
             block3.block.header.height = 3u64.into();
-            let mut block4 = block.clone();
+            let mut block4 = SealedFuelBlock::default();
             block4.block.header.height = 4u64.into();
 
             sealed_blocks.insert(1u64.into(), Arc::new(block1));
