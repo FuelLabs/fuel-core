@@ -7,6 +7,8 @@ use strum::VariantNames;
 use tracing::{info, trace};
 #[cfg(feature = "p2p")]
 mod p2p;
+
+#[cfg(feature = "relayer")]
 mod relayer;
 
 #[derive(Debug, Clone, Parser)]
@@ -54,6 +56,7 @@ pub struct Command {
     #[clap(long = "predicates")]
     pub predicates: bool,
 
+    #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
 
@@ -75,6 +78,7 @@ impl Command {
             utxo_validation,
             min_gas_price,
             predicates,
+            #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
@@ -108,6 +112,7 @@ impl Command {
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
+            #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
