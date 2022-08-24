@@ -335,7 +335,9 @@ impl Executor {
                             return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
                         }
                         if BlockHeight::from(message.da_height) > block_da_height {
-                            return Err(TransactionValidityError::MessageSpendTooEarly(*message_id));
+                            return Err(TransactionValidityError::MessageSpendTooEarly(
+                                *message_id,
+                            ));
                         }
                     } else {
                         return Err(TransactionValidityError::MessageDoesNotExist(*message_id));
