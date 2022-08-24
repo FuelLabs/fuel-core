@@ -18,8 +18,7 @@ pub mod prometheus_metrics {
     use super::{Body, IntoResponse};
     use hyper::{header::CONTENT_TYPE, Response};
     use lazy_static::lazy_static;
-    use prometheus::register_int_counter;
-    use prometheus::{self, Encoder, IntCounter, TextEncoder};
+    use prometheus::{self, register_int_counter, Encoder, IntCounter, TextEncoder};
 
     /// DatabaseMetrics is a wrapper struct for all
     /// of the initialized counters for Database-related metrics

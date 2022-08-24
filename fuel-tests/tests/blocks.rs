@@ -5,10 +5,10 @@ use fuel_core::{
     schema::scalars::BlockId,
     service::{Config, FuelService},
 };
-use fuel_core_interfaces::common::fuel_tx;
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
-use fuel_gql_client::client::types::TransactionStatus;
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
+use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
+use fuel_gql_client::client::{
+    types::TransactionStatus, FuelClient, PageDirection, PaginationRequest,
+};
 use itertools::{rev, Itertools};
 
 #[tokio::test]

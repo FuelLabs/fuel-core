@@ -270,7 +270,7 @@ impl FinalizationQueue {
         }
         self.remove_bundled_reverted_events();
 
-        //TODO to be paranoid, recheck every block and all events got from eth client.
+        // TODO to be paranoid, recheck every block and all events got from eth client.
 
         let mut validators: HashMap<ValidatorId, Option<ConsensusId>> = HashMap::new();
         while let Some(diff) = self.pending.front_mut() {

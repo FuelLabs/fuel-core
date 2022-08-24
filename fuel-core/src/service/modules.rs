@@ -1,6 +1,5 @@
 #![allow(clippy::let_unit_value)]
-use crate::database::Database;
-use crate::service::Config;
+use crate::{database::Database, service::Config};
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
@@ -9,8 +8,7 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,

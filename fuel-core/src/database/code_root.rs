@@ -33,8 +33,7 @@ impl Storage<ContractId, (Salt, Bytes32)> for Database {
 mod tests {
     use super::*;
     use fuel_core_interfaces::common::fuel_vm::prelude::Contract;
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     #[test]
     fn get() {

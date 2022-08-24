@@ -1,5 +1,7 @@
 use crate::{
-    database::Database, model::FuelBlockDb, schema::block::Block, schema::scalars::U64,
+    database::Database,
+    model::FuelBlockDb,
+    schema::{block::Block, scalars::U64},
     service::Config,
 };
 use async_graphql::{Context, Object};

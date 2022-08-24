@@ -37,7 +37,7 @@ struct PendingBlock {
     pub reverted: bool,
     pub da_height: DaBlockHeight,
     pub block_height: BlockHeight,
-    pub block_root: Bytes32, //is this block hash?
+    pub block_root: Bytes32, // is this block hash?
 }
 
 impl PendingBlock {
@@ -150,7 +150,7 @@ impl PendingBlocks {
     ) -> Vec<Arc<SealedFuelBlock>> {
         // if queue is empty check last_finalized_committed fuel block and send all newest ones that we know about.
         let mut from_height = self.last_committed_finalized_fuel_height;
-        //get blocks range that start from last pending queue item that is not reverted and goes to current block.
+        // get blocks range that start from last pending queue item that is not reverted and goes to current block.
         for pending in self.pending_block_commits.iter() {
             if !pending.reverted {
                 from_height = pending.block_height;
@@ -337,7 +337,7 @@ impl PendingBlocks {
                 .validators
                 .iter()
                 .map(|(_, (_, sig))| sig.to_vec().into())
-                .collect(); //bytes
+                .collect(); // bytes
             let withdrawals = block
                 .withdrawals()
                 .iter()
@@ -378,8 +378,8 @@ impl PendingBlocks {
             // Use EthGasStation as the gas oracle
             // https://github.com/FuelLabs/fuel-core/issues/363
             // TODO check how this is going to be done in testnet.
-            //let gas_oracle = EthGasStation::new(None);
-            //let provider = GasOracleMiddleware::new(provider, gas_oracle);
+            // let gas_oracle = EthGasStation::new(None);
+            // let provider = GasOracleMiddleware::new(provider, gas_oracle);
 
             // Manage nonces locally
             let provider = NonceManagerMiddleware::new(provider, address);

@@ -1,13 +1,10 @@
-use crate::model::ArcTx;
 use crate::{
     db::{Error as DbStateError, KvStoreError},
-    model::TxInfo,
-    model::{Coin, Message},
+    model::{ArcTx, Coin, Message, TxInfo},
 };
 use derive_more::{Deref, DerefMut};
 use fuel_storage::Storage;
-use fuel_tx::{ContractId, UtxoId};
-use fuel_tx::{Transaction, TxId};
+use fuel_tx::{ContractId, Transaction, TxId, UtxoId};
 use fuel_types::MessageId;
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;

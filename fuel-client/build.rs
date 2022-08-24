@@ -1,8 +1,10 @@
 use schemafy_lib::{Expander, Schema};
-use std::env;
-use std::fs::{self, File};
-use std::io::prelude::*;
-use std::path::PathBuf;
+use std::{
+    env,
+    fs::{self, File},
+    io::prelude::*,
+    path::PathBuf,
+};
 
 fn main() {
     println!("cargo:rerun-if-changed=./assets/debugAdapterProtocol.json");

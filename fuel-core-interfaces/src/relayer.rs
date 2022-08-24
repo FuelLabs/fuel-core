@@ -149,7 +149,7 @@ pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId
 
 #[derive(Debug)]
 pub enum RelayerRequest {
-    //expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
+    // expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.

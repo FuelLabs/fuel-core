@@ -1,6 +1,8 @@
-use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
-use crate::state::IterDirection;
+use crate::{
+    database::{Database, KvStoreError},
+    schema::scalars::{AssetId, ContractId, HexString, Salt, U64},
+    state::IterDirection,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
@@ -143,70 +145,72 @@ impl ContractBalanceQuery {
             before,
             first,
             last,
-            |after: Option<AssetId>, before: Option<AssetId>, first, last| async move {
-                // Calculate direction of which to iterate through rocksdb
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<AssetId>, before: Option<AssetId>, first, last| {
+                async move {
+                    // Calculate direction of which to iterate through rocksdb
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"));
+                    }
 
-                let after = after.map(fuel_tx::AssetId::from);
-                let before = before.map(fuel_tx::AssetId::from);
+                    let after = after.map(fuel_tx::AssetId::from);
+                    let before = before.map(fuel_tx::AssetId::from);
 
-                let start = if direction == IterDirection::Forward {
-                    after
-                } else {
-                    before
-                };
+                    let start = if direction == IterDirection::Forward {
+                        after
+                    } else {
+                        before
+                    };
 
-                let mut balances_iter =
-                    db.contract_balances(filter.contract.into(), start, Some(direction));
+                    let mut balances_iter =
+                        db.contract_balances(filter.contract.into(), start, Some(direction));
 
-                let mut started = None;
-                if start.is_some() {
-                    started = balances_iter.next();
-                }
+                    let mut started = None;
+                    if start.is_some() {
+                        started = balances_iter.next();
+                    }
 
-                let mut balances = balances_iter
-                    .take(records_to_fetch + 1)
-                    .map(|balance| {
-                        let balance = balance?;
+                    let mut balances = balances_iter
+                        .take(records_to_fetch + 1)
+                        .map(|balance| {
+                            let balance = balance?;
 
-                        Ok(ContractBalance {
-                            contract: filter.contract.into(),
-                            amount: balance.1,
-                            asset_id: balance.0,
+                            Ok(ContractBalance {
+                                contract: filter.contract.into(),
+                                amount: balance.1,
+                                asset_id: balance.0,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<ContractBalance>, KvStoreError>>()?;
+                        .collect::<Result<Vec<ContractBalance>, KvStoreError>>()?;
 
-                let has_next_page = balances.len() > records_to_fetch;
+                    let has_next_page = balances.len() > records_to_fetch;
 
-                if has_next_page {
-                    balances.pop();
+                    if has_next_page {
+                        balances.pop();
+                    }
+
+                    if direction == IterDirection::Reverse {
+                        balances.reverse();
+                    }
+
+                    let mut connection = Connection::new(started.is_some(), has_next_page);
+                    connection.edges.extend(
+                        balances
+                            .into_iter()
+                            .map(|item| Edge::new(item.asset_id.into(), item)),
+                    );
+                    Ok::<Connection<AssetId, ContractBalance>, anyhow::Error>(connection)
                 }
-
-                if direction == IterDirection::Reverse {
-                    balances.reverse();
-                }
-
-                let mut connection = Connection::new(started.is_some(), has_next_page);
-                connection.edges.extend(
-                    balances
-                        .into_iter()
-                        .map(|item| Edge::new(item.asset_id.into(), item)),
-                );
-                Ok::<Connection<AssetId, ContractBalance>, anyhow::Error>(connection)
             },
         )
         .await

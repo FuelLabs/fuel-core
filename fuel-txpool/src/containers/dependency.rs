@@ -206,9 +206,7 @@ impl Dependency {
                     }
                 }
                 Output::Contract { .. } => return Err(Error::NotInsertedIoContractOutput.into()),
-                Output::Message { .. } => {
-                    return Err(Error::NotInsertedIoMessageInput.into());
-                }
+                Output::Message { .. } => return Err(Error::NotInsertedIoMessageInput.into()),
                 Output::Change {
                     to,
                     asset_id,
@@ -331,7 +329,7 @@ impl Dependency {
                                 return Err(Error::NotInsertedCollision(*spend_by, *utxo_id).into());
                             } else {
                                 if state.is_in_database() {
-                                    //this means it is loaded from db. Get tx to compare output.
+                                    // this means it is loaded from db. Get tx to compare output.
                                     let coin = db.utxo(utxo_id)?.ok_or(
                                         Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
                                     )?;
@@ -429,7 +427,7 @@ impl Dependency {
                             .or_insert(ContractState {
                                 used_by: HashSet::new(),
                                 depth: 0,
-                                origin: None, //there is no owner if contract is in db
+                                origin: None, // there is no owner if contract is in db
                                 gas_price: GasPrice::MAX,
                             })
                             .used_by

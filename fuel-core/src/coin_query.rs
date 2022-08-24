@@ -1,6 +1,8 @@
-use crate::database::{Database, KvStoreError};
-use crate::model::{Coin, CoinStatus};
-use crate::state::{self};
+use crate::{
+    database::{Database, KvStoreError},
+    model::{Coin, CoinStatus},
+    state::{self},
+};
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
     fuel_tx::{Address, AssetId, UtxoId},

@@ -5,10 +5,9 @@ use ethers_core::{
     abi::RawLog,
     types::{Log, U256},
 };
-use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
     common::fuel_types::{Address, Bytes32, Word},
-    model::{ConsensusId, Message, ValidatorId},
+    model::{ConsensusId, DaBlockHeight, Message, ValidatorId},
 };
 
 /// Bridge message send from da to fuel network.
@@ -225,8 +224,7 @@ pub mod tests {
 
     use bytes::{Bytes, BytesMut};
     use ethers_core::types::{Bytes as EthersBytes, H160, H256, U64};
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     use super::*;
     use crate::config;

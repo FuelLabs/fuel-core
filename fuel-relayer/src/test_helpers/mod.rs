@@ -4,8 +4,7 @@ pub use middleware::*;
 use fuel_core_interfaces::{block_importer::ImportBlockBroadcast, relayer::RelayerRequest};
 use tokio::sync::{broadcast, mpsc};
 
-use crate::mock_db::MockDb;
-use crate::{service::Context, Config, Relayer};
+use crate::{mock_db::MockDb, service::Context, Config, Relayer};
 
 pub async fn relayer(
     config: Config,

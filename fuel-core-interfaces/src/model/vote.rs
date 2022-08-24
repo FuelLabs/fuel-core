@@ -11,6 +11,6 @@ pub struct ConsensusVote {
     height: u64,
     round: u64,
     signature: Signature,
-    //step: Step,
+    // step: Step,
     validator: PublicKey,
 }

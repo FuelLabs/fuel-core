@@ -1,17 +1,17 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
-use crate::database::transactional::DatabaseTransaction;
-use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{
-    in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
+use crate::{
+    database::transactional::DatabaseTransaction,
+    model::FuelBlockDb,
+    state::{in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection},
 };
 use async_trait::async_trait;
-use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
+        fuel_asm::Word,
         fuel_storage::Storage,
         fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
     },
@@ -125,9 +125,8 @@ impl Drop for DropResources {
     }
 }
 
-/*** SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
- * it is not Send+Sync by default because Storage insert fn takes &mut self
-*/
+/// * SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
+/// it is not Send+Sync by default because Storage insert fn takes &mut self
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
 
@@ -408,8 +407,7 @@ impl RelayerDb for Database {
     async fn get_finalized_da_height(&self) -> DaBlockHeight {
         match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
-                return res
-                    .expect("get_finalized_da_height value should be always present and set");
+                return res.expect("get_finalized_da_height value should be always present and set")
             }
             Err(err) => {
                 panic!("get_finalized_da_height database corruption, err:{:?}", err);
@@ -427,7 +425,7 @@ impl RelayerDb for Database {
         match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
                 return res
-                    .expect("get_validators_da_height value should be always present and set");
+                    .expect("get_validators_da_height value should be always present and set")
             }
             Err(err) => {
                 panic!(

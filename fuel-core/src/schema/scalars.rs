@@ -1,5 +1,4 @@
-use crate::database::transaction::OwnedTransactionIndexCursor;
-use crate::model::BlockHeight;
+use crate::{database::transaction::OwnedTransactionIndexCursor, model::BlockHeight};
 use async_graphql::{
     connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
 };

@@ -1,13 +1,13 @@
 use super::schema;
-use crate::client::schema::ConversionError;
-use crate::client::schema::ConversionError::HexStringPrefixError;
+use crate::client::schema::{ConversionError, ConversionError::HexStringPrefixError};
 use core::fmt;
 use cynic::impl_scalar;
 use fuel_tx::InstructionResult;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Debug, Display, Formatter, LowerHex};
-use std::str::FromStr;
+use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use std::{
+    fmt::{Debug, Display, Formatter, LowerHex},
+    str::FromStr,
+};
 
 pub type DateTime = chrono::DateTime<chrono::Utc>;
 impl_scalar!(DateTime, schema::DateTime);

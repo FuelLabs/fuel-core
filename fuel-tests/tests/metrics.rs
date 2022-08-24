@@ -1,4 +1,4 @@
-use fuel_core::{service::Config, service::DbType, service::FuelService};
+use fuel_core::service::{Config, DbType, FuelService};
 use fuel_core_interfaces::common::{
     fuel_tx,
     fuel_tx::{Address, AssetId},

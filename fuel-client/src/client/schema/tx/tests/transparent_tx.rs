@@ -104,56 +104,60 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
                 metadata: None,
             },
-            false => Self::Create {
-                gas_price: tx.gas_price.into(),
-                gas_limit: tx.gas_limit.into(),
-                maturity: tx.maturity.into(),
-                bytecode_length: tx
-                    .bytecode_length
-                    .ok_or_else(|| ConversionError::MissingField("bytecode_length".to_string()))?
-                    .into(),
-                bytecode_witness_index: tx
-                    .bytecode_witness_index
-                    .ok_or_else(|| {
-                        ConversionError::MissingField("bytecode_witness_index".to_string())
-                    })?
-                    .try_into()?,
-                salt: tx
-                    .salt
-                    .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
-                    .into(),
-                storage_slots: tx
-                    .storage_slots
-                    .ok_or_else(|| ConversionError::MissingField("storage_slots".to_string()))?
-                    .into_iter()
-                    .map(|slot| {
-                        if slot.0 .0.len() != 64 {
-                            return Err(ConversionError::BytesLength);
-                        }
-                        let key = &slot.0 .0[0..32];
-                        let value = &slot.0 .0[32..];
-                        Ok(StorageSlot::new(
-                            // unwrap is safe because length is checked
-                            fuel_types::Bytes32::try_from(key)
-                                .map_err(|_| ConversionError::BytesLength)?,
-                            fuel_types::Bytes32::try_from(value)
-                                .map_err(|_| ConversionError::BytesLength)?,
-                        ))
-                    })
-                    .try_collect()?,
-                inputs: tx
-                    .inputs
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
-                outputs: tx
-                    .outputs
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
-                witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
-                metadata: None,
-            },
+            false => {
+                Self::Create {
+                    gas_price: tx.gas_price.into(),
+                    gas_limit: tx.gas_limit.into(),
+                    maturity: tx.maturity.into(),
+                    bytecode_length: tx
+                        .bytecode_length
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("bytecode_length".to_string())
+                        })?
+                        .into(),
+                    bytecode_witness_index: tx
+                        .bytecode_witness_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("bytecode_witness_index".to_string())
+                        })?
+                        .try_into()?,
+                    salt: tx
+                        .salt
+                        .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
+                        .into(),
+                    storage_slots: tx
+                        .storage_slots
+                        .ok_or_else(|| ConversionError::MissingField("storage_slots".to_string()))?
+                        .into_iter()
+                        .map(|slot| {
+                            if slot.0 .0.len() != 64 {
+                                return Err(ConversionError::BytesLength);
+                            }
+                            let key = &slot.0 .0[0..32];
+                            let value = &slot.0 .0[32..];
+                            Ok(StorageSlot::new(
+                                // unwrap is safe because length is checked
+                                fuel_types::Bytes32::try_from(key)
+                                    .map_err(|_| ConversionError::BytesLength)?,
+                                fuel_types::Bytes32::try_from(value)
+                                    .map_err(|_| ConversionError::BytesLength)?,
+                            ))
+                        })
+                        .try_collect()?,
+                    inputs: tx
+                        .inputs
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                    outputs: tx
+                        .outputs
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                    witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+                    metadata: None,
+                }
+            }
         })
     }
 }

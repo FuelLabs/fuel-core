@@ -6,17 +6,13 @@ use crate::{
 };
 use chrono::Utc;
 use fuel_core_interfaces::{
-    common::fuel_tx::{CheckedTransaction, TransactionFee},
-    model::Message,
-};
-use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
-            Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
-            ValidationError,
+            Address, AssetId, Bytes32, CheckedTransaction, Input, Output, Receipt, Transaction,
+            TransactionFee, TxId, UtxoId, ValidationError,
         },
         fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{
@@ -24,7 +20,7 @@ use fuel_core_interfaces::{
             prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
         },
     },
-    model::FuelBlockHeader,
+    model::{FuelBlockHeader, Message},
 };
 use std::{
     error::Error as StdError,
@@ -34,7 +30,7 @@ use std::{
 use thiserror::Error;
 use tracing::{debug, warn};
 
-///! The executor is used for block production and validation. Given a block, it will execute all
+/// ! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
@@ -233,12 +229,14 @@ impl Executor {
                 let reason = vm_result
                     .receipts()
                     .iter()
-                    .find_map(|receipt| match receipt {
-                        // Format as `Revert($rA)`
-                        Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
-                        // Display PanicReason e.g. `OutOfGas`
-                        Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
-                        _ => None,
+                    .find_map(|receipt| {
+                        match receipt {
+                            // Format as `Revert($rA)`
+                            Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
+                            // Display PanicReason e.g. `OutOfGas`
+                            Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
+                            _ => None,
+                        }
                     })
                     .unwrap_or_else(|| format!("{:?}", vm_result.state()));
 
@@ -337,9 +335,7 @@ impl Executor {
                             return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
                         }
                         if BlockHeight::from(message.da_height) > block_da_height {
-                            return Err(TransactionValidityError::MessageSpendTooEarly(
-                                *message_id,
-                            ));
+                            return Err(TransactionValidityError::MessageSpendTooEarly(*message_id));
                         }
                     } else {
                         return Err(TransactionValidityError::MessageDoesNotExist(*message_id));
@@ -574,7 +570,7 @@ impl Executor {
                     backtrace.contract(),
                     backtrace.registers(),
                     backtrace.call_stack(),
-                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), // print stack
+                    hex::encode(&backtrace.memory()[..backtrace.registers()[REG_SP] as usize]), /* print stack */
                 );
             }
         }
@@ -831,7 +827,6 @@ mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
     use chrono::TimeZone;
-    use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -845,11 +840,11 @@ mod tests {
                 util::test_helpers::TestBuilder as TxBuilder,
             },
         },
+        model::{CheckedMessage, Message},
         relayer::RelayerDb,
     };
     use itertools::Itertools;
-    use rand::prelude::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{prelude::StdRng, Rng, SeedableRng};
 
     fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)

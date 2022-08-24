@@ -4,11 +4,7 @@ use ethers_providers::{
     FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt;
-use std::io::BufWriter;
-use std::sync::Arc;
-use std::time::Duration;
-use std::{fmt::Debug, str::FromStr};
+use std::{fmt, fmt::Debug, io::BufWriter, str::FromStr, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -168,15 +164,13 @@ impl JsonRpcClient for MockMiddleware {
     }
 }
 
-/*
-Needed functionality for relayer to function:
-* syncing API
-* get_block_number API
-* get_logs API.
-* .watch() API for logs with filter. Impl LogStream
-    * LogsWatcher only uses .next()
-* get_block API using only HASH
-*/
+// Needed functionality for relayer to function:
+// syncing API
+// get_block_number API
+// get_logs API.
+// .watch() API for logs with filter. Impl LogStream
+// LogsWatcher only uses .next()
+// get_block API using only HASH
 
 #[async_trait]
 impl Middleware for MockMiddleware {

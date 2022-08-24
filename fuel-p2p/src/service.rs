@@ -1,12 +1,11 @@
-use crate::codecs::bincode::BincodeCodec;
-use crate::request_response::messages::OutboundResponse;
 use crate::{
     behavior::{FuelBehaviour, FuelBehaviourEvent},
+    codecs::bincode::BincodeCodec,
     config::{build_transport, P2PConfig},
     gossipsub::messages::GossipsubBroadcastRequest,
     peer_info::PeerInfo,
     request_response::messages::{
-        RequestError, RequestMessage, ResponseChannelItem, ResponseError,
+        OutboundResponse, RequestError, RequestMessage, ResponseChannelItem, ResponseError,
     },
 };
 use futures::prelude::*;
@@ -133,22 +132,25 @@ impl FuelP2PService {
 #[cfg(test)]
 mod tests {
     use super::{FuelBehaviourEvent, FuelP2PService};
-    use crate::gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage};
-    use crate::gossipsub::topics::{
-        GossipTopic, CON_VOTE_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_TOPIC, NEW_TX_GOSSIP_TOPIC,
+    use crate::{
+        config::P2PConfig,
+        gossipsub::{
+            messages::{GossipsubBroadcastRequest, GossipsubMessage},
+            topics::{
+                GossipTopic, CON_VOTE_GOSSIP_TOPIC, NEW_BLOCK_GOSSIP_TOPIC, NEW_TX_GOSSIP_TOPIC,
+            },
+        },
+        peer_info::PeerInfo,
+        request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
+        service::FuelP2PEvent,
     };
-    use crate::request_response::messages::{
-        OutboundResponse, RequestMessage, ResponseChannelItem,
-    };
-    use crate::{config::P2PConfig, peer_info::PeerInfo, service::FuelP2PEvent};
     use ctor::ctor;
-    use fuel_core_interfaces::common::fuel_tx::Transaction;
-    use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
-    use libp2p::gossipsub::Topic;
-    use libp2p::identity::Keypair;
-    use libp2p::{Multiaddr, PeerId};
-    use std::collections::HashMap;
-    use std::{sync::Arc, time::Duration};
+    use fuel_core_interfaces::{
+        common::fuel_tx::Transaction,
+        model::{ConsensusVote, FuelBlock},
+    };
+    use libp2p::{gossipsub::Topic, identity::Keypair, Multiaddr, PeerId};
+    use std::{collections::HashMap, sync::Arc, time::Duration};
     use tokio::sync::{mpsc, oneshot};
     use tracing_attributes::instrument;
     use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter};
@@ -448,9 +450,9 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn request_response_works() {
-        use fuel_core_interfaces::common::fuel_tx::Transaction;
-        use fuel_core_interfaces::model::{
-            FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock,
+        use fuel_core_interfaces::{
+            common::fuel_tx::Transaction,
+            model::{FuelBlock, FuelBlockConsensus, FuelBlockHeader, SealedFuelBlock},
         };
 
         let mut p2p_config = P2PConfig::default_with_network("request_response_works");

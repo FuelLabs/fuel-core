@@ -7,8 +7,7 @@ use fuel_core_interfaces::{
     model::{ArcTx, TxInfo},
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
-use std::cmp::Reverse;
-use std::collections::HashMap;
+use std::{cmp::Reverse, collections::HashMap};
 use tokio::sync::{broadcast, RwLock};
 
 #[derive(Debug, Clone)]
@@ -72,7 +71,7 @@ impl TxPool {
         // if some transaction were removed so we don't need to check limit
         if rem.is_empty() {
             if max_limit_hit {
-                //remove last tx from sort
+                // remove last tx from sort
                 let rem_tx = self.by_gas_price.last().unwrap(); // safe to unwrap limit is hit
                 self.remove_inner(&rem_tx);
                 return Ok(vec![rem_tx]);
@@ -220,7 +219,7 @@ impl TxPool {
 
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub async fn block_update(
-        txpool: &RwLock<Self>, /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
+        txpool: &RwLock<Self>, // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         txpool.write().await;
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
@@ -312,10 +311,12 @@ pub mod tests {
     }
 
     use super::*;
-    use crate::txpool::tests::helpers::{
-        create_coin_input, create_coin_output, create_contract_input, create_contract_output,
+    use crate::{
+        txpool::tests::helpers::{
+            create_coin_input, create_coin_output, create_contract_input, create_contract_output,
+        },
+        Error,
     };
-    use crate::Error;
     use fuel_core_interfaces::{
         common::{
             fuel_storage::Storage,
@@ -323,8 +324,7 @@ pub mod tests {
         },
         model::{BlockHeight, Coin, CoinStatus, Message},
     };
-    use std::str::FromStr;
-    use std::{cmp::Reverse, sync::Arc};
+    use std::{cmp::Reverse, str::FromStr, sync::Arc};
 
     #[tokio::test]
     async fn simple_insertion() {

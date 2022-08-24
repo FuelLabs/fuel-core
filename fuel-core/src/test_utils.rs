@@ -1,5 +1,7 @@
-use crate::database::Database;
-use crate::model::{Coin, CoinStatus};
+use crate::{
+    database::Database,
+    model::{Coin, CoinStatus},
+};
 use fuel_core_interfaces::common::{
     fuel_asm::Word,
     fuel_storage::Storage,

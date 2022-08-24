@@ -1,6 +1,7 @@
-use crate::database::transactional::DatabaseTransaction;
-use crate::database::Database;
-use crate::schema::scalars::U64;
+use crate::{
+    database::{transactional::DatabaseTransaction, Database},
+    schema::scalars::U64,
+};
 use async_graphql::{Context, Object, SchemaBuilder, ID};
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,

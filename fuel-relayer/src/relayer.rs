@@ -531,17 +531,21 @@ mod test {
             async fn run<'a>(&mut self, _: &mut MockData, trigger: TriggerType<'a>) {
                 match self.i {
                     // check if eth client is in sync.
-                    0 => assert_eq!(
-                        TriggerType::Syncing,
-                        trigger,
-                        "We need to check if eth client is synced"
-                    ),
+                    0 => {
+                        assert_eq!(
+                            TriggerType::Syncing,
+                            trigger,
+                            "We need to check if eth client is synced"
+                        )
+                    }
                     // get best eth block number so that we know until when to sync
-                    1 => assert_eq!(
-                        TriggerType::GetBlockNumber,
-                        trigger,
-                        "We need to get Best eth block number"
-                    ),
+                    1 => {
+                        assert_eq!(
+                            TriggerType::GetBlockNumber,
+                            trigger,
+                            "We need to get Best eth block number"
+                        )
+                    }
                     // get first batch of logs.
                     2 => match trigger {
                         TriggerType::GetLogs(filter) => {

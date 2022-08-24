@@ -221,10 +221,8 @@ impl From<MessageConfig> for Message {
 mod tests {
     use super::*;
     use fuel_core_interfaces::common::{fuel_asm::Opcode, fuel_vm::prelude::Contract};
-    use rand::prelude::StdRng;
-    use rand::{Rng, RngCore, SeedableRng};
-    use std::env::temp_dir;
-    use std::fs::write;
+    use rand::{prelude::StdRng, Rng, RngCore, SeedableRng};
+    use std::{env::temp_dir, fs::write};
 
     #[test]
     fn from_str_loads_from_file() {

@@ -1,5 +1,7 @@
-use crate::client::schema::tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus};
-use crate::client::schema::ConversionError;
+use crate::client::schema::{
+    tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus},
+    ConversionError,
+};
 use chrono::{DateTime, Utc};
 use fuel_tx::Transaction;
 use fuel_types::bytes::Deserializable;

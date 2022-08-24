@@ -1,27 +1,28 @@
-use crate::database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError};
-use crate::executor::Executor;
-use crate::model::{BlockHeight, FuelBlockDb};
-use crate::schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId};
-use crate::service::Config;
-use crate::state::IterDirection;
+use crate::{
+    database::{transaction::OwnedTransactionIndexCursor, Database, KvStoreError},
+    executor::Executor,
+    model::{BlockHeight, FuelBlockDb},
+    schema::scalars::{Address, Bytes32, HexString, SortedTxCursor, TransactionId},
+    service::Config,
+    state::IterDirection,
+};
 use anyhow::anyhow;
 use async_graphql::{
     connection::{query, Connection, Edge, EmptyFields},
     Context, Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx},
-    fuel_types,
-    fuel_vm::prelude::Deserializable,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::{Bytes32 as FuelBytes32, Receipt as FuelReceipt, Transaction as FuelTx},
+        fuel_types,
+        fuel_vm::prelude::Deserializable,
+    },
+    txpool::TxPoolMpsc,
 };
-use fuel_core_interfaces::txpool::TxPoolMpsc;
 use fuel_txpool::Service as TxPoolService;
 use itertools::Itertools;
-use std::borrow::Cow;
-use std::iter;
-use std::ops::Deref;
-use std::sync::Arc;
+use std::{borrow::Cow, iter, ops::Deref, sync::Arc};
 use tokio::sync::{oneshot, Mutex};
 use types::Transaction;
 
@@ -192,76 +193,78 @@ impl TxQuery {
             before,
             first,
             last,
-            |after: Option<HexString>, before: Option<HexString>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<HexString>, before: Option<HexString>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"));
+                    }
 
-                let after = after.map(OwnedTransactionIndexCursor::from);
-                let before = before.map(OwnedTransactionIndexCursor::from);
+                    let after = after.map(OwnedTransactionIndexCursor::from);
+                    let before = before.map(OwnedTransactionIndexCursor::from);
 
-                let start;
-                let end;
+                    let start;
+                    let end;
 
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
+                    if direction == IterDirection::Forward {
+                        start = after;
+                        end = before;
+                    } else {
+                        start = before;
+                        end = after;
+                    }
 
-                let mut txs = db.owned_transactions(&owner, start.as_ref(), Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = txs.next();
-                }
+                    let mut txs = db.owned_transactions(&owner, start.as_ref(), Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = txs.next();
+                    }
 
-                // take desired amount of results
-                let txs = txs
-                    .take_while(|r| {
-                        // take until we've reached the end
-                        if let (Ok(t), Some(end)) = (r, end.as_ref()) {
-                            if &t.0 == end {
-                                return false;
+                    // take desired amount of results
+                    let txs = txs
+                        .take_while(|r| {
+                            // take until we've reached the end
+                            if let (Ok(t), Some(end)) = (r, end.as_ref()) {
+                                if &t.0 == end {
+                                    return false;
+                                }
                             }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch)
-                    .map(|res| {
-                        res.and_then(|(cursor, tx_id)| {
-                            let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, &tx_id)?
-                                .ok_or(KvStoreError::NotFound)?
-                                .into_owned();
-                            Ok((cursor, tx))
+                            true
                         })
-                    });
-                let mut txs: Vec<(OwnedTransactionIndexCursor, FuelTx)> = txs.try_collect()?;
-                if direction == IterDirection::Reverse {
-                    txs.reverse();
+                        .take(records_to_fetch)
+                        .map(|res| {
+                            res.and_then(|(cursor, tx_id)| {
+                                let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, &tx_id)?
+                                    .ok_or(KvStoreError::NotFound)?
+                                    .into_owned();
+                                Ok((cursor, tx))
+                            })
+                        });
+                    let mut txs: Vec<(OwnedTransactionIndexCursor, FuelTx)> = txs.try_collect()?;
+                    if direction == IterDirection::Reverse {
+                        txs.reverse();
+                    }
+
+                    let mut connection =
+                        Connection::new(started.is_some(), records_to_fetch <= txs.len());
+                    connection.edges.extend(
+                        txs.into_iter()
+                            .map(|item| Edge::new(HexString::from(item.0), Transaction(item.1))),
+                    );
+
+                    Ok::<Connection<HexString, Transaction>, anyhow::Error>(connection)
                 }
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= txs.len());
-                connection.edges.extend(
-                    txs.into_iter()
-                        .map(|item| Edge::new(HexString::from(item.0), Transaction(item.1))),
-                );
-
-                Ok::<Connection<HexString, Transaction>, anyhow::Error>(connection)
             },
         )
         .await

@@ -1,13 +1,12 @@
-use crate::database::Database;
-use crate::executor::{ExecutionMode, Executor};
-use crate::schema::{
-    scalars::{BlockId, U64},
-    tx::types::Transaction,
-};
-use crate::service::Config;
 use crate::{
-    database::KvStoreError,
+    database::{Database, KvStoreError},
+    executor::{ExecutionMode, Executor},
     model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
+    schema::{
+        scalars::{BlockId, U64},
+        tx::types::Transaction,
+    },
+    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -18,8 +17,7 @@ use async_graphql::{
 use chrono::{DateTime, Utc};
 use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
 use itertools::Itertools;
-use std::borrow::Cow;
-use std::convert::TryInto;
+use std::{borrow::Cow, convert::TryInto};
 
 use super::scalars::Address;
 
@@ -112,74 +110,77 @@ impl BlockQuery {
             before,
             first,
             last,
-            |after: Option<usize>, before: Option<usize>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<usize>, before: Option<usize>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"));
+                    }
 
-                let start;
-                let end;
+                    let start;
+                    let end;
 
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
+                    if direction == IterDirection::Forward {
+                        start = after;
+                        end = before;
+                    } else {
+                        start = before;
+                        end = after;
+                    }
 
-                let mut blocks = db.all_block_ids(start.map(Into::into), Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = blocks.next();
-                }
+                    let mut blocks = db.all_block_ids(start.map(Into::into), Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = blocks.next();
+                    }
 
-                // take desired amount of results
-                let blocks = blocks
-                    .take_while(|r| {
-                        if let (Ok(b), Some(end)) = (r, end) {
-                            if b.0.as_usize() == end {
-                                return false;
+                    // take desired amount of results
+                    let blocks = blocks
+                        .take_while(|r| {
+                            if let (Ok(b), Some(end)) = (r, end) {
+                                if b.0.as_usize() == end {
+                                    return false;
+                                }
                             }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch);
-                let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
-                if direction == IterDirection::Forward {
-                    blocks.reverse();
+                            true
+                        })
+                        .take(records_to_fetch);
+                    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> =
+                        blocks.try_collect()?;
+                    if direction == IterDirection::Forward {
+                        blocks.reverse();
+                    }
+
+                    // TODO: do a batch get instead
+                    let blocks: Vec<Cow<FuelBlockDb>> = blocks
+                        .iter()
+                        .map(|(_, id)| {
+                            Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, id)
+                                .transpose()
+                                .ok_or(KvStoreError::NotFound)?
+                        })
+                        .try_collect()?;
+
+                    let mut connection =
+                        Connection::new(started.is_some(), records_to_fetch <= blocks.len());
+
+                    connection.edges.extend(blocks.into_iter().map(|item| {
+                        Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
+                    }));
+
+                    Ok::<Connection<usize, Block>, anyhow::Error>(connection)
                 }
-
-                // TODO: do a batch get instead
-                let blocks: Vec<Cow<FuelBlockDb>> = blocks
-                    .iter()
-                    .map(|(_, id)| {
-                        Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, id)
-                            .transpose()
-                            .ok_or(KvStoreError::NotFound)?
-                    })
-                    .try_collect()?;
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= blocks.len());
-
-                connection.edges.extend(blocks.into_iter().map(|item| {
-                    Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
-                }));
-
-                Ok::<Connection<usize, Block>, anyhow::Error>(connection)
             },
         )
         .await

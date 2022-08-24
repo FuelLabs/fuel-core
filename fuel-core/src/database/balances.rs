@@ -1,7 +1,6 @@
-use crate::state::Error;
 use crate::{
     database::{columns::BALANCES, Database},
-    state::{IterDirection, MultiKey},
+    state::{Error, IterDirection, MultiKey},
 };
 use fuel_core_interfaces::common::{
     fuel_storage::MerkleRoot,

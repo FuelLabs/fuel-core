@@ -4,14 +4,13 @@ use crate::{
     service::{config::Config, FuelService},
 };
 use anyhow::Result;
-use fuel_core_interfaces::model::Message;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{MerkleStorage, Storage},
         fuel_tx::{Contract, MessageId, UtxoId},
         fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
     },
-    model::{Coin, CoinStatus},
+    model::{Coin, CoinStatus, Message},
 };
 use itertools::Itertools;
 
@@ -177,16 +176,18 @@ mod tests {
     use std::vec;
 
     use super::*;
-    use crate::chain_config::{
-        ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig,
+    use crate::{
+        chain_config::{ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig},
+        model::BlockHeight,
+        service::config::Config,
     };
-    use crate::model::BlockHeight;
-    use crate::service::config::Config;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Opcode,
-        fuel_types::{Address, AssetId, Word},
+    use fuel_core_interfaces::{
+        common::{
+            fuel_asm::Opcode,
+            fuel_types::{Address, AssetId, Word},
+        },
+        model::Message,
     };
-    use fuel_core_interfaces::model::Message;
     use itertools::Itertools;
     use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
 

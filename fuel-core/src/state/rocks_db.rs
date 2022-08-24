@@ -1,6 +1,5 @@
 #[cfg(feature = "prometheus")]
 use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
-use crate::state::KVItem;
 use crate::{
     database::{
         columns,
@@ -8,8 +7,8 @@ use crate::{
         metadata::{DB_VERSION, DB_VERSION_KEY},
     },
     state::{
-        BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
-        WriteOperation,
+        BatchOperations, ColumnId, Error, IterDirection, KVItem, KeyValueStore,
+        TransactableStorage, WriteOperation,
     },
 };
 use rocksdb::{

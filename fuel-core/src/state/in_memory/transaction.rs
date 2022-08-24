@@ -1,13 +1,15 @@
 use crate::state::{
-    in_memory::column_key, in_memory::memory_store::MemoryStore, BatchOperations, ColumnId,
-    DataSource, IterDirection, KeyValueStore, Result, TransactableStorage, Transaction,
-    TransactionError, TransactionResult, WriteOperation,
+    in_memory::{column_key, memory_store::MemoryStore},
+    BatchOperations, ColumnId, DataSource, IterDirection, KeyValueStore, Result,
+    TransactableStorage, Transaction, TransactionError, TransactionResult, WriteOperation,
 };
 use itertools::{EitherOrBoth, Itertools};
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug)]
 pub struct MemoryTransactionView {

@@ -137,7 +137,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                 }
 
                 NetworkBehaviourAction::Dial { handler, opts } => {
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts });
+                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
                 NetworkBehaviourAction::CloseConnection {
                     peer_id,
@@ -146,7 +146,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     return Poll::Ready(NetworkBehaviourAction::CloseConnection {
                         peer_id,
                         connection,
-                    });
+                    })
                 }
                 NetworkBehaviourAction::NotifyHandler {
                     peer_id,

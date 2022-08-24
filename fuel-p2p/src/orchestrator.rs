@@ -6,9 +6,13 @@ use fuel_core_interfaces::p2p::{
 };
 
 use libp2p::request_response::RequestId;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{
+        mpsc::{Receiver, Sender},
+        Mutex,
+    },
+    task::JoinHandle,
+};
 use tracing::warn;
 
 use crate::{
