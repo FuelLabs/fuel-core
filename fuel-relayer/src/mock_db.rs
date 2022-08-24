@@ -240,7 +240,6 @@ impl RelayerDb for MockDb {
     ) -> Vec<(DaBlockHeight, StakingDiff)> {
         let mut out = Vec::new();
         let diffs = &self.data.lock().unwrap().staking_diffs;
-        // in BTreeMap iteration are done on sorted items.
         for (block, diff) in diffs {
             if *block >= from_da_height {
                 if let Some(end_block) = to_da_height {
