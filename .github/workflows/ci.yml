@@ -85,6 +85,7 @@ jobs:
     needs:
       - lint-toml-files
       - prevent-openssl
+      - rustfmt
     runs-on: ubuntu-latest
     strategy:
       matrix:
