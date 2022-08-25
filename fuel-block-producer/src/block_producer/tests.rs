@@ -13,7 +13,4 @@ fn can_produce_next_block() {
 }
 
 #[test]
-fn stop_will_prevent_future_block_production() {
-    
-}
-
+fn stop_will_prevent_future_block_production() {}
