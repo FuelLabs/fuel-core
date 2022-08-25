@@ -198,7 +198,6 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: U64,
-    owner: Address,
     witness_index: i32,
     data: HexString,
     predicate: HexString,
@@ -242,26 +241,37 @@ impl TryFrom<Input> for fuel_tx::Input {
                 contract_id: contract.contract.id.into(),
             },
             Input::InputMessage(message) => {
+                let data_len = message.data.0 .0.len();
+
+                let recipient = {
+                    unsafe {
+                        // SAFETY: last 4 bytes are always recipient data
+                        fuel_tx::Address::from_slice_unchecked(&message.data.0 .0[data_len - 4..])
+                    }
+                };
+
+                let data = (&message.data.0 .0[..data_len - 4]).into();
+
                 if message.predicate.0 .0.is_empty() {
                     fuel_tx::Input::MessageSigned {
                         message_id: message.message_id.into(),
                         sender: message.sender.into(),
-                        recipient: message.recipient.into(),
+                        recipient,
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
+                        owner: message.recipient.into(),
                         witness_index: message.witness_index.try_into()?,
-                        data: message.data.into(),
+                        data,
                     }
                 } else {
                     fuel_tx::Input::MessagePredicate {
                         message_id: message.message_id.into(),
                         sender: message.sender.into(),
-                        recipient: message.recipient.into(),
+                        recipient,
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
-                        data: message.data.into(),
+                        owner: message.recipient.into(),
+                        data,
                         predicate: message.predicate.into(),
                         predicate_data: message.predicate_data.into(),
                     }

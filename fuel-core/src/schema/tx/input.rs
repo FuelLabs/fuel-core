@@ -101,7 +101,6 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: U64,
-    owner: Address,
     witness_index: u8,
     data: HexString,
     predicate: HexString,
@@ -128,10 +127,6 @@ impl InputMessage {
 
     async fn nonce(&self) -> U64 {
         self.nonce
-    }
-
-    async fn owner(&self) -> Address {
-        self.owner
     }
 
     async fn witness_index(&self) -> u8 {
@@ -218,12 +213,15 @@ impl From<&fuel_tx::Input> for Input {
             } => Input::Message(InputMessage {
                 message_id: MessageId(*message_id),
                 sender: Address(*sender),
-                recipient: Address(*recipient),
+                recipient: Address(*owner),
                 amount: (*amount).into(),
                 nonce: (*nonce).into(),
-                owner: Address(*owner),
                 witness_index: *witness_index,
-                data: HexString(data.clone()),
+                data: {
+                    let mut data = data.clone();
+                    data.extend(recipient.clone().to_vec());
+                    HexString(data)
+                },
                 predicate: HexString(Default::default()),
                 predicate_data: HexString(Default::default()),
             }),
@@ -240,12 +238,15 @@ impl From<&fuel_tx::Input> for Input {
             } => Input::Message(InputMessage {
                 message_id: MessageId(*message_id),
                 sender: Address(*sender),
-                recipient: Address(*recipient),
+                recipient: Address(*owner),
                 amount: (*amount).into(),
                 nonce: (*nonce).into(),
-                owner: Address(*owner),
                 witness_index: Default::default(),
-                data: HexString(data.clone()),
+                data: {
+                    let mut data = data.clone();
+                    data.extend(recipient.clone().to_vec());
+                    HexString(data)
+                },
                 predicate: HexString(predicate.clone()),
                 predicate_data: HexString(predicate_data.clone()),
             }),
