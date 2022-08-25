@@ -2,7 +2,10 @@ use crate::model::BlockHeight;
 #[cfg(graphql)]
 use async_graphql::Enum;
 use fuel_asm::Word;
-use fuel_tx::{Address, AssetId};
+use fuel_tx::{
+    Address,
+    AssetId,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]

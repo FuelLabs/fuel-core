@@ -1,8 +1,12 @@
-use crate::database::columns::METADATA;
-use crate::database::Database;
-use crate::model::BlockHeight;
-use crate::service::config::Config;
-use crate::state::Error;
+use crate::{
+    database::{
+        columns::METADATA,
+        Database,
+    },
+    model::BlockHeight,
+    service::config::Config,
+    state::Error,
+};
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";

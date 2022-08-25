@@ -1,21 +1,46 @@
 use crate::config::P2PConfig;
 use libp2p::{
     core::{
-        connection::{ConnectionId, ListenerId},
+        connection::{
+            ConnectionId,
+            ListenerId,
+        },
         either::EitherOutput,
-        ConnectedPoint, PublicKey,
+        ConnectedPoint,
+        PublicKey,
     },
-    identify::{Identify, IdentifyConfig, IdentifyEvent, IdentifyInfo},
-    ping::{Event as PingEvent, Ping, PingConfig, PingSuccess},
+    identify::{
+        Identify,
+        IdentifyConfig,
+        IdentifyEvent,
+        IdentifyInfo,
+    },
+    ping::{
+        Event as PingEvent,
+        Ping,
+        PingConfig,
+        PingSuccess,
+    },
     swarm::{
-        ConnectionHandler, IntoConnectionHandler, IntoConnectionHandlerSelect, NetworkBehaviour,
-        NetworkBehaviourAction, PollParameters,
+        ConnectionHandler,
+        IntoConnectionHandler,
+        IntoConnectionHandlerSelect,
+        NetworkBehaviour,
+        NetworkBehaviourAction,
+        PollParameters,
     },
-    Multiaddr, PeerId,
+    Multiaddr,
+    PeerId,
 };
 use std::{
-    collections::{HashMap, HashSet},
-    task::{Context, Poll},
+    collections::{
+        HashMap,
+        HashSet,
+    },
+    task::{
+        Context,
+        Poll,
+    },
     time::Duration,
 };
 use tracing::debug;
@@ -65,7 +90,8 @@ pub struct PeerInfoBehaviour {
 impl PeerInfoBehaviour {
     pub fn new(local_public_key: PublicKey, config: &P2PConfig) -> Self {
         let identify = {
-            let identify_config = IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
+            let identify_config =
+                IdentifyConfig::new("/fuel/1.0".to_string(), local_public_key);
             if let Some(interval) = config.identify_interval {
                 Identify::new(identify_config.with_interval(interval))
             } else {
@@ -153,7 +179,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
     type OutEvent = PeerInfoEvent;
 
     fn new_handler(&mut self) -> Self::ConnectionHandler {
-        IntoConnectionHandler::select(self.ping.new_handler(), self.identify.new_handler())
+        IntoConnectionHandler::select(
+            self.ping.new_handler(),
+            self.identify.new_handler(),
+        )
     }
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<libp2p::Multiaddr> {
@@ -239,7 +268,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                         event: EitherOutput::First(event),
                     })
                 }
-                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) => {
+                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                    address,
+                    score,
+                }) => {
                     return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
                         address,
                         score,
@@ -255,10 +287,12 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                     })
                 }
                 Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler =
-                        IntoConnectionHandler::select(handler, self.identify.new_handler());
+                    let handler = IntoConnectionHandler::select(
+                        handler,
+                        self.identify.new_handler(),
+                    );
 
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts });
+                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
                 Poll::Ready(NetworkBehaviourAction::GenerateEvent(PingEvent {
                     peer,
@@ -266,7 +300,7 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                 })) => {
                     self.insert_latest_ping(&peer, rtt);
                     let event = PeerInfoEvent::PeerInfoUpdated { peer_id: peer };
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event))
                 }
                 _ => {}
             }
@@ -286,7 +320,10 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                         event: EitherOutput::Second(event),
                     })
                 }
-                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr { address, score }) => {
+                Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
+                    address,
+                    score,
+                }) => {
                     return Poll::Ready(NetworkBehaviourAction::ReportObservedAddr {
                         address,
                         score,
@@ -302,43 +339,48 @@ impl NetworkBehaviour for PeerInfoBehaviour {
                     })
                 }
                 Poll::Ready(NetworkBehaviourAction::Dial { handler, opts }) => {
-                    let handler = IntoConnectionHandler::select(self.ping.new_handler(), handler);
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts });
+                    let handler =
+                        IntoConnectionHandler::select(self.ping.new_handler(), handler);
+                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
-                Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => match event {
-                    IdentifyEvent::Received {
-                        peer_id,
-                        info:
-                            IdentifyInfo {
-                                protocol_version,
-                                agent_version,
-                                mut listen_addrs,
-                                ..
-                            },
-                    } => {
-                        if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
-                            debug!(
-                                target: "fuel-libp2p",
-                                "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
-                                peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
-                            );
-                            listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
-                        }
-
-                        self.insert_client_version(&peer_id, agent_version);
-                        self.insert_peer_addresses(&peer_id, listen_addrs.clone());
-
-                        let event = PeerInfoEvent::PeerIdentified {
+                Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) => {
+                    match event {
+                        IdentifyEvent::Received {
                             peer_id,
-                            addresses: listen_addrs,
-                        };
-                        return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+                            info:
+                                IdentifyInfo {
+                                    protocol_version,
+                                    agent_version,
+                                    mut listen_addrs,
+                                    ..
+                                },
+                        } => {
+                            if listen_addrs.len() > MAX_IDENTIFY_ADDRESSES {
+                                debug!(
+                                    target: "fuel-libp2p",
+                                    "Node {:?} has reported more than {} addresses; it is identified by {:?} and {:?}",
+                                    peer_id, MAX_IDENTIFY_ADDRESSES, protocol_version, agent_version
+                                );
+                                listen_addrs.truncate(MAX_IDENTIFY_ADDRESSES);
+                            }
+
+                            self.insert_client_version(&peer_id, agent_version);
+                            self.insert_peer_addresses(&peer_id, listen_addrs.clone());
+
+                            let event = PeerInfoEvent::PeerIdentified {
+                                peer_id,
+                                addresses: listen_addrs,
+                            };
+                            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                                event,
+                            ))
+                        }
+                        IdentifyEvent::Error { peer_id, error } => {
+                            debug!(target: "fuel-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
+                        }
+                        _ => {}
                     }
-                    IdentifyEvent::Error { peer_id, error } => {
-                        debug!(target: "fuel-libp2p", "Identification with peer {:?} failed => {}", peer_id, error)
-                    }
-                    _ => {}
-                },
+                }
             }
         }
 
@@ -423,12 +465,20 @@ impl NetworkBehaviour for PeerInfoBehaviour {
             .inject_listen_failure(local_addr, send_back_addr, ping_handler);
     }
 
-    fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+    fn inject_listener_error(
+        &mut self,
+        id: ListenerId,
+        err: &(dyn std::error::Error + 'static),
+    ) {
         self.ping.inject_listener_error(id, err);
         self.identify.inject_listener_error(id, err);
     }
 
-    fn inject_listener_closed(&mut self, id: ListenerId, reason: Result<(), &std::io::Error>) {
+    fn inject_listener_closed(
+        &mut self,
+        id: ListenerId,
+        reason: Result<(), &std::io::Error>,
+    ) {
         self.ping.inject_listener_closed(id, reason);
         self.identify.inject_listener_closed(id, reason);
     }

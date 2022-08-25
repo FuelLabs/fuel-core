@@ -1,16 +1,32 @@
 use fuel_core::{
-    chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
+    chain_config::{
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+        StateConfig,
+    },
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_types::{Address, Bytes32, Salt},
+        fuel_types::{
+            Address,
+            Bytes32,
+            Salt,
+        },
         fuel_vm::prelude::AssetId,
     },
     model::BlockHeight,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 
 #[tokio::test]
 async fn snapshot_state_config() {
@@ -42,14 +58,16 @@ async fn snapshot_state_config() {
                 (owner, 150, AssetId::new([5u8; 32])),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                block_created: Some(BlockHeight::from(0u64)),
-                maturity: Some(BlockHeight::from(0u64)),
-                owner,
-                amount,
-                asset_id,
+            .map(|(owner, amount, asset_id)| {
+                CoinConfig {
+                    tx_id: None,
+                    output_index: None,
+                    block_created: Some(BlockHeight::from(0u64)),
+                    maturity: Some(BlockHeight::from(0u64)),
+                    owner,
+                    amount,
+                    asset_id,
+                }
             })
             .collect(),
         ),

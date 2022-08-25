@@ -1,19 +1,41 @@
-use super::{input::Input, output::Output, receipt::Receipt};
+use super::{
+    input::Input,
+    output::Output,
+    receipt::Receipt,
+};
 use crate::{
     database::Database,
     model::FuelBlockDb,
     schema::{
         block::Block,
         contract::Contract,
-        scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
+        scalars::{
+            AssetId,
+            Bytes32,
+            HexString,
+            Salt,
+            TransactionId,
+            U64,
+        },
     },
     tx_pool::TransactionStatus as TxStatus,
 };
-use async_graphql::{Context, Enum, Object, Union};
-use chrono::{DateTime, Utc};
+use async_graphql::{
+    Context,
+    Enum,
+    Object,
+    Union,
+};
+use chrono::{
+    DateTime,
+    Utc,
+};
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage, fuel_tx, fuel_types, fuel_types::bytes::SerializableVec,
+        fuel_storage::Storage,
+        fuel_tx,
+        fuel_types,
+        fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
     },
     db::KvStoreError,
@@ -49,18 +71,24 @@ pub enum ReturnType {
 impl From<VmProgramState> for ProgramState {
     fn from(state: VmProgramState) -> Self {
         match state {
-            VmProgramState::Return(d) => ProgramState {
-                return_type: ReturnType::Return,
-                data: d.to_be_bytes().to_vec(),
-            },
-            VmProgramState::ReturnData(d) => ProgramState {
-                return_type: ReturnType::ReturnData,
-                data: d.as_ref().to_vec(),
-            },
-            VmProgramState::Revert(d) => ProgramState {
-                return_type: ReturnType::Revert,
-                data: d.to_be_bytes().to_vec(),
-            },
+            VmProgramState::Return(d) => {
+                ProgramState {
+                    return_type: ReturnType::Return,
+                    data: d.to_be_bytes().to_vec(),
+                }
+            }
+            VmProgramState::ReturnData(d) => {
+                ProgramState {
+                    return_type: ReturnType::ReturnData,
+                    data: d.as_ref().to_vec(),
+                }
+            }
+            VmProgramState::Revert(d) => {
+                ProgramState {
+                    return_type: ReturnType::Revert,
+                    data: d.to_be_bytes().to_vec(),
+                }
+            }
             #[cfg(feature = "debug")]
             VmProgramState::RunProgram(_) | VmProgramState::VerifyPredicate(_) => {
                 unreachable!("This shouldn't get called with a debug state")
@@ -145,27 +173,33 @@ impl FailureStatus {
 impl From<TxStatus> for TransactionStatus {
     fn from(s: TxStatus) -> Self {
         match s {
-            TxStatus::Submitted { time } => TransactionStatus::Submitted(SubmittedStatus(time)),
+            TxStatus::Submitted { time } => {
+                TransactionStatus::Submitted(SubmittedStatus(time))
+            }
             TxStatus::Success {
                 block_id,
                 result,
                 time,
-            } => TransactionStatus::Success(SuccessStatus {
-                block_id,
-                result,
-                time,
-            }),
+            } => {
+                TransactionStatus::Success(SuccessStatus {
+                    block_id,
+                    result,
+                    time,
+                })
+            }
             TxStatus::Failed {
                 block_id,
                 reason,
                 time,
                 result,
-            } => TransactionStatus::Failed(FailureStatus {
-                block_id,
-                reason,
-                time,
-                state: result,
-            }),
+            } => {
+                TransactionStatus::Failed(FailureStatus {
+                    block_id,
+                    reason,
+                    time,
+                    state: result,
+                })
+            }
         }
     }
 }
@@ -222,7 +256,10 @@ impl Transaction {
         self.0.receipts_root().cloned().map(Bytes32)
     }
 
-    async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
+    async fn status(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let id = self.0.id();
@@ -242,7 +279,10 @@ impl Transaction {
         }
     }
 
-    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Vec<Receipt>>> {
+    async fn receipts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let db = ctx.data_unchecked::<Database>();
         let receipts =
             Storage::<fuel_types::Bytes32, Vec<fuel_tx::Receipt>>::get(db, &self.0.id())?;
@@ -251,7 +291,9 @@ impl Transaction {
 
     async fn script(&self) -> Option<HexString> {
         match &self.0 {
-            fuel_tx::Transaction::Script { script, .. } => Some(HexString(script.clone())),
+            fuel_tx::Transaction::Script { script, .. } => {
+                Some(HexString(script.clone()))
+            }
             fuel_tx::Transaction::Create { .. } => None,
         }
     }
@@ -294,21 +336,23 @@ impl Transaction {
     async fn storage_slots(&self) -> Option<Vec<HexString>> {
         match &self.0 {
             fuel_tx::Transaction::Script { .. } => None,
-            fuel_tx::Transaction::Create { storage_slots, .. } => Some(
-                storage_slots
-                    .iter()
-                    .map(|slot| {
-                        HexString(
-                            slot.key()
-                                .as_slice()
-                                .iter()
-                                .chain(slot.value().as_slice())
-                                .copied()
-                                .collect(),
-                        )
-                    })
-                    .collect(),
-            ),
+            fuel_tx::Transaction::Create { storage_slots, .. } => {
+                Some(
+                    storage_slots
+                        .iter()
+                        .map(|slot| {
+                            HexString(
+                                slot.key()
+                                    .as_slice()
+                                    .iter()
+                                    .chain(slot.value().as_slice())
+                                    .copied()
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
+                )
+            }
         }
     }
 

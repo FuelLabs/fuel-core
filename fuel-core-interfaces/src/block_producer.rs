@@ -1,4 +1,7 @@
-use crate::model::{BlockHeight, FuelBlock};
+use crate::model::{
+    BlockHeight,
+    FuelBlock,
+};
 use tokio::sync::oneshot;
 
 pub enum BlockProducerMpsc {

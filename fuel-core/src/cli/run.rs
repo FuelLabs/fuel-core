@@ -1,10 +1,24 @@
-use crate::cli::DEFAULT_DB_PATH;
-use crate::FuelService;
+use crate::{
+    cli::DEFAULT_DB_PATH,
+    FuelService,
+};
 use clap::Parser;
-use fuel_core::service::{Config, DbType, VMConfig};
-use std::{env, io, net, path::PathBuf};
+use fuel_core::service::{
+    Config,
+    DbType,
+    VMConfig,
+};
+use std::{
+    env,
+    io,
+    net,
+    path::PathBuf,
+};
 use strum::VariantNames;
-use tracing::{info, trace};
+use tracing::{
+    info,
+    trace,
+};
 #[cfg(feature = "p2p")]
 mod p2p;
 

@@ -5,10 +5,15 @@ pub mod schema {
 }
 
 use hex::FromHexError;
-use std::array::TryFromSliceError;
-use std::fmt::{self, Debug};
-use std::io::ErrorKind;
-use std::num::TryFromIntError;
+use std::{
+    array::TryFromSliceError,
+    fmt::{
+        self,
+        Debug,
+    },
+    io::ErrorKind,
+    num::TryFromIntError,
+};
 use thiserror::Error;
 
 pub use primitives::*;
@@ -265,18 +270,22 @@ pub struct PaginationRequest<T> {
 impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
     fn from(req: PaginationRequest<T>) -> Self {
         match req.direction {
-            PageDirection::Forward => Self {
-                after: req.cursor.map(Into::into),
-                before: None,
-                first: Some(req.results as i32),
-                last: None,
-            },
-            PageDirection::Backward => Self {
-                after: None,
-                before: req.cursor.map(Into::into),
-                first: None,
-                last: Some(req.results as i32),
-            },
+            PageDirection::Forward => {
+                Self {
+                    after: req.cursor.map(Into::into),
+                    before: None,
+                    first: Some(req.results as i32),
+                    last: None,
+                }
+            }
+            PageDirection::Backward => {
+                Self {
+                    after: None,
+                    before: req.cursor.map(Into::into),
+                    first: None,
+                    last: Some(req.results as i32),
+                }
+            }
         }
     }
 }

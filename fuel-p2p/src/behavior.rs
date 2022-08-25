@@ -1,37 +1,79 @@
 use crate::{
     codecs::NetworkCodec,
     config::P2PConfig,
-    discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
+    discovery::{
+        DiscoveryBehaviour,
+        DiscoveryConfig,
+        DiscoveryEvent,
+    },
     gossipsub::{
         self,
-        messages::{GossipsubBroadcastRequest, GossipsubMessage as FuelGossipsubMessage},
-        topics::{GossipTopic, GossipsubTopics},
+        messages::{
+            GossipsubBroadcastRequest,
+            GossipsubMessage as FuelGossipsubMessage,
+        },
+        topics::{
+            GossipTopic,
+            GossipsubTopics,
+        },
     },
-    peer_info::{PeerInfo, PeerInfoBehaviour, PeerInfoEvent},
+    peer_info::{
+        PeerInfo,
+        PeerInfoBehaviour,
+        PeerInfoEvent,
+    },
     request_response::messages::{
-        IntermediateResponse, OutboundResponse, RequestMessage, ResponseChannelItem, ResponseError,
+        IntermediateResponse,
+        OutboundResponse,
+        RequestMessage,
+        ResponseChannelItem,
+        ResponseError,
         ResponseMessage,
     },
 };
 use libp2p::{
     gossipsub::{
-        error::{PublishError, SubscriptionError},
-        Gossipsub, GossipsubEvent, MessageId, TopicHash,
+        error::{
+            PublishError,
+            SubscriptionError,
+        },
+        Gossipsub,
+        GossipsubEvent,
+        MessageId,
+        TopicHash,
     },
     request_response::{
-        ProtocolSupport, RequestId, RequestResponse, RequestResponseConfig, RequestResponseEvent,
-        RequestResponseMessage, ResponseChannel,
+        ProtocolSupport,
+        RequestId,
+        RequestResponse,
+        RequestResponseConfig,
+        RequestResponseEvent,
+        RequestResponseMessage,
+        ResponseChannel,
     },
     swarm::{
-        NetworkBehaviour, NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
+        NetworkBehaviour,
+        NetworkBehaviourAction,
+        NetworkBehaviourEventProcess,
+        PollParameters,
     },
-    NetworkBehaviour, PeerId,
+    NetworkBehaviour,
+    PeerId,
 };
 use std::{
-    collections::{HashMap, VecDeque},
-    task::{Context, Poll},
+    collections::{
+        HashMap,
+        VecDeque,
+    },
+    task::{
+        Context,
+        Poll,
+    },
 };
-use tracing::{debug, warn};
+use tracing::{
+    debug,
+    warn,
+};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
@@ -178,7 +220,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         }
     }
 
-    pub fn subscribe_to_topic(&mut self, topic: &GossipTopic) -> Result<bool, SubscriptionError> {
+    pub fn subscribe_to_topic(
+        &mut self,
+        topic: &GossipTopic,
+    ) -> Result<bool, SubscriptionError> {
         self.gossipsub.subscribe(topic)
     }
 
@@ -214,16 +259,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
                     .is_err()
                 {
                     debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed);
+                    return Err(ResponseError::SendingResponseFailed)
                 }
             }
             (Ok(_), None) => {
                 debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist);
+                return Err(ResponseError::ResponseChannelDoesNotExist)
             }
             (Err(e), _) => {
                 debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed);
+                return Err(ResponseError::ConversionToIntermediateFailed)
             }
         }
 
@@ -250,12 +295,16 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     /// Getter for outbound_requests_table
     /// Used only in testing in `service.rs`
     #[allow(dead_code)]
-    pub(super) fn get_outbound_requests_table(&self) -> &HashMap<RequestId, ResponseChannelItem> {
+    pub(super) fn get_outbound_requests_table(
+        &self,
+    ) -> &HashMap<RequestId, ResponseChannelItem> {
         &self.outbound_requests_table
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent> for FuelBehaviour<Codec> {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent>
+    for FuelBehaviour<Codec>
+{
     fn inject_event(&mut self, event: DiscoveryEvent) {
         match event {
             DiscoveryEvent::Connected(peer_id, addresses) => {
@@ -264,16 +313,19 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent> for FuelB
                 self.events
                     .push_back(FuelBehaviourEvent::PeerConnected(peer_id));
             }
-            DiscoveryEvent::Disconnected(peer_id) => self
-                .events
-                .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id)),
+            DiscoveryEvent::Disconnected(peer_id) => {
+                self.events
+                    .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id))
+            }
 
             _ => {}
         }
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBehaviour<Codec> {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent>
+    for FuelBehaviour<Codec>
+{
     fn inject_event(&mut self, event: PeerInfoEvent) {
         match event {
             PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
@@ -285,14 +337,17 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent> for FuelBe
                     .push_back(FuelBehaviourEvent::PeerIdentified(peer_id));
             }
 
-            PeerInfoEvent::PeerInfoUpdated { peer_id } => self
-                .events
-                .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id)),
+            PeerInfoEvent::PeerInfoUpdated { peer_id } => {
+                self.events
+                    .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id))
+            }
         }
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent> for FuelBehaviour<Codec> {
+impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent>
+    for FuelBehaviour<Codec>
+{
     fn inject_event(&mut self, message: GossipsubEvent) {
         if let GossipsubEvent::Message {
             propagation_source,
@@ -325,50 +380,59 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent> for FuelB
 }
 
 impl<Codec: NetworkCodec>
-    NetworkBehaviourEventProcess<RequestResponseEvent<RequestMessage, IntermediateResponse>>
-    for FuelBehaviour<Codec>
+    NetworkBehaviourEventProcess<
+        RequestResponseEvent<RequestMessage, IntermediateResponse>,
+    > for FuelBehaviour<Codec>
 {
-    fn inject_event(&mut self, event: RequestResponseEvent<RequestMessage, IntermediateResponse>) {
+    fn inject_event(
+        &mut self,
+        event: RequestResponseEvent<RequestMessage, IntermediateResponse>,
+    ) {
         match event {
-            RequestResponseEvent::Message { message, .. } => match message {
-                RequestResponseMessage::Request {
-                    request,
-                    channel,
-                    request_id,
-                } => {
-                    self.inbound_requests_table.insert(request_id, channel);
-                    self.events.push_back(FuelBehaviourEvent::RequestMessage {
+            RequestResponseEvent::Message { message, .. } => {
+                match message {
+                    RequestResponseMessage::Request {
+                        request,
+                        channel,
                         request_id,
-                        request_message: request,
-                    })
-                }
-                RequestResponseMessage::Response {
-                    request_id,
-                    response,
-                } => {
-                    match (
-                        self.outbound_requests_table.remove(&request_id),
-                        self.codec.convert_to_response(&response),
-                    ) {
-                        (
-                            Some(ResponseChannelItem::ResponseBlock(channel)),
-                            Ok(ResponseMessage::ResponseBlock(block)),
-                        ) => {
-                            if channel.send(block).is_err() {
-                                debug!("Failed to send through the channel for {:?}", request_id);
+                    } => {
+                        self.inbound_requests_table.insert(request_id, channel);
+                        self.events.push_back(FuelBehaviourEvent::RequestMessage {
+                            request_id,
+                            request_message: request,
+                        })
+                    }
+                    RequestResponseMessage::Response {
+                        request_id,
+                        response,
+                    } => {
+                        match (
+                            self.outbound_requests_table.remove(&request_id),
+                            self.codec.convert_to_response(&response),
+                        ) {
+                            (
+                                Some(ResponseChannelItem::ResponseBlock(channel)),
+                                Ok(ResponseMessage::ResponseBlock(block)),
+                            ) => {
+                                if channel.send(block).is_err() {
+                                    debug!(
+                                        "Failed to send through the channel for {:?}",
+                                        request_id
+                                    );
+                                }
                             }
-                        }
 
-                        (Some(_), Err(e)) => {
-                            debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
+                            (Some(_), Err(e)) => {
+                                debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
+                            }
+                            (None, Ok(_)) => {
+                                debug!("Send channel not found for {:?}", request_id);
+                            }
+                            _ => {}
                         }
-                        (None, Ok(_)) => {
-                            debug!("Send channel not found for {:?}", request_id);
-                        }
-                        _ => {}
                     }
                 }
-            },
+            }
             RequestResponseEvent::InboundFailure {
                 peer,
                 error,

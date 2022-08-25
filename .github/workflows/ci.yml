@@ -19,6 +19,20 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt
+
+      - name: Rustfmt check
+        run: cargo +nightly fmt --all -- --check
+
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
@@ -75,8 +89,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - command: fmt
-            args: --all --verbose -- --check
           - command: clippy
             args: --all-targets --all-features
           - command: make

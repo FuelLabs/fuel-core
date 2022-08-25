@@ -1,14 +1,28 @@
-use crate::{abi, config};
+use crate::{
+    abi,
+    config,
+};
 use anyhow::anyhow;
 use ethers_contract::EthEvent;
 use ethers_core::{
     abi::RawLog,
-    types::{Log, U256},
+    types::{
+        Log,
+        U256,
+    },
 };
-use fuel_core_interfaces::model::DaBlockHeight;
 use fuel_core_interfaces::{
-    common::fuel_types::{Address, Bytes32, Word},
-    model::{ConsensusId, Message, ValidatorId},
+    common::fuel_types::{
+        Address,
+        Bytes32,
+        Word,
+    },
+    model::{
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        ValidatorId,
+    },
 };
 
 /// Bridge message send from da to fuel network.
@@ -79,13 +93,13 @@ impl TryFrom<&Log> for EthEventLog {
 
     fn try_from(log: &Log) -> Result<Self, Self::Error> {
         if log.topics.is_empty() {
-            return Err(anyhow!("Topic list is empty"));
+            return Err(anyhow!("Topic list is empty"))
         }
 
         let log = match log.topics[0] {
             n if n == *config::ETH_LOG_MESSAGE => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for Message"));
+                    return Err(anyhow!("Malformed topics for Message"))
                 }
 
                 let raw_log = RawLog {
@@ -116,7 +130,7 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_VALIDATOR_REGISTRATION => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for ValidatorRegistration"));
+                    return Err(anyhow!("Malformed topics for ValidatorRegistration"))
                 }
                 let staking_key =
                     unsafe { ValidatorId::from_slice_unchecked(log.topics[1].as_ref()) };
@@ -130,7 +144,7 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_VALIDATOR_UNREGISTRATION => {
                 if log.topics.len() != 2 {
-                    return Err(anyhow!("Malformed topics for ValidatorUnregistration"));
+                    return Err(anyhow!("Malformed topics for ValidatorUnregistration"))
                 }
                 let staking_key =
                     unsafe { ValidatorId::from_slice_unchecked(log.topics[1].as_ref()) };
@@ -139,10 +153,12 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_DEPOSIT => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for ValidatorRegistration"));
+                    return Err(anyhow!("Malformed topics for ValidatorRegistration"))
                 }
-                let depositor = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
-                let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
+                let depositor =
+                    unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let amount =
+                    unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
 
                 let amount = <[u8; 8]>::try_from(&amount[24..])
                     .map(u64::from_be_bytes)
@@ -152,10 +168,12 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_WITHDRAWAL => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for Withdrawal"));
+                    return Err(anyhow!("Malformed topics for Withdrawal"))
                 }
-                let withdrawer = unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
-                let amount = unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
+                let withdrawer =
+                    unsafe { Address::from_slice_unchecked(log.topics[1].as_ref()) };
+                let amount =
+                    unsafe { Bytes32::from_slice_unchecked(log.topics[2].as_ref()) };
 
                 let amount = <[u8; 8]>::try_from(&amount[24..])
                     .map(u64::from_be_bytes)
@@ -165,7 +183,7 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_LOG_DELEGATION => {
                 if log.topics.len() != 2 {
-                    return Err(anyhow!("Malformed topics for Delegation"));
+                    return Err(anyhow!("Malformed topics for Delegation"))
                 }
 
                 let raw_log = RawLog {
@@ -203,13 +221,15 @@ impl TryFrom<&Log> for EthEventLog {
             }
             n if n == *config::ETH_FUEL_BLOCK_COMMITTED => {
                 if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for FuelBlockCommitted"));
+                    return Err(anyhow!("Malformed topics for FuelBlockCommitted"))
                 }
-                let block_root = unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
+                let block_root =
+                    unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
 
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
-                    .expect("Slice bounds are predefined") as u64;
+                    .expect("Slice bounds are predefined")
+                    as u64;
 
                 Self::FuelBlockCommitted { block_root, height }
             }
@@ -223,10 +243,21 @@ impl TryFrom<&Log> for EthEventLog {
 #[cfg(test)]
 pub mod tests {
 
-    use bytes::{Bytes, BytesMut};
-    use ethers_core::types::{Bytes as EthersBytes, H160, H256, U64};
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use bytes::{
+        Bytes,
+        BytesMut,
+    };
+    use ethers_core::types::{
+        Bytes as EthersBytes,
+        H160,
+        H256,
+        U64,
+    };
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     use super::*;
     use crate::config;
@@ -247,7 +278,10 @@ pub mod tests {
         )
     }
 
-    pub fn eth_log_validator_unregistration(eth_block: u64, staking_key: ValidatorId) -> Log {
+    pub fn eth_log_validator_unregistration(
+        eth_block: u64,
+        staking_key: ValidatorId,
+    ) -> Log {
         log_default(
             eth_block,
             vec![

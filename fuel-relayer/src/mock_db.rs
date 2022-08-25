@@ -2,21 +2,39 @@ use async_trait::async_trait;
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::{Arc, Mutex},
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage,
-        fuel_tx::{Address, MessageId},
+        fuel_tx::{
+            Address,
+            MessageId,
+        },
     },
     db::KvStoreError,
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, Message, SealedFuelBlock, ValidatorId,
+        BlockHeight,
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        SealedFuelBlock,
+        ValidatorId,
         ValidatorStake,
     },
-    relayer::{RelayerDb, StakingDiff, ValidatorSet},
+    relayer::{
+        RelayerDb,
+        StakingDiff,
+        ValidatorSet,
+    },
 };
 
 #[derive(Default)]
@@ -50,7 +68,11 @@ impl MockDb {
 impl Storage<MessageId, Message> for MockDb {
     type Error = KvStoreError;
 
-    fn insert(&mut self, key: &MessageId, value: &Message) -> Result<Option<Message>, Self::Error> {
+    fn insert(
+        &mut self,
+        key: &MessageId,
+        value: &Message,
+    ) -> Result<Option<Message>, Self::Error> {
         Ok(self
             .data
             .lock()
@@ -130,7 +152,10 @@ impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
             .insert(*key, value.clone()))
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
+    fn remove(
+        &mut self,
+        key: &Address,
+    ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
         Ok(self.data.lock().unwrap().delegator_index.remove(key))
     }
 
@@ -165,7 +190,10 @@ impl Storage<DaBlockHeight, StakingDiff> for MockDb {
             .insert(*key, value.clone()))
     }
 
-    fn remove(&mut self, key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
+    fn remove(
+        &mut self,
+        key: &DaBlockHeight,
+    ) -> Result<Option<StakingDiff>, Self::Error> {
         Ok(self.data.lock().unwrap().staking_diffs.remove(key))
     }
 
@@ -190,7 +218,10 @@ impl RelayerDb for MockDb {
         self.data.lock().unwrap().chain_height
     }
 
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+    async fn get_sealed_block(
+        &self,
+        height: BlockHeight,
+    ) -> Option<Arc<SealedFuelBlock>> {
         self.data
             .lock()
             .unwrap()
@@ -244,7 +275,7 @@ impl RelayerDb for MockDb {
             if *block >= from_da_height {
                 if let Some(end_block) = to_da_height {
                     if *block > end_block {
-                        break;
+                        break
                     }
                 }
                 out.push((*block, diff.clone()));

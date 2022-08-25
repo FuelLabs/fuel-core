@@ -1,11 +1,32 @@
 use crate::{
-    database::{columns::BLOCKS, columns::BLOCK_IDS, Database, KvStoreError},
-    model::{BlockHeight, FuelBlockDb},
-    state::{Error, IterDirection},
+    database::{
+        columns::{
+            BLOCKS,
+            BLOCK_IDS,
+        },
+        Database,
+        KvStoreError,
+    },
+    model::{
+        BlockHeight,
+        FuelBlockDb,
+    },
+    state::{
+        Error,
+        IterDirection,
+    },
 };
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx::Bytes32};
-use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx::Bytes32,
+};
+use std::{
+    borrow::Cow,
+    convert::{
+        TryFrom,
+        TryInto,
+    },
+};
 
 impl Storage<Bytes32, FuelBlockDb> for Database {
     type Error = KvStoreError;

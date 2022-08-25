@@ -1,7 +1,15 @@
-use crate::database::{columns, Database, KvStoreError};
+use crate::database::{
+    columns,
+    Database,
+    KvStoreError,
+};
 use fuel_core_interfaces::{
     common::fuel_storage::Storage,
-    model::{ConsensusId, ValidatorId, ValidatorStake},
+    model::{
+        ConsensusId,
+        ValidatorId,
+        ValidatorStake,
+    },
 };
 use std::borrow::Cow;
 
@@ -13,7 +21,8 @@ impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for Database {
         key: &ValidatorId,
         value: &(ValidatorStake, Option<ConsensusId>),
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, KvStoreError> {
-        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, *value).map_err(Into::into)
+        Database::insert(self, key.as_ref(), columns::VALIDATOR_SET, *value)
+            .map_err(Into::into)
     }
 
     fn remove(

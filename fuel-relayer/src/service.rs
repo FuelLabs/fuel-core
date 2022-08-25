@@ -1,13 +1,33 @@
-use crate::{Config, Relayer};
-use anyhow::{anyhow, Error};
-use ethers_providers::{Http, Middleware, Provider, ProviderError, Ws};
+use crate::{
+    Config,
+    Relayer,
+};
+use anyhow::{
+    anyhow,
+    Error,
+};
+use ethers_providers::{
+    Http,
+    Middleware,
+    Provider,
+    ProviderError,
+    Ws,
+};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    relayer::{self, RelayerDb, RelayerRequest},
+    relayer::{
+        self,
+        RelayerDb,
+        RelayerRequest,
+    },
 };
 use std::sync::Arc;
 use tokio::{
-    sync::{broadcast, mpsc, Mutex},
+    sync::{
+        broadcast,
+        mpsc,
+        Mutex,
+    },
     task::JoinHandle,
 };
 use url::Url;
@@ -68,8 +88,11 @@ impl ServiceBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Service> {
-        if self.private_key.is_none() || self.db.is_none() || self.import_block_events.is_none() {
-            return Err(anyhow!("One of context items are not set"));
+        if self.private_key.is_none()
+            || self.db.is_none()
+            || self.import_block_events.is_none()
+        {
+            return Err(anyhow!("One of context items are not set"))
         }
         let service = Service::new(
             self.sender,
@@ -116,16 +139,16 @@ impl Service {
     /// create provider that we use for communication with ethereum.
     pub(crate) async fn provider_ws(uri: &str) -> Result<Provider<Ws>, Error> {
         let ws = Ws::connect(uri).await?;
-        let provider =
-            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
+        let provider = Provider::new(ws)
+            .interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
         Ok(provider)
     }
 
     pub(crate) fn provider_http(uri: &str) -> Result<Provider<Http>, Error> {
         let url = Url::parse(uri).unwrap();
         let ws = Http::new(url);
-        let provider =
-            Provider::new(ws).interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
+        let provider = Provider::new(ws)
+            .interval(std::time::Duration::from_millis(PROVIDER_INTERVAL));
         Ok(provider)
     }
 
@@ -143,7 +166,7 @@ impl Service {
             Ok(provider) => provider,
             Err(e) => {
                 *self.context.lock().await = Some(context);
-                return Err(e);
+                return Err(e)
             }
         };
         let relayer = Relayer::new(context).await;

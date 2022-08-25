@@ -1,14 +1,29 @@
-use crate::{types::*, Error};
+use crate::{
+    types::*,
+    Error,
+};
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
-        fuel_tx::{Input, Output, UtxoId},
+        fuel_tx::{
+            Input,
+            Output,
+            UtxoId,
+        },
         fuel_types::MessageId,
     },
-    model::{ArcTx, Coin, CoinStatus, TxInfo},
+    model::{
+        ArcTx,
+        Coin,
+        CoinStatus,
+        TxInfo,
+    },
     txpool::TxPoolDb,
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::{
+    HashMap,
+    HashSet,
+};
 use tracing::warn;
 
 /// Check and hold dependency between inputs and outputs. Be mindful
@@ -134,7 +149,10 @@ impl Dependency {
         }
     }
 
-    fn check_if_coin_input_can_spend_db_coin(coin: &Coin, input: &Input) -> anyhow::Result<()> {
+    fn check_if_coin_input_can_spend_db_coin(
+        coin: &Coin,
+        input: &Input,
+    ) -> anyhow::Result<()> {
         match input {
             Input::CoinSigned {
                 utxo_id,
@@ -151,16 +169,16 @@ impl Dependency {
                 ..
             } => {
                 if *owner != coin.owner {
-                    return Err(Error::NotInsertedIoWrongOwner.into());
+                    return Err(Error::NotInsertedIoWrongOwner.into())
                 }
                 if *amount != coin.amount {
-                    return Err(Error::NotInsertedIoWrongAmount.into());
+                    return Err(Error::NotInsertedIoWrongAmount.into())
                 }
                 if *asset_id != coin.asset_id {
-                    return Err(Error::NotInsertedIoWrongAssetId.into());
+                    return Err(Error::NotInsertedIoWrongAssetId.into())
                 }
                 if coin.status == CoinStatus::Spent {
-                    return Err(Error::NotInsertedInputUtxoIdSpent(*utxo_id).into());
+                    return Err(Error::NotInsertedInputUtxoIdSpent(*utxo_id).into())
                 }
                 Ok(())
             }
@@ -196,18 +214,20 @@ impl Dependency {
                     asset_id,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into());
+                        return Err(Error::NotInsertedIoWrongOwner.into())
                     }
                     if amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into());
+                        return Err(Error::NotInsertedIoWrongAmount.into())
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into());
+                        return Err(Error::NotInsertedIoWrongAssetId.into())
                     }
                 }
-                Output::Contract { .. } => return Err(Error::NotInsertedIoContractOutput.into()),
+                Output::Contract { .. } => {
+                    return Err(Error::NotInsertedIoContractOutput.into())
+                }
                 Output::Message { .. } => {
-                    return Err(Error::NotInsertedIoMessageInput.into());
+                    return Err(Error::NotInsertedIoMessageInput.into())
                 }
                 Output::Change {
                     to,
@@ -215,13 +235,13 @@ impl Dependency {
                     amount,
                 } => {
                     if to != i_owner {
-                        return Err(Error::NotInsertedIoWrongOwner.into());
+                        return Err(Error::NotInsertedIoWrongOwner.into())
                     }
                     if asset_id != i_asset_id {
-                        return Err(Error::NotInsertedIoWrongAssetId.into());
+                        return Err(Error::NotInsertedIoWrongAssetId.into())
                     }
                     if is_output_filled && amount != i_amount {
-                        return Err(Error::NotInsertedIoWrongAmount.into());
+                        return Err(Error::NotInsertedIoWrongAmount.into())
                     }
                 }
                 Output::Variable {
@@ -231,13 +251,13 @@ impl Dependency {
                 } => {
                     if is_output_filled {
                         if to != i_owner {
-                            return Err(Error::NotInsertedIoWrongOwner.into());
+                            return Err(Error::NotInsertedIoWrongOwner.into())
                         }
                         if amount != i_amount {
-                            return Err(Error::NotInsertedIoWrongAmount.into());
+                            return Err(Error::NotInsertedIoWrongAmount.into())
                         }
                         if asset_id != i_asset_id {
-                            return Err(Error::NotInsertedIoWrongAssetId.into());
+                            return Err(Error::NotInsertedIoWrongAssetId.into())
                         }
                     }
                     // else do nothing, everything is variable and can be only check on execution
@@ -247,7 +267,7 @@ impl Dependency {
                 }
             };
         } else {
-            return Err(anyhow!("Use it only for coin output check"));
+            return Err(anyhow!("Use it only for coin output check"))
         }
         Ok(())
     }
@@ -275,10 +295,11 @@ impl Dependency {
                 data,
                 ..
             } => {
-                let computed_id =
-                    Input::compute_message_id(sender, recipient, *nonce, owner, *amount, data);
+                let computed_id = Input::compute_message_id(
+                    sender, recipient, *nonce, owner, *amount, data,
+                );
                 if message_id != &computed_id {
-                    return Err(Error::NotInsertedIoWrongMessageId.into());
+                    return Err(Error::NotInsertedIoWrongMessageId.into())
                 }
             }
             _ => {}
@@ -312,13 +333,14 @@ impl Dependency {
         for input in tx.inputs() {
             // check if all required inputs are here.
             match input {
-                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
                     // is it dependent output?
                     if let Some(state) = self.coins.get(utxo_id) {
                         // check depth
                         max_depth = core::cmp::max(state.depth + 1, max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into());
+                            return Err(Error::NotInsertedMaxDepth.into())
                         }
                         // output is present but is it spend by other tx?
                         if let Some(ref spend_by) = state.is_spend_by {
@@ -328,19 +350,26 @@ impl Dependency {
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
                             if txpool_tx.gas_price() > tx.gas_price() {
-                                return Err(Error::NotInsertedCollision(*spend_by, *utxo_id).into());
+                                return Err(Error::NotInsertedCollision(
+                                    *spend_by, *utxo_id,
+                                )
+                                .into())
                             } else {
                                 if state.is_in_database() {
-                                    //this means it is loaded from db. Get tx to compare output.
+                                    // this means it is loaded from db. Get tx to compare output.
                                     let coin = db.utxo(utxo_id)?.ok_or(
-                                        Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
+                                        Error::NotInsertedInputUtxoIdNotExisting(
+                                            *utxo_id,
+                                        ),
                                     )?;
-                                    Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                                    Self::check_if_coin_input_can_spend_db_coin(
+                                        &coin, input,
+                                    )?;
                                 } else {
                                     // tx output is in pool
                                     let output_tx = txs.get(utxo_id.tx_id()).unwrap();
-                                    let output =
-                                        &output_tx.outputs()[utxo_id.output_index() as usize];
+                                    let output = &output_tx.outputs()
+                                        [utxo_id.output_index() as usize];
                                     Self::check_if_coin_input_can_spend_output(
                                         output, input, false,
                                     )?;
@@ -377,10 +406,14 @@ impl Dependency {
                     if let Some(msg) = db.message(*message_id)? {
                         // return an error if spent block is set
                         if msg.fuel_block_spend.is_some() {
-                            return Err(Error::NotInsertedInputMessageIdSpent(*message_id).into());
+                            return Err(
+                                Error::NotInsertedInputMessageIdSpent(*message_id).into()
+                            )
                         }
                     } else {
-                        return Err(Error::NotInsertedInputMessageUnknown(*message_id).into());
+                        return Err(
+                            Error::NotInsertedInputMessageUnknown(*message_id).into()
+                        )
                     }
 
                     if let Some(state) = self.messages.get(message_id) {
@@ -390,7 +423,7 @@ impl Dependency {
                                 state.spent_by,
                                 *message_id,
                             )
-                            .into());
+                            .into())
                         } else {
                             collided.push(state.spent_by);
                         }
@@ -408,18 +441,22 @@ impl Dependency {
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
                         if tx.gas_price() > state.gas_price {
-                            return Err(Error::NotInsertedContractPricedLower(*contract_id).into());
+                            return Err(Error::NotInsertedContractPricedLower(
+                                *contract_id,
+                            )
+                            .into())
                         }
                         // check depth.
                         max_depth = core::cmp::max(state.depth, max_depth);
                         if max_depth > self.max_depth {
-                            return Err(Error::NotInsertedMaxDepth.into());
+                            return Err(Error::NotInsertedMaxDepth.into())
                         }
                     } else {
                         if !db.contract_exist(*contract_id)? {
-                            return Err(
-                                Error::NotInsertedInputContractNotExisting(*contract_id).into()
-                            );
+                            return Err(Error::NotInsertedInputContractNotExisting(
+                                *contract_id,
+                            )
+                            .into())
                         }
                         // add depth
                         max_depth = core::cmp::max(1, max_depth);
@@ -429,7 +466,7 @@ impl Dependency {
                             .or_insert(ContractState {
                                 used_by: HashSet::new(),
                                 depth: 0,
-                                origin: None, //there is no owner if contract is in db
+                                origin: None, // there is no owner if contract is in db
                                 gas_price: GasPrice::MAX,
                             })
                             .used_by
@@ -447,12 +484,16 @@ impl Dependency {
                 if let Some(contract) = self.contracts.get(contract_id) {
                     // we have a collision :(
                     if contract.is_in_database() {
-                        return Err(Error::NotInsertedContractIdAlreadyTaken(*contract_id).into());
+                        return Err(
+                            Error::NotInsertedContractIdAlreadyTaken(*contract_id).into()
+                        )
                     }
                     // check who is priced more
                     if contract.gas_price > tx.gas_price() {
                         // new tx is priced less then current tx
-                        return Err(Error::NotInsertedCollisionContractId(*contract_id).into());
+                        return Err(
+                            Error::NotInsertedCollisionContractId(*contract_id).into()
+                        )
                     }
                     // if we are prices more, mark current contract origin for removal.
                     let origin = contract.origin.expect(
@@ -484,13 +525,16 @@ impl Dependency {
             let collided = txs
                 .get(&collided)
                 .expect("Collided should be present in txpool");
-            removed_tx.extend(self.recursively_remove_all_dependencies(txs, collided.tx().clone()));
+            removed_tx.extend(
+                self.recursively_remove_all_dependencies(txs, collided.tx().clone()),
+            );
         }
 
         // iterate over all inputs and spend parent coins/contracts
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
                     // spend coin
                     if let Some(state) = self.coins.get_mut(utxo_id) {
                         state.is_spend_by = Some(tx.id());
@@ -575,9 +619,13 @@ impl Dependency {
                     if let Some(state) = self.coins.remove(&utxo).map(|c| c.is_spend_by) {
                         // there may or may not be any dependents for this coin output
                         if let Some(spend_by) = state {
-                            let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
+                            let rem_tx =
+                                txs.get(&spend_by).expect("Tx should be present in txs");
                             removed_transactions.extend(
-                                self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                                self.recursively_remove_all_dependencies(
+                                    txs,
+                                    rem_tx.tx().clone(),
+                                ),
                             );
                         }
                     } else {
@@ -590,9 +638,13 @@ impl Dependency {
                     // remove any other pending txs that depend on our yet to be created contract
                     if let Some(contract) = self.contracts.remove(contract_id) {
                         for spend_by in contract.used_by {
-                            let rem_tx = txs.get(&spend_by).expect("Tx should be present in txs");
+                            let rem_tx =
+                                txs.get(&spend_by).expect("Tx should be present in txs");
                             removed_transactions.extend(
-                                self.recursively_remove_all_dependencies(txs, rem_tx.tx().clone()),
+                                self.recursively_remove_all_dependencies(
+                                    txs,
+                                    rem_tx.tx().clone(),
+                                ),
                             );
                         }
                     }
@@ -603,7 +655,8 @@ impl Dependency {
         // remove this transaction as a dependency of its' inputs.
         for input in tx.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
                     // Input coin cases
                     // 1. coin state was already removed if parent tx was also removed, no cleanup required.
                     // 2. coin state spent_by needs to be freed from this tx if parent tx isn't being removed
@@ -650,7 +703,11 @@ mod tests {
     use std::str::FromStr;
 
     use fuel_core_interfaces::common::{
-        fuel_tx::{Address, AssetId, UtxoId},
+        fuel_tx::{
+            Address,
+            AssetId,
+            UtxoId,
+        },
         fuel_types::Bytes32,
     };
 
@@ -672,7 +729,8 @@ mod tests {
             witness_index: 0,
             maturity: 0,
         };
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_ok(), "test1. It should be Ok");
 
         let output = Output::Coin {
@@ -681,7 +739,8 @@ mod tests {
             asset_id: AssetId::default(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test2 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -698,7 +757,8 @@ mod tests {
             asset_id: AssetId::default(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test3 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -715,7 +775,8 @@ mod tests {
             .unwrap(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test4 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -732,7 +793,8 @@ mod tests {
             .unwrap(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test5 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -746,7 +808,8 @@ mod tests {
             state_root: Default::default(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test6 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -759,7 +822,8 @@ mod tests {
             amount: 0,
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test7 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),
@@ -772,7 +836,8 @@ mod tests {
             state_root: Bytes32::default(),
         };
 
-        let out = Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
+        let out =
+            Dependency::check_if_coin_input_can_spend_output(&output, &input, false);
         assert!(out.is_err(), "test8 There should be error");
         assert_eq!(
             out.err().unwrap().downcast_ref(),

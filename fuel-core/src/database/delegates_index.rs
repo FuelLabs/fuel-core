@@ -1,6 +1,13 @@
-use crate::database::{columns, Database, KvStoreError};
+use crate::database::{
+    columns,
+    Database,
+    KvStoreError,
+};
 use fuel_core_interfaces::{
-    common::{fuel_storage::Storage, fuel_types::Address},
+    common::{
+        fuel_storage::Storage,
+        fuel_types::Address,
+    },
     model::DaBlockHeight,
 };
 use std::borrow::Cow;
@@ -19,11 +26,17 @@ impl Storage<Address, Vec<DaBlockHeight>> for Database {
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
+    fn remove(
+        &mut self,
+        key: &Address,
+    ) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
         Database::remove(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 
-    fn get(&self, key: &Address) -> Result<Option<Cow<Vec<DaBlockHeight>>>, KvStoreError> {
+    fn get(
+        &self,
+        key: &Address,
+    ) -> Result<Option<Cow<Vec<DaBlockHeight>>>, KvStoreError> {
         Database::get(self, key.as_ref(), columns::VALIDATOR_SET).map_err(Into::into)
     }
 

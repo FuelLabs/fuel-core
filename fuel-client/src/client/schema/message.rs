@@ -1,5 +1,14 @@
-use super::{PageDirection, PageInfo, PaginatedResult, PaginationRequest};
-use crate::client::schema::{schema, Address, U64};
+use super::{
+    PageDirection,
+    PageInfo,
+    PaginatedResult,
+    PaginationRequest,
+};
+use crate::client::schema::{
+    schema,
+    Address,
+    U64,
+};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -57,20 +66,24 @@ pub struct OwnedMessagesConnectionArgs {
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {
     fn from(r: (Option<Address>, PaginationRequest<String>)) -> Self {
         match r.1.direction {
-            PageDirection::Forward => OwnedMessagesConnectionArgs {
-                owner: r.0,
-                after: r.1.cursor,
-                before: None,
-                first: Some(r.1.results as i32),
-                last: None,
-            },
-            PageDirection::Backward => OwnedMessagesConnectionArgs {
-                owner: r.0,
-                after: None,
-                before: r.1.cursor,
-                first: None,
-                last: Some(r.1.results as i32),
-            },
+            PageDirection::Forward => {
+                OwnedMessagesConnectionArgs {
+                    owner: r.0,
+                    after: r.1.cursor,
+                    before: None,
+                    first: Some(r.1.results as i32),
+                    last: None,
+                }
+            }
+            PageDirection::Backward => {
+                OwnedMessagesConnectionArgs {
+                    owner: r.0,
+                    after: None,
+                    before: r.1.cursor,
+                    first: None,
+                    last: Some(r.1.results as i32),
+                }
+            }
         }
     }
 }

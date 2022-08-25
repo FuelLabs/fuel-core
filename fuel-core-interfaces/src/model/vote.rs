@@ -1,4 +1,7 @@
-use fuel_crypto::{PublicKey, Signature};
+use fuel_crypto::{
+    PublicKey,
+    Signature,
+};
 use fuel_types::Bytes32;
 
 /// A vote from a validator.
@@ -11,6 +14,6 @@ pub struct ConsensusVote {
     height: u64,
     round: u64,
     signature: Signature,
-    //step: Step,
+    // step: Step,
     validator: PublicKey,
 }

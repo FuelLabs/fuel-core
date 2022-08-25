@@ -1,13 +1,27 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::common::{
-    fuel_tx::{AssetId, Input, Output},
+    fuel_tx::{
+        AssetId,
+        Input,
+        Output,
+    },
     fuel_vm::prelude::Address,
 };
 use fuel_gql_client::{
-    client::{FuelClient, PageDirection, PaginationRequest},
+    client::{
+        FuelClient,
+        PageDirection,
+        PaginationRequest,
+    },
     fuel_tx::TransactionBuilder,
 };
 
@@ -28,14 +42,16 @@ async fn balance() {
                 (owner, 150, asset_id),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                block_created: None,
-                maturity: None,
-                owner,
-                amount,
-                asset_id,
+            .map(|(owner, amount, asset_id)| {
+                CoinConfig {
+                    tx_id: None,
+                    output_index: None,
+                    block_created: None,
+                    maturity: None,
+                    owner,
+                    amount,
+                    asset_id,
+                }
             })
             .collect(),
         ),
@@ -130,14 +146,16 @@ async fn first_5_balances() {
                         (owner, 150, asset_id),
                     ]
                 })
-                .map(|(owner, amount, asset_id)| CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner,
-                    amount,
-                    asset_id,
+                .map(|(owner, amount, asset_id)| {
+                    CoinConfig {
+                        tx_id: None,
+                        output_index: None,
+                        block_created: None,
+                        maturity: None,
+                        owner,
+                        amount,
+                        asset_id,
+                    }
                 })
                 .collect(),
         ),

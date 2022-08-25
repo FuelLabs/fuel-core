@@ -1,10 +1,25 @@
 use fuel_core_interfaces::{
     common::fuel_tx::Address,
-    model::{ConsensusId, DaBlockHeight, ValidatorId, ValidatorStake},
-    relayer::{RelayerDb, ValidatorDiff},
+    model::{
+        ConsensusId,
+        DaBlockHeight,
+        ValidatorId,
+        ValidatorStake,
+    },
+    relayer::{
+        RelayerDb,
+        ValidatorDiff,
+    },
 };
-use std::collections::{hash_map::Entry, HashMap};
-use tracing::{debug, error, info};
+use std::collections::{
+    hash_map::Entry,
+    HashMap,
+};
+use tracing::{
+    debug,
+    error,
+    info,
+};
 
 /// It contains list of Validators and its stake and consensus public key.
 /// We don't expect big number of validators in that sense we are okay to have it all in memory
@@ -48,7 +63,9 @@ impl Validators {
                 let set = self
                     .set
                     .iter()
-                    .filter(|(_, (stake, consensus_key))| *stake != 0 && consensus_key.is_some())
+                    .filter(|(_, (stake, consensus_key))| {
+                        *stake != 0 && consensus_key.is_some()
+                    })
                     .map(|(k, v)| (*k, *v))
                     .collect();
                 Some(set)
@@ -112,8 +129,9 @@ impl Validators {
                     }
                 }
 
-                validators
-                    .retain(|_, (stake, consensus_key)| *stake != 0 && consensus_key.is_some());
+                validators.retain(|_, (stake, consensus_key)| {
+                    *stake != 0 && consensus_key.is_some()
+                });
                 Some(validators)
             }
         }
@@ -131,7 +149,7 @@ impl Validators {
             std::cmp::Ordering::Equal => {
                 // unusual but do nothing
                 info!("Already on same validator set height {da_height}");
-                return;
+                return
             }
             std::cmp::Ordering::Greater => {
                 // happens when initiating watch for ganache new blocks, it buffers few old blocks and sends them over.
@@ -139,7 +157,7 @@ impl Validators {
                     "current height {} is greater then new height {da_height}",
                     self.da_height
                 );
-                return;
+                return
             }
         }
 
@@ -148,8 +166,10 @@ impl Validators {
         let diffs = db
             .get_staking_diffs(self.da_height + 1, Some(da_height))
             .await;
-        let mut delegates_cached: HashMap<Address, Option<HashMap<ValidatorId, ValidatorStake>>> =
-            HashMap::new();
+        let mut delegates_cached: HashMap<
+            Address,
+            Option<HashMap<ValidatorId, ValidatorStake>>,
+        > = HashMap::new();
         for (diff_height, diff) in diffs.into_iter() {
             // update consensus_key
             for (
@@ -161,7 +181,9 @@ impl Validators {
             {
                 validators
                     .entry(validator)
-                    .or_insert_with(|| self.set.get(&validator).cloned().unwrap_or_default())
+                    .or_insert_with(|| {
+                        self.set.get(&validator).cloned().unwrap_or_default()
+                    })
                     .1 = new_consensus_key;
             }
 

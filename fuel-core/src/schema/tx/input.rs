@@ -1,9 +1,21 @@
-use crate::schema::scalars::TxPointer;
 use crate::schema::{
     contract::Contract,
-    scalars::{Address, AssetId, Bytes32, ContractId, HexString, MessageId, UtxoId, U64},
+    scalars::{
+        Address,
+        AssetId,
+        Bytes32,
+        ContractId,
+        HexString,
+        MessageId,
+        TxPointer,
+        UtxoId,
+        U64,
+    },
 };
-use async_graphql::{Object, Union};
+use async_graphql::{
+    Object,
+    Union,
+};
 use fuel_core_interfaces::common::fuel_tx;
 
 #[derive(Union)]
@@ -162,17 +174,19 @@ impl From<&fuel_tx::Input> for Input {
                 tx_pointer,
                 witness_index,
                 maturity,
-            } => Input::Coin(InputCoin {
-                utxo_id: UtxoId(*utxo_id),
-                owner: Address(*owner),
-                amount: (*amount).into(),
-                asset_id: AssetId(*asset_id),
-                tx_pointer: TxPointer(*tx_pointer),
-                witness_index: *witness_index,
-                maturity: (*maturity).into(),
-                predicate: HexString(Default::default()),
-                predicate_data: HexString(Default::default()),
-            }),
+            } => {
+                Input::Coin(InputCoin {
+                    utxo_id: UtxoId(*utxo_id),
+                    owner: Address(*owner),
+                    amount: (*amount).into(),
+                    asset_id: AssetId(*asset_id),
+                    tx_pointer: TxPointer(*tx_pointer),
+                    witness_index: *witness_index,
+                    maturity: (*maturity).into(),
+                    predicate: HexString(Default::default()),
+                    predicate_data: HexString(Default::default()),
+                })
+            }
             fuel_tx::Input::CoinPredicate {
                 utxo_id,
                 owner,
@@ -182,30 +196,34 @@ impl From<&fuel_tx::Input> for Input {
                 maturity,
                 predicate,
                 predicate_data,
-            } => Input::Coin(InputCoin {
-                utxo_id: UtxoId(*utxo_id),
-                owner: Address(*owner),
-                amount: (*amount).into(),
-                asset_id: AssetId(*asset_id),
-                tx_pointer: TxPointer(*tx_pointer),
-                witness_index: Default::default(),
-                maturity: (*maturity).into(),
-                predicate: HexString(predicate.clone()),
-                predicate_data: HexString(predicate_data.clone()),
-            }),
+            } => {
+                Input::Coin(InputCoin {
+                    utxo_id: UtxoId(*utxo_id),
+                    owner: Address(*owner),
+                    amount: (*amount).into(),
+                    asset_id: AssetId(*asset_id),
+                    tx_pointer: TxPointer(*tx_pointer),
+                    witness_index: Default::default(),
+                    maturity: (*maturity).into(),
+                    predicate: HexString(predicate.clone()),
+                    predicate_data: HexString(predicate_data.clone()),
+                })
+            }
             fuel_tx::Input::Contract {
                 utxo_id,
                 balance_root,
                 state_root,
                 tx_pointer,
                 contract_id,
-            } => Input::Contract(InputContract {
-                utxo_id: UtxoId(*utxo_id),
-                balance_root: Bytes32(*balance_root),
-                state_root: Bytes32(*state_root),
-                tx_pointer: TxPointer(*tx_pointer),
-                contract_id: ContractId(*contract_id),
-            }),
+            } => {
+                Input::Contract(InputContract {
+                    utxo_id: UtxoId(*utxo_id),
+                    balance_root: Bytes32(*balance_root),
+                    state_root: Bytes32(*state_root),
+                    tx_pointer: TxPointer(*tx_pointer),
+                    contract_id: ContractId(*contract_id),
+                })
+            }
             fuel_tx::Input::MessageSigned {
                 message_id,
                 sender,
@@ -215,18 +233,20 @@ impl From<&fuel_tx::Input> for Input {
                 owner,
                 witness_index,
                 data,
-            } => Input::Message(InputMessage {
-                message_id: MessageId(*message_id),
-                sender: Address(*sender),
-                recipient: Address(*recipient),
-                amount: (*amount).into(),
-                nonce: (*nonce).into(),
-                owner: Address(*owner),
-                witness_index: *witness_index,
-                data: HexString(data.clone()),
-                predicate: HexString(Default::default()),
-                predicate_data: HexString(Default::default()),
-            }),
+            } => {
+                Input::Message(InputMessage {
+                    message_id: MessageId(*message_id),
+                    sender: Address(*sender),
+                    recipient: Address(*recipient),
+                    amount: (*amount).into(),
+                    nonce: (*nonce).into(),
+                    owner: Address(*owner),
+                    witness_index: *witness_index,
+                    data: HexString(data.clone()),
+                    predicate: HexString(Default::default()),
+                    predicate_data: HexString(Default::default()),
+                })
+            }
             fuel_tx::Input::MessagePredicate {
                 message_id,
                 sender,
@@ -237,18 +257,20 @@ impl From<&fuel_tx::Input> for Input {
                 data,
                 predicate,
                 predicate_data,
-            } => Input::Message(InputMessage {
-                message_id: MessageId(*message_id),
-                sender: Address(*sender),
-                recipient: Address(*recipient),
-                amount: (*amount).into(),
-                nonce: (*nonce).into(),
-                owner: Address(*owner),
-                witness_index: Default::default(),
-                data: HexString(data.clone()),
-                predicate: HexString(predicate.clone()),
-                predicate_data: HexString(predicate_data.clone()),
-            }),
+            } => {
+                Input::Message(InputMessage {
+                    message_id: MessageId(*message_id),
+                    sender: Address(*sender),
+                    recipient: Address(*recipient),
+                    amount: (*amount).into(),
+                    nonce: (*nonce).into(),
+                    owner: Address(*owner),
+                    witness_index: Default::default(),
+                    data: HexString(data.clone()),
+                    predicate: HexString(predicate.clone()),
+                    predicate_data: HexString(predicate_data.clone()),
+                })
+            }
         }
     }
 }

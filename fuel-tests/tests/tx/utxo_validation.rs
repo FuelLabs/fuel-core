@@ -1,15 +1,29 @@
 //! Tests involving client behavior when utxo-validation is enabled
 
-use crate::helpers::{TestContext, TestSetupBuilder};
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
 use fuel_core_interfaces::common::{
     fuel_tx::TransactionBuilder,
-    fuel_vm::{consts::*, prelude::*},
+    fuel_vm::{
+        consts::*,
+        prelude::*,
+    },
 };
 use fuel_crypto::SecretKey;
-use fuel_gql_client::client::{types::TransactionStatus, PageDirection, PaginationRequest};
+use fuel_gql_client::client::{
+    types::TransactionStatus,
+    PageDirection,
+    PaginationRequest,
+};
 use futures::future::join_all;
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::collections::HashSet;
 
 #[tokio::test]

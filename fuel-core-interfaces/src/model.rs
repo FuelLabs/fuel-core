@@ -5,12 +5,27 @@ mod messages;
 mod txpool;
 mod vote;
 
-pub use block::{FuelBlock, FuelBlockConsensus, FuelBlockDb, FuelBlockHeader, SealedFuelBlock};
+pub use block::{
+    FuelBlock,
+    FuelBlockConsensus,
+    FuelBlockDb,
+    FuelBlockHeader,
+    SealedFuelBlock,
+};
 pub use block_height::BlockHeight;
-pub use coin::{Coin, CoinStatus};
-use fuel_types::{Address, Bytes32};
+pub use coin::{
+    Coin,
+    CoinStatus,
+};
+use fuel_types::{
+    Address,
+    Bytes32,
+};
 pub use messages::*;
-pub use txpool::{ArcTx, TxInfo};
+pub use txpool::{
+    ArcTx,
+    TxInfo,
+};
 pub use vote::ConsensusVote;
 
 pub type DaBlockHeight = u64;
