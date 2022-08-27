@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter, LowerHex};
 use std::str::FromStr;
 
-pub type DateTime = chrono::DateTime<chrono::Utc>;
+pub type DateTime = time::OffsetDateTime;
 impl_scalar!(DateTime, schema::DateTime);
 
 #[derive(Debug, Clone, Default)]

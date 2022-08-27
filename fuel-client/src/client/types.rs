@@ -1,6 +1,6 @@
 use crate::client::schema::tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus};
 use crate::client::schema::ConversionError;
-use chrono::{DateTime, Utc};
+use time::OffsetDateTime;
 use fuel_tx::Transaction;
 use fuel_types::bytes::Deserializable;
 use fuel_vm::prelude::ProgramState;
@@ -15,16 +15,16 @@ pub struct TransactionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionStatus {
     Submitted {
-        submitted_at: DateTime<Utc>,
+        submitted_at: OffsetDateTime,
     },
     Success {
         block_id: String,
-        time: DateTime<Utc>,
+        time: OffsetDateTime,
         program_state: ProgramState,
     },
     Failure {
         block_id: String,
-        time: DateTime<Utc>,
+        time: OffsetDateTime,
         reason: String,
         program_state: Option<ProgramState>,
     },
