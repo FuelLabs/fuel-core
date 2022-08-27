@@ -1,6 +1,6 @@
 use crate::{
     codecs::NetworkCodec,
-    config::{P2PConfig, REQ_RES_TIMEOUT},
+    config::P2PConfig,
     discovery::{DiscoveryBehaviour, DiscoveryConfig, DiscoveryEvent},
     gossipsub::{
         self,
@@ -18,7 +18,6 @@ use libp2p::{
         error::{PublishError, SubscriptionError},
         Gossipsub, GossipsubEvent, MessageId, TopicHash,
     },
-    identity::Keypair,
     request_response::{
         ProtocolSupport, RequestId, RequestResponse, RequestResponseConfig, RequestResponseEvent,
         RequestResponseMessage, ResponseChannel,
@@ -104,8 +103,8 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(local_keypair: Keypair, p2p_config: &P2PConfig, codec: Codec) -> Self {
-        let local_public_key = local_keypair.public();
+    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> Self {
+        let local_public_key = p2p_config.local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
         let discovery_config = {
@@ -132,13 +131,8 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
             std::iter::once((codec.get_req_res_protocol(), ProtocolSupport::Full));
 
         let mut req_res_config = RequestResponseConfig::default();
-        req_res_config
-            .set_request_timeout(p2p_config.set_request_timeout.unwrap_or(REQ_RES_TIMEOUT));
-        req_res_config.set_connection_keep_alive(
-            p2p_config
-                .set_connection_keep_alive
-                .unwrap_or(REQ_RES_TIMEOUT),
-        );
+        req_res_config.set_request_timeout(p2p_config.set_request_timeout);
+        req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
 
         let request_response =
             RequestResponse::new(codec.clone(), req_res_protocol, req_res_config);
@@ -148,7 +142,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: gossipsub::build_gossipsub(&local_keypair, p2p_config),
+            gossipsub: gossipsub::build_gossipsub(&p2p_config.local_keypair, p2p_config),
             peer_info,
             request_response,
 

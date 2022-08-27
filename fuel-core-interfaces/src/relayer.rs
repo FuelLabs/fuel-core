@@ -170,6 +170,20 @@ impl Sender {
         Self(sender)
     }
 
+    /// Create a dummy sender
+    pub fn noop() -> Self {
+        let (tx, mut rx) = mpsc::channel(100);
+
+        // drop any messages sent on the channel to avoid backpressure or memory leaks
+        tokio::spawn(async move {
+            loop {
+                // simply drop any received events
+                let _ = rx.recv().await;
+            }
+        });
+        Self(tx)
+    }
+
     pub async fn get_validator_set(
         &self,
         da_height: DaBlockHeight,

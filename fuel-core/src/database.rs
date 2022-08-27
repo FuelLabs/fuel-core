@@ -18,6 +18,7 @@ use fuel_core_interfaces::{
     model::{
         BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
     },
+    p2p::P2pDb,
     relayer::{RelayerDb, StakingDiff},
     txpool::TxPoolDb,
 };
@@ -131,6 +132,12 @@ unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
 
 impl TxPoolDb for Database {}
+#[async_trait]
+impl P2pDb for Database {
+    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+        <Self as RelayerDb>::get_sealed_block(self, height).await
+    }
+}
 
 impl Database {
     #[cfg(feature = "rocksdb")]

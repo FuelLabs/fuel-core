@@ -341,12 +341,10 @@ impl FinalizationQueue {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use crate::log::tests::*;
-    use fuel_core_interfaces::{common::fuel_types::Address, db::helpers::DummyDb};
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use crate::{log::tests::*, mock_db::MockDb};
+    use fuel_core_interfaces::common::fuel_types::Address;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     #[tokio::test]
     pub async fn check_messages_on_multiple_eth_blocks() {
@@ -477,26 +475,45 @@ mod tests {
             ])
             .await;
 
-        let mut db = DummyDb::filled();
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, Some(c1))),);
-        assert_eq!(db.data.lock().validators.get(&v2), None,);
-        assert_eq!(db.data.lock().messages.len(), 0,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(0, Some(c1))),
+        );
+        assert_eq!(db.data.lock().unwrap().validators.get(&v2), None,);
+        assert_eq!(db.data.lock().unwrap().messages.len(), 0,);
 
         queue.commit_diffs(&mut db, 2).await;
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, Some(c2))),
+        );
+        assert_eq!(db.data.lock().unwrap().messages.len(), 1,);
         // ensure committed message id matches message id from the log
         assert_eq!(
-            db.data.lock().messages.values().next().unwrap().id(),
+            db.data
+                .lock()
+                .unwrap()
+                .messages
+                .values()
+                .next()
+                .unwrap()
+                .id(),
             test_message.id()
         );
 
         queue.commit_diffs(&mut db, 3).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(0, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, Some(c2))),
+        );
+        assert_eq!(db.data.lock().unwrap().messages.len(), 1,);
     }
 
     #[tokio::test]
@@ -533,20 +550,36 @@ mod tests {
                 eth_log_withdrawal(3, delegator1, 7),
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s2, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(s2, None)),
+        );
 
         queue.commit_diffs(&mut db, 2).await;
         let s13 = s1 + s3;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s13, Some(c1))),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s13, Some(c1))),
+        );
 
         queue.commit_diffs(&mut db, 3).await;
 
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s3, Some(c1))),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s3, Some(c1))),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, None)),
+        );
     }
 
     #[tokio::test]
@@ -583,15 +616,28 @@ mod tests {
                 eth_log_withdrawal(2, delegator2, 0), // amount does nothing
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s1, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(s1, None)),
+        );
 
         queue.commit_diffs(&mut db, 2).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, None)),
+        );
     }
 
     #[tokio::test]
@@ -662,7 +708,8 @@ mod tests {
 
         queue.append_eth_logs(vec![reg1_revert, reg2_revert]).await;
 
-        let mut db = DummyDb::filled();
+        let mut db = MockDb::default();
+
         queue.commit_diffs(&mut db, 1).await;
 
         assert_eq!(queue.pending.len(), 0)
@@ -708,7 +755,8 @@ mod tests {
                 eth_log_withdrawal(4, delegator2, 0),
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         // finalize all logs
         queue.commit_diffs(&mut db, 5).await;
