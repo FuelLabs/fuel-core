@@ -2094,6 +2094,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "fuel-core-interfaces",
+ "itertools",
  "parking_lot 0.12.1",
  "tokio",
  "tracing",
