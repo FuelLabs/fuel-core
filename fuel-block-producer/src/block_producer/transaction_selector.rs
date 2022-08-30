@@ -61,11 +61,7 @@ mod tests {
         let txs = txs
             .iter()
             .map(|tx_gas| {
-                CheckedTransaction::check(
-                    TransactionBuilder::script(
-                        vec![Opcode::RET(REG_ONE)].into_iter().collect(),
-                        vec![],
-                    )
+                TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
                     .gas_price(tx_gas.price)
                     .gas_limit(tx_gas.limit)
                     .add_unsigned_coin_input(
@@ -81,14 +77,13 @@ mod tests {
                         amount: 0,
                         asset_id: Default::default(),
                     })
-                    .finalize(),
-                    0,
-                    &ConsensusParameters {
-                        gas_price_factor: 1,
-                        ..ConsensusParameters::default()
-                    },
-                )
-                .expect("Invalid transaction")
+                    .finalize_checked(
+                        0,
+                        &ConsensusParameters {
+                            gas_price_factor: 1,
+                            ..ConsensusParameters::default()
+                        },
+                    )
             })
             .collect();
 
