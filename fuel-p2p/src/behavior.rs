@@ -313,10 +313,9 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent>
                 self.events
                     .push_back(FuelBehaviourEvent::PeerConnected(peer_id));
             }
-            DiscoveryEvent::Disconnected(peer_id) => {
-                self.events
-                    .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id))
-            }
+            DiscoveryEvent::Disconnected(peer_id) => self
+                .events
+                .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id)),
 
             _ => {}
         }
@@ -337,10 +336,9 @@ impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent>
                     .push_back(FuelBehaviourEvent::PeerIdentified(peer_id));
             }
 
-            PeerInfoEvent::PeerInfoUpdated { peer_id } => {
-                self.events
-                    .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id))
-            }
+            PeerInfoEvent::PeerInfoUpdated { peer_id } => self
+                .events
+                .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id)),
         }
     }
 }
@@ -389,50 +387,48 @@ impl<Codec: NetworkCodec>
         event: RequestResponseEvent<RequestMessage, IntermediateResponse>,
     ) {
         match event {
-            RequestResponseEvent::Message { message, .. } => {
-                match message {
-                    RequestResponseMessage::Request {
-                        request,
-                        channel,
+            RequestResponseEvent::Message { message, .. } => match message {
+                RequestResponseMessage::Request {
+                    request,
+                    channel,
+                    request_id,
+                } => {
+                    self.inbound_requests_table.insert(request_id, channel);
+                    self.events.push_back(FuelBehaviourEvent::RequestMessage {
                         request_id,
-                    } => {
-                        self.inbound_requests_table.insert(request_id, channel);
-                        self.events.push_back(FuelBehaviourEvent::RequestMessage {
-                            request_id,
-                            request_message: request,
-                        })
-                    }
-                    RequestResponseMessage::Response {
-                        request_id,
-                        response,
-                    } => {
-                        match (
-                            self.outbound_requests_table.remove(&request_id),
-                            self.codec.convert_to_response(&response),
-                        ) {
-                            (
-                                Some(ResponseChannelItem::ResponseBlock(channel)),
-                                Ok(ResponseMessage::ResponseBlock(block)),
-                            ) => {
-                                if channel.send(block).is_err() {
-                                    debug!(
-                                        "Failed to send through the channel for {:?}",
-                                        request_id
-                                    );
-                                }
+                        request_message: request,
+                    })
+                }
+                RequestResponseMessage::Response {
+                    request_id,
+                    response,
+                } => {
+                    match (
+                        self.outbound_requests_table.remove(&request_id),
+                        self.codec.convert_to_response(&response),
+                    ) {
+                        (
+                            Some(ResponseChannelItem::ResponseBlock(channel)),
+                            Ok(ResponseMessage::ResponseBlock(block)),
+                        ) => {
+                            if channel.send(block).is_err() {
+                                debug!(
+                                    "Failed to send through the channel for {:?}",
+                                    request_id
+                                );
                             }
-
-                            (Some(_), Err(e)) => {
-                                debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
-                            }
-                            (None, Ok(_)) => {
-                                debug!("Send channel not found for {:?}", request_id);
-                            }
-                            _ => {}
                         }
+
+                        (Some(_), Err(e)) => {
+                            debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
+                        }
+                        (None, Ok(_)) => {
+                            debug!("Send channel not found for {:?}", request_id);
+                        }
+                        _ => {}
                     }
                 }
-            }
+            },
             RequestResponseEvent::InboundFailure {
                 peer,
                 error,

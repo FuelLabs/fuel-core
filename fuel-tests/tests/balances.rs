@@ -42,16 +42,14 @@ async fn balance() {
                 (owner, 150, asset_id),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| {
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner,
-                    amount,
-                    asset_id,
-                }
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                block_created: None,
+                maturity: None,
+                owner,
+                amount,
+                asset_id,
             })
             .collect(),
         ),
@@ -146,16 +144,14 @@ async fn first_5_balances() {
                         (owner, 150, asset_id),
                     ]
                 })
-                .map(|(owner, amount, asset_id)| {
-                    CoinConfig {
-                        tx_id: None,
-                        output_index: None,
-                        block_created: None,
-                        maturity: None,
-                        owner,
-                        amount,
-                        asset_id,
-                    }
+                .map(|(owner, amount, asset_id)| CoinConfig {
+                    tx_id: None,
+                    output_index: None,
+                    block_created: None,
+                    maturity: None,
+                    owner,
+                    amount,
+                    asset_id,
                 })
                 .collect(),
         ),

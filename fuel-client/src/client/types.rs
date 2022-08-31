@@ -46,26 +46,20 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
 
     fn try_from(status: SchemaTxStatus) -> Result<Self, Self::Error> {
         Ok(match status {
-            SchemaTxStatus::SubmittedStatus(s) => {
-                TransactionStatus::Submitted {
-                    submitted_at: s.time,
-                }
-            }
-            SchemaTxStatus::SuccessStatus(s) => {
-                TransactionStatus::Success {
-                    block_id: s.block.id.0.to_string(),
-                    time: s.time,
-                    program_state: s.program_state.try_into()?,
-                }
-            }
-            SchemaTxStatus::FailureStatus(s) => {
-                TransactionStatus::Failure {
-                    block_id: s.block.id.0.to_string(),
-                    time: s.time,
-                    reason: s.reason,
-                    program_state: s.program_state.map(TryInto::try_into).transpose()?,
-                }
-            }
+            SchemaTxStatus::SubmittedStatus(s) => TransactionStatus::Submitted {
+                submitted_at: s.time,
+            },
+            SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
+                block_id: s.block.id.0.to_string(),
+                time: s.time,
+                program_state: s.program_state.try_into()?,
+            },
+            SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
+                block_id: s.block.id.0.to_string(),
+                time: s.time,
+                reason: s.reason,
+                program_state: s.program_state.map(TryInto::try_into).transpose()?,
+            },
         })
     }
 }

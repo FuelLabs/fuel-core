@@ -55,30 +55,26 @@ pub struct CoinsConnectionArgs {
 impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs {
     fn from(r: (Address, AssetId, PaginationRequest<String>)) -> Self {
         match r.2.direction {
-            PageDirection::Forward => {
-                CoinsConnectionArgs {
-                    filter: CoinFilterInput {
-                        owner: r.0,
-                        asset_id: Some(r.1),
-                    },
-                    after: r.2.cursor,
-                    before: None,
-                    first: Some(r.2.results as i32),
-                    last: None,
-                }
-            }
-            PageDirection::Backward => {
-                CoinsConnectionArgs {
-                    filter: CoinFilterInput {
-                        owner: r.0,
-                        asset_id: Some(r.1),
-                    },
-                    after: None,
-                    before: r.2.cursor,
-                    first: None,
-                    last: Some(r.2.results as i32),
-                }
-            }
+            PageDirection::Forward => CoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner: r.0,
+                    asset_id: Some(r.1),
+                },
+                after: r.2.cursor,
+                before: None,
+                first: Some(r.2.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => CoinsConnectionArgs {
+                filter: CoinFilterInput {
+                    owner: r.0,
+                    asset_id: Some(r.1),
+                },
+                after: None,
+                before: r.2.cursor,
+                first: None,
+                last: Some(r.2.results as i32),
+            },
         }
     }
 }

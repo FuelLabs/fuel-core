@@ -195,11 +195,9 @@ impl RequestResponseConverter for BincodeCodec {
         inter_msg: &Self::IntermediateResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            IntermediateResponse::ResponseBlock(block_bytes) => {
-                Ok(ResponseMessage::ResponseBlock(
-                    self.deserialize(block_bytes)?,
-                ))
-            }
+            IntermediateResponse::ResponseBlock(block_bytes) => Ok(
+                ResponseMessage::ResponseBlock(self.deserialize(block_bytes)?),
+            ),
         }
     }
 
@@ -208,11 +206,9 @@ impl RequestResponseConverter for BincodeCodec {
         res_msg: &Self::OutboundResponse,
     ) -> Result<Self::IntermediateResponse, io::Error> {
         match res_msg {
-            OutboundResponse::ResponseBlock(sealed_block) => {
-                Ok(IntermediateResponse::ResponseBlock(
-                    self.serialize(&**sealed_block)?,
-                ))
-            }
+            OutboundResponse::ResponseBlock(sealed_block) => Ok(
+                IntermediateResponse::ResponseBlock(self.serialize(&**sealed_block)?),
+            ),
         }
     }
 }

@@ -270,22 +270,18 @@ pub struct PaginationRequest<T> {
 impl<T: Into<String>> From<PaginationRequest<T>> for ConnectionArgs {
     fn from(req: PaginationRequest<T>) -> Self {
         match req.direction {
-            PageDirection::Forward => {
-                Self {
-                    after: req.cursor.map(Into::into),
-                    before: None,
-                    first: Some(req.results as i32),
-                    last: None,
-                }
-            }
-            PageDirection::Backward => {
-                Self {
-                    after: None,
-                    before: req.cursor.map(Into::into),
-                    first: None,
-                    last: Some(req.results as i32),
-                }
-            }
+            PageDirection::Forward => Self {
+                after: req.cursor.map(Into::into),
+                before: None,
+                first: Some(req.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => Self {
+                after: None,
+                before: req.cursor.map(Into::into),
+                first: None,
+                last: Some(req.results as i32),
+            },
         }
     }
 }

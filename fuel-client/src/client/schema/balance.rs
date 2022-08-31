@@ -53,24 +53,20 @@ pub struct BalancesConnectionArgs {
 impl From<(Address, PaginationRequest<String>)> for BalancesConnectionArgs {
     fn from(r: (Address, PaginationRequest<String>)) -> Self {
         match r.1.direction {
-            PageDirection::Forward => {
-                BalancesConnectionArgs {
-                    filter: BalanceFilterInput { owner: r.0 },
-                    after: r.1.cursor,
-                    before: None,
-                    first: Some(r.1.results as i32),
-                    last: None,
-                }
-            }
-            PageDirection::Backward => {
-                BalancesConnectionArgs {
-                    filter: BalanceFilterInput { owner: r.0 },
-                    after: None,
-                    before: r.1.cursor,
-                    first: None,
-                    last: Some(r.1.results as i32),
-                }
-            }
+            PageDirection::Forward => BalancesConnectionArgs {
+                filter: BalanceFilterInput { owner: r.0 },
+                after: r.1.cursor,
+                before: None,
+                first: Some(r.1.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => BalancesConnectionArgs {
+                filter: BalanceFilterInput { owner: r.0 },
+                after: None,
+                before: r.1.cursor,
+                first: None,
+                last: Some(r.1.results as i32),
+            },
         }
     }
 }

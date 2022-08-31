@@ -599,63 +599,53 @@ mod test {
                         )
                     }
                     // get first batch of logs.
-                    2 => {
-                        match trigger {
-                            TriggerType::GetLogs(filter) => {
-                                match filter.block_option {
-                                    FilterBlockOption::Range {
+                    2 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(
                                         from_block,
+                                        Some(BlockNumber::Number(U64([100])))
+                                    );
+                                    assert_eq!(
                                         to_block,
-                                    } => {
-                                        assert_eq!(
-                                            from_block,
-                                            Some(BlockNumber::Number(U64([100])))
-                                        );
-                                        assert_eq!(
-                                            to_block,
-                                            Some(BlockNumber::Number(U64([102])))
-                                        );
-                                    }
-                                    _ => panic!("Expect filter block option range"),
-                                };
-                            }
-                            _ => {
-                                panic!(
-                                    "wrong trigger:{:?} we expected get logs 1",
-                                    trigger
-                                )
-                            }
+                                        Some(BlockNumber::Number(U64([102])))
+                                    );
+                                }
+                                _ => panic!("Expect filter block option range"),
+                            };
                         }
-                    }
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 1", trigger)
+                        }
+                    },
                     // get second batch of logs. for initial sync
-                    3 => {
-                        match trigger {
-                            TriggerType::GetLogs(filter) => {
-                                match filter.block_option {
-                                    FilterBlockOption::Range {
+                    3 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(
                                         from_block,
+                                        Some(BlockNumber::Number(U64([102])))
+                                    );
+                                    assert_eq!(
                                         to_block,
-                                    } => {
-                                        assert_eq!(
-                                            from_block,
-                                            Some(BlockNumber::Number(U64([102])))
-                                        );
-                                        assert_eq!(
-                                            to_block,
-                                            Some(BlockNumber::Number(U64([104])))
-                                        );
-                                    }
-                                    _ => panic!("Expect filter block option range"),
-                                };
-                            }
-                            _ => {
-                                panic!(
-                                    "wrong trigger:{:?} we expected get logs 1",
-                                    trigger
-                                )
-                            }
+                                        Some(BlockNumber::Number(U64([104])))
+                                    );
+                                }
+                                _ => panic!("Expect filter block option range"),
+                            };
                         }
-                    }
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 1", trigger)
+                        }
+                    },
                     // update our best block
                     4 => {
                         assert_eq!(
@@ -675,34 +665,29 @@ mod test {
                         )
                     }
                     // get block log from current finalized to best block
-                    6 => {
-                        match trigger {
-                            TriggerType::GetLogs(filter) => {
-                                match filter.block_option {
-                                    FilterBlockOption::Range {
+                    6 => match trigger {
+                        TriggerType::GetLogs(filter) => {
+                            match filter.block_option {
+                                FilterBlockOption::Range {
+                                    from_block,
+                                    to_block,
+                                } => {
+                                    assert_eq!(
                                         from_block,
+                                        Some(BlockNumber::Number(U64([104])))
+                                    );
+                                    assert_eq!(
                                         to_block,
-                                    } => {
-                                        assert_eq!(
-                                            from_block,
-                                            Some(BlockNumber::Number(U64([104])))
-                                        );
-                                        assert_eq!(
-                                            to_block,
-                                            Some(BlockNumber::Number(U64([134])))
-                                        );
-                                    }
-                                    _ => panic!("Expect filter block option range for 6"),
-                                };
-                            }
-                            _ => {
-                                panic!(
-                                    "wrong trigger:{:?} we expected get logs 6",
-                                    trigger
-                                )
-                            }
+                                        Some(BlockNumber::Number(U64([134])))
+                                    );
+                                }
+                                _ => panic!("Expect filter block option range for 6"),
+                            };
                         }
-                    }
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 6", trigger)
+                        }
+                    },
                     // get best eth block to synchronize log watcher
                     7 => {
                         assert_eq!(

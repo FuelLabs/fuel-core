@@ -129,24 +129,20 @@ impl From<ContractBalanceConnection> for PaginatedResult<ContractBalance, String
 impl From<(ContractId, PaginationRequest<String>)> for ContractBalancesConnectionArgs {
     fn from(r: (ContractId, PaginationRequest<String>)) -> Self {
         match r.1.direction {
-            PageDirection::Forward => {
-                ContractBalancesConnectionArgs {
-                    filter: ContractBalanceFilterInput { contract: r.0 },
-                    after: r.1.cursor,
-                    before: None,
-                    first: Some(r.1.results as i32),
-                    last: None,
-                }
-            }
-            PageDirection::Backward => {
-                ContractBalancesConnectionArgs {
-                    filter: ContractBalanceFilterInput { contract: r.0 },
-                    after: None,
-                    before: r.1.cursor,
-                    first: None,
-                    last: Some(r.1.results as i32),
-                }
-            }
+            PageDirection::Forward => ContractBalancesConnectionArgs {
+                filter: ContractBalanceFilterInput { contract: r.0 },
+                after: r.1.cursor,
+                before: None,
+                first: Some(r.1.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => ContractBalancesConnectionArgs {
+                filter: ContractBalanceFilterInput { contract: r.0 },
+                after: None,
+                before: r.1.cursor,
+                first: None,
+                last: Some(r.1.results as i32),
+            },
         }
     }
 }

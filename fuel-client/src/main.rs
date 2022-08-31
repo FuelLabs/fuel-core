@@ -36,32 +36,30 @@ impl CliArgs {
             FuelClient::new(self.endpoint.as_str()).expect("expected valid endpoint");
 
         match &self.command {
-            Command::Transaction(sub_cmd) => {
-                match sub_cmd {
-                    TransactionCommands::Submit { tx } => {
-                        let tx: Transaction =
-                            serde_json::from_str(tx).expect("invalid transaction json");
+            Command::Transaction(sub_cmd) => match sub_cmd {
+                TransactionCommands::Submit { tx } => {
+                    let tx: Transaction =
+                        serde_json::from_str(tx).expect("invalid transaction json");
 
-                        let result = client.submit(&tx).await;
-                        println!("{}", result.unwrap());
-                    }
-                    TransactionCommands::DryRun { tx } => {
-                        let tx: Transaction =
-                            serde_json::from_str(tx).expect("invalid transaction json");
-
-                        let result = client.dry_run(&tx).await;
-                        println!("{:?}", result.unwrap());
-                    }
-                    TransactionCommands::Get { id } => {
-                        let tx = client.transaction(id.as_str()).await.unwrap();
-                        println!("{:?}", json!(tx).to_string())
-                    }
-                    TransactionCommands::Receipts { id } => {
-                        let receipts = client.receipts(id.as_str()).await.unwrap();
-                        println!("{:?}", json!(receipts).to_string())
-                    }
+                    let result = client.submit(&tx).await;
+                    println!("{}", result.unwrap());
                 }
-            }
+                TransactionCommands::DryRun { tx } => {
+                    let tx: Transaction =
+                        serde_json::from_str(tx).expect("invalid transaction json");
+
+                    let result = client.dry_run(&tx).await;
+                    println!("{:?}", result.unwrap());
+                }
+                TransactionCommands::Get { id } => {
+                    let tx = client.transaction(id.as_str()).await.unwrap();
+                    println!("{:?}", json!(tx).to_string())
+                }
+                TransactionCommands::Receipts { id } => {
+                    let receipts = client.receipts(id.as_str()).await.unwrap();
+                    println!("{:?}", json!(receipts).to_string())
+                }
+            },
         }
     }
 }

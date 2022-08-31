@@ -143,15 +143,13 @@ async fn produce_block_negative() {
 async fn block_connection_first_5() {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| {
-            FuelBlockDb {
-                headers: FuelBlockHeader {
-                    height: i.into(),
-                    time: Utc.timestamp(i.into(), 0),
-                    ..Default::default()
-                },
-                transactions: vec![],
-            }
+        .map(|i| FuelBlockDb {
+            headers: FuelBlockHeader {
+                height: i.into(),
+                time: Utc.timestamp(i.into(), 0),
+                ..Default::default()
+            },
+            transactions: vec![],
         })
         .collect_vec();
 
@@ -191,15 +189,13 @@ async fn block_connection_first_5() {
 async fn block_connection_last_5() {
     // blocks
     let blocks = (0..10u32)
-        .map(|i| {
-            FuelBlockDb {
-                headers: FuelBlockHeader {
-                    height: i.into(),
-                    time: Utc.timestamp(i.into(), 0),
-                    ..Default::default()
-                },
-                transactions: vec![],
-            }
+        .map(|i| FuelBlockDb {
+            headers: FuelBlockHeader {
+                height: i.into(),
+                time: Utc.timestamp(i.into(), 0),
+                ..Default::default()
+            },
+            transactions: vec![],
         })
         .collect_vec();
 

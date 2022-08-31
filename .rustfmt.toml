@@ -3,7 +3,6 @@ normalize_comments = true # changed
 imports_layout = "Vertical" # changed
 imports_granularity = "Crate" # changed
 combine_control_expr = false # changed
-force_multiline_blocks = true # changed
 trailing_semicolon = false # changed
 edition = "2021" # changed
 use_try_shorthand = true # changed

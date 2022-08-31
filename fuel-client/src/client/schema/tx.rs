@@ -141,27 +141,21 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
 
     fn try_from(state: ProgramState) -> Result<Self, Self::Error> {
         Ok(match state.return_type {
-            ReturnType::Return => {
-                fuel_vm::prelude::ProgramState::Return({
-                    let b = state.data.0 .0;
-                    let b: [u8; 8] =
-                        b.try_into().map_err(|_| ConversionError::BytesLength)?;
-                    u64::from_be_bytes(b)
-                })
-            }
-            ReturnType::ReturnData => {
-                fuel_vm::prelude::ProgramState::ReturnData({
-                    Bytes32::try_from(state.data.0 .0.as_slice())?
-                })
-            }
-            ReturnType::Revert => {
-                fuel_vm::prelude::ProgramState::Revert({
-                    let b = state.data.0 .0;
-                    let b: [u8; 8] =
-                        b.try_into().map_err(|_| ConversionError::BytesLength)?;
-                    u64::from_be_bytes(b)
-                })
-            }
+            ReturnType::Return => fuel_vm::prelude::ProgramState::Return({
+                let b = state.data.0 .0;
+                let b: [u8; 8] =
+                    b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                u64::from_be_bytes(b)
+            }),
+            ReturnType::ReturnData => fuel_vm::prelude::ProgramState::ReturnData({
+                Bytes32::try_from(state.data.0 .0.as_slice())?
+            }),
+            ReturnType::Revert => fuel_vm::prelude::ProgramState::Revert({
+                let b = state.data.0 .0;
+                let b: [u8; 8] =
+                    b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                u64::from_be_bytes(b)
+            }),
         })
     }
 }
@@ -216,24 +210,20 @@ pub struct TransactionsByOwnerConnectionArgs {
 impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectionArgs {
     fn from(r: (Address, PaginationRequest<String>)) -> Self {
         match r.1.direction {
-            PageDirection::Forward => {
-                TransactionsByOwnerConnectionArgs {
-                    owner: r.0,
-                    after: r.1.cursor,
-                    before: None,
-                    first: Some(r.1.results as i32),
-                    last: None,
-                }
-            }
-            PageDirection::Backward => {
-                TransactionsByOwnerConnectionArgs {
-                    owner: r.0,
-                    after: None,
-                    before: r.1.cursor,
-                    first: None,
-                    last: Some(r.1.results as i32),
-                }
-            }
+            PageDirection::Forward => TransactionsByOwnerConnectionArgs {
+                owner: r.0,
+                after: r.1.cursor,
+                before: None,
+                first: Some(r.1.results as i32),
+                last: None,
+            },
+            PageDirection::Backward => TransactionsByOwnerConnectionArgs {
+                owner: r.0,
+                after: None,
+                before: r.1.cursor,
+                first: None,
+                last: Some(r.1.results as i32),
+            },
         }
     }
 }

@@ -348,11 +348,9 @@ impl DapMutation {
                     Some(_) => self::gql_types::RunState::Breakpoint,
                     None => self::gql_types::RunState::Completed,
                 },
-                breakpoint: dbgref.and_then(|d| {
-                    match d {
-                        DebugEval::Continue => None,
-                        DebugEval::Breakpoint(bp) => Some(bp.into()),
-                    }
+                breakpoint: dbgref.and_then(|d| match d {
+                    DebugEval::Continue => None,
+                    DebugEval::Breakpoint(bp) => Some(bp.into()),
                 }),
                 json_receipts,
             })
@@ -424,11 +422,9 @@ impl DapMutation {
                 Some(_) => self::gql_types::RunState::Breakpoint,
                 None => self::gql_types::RunState::Completed,
             },
-            breakpoint: dbgref.and_then(|d| {
-                match d {
-                    DebugEval::Continue => None,
-                    DebugEval::Breakpoint(bp) => Some(bp.into()),
-                }
+            breakpoint: dbgref.and_then(|d| match d {
+                DebugEval::Continue => None,
+                DebugEval::Breakpoint(bp) => Some(bp.into()),
             }),
             json_receipts,
         })

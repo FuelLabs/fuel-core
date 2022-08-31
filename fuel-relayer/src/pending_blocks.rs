@@ -387,14 +387,12 @@ impl PendingBlocks {
             let withdrawals = block
                 .withdrawals()
                 .iter()
-                .map(|wd| {
-                    abi::fuel::Withdrawal {
-                        owner: H160::from_slice(&wd.0.as_ref()[12..]),
-                        token: H160::from_slice(&wd.2.as_ref()[12..]),
-                        amount: wd.1.into(),
-                        precision: 0,
-                        nonce: U256::zero(),
-                    }
+                .map(|wd| abi::fuel::Withdrawal {
+                    owner: H160::from_slice(&wd.0.as_ref()[12..]),
+                    token: H160::from_slice(&wd.2.as_ref()[12..]),
+                    amount: wd.1.into(),
+                    precision: 0,
+                    nonce: U256::zero(),
                 })
                 .collect();
 

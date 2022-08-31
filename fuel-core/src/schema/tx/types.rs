@@ -71,24 +71,18 @@ pub enum ReturnType {
 impl From<VmProgramState> for ProgramState {
     fn from(state: VmProgramState) -> Self {
         match state {
-            VmProgramState::Return(d) => {
-                ProgramState {
-                    return_type: ReturnType::Return,
-                    data: d.to_be_bytes().to_vec(),
-                }
-            }
-            VmProgramState::ReturnData(d) => {
-                ProgramState {
-                    return_type: ReturnType::ReturnData,
-                    data: d.as_ref().to_vec(),
-                }
-            }
-            VmProgramState::Revert(d) => {
-                ProgramState {
-                    return_type: ReturnType::Revert,
-                    data: d.to_be_bytes().to_vec(),
-                }
-            }
+            VmProgramState::Return(d) => ProgramState {
+                return_type: ReturnType::Return,
+                data: d.to_be_bytes().to_vec(),
+            },
+            VmProgramState::ReturnData(d) => ProgramState {
+                return_type: ReturnType::ReturnData,
+                data: d.as_ref().to_vec(),
+            },
+            VmProgramState::Revert(d) => ProgramState {
+                return_type: ReturnType::Revert,
+                data: d.to_be_bytes().to_vec(),
+            },
             #[cfg(feature = "debug")]
             VmProgramState::RunProgram(_) | VmProgramState::VerifyPredicate(_) => {
                 unreachable!("This shouldn't get called with a debug state")
@@ -180,26 +174,22 @@ impl From<TxStatus> for TransactionStatus {
                 block_id,
                 result,
                 time,
-            } => {
-                TransactionStatus::Success(SuccessStatus {
-                    block_id,
-                    result,
-                    time,
-                })
-            }
+            } => TransactionStatus::Success(SuccessStatus {
+                block_id,
+                result,
+                time,
+            }),
             TxStatus::Failed {
                 block_id,
                 reason,
                 time,
                 result,
-            } => {
-                TransactionStatus::Failed(FailureStatus {
-                    block_id,
-                    reason,
-                    time,
-                    state: result,
-                })
-            }
+            } => TransactionStatus::Failed(FailureStatus {
+                block_id,
+                reason,
+                time,
+                state: result,
+            }),
         }
     }
 }
@@ -336,23 +326,21 @@ impl Transaction {
     async fn storage_slots(&self) -> Option<Vec<HexString>> {
         match &self.0 {
             fuel_tx::Transaction::Script { .. } => None,
-            fuel_tx::Transaction::Create { storage_slots, .. } => {
-                Some(
-                    storage_slots
-                        .iter()
-                        .map(|slot| {
-                            HexString(
-                                slot.key()
-                                    .as_slice()
-                                    .iter()
-                                    .chain(slot.value().as_slice())
-                                    .copied()
-                                    .collect(),
-                            )
-                        })
-                        .collect(),
-                )
-            }
+            fuel_tx::Transaction::Create { storage_slots, .. } => Some(
+                storage_slots
+                    .iter()
+                    .map(|slot| {
+                        HexString(
+                            slot.key()
+                                .as_slice()
+                                .iter()
+                                .chain(slot.value().as_slice())
+                                .copied()
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
         }
     }
 

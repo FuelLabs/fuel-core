@@ -243,16 +243,14 @@ async fn coins_to_spend() {
                 (owner, 150, asset_id_b),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| {
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner,
-                    amount,
-                    asset_id,
-                }
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                block_created: None,
+                maturity: None,
+                owner,
+                amount,
+                asset_id,
             })
             .collect(),
         ),

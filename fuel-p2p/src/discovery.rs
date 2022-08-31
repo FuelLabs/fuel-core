@@ -252,20 +252,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             // nodes could potentially report addresses in the private network
             // which are not actually part of the network
             if !self.allow_private_addresses {
-                list_to_filter.retain(|addr| {
-                    match addr.iter().next() {
-                        Some(Protocol::Ip4(addr))
-                            if !IpNetwork::from(addr).is_global() =>
-                        {
-                            false
-                        }
-                        Some(Protocol::Ip6(addr))
-                            if !IpNetwork::from(addr).is_global() =>
-                        {
-                            false
-                        }
-                        _ => true,
+                list_to_filter.retain(|addr| match addr.iter().next() {
+                    Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => {
+                        false
                     }
+                    Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => {
+                        false
+                    }
+                    _ => true,
                 });
             }
 

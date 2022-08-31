@@ -58,16 +58,14 @@ async fn snapshot_state_config() {
                 (owner, 150, AssetId::new([5u8; 32])),
             ]
             .into_iter()
-            .map(|(owner, amount, asset_id)| {
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: Some(BlockHeight::from(0u64)),
-                    maturity: Some(BlockHeight::from(0u64)),
-                    owner,
-                    amount,
-                    asset_id,
-                }
+            .map(|(owner, amount, asset_id)| CoinConfig {
+                tx_id: None,
+                output_index: None,
+                block_created: Some(BlockHeight::from(0u64)),
+                maturity: Some(BlockHeight::from(0u64)),
+                owner,
+                amount,
+                asset_id,
             })
             .collect(),
         ),

@@ -202,11 +202,9 @@ impl Executor {
             );
             let vm_result = vm
                 .transact(checked_tx)
-                .map_err(|error| {
-                    Error::VmExecution {
-                        error,
-                        transaction_id: tx_id,
-                    }
+                .map_err(|error| Error::VmExecution {
+                    error,
+                    transaction_id: tx_id,
                 })?
                 .into_owned();
 
@@ -667,16 +665,14 @@ impl Executor {
                     amount,
                     asset_id,
                     to,
-                } => {
-                    Executor::insert_coin(
-                        block_height.into(),
-                        utxo_id,
-                        amount,
-                        asset_id,
-                        to,
-                        db,
-                    )?
-                }
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::Contract {
                     input_index: input_idx,
                     ..
@@ -698,30 +694,26 @@ impl Executor {
                     to,
                     asset_id,
                     amount,
-                } => {
-                    Executor::insert_coin(
-                        block_height.into(),
-                        utxo_id,
-                        amount,
-                        asset_id,
-                        to,
-                        db,
-                    )?
-                }
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::Variable {
                     to,
                     asset_id,
                     amount,
-                } => {
-                    Executor::insert_coin(
-                        block_height.into(),
-                        utxo_id,
-                        amount,
-                        asset_id,
-                        to,
-                        db,
-                    )?
-                }
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::ContractCreated { contract_id, .. } => {
                     Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
                 }

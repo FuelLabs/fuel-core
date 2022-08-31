@@ -142,24 +142,20 @@ impl From<&fuel_tx::Output> for Output {
                 to,
                 amount,
                 asset_id,
-            } => {
-                Output::Coin(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                })
-            }
+            } => Output::Coin(CoinOutput {
+                to: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+            }),
             fuel_tx::Output::Contract {
                 input_index,
                 balance_root,
                 state_root,
-            } => {
-                Output::Contract(ContractOutput {
-                    input_index: *input_index,
-                    balance_root: *balance_root,
-                    state_root: *state_root,
-                })
-            }
+            } => Output::Contract(ContractOutput {
+                input_index: *input_index,
+                balance_root: *balance_root,
+                state_root: *state_root,
+            }),
             fuel_tx::Output::Message { recipient, amount } => {
                 Output::Message(MessageOutput {
                     recipient: *recipient,
@@ -170,33 +166,27 @@ impl From<&fuel_tx::Output> for Output {
                 to,
                 amount,
                 asset_id,
-            } => {
-                Output::Change(ChangeOutput(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                }))
-            }
+            } => Output::Change(ChangeOutput(CoinOutput {
+                to: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+            })),
             fuel_tx::Output::Variable {
                 to,
                 amount,
                 asset_id,
-            } => {
-                Output::Variable(VariableOutput(CoinOutput {
-                    to: *to,
-                    amount: *amount,
-                    asset_id: *asset_id,
-                }))
-            }
+            } => Output::Variable(VariableOutput(CoinOutput {
+                to: *to,
+                amount: *amount,
+                asset_id: *asset_id,
+            })),
             fuel_tx::Output::ContractCreated {
                 contract_id,
                 state_root,
-            } => {
-                Output::ContractCreated(ContractCreated {
-                    contract_id: *contract_id,
-                    state_root: *state_root,
-                })
-            }
+            } => Output::ContractCreated(ContractCreated {
+                contract_id: *contract_id,
+                state_root: *state_root,
+            }),
         }
     }
 }
