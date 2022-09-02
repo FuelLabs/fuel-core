@@ -36,12 +36,12 @@ env_logger = "0.9"
 fuel-block-executor = { path = "../fuel-block-executor", version = "0.10.1" }
 fuel-block-importer = { path = "../fuel-block-importer", version = "0.10.1" }
 fuel-block-producer = { path = "../fuel-block-producer", version = "0.10.1" }
-fuel-metrics = { path = "../fuel-metrics", version = "0.10.1", optional = true }
 fuel-core-bft = { path = "../fuel-core-bft", version = "0.10.1" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
     "serde",
 ] }
 fuel-crypto = { version = "0.6", default-features = false, features = [ "random" ] }
+fuel-metrics = { path = "../fuel-metrics", version = "0.10.1", optional = true }
 fuel-p2p = { path = "../fuel-p2p", version = "0.10.1", optional = true }
 fuel-relayer = { path = "../fuel-relayer", version = "0.10.1", optional = true }
 fuel-sync = { path = "../fuel-sync", version = "0.10.1" }
