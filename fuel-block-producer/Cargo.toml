@@ -20,3 +20,5 @@ tracing = { version = "0.1" }
 
 [dev-dependencies]
 itertools = "0.10"
+fuel-txpool = { path = "../fuel-txpool" }
+rand = "0.8"

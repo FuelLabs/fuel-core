@@ -136,6 +136,8 @@ pub mod helpers {
     };
 
     use super::*;
+
+    /// TODO: explain how this thing is used
     #[derive(Clone, Debug)]
     pub struct DummyDb {
         /// wrapped data.

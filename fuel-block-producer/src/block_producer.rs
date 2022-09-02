@@ -173,6 +173,3 @@ struct PreviousBlockInfo {
     transaction_root: Bytes32,
     da_height: DaBlockHeight,
 }
-
-#[cfg(test)]
-mod tests;
