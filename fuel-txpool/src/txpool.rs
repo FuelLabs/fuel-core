@@ -10,7 +10,7 @@ use fuel_core_interfaces::{
 };
 use std::cmp::Reverse;
 use std::collections::HashMap;
-use tokio::sync::{broadcast,mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {

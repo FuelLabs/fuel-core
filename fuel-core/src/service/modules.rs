@@ -6,12 +6,12 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool::TxPoolDb;
 use fuel_core_interfaces::txpool::Sender;
+use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 pub struct Modules {
@@ -89,7 +89,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (tx_request_event, _) = mpsc::channel(100);
     #[cfg(not(feature = "p2p"))]
     let (_, rx_block) = mpsc::channel(100);
-
 
     // Meant to simulate p2p's channels which hook in to communicate with txpool
     let (tx_status_sender, mut tx_status_reciever) = broadcast::channel(100);

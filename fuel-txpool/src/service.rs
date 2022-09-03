@@ -1,12 +1,12 @@
 use crate::{Config, TxPool};
 use anyhow::anyhow;
 use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
+use fuel_core_interfaces::p2p::P2pRequestEvent;
+use fuel_core_interfaces::p2p::TransactionBroadcast;
 use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
 use std::sync::Arc;
-use fuel_core_interfaces::p2p::P2pRequestEvent;
 use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio::task::JoinHandle;
-use fuel_core_interfaces::p2p::TransactionBroadcast;
 
 pub struct ServiceBuilder {
     config: Config,
@@ -270,7 +270,7 @@ pub mod tests {
     use crate::MockDb;
     use fuel_core_interfaces::{
         common::fuel_tx::TransactionBuilder,
-        txpool::{self, Sender, TxPoolMpsc, TxStatusBroadcast, Error as TxpoolError, TxStatus},
+        txpool::{Error as TxpoolError, Sender, TxPoolMpsc, TxStatus, TxStatusBroadcast},
     };
     use tokio::sync::{mpsc::error::TryRecvError, oneshot};
 
@@ -280,11 +280,11 @@ pub mod tests {
         let db = Box::new(MockDb::default());
         let (bs, _br) = broadcast::channel(10);
 
-       // Meant to simulate p2p's channels which hook in to communicate with txpool
-       let (network_sender, _) = mpsc::channel(100);
-       let (_, incoming_tx_receiver) = broadcast::channel(100);
-       let (tx_status_sender, _) = broadcast::channel(100);
-       let (txpool_sender, txpool_receiver) = Sender::channel(100);
+        // Meant to simulate p2p's channels which hook in to communicate with txpool
+        let (network_sender, _) = mpsc::channel(100);
+        let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (tx_status_sender, _) = broadcast::channel(100);
+        let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
         let mut builder = ServiceBuilder::new();
         builder
@@ -323,10 +323,9 @@ pub mod tests {
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
-        let tx1 = 
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
-                .finalize();
+        let tx1 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(10)
+            .finalize();
 
         let mut builder = ServiceBuilder::new();
         builder
@@ -379,7 +378,6 @@ pub mod tests {
                 .gas_price(10)
                 .finalize(),
         );
-
 
         let mut builder = ServiceBuilder::new();
         builder
@@ -439,11 +437,9 @@ pub mod tests {
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
-        let tx1 = 
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
-                .finalize();
-
+        let tx1 = TransactionBuilder::script(vec![], vec![])
+            .gas_price(10)
+            .finalize();
 
         let mut builder = ServiceBuilder::new();
         builder
@@ -473,7 +469,7 @@ pub mod tests {
     async fn test_filter_by_negative() {
         let config = Config::default();
         let db = Box::new(MockDb::default());
-        let (bs, br) = broadcast::channel(10);
+        let (bs, _br) = broadcast::channel(10);
 
         let (network_sender, _) = mpsc::channel(100);
         let (_, incoming_tx_receiver) = broadcast::channel(100);
@@ -481,13 +477,15 @@ pub mod tests {
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
         let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db)            
-        .incoming_tx_receiver(incoming_tx_receiver)
-        .network_sender(network_sender)
-        .import_block_event(bs.subscribe())
-        .tx_status_sender(tx_status_sender)
-        .txpool_sender(txpool_sender)
-        .txpool_receiver(txpool_receiver);
+        builder
+            .config(config)
+            .db(db)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
+            .import_block_event(bs.subscribe())
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
 
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -548,7 +546,7 @@ pub mod tests {
         let (_, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
-        
+
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
@@ -568,14 +566,14 @@ pub mod tests {
         let mut builder = ServiceBuilder::new();
 
         builder
-        .config(config)
-        .db(db)
-        .incoming_tx_receiver(incoming_tx_receiver)
-        .network_sender(network_sender)
-        .import_block_event(br)
-        .tx_status_sender(tx_status_sender)
-        .txpool_sender(txpool_sender)
-        .txpool_receiver(txpool_receiver);
+            .config(config)
+            .db(db)
+            .incoming_tx_receiver(incoming_tx_receiver)
+            .network_sender(network_sender)
+            .import_block_event(br)
+            .tx_status_sender(tx_status_sender)
+            .txpool_sender(txpool_sender)
+            .txpool_receiver(txpool_receiver);
 
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -613,7 +611,6 @@ pub mod tests {
     #[tokio::test]
     async fn simple_insert_removal_subscription() {
         let config = Config::default();
-        let db = Box::new(MockDb::default());
         let (_bs, br) = broadcast::channel(10);
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
