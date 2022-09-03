@@ -7,9 +7,11 @@ use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_interfaces::txpool::Sender;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
 pub struct Modules {
@@ -78,11 +80,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         }
     };
 
-    txpool_builder
-        .config(config.txpool.clone())
-        .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        .import_block_event(block_importer.subscribe());
-
     #[cfg(feature = "p2p")]
     let (tx_request_event, rx_request_event) = mpsc::channel(100);
     #[cfg(feature = "p2p")]
@@ -92,6 +89,29 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (tx_request_event, _) = mpsc::channel(100);
     #[cfg(not(feature = "p2p"))]
     let (_, rx_block) = mpsc::channel(100);
+
+
+    // Meant to simulate p2p's channels which hook in to communicate with txpool
+    let (tx_status_sender, mut tx_status_reciever) = broadcast::channel(100);
+
+    // Remove once tx_status events are used
+    tokio::spawn(async move { while (tx_status_reciever.recv().await).is_ok() {} });
+
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+
+    // Ok so plug these into something
+    // let (tx_consensus, _) = mpsc::channel(100);
+    let (_tx_transaction, incoming_tx_reciever) = broadcast::channel(100);
+
+    txpool_builder
+        .config(config.txpool.clone())
+        .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
+        .incoming_tx_receiver(incoming_tx_reciever)
+        .network_sender(tx_request_event.clone())
+        .import_block_event(block_importer.subscribe())
+        .tx_status_sender(tx_status_sender)
+        .txpool_sender(Sender::new(txpool_sender))
+        .txpool_receiver(txpool_receiver);
 
     block_importer.start().await;
 

@@ -202,7 +202,9 @@ impl TxPool {
                         status: TxStatus::Submitted,
                     });
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // @dev should not broadcast tx if error occurred
+                }
             }
         }
         res

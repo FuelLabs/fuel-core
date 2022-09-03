@@ -29,6 +29,29 @@ We will need to have at least three structures that do sorting of tx.
 * by PriceSort: sorted structure that sort all transaction by GasPrice. Most optimal structure can be `BinaryHeap` for fast sorting/inserting but it does have some downsides when we want to remove one item. For use case when a lot of tx are going to be removed we can just recreate structure from scratch. For first interaction we can use simple `BTreeMap` that sorts all inputs.
 * by Dependency: With every fuel transaction, inputs and outputs change state and we need to be aware of it. Graph is the main defensive structure against DDoS attack, and every transaction that we include in pool should have potential to be included in next block. The graph represents connections between parent and child txs, where child depends on execution output of parent that is found inside database or transaction pool.
 
+## P2P Integration
+
+The fuel-txpool integrates with fuel-p2p through the use of 2 channels. Since fuel-txpool uses 6 total channels though each one's use is documented below.
+
+### GraphQL <-> TxPool Channels
+
+- tx_status_sender: This channel is used to communicate between GraphQL and the TxPool, primarily for status updates on where a transaction is.
+
+- txpool_receiver: This channel is used to recieve TxPoolMpsc events from downstream consumers. The main use of this channel is GraphQL whose endpoints send various events to either view or submit tx's to the txpool.
+
+### P2P <-> TxPool Channels 
+
+- network_sender: This channel is used to communicate to p2p from txpool. Transactions are inserted into the TxPool from the GraphQL endpoint will be broadcasted on this channel.
+
+- incoming_tx_receiver: This channel is used to recieve new txs from p2p, and is important to how txs propogate through the network. Critically though once this is recieved on this channel it is not broadcasted further.
+
+- import_block_receiver: This channel is used to recieve blocks, so when new blocks are created they are recieved on this channel.
+
+### ?????
+- txpool_sender: TODO Ask someone on this, but looks like pretty much to just stop the TxPool.
+
+So the 2 channels needed to communicate with p2p are `network_sender` and `incoming_tx_receiver`. The first way the channels connect is that fuel-p2p's `rx_request_event` is the reciever to txpool's `network_sender` sender channel. The combination of both of these channels allows for transactions recieved on the GraphQL endpoint of the node to be broadcasted on p2p. The next channel combination is txpool's `incoming_tx_receiver` which recieves transactions broadcasted across the network from fuel-p2p's `tx_transaction`.
+
 ### Dependency graph
 
 Few reasonings on decision and restrains made by txpool
