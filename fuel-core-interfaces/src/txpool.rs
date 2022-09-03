@@ -34,6 +34,7 @@ pub trait TxPoolDb:
     }
 }
 
+/// RPC client for doing calls to the TxPool through an MPSC channel.
 #[derive(Clone, Deref, DerefMut)]
 pub struct Sender(mpsc::Sender<TxPoolMpsc>);
 
@@ -88,13 +89,14 @@ impl Sender {
         self.send(TxPoolMpsc::Remove { ids, response }).await?;
         receiver.await.map_err(Into::into)
     }
+
+    pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
+        let (sender, receiver) = mpsc::channel(buffer);
+        (Sender(sender), receiver)
 }
 
-pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
-    let (sender, receiver) = mpsc::channel(buffer);
-    (Sender(sender), receiver)
-}
-
+/// RPC commands that can be sent to the TxPool through an MPSC channel.
+/// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.

@@ -5,6 +5,12 @@ use fuel_core_interfaces::p2p::{
     BlockBroadcast, ConsensusBroadcast, P2pDb, P2pRequestEvent, TransactionBroadcast,
 };
 
+use libp2p::request_response::RequestId;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tracing::warn;
+
 use crate::{
     behavior::FuelBehaviourEvent,
     config::P2PConfig,
@@ -18,6 +24,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::warn;
+
 
 pub struct NetworkOrchestrator {
     p2p_config: P2PConfig,
@@ -153,6 +160,7 @@ impl Service {
         rx_request_event: Receiver<P2pRequestEvent>,
         tx_consensus: Sender<ConsensusBroadcast>,
         tx_transaction: broadcast::Sender<TransactionBroadcast>,
+
         tx_block: Sender<BlockBroadcast>,
     ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
@@ -242,6 +250,7 @@ pub mod tests {
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
         let (tx_transaction, _) = tokio::sync::broadcast::channel(100);
+
         let (tx_block, _) = tokio::sync::mpsc::channel(100);
 
         let service = Service::new(
