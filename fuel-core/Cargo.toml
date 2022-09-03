@@ -41,6 +41,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", f
     "serde",
 ] }
 fuel-crypto = { version = "0.6", default-features = false, features = [ "random" ] }
+fuel-metrics = { path = "../fuel-metrics", version = "0.10.1", optional = true }
 fuel-p2p = { path = "../fuel-p2p", version = "0.10.1", optional = true }
 fuel-relayer = { path = "../fuel-relayer", version = "0.10.1", optional = true }
 fuel-sync = { path = "../fuel-sync", version = "0.10.1" }
@@ -51,7 +52,6 @@ hex = { version = "0.4", features = ["serde"] }
 hyper = "0.14"
 itertools = "0.10"
 lazy_static = "1.4"
-prometheus = { version = "0.13", optional = true }
 rand = "0.8"
 rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",
@@ -85,8 +85,8 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
 insta = "1.8"
 
 [features]
-prometheus = ["dep:prometheus"]
-default = ["rocksdb", "prometheus", "debug"]
+metrics = ["dep:fuel-metrics"]
+default = ["rocksdb", "metrics", "debug"]
 debug = ["fuel-core-interfaces/debug"]
 test-helpers = []
 relayer = ["dep:fuel-relayer"]

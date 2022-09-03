@@ -2118,6 +2118,7 @@ dependencies = [
  "fuel-core-bft",
  "fuel-core-interfaces",
  "fuel-crypto",
+ "fuel-metrics",
  "fuel-p2p",
  "fuel-relayer",
  "fuel-sync",
@@ -2232,6 +2233,16 @@ dependencies = [
  "hex",
  "sha2 0.10.2",
  "thiserror",
+]
+
+[[package]]
+name = "fuel-metrics"
+version = "0.10.1"
+dependencies = [
+ "axum",
+ "hyper",
+ "lazy_static",
+ "prometheus",
 ]
 
 [[package]]

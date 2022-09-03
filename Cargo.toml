@@ -9,6 +9,7 @@ members = [
   "fuel-core",
   "fuel-core-bft",
   "fuel-core-interfaces",
+  "fuel-metrics",
   "fuel-p2p",
   "fuel-relayer",
   "fuel-sync",
