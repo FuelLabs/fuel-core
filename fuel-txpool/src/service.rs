@@ -330,7 +330,6 @@ pub mod tests {
         let tx1 = Arc::new(DummyDb::dummy_tx(tx1_hash));
         let tx2 = Arc::new(DummyDb::dummy_tx(tx2_hash));
 
-
         let mut builder = ServiceBuilder::new();
         builder
             .config(config)
@@ -627,7 +626,6 @@ pub mod tests {
 
         let tx1_hash = *TX_ID1;
         let tx2_hash = *TX_ID2;
-
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])

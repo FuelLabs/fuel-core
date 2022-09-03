@@ -93,6 +93,7 @@ impl Sender {
     pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
         let (sender, receiver) = mpsc::channel(buffer);
         (Sender(sender), receiver)
+    }
 }
 
 /// RPC commands that can be sent to the TxPool through an MPSC channel.

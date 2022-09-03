@@ -6,8 +6,8 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool;
 use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_interfaces::txpool::Sender;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -79,14 +79,14 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // Remove once tx_status events are used
     tokio::spawn(async move { while (tx_status_reciever.recv().await).is_ok() {} });
 
-    let (txpool_sender, txpool_receiver) = txpool::channel(100);
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
     // Ok so plug these into something
-    let (tx_consensus, _) = mpsc::channel(100);
+    // let (tx_consensus, _) = mpsc::channel(100);
     let (tx_transaction, incoming_tx_reciever) = broadcast::channel(100);
 
     let (tx_request_event, rx_request_event) = mpsc::channel(100);
-    let (tx_block, rx_block) = mpsc::channel(100);
+    // let (tx_block, rx_block) = mpsc::channel(100);
 
   let relayer_sender = {
         #[cfg(feature = "relayer")]
@@ -106,8 +106,8 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .network_sender(tx_request_event.clone())
         .import_block_event(block_importer.subscribe())
         .tx_status_sender(tx_status_sender)
-        .txpool_sender(txpool_sender)
-        .txpool_receiver(txpool_receiver);
+        .txpool_sender(Sender::new(txpool_sender))
+        .txpool_receiver(txpool_receiver)
         .import_block_event(block_importer.subscribe());
 
     #[cfg(feature = "p2p")]
@@ -124,7 +124,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     block_producer.start(txpool_builder.sender().clone()).await;
     bft.start(
-        relayer_builder.sender().clone(),
+        relayer_sender.clone(),
 
         tx_request_event.clone(),
         block_producer.sender().clone(),
@@ -136,7 +136,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     sync.start(
         rx_block,
         tx_request_event.clone(),
-        relayer_builder.sender().clone(),
+        relayer_sender.clone(),
 
         bft.sender().clone(),
         block_importer.sender().clone(),

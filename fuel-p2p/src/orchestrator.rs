@@ -18,13 +18,7 @@ use crate::{
     request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
     service::{FuelP2PEvent, FuelP2PService},
 };
-use libp2p::request_response::RequestId;
 use tokio::sync::broadcast;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tracing::warn;
-
 
 pub struct NetworkOrchestrator {
     p2p_config: P2PConfig,
