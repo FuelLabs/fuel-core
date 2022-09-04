@@ -44,6 +44,11 @@ input BalanceFilterInput {
 	owner: Address!
 }
 
+"""
+The schema analog of the [`crate::database::utils::Banknote`].
+"""
+union Banknote = Coin | Message
+
 type Block {
 	id: BlockId!
 	height: U64!
@@ -250,6 +255,17 @@ The input/output is a string in RFC3339 format.
 """
 scalar DateTime
 
+input ExcludeInput {
+	"""
+	Utxos to exclude from the selection.
+	"""
+	utxos: [UtxoId!]!
+	"""
+	Messages to exclude from teh selection.
+	"""
+	messages: [MessageId!]!
+}
+
 type FailureStatus {
 	block: Block!
 	time: DateTime!
@@ -429,18 +445,18 @@ type Query {
 	health: Boolean!
 	coin(utxoId: UtxoId!): Coin
 	coins(filter: CoinFilterInput!, first: Int, after: String, last: Int, before: String): CoinConnection!
-	"""
-	For each `spend_query`, get some spendable coins (of asset specified by the query) owned by
-	`owner` that add up at least the query amount. The returned coins (UTXOs) are actual coins
-	that can be spent. The number of coins (UXTOs) is optimized to prevent dust accumulation.
-	Max number of UTXOS and excluded UTXOS can also be specified.
-	"""
-	coinsToSpend(owner: Address!, spendQuery: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: [UtxoId!]): [Coin!]!
 	contract(id: ContractId!): Contract
 	contractBalance(contract: ContractId!, asset: AssetId!): ContractBalance!
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
+	"""
+	For each `spend_query`, get some spendable banknotes(of asset specified by the query) owned by
+	`owner` that add up at least the query amount. The returned banknotes are actual coins/messages
+	that can be spent. The number of banknotes is optimized to prevent dust accumulation.
+	Max number of banknotes and excluded banknotes can also be specified.
+	"""
+	banknotesToSpend(owner: Address!, assets: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: ExcludeInput): [[Banknote!]!]!
 }
 
 type Receipt {

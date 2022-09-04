@@ -52,7 +52,7 @@ impl BalanceQuery {
         let db = ctx.data_unchecked::<Database>();
 
         let balance = db
-            .owned_coins(owner.into(), None, None)
+            .owned_coins_utxos(&owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
@@ -94,7 +94,7 @@ impl BalanceQuery {
         let db = ctx.data_unchecked::<Database>();
 
         let balances = db
-            .owned_coins(filter.owner.into(), None, None)
+            .owned_coins_utxos(&filter.owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)

@@ -1,4 +1,5 @@
 mod balances;
+mod banknote;
 mod blocks;
 mod chain;
 mod coin;

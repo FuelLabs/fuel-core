@@ -1,6 +1,7 @@
 use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
 
 pub mod balance;
+pub mod banknote;
 pub mod block;
 pub mod chain;
 pub mod coin;
@@ -25,6 +26,7 @@ pub struct Query(
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
     message::MessageQuery,
+    banknote::BanknoteQuery,
 );
 
 #[derive(MergedObject, Default)]

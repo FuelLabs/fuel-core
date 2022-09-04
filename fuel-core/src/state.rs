@@ -47,6 +47,9 @@ pub trait KeyValueStore {
     fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
+    // TODO: Use `Option<&[u8]>` instead of `Option<Vec<u8>>`. Also decide, do we really need usage
+    //  of `Option`? If `len` is zero it is the same as `None`. Apply the same change for all upper
+    //  functions.
     fn iter_all(
         &self,
         column: ColumnId,

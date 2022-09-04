@@ -14,6 +14,7 @@ use thiserror::Error;
 pub use primitives::*;
 
 pub mod balance;
+pub mod banknote;
 pub mod block;
 pub mod chain;
 pub mod coin;

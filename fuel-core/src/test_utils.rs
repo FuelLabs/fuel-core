@@ -33,9 +33,9 @@ impl TestDatabase {
         (id, coin)
     }
 
-    pub fn owned_coins(&self, owner: Address) -> Vec<(UtxoId, Coin)> {
+    pub fn owned_coins(&self, owner: &Address) -> Vec<(UtxoId, Coin)> {
         self.database
-            .owned_coins(owner, None, None)
+            .owned_coins_utxos(owner, None, None)
             .map(|res| {
                 res.map(|id| {
                     let coin = Storage::<UtxoId, Coin>::get(&self.database, &id)

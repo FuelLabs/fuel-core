@@ -5,8 +5,9 @@ use fuel_vm::prelude::*;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
+    banknote::SpendQueryElementInput,
     block::BlockByIdArgs,
-    coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
+    coin::{Coin, CoinByIdArgs},
     contract::{Contract, ContractByIdArgs},
     tx::{TxArg, TxIdArgs},
     Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs,
@@ -21,6 +22,7 @@ use std::{
 };
 use types::{TransactionResponse, TransactionStatus};
 
+use crate::client::schema::banknote::ExcludeInput;
 use crate::client::schema::tx::DryRunArg;
 pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
 
@@ -359,14 +361,15 @@ impl FuelClient {
         Ok(coins)
     }
 
-    /// Retrieve coins to spend in a transaction
-    pub async fn coins_to_spend(
+    /// Retrieve banknotes to spend in a transaction
+    pub async fn banknotes_to_spend(
         &self,
         owner: &str,
         spend_query: Vec<(&str, u64)>,
         max_inputs: Option<i32>,
-        excluded_ids: Option<Vec<&str>>,
-    ) -> io::Result<Vec<schema::coin::Coin>> {
+        // (Utxos, messages)
+        excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
+    ) -> io::Result<Vec<Vec<schema::banknote::Banknote>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
@@ -377,15 +380,15 @@ impl FuelClient {
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<Vec<schema::UtxoId>> = excluded_ids
-            .map(|ids| ids.into_iter().map(schema::UtxoId::from_str).try_collect())
+        let excluded_ids: Option<ExcludeInput> = excluded_ids
+            .map(|tuple| ExcludeInput::from_tuple(tuple))
             .transpose()?;
-        let query = schema::coin::CoinsToSpendQuery::build(
+        let query = schema::banknote::BanknotesToSpendQuery::build(
             &(owner, spend_query, max_inputs, excluded_ids).into(),
         );
 
-        let coins = self.query(query).await?.coins_to_spend;
-        Ok(coins)
+        let banknotes_per_asset = self.query(query).await?.banknotes_to_spend;
+        Ok(banknotes_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {

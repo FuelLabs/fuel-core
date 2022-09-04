@@ -15,6 +15,12 @@ pub struct Coin {
     pub block_created: BlockHeight,
 }
 
+impl AsRef<Coin> for Coin {
+    fn as_ref(&self) -> &Coin {
+        self
+    }
+}
+
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Copy, Clone, Eq, PartialOrd, PartialEq)]
 pub enum CoinStatus {

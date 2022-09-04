@@ -50,6 +50,7 @@ pub mod staking_diffs;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
+pub mod utils;
 pub mod validator_set;
 
 pub mod columns {

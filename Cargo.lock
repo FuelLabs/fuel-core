@@ -2130,7 +2130,6 @@ dependencies = [
  "insta",
  "itertools",
  "lazy_static",
- "prometheus",
  "rand 0.8.5",
  "rocksdb",
  "serde",
