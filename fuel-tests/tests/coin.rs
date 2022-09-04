@@ -161,9 +161,13 @@ async fn only_unspent_coins(
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                asset_id: if i <= 5 { asset_id } else { Default::default() },
+                asset_id: asset_id,
                 maturity: Default::default(),
-                status: CoinStatus::Unspent,
+                status: if i <= 5 {
+                    CoinStatus::Unspent
+                } else {
+                    CoinStatus::Spent
+                },
                 block_created: Default::default(),
             };
 
