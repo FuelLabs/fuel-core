@@ -2,7 +2,6 @@ max_width = 90 # changed
 normalize_comments = true # changed
 imports_layout = "Vertical" # changed
 imports_granularity = "Crate" # changed
-combine_control_expr = false # changed
 trailing_semicolon = false # changed
 edition = "2021" # changed
 use_try_shorthand = true # changed
