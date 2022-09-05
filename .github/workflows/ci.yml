@@ -79,8 +79,8 @@ jobs:
             args: --all --verbose -- --check
           - command: clippy
             args: --all-targets --all-features
-          - command: make build
-            # args: --all-targets --all-features
+          - command: make
+            args: build
           - command: test
             args: --all-targets --all-features --workspace --exclude fuel-p2p
           - command: test
