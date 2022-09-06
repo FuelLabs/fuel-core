@@ -79,8 +79,8 @@ jobs:
             args: --all --verbose -- --check
           - command: clippy
             args: --all-targets --all-features
-          - command: check
-            args: --all-targets --all-features
+          - command: make
+            args: build
           - command: test
             args: --all-targets --all-features --workspace --exclude fuel-p2p
           - command: test
@@ -97,6 +97,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - name: Install Cargo Make
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-make
+          version: "0.35.16"
       - uses: Swatinem/rust-cache@v1
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
