@@ -1,15 +1,31 @@
 use crate::{
-    containers::{dependency::Dependency, price_sort::PriceSort},
+    containers::{
+        dependency::Dependency,
+        price_sort::PriceSort,
+    },
     types::*,
-    Config, Error,
+    Config,
+    Error,
 };
 use fuel_core_interfaces::{
-    model::{ArcTx, TxInfo},
-    txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
+    model::{
+        ArcTx,
+        TxInfo,
+    },
+    txpool::{
+        TxPoolDb,
+        TxStatus,
+        TxStatusBroadcast,
+    },
 };
-use std::cmp::Reverse;
-use std::collections::HashMap;
-use tokio::sync::{broadcast, RwLock};
+use std::{
+    cmp::Reverse,
+    collections::HashMap,
+};
+use tokio::sync::{
+    broadcast,
+    RwLock,
+};
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -44,14 +60,14 @@ impl TxPool {
         db: &dyn TxPoolDb,
     ) -> anyhow::Result<Vec<ArcTx>> {
         if tx.metadata().is_none() {
-            return Err(Error::NoMetadata.into());
+            return Err(Error::NoMetadata.into())
         }
 
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
         if self.by_hash.contains_key(&tx.id()) {
-            return Err(Error::NotInsertedTxKnown.into());
+            return Err(Error::NotInsertedTxKnown.into())
         }
 
         let mut max_limit_hit = false;
@@ -61,7 +77,7 @@ impl TxPool {
             // limit is hit, check if we can push out lowest priced tx
             let lowest_price = self.by_gas_price.lowest_price();
             if lowest_price >= tx.gas_price() {
-                return Err(Error::NotInsertedLimitHit.into());
+                return Err(Error::NotInsertedLimitHit.into())
             }
         }
         // check and insert dependency
@@ -72,10 +88,10 @@ impl TxPool {
         // if some transaction were removed so we don't need to check limit
         if rem.is_empty() {
             if max_limit_hit {
-                //remove last tx from sort
+                // remove last tx from sort
                 let rem_tx = self.by_gas_price.last().unwrap(); // safe to unwrap limit is hit
                 self.remove_inner(&rem_tx);
-                return Ok(vec![rem_tx]);
+                return Ok(vec![rem_tx])
             }
             Ok(Vec::new())
         } else {
@@ -115,14 +131,14 @@ impl TxPool {
                 self.by_gas_price.remove(remove);
                 self.by_hash.remove(&remove.id());
             }
-            return removed;
+            return removed
         }
         Vec::new()
     }
 
     fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
         if tx.gas_price() < self.config.min_gas_price {
-            return Err(Error::NotInsertedGasPriceTooLow);
+            return Err(Error::NotInsertedGasPriceTooLow)
         }
         Ok(())
     }
@@ -187,8 +203,11 @@ impl TxPool {
             let pool = txpool.read().await;
             for hash in hashes {
                 if let Some(tx) = pool.txs().get(hash) {
-                    pool.dependency()
-                        .find_dependent(tx.tx().clone(), &mut seen, pool.txs());
+                    pool.dependency().find_dependent(
+                        tx.tx().clone(),
+                        &mut seen,
+                        pool.txs(),
+                    );
                 }
             }
         }
@@ -220,7 +239,7 @@ impl TxPool {
 
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub async fn block_update(
-        txpool: &RwLock<Self>, /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
+        txpool: &RwLock<Self>, // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
         txpool.write().await;
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
@@ -255,7 +274,13 @@ pub mod tests {
     mod helpers {
         use crate::types::TxId;
         use fuel_core_interfaces::{
-            common::fuel_tx::{Contract, ContractId, Input, Output, UtxoId},
+            common::fuel_tx::{
+                Contract,
+                ContractId,
+                Input,
+                Output,
+                UtxoId,
+            },
             model::Message,
         };
 
@@ -312,19 +337,35 @@ pub mod tests {
     }
 
     use super::*;
-    use crate::txpool::tests::helpers::{
-        create_coin_input, create_coin_output, create_contract_input, create_contract_output,
+    use crate::{
+        txpool::tests::helpers::{
+            create_coin_input,
+            create_coin_output,
+            create_contract_input,
+            create_contract_output,
+        },
+        Error,
     };
-    use crate::Error;
     use fuel_core_interfaces::{
         common::{
             fuel_storage::Storage,
-            fuel_tx::{TransactionBuilder, UtxoId},
+            fuel_tx::{
+                TransactionBuilder,
+                UtxoId,
+            },
         },
-        model::{BlockHeight, Coin, CoinStatus, Message},
+        model::{
+            BlockHeight,
+            Coin,
+            CoinStatus,
+            Message,
+        },
     };
-    use std::str::FromStr;
-    use std::{cmp::Reverse, sync::Arc};
+    use std::{
+        cmp::Reverse,
+        str::FromStr,
+        sync::Arc,
+    };
 
     #[tokio::test]
     async fn simple_insertion() {
@@ -374,9 +415,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
-        let db_tx_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
+        let db_tx_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
         db.insert(
             &UtxoId::new(db_tx_id, 0),
             &Coin {
@@ -431,9 +473,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
-        let db_tx_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
+        let db_tx_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
         db.insert(
             &UtxoId::new(db_tx_id, 0),
             &Coin {
@@ -505,9 +548,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let db = MockDb::default();
 
-        let nonexistent_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000011")
-                .unwrap();
+        let nonexistent_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000011",
+        )
+        .unwrap();
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(create_coin_input(nonexistent_id, 0))
@@ -529,9 +573,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
-        let db_tx_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
+        let db_tx_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
         db.insert(
             &UtxoId::new(db_tx_id, 0),
             &Coin {
@@ -566,9 +611,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
-        let db_tx_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
+        let db_tx_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
         db.insert(
             &UtxoId::new(db_tx_id, 0),
             &Coin {
@@ -724,9 +770,10 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let mut db = MockDb::default();
 
-        let db_tx_id =
-            TxId::from_str("0x0000000000000000000000000000000000000000000000000000000000000000")
-                .unwrap();
+        let db_tx_id = TxId::from_str(
+            "0x0000000000000000000000000000000000000000000000000000000000000000",
+        )
+        .unwrap();
         db.insert(
             &UtxoId::new(db_tx_id, 0),
             &Coin {
@@ -1064,14 +1111,16 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id() {
+    async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same_message_id(
+    ) {
         let message_amount = 10_000;
         let message = Message {
             amount: message_amount,
             ..Default::default()
         };
 
-        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
+        let conflicting_message_input =
+            helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
         let gas_price_low = 1u64;
 
@@ -1120,7 +1169,8 @@ pub mod tests {
             ..Default::default()
         };
 
-        let conflicting_message_input = helpers::create_message_predicate_from_message(&message);
+        let conflicting_message_input =
+            helpers::create_message_predicate_from_message(&message);
         let gas_price_high = 2u64;
         let gas_price_low = 1u64;
 

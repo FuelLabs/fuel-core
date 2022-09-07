@@ -1,18 +1,34 @@
-use crate::model::ArcTx;
 use crate::{
-    db::{Error as DbStateError, KvStoreError},
-    model::TxInfo,
-    model::{Coin, Message},
+    db::{
+        Error as DbStateError,
+        KvStoreError,
+    },
+    model::{
+        ArcTx,
+        Coin,
+        Message,
+        TxInfo,
+    },
 };
-use derive_more::{Deref, DerefMut};
+use derive_more::{
+    Deref,
+    DerefMut,
+};
 use fuel_storage::Storage;
-use fuel_tx::{ContractId, UtxoId};
-use fuel_tx::{Transaction, TxId};
+use fuel_tx::{
+    ContractId,
+    Transaction,
+    TxId,
+    UtxoId,
+};
 use fuel_types::MessageId;
 use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{
+    mpsc,
+    oneshot,
+};
 
 pub trait TxPoolDb:
     Storage<UtxoId, Coin, Error = KvStoreError>
@@ -30,7 +46,8 @@ pub trait TxPoolDb:
     }
 
     fn message(&self, message_id: MessageId) -> Result<Option<Message>, KvStoreError> {
-        Storage::<MessageId, Message>::get(self, &message_id).map(|t| t.map(|t| t.as_ref().clone()))
+        Storage::<MessageId, Message>::get(self, &message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
     }
 }
 
@@ -64,7 +81,10 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn find_dependent(
+        &self,
+        ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::FindDependent { ids, response })
             .await?;
@@ -181,7 +201,9 @@ pub enum Error {
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, MessageId),
-    #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}")]
+    #[error(
+        "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
+    )]
     NotInsertedOutputNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
     NotInsertedInputContractNotExisting(ContractId),

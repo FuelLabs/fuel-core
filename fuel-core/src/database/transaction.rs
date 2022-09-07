@@ -1,18 +1,32 @@
 use crate::{
     database::{
-        columns::{TRANSACTIONS, TRANSACTIONS_BY_OWNER_BLOCK_IDX, TRANSACTION_STATUS},
-        Database, KvStoreError,
+        columns::{
+            TRANSACTIONS,
+            TRANSACTIONS_BY_OWNER_BLOCK_IDX,
+            TRANSACTION_STATUS,
+        },
+        Database,
+        KvStoreError,
     },
     model::BlockHeight,
-    state::{Error, IterDirection},
+    state::{
+        Error,
+        IterDirection,
+    },
     tx_pool::TransactionStatus,
 };
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
-    fuel_tx::{Bytes32, Transaction},
+    fuel_tx::{
+        Bytes32,
+        Transaction,
+    },
     fuel_types::Address,
 };
-use std::{borrow::Cow, ops::Deref};
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 pub type TransactionIndex = u32;
 
@@ -24,7 +38,8 @@ impl Storage<Bytes32, Transaction> for Database {
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        Database::insert(self, key.as_ref(), TRANSACTIONS, value.clone()).map_err(Into::into)
+        Database::insert(self, key.as_ref(), TRANSACTIONS, value.clone())
+            .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
@@ -60,9 +75,10 @@ impl Database {
         owner: &Address,
         start: Option<&OwnedTransactionIndexCursor>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), Error>> + '_ {
-        let start =
-            start.map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
+    ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), Error>> + '_
+    {
+        let start = start
+            .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
         self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
             TRANSACTIONS_BY_OWNER_BLOCK_IDX,
             Some(owner.to_vec()),
@@ -94,7 +110,10 @@ impl Database {
         self.insert(tx_id.to_vec(), TRANSACTION_STATUS, status)
     }
 
-    pub fn get_tx_status(&self, tx_id: &Bytes32) -> Result<Option<TransactionStatus>, Error> {
+    pub fn get_tx_status(
+        &self,
+        tx_id: &Bytes32,
+    ) -> Result<Option<TransactionStatus>, Error> {
         self.get(&tx_id.deref()[..], TRANSACTION_STATUS)
     }
 }
@@ -158,7 +177,11 @@ impl From<OwnedTransactionIndexCursor> for Vec<u8> {
     }
 }
 
-fn owned_tx_index_key(owner: &Address, height: BlockHeight, tx_idx: TransactionIndex) -> Vec<u8> {
+fn owned_tx_index_key(
+    owner: &Address,
+    height: BlockHeight,
+    tx_idx: TransactionIndex,
+) -> Vec<u8> {
     // generate prefix to enable sorted indexing of transactions by owner
     // owner + block_height + tx_idx
     let mut key = Vec::with_capacity(40);

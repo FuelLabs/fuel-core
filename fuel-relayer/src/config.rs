@@ -1,8 +1,17 @@
-use ethers_core::types::{H160, H256};
+use ethers_core::types::{
+    H160,
+    H256,
+};
 use fuel_core_interfaces::model::DaBlockHeight;
 use once_cell::sync::Lazy;
-use sha3::{Digest, Keccak256};
-use std::{str::FromStr, time::Duration};
+use sha3::{
+    Digest,
+    Keccak256,
+};
+use std::{
+    str::FromStr,
+    time::Duration,
+};
 
 pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
 pub(crate) const NUMBER_OF_TRIES_FOR_INITIAL_SYNC: u64 = 10;
@@ -18,7 +27,8 @@ pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
     Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
 pub(crate) static ETH_LOG_VALIDATOR_UNREGISTRATION: Lazy<H256> =
     Lazy::new(|| keccak256("ValidatorUnregistration(bytes)"));
-pub(crate) static ETH_LOG_DEPOSIT: Lazy<H256> = Lazy::new(|| keccak256("Deposit(address,uint256)"));
+pub(crate) static ETH_LOG_DEPOSIT: Lazy<H256> =
+    Lazy::new(|| keccak256("Deposit(address,uint256)"));
 pub(crate) static ETH_LOG_WITHDRAWAL: Lazy<H256> =
     Lazy::new(|| keccak256("Withdrawal(address,uint256)"));
 pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
@@ -108,33 +118,45 @@ mod tests {
     pub fn test_function_signatures() {
         assert_eq!(
             *ETH_LOG_MESSAGE,
-            H256::from_str("0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2")
-                .unwrap()
+            H256::from_str(
+                "0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2"
+            )
+            .unwrap()
         );
         assert_eq!(
             *ETH_LOG_VALIDATOR_REGISTRATION,
-            H256::from_str("0xb880ae9a41c67ab61e670929983ea383810f2a09e384b5d1e40a6a8d123e643f")
-                .unwrap()
+            H256::from_str(
+                "0xb880ae9a41c67ab61e670929983ea383810f2a09e384b5d1e40a6a8d123e643f"
+            )
+            .unwrap()
         );
         assert_eq!(
             *ETH_LOG_DEPOSIT,
-            H256::from_str("0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c")
-                .unwrap()
+            H256::from_str(
+                "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
+            )
+            .unwrap()
         );
         assert_eq!(
             *ETH_LOG_WITHDRAWAL,
-            H256::from_str("0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65")
-                .unwrap()
+            H256::from_str(
+                "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65"
+            )
+            .unwrap()
         );
         assert_eq!(
             *ETH_LOG_DELEGATION,
-            H256::from_str("0xb304243c5b5465a0f6a6b44be45b6906650d542c8e1dd33b0630f72b2f454081")
-                .unwrap()
+            H256::from_str(
+                "0xb304243c5b5465a0f6a6b44be45b6906650d542c8e1dd33b0630f72b2f454081"
+            )
+            .unwrap()
         );
         assert_eq!(
             *ETH_FUEL_BLOCK_COMMITTED,
-            H256::from_str("0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872")
-                .unwrap()
+            H256::from_str(
+                "0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872"
+            )
+            .unwrap()
         );
     }
 }

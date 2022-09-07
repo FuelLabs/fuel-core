@@ -1,16 +1,35 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+    },
     database::Database,
-    model::{Coin, CoinStatus},
-    service::{Config, FuelService},
+    model::{
+        Coin,
+        CoinStatus,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
-    fuel_tx::{AssetId, UtxoId},
-    fuel_vm::prelude::{Address, Bytes32, Word},
+    fuel_tx::{
+        AssetId,
+        UtxoId,
+    },
+    fuel_vm::prelude::{
+        Address,
+        Bytes32,
+        Word,
+    },
 };
 use fuel_gql_client::client::{
-    schema::coin::CoinStatus as SchemeCoinStatus, FuelClient, PageDirection, PaginationRequest,
+    schema::coin::CoinStatus as SchemeCoinStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 
 #[tokio::test]

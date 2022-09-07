@@ -1,30 +1,60 @@
 use super::modules::Modules;
-use crate::database::Database;
-use crate::schema::{build_schema, dap, CoreSchema};
-use crate::service::metrics::metrics;
-use crate::service::Config;
+use crate::{
+    database::Database,
+    schema::{
+        build_schema,
+        dap,
+        CoreSchema,
+    },
+    service::{
+        metrics::metrics,
+        Config,
+    },
+};
 use anyhow::Result;
 use async_graphql::{
-    extensions::Tracing, http::playground_source, http::GraphQLPlaygroundConfig, Request, Response,
+    extensions::Tracing,
+    http::{
+        playground_source,
+        GraphQLPlaygroundConfig,
+    },
+    Request,
+    Response,
 };
 use axum::{
     extract::Extension,
     http::{
         header::{
-            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
+            ACCESS_CONTROL_ALLOW_HEADERS,
+            ACCESS_CONTROL_ALLOW_METHODS,
+            ACCESS_CONTROL_ALLOW_ORIGIN,
         },
         HeaderValue,
     },
-    response::Html,
-    response::IntoResponse,
-    routing::{get, post},
-    Json, Router,
+    response::{
+        Html,
+        IntoResponse,
+    },
+    routing::{
+        get,
+        post,
+    },
+    Json,
+    Router,
 };
 use serde_json::json;
-use std::net::{SocketAddr, TcpListener};
-use tokio::signal::unix::SignalKind;
-use tokio::task::JoinHandle;
-use tower_http::{set_header::SetResponseHeaderLayer, trace::TraceLayer};
+use std::net::{
+    SocketAddr,
+    TcpListener,
+};
+use tokio::{
+    signal::unix::SignalKind,
+    task::JoinHandle,
+};
+use tower_http::{
+    set_header::SetResponseHeaderLayer,
+    trace::TraceLayer,
+};
 use tracing::info;
 
 /// Spawns the api server for this node
@@ -124,7 +154,10 @@ async fn health() -> Json<serde_json::Value> {
     Json(json!({ "up": true }))
 }
 
-async fn graphql_handler(schema: Extension<CoreSchema>, req: Json<Request>) -> Json<Response> {
+async fn graphql_handler(
+    schema: Extension<CoreSchema>,
+    req: Json<Request>,
+) -> Json<Response> {
     schema.execute(req.0).await.into()
 }
 

@@ -1,22 +1,42 @@
-use crate::state::KVItem;
 use crate::{
     database::{
         columns,
         columns::METADATA,
-        metadata::{DB_VERSION, DB_VERSION_KEY},
+        metadata::{
+            DB_VERSION,
+            DB_VERSION_KEY,
+        },
     },
     state::{
-        BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
+        BatchOperations,
+        ColumnId,
+        Error,
+        IterDirection,
+        KVItem,
+        KeyValueStore,
+        TransactableStorage,
         WriteOperation,
     },
 };
 #[cfg(feature = "metrics")]
 use fuel_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
-    BoundColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBWithThreadMode, IteratorMode,
-    MultiThreaded, Options, ReadOptions, SliceTransform, WriteBatch,
+    BoundColumnFamily,
+    ColumnFamilyDescriptor,
+    DBCompressionType,
+    DBWithThreadMode,
+    IteratorMode,
+    MultiThreaded,
+    Options,
+    ReadOptions,
+    SliceTransform,
+    WriteBatch,
 };
-use std::{convert::TryFrom, path::Path, sync::Arc};
+use std::{
+    convert::TryFrom,
+    path::Path,
+    sync::Arc,
+};
 
 type DB = DBWithThreadMode<MultiThreaded>;
 #[derive(Debug)]
@@ -66,11 +86,11 @@ impl RocksDb {
                 )?;
             }
             Some(v) => {
-                let b =
-                    <[u8; 4]>::try_from(v.as_slice()).map_err(|_| Error::InvalidDatabaseVersion)?;
+                let b = <[u8; 4]>::try_from(v.as_slice())
+                    .map_err(|_| Error::InvalidDatabaseVersion)?;
                 let version = u32::from_be_bytes(b);
                 if version != DB_VERSION {
-                    return Err(Error::InvalidDatabaseVersion);
+                    return Err(Error::InvalidDatabaseVersion)
                 }
             }
         };
@@ -144,7 +164,11 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn delete(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
+    fn delete(
+        &self,
+        key: &[u8],
+        column: ColumnId,
+    ) -> crate::state::Result<Option<Vec<u8>>> {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
@@ -228,7 +252,10 @@ impl KeyValueStore for RocksDb {
 }
 
 impl BatchOperations for RocksDb {
-    fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<(), Error> {
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = WriteOperation>,
+    ) -> Result<(), Error> {
         let mut batch = WriteBatch::default();
 
         for entry in entries {

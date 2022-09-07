@@ -1,12 +1,28 @@
 use fuel_core::{
-    chain_config::{MessageConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        MessageConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use fuel_crypto::fuel_types::Address;
-use fuel_crypto::SecretKey;
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use fuel_crypto::{
+    fuel_types::Address,
+    SecretKey,
+};
+use fuel_gql_client::client::{
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
+};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::ops::Deref;
 
 #[tokio::test]

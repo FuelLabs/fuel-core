@@ -1,9 +1,25 @@
-use futures::future::BoxFuture;
-use futures::FutureExt;
-use libp2p::mdns::{MdnsConfig, MdnsEvent};
-use libp2p::swarm::{NetworkBehaviour, NetworkBehaviourAction, PollParameters};
-use libp2p::{mdns::Mdns, Multiaddr, PeerId};
-use std::task::{Context, Poll};
+use futures::{
+    future::BoxFuture,
+    FutureExt,
+};
+use libp2p::{
+    mdns::{
+        Mdns,
+        MdnsConfig,
+        MdnsEvent,
+    },
+    swarm::{
+        NetworkBehaviour,
+        NetworkBehaviourAction,
+        PollParameters,
+    },
+    Multiaddr,
+    PeerId,
+};
+use std::task::{
+    Context,
+    Poll,
+};
 use tracing::warn;
 
 #[allow(clippy::large_enum_variant)]
@@ -36,8 +52,9 @@ impl MdnsWrapper {
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
-    ) -> Poll<NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>>
-    {
+    ) -> Poll<
+        NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>,
+    > {
         loop {
             match self {
                 Self::Instantiating(fut) => {

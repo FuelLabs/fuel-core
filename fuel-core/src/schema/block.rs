@@ -1,25 +1,53 @@
-use crate::database::Database;
-use crate::executor::{ExecutionMode, Executor};
-use crate::schema::{
-    scalars::{BlockId, U64},
-    tx::types::Transaction,
-};
-use crate::service::Config;
 use crate::{
-    database::KvStoreError,
-    model::{BlockHeight, FuelBlock, FuelBlockDb, FuelBlockHeader},
+    database::{
+        Database,
+        KvStoreError,
+    },
+    executor::{
+        ExecutionMode,
+        Executor,
+    },
+    model::{
+        BlockHeight,
+        FuelBlock,
+        FuelBlockDb,
+        FuelBlockHeader,
+    },
+    schema::{
+        scalars::{
+            BlockId,
+            U64,
+        },
+        tx::types::Transaction,
+    },
+    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{query, Connection, Edge, EmptyFields},
-    Context, Object,
+    connection::{
+        query,
+        Connection,
+        Edge,
+        EmptyFields,
+    },
+    Context,
+    Object,
 };
-use chrono::{DateTime, Utc};
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
+use chrono::{
+    DateTime,
+    Utc,
+};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx,
+    fuel_types,
+};
 use itertools::Itertools;
-use std::borrow::Cow;
-use std::convert::TryInto;
+use std::{
+    borrow::Cow,
+    convert::TryInto,
+};
 
 use super::scalars::Address;
 
@@ -35,7 +63,10 @@ impl Block {
         self.0.headers.height.into()
     }
 
-    async fn transactions(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<Transaction>> {
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Vec<Transaction>> {
         let db = ctx.data_unchecked::<Database>().clone();
         self.0
             .transactions
@@ -83,13 +114,15 @@ impl BlockQuery {
                 if height == 0 {
                     return Err(async_graphql::Error::new(
                         "Genesis block isn't implemented yet",
-                    ));
+                    ))
                 } else {
                     db.get_block_id(height.try_into()?)?
                         .ok_or("Block height non-existent")?
                 }
             }
-            (None, None) => return Err(async_graphql::Error::new("Missing either id or height")),
+            (None, None) => {
+                return Err(async_graphql::Error::new("Missing either id or height"))
+            }
         };
 
         let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &id)?
@@ -112,74 +145,83 @@ impl BlockQuery {
             before,
             first,
             last,
-            |after: Option<usize>, before: Option<usize>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<usize>, before: Option<usize>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"))
+                    }
 
-                let start;
-                let end;
+                    let start;
+                    let end;
 
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
+                    if direction == IterDirection::Forward {
+                        start = after;
+                        end = before;
+                    } else {
+                        start = before;
+                        end = after;
+                    }
 
-                let mut blocks = db.all_block_ids(start.map(Into::into), Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = blocks.next();
-                }
+                    let mut blocks =
+                        db.all_block_ids(start.map(Into::into), Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = blocks.next();
+                    }
 
-                // take desired amount of results
-                let blocks = blocks
-                    .take_while(|r| {
-                        if let (Ok(b), Some(end)) = (r, end) {
-                            if b.0.as_usize() == end {
-                                return false;
+                    // take desired amount of results
+                    let blocks = blocks
+                        .take_while(|r| {
+                            if let (Ok(b), Some(end)) = (r, end) {
+                                if b.0.as_usize() == end {
+                                    return false
+                                }
                             }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch);
-                let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
-                if direction == IterDirection::Forward {
-                    blocks.reverse();
+                            true
+                        })
+                        .take(records_to_fetch);
+                    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> =
+                        blocks.try_collect()?;
+                    if direction == IterDirection::Forward {
+                        blocks.reverse();
+                    }
+
+                    // TODO: do a batch get instead
+                    let blocks: Vec<Cow<FuelBlockDb>> = blocks
+                        .iter()
+                        .map(|(_, id)| {
+                            Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, id)
+                                .transpose()
+                                .ok_or(KvStoreError::NotFound)?
+                        })
+                        .try_collect()?;
+
+                    let mut connection = Connection::new(
+                        started.is_some(),
+                        records_to_fetch <= blocks.len(),
+                    );
+
+                    connection.edges.extend(blocks.into_iter().map(|item| {
+                        Edge::new(
+                            item.headers.height.to_usize(),
+                            Block(item.into_owned()),
+                        )
+                    }));
+
+                    Ok::<Connection<usize, Block>, anyhow::Error>(connection)
                 }
-
-                // TODO: do a batch get instead
-                let blocks: Vec<Cow<FuelBlockDb>> = blocks
-                    .iter()
-                    .map(|(_, id)| {
-                        Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, id)
-                            .transpose()
-                            .ok_or(KvStoreError::NotFound)?
-                    })
-                    .try_collect()?;
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= blocks.len());
-
-                connection.edges.extend(blocks.into_iter().map(|item| {
-                    Edge::new(item.headers.height.to_usize(), Block(item.into_owned()))
-                }));
-
-                Ok::<Connection<usize, Block>, anyhow::Error>(connection)
             },
         )
         .await
@@ -200,7 +242,9 @@ impl BlockMutation {
         let cfg = ctx.data_unchecked::<Config>().clone();
 
         if !cfg.manual_blocks_enabled {
-            return Err(anyhow!("Manual Blocks must be enabled to use this endpoint").into());
+            return Err(
+                anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
+            )
         }
 
         let executor = Executor {

@@ -1,40 +1,73 @@
 use crate::{
-    database::{transaction::TransactionIndex, Database, KvStoreError},
-    model::{BlockHeight, Coin, CoinStatus, FuelBlock, FuelBlockDb},
+    database::{
+        transaction::TransactionIndex,
+        Database,
+        KvStoreError,
+    },
+    model::{
+        BlockHeight,
+        Coin,
+        CoinStatus,
+        FuelBlock,
+        FuelBlockDb,
+    },
     service::Config,
     tx_pool::TransactionStatus,
 };
 use chrono::Utc;
-use fuel_core_interfaces::{
-    common::fuel_tx::{CheckedTransaction, TransactionFee},
-    model::Message,
-};
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage::Storage,
         fuel_tx::{
-            Address, AssetId, Bytes32, Input, Output, Receipt, Transaction, TxId, UtxoId,
+            Address,
+            AssetId,
+            Bytes32,
+            CheckedTransaction,
+            Input,
+            Output,
+            Receipt,
+            Transaction,
+            TransactionFee,
+            TxId,
+            UtxoId,
             ValidationError,
         },
-        fuel_types::{bytes::SerializableVec, ContractId, MessageId},
+        fuel_types::{
+            bytes::SerializableVec,
+            ContractId,
+            MessageId,
+        },
         fuel_vm::{
             consts::REG_SP,
-            prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
+            prelude::{
+                Backtrace as FuelBacktrace,
+                Interpreter,
+                PredicateStorage,
+            },
         },
     },
-    model::FuelBlockHeader,
+    model::{
+        FuelBlockHeader,
+        Message,
+    },
 };
 use std::{
     error::Error as StdError,
-    ops::{Deref, DerefMut},
+    ops::{
+        Deref,
+        DerefMut,
+    },
     sync::Arc,
 };
 use thiserror::Error;
-use tracing::{debug, warn};
+use tracing::{
+    debug,
+    warn,
+};
 
-///! The executor is used for block production and validation. Given a block, it will execute all
+/// ! The executor is used for block production and validation. Given a block, it will execute all
 /// the transactions contained in the block and persist changes to the underlying database as needed.
 /// In production mode, block fields like transaction commitments are set based on the executed txs.
 /// In validation mode, the processed block commitments are compared with the proposed block.
@@ -58,7 +91,10 @@ impl Executor {
 
         for tx in txs.iter() {
             // set status to submitted
-            db.update_tx_status(&tx.id(), TransactionStatus::Submitted { time: Utc::now() })?;
+            db.update_tx_status(
+                &tx.id(),
+                TransactionStatus::Submitted { time: Utc::now() },
+            )?;
         }
 
         // setup and execute block
@@ -81,7 +117,11 @@ impl Executor {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error> {
+    pub async fn execute(
+        &self,
+        block: &mut FuelBlock,
+        mode: ExecutionMode,
+    ) -> Result<(), Error> {
         // Compute the block id before execution, if mode is set to production just use zeroed id.
         let pre_exec_block_id = match mode {
             ExecutionMode::Production => Default::default(),
@@ -108,10 +148,14 @@ impl Executor {
                 block_db_transaction.deref_mut(),
                 &tx_id,
             )? {
-                return Err(Error::TransactionIdCollision(tx_id));
+                return Err(Error::TransactionIdCollision(tx_id))
             }
 
-            self.compute_contract_input_utxo_ids(tx, &mode, block_db_transaction.deref())?;
+            self.compute_contract_input_utxo_ids(
+                tx,
+                &mode,
+                block_db_transaction.deref(),
+            )?;
 
             let checked_tx = CheckedTransaction::check_unsigned(
                 tx.clone(),
@@ -170,8 +214,12 @@ impl Executor {
             }
 
             // update block commitment
-            let tx_fee =
-                self.total_fee_paid(min_fee, max_fee, tx.gas_price(), vm_result.receipts())?;
+            let tx_fee = self.total_fee_paid(
+                min_fee,
+                max_fee,
+                tx.gas_price(),
+                vm_result.receipts(),
+            )?;
             coinbase = coinbase.checked_add(tx_fee).ok_or(Error::FeeOverflow)?;
 
             // include the canonical serialization of the malleated tx into the commitment,
@@ -189,7 +237,7 @@ impl Executor {
                     if vm_result.tx() != tx {
                         return Err(Error::InvalidTransactionOutcome {
                             transaction_id: tx_id,
-                        });
+                        })
                     }
                 }
                 ExecutionMode::Production => {
@@ -233,12 +281,16 @@ impl Executor {
                 let reason = vm_result
                     .receipts()
                     .iter()
-                    .find_map(|receipt| match receipt {
-                        // Format as `Revert($rA)`
-                        Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
-                        // Display PanicReason e.g. `OutOfGas`
-                        Receipt::Panic { reason, .. } => Some(format!("{}", reason.reason())),
-                        _ => None,
+                    .find_map(|receipt| {
+                        match receipt {
+                            // Format as `Revert($rA)`
+                            Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
+                            // Display PanicReason e.g. `OutOfGas`
+                            Receipt::Panic { reason, .. } => {
+                                Some(format!("{}", reason.reason()))
+                            }
+                            _ => None,
+                        }
                     })
                     .unwrap_or_else(|| format!("{:?}", vm_result.state()));
 
@@ -269,7 +321,7 @@ impl Executor {
             }
             ExecutionMode::Validation => {
                 if block.header.transactions_root != txs_root {
-                    return Err(Error::InvalidTransactionRoot);
+                    return Err(Error::InvalidTransactionRoot)
                 }
             }
         }
@@ -282,7 +334,7 @@ impl Executor {
         if mode == ExecutionMode::Validation && pre_exec_block_id != finalized_block_id {
             // In theory this shouldn't happen since any deviance in the block should've already
             // been checked by now.
-            return Err(Error::InvalidBlockId);
+            return Err(Error::InvalidBlockId)
         }
 
         // save the status for every transaction using the finalized block id
@@ -317,32 +369,43 @@ impl Executor {
     ) -> Result<(), TransactionValidityError> {
         for input in transaction.inputs() {
             match input {
-                Input::CoinSigned { utxo_id, .. } | Input::CoinPredicate { utxo_id, .. } => {
+                Input::CoinSigned { utxo_id, .. }
+                | Input::CoinPredicate { utxo_id, .. } => {
                     if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
                         if coin.status == CoinStatus::Spent {
-                            return Err(TransactionValidityError::CoinAlreadySpent(*utxo_id));
+                            return Err(TransactionValidityError::CoinAlreadySpent(
+                                *utxo_id,
+                            ))
                         }
                         if block_height < coin.block_created + coin.maturity {
-                            return Err(TransactionValidityError::CoinHasNotMatured(*utxo_id));
+                            return Err(TransactionValidityError::CoinHasNotMatured(
+                                *utxo_id,
+                            ))
                         }
                     } else {
-                        return Err(TransactionValidityError::CoinDoesNotExist(*utxo_id));
+                        return Err(TransactionValidityError::CoinDoesNotExist(*utxo_id))
                     }
                 }
                 Input::Contract { .. } => {}
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    if let Some(message) = Storage::<MessageId, Message>::get(db, message_id)? {
+                    if let Some(message) =
+                        Storage::<MessageId, Message>::get(db, message_id)?
+                    {
                         if message.fuel_block_spend.is_some() {
-                            return Err(TransactionValidityError::MessageAlreadySpent(*message_id));
+                            return Err(TransactionValidityError::MessageAlreadySpent(
+                                *message_id,
+                            ))
                         }
                         if BlockHeight::from(message.da_height) > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
-                            ));
+                            ))
                         }
                     } else {
-                        return Err(TransactionValidityError::MessageDoesNotExist(*message_id));
+                        return Err(TransactionValidityError::MessageDoesNotExist(
+                            *message_id,
+                        ))
                     }
                 }
             }
@@ -362,8 +425,10 @@ impl Executor {
                 .any(|input| input.is_coin_predicate());
             if has_predicate {
                 return Err(Error::TransactionValidity(
-                    TransactionValidityError::PredicateExecutionDisabled(tx.transaction().id()),
-                ));
+                    TransactionValidityError::PredicateExecutionDisabled(
+                        tx.transaction().id(),
+                    ),
+                ))
             }
         } else {
             // otherwise attempt to validate any predicates if the feature flag is enabled
@@ -373,7 +438,7 @@ impl Executor {
             ) {
                 return Err(Error::TransactionValidity(
                     TransactionValidityError::InvalidPredicate(tx.transaction().id()),
-                ));
+                ))
             }
         }
         Ok(())
@@ -383,7 +448,10 @@ impl Executor {
     ///
     /// TODO: This verification really belongs in fuel-tx, and can be removed once
     ///       https://github.com/FuelLabs/fuel-tx/issues/118 is resolved.
-    fn verify_tx_has_at_least_one_coin_or_message(&self, tx: &Transaction) -> Result<(), Error> {
+    fn verify_tx_has_at_least_one_coin_or_message(
+        &self,
+        tx: &Transaction,
+    ) -> Result<(), Error> {
         if tx
             .inputs()
             .iter()
@@ -467,7 +535,9 @@ impl Executor {
                     let da_height = if self.config.utxo_validation {
                         Storage::<MessageId, Message>::get(db, message_id)?
                             .ok_or(Error::TransactionValidity(
-                                TransactionValidityError::MessageDoesNotExist(*message_id),
+                                TransactionValidityError::MessageDoesNotExist(
+                                    *message_id,
+                                ),
                             ))?
                             .da_height
                     } else {
@@ -511,7 +581,7 @@ impl Executor {
                     gas_price,
                 )
                 .and_then(|refund| max_fee.checked_sub(refund))
-                .ok_or(Error::FeeOverflow);
+                .ok_or(Error::FeeOverflow)
             }
         }
         // if there's no script result (i.e. create) then fee == base amount
@@ -534,7 +604,8 @@ impl Executor {
                     ..
                 } = input
                 {
-                    let maybe_utxo_id = Storage::<ContractId, UtxoId>::get(db, contract_id)?;
+                    let maybe_utxo_id =
+                        Storage::<ContractId, UtxoId>::get(db, contract_id)?;
                     let expected_utxo_id = if self.config.utxo_validation {
                         maybe_utxo_id
                             .ok_or(Error::ContractUtxoMissing(*contract_id))?
@@ -549,7 +620,7 @@ impl Executor {
                             if *utxo_id != expected_utxo_id {
                                 return Err(Error::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
-                                });
+                                })
                             }
                         }
                     }
@@ -594,7 +665,14 @@ impl Executor {
                     amount,
                     asset_id,
                     to,
-                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::Contract {
                     input_index: input_idx,
                     ..
@@ -606,7 +684,7 @@ impl Executor {
                     } else {
                         return Err(Error::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
-                        ));
+                        ))
                     }
                 }
                 Output::Message { .. } => {
@@ -616,12 +694,26 @@ impl Executor {
                     to,
                     asset_id,
                     amount,
-                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::Variable {
                     to,
                     asset_id,
                     amount,
-                } => Executor::insert_coin(block_height.into(), utxo_id, amount, asset_id, to, db)?,
+                } => Executor::insert_coin(
+                    block_height.into(),
+                    utxo_id,
+                    amount,
+                    asset_id,
+                    to,
+                    db,
+                )?,
                 Output::ContractCreated { contract_id, .. } => {
                     Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
                 }
@@ -652,7 +744,7 @@ impl Executor {
             };
 
             if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
-                return Err(Error::OutputAlreadyExists);
+                return Err(Error::OutputAlreadyExists)
             }
         }
 
@@ -665,8 +757,10 @@ impl Executor {
         receipts: &[Receipt],
         db: &mut Database,
     ) -> Result<(), Error> {
-        if Storage::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?.is_some() {
-            return Err(Error::OutputAlreadyExists);
+        if Storage::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?
+            .is_some()
+        {
+            return Err(Error::OutputAlreadyExists)
         }
         Ok(())
     }
@@ -682,7 +776,9 @@ impl Executor {
     ) -> Result<(), Error> {
         let mut owners = vec![];
         for input in tx.inputs() {
-            if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } = input {
+            if let Input::CoinSigned { owner, .. } | Input::CoinPredicate { owner, .. } =
+                input
+            {
                 owners.push(owner);
             }
         }
@@ -704,7 +800,12 @@ impl Executor {
         owners.dedup();
 
         for owner in owners {
-            db.record_tx_id_owner(owner, block_height, tx_idx as TransactionIndex, tx_id)?;
+            db.record_tx_id_owner(
+                owner,
+                block_height,
+                tx_idx as TransactionIndex,
+                tx_id,
+            )?;
         }
 
         Ok(())
@@ -743,7 +844,9 @@ pub enum TransactionValidityError {
     CoinDoesNotExist(UtxoId),
     #[error("The specified message was already spent")]
     MessageAlreadySpent(MessageId),
-    #[error("Message is not yet spendable, as it's DA height is newer than this block allows")]
+    #[error(
+        "Message is not yet spendable, as it's DA height is newer than this block allows"
+    )]
     MessageSpendTooEarly(MessageId),
     #[error("The specified message doesn't exist")]
     MessageDoesNotExist(MessageId),
@@ -782,7 +885,9 @@ pub enum Error {
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError + Send + Sync>),
-    #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
+    #[error(
+        "missing transaction data for tx {transaction_id:#x} in block {block_id:#x}"
+    )]
     MissingTransactionData {
         block_id: Bytes32,
         transaction_id: Bytes32,
@@ -831,25 +936,49 @@ mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
     use chrono::TimeZone;
-    use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
             fuel_crypto::SecretKey,
-            fuel_tx::{self, ConsensusParameters, Transaction, TransactionBuilder},
-            fuel_types::{ContractId, Immediate12, Immediate18, Salt},
+            fuel_tx::{
+                self,
+                ConsensusParameters,
+                Transaction,
+                TransactionBuilder,
+            },
+            fuel_types::{
+                ContractId,
+                Immediate12,
+                Immediate18,
+                Salt,
+            },
             fuel_vm::{
-                consts::{REG_CGAS, REG_FP, REG_ONE, REG_ZERO},
-                prelude::{Call, CallFrame},
+                consts::{
+                    REG_CGAS,
+                    REG_FP,
+                    REG_ONE,
+                    REG_ZERO,
+                },
+                prelude::{
+                    Call,
+                    CallFrame,
+                },
                 script_with_data_offset,
                 util::test_helpers::TestBuilder as TxBuilder,
             },
         },
+        model::{
+            CheckedMessage,
+            Message,
+        },
         relayer::RelayerDb,
     };
     use itertools::Itertools;
-    use rand::prelude::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)
@@ -872,7 +1001,10 @@ mod tests {
         }
     }
 
-    fn create_contract<R: Rng>(contract_code: Vec<u8>, rng: &mut R) -> (Transaction, ContractId) {
+    fn create_contract<R: Rng>(
+        contract_code: Vec<u8>,
+        rng: &mut R,
+    ) -> (Transaction, ContractId) {
         let salt: Salt = rng.gen();
         let contract = fuel_tx::Contract::from(contract_code.clone());
         let root = contract.root();
@@ -1118,22 +1250,24 @@ mod tests {
         // create an input which doesn't exist in the utxo set
         let mut rng = StdRng::seed_from_u64(2322u64);
 
-        let tx =
-            TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
-                .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
-                    rng.gen(),
-                    10,
-                    Default::default(),
-                    Default::default(),
-                    0,
-                )
-                .add_output(Output::Change {
-                    to: Default::default(),
-                    amount: 0,
-                    asset_id: Default::default(),
-                })
-                .finalize();
+        let tx = TransactionBuilder::script(
+            vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+            vec![],
+        )
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            10,
+            Default::default(),
+            Default::default(),
+            0,
+        )
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: Default::default(),
+        })
+        .finalize();
 
         // setup executors with utxo-validation enabled
         let config = Config {
@@ -1328,10 +1462,12 @@ mod tests {
             .unwrap();
 
         // assert the tx coin is spent
-        let coin =
-            Storage::<UtxoId, Coin>::get(&db, block.transactions[0].inputs()[0].utxo_id().unwrap())
-                .unwrap()
-                .unwrap();
+        let coin = Storage::<UtxoId, Coin>::get(
+            &db,
+            block.transactions[0].inputs()[0].utxo_id().unwrap(),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
     }
 
@@ -1341,22 +1477,24 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(2322u64);
         let starting_block = BlockHeight::from(5u64);
 
-        let tx =
-            TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
-                .add_unsigned_coin_input(
-                    SecretKey::random(&mut rng),
-                    rng.gen(),
-                    100,
-                    Default::default(),
-                    Default::default(),
-                    0,
-                )
-                .add_output(Output::Change {
-                    to: Default::default(),
-                    amount: 0,
-                    asset_id: Default::default(),
-                })
-                .finalize();
+        let tx = TransactionBuilder::script(
+            vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+            vec![],
+        )
+        .add_unsigned_coin_input(
+            SecretKey::random(&mut rng),
+            rng.gen(),
+            100,
+            Default::default(),
+            Default::default(),
+            0,
+        )
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: Default::default(),
+        })
+        .finalize();
         let mut db = Database::default();
 
         // insert coin into state
@@ -1413,10 +1551,12 @@ mod tests {
             .unwrap();
 
         // assert the tx coin is spent
-        let coin =
-            Storage::<UtxoId, Coin>::get(&db, block.transactions[0].inputs()[0].utxo_id().unwrap())
-                .unwrap()
-                .unwrap();
+        let coin = Storage::<UtxoId, Coin>::get(
+            &db,
+            block.transactions[0].inputs()[0].utxo_id().unwrap(),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
         // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
         assert_eq!(coin.block_created, starting_block)
@@ -1662,7 +1802,8 @@ mod tests {
             let id = fuel_tx::UtxoId::new(tx2_id, idx as u8);
             match output {
                 Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
-                    let maybe_utxo = Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+                    let maybe_utxo =
+                        Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
                     assert!(maybe_utxo.is_some());
                     let utxo = maybe_utxo.unwrap();
                     assert!(utxo.amount > 0)
@@ -1712,7 +1853,10 @@ mod tests {
     }
 
     /// Helper to build transactions and a message in it for some of the message tests
-    fn make_tx_and_message(rng: &mut StdRng, da_height: u64) -> (Transaction, CheckedMessage) {
+    fn make_tx_and_message(
+        rng: &mut StdRng,
+        da_height: u64,
+    ) -> (Transaction, CheckedMessage) {
         let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
