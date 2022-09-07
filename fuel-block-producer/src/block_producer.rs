@@ -10,7 +10,7 @@ use fuel_core_interfaces::common::fuel_tx::CheckedTransaction;
 use fuel_core_interfaces::executor::{ExecutionMode, Executor};
 use fuel_core_interfaces::{
     block_producer::BlockProducerMpsc,
-    common::{fuel_tx::Transaction, fuel_types::Bytes32},
+    common::fuel_types::Bytes32,
     model::{BlockHeight, DaBlockHeight, FuelBlock, FuelBlockHeader},
 };
 use std::cmp::max;

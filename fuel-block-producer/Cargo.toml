@@ -19,6 +19,13 @@ tokio = { version = "1.14", features = ["full"] }
 tracing = { version = "0.1" }
 
 [dev-dependencies]
-itertools = "0.10"
+fuel-core = { path = "../fuel-core" }
 fuel-txpool = { path = "../fuel-txpool" }
+fuel-block-executor = { path = "../fuel-block-executor" }
+fuel-block-importer = { path = "../fuel-block-importer" }
+fuel-block-producer = { path = "../fuel-block-producer" }
+fuel-core-bft = { path = "../fuel-core-bft" }
+fuel-relayer = { path = "../fuel-relayer" }
+fuel-sync = { path = "../fuel-sync" }
+itertools = "0.10"
 rand = "0.8"

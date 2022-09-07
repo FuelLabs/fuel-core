@@ -4,11 +4,11 @@ use crate::{
     Config, Error,
 };
 use fuel_core_interfaces::{
-    model::{ArcTx, TxInfo},
+    model::{ArcTx, FuelBlock, TxInfo},
     txpool::{TxPoolDb, TxStatus, TxStatusBroadcast},
 };
-use std::cmp::Reverse;
 use std::collections::HashMap;
+use std::{cmp::Reverse, sync::Arc};
 use tokio::sync::{broadcast, RwLock};
 
 #[derive(Debug, Clone)]
@@ -220,10 +220,16 @@ impl TxPool {
 
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub async fn block_update(
-        txpool: &RwLock<Self>, /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
+        txpool: &RwLock<Self>,
+        block: Arc<FuelBlock>,
+        /*spend_outputs: [Input], added_outputs: [AddedOutputs]*/
     ) {
-        txpool.write().await;
+        let mut guard = txpool.write().await;
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
+
+        for tx in &block.transactions {
+            let _removed = guard.remove_by_tx_id(&tx.id());
+        }
     }
 
     /// remove transaction from pool needed on user demand. Low priority

@@ -21,6 +21,10 @@ pub fn select_transactions(
         .into_iter()
         .filter(|tx| {
             let tx_block_space = tx.max_fee();
+            debug_assert!(
+                tx_block_space <= config.max_gas_per_block,
+                "Tx can never be included"
+            );
             if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
                 if new_used_space <= config.max_gas_per_block {
                     used_block_space = new_used_space;

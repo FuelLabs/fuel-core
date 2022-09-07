@@ -130,11 +130,23 @@ impl Context {
                         TxPoolMpsc::Stop => {}
                     }});
                 }
-                _block_updated = self.import_block_events.recv() => {
-                    let txpool = txpool.clone();
-                    tokio::spawn( async move {
-                        TxPool::block_update(txpool.as_ref()).await
-                    });
+                block_updated = self.import_block_events.recv() => {
+                    if let Ok(block_updated) = block_updated {
+
+                        match block_updated {
+                            ImportBlockBroadcast::PendingFuelBlockImported { block } => {
+                                let txpool = txpool.clone();
+                                TxPool::block_update(txpool.as_ref(), block).await
+                                // tokio::spawn( async move {
+                                //     TxPool::block_update(txpool.as_ref(), block).await
+                                // });
+                            },
+                            ImportBlockBroadcast::SealedFuelBlockImported { block, is_created_by_self } => {
+                                // TODO: what to do with sealed blocks?
+                                todo!("Sealed block");
+                            }
+                        };
+                    }
                 }
             }
         }
