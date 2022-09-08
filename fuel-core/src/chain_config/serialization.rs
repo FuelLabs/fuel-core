@@ -1,8 +1,18 @@
 use crate::model::BlockHeight;
 use core::fmt;
-use fuel_core_interfaces::common::{fuel_types::bytes::WORD_SIZE, fuel_types::Word};
-use serde::{de::Error, Deserializer, Serializer};
-use serde_with::{DeserializeAs, SerializeAs};
+use fuel_core_interfaces::common::fuel_types::{
+    bytes::WORD_SIZE,
+    Word,
+};
+use serde::{
+    de::Error,
+    Deserializer,
+    Serializer,
+};
+use serde_with::{
+    DeserializeAs,
+    SerializeAs,
+};
 use std::convert::TryFrom;
 
 /// Used for primitive number types which don't implement AsRef or TryFrom<&[u8]>
@@ -29,7 +39,7 @@ impl<'de> DeserializeAs<'de, Word> for HexNumber {
                 return Err(D::Error::custom(format!(
                     "value cant exceed {} bytes",
                     WORD_SIZE
-                )));
+                )))
             }
             len if len < WORD_SIZE => {
                 // pad if length < word size
@@ -93,9 +103,15 @@ where
 
 pub mod serde_hex {
     use core::fmt;
-    use hex::{FromHex, ToHex};
-    use serde::de::Error;
-    use serde::{Deserializer, Serializer};
+    use hex::{
+        FromHex,
+        ToHex,
+    };
+    use serde::{
+        de::Error,
+        Deserializer,
+        Serializer,
+    };
     use std::convert::TryFrom;
 
     pub fn serialize<T, S>(target: T, ser: S) -> Result<S::Ok, S::Error>
@@ -115,7 +131,8 @@ pub mod serde_hex {
     {
         let raw_string: String = serde::Deserialize::deserialize(des)?;
         let stripped_prefix = raw_string.trim_start_matches("0x");
-        let bytes: Vec<u8> = FromHex::from_hex(stripped_prefix).map_err(D::Error::custom)?;
+        let bytes: Vec<u8> =
+            FromHex::from_hex(stripped_prefix).map_err(D::Error::custom)?;
         let result = T::try_from(bytes.as_slice()).map_err(D::Error::custom)?;
         Ok(result)
     }

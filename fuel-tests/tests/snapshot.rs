@@ -1,16 +1,32 @@
 use fuel_core::{
-    chain_config::{CoinConfig, ContractConfig, MessageConfig, StateConfig},
+    chain_config::{
+        CoinConfig,
+        ContractConfig,
+        MessageConfig,
+        StateConfig,
+    },
     database::Database,
-    service::{Config, FuelService},
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_types::{Address, Bytes32, Salt},
+        fuel_types::{
+            Address,
+            Bytes32,
+            Salt,
+        },
         fuel_vm::prelude::AssetId,
     },
     model::BlockHeight,
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 
 #[tokio::test]
 async fn snapshot_state_config() {

@@ -3,18 +3,27 @@ use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::Executor,
-    model::{FuelBlock, FuelBlockHeader},
-    service::{Config, FuelService},
-};
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx,
-        fuel_vm::{consts::*, prelude::*},
+    model::{
+        FuelBlock,
+        FuelBlockHeader,
     },
-    executor::ExecutionMode,
+    service::{
+        Config,
+        FuelService,
+    },
+};
+use fuel_core_interfaces::common::{
+    fuel_tx,
+    fuel_vm::{
+        consts::*,
+        prelude::*,
+    },
 };
 use fuel_gql_client::client::{
-    types::TransactionStatus, FuelClient, PageDirection, PaginationRequest,
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
 use itertools::Itertools;
 use rand::Rng;
@@ -452,7 +461,12 @@ async fn get_owned_transactions() {
 }
 
 impl TestContext {
-    async fn transfer(&mut self, from: Address, to: Address, amount: u64) -> io::Result<Bytes32> {
+    async fn transfer(
+        &mut self,
+        from: Address,
+        to: Address,
+        amount: u64,
+    ) -> io::Result<Bytes32> {
         let script = Opcode::RET(0x10).to_bytes().to_vec();
         let tx = Transaction::Script {
             gas_price: 0,

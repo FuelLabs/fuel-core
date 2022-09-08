@@ -1,7 +1,17 @@
-use derive_more::{Add, Deref, Display, From, Into, Sub};
+use derive_more::{
+    Add,
+    Deref,
+    Display,
+    From,
+    Into,
+    Sub,
+};
 use std::{
     array::TryFromSliceError,
-    convert::{TryFrom, TryInto},
+    convert::{
+        TryFrom,
+        TryInto,
+    },
 };
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

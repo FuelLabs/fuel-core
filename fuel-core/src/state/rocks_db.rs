@@ -1,22 +1,42 @@
-#[cfg(feature = "prometheus")]
-use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
-use crate::state::KVItem;
 use crate::{
     database::{
         columns,
         columns::METADATA,
-        metadata::{DB_VERSION, DB_VERSION_KEY},
+        metadata::{
+            DB_VERSION,
+            DB_VERSION_KEY,
+        },
     },
     state::{
-        BatchOperations, ColumnId, Error, IterDirection, KeyValueStore, TransactableStorage,
+        BatchOperations,
+        ColumnId,
+        Error,
+        IterDirection,
+        KVItem,
+        KeyValueStore,
+        TransactableStorage,
         WriteOperation,
     },
 };
+#[cfg(feature = "metrics")]
+use fuel_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
-    BoundColumnFamily, ColumnFamilyDescriptor, DBCompressionType, DBWithThreadMode, IteratorMode,
-    MultiThreaded, Options, ReadOptions, SliceTransform, WriteBatch,
+    BoundColumnFamily,
+    ColumnFamilyDescriptor,
+    DBCompressionType,
+    DBWithThreadMode,
+    IteratorMode,
+    MultiThreaded,
+    Options,
+    ReadOptions,
+    SliceTransform,
+    WriteBatch,
 };
-use std::{convert::TryFrom, path::Path, sync::Arc};
+use std::{
+    convert::TryFrom,
+    path::Path,
+    sync::Arc,
+};
 
 type DB = DBWithThreadMode<MultiThreaded>;
 #[derive(Debug)]
@@ -66,11 +86,11 @@ impl RocksDb {
                 )?;
             }
             Some(v) => {
-                let b =
-                    <[u8; 4]>::try_from(v.as_slice()).map_err(|_| Error::InvalidDatabaseVersion)?;
+                let b = <[u8; 4]>::try_from(v.as_slice())
+                    .map_err(|_| Error::InvalidDatabaseVersion)?;
                 let version = u32::from_be_bytes(b);
                 if version != DB_VERSION {
-                    return Err(Error::InvalidDatabaseVersion);
+                    return Err(Error::InvalidDatabaseVersion)
                 }
             }
         };
@@ -106,13 +126,13 @@ impl RocksDb {
 
 impl KeyValueStore for RocksDb {
     fn get(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
             .db
             .get_cf(&self.cf(column), key)
             .map_err(|e| Error::DatabaseError(Box::new(e)));
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             if value.is_ok() && value.as_ref().unwrap().is_some() {
                 let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
@@ -130,7 +150,7 @@ impl KeyValueStore for RocksDb {
         column: ColumnId,
         value: Vec<u8>,
     ) -> crate::state::Result<Option<Vec<u8>>> {
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS
@@ -144,7 +164,11 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn delete(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
+    fn delete(
+        &self,
+        key: &[u8],
+        column: ColumnId,
+    ) -> crate::state::Result<Option<Vec<u8>>> {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
@@ -199,7 +223,7 @@ impl KeyValueStore for RocksDb {
                 item.map(|(key, value)| {
                     let value_as_vec = value.to_vec();
                     let key_as_vec = key.to_vec();
-                    #[cfg(feature = "prometheus")]
+                    #[cfg(feature = "metrics")]
                     {
                         DATABASE_METRICS.read_meter.inc();
                         DATABASE_METRICS
@@ -228,7 +252,10 @@ impl KeyValueStore for RocksDb {
 }
 
 impl BatchOperations for RocksDb {
-    fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<(), Error> {
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = WriteOperation>,
+    ) -> Result<(), Error> {
         let mut batch = WriteBatch::default();
 
         for entry in entries {
@@ -241,7 +268,7 @@ impl BatchOperations for RocksDb {
                 }
             }
         }
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS

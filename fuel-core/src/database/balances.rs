@@ -1,13 +1,24 @@
-use crate::state::Error;
 use crate::{
-    database::{columns::BALANCES, Database},
-    state::{IterDirection, MultiKey},
+    database::{
+        columns::BALANCES,
+        Database,
+    },
+    state::{
+        Error,
+        IterDirection,
+        MultiKey,
+    },
 };
 use fuel_core_interfaces::common::{
     fuel_storage::MerkleRoot,
     fuel_vm::{
         crypto,
-        prelude::{AssetId, ContractId, MerkleStorage, Word},
+        prelude::{
+            AssetId,
+            ContractId,
+            MerkleStorage,
+            Word,
+        },
     },
 };
 use itertools::Itertools;
@@ -26,12 +37,20 @@ impl MerkleStorage<ContractId, AssetId, Word> for Database {
         Database::insert(self, key.as_ref().to_vec(), BALANCES, *value)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &AssetId) -> Result<Option<Word>, Error> {
+    fn remove(
+        &mut self,
+        parent: &ContractId,
+        key: &AssetId,
+    ) -> Result<Option<Word>, Error> {
         let key = MultiKey::new((parent, key));
         Database::remove(self, key.as_ref(), BALANCES)
     }
 
-    fn get(&self, parent: &ContractId, key: &AssetId) -> Result<Option<Cow<Word>>, Error> {
+    fn get(
+        &self,
+        parent: &ContractId,
+        key: &AssetId,
+    ) -> Result<Option<Cow<Word>>, Error> {
         let key = MultiKey::new((parent, key));
         self.get(key.as_ref(), BALANCES)
     }
@@ -174,7 +193,10 @@ mod tests {
         )
         .unwrap();
 
-        let root = MerkleStorage::<ContractId, AssetId, Word>::root(&mut database, &balance_id.0);
+        let root = MerkleStorage::<ContractId, AssetId, Word>::root(
+            &mut database,
+            &balance_id.0,
+        );
         assert!(root.is_ok())
     }
 }

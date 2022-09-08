@@ -1,4 +1,7 @@
-use crate::model::{BlockHeight, FuelBlock};
+use crate::model::{
+    BlockHeight,
+    FuelBlock,
+};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 

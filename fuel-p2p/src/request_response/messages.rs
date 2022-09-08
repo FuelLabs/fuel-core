@@ -1,7 +1,13 @@
 use std::sync::Arc;
 
-use fuel_core_interfaces::model::{BlockHeight, SealedFuelBlock};
-use serde::{Deserialize, Serialize};
+use fuel_core_interfaces::model::{
+    BlockHeight,
+    SealedFuelBlock,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use tokio::sync::oneshot;
 
 pub(crate) const REQUEST_RESPONSE_PROTOCOL_ID: &[u8] = b"/fuel/req_res/0.0.1";

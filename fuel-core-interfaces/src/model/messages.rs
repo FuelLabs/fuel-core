@@ -2,7 +2,11 @@ use super::BlockHeight;
 use crate::model::DaBlockHeight;
 use core::ops::Deref;
 use fuel_crypto::Hasher;
-use fuel_types::{Address, MessageId, Word};
+use fuel_types::{
+    Address,
+    MessageId,
+    Word,
+};
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

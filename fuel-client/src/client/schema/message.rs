@@ -1,5 +1,14 @@
-use super::{PageDirection, PageInfo, PaginatedResult, PaginationRequest};
-use crate::client::schema::{schema, Address, U64};
+use super::{
+    PageDirection,
+    PageInfo,
+    PaginatedResult,
+    PaginationRequest,
+};
+use crate::client::schema::{
+    schema,
+    Address,
+    U64,
+};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

@@ -1,16 +1,34 @@
-use crate::block_producer::Task;
-use crate::db::BlockProducerDatabase;
-use crate::ports::{Relayer, TxPool};
-use crate::Config;
-use fuel_core_interfaces::block_producer::BlockProducerBroadcast;
-use fuel_core_interfaces::block_producer::BlockProducerMpsc;
-use fuel_core_interfaces::executor::Executor;
+use crate::{
+    block_producer::Task,
+    db::BlockProducerDatabase,
+    ports::{
+        Relayer,
+        TxPool,
+    },
+    Config,
+};
+use fuel_core_interfaces::{
+    block_producer::{
+        BlockProducerBroadcast,
+        BlockProducerMpsc,
+    },
+    executor::Executor,
+    txpool,
+};
+use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::{
-    sync::{broadcast, mpsc, Mutex},
+    sync::{
+        broadcast,
+        mpsc,
+        Mutex,
+    },
     task::JoinHandle,
 };
-use tracing::{info, warn};
+use tracing::{
+    info,
+    warn,
+};
 
 /// Primary entrypoint for the block producer.
 /// Manages channels and tasks related to block production (i.e. supervisor)
@@ -55,7 +73,7 @@ impl Service {
                     executor,
                 };
                 *join = Some(tokio::spawn(task.spawn()));
-                return true;
+                return true
             } else {
                 warn!("Starting block producer that is stopping");
             }

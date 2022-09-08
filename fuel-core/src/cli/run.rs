@@ -1,11 +1,28 @@
-use crate::cli::DEFAULT_DB_PATH;
-use crate::FuelService;
+use crate::{
+    cli::DEFAULT_DB_PATH,
+    FuelService,
+};
 use clap::Parser;
-use fuel_core::service::{Config, DbType, VMConfig};
-use std::{env, io, net, path::PathBuf};
+use fuel_core::service::{
+    Config,
+    DbType,
+    VMConfig,
+};
+use std::{
+    env,
+    io,
+    net,
+    path::PathBuf,
+};
 use strum::VariantNames;
-use tracing::{info, trace};
+use tracing::{
+    info,
+    trace,
+};
+#[cfg(feature = "p2p")]
+mod p2p;
 
+#[cfg(feature = "relayer")]
 mod relayer;
 
 #[derive(Debug, Clone, Parser)]
@@ -53,8 +70,13 @@ pub struct Command {
     #[clap(long = "predicates")]
     pub predicates: bool,
 
+    #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
+
+    #[cfg(feature = "p2p")]
+    #[clap(flatten)]
+    pub p2p_args: p2p::P2pArgs,
 }
 
 impl Command {
@@ -70,10 +92,22 @@ impl Command {
             utxo_validation,
             min_gas_price,
             predicates,
+            #[cfg(feature = "relayer")]
             relayer_args,
+            #[cfg(feature = "p2p")]
+            p2p_args,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
+
+        #[cfg(feature = "p2p")]
+        let p2p = {
+            match p2p_args.into() {
+                Ok(value) => value,
+                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+            }
+        };
+
         Ok(Config {
             addr,
             database_path,
@@ -92,9 +126,12 @@ impl Command {
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
+            #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
             bft: Default::default(),
             sync: Default::default(),
+            #[cfg(feature = "p2p")]
+            p2p,
         })
     }
 }

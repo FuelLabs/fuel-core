@@ -1,14 +1,27 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
 use crate::model::DaBlockHeight;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{
+    DateTime,
+    TimeZone,
+    Utc,
+};
 use core::ops::Deref;
 use fuel_crypto::Hasher;
-use fuel_merkle::binary::MerkleTree;
-use fuel_merkle::common::StorageMap;
-use fuel_tx::{Address, AssetId, Bytes32, Transaction};
-use fuel_types::bytes::SerializableVec;
-use fuel_types::Word;
+use fuel_merkle::{
+    binary::MerkleTree,
+    common::StorageMap,
+};
+use fuel_tx::{
+    Address,
+    AssetId,
+    Bytes32,
+    Transaction,
+};
+use fuel_types::{
+    bytes::SerializableVec,
+    Word,
+};
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]

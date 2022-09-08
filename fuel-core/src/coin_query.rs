@@ -1,9 +1,21 @@
-use crate::database::{Database, KvStoreError};
-use crate::model::{Coin, CoinStatus};
-use crate::state::{self};
+use crate::{
+    database::{
+        Database,
+        KvStoreError,
+    },
+    model::{
+        Coin,
+        CoinStatus,
+    },
+    state::{self,},
+};
 use fuel_core_interfaces::common::{
     fuel_storage::Storage,
-    fuel_tx::{Address, AssetId, UtxoId},
+    fuel_tx::{
+        Address,
+        AssetId,
+        UtxoId,
+    },
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -94,12 +106,12 @@ pub fn largest_first(
         for (id, coin) in coins_of_asset_id {
             // Break if we don't need any more coins
             if collected_amount >= amount {
-                break;
+                break
             }
 
             // Error if we can't fit more coins
             if coins.len() >= max_inputs as usize {
-                return Err(CoinQueryError::NotEnoughInputs);
+                return Err(CoinQueryError::NotEnoughInputs)
             }
 
             // Add to list
@@ -108,7 +120,7 @@ pub fn largest_first(
         }
 
         if collected_amount < amount {
-            return Err(CoinQueryError::NotEnoughCoins);
+            return Err(CoinQueryError::NotEnoughCoins)
         }
     }
 
@@ -177,17 +189,17 @@ pub fn random_improve(
         loop {
             // Break if we don't need any more coins
             if *collected_amount >= *amount {
-                break;
+                break
             }
 
             // Fallback to largest_first if we can't fit more coins
             if coins.len() >= max_inputs as usize {
-                return largest_first(db, &spend_query, max_inputs, excluded_ids);
+                return largest_first(db, &spend_query, max_inputs, excluded_ids)
             }
 
             // Error if we don't have more coins
             if coins_of_asset_id.is_empty() {
-                return Err(CoinQueryError::NotEnoughCoins);
+                return Err(CoinQueryError::NotEnoughCoins)
             }
 
             // Remove random ID from the list
@@ -204,7 +216,7 @@ pub fn random_improve(
 
     // Stop if we can't fit more coins
     if coins.len() >= max_inputs as usize {
-        return Ok(coins);
+        return Ok(coins)
     }
 
     // Collect extra coins to leave useful change
@@ -219,12 +231,12 @@ pub fn random_improve(
         loop {
             // Break if we can't fit more coins
             if coins.len() >= max_inputs as usize {
-                break;
+                break
             }
 
             // Break if we don't have more coins
             if coins_of_asset_id.is_empty() {
-                break;
+                break
             }
 
             // Remove random ID from the list
@@ -235,7 +247,7 @@ pub fn random_improve(
 
             // Break if found coin exceeds the upper limit
             if coin.1.amount > upper_limit {
-                break;
+                break
             }
 
             // Break if adding doesn't improve the distance
@@ -251,7 +263,7 @@ pub fn random_improve(
             let distance = abs_diff(*target_amount, change_amount);
             let next_distance = abs_diff(*target_amount, change_amount + coin.1.amount);
             if next_distance >= distance {
-                break;
+                break
             }
 
             // Add to list
@@ -267,7 +279,10 @@ pub fn random_improve(
 mod tests {
     use crate::test_utils::*;
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx::Address};
+    use fuel_core_interfaces::common::{
+        fuel_asm::Word,
+        fuel_tx::Address,
+    };
 
     use super::*;
 
@@ -407,7 +422,9 @@ mod tests {
                     // TODO: Implement the test
                 }
                 // This range should return all coins
-                8..=15 => assert_matches!(coins, Ok(coins) if coins == vec![5, 4, 3, 2, 1]),
+                8..=15 => {
+                    assert_matches!(coins, Ok(coins) if coins == vec![5, 4, 3, 2, 1])
+                }
                 // Asking for more than the owner's balance should error
                 _ => assert_matches!(coins, Err(CoinQueryError::NotEnoughCoins)),
             };
@@ -465,7 +482,8 @@ mod tests {
                      max_inputs: u64,
                      excluded_ids: Option<&Vec<UtxoId>>|
          -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
-            let coins = random_improve(db.as_ref(), spend_query, max_inputs, excluded_ids);
+            let coins =
+                random_improve(db.as_ref(), spend_query, max_inputs, excluded_ids);
 
             // Transform result for convenience
             coins.map(|coins| {

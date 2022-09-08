@@ -1,6 +1,12 @@
-use crate::helpers::{TestContext, TestSetupBuilder};
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
 use fuel_core_interfaces::common::fuel_vm::prelude::*;
-use fuel_gql_client::client::{PageDirection, PaginationRequest};
+use fuel_gql_client::client::{
+    PageDirection,
+    PaginationRequest,
+};
 use rstest::rstest;
 
 const SEED: u64 = 2322;
@@ -27,8 +33,8 @@ async fn test_contract_salt() {
 async fn test_contract_balance() {
     for test_bal in 0..10 {
         let mut test_builder = TestSetupBuilder::new(SEED);
-        let (_, contract_id) =
-            test_builder.setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), test_bal)]));
+        let (_, contract_id) = test_builder
+            .setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), test_bal)]));
 
         // spin up node
         let TestContext { client, .. } = test_builder.finalize().await;

@@ -1,6 +1,13 @@
-use libp2p::gossipsub::{Sha256Topic, Topic, TopicHash};
+use libp2p::gossipsub::{
+    Sha256Topic,
+    Topic,
+    TopicHash,
+};
 
-use super::messages::{GossipTopicTag, GossipsubBroadcastRequest};
+use super::messages::{
+    GossipTopicTag,
+    GossipsubBroadcastRequest,
+};
 
 pub type GossipTopic = Sha256Topic;
 pub const NEW_TX_GOSSIP_TOPIC: &str = "new_tx";
@@ -19,8 +26,10 @@ pub struct GossipsubTopics {
 
 impl GossipsubTopics {
     pub fn new(network_name: &str) -> Self {
-        let new_tx_topic = Topic::new(format!("{}/{}", NEW_TX_GOSSIP_TOPIC, network_name));
-        let new_block_topic = Topic::new(format!("{}/{}", NEW_BLOCK_GOSSIP_TOPIC, network_name));
+        let new_tx_topic =
+            Topic::new(format!("{}/{}", NEW_TX_GOSSIP_TOPIC, network_name));
+        let new_block_topic =
+            Topic::new(format!("{}/{}", NEW_BLOCK_GOSSIP_TOPIC, network_name));
         let consensus_vote_topic =
             Topic::new(format!("{}/{}", CON_VOTE_GOSSIP_TOPIC, network_name));
 
@@ -32,7 +41,10 @@ impl GossipsubTopics {
     }
 
     /// Given a TopicHash it will return a matching GossipTopicTag
-    pub fn get_gossipsub_tag(&self, incoming_topic: &TopicHash) -> Option<GossipTopicTag> {
+    pub fn get_gossipsub_tag(
+        &self,
+        incoming_topic: &TopicHash,
+    ) -> Option<GossipTopicTag> {
         let GossipsubTopics {
             new_tx_topic,
             new_block_topic,
@@ -42,16 +54,23 @@ impl GossipsubTopics {
         match incoming_topic {
             hash if hash == &new_tx_topic.0 => Some(GossipTopicTag::NewTx),
             hash if hash == &new_block_topic.0 => Some(GossipTopicTag::NewBlock),
-            hash if hash == &consensus_vote_topic.0 => Some(GossipTopicTag::ConsensusVote),
+            hash if hash == &consensus_vote_topic.0 => {
+                Some(GossipTopicTag::ConsensusVote)
+            }
             _ => None,
         }
     }
 
     /// Given a `GossipsubBroadcastRequest` retruns a `GossipTopic`
     /// which is broadcast over the network with the serialized inner value of `GossipsubBroadcastRequest`
-    pub fn get_gossipsub_topic(&self, outgoing_request: &GossipsubBroadcastRequest) -> GossipTopic {
+    pub fn get_gossipsub_topic(
+        &self,
+        outgoing_request: &GossipsubBroadcastRequest,
+    ) -> GossipTopic {
         match outgoing_request {
-            GossipsubBroadcastRequest::ConsensusVote(_) => self.consensus_vote_topic.1.clone(),
+            GossipsubBroadcastRequest::ConsensusVote(_) => {
+                self.consensus_vote_topic.1.clone()
+            }
             GossipsubBroadcastRequest::NewBlock(_) => self.new_block_topic.1.clone(),
             GossipsubBroadcastRequest::NewTx(_) => self.new_tx_topic.1.clone(),
         }
@@ -61,8 +80,13 @@ impl GossipsubTopics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_tx::Transaction;
-    use fuel_core_interfaces::model::{ConsensusVote, FuelBlock};
+    use fuel_core_interfaces::{
+        common::fuel_tx::Transaction,
+        model::{
+            ConsensusVote,
+            FuelBlock,
+        },
+    };
     use libp2p::gossipsub::Topic;
     use std::sync::Arc;
 
@@ -108,13 +132,15 @@ mod tests {
             consensus_vote_topic.hash()
         );
 
-        let broadcast_req = GossipsubBroadcastRequest::NewBlock(Arc::new(FuelBlock::default()));
+        let broadcast_req =
+            GossipsubBroadcastRequest::NewBlock(Arc::new(FuelBlock::default()));
         assert_eq!(
             gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
             new_block_topic.hash()
         );
 
-        let broadcast_req = GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default()));
+        let broadcast_req =
+            GossipsubBroadcastRequest::NewTx(Arc::new(Transaction::default()));
         assert_eq!(
             gossipsub_topics.get_gossipsub_topic(&broadcast_req).hash(),
             new_tx_topic.hash()

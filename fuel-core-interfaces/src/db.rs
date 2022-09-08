@@ -111,15 +111,27 @@ pub mod helpers {
         )
         .unwrap();
     }
-    //const DB_TX1_HASH: TxId = 0x0000.into();
+    // const DB_TX1_HASH: TxId = 0x0000.into();
 
     use core::str::FromStr;
-    use std::{borrow::Cow, collections::BTreeMap, sync::Arc};
+    use std::{
+        borrow::Cow,
+        collections::BTreeMap,
+        sync::Arc,
+    };
 
     use fuel_asm::Opcode;
     use fuel_storage::Storage;
     use fuel_tx::{
-        Address, Bytes32, ContractId, Input, Metadata, Output, Transaction, TxId, UtxoId,
+        Address,
+        Bytes32,
+        ContractId,
+        Input,
+        Metadata,
+        Output,
+        Transaction,
+        TxId,
+        UtxoId,
     };
     use fuel_types::MessageId;
     use fuel_vm::prelude::Contract;
@@ -127,11 +139,23 @@ pub mod helpers {
 
     use crate::{
         model::{
-            BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, FuelBlock,
-            FuelBlockConsensus, FuelBlockHeader, Message, SealedFuelBlock, ValidatorId,
+            BlockHeight,
+            Coin,
+            CoinStatus,
+            ConsensusId,
+            DaBlockHeight,
+            FuelBlock,
+            FuelBlockConsensus,
+            FuelBlockHeader,
+            Message,
+            SealedFuelBlock,
+            ValidatorId,
             ValidatorStake,
         },
-        relayer::{RelayerDb, StakingDiff},
+        relayer::{
+            RelayerDb,
+            StakingDiff,
+        },
         txpool::TxPoolDb,
     };
 
@@ -404,7 +428,7 @@ pub mod helpers {
 
             let script = Opcode::RET(0x10).to_bytes().to_vec();
             let tx5 = Transaction::Script {
-                gas_price: 5, //lower then tx1
+                gas_price: 5, // lower then tx1
                 gas_limit: 1_000_000,
                 maturity: 0,
                 receipts_root: Default::default(),
@@ -645,7 +669,11 @@ pub mod helpers {
     impl Storage<UtxoId, Coin> for DummyDb {
         type Error = KvStoreError;
 
-        fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
+        fn insert(
+            &mut self,
+            key: &UtxoId,
+            value: &Coin,
+        ) -> Result<Option<Coin>, Self::Error> {
             Ok(self.data.lock().coins.insert(*key, value.clone()))
         }
 
@@ -799,14 +827,18 @@ pub mod helpers {
             Ok(self.data.lock().delegator_index.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
+        fn remove(
+            &mut self,
+            key: &Address,
+        ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
             Ok(self.data.lock().delegator_index.remove(key))
         }
 
         fn get<'a>(
             &'a self,
             key: &Address,
-        ) -> Result<Option<std::borrow::Cow<'a, Vec<DaBlockHeight>>>, Self::Error> {
+        ) -> Result<Option<std::borrow::Cow<'a, Vec<DaBlockHeight>>>, Self::Error>
+        {
             Ok(self
                 .data
                 .lock()
@@ -842,8 +874,10 @@ pub mod helpers {
         fn get<'a>(
             &'a self,
             key: &ValidatorId,
-        ) -> Result<Option<std::borrow::Cow<'a, (ValidatorStake, Option<ConsensusId>)>>, Self::Error>
-        {
+        ) -> Result<
+            Option<std::borrow::Cow<'a, (ValidatorStake, Option<ConsensusId>)>>,
+            Self::Error,
+        > {
             Ok(self.data.lock().validators.get(key).map(|i| Cow::Owned(*i)))
         }
 
@@ -864,7 +898,10 @@ pub mod helpers {
             Ok(self.data.lock().staking_diffs.insert(*key, value.clone()))
         }
 
-        fn remove(&mut self, key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
+        fn remove(
+            &mut self,
+            key: &DaBlockHeight,
+        ) -> Result<Option<StakingDiff>, Self::Error> {
             Ok(self.data.lock().staking_diffs.remove(key))
         }
 
@@ -913,7 +950,7 @@ pub mod helpers {
                 if *block >= from_da_height {
                     if let Some(end_block) = to_da_height {
                         if *block > end_block {
-                            break;
+                            break
                         }
                     }
                     out.push((*block, diff.clone()));
@@ -926,7 +963,10 @@ pub mod helpers {
             self.data.lock().chain_height
         }
 
-        async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+        async fn get_sealed_block(
+            &self,
+            height: BlockHeight,
+        ) -> Option<Arc<SealedFuelBlock>> {
             self.data.lock().sealed_blocks.get(&height).cloned()
         }
 
@@ -942,7 +982,10 @@ pub mod helpers {
             self.data.lock().last_committed_finalized_fuel_height
         }
 
-        async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
+        async fn set_last_committed_finalized_fuel_height(
+            &self,
+            block_height: BlockHeight,
+        ) {
             self.data.lock().last_committed_finalized_fuel_height = block_height;
         }
     }
@@ -950,18 +993,38 @@ pub mod helpers {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-    use std::error::Error;
-
-    use crate::db::helpers::{DummyDb, CONTRACT_ID1};
-    use crate::model::{
-        BlockHeight, Coin, CoinStatus, ConsensusId, DaBlockHeight, Message, ValidatorId,
-        ValidatorStake,
+    use std::{
+        collections::HashMap,
+        error::Error,
     };
-    use crate::relayer::StakingDiff;
+
+    use crate::{
+        db::helpers::{
+            DummyDb,
+            CONTRACT_ID1,
+        },
+        model::{
+            BlockHeight,
+            Coin,
+            CoinStatus,
+            ConsensusId,
+            DaBlockHeight,
+            Message,
+            ValidatorId,
+            ValidatorStake,
+        },
+        relayer::StakingDiff,
+    };
     use fuel_storage::Storage;
-    use fuel_tx::{Contract, Transaction, UtxoId};
-    use fuel_types::{Address, ContractId};
+    use fuel_tx::{
+        Contract,
+        Transaction,
+        UtxoId,
+    };
+    use fuel_types::{
+        Address,
+        ContractId,
+    };
 
     #[test]
     fn coins_db() {
@@ -1029,7 +1092,8 @@ mod tests {
     fn validators_db() {
         let db = sample_db();
         let key: ValidatorId = ValidatorId::default();
-        let value: (ValidatorStake, Option<ConsensusId>) = (ValidatorStake::default(), None);
+        let value: (ValidatorStake, Option<ConsensusId>) =
+            (ValidatorStake::default(), None);
 
         assert!(execute_test(db, key, value).is_ok());
     }
@@ -1059,7 +1123,7 @@ mod tests {
         V: Clone,
         E: Error,
     {
-        //before
+        // before
         assert!(
             !db.contains_key(&key)?,
             "key should not exist before insertion"

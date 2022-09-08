@@ -1,6 +1,15 @@
-use chrono::{DateTime, Utc};
-use fuel_core_interfaces::common::{fuel_tx::Bytes32, fuel_vm::prelude::ProgramState};
-use serde::{Deserialize, Serialize};
+use chrono::{
+    DateTime,
+    Utc,
+};
+use fuel_core_interfaces::common::{
+    fuel_tx::Bytes32,
+    fuel_vm::prelude::ProgramState,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum TransactionStatus {

@@ -1,4 +1,9 @@
-use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
+use async_graphql::{
+    EmptySubscription,
+    MergedObject,
+    Schema,
+    SchemaBuilder,
+};
 
 pub mod balance;
 pub mod block;

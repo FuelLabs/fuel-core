@@ -1,18 +1,47 @@
-use crate::{config, finalization_queue::FinalizationQueue, service::Context};
+use crate::{
+    config,
+    finalization_queue::FinalizationQueue,
+    service::Context,
+};
 use anyhow::Error;
-use ethers_core::types::{BlockId, Filter, Log, TxHash, ValueOrArray, H256};
-use ethers_providers::{FilterWatcher, Middleware, ProviderError, StreamExt, SyncingStatus};
+use ethers_core::types::{
+    BlockId,
+    Filter,
+    Log,
+    TxHash,
+    ValueOrArray,
+    H256,
+};
+use ethers_providers::{
+    FilterWatcher,
+    Middleware,
+    ProviderError,
+    StreamExt,
+    SyncingStatus,
+};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     model::DaBlockHeight,
-    relayer::{RelayerError, RelayerRequest, RelayerStatus},
+    relayer::{
+        RelayerError,
+        RelayerRequest,
+        RelayerStatus,
+    },
 };
 use std::{
-    cmp::{max, min},
+    cmp::{
+        max,
+        min,
+    },
     sync::Arc,
     time::Duration,
 };
-use tracing::{debug, error, info, trace};
+use tracing::{
+    debug,
+    error,
+    info,
+    trace,
+};
 
 pub struct Relayer {
     /// Pending stakes/assets/withdrawals. Before they are finalized
@@ -96,7 +125,7 @@ impl Relayer {
                 handle_interrupt!(self, provider.syncing())??,
                 SyncingStatus::IsFalse
             ) {
-                break;
+                break
             }
             let wait = self.ctx.config.initial_sync_refresh();
             handle_interrupt!(self, tokio::time::sleep(wait))?;
@@ -110,8 +139,8 @@ impl Relayer {
         );
         // should be always more then last finalized_da_heights
 
-        let best_finalized_block =
-            provider.get_block_number().await?.as_u64() - self.ctx.config.da_finalization();
+        let best_finalized_block = provider.get_block_number().await?.as_u64()
+            - self.ctx.config.da_finalization();
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
@@ -126,7 +155,8 @@ impl Relayer {
 
         for start in (last_finalized_da_height..best_finalized_block).step_by(step) {
             let end = min(start + step as DaBlockHeight, best_finalized_block);
-            if (start - last_finalized_da_height) % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
+            if (start - last_finalized_da_height)
+                % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
                 == 0
             {
                 info!("getting log from height:{}", start);
@@ -174,7 +204,8 @@ impl Relayer {
             self.queue.append_eth_logs(logs).await;
 
             // 3. Start listening to eth events
-            let eth_log_filter = Filter::new().address(ValueOrArray::Array(contracts.clone()));
+            let eth_log_filter =
+                Filter::new().address(ValueOrArray::Array(contracts.clone()));
             watchers = Some((
                 handle_interrupt!(self, provider.watch_blocks())??,
                 handle_interrupt!(self, provider.watch(&eth_log_filter))??,
@@ -193,7 +224,7 @@ impl Relayer {
             {
                 // block number and hash are same as before starting watcher over logs.
                 // we are safe to continue.
-                break;
+                break
             }
             // If not the same, stop listening to events and do 2,3,4 steps again.
             // empty pending and do overlapping sync again.
@@ -226,7 +257,7 @@ impl Relayer {
                 Ok(watcher) => break watcher,
                 Err(err) => {
                     if self.status == RelayerStatus::Stop {
-                        return self.ctx;
+                        return self.ctx
                     }
                     if number_of_tries == 0 {
                         self.status = RelayerStatus::Stop;
@@ -234,7 +265,7 @@ impl Relayer {
                             "Stopping relayer as there are errors on initial sync: {:?}",
                             err
                         );
-                        return self.ctx;
+                        return self.ctx
                     }
                     error!("Initial sync error:{:?}", err);
                     info!("Number of tries:{:?}", number_of_tries);
@@ -243,7 +274,9 @@ impl Relayer {
                 }
             };
         };
-        info!("Initial syncing finished on block {best_block}. Continue to passive sync.");
+        info!(
+            "Initial syncing finished on block {best_block}. Continue to passive sync."
+        );
         loop {
             tokio::select! {
                 inner_fuel_event = self.ctx.receiver.recv() => {
@@ -350,8 +383,8 @@ impl Relayer {
         trace!("Received new block hash:{:x?}", block_hash);
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
-                let finalized_da_height =
-                    da_height.as_u64() as DaBlockHeight - self.ctx.config.da_finalization();
+                let finalized_da_height = da_height.as_u64() as DaBlockHeight
+                    - self.ctx.config.da_finalization();
 
                 self.queue
                     .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)
@@ -379,17 +412,36 @@ impl Relayer {
 #[cfg(test)]
 mod test {
 
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        sync::Arc,
+        time::Duration,
+    };
 
     use async_trait::async_trait;
-    use ethers_core::types::{BlockId, BlockNumber, FilterBlockOption, H256, U256, U64};
+    use ethers_core::types::{
+        BlockId,
+        BlockNumber,
+        FilterBlockOption,
+        H256,
+        U256,
+        U64,
+    };
     use ethers_providers::SyncingStatus;
-    use fuel_core_interfaces::{common::fuel_tx::Address, relayer::RelayerRequest};
+    use fuel_core_interfaces::{
+        common::fuel_tx::Address,
+        relayer::RelayerRequest,
+    };
     use tokio::sync::mpsc;
 
     use crate::{
         log,
-        test_helpers::{relayer, MockData, MockMiddleware, TriggerHandle, TriggerType},
+        test_helpers::{
+            relayer,
+            MockData,
+            MockMiddleware,
+            TriggerHandle,
+            TriggerType,
+        },
         Config,
     };
 
@@ -421,7 +473,7 @@ mod test {
                     if self.i == 3 {
                         let _ = self.event.send(RelayerRequest::Stop).await;
                         self.i += 1;
-                        return;
+                        return
                     }
                     if self.i == 4 {
                         panic!("Something is fishy. We should have stopped");
@@ -486,7 +538,7 @@ mod test {
                 }
                 if self.i == 2 {
                     let _ = self.event.send(RelayerRequest::Stop).await;
-                    return;
+                    return
                 }
             }
         }
@@ -531,17 +583,21 @@ mod test {
             async fn run<'a>(&mut self, _: &mut MockData, trigger: TriggerType<'a>) {
                 match self.i {
                     // check if eth client is in sync.
-                    0 => assert_eq!(
-                        TriggerType::Syncing,
-                        trigger,
-                        "We need to check if eth client is synced"
-                    ),
+                    0 => {
+                        assert_eq!(
+                            TriggerType::Syncing,
+                            trigger,
+                            "We need to check if eth client is synced"
+                        )
+                    }
                     // get best eth block number so that we know until when to sync
-                    1 => assert_eq!(
-                        TriggerType::GetBlockNumber,
-                        trigger,
-                        "We need to get Best eth block number"
-                    ),
+                    1 => {
+                        assert_eq!(
+                            TriggerType::GetBlockNumber,
+                            trigger,
+                            "We need to get Best eth block number"
+                        )
+                    }
                     // get first batch of logs.
                     2 => match trigger {
                         TriggerType::GetLogs(filter) => {
@@ -550,13 +606,21 @@ mod test {
                                     from_block,
                                     to_block,
                                 } => {
-                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([100]))));
-                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([102]))));
+                                    assert_eq!(
+                                        from_block,
+                                        Some(BlockNumber::Number(U64([100])))
+                                    );
+                                    assert_eq!(
+                                        to_block,
+                                        Some(BlockNumber::Number(U64([102])))
+                                    );
                                 }
                                 _ => panic!("Expect filter block option range"),
                             };
                         }
-                        _ => panic!("wrong trigger:{:?} we expected get logs 1", trigger),
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 1", trigger)
+                        }
                     },
                     // get second batch of logs. for initial sync
                     3 => match trigger {
@@ -566,13 +630,21 @@ mod test {
                                     from_block,
                                     to_block,
                                 } => {
-                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([102]))));
-                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([104]))));
+                                    assert_eq!(
+                                        from_block,
+                                        Some(BlockNumber::Number(U64([102])))
+                                    );
+                                    assert_eq!(
+                                        to_block,
+                                        Some(BlockNumber::Number(U64([104])))
+                                    );
                                 }
                                 _ => panic!("Expect filter block option range"),
                             };
                         }
-                        _ => panic!("wrong trigger:{:?} we expected get logs 1", trigger),
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 1", trigger)
+                        }
                     },
                     // update our best block
                     4 => {
@@ -585,7 +657,9 @@ mod test {
                     // get block hash from best block number
                     5 => {
                         assert_eq!(
-                            TriggerType::GetBlock(BlockId::Number(BlockNumber::Number(U64([134])))),
+                            TriggerType::GetBlock(BlockId::Number(BlockNumber::Number(
+                                U64([134])
+                            ))),
                             trigger,
                             "Get block hash from best block number"
                         )
@@ -598,13 +672,21 @@ mod test {
                                     from_block,
                                     to_block,
                                 } => {
-                                    assert_eq!(from_block, Some(BlockNumber::Number(U64([104]))));
-                                    assert_eq!(to_block, Some(BlockNumber::Number(U64([134]))));
+                                    assert_eq!(
+                                        from_block,
+                                        Some(BlockNumber::Number(U64([104])))
+                                    );
+                                    assert_eq!(
+                                        to_block,
+                                        Some(BlockNumber::Number(U64([134])))
+                                    );
                                 }
                                 _ => panic!("Expect filter block option range for 6"),
                             };
                         }
-                        _ => panic!("wrong trigger:{:?} we expected get logs 6", trigger),
+                        _ => {
+                            panic!("wrong trigger:{:?} we expected get logs 6", trigger)
+                        }
                     },
                     // get best eth block to synchronize log watcher
                     7 => {

@@ -1,12 +1,21 @@
 use crate::{
-    database::{columns::CONTRACTS_STATE, Database},
-    state::{Error, IterDirection, MultiKey},
+    database::{
+        columns::CONTRACTS_STATE,
+        Database,
+    },
+    state::{
+        Error,
+        IterDirection,
+        MultiKey,
+    },
 };
-use fuel_core_interfaces::{
-    common::fuel_vm::prelude::MerkleRoot,
-    common::fuel_vm::{
-        crypto,
-        prelude::{Bytes32, ContractId, MerkleStorage},
+use fuel_core_interfaces::common::fuel_vm::{
+    crypto,
+    prelude::{
+        Bytes32,
+        ContractId,
+        MerkleRoot,
+        MerkleStorage,
     },
 };
 use itertools::Itertools;
@@ -22,15 +31,24 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
         value: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, *value).map_err(Into::into)
+        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, *value)
+            .map_err(Into::into)
     }
 
-    fn remove(&mut self, parent: &ContractId, key: &Bytes32) -> Result<Option<Bytes32>, Error> {
+    fn remove(
+        &mut self,
+        parent: &ContractId,
+        key: &Bytes32,
+    ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new((parent, key));
         Database::remove(self, key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
     }
 
-    fn get(&self, parent: &ContractId, key: &Bytes32) -> Result<Option<Cow<Bytes32>>, Error> {
+    fn get(
+        &self,
+        parent: &ContractId,
+        key: &Bytes32,
+    ) -> Result<Option<Cow<Bytes32>>, Error> {
         let key = MultiKey::new((parent, key));
         self.get(key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
     }
@@ -171,8 +189,10 @@ mod tests {
         )
         .unwrap();
 
-        let root =
-            MerkleStorage::<ContractId, Bytes32, Bytes32>::root(&mut database, &storage_id.0);
+        let root = MerkleStorage::<ContractId, Bytes32, Bytes32>::root(
+            &mut database,
+            &storage_id.0,
+        );
         assert!(root.is_ok())
     }
 }
