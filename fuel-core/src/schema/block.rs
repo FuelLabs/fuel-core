@@ -3,10 +3,7 @@ use crate::{
         Database,
         KvStoreError,
     },
-    executor::{
-        ExecutionMode,
-        Executor,
-    },
+    executor::Executor,
     model::{
         BlockHeight,
         FuelBlock,

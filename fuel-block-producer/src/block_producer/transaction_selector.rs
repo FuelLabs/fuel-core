@@ -1,7 +1,10 @@
 use std::cmp::Reverse;
 
 use crate::Config;
-use fuel_core_interfaces::common::{fuel_tx::CheckedTransaction, fuel_types::Word};
+use fuel_core_interfaces::common::{
+    fuel_tx::CheckedTransaction,
+    fuel_types::Word,
+};
 
 pub fn select_transactions(
     mut includable_txs: Vec<CheckedTransaction>,
@@ -39,8 +42,15 @@ pub fn select_transactions(
 mod tests {
     use fuel_core_interfaces::common::{
         fuel_asm::Opcode,
-        fuel_crypto::rand::{thread_rng, Rng},
-        fuel_tx::{ConsensusParameters, Output, TransactionBuilder},
+        fuel_crypto::rand::{
+            thread_rng,
+            Rng,
+        },
+        fuel_tx::{
+            ConsensusParameters,
+            Output,
+            TransactionBuilder,
+        },
         fuel_vm::consts::REG_ONE,
     };
     use itertools::Itertools;
@@ -61,29 +71,32 @@ mod tests {
         let txs = txs
             .iter()
             .map(|tx_gas| {
-                TransactionBuilder::script(vec![Opcode::RET(REG_ONE)].into_iter().collect(), vec![])
-                    .gas_price(tx_gas.price)
-                    .gas_limit(tx_gas.limit)
-                    .add_unsigned_coin_input(
-                        rng.gen(),
-                        rng.gen(),
-                        1_000_000,
-                        Default::default(),
-                        Default::default(),
-                        0,
-                    )
-                    .add_output(Output::Change {
-                        to: Default::default(),
-                        amount: 0,
-                        asset_id: Default::default(),
-                    })
-                    .finalize_checked(
-                        0,
-                        &ConsensusParameters {
-                            gas_price_factor: 1,
-                            ..ConsensusParameters::default()
-                        },
-                    )
+                TransactionBuilder::script(
+                    vec![Opcode::RET(REG_ONE)].into_iter().collect(),
+                    vec![],
+                )
+                .gas_price(tx_gas.price)
+                .gas_limit(tx_gas.limit)
+                .add_unsigned_coin_input(
+                    rng.gen(),
+                    rng.gen(),
+                    1_000_000,
+                    Default::default(),
+                    Default::default(),
+                    0,
+                )
+                .add_output(Output::Change {
+                    to: Default::default(),
+                    amount: 0,
+                    asset_id: Default::default(),
+                })
+                .finalize_checked(
+                    0,
+                    &ConsensusParameters {
+                        gas_price_factor: 1,
+                        ..ConsensusParameters::default()
+                    },
+                )
             })
             .collect();
 

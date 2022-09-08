@@ -13,9 +13,7 @@ use fuel_core_interfaces::{
         BlockProducerMpsc,
     },
     executor::Executor,
-    txpool,
 };
-use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::{
     sync::{

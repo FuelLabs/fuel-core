@@ -1,6 +1,9 @@
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
-    fuel_types::{Address, Word},
+    fuel_types::{
+        Address,
+        Word,
+    },
 };
 
 #[derive(Clone, Debug)]

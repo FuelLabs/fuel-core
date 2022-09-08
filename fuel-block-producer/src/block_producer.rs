@@ -1,22 +1,40 @@
 use crate::{
     block_producer::transaction_selector::select_transactions,
     db::BlockProducerDatabase,
-    ports::{Relayer, TxPool},
+    ports::{
+        Relayer,
+        TxPool,
+    },
     Config,
 };
 use anyhow::Result;
 use chrono::Utc;
-use fuel_core_interfaces::common::fuel_tx::CheckedTransaction;
-use fuel_core_interfaces::executor::{ExecutionMode, Executor};
 use fuel_core_interfaces::{
     block_producer::BlockProducerMpsc,
-    common::fuel_types::Bytes32,
-    model::{BlockHeight, DaBlockHeight, FuelBlock, FuelBlockHeader},
+    common::{
+        fuel_tx::CheckedTransaction,
+        fuel_types::Bytes32,
+    },
+    executor::{
+        ExecutionMode,
+        Executor,
+    },
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+        FuelBlock,
+        FuelBlockHeader,
+    },
 };
-use std::cmp::max;
-use std::sync::Arc;
+use std::{
+    cmp::max,
+    sync::Arc,
+};
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::{
+    info,
+    warn,
+};
 
 mod transaction_selector;
 
@@ -56,7 +74,8 @@ impl Task {
                     "handling block production request for height {}, with validator id {}",
                     height, self.config.validator_id
                 );
-                let produced_block = self.produce_block(height).await.map(Box::new).map(Arc::new);
+                let produced_block =
+                    self.produce_block(height).await.map(Box::new).map(Arc::new);
                 if let Err(e) = response.send(produced_block) {
                     // this isn't strictly an error since a block production request can be started
                     // at any time from anywhere.
@@ -146,7 +165,10 @@ impl Task {
         Ok(select_transactions(includable_txs, &self.config))
     }
 
-    async fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
+    async fn previous_block_info(
+        &self,
+        height: BlockHeight,
+    ) -> Result<PreviousBlockInfo> {
         // if this is the first block (ooh wee!), fill in base metadata from genesis
         if height <= 1u32.into() {
             // use best finalized height for first block

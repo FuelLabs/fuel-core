@@ -1,6 +1,8 @@
 use crate::ports::TxPool;
-use fuel_core_interfaces::common::fuel_tx::Transaction;
-use fuel_core_interfaces::txpool::Sender;
+use fuel_core_interfaces::{
+    common::fuel_tx::Transaction,
+    txpool::Sender,
+};
 use std::sync::Arc;
 
 #[async_trait::async_trait]

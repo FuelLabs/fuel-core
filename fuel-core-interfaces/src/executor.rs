@@ -1,8 +1,18 @@
-use crate::db::KvStoreError;
-use crate::model::FuelBlock;
+use crate::{
+    db::KvStoreError,
+    model::FuelBlock,
+};
 use async_trait::async_trait;
-use fuel_tx::{TxId, UtxoId, ValidationError};
-use fuel_types::{Bytes32, ContractId, MessageId};
+use fuel_tx::{
+    TxId,
+    UtxoId,
+    ValidationError,
+};
+use fuel_types::{
+    Bytes32,
+    ContractId,
+    MessageId,
+};
 use fuel_vm::backtrace::Backtrace;
 use std::error::Error as StdError;
 use thiserror::Error;
@@ -16,7 +26,11 @@ pub enum ExecutionMode {
 
 #[async_trait]
 pub trait Executor: Sync + Send {
-    async fn execute(&self, block: &mut FuelBlock, mode: ExecutionMode) -> Result<(), Error>;
+    async fn execute(
+        &self,
+        block: &mut FuelBlock,
+        mode: ExecutionMode,
+    ) -> Result<(), Error>;
 }
 
 #[derive(Debug, Error)]
@@ -30,7 +44,9 @@ pub enum TransactionValidityError {
     CoinDoesNotExist(UtxoId),
     #[error("The specified message was already spent")]
     MessageAlreadySpent(MessageId),
-    #[error("Message is not yet spendable, as it's DA height is newer than this block allows")]
+    #[error(
+        "Message is not yet spendable, as it's DA height is newer than this block allows"
+    )]
     MessageSpendTooEarly(MessageId),
     #[error("The specified message doesn't exist")]
     MessageDoesNotExist(MessageId),
@@ -69,7 +85,9 @@ pub enum Error {
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError + Send + Sync>),
-    #[error("missing transaction data for tx {transaction_id:#x} in block {block_id:#x}")]
+    #[error(
+        "missing transaction data for tx {transaction_id:#x} in block {block_id:#x}"
+    )]
     MissingTransactionData {
         block_id: Bytes32,
         transaction_id: Bytes32,

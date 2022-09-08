@@ -14,36 +14,79 @@ pub use service::Service;
 mod block_production_mock {
     use std::{
         borrow::Cow,
-        net::{IpAddr, SocketAddr},
+        net::{
+            IpAddr,
+            SocketAddr,
+        },
         path::PathBuf,
         sync::Arc,
     };
 
     use anyhow::Result;
     use async_trait::async_trait;
-    use rand::prelude::StdRng;
-    use rand::{Rng, SeedableRng};
-    use tokio::sync::{broadcast, oneshot};
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
+    use tokio::sync::{
+        broadcast,
+        oneshot,
+    };
 
-    use super::{db::BlockProducerDatabase, ports::Relayer, Service};
+    use super::{
+        db::BlockProducerDatabase,
+        ports::Relayer,
+        Service,
+    };
     use fuel_core::{
-        chain_config::{ChainConfig, CoinConfig, ProductionStrategy, StateConfig},
+        chain_config::{
+            ChainConfig,
+            CoinConfig,
+            ProductionStrategy,
+            StateConfig,
+        },
         database::Database,
-        service::{Config as CoreServiceConfig, DbType, FuelService, VMConfig},
+        service::{
+            Config as CoreServiceConfig,
+            DbType,
+            FuelService,
+            VMConfig,
+        },
     };
     use fuel_core_interfaces::{
         block_importer::ImportBlockBroadcast,
         block_producer::BlockProducerMpsc,
         common::{
             fuel_asm::Opcode,
-            fuel_crypto::{PublicKey, SecretKey},
+            fuel_crypto::{
+                PublicKey,
+                SecretKey,
+            },
             fuel_merkle::common::Bytes32,
-            fuel_tx::{ConsensusParameters, Output, Transaction, TransactionBuilder, UtxoId},
-            fuel_types::{Address, AssetId},
+            fuel_tx::{
+                ConsensusParameters,
+                Output,
+                Transaction,
+                TransactionBuilder,
+                UtxoId,
+            },
+            fuel_types::{
+                Address,
+                AssetId,
+            },
             fuel_vm::consts::REG_ZERO,
         },
-        executor::{Error as ExecutorError, ExecutionMode, Executor},
-        model::{BlockHeight, DaBlockHeight, FuelBlock},
+        executor::{
+            Error as ExecutorError,
+            ExecutionMode,
+            Executor,
+        },
+        model::{
+            BlockHeight,
+            DaBlockHeight,
+            FuelBlock,
+        },
     };
     use fuel_txpool::ServiceBuilder as TxPoolServiceBuilder;
 
@@ -111,23 +154,26 @@ mod block_production_mock {
     const COIN_AMOUNT: u64 = 1_000_000_000;
 
     fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
-        TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-            .gas_price(gas_price)
-            .gas_limit(gas_limit)
-            .add_unsigned_coin_input(
-                coin.secret_key,
-                coin.utxo_id(),
-                COIN_AMOUNT,
-                AssetId::zeroed(),
-                Default::default(),
-                0,
-            )
-            .add_output(Output::Change {
-                to: Default::default(),
-                amount: 0,
-                asset_id: AssetId::zeroed(),
-            })
-            .finalize()
+        TransactionBuilder::script(
+            vec![Opcode::RET(REG_ZERO)].into_iter().collect(),
+            vec![],
+        )
+        .gas_price(gas_price)
+        .gas_limit(gas_limit)
+        .add_unsigned_coin_input(
+            coin.secret_key,
+            coin.utxo_id(),
+            COIN_AMOUNT,
+            AssetId::zeroed(),
+            Default::default(),
+            0,
+        )
+        .add_output(Output::Change {
+            to: Default::default(),
+            amount: 0,
+            asset_id: AssetId::zeroed(),
+        })
+        .finalize()
     }
 
     #[tokio::test]
@@ -218,7 +264,10 @@ mod block_production_mock {
                 block_executor: Default::default(),
                 bft: Default::default(),
                 sync: Default::default(),
+                #[cfg(feature = "relayer")]
                 relayer: Default::default(),
+                #[cfg(feature = "p2p")]
+                p2p: Default::default(),
             };
 
             database.init(&config).unwrap();

@@ -1,5 +1,8 @@
 use anyhow::Result;
-use fuel_core_interfaces::model::{BlockHeight, FuelBlock};
+use fuel_core_interfaces::model::{
+    BlockHeight,
+    FuelBlock,
+};
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Sync + Send {
