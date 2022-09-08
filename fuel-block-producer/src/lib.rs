@@ -12,11 +12,8 @@ pub use service::Service;
 
 #[cfg(test)]
 mod block_production_mock {
-    #![allow(unused_imports)] // TODO: remove
-
     use std::{
         borrow::Cow,
-        collections::{BTreeMap, HashMap},
         net::{IpAddr, SocketAddr},
         path::PathBuf,
         sync::Arc,
@@ -24,12 +21,11 @@ mod block_production_mock {
 
     use anyhow::Result;
     use async_trait::async_trait;
-    use parking_lot::Mutex;
     use rand::prelude::StdRng;
     use rand::{Rng, SeedableRng};
-    use tokio::sync::{broadcast, mpsc, oneshot};
+    use tokio::sync::{broadcast, oneshot};
 
-    use super::{db::BlockProducerDatabase, ports::Relayer, Config, Service};
+    use super::{db::BlockProducerDatabase, ports::Relayer, Service};
     use fuel_core::{
         chain_config::{ChainConfig, CoinConfig, ProductionStrategy, StateConfig},
         database::Database,
@@ -42,20 +38,14 @@ mod block_production_mock {
             fuel_asm::Opcode,
             fuel_crypto::{PublicKey, SecretKey},
             fuel_merkle::common::Bytes32,
-            fuel_storage::Storage,
             fuel_tx::{ConsensusParameters, Output, Transaction, TransactionBuilder, UtxoId},
             fuel_types::{Address, AssetId},
-            fuel_vm::consts::{REG_ONE, REG_ZERO},
-        },
-        db::{
-            helpers::{Data, DummyDb, TX_ID1},
-            KvStoreError,
+            fuel_vm::consts::REG_ZERO,
         },
         executor::{Error as ExecutorError, ExecutionMode, Executor},
-        model::{BlockHeight, Coin, CoinStatus, DaBlockHeight, FuelBlock},
-        txpool::{Sender as TxPoolSender, TxPoolDb, TxPoolMpsc},
+        model::{BlockHeight, DaBlockHeight, FuelBlock},
     };
-    use fuel_txpool::{types::ContractId, ServiceBuilder as TxPoolServiceBuilder};
+    use fuel_txpool::ServiceBuilder as TxPoolServiceBuilder;
 
     struct MockRelayer;
 
@@ -68,13 +58,11 @@ mod block_production_mock {
             _validator_id: Address,
             _da_height: DaBlockHeight,
         ) -> Result<Address> {
-            println!("GET-BP-KEY");
             Ok(Address::default())
         }
 
         /// Get the best finalized height from the DA layer
         async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
-            println!("GET-BEST-HEIGHT");
             Ok(DaBlockHeight::default())
         }
     }
@@ -88,7 +76,6 @@ mod block_production_mock {
             _block: &mut FuelBlock,
             _mode: ExecutionMode,
         ) -> Result<(), ExecutorError> {
-            println!("MOCK-EXECUTE");
             Ok(())
         }
     }
@@ -238,8 +225,6 @@ mod block_production_mock {
 
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 FuelService::init_coin_state(database, initial_state)?;
-                // Self::init_contracts(database, initial_state)?;
-                // Self::init_da_messages(database, initial_state)?;
             }
 
             import_tx.commit().unwrap();

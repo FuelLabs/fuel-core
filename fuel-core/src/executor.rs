@@ -1,5 +1,5 @@
 use crate::{
-    database::{transaction::TransactionIndex, Database, KvStoreError},
+    database::{transaction::TransactionIndex, Database},
     model::{BlockHeight, Coin, CoinStatus, FuelBlock, FuelBlockDb},
     service::Config,
     tx_pool::TransactionStatus,
@@ -13,7 +13,7 @@ use fuel_core_interfaces::{
         fuel_storage::Storage,
         fuel_tx::{
             Address, AssetId, Bytes32, CheckedTransaction, Input, Output, Receipt, Transaction,
-            TransactionFee, TxId, UtxoId, ValidationError,
+            TransactionFee, UtxoId,
         },
         fuel_types::{bytes::SerializableVec, ContractId, MessageId},
         fuel_vm::{
@@ -21,16 +21,14 @@ use fuel_core_interfaces::{
             prelude::{Backtrace as FuelBacktrace, Interpreter, PredicateStorage},
         },
     },
-    executor::{Error, ExecutionMode, Executor as Trait, TransactionValidityError},
+    executor::{Error, ExecutionMode, TransactionValidityError},
     model::FuelBlockHeader,
     model::Message,
 };
 use std::{
-    error::Error as StdError,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
-use thiserror::Error;
 use tracing::{debug, warn};
 
 ///! The executor is used for block production and validation. Given a block, it will execute all
@@ -729,6 +727,7 @@ mod tests {
     use super::*;
     use crate::model::FuelBlockHeader;
     use chrono::TimeZone;
+    use fuel_core_interfaces::common::fuel_tx::ValidationError;
     use fuel_core_interfaces::model::{CheckedMessage, Message};
     use fuel_core_interfaces::{
         common::{

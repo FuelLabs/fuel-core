@@ -137,11 +137,12 @@ impl Context {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let txpool = txpool.clone();
                                 TxPool::block_update(txpool.as_ref(), block).await
+                                // TODO: Should this be done in a separate task? Like this:
                                 // tokio::spawn( async move {
                                 //     TxPool::block_update(txpool.as_ref(), block).await
                                 // });
                             },
-                            ImportBlockBroadcast::SealedFuelBlockImported { block, is_created_by_self } => {
+                            ImportBlockBroadcast::SealedFuelBlockImported { block: _, is_created_by_self: _ } => {
                                 // TODO: what to do with sealed blocks?
                                 todo!("Sealed block");
                             }
