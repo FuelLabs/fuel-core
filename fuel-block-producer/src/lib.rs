@@ -14,11 +14,6 @@ pub use service::Service;
 mod block_production_mock {
     use std::{
         borrow::Cow,
-        net::{
-            IpAddr,
-            SocketAddr,
-        },
-        path::PathBuf,
         sync::Arc,
     };
 
@@ -49,9 +44,7 @@ mod block_production_mock {
         database::Database,
         service::{
             Config as CoreServiceConfig,
-            DbType,
             FuelService,
-            VMConfig,
         },
     };
     use fuel_core_interfaces::{
@@ -226,48 +219,30 @@ mod block_production_mock {
             let mut import_tx = db.transaction();
             let database = import_tx.as_mut();
 
-            let config = CoreServiceConfig {
-                addr: SocketAddr::from((IpAddr::from([0; 4]), 0)),
-                database_path: PathBuf::new(),
-                database_type: DbType::InMemory,
-                chain_conf: ChainConfig {
-                    block_production: ProductionStrategy::Manual,
-                    chain_name: "test-chain".to_string(),
-                    initial_state: Some(StateConfig {
-                        coins: Some(
-                            coins
-                                .iter()
-                                .map(|coin| CoinConfig {
-                                    tx_id: Some(coin.id.into()),
-                                    output_index: Some(coin.index.into()),
-                                    block_created: Some(BlockHeight::from(0u32)),
-                                    maturity: Some(BlockHeight::from(0u32)),
-                                    owner: coin.address(),
-                                    amount: COIN_AMOUNT,
-                                    asset_id: AssetId::zeroed(),
-                                })
-                                .collect(),
-                        ),
-                        contracts: None,
-                        height: None,
-                        messages: None,
-                    }),
-                    transaction_parameters: consensus_params,
-                },
-                manual_blocks_enabled: false,
-                predicates: false,
-                utxo_validation: true,
-                vm: VMConfig::default(),
-                txpool: Default::default(),
-                block_importer: Default::default(),
-                block_producer: Default::default(),
-                block_executor: Default::default(),
-                bft: Default::default(),
-                sync: Default::default(),
-                #[cfg(feature = "relayer")]
-                relayer: Default::default(),
-                #[cfg(feature = "p2p")]
-                p2p: Default::default(),
+            let mut config = CoreServiceConfig::local_node();
+            config.chain_conf = ChainConfig {
+                block_production: ProductionStrategy::Manual,
+                chain_name: "test-chain".to_string(),
+                initial_state: Some(StateConfig {
+                    coins: Some(
+                        coins
+                            .iter()
+                            .map(|coin| CoinConfig {
+                                tx_id: Some(coin.id.into()),
+                                output_index: Some(coin.index.into()),
+                                block_created: Some(BlockHeight::from(0u32)),
+                                maturity: Some(BlockHeight::from(0u32)),
+                                owner: coin.address(),
+                                amount: COIN_AMOUNT,
+                                asset_id: AssetId::zeroed(),
+                            })
+                            .collect(),
+                    ),
+                    contracts: None,
+                    height: None,
+                    messages: None,
+                }),
+                transaction_parameters: consensus_params,
             };
 
             database.init(&config).unwrap();
