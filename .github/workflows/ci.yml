@@ -94,6 +94,8 @@ jobs:
             args: --all-targets --all-features
           - command: make
             args: build
+          - command: check
+            args: --locked --workspace
           - command: test
             args: --all-targets --all-features --workspace --exclude fuel-p2p
           - command: test
