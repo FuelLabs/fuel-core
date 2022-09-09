@@ -37,7 +37,7 @@ type BalanceEdge {
 	node: Balance!
 }
 
-input BalanceFilterInput {
+input BalanceFilterInput{
 	"""
 	Filter coins based on the `owner` field
 	"""
@@ -84,7 +84,7 @@ type BlockEdge {
 scalar BlockId
 
 
-input Breakpoint {
+input Breakpoint{
 	contract: ContractId!
 	pc: U64!
 }
@@ -144,7 +144,7 @@ type CoinEdge {
 	node: Coin!
 }
 
-input CoinFilterInput {
+input CoinFilterInput{
 	"""
 	Address of the owner
 	"""
@@ -161,7 +161,7 @@ type CoinOutput {
 	assetId: AssetId!
 }
 
-enum CoinStatus {
+enum CoinStatus{
 	UNSPENT
 	SPENT
 }
@@ -223,7 +223,7 @@ type ContractBalanceEdge {
 	node: ContractBalance!
 }
 
-input ContractBalanceFilterInput {
+input ContractBalanceFilterInput{
 	"""
 	Filter assets based on the `contractId` field
 	"""
@@ -248,7 +248,7 @@ Implement the DateTime<Utc> scalar
 
 The input/output is a string in RFC3339 format.
 """
-scalar DateTime
+scalar DateTime @specifiedBy(url: "https://datatracker.ietf.org/doc/html/rfc3339")
 
 type FailureStatus {
 	block: Block!
@@ -474,7 +474,7 @@ type Receipt {
 	nonce: Bytes32
 }
 
-enum ReceiptType {
+enum ReceiptType{
 	CALL
 	RETURN
 	RETURN_DATA
@@ -488,7 +488,7 @@ enum ReceiptType {
 	MESSAGE_OUT
 }
 
-enum ReturnType {
+enum ReturnType{
 	RETURN
 	RETURN_DATA
 	REVERT
@@ -500,14 +500,14 @@ type RunResult {
 	jsonReceipts: [String!]!
 }
 
-enum RunState {
+enum RunState{
 	COMPLETED
 	BREAKPOINT
 }
 
 scalar Salt
 
-input SpendQueryElementInput {
+input SpendQueryElementInput{
 	"""
 	Asset ID of the coins
 	"""
