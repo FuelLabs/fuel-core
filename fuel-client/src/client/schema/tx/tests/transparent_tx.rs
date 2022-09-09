@@ -228,7 +228,6 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: U64,
-    owner: Address,
     witness_index: i32,
     data: HexString,
     predicate: HexString,
@@ -279,7 +278,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
                         witness_index: message.witness_index.try_into()?,
                         data: message.data.into(),
                     }
@@ -290,7 +288,6 @@ impl TryFrom<Input> for fuel_tx::Input {
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
                         data: message.data.into(),
                         predicate: message.predicate.into(),
                         predicate_data: message.predicate_data.into(),

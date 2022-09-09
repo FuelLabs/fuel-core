@@ -482,7 +482,6 @@ mod tests {
 
         let acc1: Address = rng.gen();
         let recipient = rng.gen();
-        let sender = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
@@ -498,7 +497,6 @@ mod tests {
         let test_message = Message {
             sender: acc1,
             recipient,
-            owner: sender,
             nonce: 40,
             amount: 0,
             data: vec![],
@@ -513,7 +511,7 @@ mod tests {
                     2,
                     test_message.sender,
                     test_message.recipient,
-                    test_message.owner,
+                    test_message.recipient,
                     test_message.nonce as u32,
                     test_message.amount as u32,
                     test_message.data.clone(),

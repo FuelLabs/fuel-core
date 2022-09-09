@@ -218,8 +218,6 @@ pub struct MessageConfig {
     pub sender: Address,
     #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexType")]
-    pub owner: Address,
     #[serde_as(as = "HexNumber")]
     pub nonce: Word,
     #[serde_as(as = "HexNumber")]
@@ -236,7 +234,6 @@ impl From<MessageConfig> for Message {
         Message {
             sender: msg.sender,
             recipient: msg.recipient,
-            owner: msg.owner,
             nonce: msg.nonce,
             amount: msg.amount,
             data: msg.data,
@@ -472,7 +469,6 @@ mod tests {
                 messages: Some(vec![MessageConfig {
                     sender: rng.gen(),
                     recipient: rng.gen(),
-                    owner: rng.gen(),
                     nonce: rng.gen(),
                     amount: rng.gen(),
                     data: vec![rng.gen()],

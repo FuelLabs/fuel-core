@@ -280,7 +280,6 @@ impl Dependency {
                 sender,
                 recipient,
                 nonce,
-                owner,
                 amount,
                 data,
                 ..
@@ -290,14 +289,12 @@ impl Dependency {
                 sender,
                 recipient,
                 nonce,
-                owner,
                 amount,
                 data,
                 ..
             } => {
-                let computed_id = Input::compute_message_id(
-                    sender, recipient, *nonce, owner, *amount, data,
-                );
+                let computed_id =
+                    Input::compute_message_id(sender, recipient, *nonce, *amount, data);
                 if message_id != &computed_id {
                     return Err(Error::NotInsertedIoWrongMessageId.into())
                 }

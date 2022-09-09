@@ -16,7 +16,6 @@ pub struct Message {
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
-    pub owner: Address,
     pub nonce: U64,
     pub data: Vec<i32>,
     pub da_height: U64,

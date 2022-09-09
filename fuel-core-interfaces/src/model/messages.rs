@@ -14,7 +14,6 @@ use fuel_types::{
 pub struct Message {
     pub sender: Address,
     pub recipient: Address,
-    pub owner: Address,
     pub nonce: Word,
     pub amount: Word,
     pub data: Vec<u8>,
@@ -29,7 +28,6 @@ impl Message {
         hasher.input(self.sender);
         hasher.input(self.recipient);
         hasher.input(self.nonce.to_be_bytes());
-        hasher.input(self.owner);
         hasher.input(self.amount.to_be_bytes());
         hasher.input(&self.data);
         MessageId::from(*hasher.digest())
