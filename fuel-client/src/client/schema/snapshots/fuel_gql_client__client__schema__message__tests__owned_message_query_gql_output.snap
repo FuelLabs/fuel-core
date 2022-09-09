@@ -1,6 +1,5 @@
 ---
 source: fuel-client/src/client/schema/message.rs
-assertion_line: 105
 expression: operation.query
 ---
 query Query($_0: Address, $_1: Int, $_2: String, $_3: Int, $_4: String) {
@@ -11,7 +10,6 @@ query Query($_0: Address, $_1: Int, $_2: String, $_3: Int, $_4: String) {
         amount
         sender
         recipient
-        owner
         nonce
         data
         daHeight
