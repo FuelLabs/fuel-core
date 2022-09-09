@@ -17,7 +17,7 @@ pub use coin::{
     Coin,
     CoinStatus,
 };
-use fuel_types::{
+use fuel_vm::fuel_types::{
     Address,
     Bytes32,
 };

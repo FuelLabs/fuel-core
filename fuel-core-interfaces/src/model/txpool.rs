@@ -2,7 +2,7 @@ use chrono::{
     DateTime,
     Utc,
 };
-use fuel_tx::Transaction;
+use fuel_vm::fuel_tx::Transaction;
 use std::{
     ops::Deref,
     sync::Arc,

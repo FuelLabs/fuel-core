@@ -5,7 +5,7 @@ use super::model::{
 };
 use crate::model::ConsensusVote;
 use async_trait::async_trait;
-use fuel_tx::Transaction;
+use fuel_vm::fuel_tx::Transaction;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
