@@ -7,6 +7,4 @@ pub use fuel_core_interfaces::common::{
     fuel_types::Word,
 };
 
-use fuel_core_interfaces::common::fuel_types::Word;
-
 pub type GasPrice = Word;

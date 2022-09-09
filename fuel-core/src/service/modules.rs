@@ -162,7 +162,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     #[cfg(feature = "p2p")]
     let (tx_consensus, _) = mpsc::channel(100);
     #[cfg(feature = "p2p")]
-    let (tx_transaction, _) = mpsc::channel(100);
+    let (tx_transaction, _) = broadcast::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = fuel_p2p::orchestrator::Service::new(
