@@ -2192,7 +2192,7 @@ dependencies = [
  "fuel-storage 0.3.0",
  "fuel-tx",
  "fuel-types",
- "fuel-vm 0.15.0 (git+https://github.com/FuelLabs/fuel-vm?branch=feature/split-storage-trait)",
+ "fuel-vm",
  "futures",
  "lazy_static",
  "parking_lot 0.12.1",
@@ -2229,7 +2229,7 @@ dependencies = [
  "derive_more",
  "fuel-tx",
  "fuel-types",
- "fuel-vm 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-vm",
  "futures",
  "hex",
  "insta",
@@ -2422,29 +2422,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bdbc4b0863a4d7d523b248d404821dc4e3b6d0034fbbf33f03b1f4283af663"
-dependencies = [
- "fuel-asm",
- "fuel-crypto",
- "fuel-merkle 0.3.0",
- "fuel-storage 0.2.0",
- "fuel-tx",
- "fuel-types",
- "itertools",
- "secp256k1",
- "serde",
- "sha3",
- "tai64",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "fuel-vm"
-version = "0.15.0"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=feature/split-storage-trait#06ef9eb4fd60cc5e8021a239cc478ecb608ebc36"
+checksum = "6658f32707cb114d464561ed6e304e9830da6a4e74da3e5fcdab4aad94d81361"
 dependencies = [
  "anyhow",
  "fuel-asm",
