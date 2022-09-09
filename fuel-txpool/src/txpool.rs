@@ -291,7 +291,6 @@ pub mod tests {
                 message.recipient,
                 message.amount,
                 message.nonce,
-                message.owner,
                 message.data.clone(),
                 Default::default(),
                 Default::default(),

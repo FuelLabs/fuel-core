@@ -2059,9 +2059,9 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuel-asm"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135ef9990debd1fa257988a0a8be5b9d787decaba911cc3b97d7712a4b70328d"
+checksum = "6e4dcbfb02da27a232dc1a8dedcb8ed50ee3e981b40ce3618f96ce0f3c250f3e"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2339,9 +2339,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "118b773c25dbf645457fbd9b0288ac923c044d03ce68f492e539c840c3595f5e"
+checksum = "d88b96bddf1c57f1d73a51f0f58ef67b294cdb722d5f80ee76d9cf84b986769e"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
@@ -2351,6 +2351,7 @@ dependencies = [
  "num-integer",
  "rand 0.8.5",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2380,9 +2381,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516d60fc504570c0ad79f6dffcbd31687b15b76ecf8753bccaeae201baac29d2"
+checksum = "44bdbc4b0863a4d7d523b248d404821dc4e3b6d0034fbbf33f03b1f4283af663"
 dependencies = [
  "anyhow",
  "fuel-asm",

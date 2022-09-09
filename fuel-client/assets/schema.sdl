@@ -289,7 +289,6 @@ type InputMessage {
 	recipient: Address!
 	amount: U64!
 	nonce: U64!
-	owner: Address!
 	witnessIndex: Int!
 	data: HexString!
 	predicate: HexString!
@@ -301,7 +300,6 @@ type Message {
 	amount: U64!
 	sender: Address!
 	recipient: Address!
-	owner: Address!
 	nonce: U64!
 	data: [Int!]!
 	daHeight: U64!

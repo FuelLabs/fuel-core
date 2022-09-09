@@ -13,29 +13,30 @@ use fuel_crypto::{
     fuel_types::Address,
     SecretKey,
 };
-use fuel_gql_client::client::{
-    FuelClient,
-    PageDirection,
-    PaginationRequest,
+use fuel_gql_client::{
+    client::{
+        FuelClient,
+        PageDirection,
+        PaginationRequest,
+    },
+    fuel_tx::Input,
 };
 use rand::{
     rngs::StdRng,
     Rng,
     SeedableRng,
 };
-use std::ops::Deref;
 
 #[tokio::test]
 async fn can_submit_genesis_message() {
     let mut rng = StdRng::seed_from_u64(1234);
 
     let secret_key: SecretKey = rng.gen();
-    let owner = secret_key.public_key().hash();
+    let pk = secret_key.public_key();
 
     let msg1 = MessageConfig {
         sender: rng.gen(),
-        recipient: rng.gen(),
-        owner: (*owner.deref()).into(),
+        recipient: Input::owner(&pk),
         nonce: rng.gen(),
         amount: rng.gen(),
         data: vec![rng.gen()],
@@ -45,7 +46,6 @@ async fn can_submit_genesis_message() {
         .add_unsigned_message_input(
             secret_key,
             msg1.sender,
-            msg1.recipient,
             msg1.nonce,
             msg1.amount,
             msg1.data.clone(),
@@ -73,19 +73,19 @@ async fn messages_returns_messages_for_all_owners() {
 
     // create some messages for owner A
     let first_msg = MessageConfig {
-        owner: owner_a,
+        recipient: owner_a,
         nonce: 1,
         ..Default::default()
     };
     let second_msg = MessageConfig {
-        owner: owner_a,
+        recipient: owner_a,
         nonce: 2,
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
-        owner: owner_b,
+        recipient: owner_b,
         nonce: 3,
         ..Default::default()
     };
@@ -121,19 +121,19 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // create some messages for owner A
     let first_msg = MessageConfig {
-        owner: owner_a,
+        recipient: owner_a,
         nonce: 1,
         ..Default::default()
     };
     let second_msg = MessageConfig {
-        owner: owner_a,
+        recipient: owner_a,
         nonce: 2,
         ..Default::default()
     };
 
     // create a message for owner B
     let third_msg = MessageConfig {
-        owner: owner_b,
+        recipient: owner_b,
         nonce: 3,
         ..Default::default()
     };
@@ -166,7 +166,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
 
     // verify messages owner matches
     for message in result.results {
-        assert_eq!(message.owner.0 .0, owner_a)
+        assert_eq!(message.recipient.0 .0, owner_a)
     }
 
     // get the messages from Owner B
@@ -178,7 +178,7 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     // verify that Owner B has 1 message
     assert_eq!(result.results.len(), 1);
 
-    assert_eq!(result.results[0].owner.0 .0, owner_b);
+    assert_eq!(result.results[0].recipient.0 .0, owner_b);
 }
 
 #[tokio::test]

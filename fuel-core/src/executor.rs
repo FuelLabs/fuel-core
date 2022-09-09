@@ -518,7 +518,6 @@ impl Executor {
                     recipient,
                     amount,
                     nonce,
-                    owner,
                     data,
                     ..
                 }
@@ -528,7 +527,6 @@ impl Executor {
                     recipient,
                     amount,
                     nonce,
-                    owner,
                     data,
                     ..
                 } => {
@@ -553,7 +551,6 @@ impl Executor {
                             fuel_block_spend: Some(block_height),
                             sender: *sender,
                             recipient: *recipient,
-                            owner: *owner,
                             nonce: *nonce,
                             amount: *amount,
                             data: data.clone(),
@@ -1860,7 +1857,6 @@ mod tests {
         let mut message = Message {
             sender: rng.gen(),
             recipient: rng.gen(),
-            owner: rng.gen(),
             nonce: rng.gen(),
             amount: 1000,
             data: vec![],
@@ -1872,15 +1868,14 @@ mod tests {
             .add_unsigned_message_input(
                 rng.gen(),
                 message.sender,
-                message.recipient,
                 message.nonce,
                 message.amount,
                 vec![],
             )
             .finalize();
 
-        if let Input::MessageSigned { owner, .. } = tx.inputs()[0] {
-            message.owner = owner;
+        if let Input::MessageSigned { recipient, .. } = tx.inputs()[0] {
+            message.recipient = recipient;
         } else {
             unreachable!();
         }

@@ -42,7 +42,6 @@ impl From<&MessageLog> for Message {
         Self {
             sender: message.sender,
             recipient: message.recipient,
-            owner: message.owner,
             nonce: message.nonce,
             amount: message.amount,
             data: message.data.clone(),
