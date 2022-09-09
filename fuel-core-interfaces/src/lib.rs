@@ -8,6 +8,8 @@ pub mod relayer;
 pub mod signer;
 pub mod sync;
 pub mod txpool;
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod utils;
 
 pub mod common {
     #[doc(no_inline)]

@@ -1,6 +1,89 @@
+use crate::{
+    model::{
+        Coin,
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        ValidatorId,
+        ValidatorStake,
+    },
+    relayer::StakingDiff,
+};
+use fuel_storage::Mappable;
+use fuel_tx::{
+    Transaction,
+    UtxoId,
+};
+use fuel_types::{
+    Address,
+    Bytes32,
+    MessageId,
+};
 use fuel_vm::prelude::InterpreterError;
 use std::io::ErrorKind;
 use thiserror::Error;
+
+pub use fuel_vm::storage::{
+    ContractsAssets,
+    ContractsInfo,
+    ContractsRawCode,
+    ContractsState,
+};
+
+/// The storage table of coins UTXOs.
+pub struct Coins;
+
+impl Mappable for Coins {
+    type Key = UtxoId;
+    type SetValue = Coin;
+    type GetValue = Self::SetValue;
+}
+
+/// The storage table of bridget from Ethereum messages.
+pub struct Messages;
+
+impl Mappable for Messages {
+    type Key = MessageId;
+    type SetValue = Message;
+    type GetValue = Self::SetValue;
+}
+
+/// The storage table of confirmed transactions.
+pub struct Transactions;
+
+impl Mappable for Transactions {
+    type Key = Bytes32;
+    type SetValue = Transaction;
+    type GetValue = Self::SetValue;
+}
+
+/// The storage table of delegate's indexes used by relayer.
+/// Delegate index maps delegate `Address` with list of da block where delegation happened.
+pub struct DelegatesIndexes;
+
+impl Mappable for DelegatesIndexes {
+    type Key = Address;
+    type SetValue = [DaBlockHeight];
+    type GetValue = Vec<DaBlockHeight>;
+}
+
+/// The storage table of relayer validators set.
+pub struct ValidatorsSet;
+
+impl Mappable for ValidatorsSet {
+    type Key = ValidatorId;
+    type SetValue = (ValidatorStake, Option<ConsensusId>);
+    type GetValue = Self::SetValue;
+}
+
+/// The storage table of relayer stacking diffs.
+pub struct StackingDiffs;
+
+impl Mappable for StackingDiffs {
+    type Key = DaBlockHeight;
+    type SetValue = StakingDiff;
+    type GetValue = Self::SetValue;
+}
 
 #[derive(Error, Debug)]
 #[non_exhaustive]

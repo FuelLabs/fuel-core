@@ -5,15 +5,18 @@ use crate::{
         CoinStatus,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_asm::Word,
-    fuel_storage::Storage,
-    fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        UtxoId,
+use fuel_core_interfaces::{
+    common::{
+        fuel_asm::Word,
+        fuel_storage::StorageAsMut,
+        fuel_tx::{
+            Address,
+            AssetId,
+            Bytes32,
+            UtxoId,
+        },
     },
+    db::Coins,
 };
 use itertools::Itertools;
 
@@ -43,19 +46,19 @@ impl TestDatabase {
             block_created: Default::default(),
         };
 
-        Storage::<UtxoId, Coin>::insert(&mut self.database, &id, &coin).unwrap();
+        self.database.storage::<Coins>().insert(&id, &coin).unwrap();
 
         (id, coin)
     }
 
     pub fn owned_coins(&self, owner: Address) -> Vec<(UtxoId, Coin)> {
+        use fuel_core_interfaces::common::fuel_storage::StorageAsRef;
         self.database
             .owned_coins(owner, None, None)
             .map(|res| {
                 res.map(|id| {
-                    let coin = Storage::<UtxoId, Coin>::get(&self.database, &id)
-                        .unwrap()
-                        .unwrap();
+                    let coin =
+                        self.database.storage::<Coins>().get(&id).unwrap().unwrap();
                     (id, coin.into_owned())
                 })
             })

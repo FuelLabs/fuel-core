@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        columns::METADATA,
+        Column,
         Database,
     },
     model::BlockHeight,
@@ -24,10 +24,10 @@ impl Database {
         // check only for one field if it initialized or not.
         self.insert(
             CHAIN_NAME_KEY,
-            METADATA,
+            Column::Metadata,
             config.chain_conf.chain_name.clone(),
         )
-        .and_then(|v| {
+        .and_then(|v: Option<String>| {
             if v.is_some() {
                 Err(Error::ChainAlreadyInitialized)
             } else {
@@ -42,19 +42,26 @@ impl Database {
             .and_then(|c| c.height)
             .unwrap_or_default();
 
-        self.insert(DB_VERSION_KEY, METADATA, DB_VERSION)?;
-        self.insert(CHAIN_HEIGHT_KEY, METADATA, chain_height)?;
-        self.insert(FINALIZED_DA_HEIGHT_KEY, METADATA, 0)?;
-        self.insert(VALIDATORS_DA_HEIGHT_KEY, METADATA, 0)?;
-        self.insert(LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY, METADATA, 0)?;
+        let _: Option<u32> = self.insert(DB_VERSION_KEY, Column::Metadata, DB_VERSION)?;
+        let _: Option<BlockHeight> =
+            self.insert(CHAIN_HEIGHT_KEY, Column::Metadata, chain_height)?;
+        let _: Option<BlockHeight> =
+            self.insert(FINALIZED_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+        let _: Option<BlockHeight> =
+            self.insert(VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+        let _: Option<BlockHeight> = self.insert(
+            LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
+            Column::Metadata,
+            0,
+        )?;
         Ok(())
     }
 
     pub fn get_chain_name(&self) -> Result<Option<String>, Error> {
-        self.get(CHAIN_NAME_KEY, METADATA)
+        self.get(CHAIN_NAME_KEY, Column::Metadata)
     }
 
     pub fn get_starting_chain_height(&self) -> Result<Option<BlockHeight>, Error> {
-        self.get(CHAIN_HEIGHT_KEY, METADATA)
+        self.get(CHAIN_HEIGHT_KEY, Column::Metadata)
     }
 }

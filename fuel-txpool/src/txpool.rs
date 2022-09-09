@@ -270,7 +270,42 @@ impl TxPool {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::MockDb;
+    use super::*;
+    use crate::{
+        txpool::tests::helpers::{
+            create_coin_input,
+            create_coin_output,
+            create_contract_input,
+            create_contract_output,
+        },
+        Error,
+        MockDb,
+    };
+    use fuel_core_interfaces::{
+        common::{
+            fuel_storage::StorageAsMut,
+            fuel_tx::{
+                TransactionBuilder,
+                UtxoId,
+            },
+        },
+        db::{
+            Coins,
+            Messages,
+        },
+        model::{
+            BlockHeight,
+            Coin,
+            CoinStatus,
+            Message,
+        },
+    };
+    use std::{
+        cmp::Reverse,
+        str::FromStr,
+        sync::Arc,
+    };
+
     mod helpers {
         use crate::types::TxId;
         use fuel_core_interfaces::{
@@ -336,37 +371,6 @@ pub mod tests {
         }
     }
 
-    use super::*;
-    use crate::{
-        txpool::tests::helpers::{
-            create_coin_input,
-            create_coin_output,
-            create_contract_input,
-            create_contract_output,
-        },
-        Error,
-    };
-    use fuel_core_interfaces::{
-        common::{
-            fuel_storage::Storage,
-            fuel_tx::{
-                TransactionBuilder,
-                UtxoId,
-            },
-        },
-        model::{
-            BlockHeight,
-            Coin,
-            CoinStatus,
-            Message,
-        },
-    };
-    use std::{
-        cmp::Reverse,
-        str::FromStr,
-        sync::Arc,
-    };
-
     #[tokio::test]
     async fn simple_insertion() {
         let mut txpool = TxPool::new(Default::default());
@@ -419,18 +423,19 @@ pub mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000000",
         )
         .unwrap();
-        db.insert(
-            &UtxoId::new(db_tx_id, 0),
-            &Coin {
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: CoinStatus::Unspent,
-                block_created: BlockHeight::default(),
-            },
-        )
-        .expect("unable to insert seed coin data");
+        db.storage::<Coins>()
+            .insert(
+                &UtxoId::new(db_tx_id, 0),
+                &Coin {
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: BlockHeight::default(),
+                },
+            )
+            .expect("unable to insert seed coin data");
 
         let contract_id = ContractId::from_str(
             "0x0000000000000000000000000000000000000000000000000000000000000100",
@@ -477,18 +482,19 @@ pub mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000000",
         )
         .unwrap();
-        db.insert(
-            &UtxoId::new(db_tx_id, 0),
-            &Coin {
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: CoinStatus::Unspent,
-                block_created: BlockHeight::default(),
-            },
-        )
-        .expect("unable to insert seed coin data");
+        db.storage::<Coins>()
+            .insert(
+                &UtxoId::new(db_tx_id, 0),
+                &Coin {
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: BlockHeight::default(),
+                },
+            )
+            .expect("unable to insert seed coin data");
 
         let contract_id = ContractId::from_str(
             "0x0000000000000000000000000000000000000000000000000000000000000100",
@@ -577,18 +583,19 @@ pub mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000000",
         )
         .unwrap();
-        db.insert(
-            &UtxoId::new(db_tx_id, 0),
-            &Coin {
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: CoinStatus::Spent,
-                block_created: BlockHeight::default(),
-            },
-        )
-        .expect("unable to insert seed coin data");
+        db.storage::<Coins>()
+            .insert(
+                &UtxoId::new(db_tx_id, 0),
+                &Coin {
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Spent,
+                    block_created: BlockHeight::default(),
+                },
+            )
+            .expect("unable to insert seed coin data");
 
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -615,18 +622,19 @@ pub mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000000",
         )
         .unwrap();
-        db.insert(
-            &UtxoId::new(db_tx_id, 0),
-            &Coin {
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: CoinStatus::Unspent,
-                block_created: BlockHeight::default(),
-            },
-        )
-        .expect("unable to insert seed coin data");
+        db.storage::<Coins>()
+            .insert(
+                &UtxoId::new(db_tx_id, 0),
+                &Coin {
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: BlockHeight::default(),
+                },
+            )
+            .expect("unable to insert seed coin data");
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -774,18 +782,19 @@ pub mod tests {
             "0x0000000000000000000000000000000000000000000000000000000000000000",
         )
         .unwrap();
-        db.insert(
-            &UtxoId::new(db_tx_id, 0),
-            &Coin {
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                maturity: Default::default(),
-                status: CoinStatus::Unspent,
-                block_created: BlockHeight::default(),
-            },
-        )
-        .expect("unable to insert seed coin data");
+        db.storage::<Coins>()
+            .insert(
+                &UtxoId::new(db_tx_id, 0),
+                &Coin {
+                    owner: Default::default(),
+                    amount: Default::default(),
+                    asset_id: Default::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: BlockHeight::default(),
+                },
+            )
+            .expect("unable to insert seed coin data");
 
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -1044,7 +1053,9 @@ pub mod tests {
             .finalize();
 
         let mut db = MockDb::default();
-        db.insert(&message.id(), &message).unwrap();
+        db.storage::<Messages>()
+            .insert(&message.id(), &message)
+            .unwrap();
         let mut txpool = TxPool::new(Default::default());
 
         txpool
@@ -1070,7 +1081,9 @@ pub mod tests {
             .finalize();
 
         let mut db = MockDb::default();
-        db.insert(&message.id(), &message).unwrap();
+        db.storage::<Messages>()
+            .insert(&message.id(), &message)
+            .unwrap();
         let mut txpool = TxPool::new(Default::default());
 
         let err = txpool
@@ -1135,7 +1148,9 @@ pub mod tests {
             .finalize();
 
         let mut db = MockDb::default();
-        db.insert(&message.id(), &message).unwrap();
+        db.storage::<Messages>()
+            .insert(&message.id(), &message)
+            .unwrap();
 
         let mut txpool = TxPool::new(Default::default());
 
@@ -1181,7 +1196,9 @@ pub mod tests {
             .finalize();
 
         let mut db = MockDb::default();
-        db.insert(&message.id(), &message).unwrap();
+        db.storage::<Messages>()
+            .insert(&message.id(), &message)
+            .unwrap();
 
         let mut txpool = TxPool::new(Default::default());
 
@@ -1246,8 +1263,12 @@ pub mod tests {
             .finalize();
 
         let mut db = MockDb::default();
-        db.insert(&message_1.id(), &message_1).unwrap();
-        db.insert(&message_2.id(), &message_2).unwrap();
+        db.storage::<Messages>()
+            .insert(&message_1.id(), &message_1)
+            .unwrap();
+        db.storage::<Messages>()
+            .insert(&message_2.id(), &message_2)
+            .unwrap();
         let mut txpool = TxPool::new(Default::default());
 
         txpool

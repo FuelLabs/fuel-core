@@ -31,9 +31,10 @@ use async_graphql::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::StorageAsRef,
         fuel_tx,
     },
+    db::Coins,
     model::{
         Coin as CoinModel,
         CoinStatus as CoinStatusModel,
@@ -109,7 +110,9 @@ impl CoinQuery {
     ) -> async_graphql::Result<Option<Coin>> {
         let utxo_id = utxo_id.0;
         let db = ctx.data_unchecked::<Database>().clone();
-        let block = Storage::<fuel_tx::UtxoId, CoinModel>::get(&db, &utxo_id)?
+        let block = db
+            .storage::<Coins>()
+            .get(&utxo_id)?
             .map(|coin| Coin(utxo_id, coin.into_owned()));
         Ok(block)
     }
@@ -191,7 +194,8 @@ impl CoinQuery {
                     let coins: Vec<Coin> = coins
                         .into_iter()
                         .map(|id| {
-                            Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
+                            db.storage::<Coins>()
+                                .get(&id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|coin| Coin(id, coin.into_owned()))
