@@ -1,12 +1,18 @@
 use std::{
-    net::{IpAddr, Ipv4Addr},
+    net::{
+        IpAddr,
+        Ipv4Addr,
+    },
     path::PathBuf,
     time::Duration,
 };
 
 use clap::Args;
 
-use fuel_p2p::{config::P2PConfig, Multiaddr};
+use fuel_p2p::{
+    config::P2PConfig,
+    Multiaddr,
+};
 
 #[derive(Debug, Clone, Args)]
 pub struct P2pArgs {
@@ -98,10 +104,11 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 Some(path) => {
                     let phrase = std::fs::read_to_string(path)?;
 
-                    let secret_key = fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
-                        &phrase,
-                        "m/44'/60'/0'/0/0",
-                    )?;
+                    let secret_key =
+                        fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
+                            &phrase,
+                            "m/44'/60'/0'/0/0",
+                        )?;
 
                     fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
@@ -127,7 +134,9 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,
             enable_random_walk: args.enable_random_walk,
-            connection_idle_timeout: Some(Duration::from_secs(args.connection_idle_timeout)),
+            connection_idle_timeout: Some(Duration::from_secs(
+                args.connection_idle_timeout,
+            )),
             topics: args.topics,
             max_mesh_size: args.max_mesh_size,
             min_mesh_size: args.min_mesh_size,

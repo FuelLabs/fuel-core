@@ -1,12 +1,19 @@
 use crate::database::Database;
 use anyhow::Error as AnyError;
 use modules::Modules;
-use std::{net::SocketAddr, panic};
+use std::{
+    net::SocketAddr,
+    panic,
+};
 use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
-pub use config::{Config, DbType, VMConfig};
+pub use config::{
+    Config,
+    DbType,
+    VMConfig,
+};
 
 pub mod config;
 pub(crate) mod genesis;
@@ -40,7 +47,10 @@ impl FuelService {
 
     #[cfg(any(test, feature = "test-helpers"))]
     /// Used to initialize a service with a pre-existing database
-    pub async fn from_database(database: Database, config: Config) -> Result<Self, AnyError> {
+    pub async fn from_database(
+        database: Database,
+        config: Config,
+    ) -> Result<Self, AnyError> {
         Self::init_service(database, config).await
     }
 

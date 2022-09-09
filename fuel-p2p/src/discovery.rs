@@ -4,22 +4,42 @@ use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
     core::{
-        connection::{ConnectionId, ListenerId},
+        connection::{
+            ConnectionId,
+            ListenerId,
+        },
         ConnectedPoint,
     },
-    kad::{handler::KademliaHandlerProto, store::MemoryStore, Kademlia, KademliaEvent, QueryId},
+    kad::{
+        handler::KademliaHandlerProto,
+        store::MemoryStore,
+        Kademlia,
+        KademliaEvent,
+        QueryId,
+    },
     mdns::MdnsEvent,
     multiaddr::Protocol,
     swarm::{
-        ConnectionHandler, DialError, IntoConnectionHandler, NetworkBehaviour,
-        NetworkBehaviourAction, PollParameters,
+        ConnectionHandler,
+        DialError,
+        IntoConnectionHandler,
+        NetworkBehaviour,
+        NetworkBehaviourAction,
+        PollParameters,
     },
-    Multiaddr, PeerId,
+    Multiaddr,
+    PeerId,
 };
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{
+        HashSet,
+        VecDeque,
+    },
     io,
-    task::{Context, Poll},
+    task::{
+        Context,
+        Poll,
+    },
     time::Duration,
 };
 use tracing::trace;
@@ -108,7 +128,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         params: &mut impl PollParameters,
     ) -> Poll<NetworkBehaviourAction<Self::OutEvent, Self::ConnectionHandler>> {
         if let Some(next_event) = self.events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event));
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
         }
 
         // if random walk is enabled poll the stream that will fire when random walk is scheduled
@@ -130,14 +150,16 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         // poll Kademlia behaviour
         while let Poll::Ready(kad_action) = self.kademlia.poll(cx, params) {
             match kad_action {
-                NetworkBehaviourAction::GenerateEvent(KademliaEvent::UnroutablePeer { peer }) => {
+                NetworkBehaviourAction::GenerateEvent(
+                    KademliaEvent::UnroutablePeer { peer },
+                ) => {
                     return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
                         DiscoveryEvent::UnroutablePeer(peer),
                     ))
                 }
 
                 NetworkBehaviourAction::Dial { handler, opts } => {
-                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts });
+                    return Poll::Ready(NetworkBehaviourAction::Dial { handler, opts })
                 }
                 NetworkBehaviourAction::CloseConnection {
                     peer_id,
@@ -146,7 +168,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
                     return Poll::Ready(NetworkBehaviourAction::CloseConnection {
                         peer_id,
                         connection,
-                    });
+                    })
                 }
                 NetworkBehaviourAction::NotifyHandler {
                     peer_id,
@@ -200,7 +222,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         }
 
         if let Some(next_event) = self.events.pop_front() {
-            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event));
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(next_event))
         }
 
         Poll::Pending
@@ -231,8 +253,12 @@ impl NetworkBehaviour for DiscoveryBehaviour {
             // which are not actually part of the network
             if !self.allow_private_addresses {
                 list_to_filter.retain(|addr| match addr.iter().next() {
-                    Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => false,
-                    Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => false,
+                    Some(Protocol::Ip4(addr)) if !IpNetwork::from(addr).is_global() => {
+                        false
+                    }
+                    Some(Protocol::Ip6(addr)) if !IpNetwork::from(addr).is_global() => {
+                        false
+                    }
                     _ => true,
                 });
             }
@@ -316,7 +342,11 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         self.kademlia.inject_new_listen_addr(id, addr)
     }
 
-    fn inject_listener_error(&mut self, id: ListenerId, err: &(dyn std::error::Error + 'static)) {
+    fn inject_listener_error(
+        &mut self,
+        id: ListenerId,
+        err: &(dyn std::error::Error + 'static),
+    ) {
         self.kademlia.inject_listener_error(id, err)
     }
 
@@ -327,15 +357,32 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
 #[cfg(test)]
 mod tests {
-    use super::{DiscoveryBehaviour, DiscoveryConfig};
+    use super::{
+        DiscoveryBehaviour,
+        DiscoveryConfig,
+    };
     use crate::discovery::DiscoveryEvent;
-    use futures::{future::poll_fn, StreamExt};
+    use futures::{
+        future::poll_fn,
+        StreamExt,
+    };
     use libp2p::{
-        core, identity::Keypair, multiaddr::Protocol, noise, swarm::SwarmEvent, yamux, Multiaddr,
-        PeerId, Swarm, Transport,
+        core,
+        identity::Keypair,
+        multiaddr::Protocol,
+        noise,
+        swarm::SwarmEvent,
+        yamux,
+        Multiaddr,
+        PeerId,
+        Swarm,
+        Transport,
     };
     use std::{
-        collections::{HashSet, VecDeque},
+        collections::{
+            HashSet,
+            VecDeque,
+        },
         task::Poll,
         time::Duration,
     };
@@ -358,8 +405,10 @@ mod tests {
             .boxed();
 
         let behaviour = {
-            let mut config =
-                DiscoveryConfig::new(keypair.public().to_peer_id(), "test_network".into());
+            let mut config = DiscoveryConfig::new(
+                keypair.public().to_peer_id(),
+                "test_network".into(),
+            );
             config
                 .discovery_limit(50)
                 .with_bootstrap_nodes(bootstrap_nodes)
@@ -465,10 +514,10 @@ mod tests {
                                 }
                             }
                         }
-                        continue 'polling;
+                        continue 'polling
                     }
                 }
-                break;
+                break
             }
 
             // if there are no swarms left to discover we are done with the discovery

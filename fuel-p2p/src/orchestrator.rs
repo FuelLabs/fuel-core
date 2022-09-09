@@ -2,23 +2,44 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use fuel_core_interfaces::p2p::{
-    BlockBroadcast, ConsensusBroadcast, P2pDb, P2pRequestEvent, TransactionBroadcast,
+    BlockBroadcast,
+    ConsensusBroadcast,
+    P2pDb,
+    P2pRequestEvent,
+    TransactionBroadcast,
 };
 
 use tokio::sync::broadcast;
 
 use libp2p::request_response::RequestId;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{
+        mpsc::{
+            Receiver,
+            Sender,
+        },
+        Mutex,
+    },
+    task::JoinHandle,
+};
 use tracing::warn;
 
 use crate::{
     behavior::FuelBehaviourEvent,
     config::P2PConfig,
-    gossipsub::messages::{GossipsubBroadcastRequest, GossipsubMessage},
-    request_response::messages::{OutboundResponse, RequestMessage, ResponseChannelItem},
-    service::{FuelP2PEvent, FuelP2PService},
+    gossipsub::messages::{
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
+    request_response::messages::{
+        OutboundResponse,
+        RequestMessage,
+        ResponseChannelItem,
+    },
+    service::{
+        FuelP2PEvent,
+        FuelP2PService,
+    },
 };
 
 pub struct NetworkOrchestrator {
@@ -48,7 +69,8 @@ impl NetworkOrchestrator {
 
         db: Arc<dyn P2pDb>,
     ) -> Self {
-        let (tx_outbound_responses, rx_outbound_responses) = tokio::sync::mpsc::channel(100);
+        let (tx_outbound_responses, rx_outbound_responses) =
+            tokio::sync::mpsc::channel(100);
 
         Self {
             p2p_config,
@@ -177,7 +199,9 @@ impl Service {
         let mut join = self.join.lock().await;
 
         if join.is_none() {
-            if let Some(network_orchestrator) = self.network_orchestrator.lock().await.take() {
+            if let Some(network_orchestrator) =
+                self.network_orchestrator.lock().await.take()
+            {
                 *join = Some(tokio::spawn(async { network_orchestrator.run().await }));
 
                 Ok(())
@@ -211,16 +235,25 @@ pub mod tests {
     use super::*;
     use async_trait::async_trait;
     use fuel_core_interfaces::model::{
-        BlockHeight, FuelBlock, FuelBlockConsensus, SealedFuelBlock,
+        BlockHeight,
+        FuelBlock,
+        FuelBlockConsensus,
+        SealedFuelBlock,
     };
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{
+        sleep,
+        Duration,
+    };
 
     #[derive(Clone, Debug)]
     struct FakeDb;
 
     #[async_trait]
     impl P2pDb for FakeDb {
-        async fn get_sealed_block(&self, _height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+        async fn get_sealed_block(
+            &self,
+            _height: BlockHeight,
+        ) -> Option<Arc<SealedFuelBlock>> {
             let block = FuelBlock {
                 header: Default::default(),
                 transactions: vec![],

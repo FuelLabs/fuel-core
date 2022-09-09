@@ -1,12 +1,28 @@
-use crate::{Config, TxPool};
+use crate::{
+    Config,
+    TxPool,
+};
 use anyhow::anyhow;
-use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::p2p::P2pRequestEvent;
-use fuel_core_interfaces::p2p::TransactionBroadcast;
-use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use fuel_core_interfaces::{
+    block_importer::ImportBlockBroadcast,
+    txpool::{
+        self,
+        TxPoolDb,
+        TxPoolMpsc,
+        TxStatusBroadcast,
+    },
+    p2p::{P2pRequestEvent, TransactionBroadcast},
+};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{
+        broadcast,
+        mpsc,
+        Mutex,
+        RwLock,
+    },
+    task::JoinHandle,
+};
 
 pub struct ServiceBuilder {
     config: Config,
@@ -105,7 +121,7 @@ impl ServiceBuilder {
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
         {
-            return Err(anyhow!("One of context items are not set"));
+            return Err(anyhow!("One of context items are not set"))
         }
         let service = Service::new(
             self.txpool_sender.unwrap(),
@@ -270,7 +286,14 @@ pub mod tests {
     use crate::MockDb;
     use fuel_core_interfaces::{
         common::fuel_tx::TransactionBuilder,
-        txpool::{Error as TxpoolError, Sender, TxPoolMpsc, TxStatus, TxStatusBroadcast},
+        txpool::{
+            Error as TxpoolError,
+            Sender,
+            TxPoolMpsc,
+            TxStatus,
+            TxStatusBroadcast
+            TxStatus,
+        },
     };
     use tokio::sync::{mpsc::error::TryRecvError, oneshot};
 
@@ -692,7 +715,8 @@ pub mod tests {
         let _rem = receiver.await.unwrap();
 
         assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
+                .await,
             Ok(Ok(TxStatusBroadcast {
                 tx: tx1,
                 status: TxStatus::SqueezedOut {
@@ -703,7 +727,8 @@ pub mod tests {
         );
 
         assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
+                .await,
             Ok(Ok(TxStatusBroadcast {
                 tx: tx2,
                 status: TxStatus::SqueezedOut {

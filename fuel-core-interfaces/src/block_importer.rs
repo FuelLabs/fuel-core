@@ -1,4 +1,8 @@
-use super::model::{ConsensusVote, FuelBlock, SealedFuelBlock};
+use super::model::{
+    ConsensusVote,
+    FuelBlock,
+    SealedFuelBlock,
+};
 use fuel_types::Bytes32;
 use std::sync::Arc;
 

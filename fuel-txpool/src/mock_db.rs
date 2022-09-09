@@ -1,14 +1,30 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    sync::{
+        Arc,
+        Mutex,
+    },
+};
 
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage,
-        fuel_tx::{Contract, ContractId, MessageId, UtxoId},
+        fuel_tx::{
+            Contract,
+            ContractId,
+            MessageId,
+            UtxoId,
+        },
     },
-    db::{Error, KvStoreError},
-    model::{Coin, Message},
+    db::{
+        Error,
+        KvStoreError,
+    },
+    model::{
+        Coin,
+        Message,
+    },
     txpool::TxPoolDb,
 };
 
@@ -27,7 +43,11 @@ pub(crate) struct MockDb {
 impl Storage<UtxoId, Coin> for MockDb {
     type Error = KvStoreError;
 
-    fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, Self::Error> {
+    fn insert(
+        &mut self,
+        key: &UtxoId,
+        value: &Coin,
+    ) -> Result<Option<Coin>, Self::Error> {
         Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
     }
 
@@ -88,7 +108,11 @@ impl Storage<ContractId, Contract> for MockDb {
 impl Storage<MessageId, Message> for MockDb {
     type Error = KvStoreError;
 
-    fn insert(&mut self, key: &MessageId, value: &Message) -> Result<Option<Message>, Self::Error> {
+    fn insert(
+        &mut self,
+        key: &MessageId,
+        value: &Message,
+    ) -> Result<Option<Message>, Self::Error> {
         Ok(self
             .data
             .lock()

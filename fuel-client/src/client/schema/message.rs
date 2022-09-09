@@ -1,5 +1,14 @@
-use super::{PageDirection, PageInfo, PaginatedResult, PaginationRequest};
-use crate::client::schema::{schema, Address, U64};
+use super::{
+    PageDirection,
+    PageInfo,
+    PaginatedResult,
+    PaginationRequest,
+};
+use crate::client::schema::{
+    schema,
+    Address,
+    U64,
+};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -7,7 +16,6 @@ pub struct Message {
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
-    pub owner: Address,
     pub nonce: U64,
     pub data: Vec<i32>,
     pub da_height: U64,

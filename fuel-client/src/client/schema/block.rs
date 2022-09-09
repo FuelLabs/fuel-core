@@ -1,7 +1,17 @@
-use crate::client::schema::{
-    primitives::Address, primitives::DateTime, schema, BlockId, ConnectionArgs, PageInfo, U64,
+use crate::client::{
+    schema::{
+        primitives::{
+            Address,
+            DateTime,
+        },
+        schema,
+        BlockId,
+        ConnectionArgs,
+        PageInfo,
+        U64,
+    },
+    PaginatedResult,
 };
-use crate::client::PaginatedResult;
 
 use super::tx::TransactionIdFragment;
 

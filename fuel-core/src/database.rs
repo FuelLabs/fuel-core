@@ -1,33 +1,58 @@
 #[cfg(feature = "rocksdb")]
 use crate::database::columns::COLUMN_NUM;
-use crate::database::transactional::DatabaseTransaction;
-use crate::model::FuelBlockDb;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use crate::state::{
-    in_memory::memory_store::MemoryStore, ColumnId, DataSource, Error, IterDirection,
+use crate::{
+    database::transactional::DatabaseTransaction,
+    model::FuelBlockDb,
+    state::{
+        in_memory::memory_store::MemoryStore,
+        ColumnId,
+        DataSource,
+        Error,
+        IterDirection,
+    },
 };
 use async_trait::async_trait;
-use fuel_core_interfaces::common::fuel_asm::Word;
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
+        fuel_asm::Word,
         fuel_storage::Storage,
-        fuel_vm::prelude::{Address, Bytes32, InterpreterStorage},
+        fuel_vm::prelude::{
+            Address,
+            Bytes32,
+            InterpreterStorage,
+        },
     },
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, SealedFuelBlock, ValidatorId, ValidatorStake,
+        BlockHeight,
+        ConsensusId,
+        DaBlockHeight,
+        SealedFuelBlock,
+        ValidatorId,
+        ValidatorStake,
     },
     p2p::P2pDb,
-    relayer::{RelayerDb, StakingDiff},
+    relayer::{
+        RelayerDb,
+        StakingDiff,
+    },
     txpool::TxPoolDb,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{
+    de::DeserializeOwned,
+    Serialize,
+};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 use std::{
     collections::HashMap,
-    fmt::{self, Debug, Formatter},
+    fmt::{
+        self,
+        Debug,
+        Formatter,
+    },
     marker::Send,
     ops::DerefMut,
     sync::Arc,
@@ -125,16 +150,18 @@ impl Drop for DropResources {
     }
 }
 
-/*** SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
- * it is not Send+Sync by default because Storage insert fn takes &mut self
-*/
+/// * SAFETY: we are safe to do it because DataSource is Send+Sync and there is nowhere it is overwritten
+/// it is not Send+Sync by default because Storage insert fn takes &mut self
 unsafe impl Send for Database {}
 unsafe impl Sync for Database {}
 
 impl TxPoolDb for Database {}
 #[async_trait]
 impl P2pDb for Database {
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+    async fn get_sealed_block(
+        &self,
+        height: BlockHeight,
+    ) -> Option<Arc<SealedFuelBlock>> {
         <Self as RelayerDb>::get_sealed_block(self, height).await
     }
 }
@@ -188,7 +215,11 @@ impl Database {
             .transpose()
     }
 
-    fn get<V: DeserializeOwned>(&self, key: &[u8], column: ColumnId) -> Result<Option<V>, Error> {
+    fn get<V: DeserializeOwned>(
+        &self,
+        key: &[u8],
+        column: ColumnId,
+    ) -> Result<Option<V>, Error> {
         self.data
             .get(key, column)?
             .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
@@ -215,7 +246,8 @@ impl Database {
             .map(|val| {
                 val.and_then(|(key, value)| {
                     let key = K::from(key);
-                    let value: V = bincode::deserialize(&value).map_err(|_| Error::Codec)?;
+                    let value: V =
+                        bincode::deserialize(&value).map_err(|_| Error::Codec)?;
                     Ok((key, value))
                 })
             })
@@ -248,7 +280,9 @@ impl Default for Database {
         {
             let tmp_dir = TempDir::new().unwrap();
             Self {
-                data: Arc::new(RocksDb::open(tmp_dir.path(), columns::COLUMN_NUM).unwrap()),
+                data: Arc::new(
+                    RocksDb::open(tmp_dir.path(), columns::COLUMN_NUM).unwrap(),
+                ),
                 _drop: Arc::new(
                     {
                         move || {
@@ -297,7 +331,9 @@ impl InterpreterStorage for Database {
 
 #[async_trait]
 impl RelayerDb for Database {
-    async fn get_validators(&self) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
+    async fn get_validators(
+        &self,
+    ) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
         struct WrapAddress(pub ValidatorId);
         impl From<Vec<u8>> for WrapAddress {
             fn from(i: Vec<u8>) -> Self {
@@ -328,7 +364,7 @@ impl RelayerDb for Database {
     ) -> Vec<(DaBlockHeight, StakingDiff)> {
         let to_da_height = if let Some(to_da_height) = to_da_height {
             if from_da_height > to_da_height {
-                return Vec::new();
+                return Vec::new()
             }
             to_da_height
         } else {
@@ -337,7 +373,10 @@ impl RelayerDb for Database {
         struct WrapU64Be(pub DaBlockHeight);
         impl From<Vec<u8>> for WrapU64Be {
             fn from(i: Vec<u8>) -> Self {
-                use byteorder::{BigEndian, ReadBytesExt};
+                use byteorder::{
+                    BigEndian,
+                    ReadBytesExt,
+                };
                 use std::io::Cursor;
                 let mut i = Cursor::new(i);
                 Self(i.read_u64::<BigEndian>().unwrap_or_default())
@@ -354,7 +393,7 @@ impl RelayerDb for Database {
                 Ok((key, diff)) => {
                     let block = key.0;
                     if block > to_da_height {
-                        return out;
+                        return out
                     }
                     out.push((block, diff))
                 }
@@ -387,20 +426,26 @@ impl RelayerDb for Database {
 
     async fn get_chain_height(&self) -> BlockHeight {
         match self.get_block_height() {
-            Ok(res) => res.expect("get_block_height value should be always present and set"),
+            Ok(res) => {
+                res.expect("get_block_height value should be always present and set")
+            }
             Err(err) => {
                 panic!("get_block_height database corruption, err:{:?}", err);
             }
         }
     }
 
-    async fn get_sealed_block(&self, _height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+    async fn get_sealed_block(
+        &self,
+        _height: BlockHeight,
+    ) -> Option<Arc<SealedFuelBlock>> {
         // TODO
         Some(Arc::new(SealedFuelBlock::default()))
     }
 
     async fn set_finalized_da_height(&self, block: DaBlockHeight) {
-        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA, block) {
+        if let Err(err) = self.insert(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA, block)
+        {
             panic!("set_finalized_da_height should always succeed: {:?}", err);
         }
     }
@@ -408,8 +453,9 @@ impl RelayerDb for Database {
     async fn get_finalized_da_height(&self) -> DaBlockHeight {
         match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
-                return res
-                    .expect("get_finalized_da_height value should be always present and set");
+                return res.expect(
+                    "get_finalized_da_height value should be always present and set",
+                )
             }
             Err(err) => {
                 panic!("get_finalized_da_height database corruption, err:{:?}", err);
@@ -418,7 +464,8 @@ impl RelayerDb for Database {
     }
 
     async fn set_validators_da_height(&self, block: DaBlockHeight) {
-        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA, block) {
+        if let Err(err) = self.insert(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA, block)
+        {
             panic!("set_validators_da_height should always succeed: {:?}", err);
         }
     }
@@ -426,8 +473,9 @@ impl RelayerDb for Database {
     async fn get_validators_da_height(&self) -> DaBlockHeight {
         match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, METADATA) {
             Ok(res) => {
-                return res
-                    .expect("get_validators_da_height value should be always present and set");
+                return res.expect(
+                    "get_validators_da_height value should be always present and set",
+                )
             }
             Err(err) => {
                 panic!(

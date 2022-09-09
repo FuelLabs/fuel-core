@@ -1,18 +1,43 @@
 use crate::{
-    coin_query::{random_improve, SpendQueryElement},
-    database::{Database, KvStoreError},
-    schema::scalars::{Address, AssetId, UtxoId, U64},
+    coin_query::{
+        random_improve,
+        SpendQueryElement,
+    },
+    database::{
+        Database,
+        KvStoreError,
+    },
+    schema::scalars::{
+        Address,
+        AssetId,
+        UtxoId,
+        U64,
+    },
     service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{query, Connection, Edge, EmptyFields},
-    Context, Enum, InputObject, Object,
+    connection::{
+        query,
+        Connection,
+        Edge,
+        EmptyFields,
+    },
+    Context,
+    Enum,
+    InputObject,
+    Object,
 };
 use fuel_core_interfaces::{
-    common::{fuel_storage::Storage, fuel_tx},
-    model::{Coin as CoinModel, CoinStatus as CoinStatusModel},
+    common::{
+        fuel_storage::Storage,
+        fuel_tx,
+    },
+    model::{
+        Coin as CoinModel,
+        CoinStatus as CoinStatusModel,
+    },
 };
 use itertools::Itertools;
 
@@ -105,91 +130,95 @@ impl CoinQuery {
             before,
             first,
             last,
-            |after: Option<UtxoId>, before: Option<UtxoId>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<UtxoId>, before: Option<UtxoId>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"))
+                    }
 
-                let after = after.map(fuel_tx::UtxoId::from);
-                let before = before.map(fuel_tx::UtxoId::from);
+                    let after = after.map(fuel_tx::UtxoId::from);
+                    let before = before.map(fuel_tx::UtxoId::from);
 
-                let start;
-                let end;
+                    let start;
+                    let end;
 
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
+                    if direction == IterDirection::Forward {
+                        start = after;
+                        end = before;
+                    } else {
+                        start = before;
+                        end = after;
+                    }
 
-                let owner: fuel_tx::Address = filter.owner.into();
+                    let owner: fuel_tx::Address = filter.owner.into();
 
-                let mut coin_ids = db.owned_coins(owner, start, Some(direction));
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = coin_ids.next();
-                }
+                    let mut coin_ids = db.owned_coins(owner, start, Some(direction));
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = coin_ids.next();
+                    }
 
-                // take desired amount of results
-                let coins = coin_ids
-                    .take_while(|r| {
-                        // take until we've reached the end
-                        if let (Ok(t), Some(end)) = (r, end.as_ref()) {
-                            if *t == *end {
-                                return false;
+                    // take desired amount of results
+                    let coins = coin_ids
+                        .take_while(|r| {
+                            // take until we've reached the end
+                            if let (Ok(t), Some(end)) = (r, end.as_ref()) {
+                                if *t == *end {
+                                    return false
+                                }
                             }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch);
-                let mut coins: Vec<fuel_tx::UtxoId> = coins.try_collect()?;
-                if direction == IterDirection::Reverse {
-                    coins.reverse();
-                }
+                            true
+                        })
+                        .take(records_to_fetch);
+                    let mut coins: Vec<fuel_tx::UtxoId> = coins.try_collect()?;
+                    if direction == IterDirection::Reverse {
+                        coins.reverse();
+                    }
 
-                // TODO: do a batch get instead
-                let coins: Vec<Coin> = coins
-                    .into_iter()
-                    .map(|id| {
-                        Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
-                            .transpose()
-                            .ok_or(KvStoreError::NotFound)?
-                            .map(|coin| Coin(id, coin.into_owned()))
-                    })
-                    .try_collect()?;
-
-                // filter coins by asset ID
-                let mut coins = coins;
-                if let Some(asset_id) = filter.asset_id {
-                    coins.retain(|coin| coin.1.asset_id == asset_id.0);
-                }
-
-                // filter coins by status
-                coins.retain(|coin| coin.1.status == CoinStatusModel::Unspent);
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= coins.len());
-                connection.edges.extend(
-                    coins
+                    // TODO: do a batch get instead
+                    let coins: Vec<Coin> = coins
                         .into_iter()
-                        .map(|item| Edge::new(UtxoId::from(item.0), item)),
-                );
+                        .map(|id| {
+                            Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
+                                .transpose()
+                                .ok_or(KvStoreError::NotFound)?
+                                .map(|coin| Coin(id, coin.into_owned()))
+                        })
+                        .try_collect()?;
 
-                Ok::<Connection<UtxoId, Coin>, anyhow::Error>(connection)
+                    // filter coins by asset ID
+                    let mut coins = coins;
+                    if let Some(asset_id) = filter.asset_id {
+                        coins.retain(|coin| coin.1.asset_id == asset_id.0);
+                    }
+
+                    // filter coins by status
+                    coins.retain(|coin| coin.1.status == CoinStatusModel::Unspent);
+
+                    let mut connection = Connection::new(
+                        started.is_some(),
+                        records_to_fetch <= coins.len(),
+                    );
+                    connection.edges.extend(
+                        coins
+                            .into_iter()
+                            .map(|item| Edge::new(UtxoId::from(item.0), item)),
+                    );
+
+                    Ok::<Connection<UtxoId, Coin>, anyhow::Error>(connection)
+                }
             },
         )
         .await
@@ -203,11 +232,14 @@ impl CoinQuery {
         &self,
         ctx: &Context<'_>,
         #[graphql(desc = "The Address of the utxo owner")] owner: Address,
-        #[graphql(desc = "The total amount of each asset type to spend")] spend_query: Vec<
-            SpendQueryElementInput,
+        #[graphql(desc = "The total amount of each asset type to spend")]
+        spend_query: Vec<SpendQueryElementInput>,
+        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<
+            u64,
         >,
-        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u64>,
-        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<Vec<UtxoId>>,
+        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<
+            Vec<UtxoId>,
+        >,
     ) -> async_graphql::Result<Vec<Coin>> {
         let config = ctx.data_unchecked::<Config>();
 

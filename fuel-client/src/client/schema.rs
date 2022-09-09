@@ -5,10 +5,15 @@ pub mod schema {
 }
 
 use hex::FromHexError;
-use std::array::TryFromSliceError;
-use std::fmt::{self, Debug};
-use std::io::ErrorKind;
-use std::num::TryFromIntError;
+use std::{
+    array::TryFromSliceError,
+    fmt::{
+        self,
+        Debug,
+    },
+    io::ErrorKind,
+    num::TryFromIntError,
+};
 use thiserror::Error;
 
 pub use primitives::*;

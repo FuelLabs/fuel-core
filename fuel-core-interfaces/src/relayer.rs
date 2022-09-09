@@ -1,9 +1,21 @@
 use async_trait::async_trait;
-use derive_more::{Deref, DerefMut};
+use derive_more::{
+    Deref,
+    DerefMut,
+};
 use fuel_storage::Storage;
-use fuel_types::{Address, MessageId};
-use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{mpsc, oneshot};
+use fuel_types::{
+    Address,
+    MessageId,
+};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
+use tokio::sync::{
+    mpsc,
+    oneshot,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
@@ -149,7 +161,7 @@ pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId
 
 #[derive(Debug)]
 pub enum RelayerRequest {
-    //expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
+    // expand with https://docs.rs/tokio/0.2.12/tokio/sync/index.html#oneshot-channel
     // so that we return list of validator to consensus.
     GetValidatorSet {
         /// represent validator set for current block and it is on relayer to calculate it with slider in mind.
@@ -213,8 +225,14 @@ pub use thiserror::Error;
 use crate::{
     db::KvStoreError,
     model::{
-        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
-        ValidatorId, ValidatorStake,
+        BlockHeight,
+        CheckedMessage,
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        SealedFuelBlock,
+        ValidatorId,
+        ValidatorStake,
     },
 };
 

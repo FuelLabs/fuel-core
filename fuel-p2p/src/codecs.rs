@@ -1,9 +1,16 @@
 pub mod bincode;
 
 use crate::{
-    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
+    gossipsub::messages::{
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
     request_response::messages::{
-        IntermediateResponse, OutboundResponse, RequestMessage, ResponseMessage,
+        IntermediateResponse,
+        OutboundResponse,
+        RequestMessage,
+        ResponseMessage,
     },
 };
 use libp2p::request_response::RequestResponseCodec;
@@ -45,8 +52,10 @@ pub trait RequestResponseConverter {
 /// Main Codec trait
 /// Needs to be implemented and provided to FuelBehaviour
 pub trait NetworkCodec:
-    GossipsubCodec<RequestMessage = GossipsubBroadcastRequest, ResponseMessage = GossipsubMessage>
-    + RequestResponseCodec<Request = RequestMessage, Response = IntermediateResponse>
+    GossipsubCodec<
+        RequestMessage = GossipsubBroadcastRequest,
+        ResponseMessage = GossipsubMessage,
+    > + RequestResponseCodec<Request = RequestMessage, Response = IntermediateResponse>
     + RequestResponseConverter<
         IntermediateResponse = IntermediateResponse,
         OutboundResponse = OutboundResponse,
