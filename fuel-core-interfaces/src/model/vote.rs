@@ -1,4 +1,4 @@
-use fuel_vm::{
+use crate::common::{
     fuel_crypto::{
         PublicKey,
         Signature,

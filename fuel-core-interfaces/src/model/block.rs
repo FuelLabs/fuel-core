@@ -1,12 +1,6 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
-use chrono::{
-    DateTime,
-    TimeZone,
-    Utc,
-};
-use core::ops::Deref;
-use fuel_vm::{
+use crate::common::{
     fuel_crypto::Hasher,
     fuel_tx::{
         Address,
@@ -16,6 +10,12 @@ use fuel_vm::{
     },
     fuel_types::Word,
 };
+use chrono::{
+    DateTime,
+    TimeZone,
+    Utc,
+};
+use core::ops::Deref;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]

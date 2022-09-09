@@ -1,14 +1,14 @@
-use async_trait::async_trait;
-use derive_more::{
-    Deref,
-    DerefMut,
-};
-use fuel_vm::{
+use crate::common::{
     fuel_storage::Storage,
     fuel_types::{
         Address,
         MessageId,
     },
+};
+use async_trait::async_trait;
+use derive_more::{
+    Deref,
+    DerefMut,
 };
 use std::{
     collections::HashMap,
