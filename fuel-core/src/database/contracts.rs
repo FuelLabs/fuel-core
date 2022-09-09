@@ -64,11 +64,11 @@ impl StorageInspect<ContractsLatestUtxo> for Database {
     type Error = Error;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<UtxoId>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractUtxoId)
+        self.get(key.as_ref(), Column::ContractsLatestUtxo)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractUtxoId)
+        self.exists(key.as_ref(), Column::ContractsLatestUtxo)
     }
 }
 
@@ -78,11 +78,11 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
         key: &ContractId,
         value: &UtxoId,
     ) -> Result<Option<UtxoId>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractUtxoId, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsLatestUtxo, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractUtxoId)
+        Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
     }
 }
 
@@ -94,7 +94,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
         self.iter_all::<Vec<u8>, Word>(
-            Column::Balances,
+            Column::ContractsAssets,
             Some(contract.as_ref().to_vec()),
             start_asset
                 .map(|asset_id| MultiKey::new(&(&contract, &asset_id)).as_ref().to_vec()),
@@ -150,7 +150,7 @@ impl Database {
 
                 let balances = Some(
                     self.iter_all::<Vec<u8>, u64>(
-                        Column::Balances,
+                        Column::ContractsAssets,
                         Some(contract_id.as_ref().to_vec()),
                         None,
                         None,

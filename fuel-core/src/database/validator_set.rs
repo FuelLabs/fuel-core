@@ -24,11 +24,11 @@ impl StorageInspect<ValidatorsSet> for Database {
         &self,
         key: &ValidatorId,
     ) -> Result<Option<Cow<(ValidatorStake, Option<ConsensusId>)>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::ValidatorSet).map_err(Into::into)
+        Database::get(self, key.as_ref(), Column::ValidatorsSet).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &ValidatorId) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::ValidatorSet).map_err(Into::into)
+        Database::exists(self, key.as_ref(), Column::ValidatorsSet).map_err(Into::into)
     }
 }
 
@@ -38,7 +38,7 @@ impl StorageMutate<ValidatorsSet> for Database {
         key: &ValidatorId,
         value: &(ValidatorStake, Option<ConsensusId>),
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, KvStoreError> {
-        Database::insert(self, key.as_ref(), Column::ValidatorSet, value)
+        Database::insert(self, key.as_ref(), Column::ValidatorsSet, value)
             .map_err(Into::into)
     }
 
@@ -46,6 +46,6 @@ impl StorageMutate<ValidatorsSet> for Database {
         &mut self,
         key: &ValidatorId,
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, KvStoreError> {
-        Database::remove(self, key.as_ref(), Column::ValidatorSet).map_err(Into::into)
+        Database::remove(self, key.as_ref(), Column::ValidatorsSet).map_err(Into::into)
     }
 }

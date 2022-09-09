@@ -76,32 +76,46 @@ pub mod transactional;
     Copy, Clone, Debug, strum_macros::EnumCount, PartialEq, Eq, enum_iterator::Sequence,
 )]
 pub enum Column {
+    /// The column id of metadata about the blockchain
     Metadata = 0,
+    /// See [`ContractsRawCode`](fuel_vm::storage::ContractsRawCode)
     ContractsRawCode = 1,
+    /// See [`ContractsRawCode`](fuel_vm::storage::ContractsRawCode)
     ContractsInfo = 2,
+    /// See [`ContractsState`](fuel_vm::storage::ContractsState)
     ContractsState = 3,
-    /// Contract Id -> Utxo Id
-    ContractUtxoId = 4,
-    Balances = 5,
+    /// See [`ContractsLatestUtxo`](storage::ContractsLatestUtxo)
+    ContractsLatestUtxo = 4,
+    /// See [`ContractsAssets`](fuel_vm::storage::ContractsAssets)
+    ContractsAssets = 5,
+    /// See [`Coins`](fuel_core_interfaces::db::Coins)
     Coins = 6,
-    /// (owner, coin id) => true
+    /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
     OwnedCoins = 7,
-    Transaction = 8,
-    /// tx id -> current status
+    /// See [`Transactions`](fuel_core_interfaces::db::Transactions)
+    Transactions = 8,
+    /// Transaction id to current status
     TransactionStatus = 9,
+    /// The column of the table of all `owner`'s transactions
     TransactionsByOwnerBlockIdx = 10,
+    /// See [`Receipts`](storage::Receipts)
     Receipts = 11,
-    Blocks = 12,
-    /// Maps block id to block hash
-    BlockIds = 13,
+    /// See [`FuelBlocks`](storage::FuelBlocks)
+    FuelBlocks = 12,
+    /// Maps fuel block id to fuel block hash
+    FuelBlockIds = 13,
+    /// See [`Messages`](fuel_core_interfaces::db::Messages)
     Messages = 14,
     /// Contain current validator stake and it consensus_key if set.
-    ValidatorSet = 15,
+    /// See [`ValidatorsSet`](fuel_core_interfaces::db::ValidatorsSet)
+    ValidatorsSet = 15,
     /// Contain diff between da blocks it contains new registers consensus key and new delegate sets.
+    /// See [`StackingDiffs`](fuel_core_interfaces::db::StackingDiffs)
     StackingDiffs = 16,
     /// Maps delegate address with validator_set_diff index where last delegate change happened.
-    DelegatesIndex = 17,
-    /// (Owner, MessageId) => true
+    /// See [`DelegatesIndexes`](fuel_core_interfaces::db::DelegatesIndexes)
+    DelegatesIndexes = 17,
+    /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 18,
 }
 
@@ -365,7 +379,7 @@ mod relayer {
             let mut out = HashMap::new();
             for diff in self
                 .iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusId>)>(
-                    Column::ValidatorSet,
+                    Column::ValidatorsSet,
                     None,
                     None,
                     None,

@@ -36,12 +36,12 @@ impl StorageInspect<ContractsAssets<'_>> for Database {
 
     fn get(&self, key: &(&ContractId, &AssetId)) -> Result<Option<Cow<Word>>, Error> {
         let key = MultiKey::new(key);
-        self.get(key.as_ref(), Column::Balances)
+        self.get(key.as_ref(), Column::ContractsAssets)
     }
 
     fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Error> {
         let key = MultiKey::new(key);
-        self.exists(key.as_ref(), Column::Balances)
+        self.exists(key.as_ref(), Column::ContractsAssets)
     }
 }
 
@@ -52,12 +52,12 @@ impl StorageMutate<ContractsAssets<'_>> for Database {
         value: &Word,
     ) -> Result<Option<Word>, Error> {
         let key = MultiKey::new(key);
-        Database::insert(self, key.as_ref(), Column::Balances, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
     }
 
     fn remove(&mut self, key: &(&ContractId, &AssetId)) -> Result<Option<Word>, Error> {
         let key = MultiKey::new(key);
-        Database::remove(self, key.as_ref(), Column::Balances)
+        Database::remove(self, key.as_ref(), Column::ContractsAssets)
     }
 }
 
@@ -65,7 +65,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
     fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
             self,
-            Column::Balances,
+            Column::ContractsAssets,
             Some(parent.as_ref().to_vec()),
             None,
             Some(IterDirection::Forward),

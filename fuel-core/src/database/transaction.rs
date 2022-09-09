@@ -34,11 +34,11 @@ impl StorageInspect<Transactions> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::Transaction).map_err(Into::into)
+        Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::Transaction).map_err(Into::into)
+        Database::exists(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 }
 
@@ -48,12 +48,12 @@ impl StorageMutate<Transactions> for Database {
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        Database::insert(self, key.as_ref(), Column::Transaction, value.clone())
+        Database::insert(self, key.as_ref(), Column::Transactions, value.clone())
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
-        Database::remove(self, key.as_ref(), Column::Transaction).map_err(Into::into)
+        Database::remove(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 }
 
@@ -64,8 +64,13 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all::<Vec<u8>, Transaction>(Column::Transaction, None, start, direction)
-            .map(|res| res.map(|(_, tx)| tx))
+        self.iter_all::<Vec<u8>, Transaction>(
+            Column::Transactions,
+            None,
+            start,
+            direction,
+        )
+        .map(|res| res.map(|(_, tx)| tx))
     }
 
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This

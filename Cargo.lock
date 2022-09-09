@@ -2188,8 +2188,8 @@ dependencies = [
  "derive_more",
  "fuel-asm",
  "fuel-crypto",
- "fuel-merkle 0.4.0",
- "fuel-storage 0.3.0",
+ "fuel-merkle",
+ "fuel-storage",
  "fuel-tx",
  "fuel-types",
  "fuel-vm",
@@ -2243,26 +2243,12 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa59f2a4e6cd6d83a51981c5ac706d58fc8ef53700003948c826827b88cfff1"
-dependencies = [
- "digest 0.10.3",
- "fuel-storage 0.2.0",
- "hashbrown",
- "hex",
- "sha2 0.10.2",
- "thiserror",
-]
-
-[[package]]
-name = "fuel-merkle"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c006505ab44132df81c7b38a438a3b8b5ec368b93f9294dcc75ee381c6939655"
 dependencies = [
  "digest 0.10.3",
- "fuel-storage 0.3.0",
+ "fuel-storage",
  "hashbrown",
  "hex",
  "sha2 0.10.2",
@@ -2336,12 +2322,6 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b9161e86d434a93088409530a4f71f42e074b3bbcbb7a27bfe666583f92fd7"
-
-[[package]]
-name = "fuel-storage"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
@@ -2380,13 +2360,13 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d88b96bddf1c57f1d73a51f0f58ef67b294cdb722d5f80ee76d9cf84b986769e"
+checksum = "e9045f94a95dda991ae16f8a4720cf6c1f5112c9911173726ed702eb4cb70204"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
- "fuel-merkle 0.3.0",
+ "fuel-merkle",
  "fuel-types",
  "itertools",
  "num-integer",
@@ -2422,15 +2402,15 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6658f32707cb114d464561ed6e304e9830da6a4e74da3e5fcdab4aad94d81361"
+checksum = "6ceb5384b74f8518f29e230af43a2cec64f51004e08d21d990090c622db96012"
 dependencies = [
  "anyhow",
  "fuel-asm",
  "fuel-crypto",
- "fuel-merkle 0.4.0",
- "fuel-storage 0.3.0",
+ "fuel-merkle",
+ "fuel-storage",
  "fuel-tx",
  "fuel-types",
  "itertools",

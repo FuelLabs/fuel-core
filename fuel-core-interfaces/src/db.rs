@@ -30,7 +30,7 @@ pub use fuel_vm::storage::{
     ContractsState,
 };
 
-/// The storage table of coins UTXOs.
+/// The storage table of coins. Each [`Coin`](crate::model::Coin) is represented by unique `UtxoId`.
 pub struct Coins;
 
 impl Mappable for Coins {
@@ -39,7 +39,7 @@ impl Mappable for Coins {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of bridget from Ethereum messages.
+/// The storage table of bridget from the Ethereum [`Message`](crate::model::Message)s.
 pub struct Messages;
 
 impl Mappable for Messages {

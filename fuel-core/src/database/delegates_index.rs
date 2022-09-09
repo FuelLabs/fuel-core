@@ -23,11 +23,11 @@ impl StorageInspect<DelegatesIndexes> for Database {
         &self,
         key: &Address,
     ) -> Result<Option<Cow<Vec<DaBlockHeight>>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::DelegatesIndex).map_err(Into::into)
+        Database::get(self, key.as_ref(), Column::DelegatesIndexes).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Address) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::DelegatesIndex).map_err(Into::into)
+        Database::exists(self, key.as_ref(), Column::DelegatesIndexes).map_err(Into::into)
     }
 }
 
@@ -37,7 +37,7 @@ impl StorageMutate<DelegatesIndexes> for Database {
         key: &Address,
         value: &[DaBlockHeight],
     ) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
-        Database::insert(self, key.as_ref(), Column::DelegatesIndex, value)
+        Database::insert(self, key.as_ref(), Column::DelegatesIndexes, value)
             .map_err(Into::into)
     }
 
@@ -45,6 +45,6 @@ impl StorageMutate<DelegatesIndexes> for Database {
         &mut self,
         key: &Address,
     ) -> Result<Option<Vec<DaBlockHeight>>, KvStoreError> {
-        Database::remove(self, key.as_ref(), Column::DelegatesIndex).map_err(Into::into)
+        Database::remove(self, key.as_ref(), Column::DelegatesIndexes).map_err(Into::into)
     }
 }
