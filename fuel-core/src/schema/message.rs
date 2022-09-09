@@ -44,10 +44,6 @@ impl Message {
         self.0.recipient.into()
     }
 
-    async fn owner(&self) -> Address {
-        self.0.owner.into()
-    }
-
     async fn nonce(&self) -> U64 {
         self.0.nonce.into()
     }
