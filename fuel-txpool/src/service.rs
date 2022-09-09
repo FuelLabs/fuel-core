@@ -5,13 +5,16 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
+    p2p::{
+        P2pRequestEvent,
+        TransactionBroadcast,
+    },
     txpool::{
         self,
         TxPoolDb,
         TxPoolMpsc,
         TxStatusBroadcast,
     },
-    p2p::{P2pRequestEvent, TransactionBroadcast},
 };
 use std::sync::Arc;
 use tokio::{
@@ -73,7 +76,10 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn txpool_receiver(&mut self, txpool_receiver: mpsc::Receiver<TxPoolMpsc>) -> &mut Self {
+    pub fn txpool_receiver(
+        &mut self,
+        txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
+    ) -> &mut Self {
         self.txpool_receiver = Some(txpool_receiver);
         self
     }
@@ -94,7 +100,10 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn network_sender(&mut self, network_sender: mpsc::Sender<P2pRequestEvent>) -> &mut Self {
+    pub fn network_sender(
+        &mut self,
+        network_sender: mpsc::Sender<P2pRequestEvent>,
+    ) -> &mut Self {
         self.network_sender = Some(network_sender);
         self
     }
@@ -291,11 +300,13 @@ pub mod tests {
             Sender,
             TxPoolMpsc,
             TxStatus,
-            TxStatusBroadcast
-            TxStatus,
+            TxStatusBroadcast,
         },
     };
-    use tokio::sync::{mpsc::error::TryRecvError, oneshot};
+    use tokio::sync::{
+        mpsc::error::TryRecvError,
+        oneshot,
+    };
 
     #[tokio::test]
     async fn test_start_stop() {

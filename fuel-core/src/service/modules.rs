@@ -8,12 +8,17 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool::Sender;
-use fuel_core_interfaces::txpool::TxPoolDb;
+use fuel_core_interfaces::txpool::{
+    Sender,
+    TxPoolDb,
+};
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
-    sync::{mpsc, broadcast},
+    sync::{
+        broadcast,
+        mpsc,
+    },
     task::JoinHandle,
 };
 

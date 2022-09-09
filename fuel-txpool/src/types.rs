@@ -2,7 +2,7 @@ pub use fuel_core_interfaces::common::{
     fuel_tx::{
         ContractId,
         Transaction,
-        TxId
+        TxId,
     },
     fuel_types::Word,
 };
