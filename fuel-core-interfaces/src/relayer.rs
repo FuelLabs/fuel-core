@@ -104,8 +104,8 @@ pub trait RelayerDb:
         delegate: &Address,
         da_height: DaBlockHeight,
     ) -> Option<HashMap<ValidatorId, ValidatorStake>> {
-        let storage = self.storage::<DelegatesIndexes>();
-        let delegate_index = storage
+        let delegate_index = self
+            .storage::<DelegatesIndexes>()
             .get(delegate)
             .expect("Expect to get data without problem")?;
         let mut last_da_height = 0;
@@ -120,8 +120,8 @@ pub trait RelayerDb:
             return None
         }
         // get staking diff
-        let storage = self.storage::<StackingDiffs>();
-        let staking_diff = storage
+        let staking_diff = self
+            .storage::<StackingDiffs>()
             .get(&last_da_height)
             .expect("Expect to get data without problem")?;
 

@@ -1,5 +1,3 @@
-#[cfg(feature = "prometheus")]
-use crate::service::metrics::prometheus_metrics::DATABASE_METRICS;
 use crate::{
     database::{
         metadata::{
@@ -18,6 +16,8 @@ use crate::{
         WriteOperation,
     },
 };
+#[cfg(feature = "metrics")]
+use fuel_metrics::core_metrics::DATABASE_METRICS;
 use rocksdb::{
     BoundColumnFamily,
     ColumnFamilyDescriptor,
@@ -129,13 +129,13 @@ impl RocksDb {
 
 impl KeyValueStore for RocksDb {
     fn get(&self, key: &[u8], column: Column) -> crate::state::Result<Option<Vec<u8>>> {
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
             .db
             .get_cf(&self.cf(column), key)
             .map_err(|e| Error::DatabaseError(Box::new(e)));
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             if value.is_ok() && value.as_ref().unwrap().is_some() {
                 let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
@@ -153,7 +153,7 @@ impl KeyValueStore for RocksDb {
         column: Column,
         value: Vec<u8>,
     ) -> crate::state::Result<Option<Vec<u8>>> {
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS
@@ -226,7 +226,7 @@ impl KeyValueStore for RocksDb {
                 item.map(|(key, value)| {
                     let value_as_vec = value.to_vec();
                     let key_as_vec = key.to_vec();
-                    #[cfg(feature = "prometheus")]
+                    #[cfg(feature = "metrics")]
                     {
                         DATABASE_METRICS.read_meter.inc();
                         DATABASE_METRICS
@@ -271,7 +271,7 @@ impl BatchOperations for RocksDb {
                 }
             }
         }
-        #[cfg(feature = "prometheus")]
+        #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS
