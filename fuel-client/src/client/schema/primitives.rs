@@ -123,7 +123,7 @@ impl FromStr for UtxoId {
     }
 }
 
-impl From<UtxoId> for fuel_vm::fuel_tx::UtxoId {
+impl From<UtxoId> for ::fuel_vm::fuel_tx::UtxoId {
     fn from(s: UtxoId) -> Self {
         s.0 .0
     }
@@ -147,7 +147,7 @@ impl FromStr for TxPointer {
     }
 }
 
-impl From<TxPointer> for fuel_vm::fuel_tx::TxPointer {
+impl From<TxPointer> for ::fuel_vm::fuel_tx::TxPointer {
     fn from(s: TxPointer) -> Self {
         s.0 .0
     }
