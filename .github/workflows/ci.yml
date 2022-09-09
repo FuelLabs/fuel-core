@@ -94,10 +94,10 @@ jobs:
             args: --all-targets --all-features
           - command: make
             args: check --locked --workspace
-          - command: test
-            args: --all-targets --all-features
-          - command: test
-            args: --all-targets --no-default-features
+          - command: make
+            args: test --all-targets --all-features
+          - command: make
+            args: test --all-targets --no-default-features
     # disallow any job that takes longer than 30 minutes
     timeout-minutes: 30
     continue-on-error: ${{ matrix.skip-error || false }}
