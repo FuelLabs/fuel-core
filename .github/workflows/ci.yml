@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Run Cargo.toml linter
-        uses: FuelLabs/github-actions/.github/workflows/lint-TOML-files.yml@master
+        uses: FuelLabs/github-actions/.github/workflows/lint-toml-files.yml@master
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always() && github.ref == 'refs/heads/master'
