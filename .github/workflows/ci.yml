@@ -36,17 +36,8 @@ jobs:
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - name: Install Cargo.toml linter
-        uses: baptiste0928/cargo-install@v1
-        with:
-          crate: cargo-toml-lint
-          version: '0.1'
       - name: Run Cargo.toml linter
-        run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
+        uses: FuelLabs/github-actions/.github/workflows/lint-TOML-files.yml@master
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
         if: always() && github.ref == 'refs/heads/master'
