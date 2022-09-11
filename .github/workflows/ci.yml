@@ -207,7 +207,7 @@ jobs:
           flavor: |
             latest=${{ github.ref == 'refs/heads/master' }}
           images: |
-            ghcr.io/fuellabs/fuel-core
+            ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=sha
             type=ref,event=branch
