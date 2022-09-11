@@ -147,15 +147,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
       - name: Verify tag version
         run: |
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
@@ -177,10 +168,7 @@ jobs:
           ./.github/workflows/scripts/verify_chart_version.sh
 
       - name: Publish crate
-        uses: katyo/publish-crates@v1
-        with:
-          publish-delay: 30000
-          registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@master
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
