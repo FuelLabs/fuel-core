@@ -1,6 +1,14 @@
 use crate::client::schema::{
-    contract::ContractIdFragment, schema, Address, AssetId, Bytes32, ConversionError,
-    ConversionError::MissingField, HexString, MessageId, U64,
+    contract::ContractIdFragment,
+    schema,
+    Address,
+    AssetId,
+    Bytes32,
+    ConversionError,
+    ConversionError::MissingField,
+    HexString,
+    MessageId,
+    U64,
 };
 use fuel_types::Word;
 

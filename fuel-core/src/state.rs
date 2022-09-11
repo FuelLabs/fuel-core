@@ -1,5 +1,9 @@
 use crate::state::in_memory::transaction::MemoryTransactionView;
-use std::{fmt::Debug, marker::PhantomData, sync::Arc};
+use std::{
+    fmt::Debug,
+    marker::PhantomData,
+    sync::Arc,
+};
 
 pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource = Arc<dyn TransactableStorage>;
@@ -44,7 +48,12 @@ pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
     fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
-    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    fn put(
+        &self,
+        key: Vec<u8>,
+        column: ColumnId,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
     fn iter_all(
@@ -71,7 +80,10 @@ impl Default for IterDirection {
 pub use fuel_core_interfaces::db::Error;
 
 pub trait BatchOperations: KeyValueStore {
-    fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<()> {
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = WriteOperation>,
+    ) -> Result<()> {
         for entry in entries {
             match entry {
                 // TODO: error handling
@@ -101,7 +113,10 @@ pub trait Transaction {
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage: KeyValueStore + BatchOperations + Debug + Send + Sync {}
+pub trait TransactableStorage:
+    KeyValueStore + BatchOperations + Debug + Send + Sync
+{
+}
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {

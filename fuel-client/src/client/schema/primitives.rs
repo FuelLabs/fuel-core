@@ -1,13 +1,27 @@
 use super::schema;
-use crate::client::schema::ConversionError;
-use crate::client::schema::ConversionError::HexStringPrefixError;
+use crate::client::schema::{
+    ConversionError,
+    ConversionError::HexStringPrefixError,
+};
 use core::fmt;
 use cynic::impl_scalar;
 use fuel_tx::InstructionResult;
-use serde::de::Error;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::{Debug, Display, Formatter, LowerHex};
-use std::str::FromStr;
+use serde::{
+    de::Error,
+    Deserialize,
+    Deserializer,
+    Serialize,
+    Serializer,
+};
+use std::{
+    fmt::{
+        Debug,
+        Display,
+        Formatter,
+        LowerHex,
+    },
+    str::FromStr,
+};
 
 pub type DateTime = chrono::DateTime<chrono::Utc>;
 impl_scalar!(DateTime, schema::DateTime);
@@ -36,7 +50,9 @@ impl<'de, T: FromStr<Err = E> + Debug + Clone + Default, E: Display> Deserialize
     }
 }
 
-impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr for HexFormatted<T> {
+impl<T: FromStr<Err = E> + Debug + Clone + Default, E: Display> FromStr
+    for HexFormatted<T>
+{
     type Err = ConversionError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -192,7 +208,9 @@ impl Display for Bytes {
     }
 }
 
-#[derive(Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq)]
+#[derive(
+    Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq,
+)]
 pub struct U64(pub u64);
 impl_scalar!(U64, schema::U64);
 

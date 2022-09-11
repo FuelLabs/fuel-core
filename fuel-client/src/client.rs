@@ -1,28 +1,71 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
-use cynic::{http::SurfExt, Id, MutationBuilder, Operation, QueryBuilder};
+use cynic::{
+    http::SurfExt,
+    Id,
+    MutationBuilder,
+    Operation,
+    QueryBuilder,
+};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
-    contract::{Contract, ContractByIdArgs},
-    tx::{TxArg, TxIdArgs},
-    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs,
-    RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping, SetSingleSteppingArgs, StartTx,
-    StartTxArgs, TransactionId, U64,
+    coin::{
+        Coin,
+        CoinByIdArgs,
+        SpendQueryElementInput,
+    },
+    contract::{
+        Contract,
+        ContractByIdArgs,
+    },
+    tx::{
+        TxArg,
+        TxIdArgs,
+    },
+    Bytes,
+    ContinueTx,
+    ContinueTxArgs,
+    ConversionError,
+    HexString,
+    IdArg,
+    MemoryArgs,
+    RegisterArgs,
+    RunResult,
+    SetBreakpoint,
+    SetBreakpointArgs,
+    SetSingleStepping,
+    SetSingleSteppingArgs,
+    StartTx,
+    StartTxArgs,
+    TransactionId,
+    U64,
 };
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
+    io::{
+        self,
+        ErrorKind,
+    },
     net,
-    str::{self, FromStr},
+    str::{
+        self,
+        FromStr,
+    },
 };
-use types::{TransactionResponse, TransactionStatus};
+use types::{
+    TransactionResponse,
+    TransactionStatus,
+};
 
 use crate::client::schema::tx::DryRunArg;
-pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
+pub use schema::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 
 use self::schema::block::ProduceBlockArgs;
 
@@ -175,7 +218,12 @@ impl FuelClient {
         Ok(self.query(query).await?.register.0 as Word)
     }
 
-    pub async fn memory(&self, id: &str, start: usize, size: usize) -> io::Result<Vec<u8>> {
+    pub async fn memory(
+        &self,
+        id: &str,
+        start: usize,
+        size: usize,
+    ) -> io::Result<Vec<u8>> {
         let query = schema::Memory::build(&MemoryArgs {
             id: id.into(),
             start: start.into(),
@@ -209,7 +257,11 @@ impl FuelClient {
         Ok(())
     }
 
-    pub async fn set_single_stepping(&self, session_id: &str, enable: bool) -> io::Result<()> {
+    pub async fn set_single_stepping(
+        &self,
+        session_id: &str,
+        enable: bool,
+    ) -> io::Result<()> {
         let operation = SetSingleStepping::build(SetSingleSteppingArgs {
             id: Id::new(session_id),
             enable,
@@ -218,7 +270,11 @@ impl FuelClient {
         Ok(())
     }
 
-    pub async fn start_tx(&self, session_id: &str, tx: &Transaction) -> io::Result<RunResult> {
+    pub async fn start_tx(
+        &self,
+        session_id: &str,
+        tx: &Transaction,
+    ) -> io::Result<RunResult> {
         let operation = StartTx::build(StartTxArgs {
             id: Id::new(session_id),
             tx: serde_json::to_string(tx).expect("Couldn't serialize tx to json"),
@@ -314,7 +370,8 @@ impl FuelClient {
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
-        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
+        let query =
+            schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
 
         let block = self.query(query).await?.block;
 
@@ -389,22 +446,28 @@ impl FuelClient {
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {
-        let query =
-            schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
+        let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
+            id: id.parse()?,
+        });
         let contract = self.query(query).await?.contract;
         Ok(contract)
     }
 
-    pub async fn contract_balance(&self, id: &str, asset: Option<&str>) -> io::Result<u64> {
+    pub async fn contract_balance(
+        &self,
+        id: &str,
+        asset: Option<&str>,
+    ) -> io::Result<u64> {
         let asset_id: schema::AssetId = match asset {
             Some(asset) => asset.parse()?,
             None => schema::AssetId::default(),
         };
 
-        let query = schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
-            id: id.parse()?,
-            asset: asset_id,
-        });
+        let query =
+            schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
+                id: id.parse()?,
+                asset: asset_id,
+            });
 
         let balance = self.query(query).await.unwrap().contract_balance.amount;
         Ok(balance.into())
@@ -440,7 +503,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
         let contract_id: schema::ContractId = contract.parse()?;
-        let query = schema::contract::ContractBalancesQuery::build(&(contract_id, request).into());
+        let query = schema::contract::ContractBalancesQuery::build(
+            &(contract_id, request).into(),
+        );
 
         let balances = self.query(query).await?.contract_balances.into();
 
@@ -452,7 +517,8 @@ impl FuelClient {
         owner: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
-        let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
+        let owner: Option<schema::Address> =
+            owner.map(|owner| owner.parse()).transpose()?;
         let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
 
         let messages = self.query(query).await?.messages.into();

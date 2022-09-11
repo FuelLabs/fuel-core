@@ -1,9 +1,19 @@
-use crate::database::Database;
-use crate::model::{Coin, CoinStatus};
+use crate::{
+    database::Database,
+    model::{
+        Coin,
+        CoinStatus,
+    },
+};
 use fuel_core_interfaces::common::{
     fuel_asm::Word,
     fuel_storage::Storage,
-    fuel_tx::{Address, AssetId, Bytes32, UtxoId},
+    fuel_tx::{
+        Address,
+        AssetId,
+        Bytes32,
+        UtxoId,
+    },
 };
 use itertools::Itertools;
 
@@ -14,7 +24,12 @@ pub struct TestDatabase {
 }
 
 impl TestDatabase {
-    pub fn make_coin(&mut self, owner: Address, amount: Word, asset_id: AssetId) -> (UtxoId, Coin) {
+    pub fn make_coin(
+        &mut self,
+        owner: Address,
+        amount: Word,
+        asset_id: AssetId,
+    ) -> (UtxoId, Coin) {
         let index = self.last_coin_index;
         self.last_coin_index += 1;
 

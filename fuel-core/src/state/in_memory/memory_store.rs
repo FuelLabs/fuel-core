@@ -1,9 +1,22 @@
 use crate::state::{
-    in_memory::{column_key, is_column},
-    BatchOperations, ColumnId, IterDirection, KeyValueStore, Result, TransactableStorage,
+    in_memory::{
+        column_key,
+        is_column,
+    },
+    BatchOperations,
+    ColumnId,
+    IterDirection,
+    KeyValueStore,
+    Result,
+    TransactableStorage,
 };
 use itertools::Itertools;
-use std::{collections::HashMap, fmt::Debug, mem::size_of, sync::Mutex};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    mem::size_of,
+    sync::Mutex,
+};
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
@@ -20,7 +33,12 @@ impl KeyValueStore for MemoryStore {
             .cloned())
     }
 
-    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    fn put(
+        &self,
+        key: Vec<u8>,
+        column: ColumnId,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()

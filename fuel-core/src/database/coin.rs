@@ -1,17 +1,32 @@
 use crate::{
     chain_config::CoinConfig,
     database::{
-        columns::{self, COIN, OWNED_COINS},
-        Database, KvStoreError,
+        columns::{
+            self,
+            COIN,
+            OWNED_COINS,
+        },
+        Database,
+        KvStoreError,
     },
     model::Coin,
-    state::{Error, IterDirection},
+    state::{
+        Error,
+        IterDirection,
+    },
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{Address, AssetId, Bytes32, UtxoId},
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::{
+            Address,
+            AssetId,
+            Bytes32,
+            UtxoId,
+        },
+    },
+    model::Coin as CoinModel,
 };
-use fuel_core_interfaces::model::Coin as CoinModel;
 use itertools::Itertools;
 use std::borrow::Cow;
 
@@ -37,22 +52,29 @@ fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
 impl Storage<UtxoId, Coin> for Database {
     type Error = KvStoreError;
 
-    fn insert(&mut self, key: &UtxoId, value: &Coin) -> Result<Option<Coin>, KvStoreError> {
+    fn insert(
+        &mut self,
+        key: &UtxoId,
+        value: &Coin,
+    ) -> Result<Option<Coin>, KvStoreError> {
         let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
         // insert primary record
-        let insert = Database::insert(self, utxo_id_to_bytes(key), columns::COIN, value.clone())?;
+        let insert =
+            Database::insert(self, utxo_id_to_bytes(key), columns::COIN, value.clone())?;
         // insert secondary index by owner
         Database::insert(self, coin_by_owner, columns::OWNED_COINS, true)?;
         Ok(insert)
     }
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        let coin: Option<Coin> = Database::remove(self, &utxo_id_to_bytes(key), columns::COIN)?;
+        let coin: Option<Coin> =
+            Database::remove(self, &utxo_id_to_bytes(key), columns::COIN)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {
             let key = owner_coin_id_key(&coin.owner, key);
-            let _: Option<bool> = Database::remove(self, key.as_slice(), columns::OWNED_COINS)?;
+            let _: Option<bool> =
+                Database::remove(self, key.as_slice(), columns::OWNED_COINS)?;
         }
 
         Ok(coin)

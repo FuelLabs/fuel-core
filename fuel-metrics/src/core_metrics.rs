@@ -1,8 +1,17 @@
 use axum::response::IntoResponse;
-use hyper::{header::CONTENT_TYPE, Body, Response};
+use hyper::{
+    header::CONTENT_TYPE,
+    Body,
+    Response,
+};
 use lazy_static::lazy_static;
-use prometheus::register_int_counter;
-use prometheus::{self, Encoder, IntCounter, TextEncoder};
+use prometheus::{
+    self,
+    register_int_counter,
+    Encoder,
+    IntCounter,
+    TextEncoder,
+};
 
 /// DatabaseMetrics is a wrapper struct for all
 /// of the initialized counters for Database-related metrics
@@ -16,9 +25,13 @@ pub struct DatabaseMetrics {
 
 lazy_static! {
     pub static ref DATABASE_METRICS: DatabaseMetrics = DatabaseMetrics {
-        write_meter: register_int_counter!("Writes", "Number of database write operations")
+        write_meter: register_int_counter!(
+            "Writes",
+            "Number of database write operations"
+        )
+        .unwrap(),
+        read_meter: register_int_counter!("Reads", "Number of database read operations")
             .unwrap(),
-        read_meter: register_int_counter!("Reads", "Number of database read operations").unwrap(),
         bytes_written_meter: register_int_counter!(
             "Bytes_Written",
             "The number of bytes written to the database"
@@ -43,8 +56,11 @@ pub struct CoreMetrics {
 
 lazy_static! {
     pub static ref CORE_METRICS: CoreMetrics = CoreMetrics {
-        blocks_processed: register_int_counter!("Blocks_Processed", "Number of blocks processed")
-            .unwrap(),
+        blocks_processed: register_int_counter!(
+            "Blocks_Processed",
+            "Number of blocks processed"
+        )
+        .unwrap(),
         transactions_executed: register_int_counter!(
             "Transactions_Processed",
             "Number of transactions executed"

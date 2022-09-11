@@ -1,6 +1,12 @@
-use crate::helpers::{TestContext, TestSetupBuilder};
+use crate::helpers::{
+    TestContext,
+    TestSetupBuilder,
+};
 use fuel_core_interfaces::common::fuel_vm::prelude::*;
-use fuel_gql_client::client::{PageDirection, PaginationRequest};
+use fuel_gql_client::client::{
+    PageDirection,
+    PaginationRequest,
+};
 use rstest::rstest;
 
 const SEED: u64 = 2322;

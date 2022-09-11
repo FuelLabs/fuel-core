@@ -28,7 +28,13 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 #[cfg(feature = "rocksdb")]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
-    use fuel_core::{chain_config::ChainConfig, chain_config::StateConfig, database::Database};
+    use fuel_core::{
+        chain_config::{
+            ChainConfig,
+            StateConfig,
+        },
+        database::Database,
+    };
 
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;
@@ -48,6 +54,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 
     let stdout = std::io::stdout().lock();
 
-    serde_json::to_writer(stdout, &chain_conf).context("failed to dump snapshot to JSON")?;
+    serde_json::to_writer(stdout, &chain_conf)
+        .context("failed to dump snapshot to JSON")?;
     Ok(())
 }

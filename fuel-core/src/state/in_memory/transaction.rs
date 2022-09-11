@@ -1,13 +1,33 @@
 use crate::state::{
-    in_memory::column_key, in_memory::memory_store::MemoryStore, BatchOperations, ColumnId,
-    DataSource, IterDirection, KeyValueStore, Result, TransactableStorage, Transaction,
-    TransactionError, TransactionResult, WriteOperation,
+    in_memory::{
+        column_key,
+        memory_store::MemoryStore,
+    },
+    BatchOperations,
+    ColumnId,
+    DataSource,
+    IterDirection,
+    KeyValueStore,
+    Result,
+    TransactableStorage,
+    Transaction,
+    TransactionError,
+    TransactionResult,
+    WriteOperation,
 };
-use itertools::{EitherOrBoth, Itertools};
-use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use itertools::{
+    EitherOrBoth,
+    Itertools,
+};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Debug,
+    sync::{
+        Arc,
+        Mutex,
+    },
+};
 
 #[derive(Debug)]
 pub struct MemoryTransactionView {
@@ -54,7 +74,12 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+    fn put(
+        &self,
+        key: Vec<u8>,
+        column: ColumnId,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>> {
         let k = column_key(&key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes.lock().expect("poisoned lock").insert(

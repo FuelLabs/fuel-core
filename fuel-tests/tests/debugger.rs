@@ -1,6 +1,9 @@
 #![cfg(feature = "debug")]
 
-use fuel_core::service::{Config, FuelService};
+use fuel_core::service::{
+    Config,
+    FuelService,
+};
 use fuel_core_interfaces::common::fuel_vm::prelude::*;
 use fuel_gql_client::client::FuelClient;
 
@@ -22,8 +25,8 @@ async fn debugger_integration() {
         .await
         .unwrap();
 
-    let tx: Transaction =
-        serde_json::from_str(include_str!("example_tx.json")).expect("Invalid transaction JSON");
+    let tx: Transaction = serde_json::from_str(include_str!("example_tx.json"))
+        .expect("Invalid transaction JSON");
     let status = client.start_tx(session_id, &tx).await.unwrap();
     assert!(status.breakpoint.is_some());
 

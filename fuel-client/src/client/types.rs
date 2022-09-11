@@ -1,10 +1,21 @@
-use crate::client::schema::tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus};
-use crate::client::schema::ConversionError;
-use chrono::{DateTime, Utc};
+use crate::client::schema::{
+    tx::{
+        OpaqueTransaction,
+        TransactionStatus as SchemaTxStatus,
+    },
+    ConversionError,
+};
+use chrono::{
+    DateTime,
+    Utc,
+};
 use fuel_tx::Transaction;
 use fuel_types::bytes::Deserializable;
 use fuel_vm::prelude::ProgramState;
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResponse {

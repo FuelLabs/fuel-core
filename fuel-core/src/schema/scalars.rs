@@ -1,12 +1,22 @@
-use crate::database::transaction::OwnedTransactionIndexCursor;
-use crate::model::BlockHeight;
+use crate::{
+    database::transaction::OwnedTransactionIndexCursor,
+    model::BlockHeight,
+};
 use async_graphql::{
-    connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
+    connection::CursorType,
+    InputValueError,
+    InputValueResult,
+    Scalar,
+    ScalarType,
+    Value,
 };
 use fuel_core_interfaces::common::fuel_types;
 use std::{
     convert::TryInto,
-    fmt::{Display, Formatter},
+    fmt::{
+        Display,
+        Formatter,
+    },
     str::FromStr,
 };
 pub use tx_pointer::TxPointer;
@@ -66,7 +76,8 @@ impl CursorType for SortedTxCursor {
     type Error = String;
 
     fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        let (block_height, tx_id) = s.split_once('#').ok_or("Incorrect format provided")?;
+        let (block_height, tx_id) =
+            s.split_once('#').ok_or("Incorrect format provided")?;
 
         Ok(Self::new(
             usize::from_str(block_height)

@@ -1,6 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
-use std::{env, path::PathBuf, str::FromStr};
+use std::{
+    env,
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::log::warn;
 use tracing_subscriber::filter::EnvFilter;
 
@@ -35,7 +39,9 @@ pub const HUMAN_LOGGING: &str = "HUMAN_LOGGING";
 
 pub async fn init_logging() -> Result<()> {
     let filter = match env::var_os(LOG_FILTER) {
-        Some(_) => EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided"),
+        Some(_) => {
+            EnvFilter::try_from_default_env().expect("Invalid `RUST_LOG` provided")
+        }
         None => EnvFilter::new("info"),
     };
 
@@ -78,7 +84,7 @@ pub async fn run_cli() -> Result<()> {
         let command = run::Command::try_parse();
         if let Ok(command) = command {
             warn!("This cli format for running `fuel-core` is deprecated and will be removed. Please use `fuel-core run` or use `--help` for more information");
-            return run::exec(command).await;
+            return run::exec(command).await
         }
     }
 

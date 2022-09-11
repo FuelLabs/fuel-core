@@ -1,4 +1,7 @@
-use fuel_core::service::{Config, FuelService};
+use fuel_core::service::{
+    Config,
+    FuelService,
+};
 use fuel_gql_client::client::FuelClient;
 
 #[tokio::test]

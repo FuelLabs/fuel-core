@@ -1,24 +1,49 @@
 use anyhow::Error;
 use ethers_core::{
     k256::ecdsa::SigningKey,
-    types::{TransactionRequest, H160, U256},
+    types::{
+        TransactionRequest,
+        H160,
+        U256,
+    },
 };
 use ethers_middleware::{
-    gas_escalator::{Frequency, GasEscalatorMiddleware, GeometricGasPrice},
-    NonceManagerMiddleware, SignerMiddleware,
+    gas_escalator::{
+        Frequency,
+        GasEscalatorMiddleware,
+        GeometricGasPrice,
+    },
+    NonceManagerMiddleware,
+    SignerMiddleware,
 };
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
     common::fuel_tx::Bytes32,
-    model::{BlockHeight, DaBlockHeight, SealedFuelBlock},
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+        SealedFuelBlock,
+    },
     relayer::RelayerDb,
 };
-use std::{cmp::max, collections::VecDeque, sync::Arc};
+use std::{
+    cmp::max,
+    collections::VecDeque,
+    sync::Arc,
+};
 
 // use the ethers_signers crate to manage LocalWallet and Signer
 use crate::abi;
-use ethers_signers::{LocalWallet, Signer};
-use tracing::{debug, error, info, warn};
+use ethers_signers::{
+    LocalWallet,
+    Signer,
+};
+use tracing::{
+    debug,
+    error,
+    info,
+    warn,
+};
 
 /// Pending Fuel Blocks waiting to be finalized inside client. Until then
 /// there is possibility that they are going to be reverted
@@ -37,7 +62,7 @@ struct PendingBlock {
     pub reverted: bool,
     pub da_height: DaBlockHeight,
     pub block_height: BlockHeight,
-    pub block_root: Bytes32, //is this block hash?
+    pub block_root: Bytes32, // is this block hash?
 }
 
 impl PendingBlock {
@@ -64,16 +89,24 @@ pub fn from_fuel_to_block_header(fuel_block: &SealedFuelBlock) -> abi::fuel::Blo
         digest_root: [0; 32],
         digest_hash: [0; 32],
         digest_length: 0,
-        transaction_root: <[u8; 32]>::try_from(fuel_block.header.transactions_root.as_ref())
-            .unwrap(),
+        transaction_root: <[u8; 32]>::try_from(
+            fuel_block.header.transactions_root.as_ref(),
+        )
+        .unwrap(),
         transaction_sum: fuel_block.transaction_sum().into(),
         num_transactions: fuel_block.transactions.len() as u32,
-        validator_set_hash: <[u8; 32]>::try_from(fuel_block.validator_set_hash().as_ref()).unwrap(),
+        validator_set_hash: <[u8; 32]>::try_from(
+            fuel_block.validator_set_hash().as_ref(),
+        )
+        .unwrap(),
         required_stake: fuel_block.consensus.required_stake.into(),
-        withdrawals_root: <[u8; 32]>::try_from(fuel_block.withdrawals_root().as_ref()).unwrap(),
-        transactions_data_length: 0,
-        transaction_hash: <[u8; 32]>::try_from(fuel_block.transaction_data_hash().as_ref())
+        withdrawals_root: <[u8; 32]>::try_from(fuel_block.withdrawals_root().as_ref())
             .unwrap(),
+        transactions_data_length: 0,
+        transaction_hash: <[u8; 32]>::try_from(
+            fuel_block.transaction_data_hash().as_ref(),
+        )
+        .unwrap(),
     };
     block
 }
@@ -113,7 +146,10 @@ impl PendingBlocks {
 
     /// Discard block from pending queue that got finalized.
     /// return last finalized block commit hash and height if there is one.
-    pub fn handle_da_finalization(&mut self, finalized_da_height: DaBlockHeight) -> BlockHeight {
+    pub fn handle_da_finalization(
+        &mut self,
+        finalized_da_height: DaBlockHeight,
+    ) -> BlockHeight {
         // iterate over all pending blocks and finalize some\
         self.pending_block_commits.retain(|block| {
             if block.da_height <= finalized_da_height {
@@ -138,8 +174,12 @@ impl PendingBlocks {
         is_reverted: IsReverted,
     ) {
         match is_reverted {
-            IsReverted::True => self.handle_block_commit_revert(block_root, height, da_height),
-            IsReverted::False => self.handle_block_commit_append(block_root, height, da_height),
+            IsReverted::True => {
+                self.handle_block_commit_revert(block_root, height, da_height)
+            }
+            IsReverted::False => {
+                self.handle_block_commit_append(block_root, height, da_height)
+            }
         }
     }
 
@@ -150,21 +190,25 @@ impl PendingBlocks {
     ) -> Vec<Arc<SealedFuelBlock>> {
         // if queue is empty check last_finalized_committed fuel block and send all newest ones that we know about.
         let mut from_height = self.last_committed_finalized_fuel_height;
-        //get blocks range that start from last pending queue item that is not reverted and goes to current block.
+        // get blocks range that start from last pending queue item that is not reverted and goes to current block.
         for pending in self.pending_block_commits.iter() {
             if !pending.reverted {
                 from_height = pending.block_height;
-                break;
+                break
             }
         }
 
         debug!("Bundle from:{from_height}, to:{to_height}");
         let mut bundle = Vec::new();
         for height in from_height.as_usize()..=to_height.as_usize() {
-            if let Some(sealed_block) = db.get_sealed_block(BlockHeight::from(height)).await {
+            if let Some(sealed_block) =
+                db.get_sealed_block(BlockHeight::from(height)).await
+            {
                 bundle.push(sealed_block.clone());
             } else {
-                panic!("All not committed blocks should have its seal and blocks inside db");
+                panic!(
+                    "All not committed blocks should have its seal and blocks inside db"
+                );
             }
         }
         bundle
@@ -184,7 +228,7 @@ impl PendingBlocks {
 
         // if contract is not set there is no point to bundle and send block commits
         if self.contract_address.is_none() {
-            return;
+            return
         }
 
         let mut bundle = self.bundle(height, db).await.into_iter();
@@ -202,7 +246,7 @@ impl PendingBlocks {
             );
             if let Err(error) = self.call_contract(&parent, &block, provider).await {
                 warn!("Commit fuel block failed: {}", error);
-                break;
+                break
             }
             parent = block;
         }
@@ -225,7 +269,7 @@ impl PendingBlocks {
                 .push_front(PendingBlock::new_committed_block(
                     da_height, height, block_root,
                 ));
-            return;
+            return
         }
 
         let front_height = self.pending_block_commits.front().unwrap().block_height;
@@ -264,7 +308,7 @@ impl PendingBlocks {
                     pending.da_height = da_height;
                     pending.reverted = false;
                     pending.block_root = block_root;
-                    break;
+                    break
                 }
             }
         }
@@ -281,7 +325,7 @@ impl PendingBlocks {
             // nothing to revert
             error!("Revert for height {height} received while pending block queue is empty and LFCFB is {}",
                 self.last_committed_finalized_fuel_height);
-            return;
+            return
         }
 
         let front_height = self.pending_block_commits.front().unwrap().block_height;
@@ -297,7 +341,9 @@ impl PendingBlocks {
             for pending in self.pending_block_commits.iter_mut() {
                 if pending.block_height == height {
                     if pending.reverted {
-                        error!("We received block {height} commit that was already reverted");
+                        error!(
+                            "We received block {height} commit that was already reverted"
+                        );
                     }
                     pending.da_height = da_height;
                     pending.reverted = true;
@@ -337,7 +383,7 @@ impl PendingBlocks {
                 .validators
                 .iter()
                 .map(|(_, (_, sig))| sig.to_vec().into())
-                .collect(); //bytes
+                .collect(); // bytes
             let withdrawals = block
                 .withdrawals()
                 .iter()
@@ -368,8 +414,11 @@ impl PendingBlocks {
 
             // Escalate gas prices
             let escalator = GeometricGasPrice::new(1.125, 60u64, None::<u64>);
-            let provider =
-                GasEscalatorMiddleware::new(provider.clone(), escalator, Frequency::PerBlock);
+            let provider = GasEscalatorMiddleware::new(
+                provider.clone(),
+                escalator,
+                Frequency::PerBlock,
+            );
 
             // Sign transactions with a private key
             let address = self.signer.address();
@@ -378,8 +427,8 @@ impl PendingBlocks {
             // Use EthGasStation as the gas oracle
             // https://github.com/FuelLabs/fuel-core/issues/363
             // TODO check how this is going to be done in testnet.
-            //let gas_oracle = EthGasStation::new(None);
-            //let provider = GasOracleMiddleware::new(provider, gas_oracle);
+            // let gas_oracle = EthGasStation::new(None);
+            // let provider = GasOracleMiddleware::new(provider, gas_oracle);
 
             // Manage nonces locally
             let provider = NonceManagerMiddleware::new(provider, address);
@@ -400,13 +449,18 @@ impl PendingBlocks {
 mod tests {
     use super::*;
     use crate::mock_db::MockDb;
-    use rand::{prelude::StdRng, Rng, SeedableRng};
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
     use tracing_test::traced_test;
 
     pub fn block_commit(last_committed_fuel_block: BlockHeight) -> PendingBlocks {
-        let private_key =
-            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
-                .unwrap();
+        let private_key = hex::decode(
+            "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",
+        )
+        .unwrap();
         PendingBlocks::new(
             0,
             Some(H160::zero()),
@@ -625,7 +679,9 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "All not committed blocks should have its seal and blocks inside db")]
+    #[should_panic(
+        expected = "All not committed blocks should have its seal and blocks inside db"
+    )]
     async fn bundle_should_panic_if_sealed_block_is_missing() {
         let mut blocks = block_commit(1u64.into());
         let mut db = Box::new(MockDb::default());
