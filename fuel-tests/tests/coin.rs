@@ -66,8 +66,7 @@ async fn coin() {
 #[rstest]
 #[tokio::test]
 async fn first_5_coins(
-    #[values(PageDirection::Forward)]
-    pagination_direction: PageDirection,
+    #[values(PageDirection::Forward)] pagination_direction: PageDirection,
 ) {
     let owner = Address::default();
 
