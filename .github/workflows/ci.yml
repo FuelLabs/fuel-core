@@ -169,6 +169,8 @@ jobs:
 
       - name: Publish crate
         uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@master
+        secrets:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v1
