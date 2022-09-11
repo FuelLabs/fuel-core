@@ -37,7 +37,8 @@ async fn test_contract_balance(
     #[values(100, 0, 18446744073709551615)] test_balance: u64,
 ) {
     let mut test_builder = TestSetupBuilder::new(SEED);
-    let (_, contract_id) = test_builder.setup_contract(vec![], Some(vec![(asset, test_balance)]));
+    let (_, contract_id) =
+        test_builder.setup_contract(vec![], Some(vec![(asset, test_balance)]));
 
     // spin up node
     let TestContext { client, .. } = test_builder.finalize().await;

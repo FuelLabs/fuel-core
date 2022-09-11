@@ -25,13 +25,12 @@ use fuel_core_interfaces::common::{
         Word,
     },
 };
-use rstest::rstest;
 use fuel_gql_client::client::{
-    schema::coin::CoinStatus as SchemeCoinStatus,
     FuelClient,
     PageDirection,
     PaginationRequest,
 };
+use rstest::rstest;
 
 #[tokio::test]
 async fn coin() {
@@ -67,7 +66,8 @@ async fn coin() {
 #[rstest]
 #[tokio::test]
 async fn first_5_coins(
-    #[values(PageDirection::Forward, PageDirection::Backward)] pagination_direction: PageDirection,
+    #[values(PageDirection::Forward)]
+    pagination_direction: PageDirection,
 ) {
     let owner = Address::default();
 
@@ -182,7 +182,7 @@ async fn only_unspent_coins(
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                asset_id: asset_id,
+                asset_id,
                 maturity: Default::default(),
                 status: if i <= 5 {
                     CoinStatus::Unspent

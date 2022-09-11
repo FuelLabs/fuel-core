@@ -29,13 +29,7 @@ use itertools::{
     rev,
     Itertools,
 };
-use fuel_core_interfaces::common::fuel_tx;
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
-use fuel_gql_client::client::types::TransactionStatus;
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use itertools::{rev, Itertools};
 use rstest::rstest;
-
 
 #[tokio::test]
 async fn block() {
@@ -149,7 +143,8 @@ async fn produce_block_negative() {
 #[rstest]
 #[tokio::test]
 async fn block_connection_5(
-    #[values(PageDirection::Forward, PageDirection::Backward)] pagination_direction: PageDirection,
+    #[values(PageDirection::Forward, PageDirection::Backward)]
+    pagination_direction: PageDirection,
 ) {
     // blocks
     let blocks = (0..10u32)

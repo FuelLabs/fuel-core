@@ -9,8 +9,6 @@ use fuel_core::{
     },
 };
 use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use rstest::rstest;
-use std::ops::Deref;
 use fuel_crypto::{
     fuel_types::Address,
     SecretKey,
@@ -28,6 +26,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
+use rstest::rstest;
 
 #[tokio::test]
 async fn can_submit_genesis_message() {
