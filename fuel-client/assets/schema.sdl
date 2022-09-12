@@ -452,7 +452,7 @@ type Query {
 	
 	Returns:
 	The list of spendable resources per asset from the query. The length of the result is
-	the same as the length of `query_per_asset`. The ordering of assets and spendQuery
+	the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
 	is the same.
 	"""
 	resourcesToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Resource!]!]!

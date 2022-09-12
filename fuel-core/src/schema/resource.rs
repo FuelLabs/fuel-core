@@ -66,7 +66,7 @@ impl ResourceQuery {
     ///
     /// Returns:
     ///     The list of spendable resources per asset from the query. The length of the result is
-    ///     the same as the length of `query_per_asset`. The ordering of assets and spendQuery
+    ///     the same as the length of `query_per_asset`. The ordering of assets and `query_per_asset`
     ///     is the same.
     async fn resources_to_spend(
         &self,
