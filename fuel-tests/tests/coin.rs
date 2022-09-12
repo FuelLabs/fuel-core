@@ -26,6 +26,7 @@ use fuel_core_interfaces::common::{
     },
 };
 use fuel_gql_client::client::{
+    schema::coin::CoinStatus as SchemeCoinStatus,
     FuelClient,
     PageDirection,
     PaginationRequest,
@@ -225,7 +226,7 @@ async fn only_unspent_coins(
     assert!(coins
         .results
         .into_iter()
-        .all(|c| asset_id == c.asset_id.into()));
+        .all(|c| c.status == SchemeCoinStatus::Unspent));
 }
 
 #[rstest]
