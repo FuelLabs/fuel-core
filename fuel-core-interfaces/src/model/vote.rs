@@ -1,8 +1,10 @@
-use fuel_crypto::{
-    PublicKey,
-    Signature,
+use crate::common::{
+    fuel_crypto::{
+        PublicKey,
+        Signature,
+    },
+    fuel_types::Bytes32,
 };
-use fuel_types::Bytes32;
 
 /// A vote from a validator.
 ///
