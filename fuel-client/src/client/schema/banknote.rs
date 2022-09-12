@@ -1,6 +1,14 @@
-use crate::client::schema::coin::Coin;
-use crate::client::schema::message::Message;
-use crate::client::schema::{schema, Address, AssetId, ConversionError, MessageId, UtxoId, U64};
+use crate::client::schema::{
+    coin::Coin,
+    message::Message,
+    schema,
+    Address,
+    AssetId,
+    ConversionError,
+    MessageId,
+    UtxoId,
+    U64,
+};
 use itertools::Itertools;
 use std::str::FromStr;
 

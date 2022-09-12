@@ -1,10 +1,21 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_interfaces::common::{fuel_tx::AssetId, fuel_vm::prelude::Address};
-use fuel_gql_client::client::schema::banknote::Banknote;
-use fuel_gql_client::client::FuelClient;
+use fuel_core_interfaces::common::{
+    fuel_tx::AssetId,
+    fuel_vm::prelude::Address,
+};
+use fuel_gql_client::client::{
+    schema::banknote::Banknote,
+    FuelClient,
+};
 
 #[tokio::test]
 async fn banknotes_to_spend() {

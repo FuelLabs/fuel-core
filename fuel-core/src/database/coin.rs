@@ -26,7 +26,6 @@ use fuel_core_interfaces::{
     },
     model::Coin as CoinModel,
 };
-use itertools::Itertools;
 use std::borrow::Cow;
 
 fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {

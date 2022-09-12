@@ -1,12 +1,30 @@
 use crate::database::Database;
-use fuel_core_interfaces::common::fuel_storage::Storage;
-use fuel_core_interfaces::common::fuel_tx::UtxoId;
-use fuel_core_interfaces::common::fuel_types::{Address, AssetId, MessageId, Word};
-use fuel_core_interfaces::db::{Error, KvStoreError};
-use fuel_core_interfaces::model::{Coin, CoinStatus, Message};
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::UtxoId,
+        fuel_types::{
+            Address,
+            AssetId,
+            MessageId,
+            Word,
+        },
+    },
+    db::{
+        Error,
+        KvStoreError,
+    },
+    model::{
+        Coin,
+        CoinStatus,
+        Message,
+    },
+};
 use itertools::Itertools;
-use std::borrow::Cow;
-use std::collections::HashSet;
+use std::{
+    borrow::Cow,
+    collections::HashSet,
+};
 
 const BASE_ASSET: AssetId = AssetId::zeroed();
 
@@ -92,7 +110,8 @@ impl<'a> AssetQuery<'a> {
             .map(|results| Ok(results??))
             .filter_ok(|coin| {
                 if let Banknote::Coin { fields, .. } = coin {
-                    fields.asset_id == self.asset.id && fields.status == CoinStatus::Unspent
+                    fields.asset_id == self.asset.id
+                        && fields.status == CoinStatus::Unspent
                 } else {
                     true
                 }

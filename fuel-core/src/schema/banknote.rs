@@ -1,16 +1,31 @@
-use crate::coin_query::SpendQuery;
-use crate::database::utils::Asset;
-use crate::schema::coin::Coin;
-use crate::schema::message::Message;
-use crate::schema::scalars::message_id::MessageId;
-use crate::schema::scalars::{AssetId, U64};
 use crate::{
-    coin_query::random_improve,
-    database::Database,
-    schema::scalars::{Address, UtxoId},
+    coin_query::{
+        random_improve,
+        SpendQuery,
+    },
+    database::{
+        utils::Asset,
+        Database,
+    },
+    schema::{
+        coin::Coin,
+        message::Message,
+        scalars::{
+            message_id::MessageId,
+            Address,
+            AssetId,
+            UtxoId,
+            U64,
+        },
+    },
     service::Config,
 };
-use async_graphql::{Context, InputObject, Object, Union};
+use async_graphql::{
+    Context,
+    InputObject,
+    Object,
+    Union,
+};
 use fuel_core_interfaces::common::fuel_tx;
 use itertools::Itertools;
 
@@ -54,8 +69,12 @@ impl BanknoteQuery {
         #[graphql(desc = "The total amount of each asset type to spend")] assets: Vec<
             SpendQueryElementInput,
         >,
-        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<u64>,
-        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<ExcludeInput>,
+        #[graphql(desc = "The max number of utxos that can be used")] max_inputs: Option<
+            u64,
+        >,
+        #[graphql(desc = "The utxos that cannot be used")] excluded_ids: Option<
+            ExcludeInput,
+        >,
     ) -> async_graphql::Result<Vec<Vec<Banknote>>> {
         let config = ctx.data_unchecked::<Config>();
 

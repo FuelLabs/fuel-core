@@ -1,8 +1,4 @@
 use crate::{
-    coin_query::{
-        random_improve,
-        SpendQueryElement,
-    },
     database::{
         Database,
         KvStoreError,
@@ -13,7 +9,6 @@ use crate::{
         UtxoId,
         U64,
     },
-    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;

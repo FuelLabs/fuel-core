@@ -16,9 +16,9 @@ use fuel_core_interfaces::common::{
     },
     fuel_vm::prelude::Address,
 };
-use fuel_gql_client::client::schema::banknote::Banknote;
 use fuel_gql_client::{
     client::{
+        schema::banknote::Banknote,
         FuelClient,
         PageDirection,
         PaginationRequest,
@@ -100,7 +100,6 @@ async fn balance() {
                 Banknote::Message(message) => tx.add_input(Input::MessageSigned {
                     message_id: Default::default(),
                     sender: message.sender.into(),
-                    owner: message.owner.into(),
                     amount: message.amount.into(),
                     witness_index: 0,
                     recipient: message.recipient.into(),
