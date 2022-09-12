@@ -32,6 +32,10 @@ pub struct Message(pub(crate) model::Message);
 
 #[Object]
 impl Message {
+    async fn message_id(&self) -> MessageId {
+        self.0.id().into()
+    }
+
     async fn amount(&self) -> U64 {
         self.0.amount.into()
     }

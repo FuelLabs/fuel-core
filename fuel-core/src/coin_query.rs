@@ -35,10 +35,10 @@ pub enum CoinQueryError {
     KvStoreError(KvStoreError),
     #[error("state error occurred")]
     StateError(StateError),
-    #[error("enough coins could not be found")]
-    NotEnoughCoins,
-    #[error("not enough inputs")]
-    NotEnoughInputs,
+    #[error("not enough resources to fit the target")]
+    InsufficientResources,
+    #[error("max number of resources is reached while trying to fit the target")]
+    MaxResourcesReached,
     #[error("the query contains duplicate assets")]
     DuplicateAssets(AssetId),
 }
@@ -123,7 +123,7 @@ pub fn largest_first(
 
         // Error if we can't fit more coins
         if resources.len() >= query.asset.max {
-            return Err(CoinQueryError::NotEnoughInputs)
+            return Err(CoinQueryError::MaxResourcesReached)
         }
 
         // Add to list
@@ -133,7 +133,7 @@ pub fn largest_first(
 
     if collected_amount < query.asset.target {
         // TODO: Return the asset id and maybe collected amount
-        return Err(CoinQueryError::NotEnoughCoins)
+        return Err(CoinQueryError::InsufficientResources)
     }
 
     Ok(resources)
@@ -204,21 +204,21 @@ impl From<StateError> for CoinQueryError {
 }
 
 #[cfg(test)]
-mod tests_coins {
-    use crate::test_utils::*;
+mod tests {
+    use crate::{
+        chain_config::ChainConfig,
+        test_utils::*,
+    };
     use assert_matches::assert_matches;
     use fuel_core_interfaces::common::{
         fuel_asm::Word,
-        fuel_tx::{
-            Address,
-            UtxoId,
-        },
+        fuel_tx::Address,
         fuel_types::AssetId,
     };
 
     use super::*;
 
-    fn setup() -> (Address, [AssetId; 2], TestDatabase) {
+    fn setup_coins() -> (Address, [AssetId; 2], TestDatabase) {
         let owner = Address::default();
         let asset_ids = [AssetId::new([1u8; 32]), AssetId::new([2u8; 32])];
         let mut db = TestDatabase::default();
@@ -230,99 +230,336 @@ mod tests_coins {
         (owner, asset_ids, db)
     }
 
-    #[test]
-    fn largest_first_output() {
-        // Setup
-        let (owner, asset_ids, db) = setup();
-        let query =
-            |spend_query: &[Asset]| -> Result<Vec<Vec<(AssetId, Word)>>, CoinQueryError> {
-                let result: Vec<_> = spend_query
-                    .iter()
-                    .map(|asset| {
-                        largest_first(&AssetQuery::new(&owner, asset, None, db.as_ref()))
-                            .map(|resources| {
-                                resources
-                                    .iter()
-                                    .map(|resource| {
-                                        (*resource.asset_id(), *resource.amount())
-                                    })
-                                    .collect()
-                            })
-                    })
-                    .try_collect()?;
-                Ok(result)
-            };
+    fn setup_messages() -> (Address, AssetId, TestDatabase) {
+        let owner = Address::default();
+        let asset_id = ChainConfig::BASE_ASSET;
+        let mut db = TestDatabase::default();
+        (0..5usize).for_each(|i| {
+            db.make_message(owner, (i + 1) as Word);
+        });
 
-        // Query some targets, including higher than the owner's balance
-        for target in 0..20 {
-            let resources = query(&[Asset::new(asset_ids[0], target, u64::MAX)]);
-
-            // Transform result for convenience
-            let resources = resources.map(|resources| {
-                resources[0]
-                    .iter()
-                    .map(|(asset_id, amount)| {
-                        // Check the asset ID before we drop it
-                        assert_eq!(asset_id, &asset_ids[0]);
-
-                        *amount
-                    })
-                    .collect::<Vec<u64>>()
-            });
-
-            match target {
-                // This should return nothing
-                0 => assert_matches!(resources, Ok(resources) if resources.is_empty()),
-                // This range should return the largest resources
-                1..=5 => {
-                    assert_matches!(resources, Ok(resources) if resources == vec![5])
-                }
-                // This range should return the largest two resources
-                6..=9 => {
-                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4])
-                }
-                // This range should return the largest three resources
-                10..=12 => {
-                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3])
-                }
-                // This range should return the largest four resources
-                13..=14 => {
-                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2])
-                }
-                // This range should return all resources
-                15 => {
-                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2, 1])
-                }
-                // Asking for more than the owner's balance should error
-                _ => assert_matches!(resources, Err(CoinQueryError::NotEnoughCoins)),
-            };
-        }
-
-        // Query multiple asset IDs
-        let resources = query(&[
-            Asset::new(asset_ids[0], 3, u64::MAX),
-            Asset::new(asset_ids[1], 6, u64::MAX),
-        ]);
-        assert_matches!(resources, Ok(resources)
-        if resources == vec![
-            vec![(asset_ids[0], 5)],
-            vec![(asset_ids[1], 5), (asset_ids[1], 4)]
-        ]);
-
-        // Query with too small max_inputs
-        let resources = query(&[Asset::new(asset_ids[0], 6, 1)]);
-        assert_matches!(resources, Err(CoinQueryError::NotEnoughInputs));
+        (owner, asset_id, db)
     }
 
-    #[test]
-    fn random_improve_output() {
-        let (owner, asset_ids, db) = setup();
-        // Setup
-        let query =
-            |query_per_asset: Vec<Asset>| -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
+    fn setup_coins_and_messages() -> (Address, [AssetId; 2], TestDatabase) {
+        let owner = Address::default();
+        let asset_ids = [ChainConfig::BASE_ASSET, AssetId::new([1u8; 32])];
+        let mut db = TestDatabase::default();
+        // 2 coins and 3 messages
+        (0..2usize).for_each(|i| {
+            db.make_coin(owner, (i + 1) as Word, asset_ids[0]);
+        });
+        (2..5usize).for_each(|i| {
+            db.make_message(owner, (i + 1) as Word);
+        });
+
+        (0..5usize).for_each(|i| {
+            db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
+        });
+
+        (owner, asset_ids, db)
+    }
+
+    mod largest_first {
+        use super::*;
+
+        fn query(
+            spend_query: &[Asset],
+            owner: &Address,
+            db: &Database,
+        ) -> Result<Vec<Vec<(AssetId, Word)>>, CoinQueryError> {
+            let result: Vec<_> = spend_query
+                .iter()
+                .map(|asset| {
+                    largest_first(&AssetQuery::new(owner, asset, None, db)).map(
+                        |resources| {
+                            resources
+                                .iter()
+                                .map(|resource| {
+                                    (*resource.asset_id(), *resource.amount())
+                                })
+                                .collect()
+                        },
+                    )
+                })
+                .try_collect()?;
+            Ok(result)
+        }
+
+        fn single_asset_assert(owner: Address, asset_ids: &[AssetId], db: TestDatabase) {
+            // Query some targets, including higher than the owner's balance
+            for target in 0..20 {
+                let resources = query(
+                    &[Asset::new(asset_ids[0], target, u64::MAX)],
+                    &owner,
+                    db.as_ref(),
+                );
+
+                // Transform result for convenience
+                let resources = resources.map(|resources| {
+                    resources[0]
+                        .iter()
+                        .map(|(asset_id, amount)| {
+                            // Check the asset ID before we drop it
+                            assert_eq!(asset_id, &asset_ids[0]);
+
+                            *amount
+                        })
+                        .collect::<Vec<u64>>()
+                });
+
+                match target {
+                    // This should return nothing
+                    0 => {
+                        assert_matches!(resources, Ok(resources) if resources.is_empty())
+                    }
+                    // This range should return the largest resources
+                    1..=5 => {
+                        assert_matches!(resources, Ok(resources) if resources == vec![5])
+                    }
+                    // This range should return the largest two resources
+                    6..=9 => {
+                        assert_matches!(resources, Ok(resources) if resources == vec![5, 4])
+                    }
+                    // This range should return the largest three resources
+                    10..=12 => {
+                        assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3])
+                    }
+                    // This range should return the largest four resources
+                    13..=14 => {
+                        assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2])
+                    }
+                    // This range should return all resources
+                    15 => {
+                        assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2, 1])
+                    }
+                    // Asking for more than the owner's balance should error
+                    _ => {
+                        assert_matches!(
+                            resources,
+                            Err(CoinQueryError::InsufficientResources)
+                        )
+                    }
+                };
+            }
+
+            // Query with too small max_inputs
+            let resources = query(&[Asset::new(asset_ids[0], 6, 1)], &owner, db.as_ref());
+            assert_matches!(resources, Err(CoinQueryError::MaxResourcesReached));
+        }
+
+        #[test]
+        fn single_asset() {
+            // Setup for coins
+            let (owner, asset_ids, db) = setup_coins();
+            single_asset_assert(owner, &asset_ids, db);
+
+            // Setup for messages
+            let (owner, asset_ids, db) = setup_messages();
+            single_asset_assert(owner, &[asset_ids], db);
+
+            // Setup for coins and messages
+            let (owner, asset_ids, db) = setup_coins_and_messages();
+            single_asset_assert(owner, &asset_ids, db);
+        }
+
+        fn multiple_assets_helper(
+            owner: Address,
+            asset_ids: &[AssetId],
+            db: TestDatabase,
+        ) {
+            let resources = query(
+                &[
+                    Asset::new(asset_ids[0], 3, u64::MAX),
+                    Asset::new(asset_ids[1], 6, u64::MAX),
+                ],
+                &owner,
+                db.as_ref(),
+            );
+            assert_matches!(resources, Ok(resources)
+            if resources == vec![
+                vec![(asset_ids[0], 5)],
+                vec![(asset_ids[1], 5), (asset_ids[1], 4)]
+            ]);
+        }
+
+        #[test]
+        fn multiple_assets() {
+            // Setup coins
+            let (owner, asset_ids, db) = setup_coins();
+            multiple_assets_helper(owner, &asset_ids, db);
+
+            // Setup coins and messages
+            let (owner, asset_ids, db) = setup_coins_and_messages();
+            multiple_assets_helper(owner, &asset_ids, db);
+        }
+    }
+
+    mod random_improve {
+        use super::*;
+
+        fn query(
+            query_per_asset: Vec<Asset>,
+            owner: Address,
+            asset_ids: &[AssetId],
+            db: &Database,
+        ) -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
+            let coins =
+                random_improve(db, &SpendQuery::new(owner, &query_per_asset, None)?);
+
+            // Transform result for convenience
+            coins.map(|coins| {
+                coins
+                    .into_iter()
+                    .flat_map(|coin| {
+                        coin.into_iter()
+                            .map(|resource| (*resource.asset_id(), *resource.amount()))
+                            .sorted_by_key(|(asset_id, amount)| {
+                                (
+                                    asset_ids.iter().position(|c| c == asset_id).unwrap(),
+                                    Reverse(*amount),
+                                )
+                            })
+                    })
+                    .collect()
+            })
+        }
+
+        fn single_asset_assert(owner: Address, asset_ids: &[AssetId], db: TestDatabase) {
+            // Query some amounts, including higher than the owner's balance
+            for amount in 0..20 {
+                let coins = query(
+                    vec![Asset::new(asset_ids[0], amount, u64::MAX)],
+                    owner,
+                    asset_ids,
+                    db.as_ref(),
+                );
+
+                // Transform result for convenience
+                let coins = coins.map(|coins| {
+                    coins
+                        .into_iter()
+                        .map(|(asset_id, amount)| {
+                            // Check the asset ID before we drop it
+                            assert_eq!(asset_id, asset_ids[0]);
+
+                            amount
+                        })
+                        .collect::<Vec<u64>>()
+                });
+
+                match amount {
+                    // This should return nothing
+                    0 => assert_matches!(coins, Ok(coins) if coins.is_empty()),
+                    // This range should...
+                    1..=7 => {
+                        // ...satisfy the amount
+                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
+                        // ...and add more for dust management
+                        // TODO: Implement the test
+                    }
+                    // This range should return all coins
+                    8..=15 => {
+                        assert_matches!(coins, Ok(coins) if coins == vec![5, 4, 3, 2, 1])
+                    }
+                    // Asking for more than the owner's balance should error
+                    _ => {
+                        assert_matches!(coins, Err(CoinQueryError::InsufficientResources))
+                    }
+                };
+            }
+
+            // Query with too small max_inputs
+            let coins = query(
+                vec![Asset::new(
+                    asset_ids[0],
+                    6, // target
+                    1, // max
+                )],
+                owner,
+                asset_ids,
+                db.as_ref(),
+            );
+            assert_matches!(coins, Err(CoinQueryError::MaxResourcesReached));
+        }
+
+        #[test]
+        fn single_asset() {
+            // Setup for coins
+            let (owner, asset_ids, db) = setup_coins();
+            single_asset_assert(owner, &asset_ids, db);
+
+            // Setup for messages
+            let (owner, asset_ids, db) = setup_messages();
+            single_asset_assert(owner, &[asset_ids], db);
+
+            // Setup for coins and messages
+            let (owner, asset_ids, db) = setup_coins_and_messages();
+            single_asset_assert(owner, &asset_ids, db);
+        }
+
+        fn multiple_assets_assert(
+            owner: Address,
+            asset_ids: &[AssetId],
+            db: TestDatabase,
+        ) {
+            // Query multiple asset IDs
+            let coins = query(
+                vec![
+                    Asset::new(asset_ids[0], 3 /* target */, 3 /* max */),
+                    Asset::new(asset_ids[1], 6 /* target */, 3 /* max */),
+                ],
+                owner,
+                asset_ids,
+                db.as_ref(),
+            );
+            assert_matches!(coins, Ok(ref coins) if coins.len() <= 6);
+            let coins = coins.unwrap();
+            assert!(
+                coins
+                    .iter()
+                    .filter(|c| c.0 == asset_ids[0])
+                    .map(|c| c.1)
+                    .sum::<u64>()
+                    >= 3
+            );
+            assert!(
+                coins
+                    .iter()
+                    .filter(|c| c.0 == asset_ids[1])
+                    .map(|c| c.1)
+                    .sum::<u64>()
+                    >= 6
+            );
+        }
+
+        #[test]
+        fn multiple_assets() {
+            // Setup coins
+            let (owner, asset_ids, db) = setup_coins();
+            multiple_assets_assert(owner, &asset_ids, db);
+
+            // Setup coins and messages
+            let (owner, asset_ids, db) = setup_coins_and_messages();
+            multiple_assets_assert(owner, &asset_ids, db);
+        }
+    }
+
+    mod exclusion {
+        use super::*;
+
+        fn exclusion_assert(
+            owner: Address,
+            asset_ids: &[AssetId],
+            db: TestDatabase,
+            excluded_ids: Vec<ResourceId>,
+        ) {
+            let query = |query_per_asset: Vec<Asset>,
+                         excluded_ids: Vec<ResourceId>|
+             -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
                 let coins = random_improve(
                     db.as_ref(),
-                    &SpendQuery::new(owner, &query_per_asset, None)?,
+                    &SpendQuery::new(owner, &query_per_asset, Some(excluded_ids))?,
                 );
 
                 // Transform result for convenience
@@ -331,13 +568,8 @@ mod tests_coins {
                         .into_iter()
                         .flat_map(|coin| {
                             coin.into_iter()
-                                .map(|resource| match resource {
-                                    Resource::Coin { fields, .. } => {
-                                        (fields.asset_id, fields.amount)
-                                    }
-                                    Resource::Message { .. } => {
-                                        panic!("This test only for coins")
-                                    }
+                                .map(|resource| {
+                                    (*resource.asset_id(), *resource.amount())
                                 })
                                 .sorted_by_key(|(asset_id, amount)| {
                                     (
@@ -353,160 +585,88 @@ mod tests_coins {
                 })
             };
 
-        // Query some amounts, including higher than the owner's balance
-        for amount in 0..20 {
-            let coins = query(vec![Asset::new(asset_ids[0], amount, u64::MAX)]);
+            // Query some amounts, including higher than the owner's balance
+            for amount in 0..20 {
+                let coins = query(
+                    vec![Asset::new(asset_ids[0], amount, u64::MAX)],
+                    excluded_ids.clone(),
+                );
 
-            // Transform result for convenience
-            let coins = coins.map(|coins| {
-                coins
-                    .into_iter()
-                    .map(|(asset_id, amount)| {
-                        // Check the asset ID before we drop it
-                        assert_eq!(asset_id, asset_ids[0]);
+                // Transform result for convenience
+                let coins = coins.map(|coins| {
+                    coins
+                        .into_iter()
+                        .map(|(asset_id, amount)| {
+                            // Check the asset ID before we drop it
+                            assert_eq!(asset_id, asset_ids[0]);
 
-                        amount
-                    })
-                    .collect::<Vec<u64>>()
-            });
+                            amount
+                        })
+                        .collect::<Vec<u64>>()
+                });
 
-            match amount {
-                // This should return nothing
-                0 => assert_matches!(coins, Ok(coins) if coins.is_empty()),
-                // This range should...
-                1..=7 => {
-                    // ...satisfy the amount
-                    assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
-                    // ...and add more for dust management
-                    // TODO: Implement the test
-                }
-                // This range should return all coins
-                8..=15 => {
-                    assert_matches!(coins, Ok(coins) if coins == vec![5, 4, 3, 2, 1])
-                }
-                // Asking for more than the owner's balance should error
-                _ => assert_matches!(coins, Err(CoinQueryError::NotEnoughCoins)),
-            };
+                match amount {
+                    // This should return nothing
+                    0 => assert_matches!(coins, Ok(coins) if coins.is_empty()),
+                    // This range should...
+                    1..=4 => {
+                        // ...satisfy the amount
+                        assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
+                        // ...and add more for dust management
+                        // TODO: Implement the test
+                    }
+                    // This range should return all coins
+                    5..=10 => {
+                        assert_matches!(coins, Ok(coins) if coins == vec![ 4, 3, 2, 1])
+                    }
+                    // Asking for more than the owner's balance should error
+                    _ => {
+                        assert_matches!(coins, Err(CoinQueryError::InsufficientResources))
+                    }
+                };
+            }
         }
 
-        // Query multiple asset IDs
-        let coins = query(vec![
-            Asset::new(asset_ids[0], 3 /* target */, 3 /* max */),
-            Asset::new(asset_ids[1], 6 /* target */, 3 /* max */),
-        ]);
-        assert_matches!(coins, Ok(ref coins) if coins.len() <= 6);
-        let coins = coins.unwrap();
-        assert!(
-            coins
-                .iter()
-                .filter(|c| c.0 == asset_ids[0])
-                .map(|c| c.1)
-                .sum::<u64>()
-                >= 3
-        );
-        assert!(
-            coins
-                .iter()
-                .filter(|c| c.0 == asset_ids[1])
-                .map(|c| c.1)
-                .sum::<u64>()
-                >= 6
-        );
+        #[test]
+        fn exclusion() {
+            // Setup coins
+            let (owner, asset_ids, db) = setup_coins();
 
-        // Query with too small max_inputs
-        let coins = query(vec![Asset::new(
-            asset_ids[0],
-            6, // target
-            1, // max
-        )]);
-        assert_matches!(coins, Err(CoinQueryError::NotEnoughInputs));
-    }
+            // Exclude largest coin IDs
+            let excluded_ids = db
+                .owned_coins(&owner)
+                .into_iter()
+                .filter(|(_, coin)| coin.amount == 5)
+                .map(|(utxo_id, _)| ResourceId::Utxo(utxo_id))
+                .collect_vec();
 
-    #[test]
-    fn exclusion() {
-        // Setup
-        let (owner, asset_ids, db) = setup();
+            exclusion_assert(owner, &asset_ids, db, excluded_ids);
 
-        let query = |query_per_asset: Vec<Asset>,
-                     excluded_ids: Vec<UtxoId>|
-         -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
-            let coins = random_improve(
-                db.as_ref(),
-                &SpendQuery::new(
-                    owner,
-                    &query_per_asset,
-                    Some(excluded_ids.into_iter().map(ResourceId::Utxo).collect()),
-                )?,
-            );
+            // Setup messages
+            let (owner, asset_ids, db) = setup_messages();
 
-            // Transform result for convenience
-            coins.map(|coins| {
-                coins
-                    .into_iter()
-                    .flat_map(|coin| {
-                        coin.into_iter()
-                            .map(|resource| match resource {
-                                Resource::Coin { fields, .. } => {
-                                    (fields.asset_id, fields.amount)
-                                }
-                                Resource::Message { .. } => {
-                                    panic!("This test only for coins")
-                                }
-                            })
-                            .sorted_by_key(|(asset_id, amount)| {
-                                (
-                                    asset_ids.iter().position(|c| c == asset_id).unwrap(),
-                                    Reverse(*amount),
-                                )
-                            })
-                    })
-                    .collect()
-            })
-        };
+            // Exclude largest messages IDs
+            let excluded_ids = db
+                .owned_messages(&owner)
+                .into_iter()
+                .filter(|message| message.amount == 5)
+                .map(|message| ResourceId::Message(message.id()))
+                .collect_vec();
 
-        // Exclude largest coin IDs
-        let excluded_ids = db
-            .owned_coins(&owner)
-            .into_iter()
-            .filter(|(_, coin)| coin.amount == 5)
-            .map(|(utxo_id, _)| utxo_id)
-            .collect_vec();
+            exclusion_assert(owner, &[asset_ids], db, excluded_ids);
 
-        // Query some amounts, including higher than the owner's balance
-        for amount in 0..20 {
-            let coins = query(
-                vec![Asset::new(asset_ids[0], amount, u64::MAX)],
-                excluded_ids.clone(),
-            );
+            // Setup coins and messages
+            let (owner, asset_ids, db) = setup_coins_and_messages();
 
-            // Transform result for convenience
-            let coins = coins.map(|coins| {
-                coins
-                    .into_iter()
-                    .map(|(asset_id, amount)| {
-                        // Check the asset ID before we drop it
-                        assert_eq!(asset_id, asset_ids[0]);
+            // Exclude largest messages IDs, because coins only 1 and 2
+            let excluded_ids = db
+                .owned_messages(&owner)
+                .into_iter()
+                .filter(|message| message.amount == 5)
+                .map(|message| ResourceId::Message(message.id()))
+                .collect_vec();
 
-                        amount
-                    })
-                    .collect::<Vec<u64>>()
-            });
-
-            match amount {
-                // This should return nothing
-                0 => assert_matches!(coins, Ok(coins) if coins.is_empty()),
-                // This range should...
-                1..=4 => {
-                    // ...satisfy the amount
-                    assert_matches!(coins, Ok(coins) if coins.iter().sum::<u64>() >= amount)
-                    // ...and add more for dust management
-                    // TODO: Implement the test
-                }
-                // This range should return all coins
-                5..=10 => assert_matches!(coins, Ok(coins) if coins == vec![ 4, 3, 2, 1]),
-                // Asking for more than the owner's balance should error
-                _ => assert_matches!(coins, Err(CoinQueryError::NotEnoughCoins)),
-            };
+            exclusion_assert(owner, &asset_ids, db, excluded_ids);
         }
     }
 }

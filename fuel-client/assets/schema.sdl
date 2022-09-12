@@ -308,6 +308,7 @@ type InputMessage {
 
 
 type Message {
+	messageId: MessageId!
 	amount: U64!
 	sender: Address!
 	recipient: Address!

@@ -108,6 +108,17 @@ where
     }
 }
 
+pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
+    let e = errors
+        .into_iter()
+        .fold(String::from("Response errors"), |mut s, e| {
+            s.push_str("; ");
+            s.push_str(e.as_str());
+            s
+        });
+    io::Error::new(io::ErrorKind::Other, e)
+}
+
 impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
@@ -121,17 +132,9 @@ impl FuelClient {
 
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
-            (_, Some(e)) => {
-                let e = e.into_iter().map(|e| e.message).fold(
-                    String::from("Response errors"),
-                    |mut s, e| {
-                        s.push_str("; ");
-                        s.push_str(e.as_str());
-                        s
-                    },
-                );
-                Err(io::Error::new(io::ErrorKind::Other, e))
-            }
+            (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                e.into_iter().map(|e| e.message).collect(),
+            )),
             _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }

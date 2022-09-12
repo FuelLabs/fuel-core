@@ -1,4 +1,7 @@
-use crate::database::Database;
+use crate::{
+    chain_config::ChainConfig,
+    database::Database,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage,
@@ -29,9 +32,7 @@ use std::{
     collections::HashSet,
 };
 
-const BASE_ASSET: AssetId = AssetId::zeroed();
-
-/// At least required `target` of the query per asset's `id`.
+/// At least required `target` of the query per asset's `id` with `max` resources.
 #[derive(Clone)]
 pub struct Asset {
     pub id: AssetId,
@@ -156,11 +157,13 @@ impl<'a> AssetQuery<'a> {
                 }
             });
 
-        coins_iter.chain(messages_iter.take_while(|_| self.asset.id == BASE_ASSET))
+        coins_iter
+            .chain(messages_iter.take_while(|_| self.asset.id == ChainConfig::BASE_ASSET))
     }
 }
 
 /// The id of the resource.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResourceId {
     Utxo(UtxoId),
     Message(MessageId),
@@ -176,8 +179,8 @@ pub enum Resource<C, M> {
 
 impl<C, M> Resource<C, M>
 where
-    C: Clone + Borrow<Coin>,
-    M: Clone + Borrow<Message>,
+    C: Borrow<Coin>,
+    M: Borrow<Message>,
 {
     pub fn amount(&self) -> &Word {
         match self {
@@ -189,7 +192,7 @@ where
     pub fn asset_id(&self) -> &AssetId {
         match self {
             Resource::Coin { fields, .. } => &fields.borrow().asset_id,
-            Resource::Message { .. } => &BASE_ASSET,
+            Resource::Message { .. } => &ChainConfig::BASE_ASSET,
         }
     }
 }
