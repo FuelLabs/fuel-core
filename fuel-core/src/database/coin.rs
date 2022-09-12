@@ -97,7 +97,7 @@ impl Database {
         self.iter_all::<Vec<u8>, bool>(
             OWNED_COINS,
             Some(owner.as_ref().to_vec()),
-            start_coin.map(|b| owner_coin_id_key(&owner, &b)),
+            start_coin.map(|b| owner_coin_id_key(owner, &b)),
             direction,
         )
         // Safety: key is always 64 bytes

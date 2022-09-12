@@ -83,7 +83,7 @@ impl Database {
         self.iter_all::<Vec<u8>, bool>(
             columns::OWNED_MESSAGE_IDS,
             Some(owner.to_vec()),
-            start_message_id.map(|msg_id| owner_msg_id_key(&owner, &msg_id)),
+            start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
             direction,
         )
         // Safety: key is always 64 bytes

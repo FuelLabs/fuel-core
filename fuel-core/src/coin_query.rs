@@ -63,7 +63,7 @@ impl SpendQuery {
             if duplicate_checker.contains(&query.id) {
                 return Err(CoinQueryError::DuplicateAssets(query.id))
             }
-            duplicate_checker.insert(query.id.clone());
+            duplicate_checker.insert(query.id);
         }
 
         let exclude = if let Some(exclude_vec) = exclude_vec {
