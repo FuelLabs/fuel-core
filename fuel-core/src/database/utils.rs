@@ -22,7 +22,10 @@ use fuel_core_interfaces::{
 };
 use itertools::Itertools;
 use std::{
-    borrow::Cow,
+    borrow::{
+        Borrow,
+        Cow,
+    },
     collections::HashSet,
 };
 
@@ -89,18 +92,18 @@ impl<'a> AssetQuery<'a> {
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) inputs of the `owner`
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
     /// for the `asset_id`.
     // TODO: Optimize this by creating an index
-    pub fn unspent_inputs(
+    pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
         let coins_iter = self
             .database
             .owned_coins_utxos(self.owner, None, None)
             .filter_ok(|id| {
-                if let Some(excluder) = self.exclude {
-                    !excluder.utxos.contains(id)
+                if let Some(exclude) = self.exclude {
+                    !exclude.utxos.contains(id)
                 } else {
                     true
                 }
@@ -123,9 +126,37 @@ impl<'a> AssetQuery<'a> {
                 }
             });
 
-        // TODO: If asset_id is zero, also check messages.
+        let messages_iter = self
+            .database
+            .owned_message_ids(self.owner, None, None)
+            .filter_ok(|id| {
+                if let Some(exclude) = self.exclude {
+                    !exclude.messages.contains(id)
+                } else {
+                    true
+                }
+            })
+            .map(|res| {
+                res.map(|id| {
+                    let message = Storage::<MessageId, Message>::get(self.database, &id)?
+                        .ok_or(KvStoreError::NotFound)?;
 
-        coins_iter
+                    Ok::<_, KvStoreError>(Resource::Message {
+                        id,
+                        fields: message,
+                    })
+                })
+            })
+            .map(|results| Ok(results??))
+            .filter_ok(|message| {
+                if let Resource::Message { fields, .. } = message {
+                    fields.fuel_block_spend.is_none()
+                } else {
+                    true
+                }
+            });
+
+        coins_iter.chain(messages_iter.take_while(|_| self.asset.id == BASE_ASSET))
     }
 }
 
@@ -143,17 +174,21 @@ pub enum Resource<C, M> {
     Message { id: MessageId, fields: M },
 }
 
-impl<C: AsRef<Coin>, M: AsRef<Message>> Resource<C, M> {
+impl<C, M> Resource<C, M>
+where
+    C: Clone + Borrow<Coin>,
+    M: Clone + Borrow<Message>,
+{
     pub fn amount(&self) -> &Word {
         match self {
-            Resource::Coin { fields, .. } => &fields.as_ref().amount,
-            Resource::Message { fields, .. } => &fields.as_ref().amount,
+            Resource::Coin { fields, .. } => &fields.borrow().amount,
+            Resource::Message { fields, .. } => &fields.borrow().amount,
         }
     }
 
     pub fn asset_id(&self) -> &AssetId {
         match self {
-            Resource::Coin { fields, .. } => &fields.as_ref().asset_id,
+            Resource::Coin { fields, .. } => &fields.borrow().asset_id,
             Resource::Message { .. } => &BASE_ASSET,
         }
     }
@@ -161,8 +196,8 @@ impl<C: AsRef<Coin>, M: AsRef<Message>> Resource<C, M> {
 
 impl<'c, 'm, C, M> Resource<Cow<'c, C>, Cow<'m, M>>
 where
-    C: Clone + AsRef<Coin>,
-    M: Clone + AsRef<Message>,
+    C: Clone,
+    M: Clone,
 {
     /// Return owned `C` or `M`. Will clone if is borrowed.
     pub fn into_owned(self) -> Resource<C, M> {

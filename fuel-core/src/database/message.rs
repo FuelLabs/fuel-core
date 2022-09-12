@@ -76,13 +76,13 @@ impl Storage<MessageId, Message> for Database {
 impl Database {
     pub fn owned_message_ids(
         &self,
-        owner: Address,
+        owner: &Address,
         start_message_id: Option<MessageId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<MessageId, Error>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             columns::OWNED_MESSAGE_IDS,
-            Some(owner.as_ref().to_vec()),
+            Some(owner.to_vec()),
             start_message_id.map(|msg_id| owner_msg_id_key(&owner, &msg_id)),
             direction,
         )
@@ -155,7 +155,7 @@ mod tests {
             Storage::<MessageId, Message>::insert(&mut db, &second_id, &message).unwrap();
 
         // verify that 2 message IDs are associated with a single Owner/Recipient
-        let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
+        let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
@@ -163,14 +163,14 @@ mod tests {
 
         // verify that only second ID is left
         let owned_msg_ids: Vec<_> = db
-            .owned_message_ids(message.recipient, None, None)
+            .owned_message_ids(&message.recipient, None, None)
             .collect();
         assert_eq!(owned_msg_ids.first().unwrap().as_ref().unwrap(), &second_id);
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
         let _ = Storage::<MessageId, Message>::remove(&mut db, &second_id).unwrap();
-        let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
+        let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
 }

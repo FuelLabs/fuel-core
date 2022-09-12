@@ -437,13 +437,12 @@ impl FuelClient {
                 Ok(SpendQueryElementInput {
                     asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
-                    max: max.clone().map(|max| max.into()),
+                    max: (*max).map(|max| max.into()),
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<ExcludeInput> = excluded_ids
-            .map(|tuple| ExcludeInput::from_tuple(tuple))
-            .transpose()?;
+        let excluded_ids: Option<ExcludeInput> =
+            excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
         let query = schema::resource::ResourcesToSpendQuery::build(
             &(owner, spend_query, excluded_ids).into(),
         );

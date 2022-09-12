@@ -26,12 +26,6 @@ pub struct Message {
     pub fuel_block_spend: Option<BlockHeight>,
 }
 
-impl AsRef<Message> for Message {
-    fn as_ref(&self) -> &Message {
-        self
-    }
-}
-
 impl Message {
     pub fn id(&self) -> MessageId {
         let mut hasher = Hasher::default();

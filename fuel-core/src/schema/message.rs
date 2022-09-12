@@ -109,7 +109,7 @@ impl MessageQuery {
                     let (mut messages, has_next_page, has_previous_page) =
                         if let Some(owner) = owner {
                             let mut message_ids = db.owned_message_ids(
-                                owner.into(),
+                                &owner.0,
                                 start.map(Into::into),
                                 Some(direction),
                             );

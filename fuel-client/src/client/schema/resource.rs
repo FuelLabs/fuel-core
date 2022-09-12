@@ -37,7 +37,7 @@ pub struct SpendQueryElementInput {
     pub asset_id: AssetId,
     /// address of the owner
     pub amount: U64,
-    /// address of the owner
+    /// the maximum number of resources per asset from the owner to return.
     pub max: Option<U64>,
 }
 
