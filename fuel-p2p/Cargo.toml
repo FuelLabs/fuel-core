@@ -18,13 +18,13 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["serde"],
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
-libp2p = { version = "0.43", default-features = false, features = [
-    "dns-async-std", "gossipsub", "identify", "kad", "mdns", "mplex", "noise", 
+libp2p = { version = "0.44", default-features = false, features = [
+    "dns-async-std", "gossipsub", "identify", "kad", "mdns", "mplex", "noise",
     "ping", "request-response", "secp256k1", "tcp-async-io", "yamux", "websocket"
 ] }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
-sha2 = "0.9"
+sha2 = "0.10"
 tokio = { version = "1.17", features = ["sync"] }
 tracing = "0.1"
 
