@@ -1,5 +1,5 @@
+use crate::common::fuel_types::Bytes32;
 use async_trait::async_trait;
-use fuel_types::Bytes32;
 use thiserror::Error;
 
 /// Dummy signer that will be removed in next pull request.

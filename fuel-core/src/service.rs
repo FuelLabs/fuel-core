@@ -5,7 +5,6 @@ use std::{
     net::SocketAddr,
     panic,
 };
-use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
@@ -107,10 +106,4 @@ impl FuelService {
         }
         self.modules.stop().await;
     }
-}
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("An api server error occurred {0}")]
-    ApiServer(#[from] hyper::Error),
 }
