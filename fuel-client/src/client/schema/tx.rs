@@ -1,12 +1,27 @@
 use super::block::BlockIdFragment;
-use crate::client::schema::{
-    schema, Address, ConnectionArgs, ConversionError, HexString, PageInfo, TransactionId,
+use crate::client::{
+    schema::{
+        schema,
+        Address,
+        ConnectionArgs,
+        ConversionError,
+        HexString,
+        PageInfo,
+        TransactionId,
+    },
+    types::TransactionResponse,
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
 };
-use crate::client::types::TransactionResponse;
-use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
-use fuel_types::bytes::Deserializable;
-use fuel_types::Bytes32;
-use std::convert::{TryFrom, TryInto};
+use fuel_vm::fuel_types::{
+    bytes::Deserializable,
+    Bytes32,
+};
+use std::convert::{
+    TryFrom,
+    TryInto,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -74,12 +89,12 @@ pub struct OpaqueTransaction {
     pub status: Option<TransactionStatus>,
 }
 
-impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
+impl TryFrom<OpaqueTransaction> for ::fuel_vm::fuel_tx::Transaction {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        fuel_tx::Transaction::from_bytes(bytes.as_slice())
+        ::fuel_vm::fuel_tx::Transaction::from_bytes(bytes.as_slice())
             .map_err(ConversionError::TransactionFromBytesError)
     }
 }
@@ -96,12 +111,12 @@ pub struct OpaqueReceipt {
     pub raw_payload: HexString,
 }
 
-impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
+impl TryFrom<OpaqueReceipt> for ::fuel_vm::fuel_tx::Receipt {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        fuel_tx::Receipt::from_bytes(bytes.as_slice())
+        ::fuel_vm::fuel_tx::Receipt::from_bytes(bytes.as_slice())
             .map_err(ConversionError::ReceiptFromBytesError)
     }
 }
@@ -128,7 +143,8 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
         Ok(match state.return_type {
             ReturnType::Return => fuel_vm::prelude::ProgramState::Return({
                 let b = state.data.0 .0;
-                let b: [u8; 8] = b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                let b: [u8; 8] =
+                    b.try_into().map_err(|_| ConversionError::BytesLength)?;
                 u64::from_be_bytes(b)
             }),
             ReturnType::ReturnData => fuel_vm::prelude::ProgramState::ReturnData({
@@ -136,7 +152,8 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
             }),
             ReturnType::Revert => fuel_vm::prelude::ProgramState::Revert({
                 let b = state.data.0 .0;
-                let b: [u8; 8] = b.try_into().map_err(|_| ConversionError::BytesLength)?;
+                let b: [u8; 8] =
+                    b.try_into().map_err(|_| ConversionError::BytesLength)?;
                 u64::from_be_bytes(b)
             }),
         })
@@ -261,7 +278,7 @@ pub struct Submit {
 pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
-    use fuel_types::bytes::SerializableVec;
+    use fuel_vm::fuel_types::bytes::SerializableVec;
 
     pub mod transparent_receipt;
     pub mod transparent_tx;
@@ -299,20 +316,21 @@ pub mod tests {
     #[test]
     fn transactions_by_owner_gql_output() {
         use cynic::QueryBuilder;
-        let operation = TransactionsByOwnerQuery::build(TransactionsByOwnerConnectionArgs {
-            owner: Default::default(),
-            after: None,
-            before: None,
-            first: None,
-            last: None,
-        });
+        let operation =
+            TransactionsByOwnerQuery::build(TransactionsByOwnerConnectionArgs {
+                owner: Default::default(),
+                after: None,
+                before: None,
+                first: None,
+                last: None,
+            });
         insta::assert_snapshot!(operation.query)
     }
 
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -323,7 +341,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

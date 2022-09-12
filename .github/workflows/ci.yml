@@ -19,6 +19,20 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt
+
+      - name: Rustfmt check
+        run: cargo +nightly fmt --all -- --check
+
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
@@ -71,16 +85,17 @@ jobs:
     needs:
       - lint-toml-files
       - prevent-openssl
+      - rustfmt
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - command: fmt
-            args: --all --verbose -- --check
           - command: clippy
             args: --all-targets --all-features
+          - command: make
+            args: build
           - command: check
-            args: --all-targets --all-features
+            args: --locked --workspace
           - command: test
             args: --all-targets --all-features --workspace --exclude fuel-p2p
           - command: test
@@ -97,6 +112,11 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - name: Install Cargo Make
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-make
+          version: "0.35.16"
       - uses: Swatinem/rust-cache@v1
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
@@ -313,7 +333,7 @@ jobs:
 
       - name: Build fuel-core
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'

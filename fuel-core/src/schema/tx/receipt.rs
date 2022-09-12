@@ -1,11 +1,24 @@
-use crate::schema::scalars::MessageId;
 use crate::schema::{
     contract::Contract,
-    scalars::{Address, AssetId, Bytes32, HexString, U64},
+    scalars::{
+        Address,
+        AssetId,
+        Bytes32,
+        HexString,
+        MessageId,
+        U64,
+    },
 };
-use async_graphql::{Enum, Object};
+use async_graphql::{
+    Enum,
+    Object,
+};
 use derive_more::Display;
-use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx, fuel_types::bytes::SerializableVec};
+use fuel_core_interfaces::common::{
+    fuel_asm::Word,
+    fuel_tx,
+    fuel_types::bytes::SerializableVec,
+};
 
 #[derive(Copy, Clone, Debug, Display, Enum, Eq, PartialEq)]
 pub enum ReceiptType {

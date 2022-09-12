@@ -1,11 +1,29 @@
 use fuel_core::{
-    chain_config::{ChainConfig, CoinConfig, ContractConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        ChainConfig,
+        CoinConfig,
+        ContractConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_interfaces::common::{fuel_tx::Contract, fuel_tx::Transaction, fuel_vm::prelude::*};
+use fuel_core_interfaces::common::{
+    fuel_tx::{
+        Contract,
+        Transaction,
+    },
+    fuel_vm::prelude::*,
+};
 use fuel_gql_client::client::FuelClient;
 use itertools::Itertools;
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::collections::HashMap;
 
 /// Helper for wrapping a currently running node environment
@@ -49,7 +67,8 @@ impl TestSetupBuilder {
         let contract = Contract::from(code.clone());
         let root = contract.root();
         let salt: Salt = self.rng.gen();
-        let contract_id = contract.id(&salt.clone(), &root, &Contract::default_state_root());
+        let contract_id =
+            contract.id(&salt.clone(), &root, &Contract::default_state_root());
 
         self.contracts.insert(
             contract_id,
@@ -69,41 +88,40 @@ impl TestSetupBuilder {
         &mut self,
         transactions: &[&Transaction],
     ) -> &mut Self {
-        self.initial_coins
-            .extend(
-                transactions
-                    .iter()
-                    .flat_map(|t| t.inputs())
-                    .filter_map(|input| {
-                        if let Input::CoinSigned {
-                            amount,
-                            owner,
-                            asset_id,
-                            utxo_id,
-                            ..
-                        }
-                        | Input::CoinPredicate {
-                            amount,
-                            owner,
-                            asset_id,
-                            utxo_id,
-                            ..
-                        } = input
-                        {
-                            Some(CoinConfig {
-                                tx_id: Some(*utxo_id.tx_id()),
-                                output_index: Some(utxo_id.output_index() as u64),
-                                block_created: None,
-                                maturity: None,
-                                owner: *owner,
-                                amount: *amount,
-                                asset_id: *asset_id,
-                            })
-                        } else {
-                            None
-                        }
-                    }),
-            );
+        self.initial_coins.extend(
+            transactions
+                .iter()
+                .flat_map(|t| t.inputs())
+                .filter_map(|input| {
+                    if let Input::CoinSigned {
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        ..
+                    }
+                    | Input::CoinPredicate {
+                        amount,
+                        owner,
+                        asset_id,
+                        utxo_id,
+                        ..
+                    } = input
+                    {
+                        Some(CoinConfig {
+                            tx_id: Some(*utxo_id.tx_id()),
+                            output_index: Some(utxo_id.output_index() as u64),
+                            block_created: None,
+                            maturity: None,
+                            owner: *owner,
+                            amount: *amount,
+                            asset_id: *asset_id,
+                        })
+                    } else {
+                        None
+                    }
+                }),
+        );
 
         self
     }

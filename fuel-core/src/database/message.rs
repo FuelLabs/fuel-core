@@ -1,17 +1,30 @@
 use crate::{
     chain_config::MessageConfig,
-    database::{columns, Database, KvStoreError},
-    state::{Error, IterDirection},
+    database::{
+        columns,
+        Database,
+        KvStoreError,
+    },
+    state::{
+        Error,
+        IterDirection,
+    },
 };
 use fuel_core_interfaces::{
     common::{
         fuel_storage::Storage,
-        fuel_types::{Address, Bytes32, MessageId},
+        fuel_types::{
+            Address,
+            Bytes32,
+            MessageId,
+        },
     },
     model::Message,
 };
-use std::borrow::Cow;
-use std::ops::Deref;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
 
 impl Storage<MessageId, Message> for Database {
     type Error = KvStoreError;
@@ -22,12 +35,13 @@ impl Storage<MessageId, Message> for Database {
         value: &Message,
     ) -> Result<Option<Message>, KvStoreError> {
         // insert primary record
-        let result = Database::insert(self, key.as_ref(), columns::MESSAGES, value.clone())?;
+        let result =
+            Database::insert(self, key.as_ref(), columns::MESSAGES, value.clone())?;
 
         // insert secondary record by owner
         Database::insert(
             self,
-            owner_msg_id_key(&value.owner, key),
+            owner_msg_id_key(&value.recipient, key),
             columns::OWNED_MESSAGE_IDS,
             true,
         )?;
@@ -36,12 +50,13 @@ impl Storage<MessageId, Message> for Database {
     }
 
     fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, KvStoreError> {
-        let result: Option<Message> = Database::remove(self, key.as_ref(), columns::MESSAGES)?;
+        let result: Option<Message> =
+            Database::remove(self, key.as_ref(), columns::MESSAGES)?;
 
         if let Some(message) = &result {
             Database::remove::<bool>(
                 self,
-                &owner_msg_id_key(&message.owner, key),
+                &owner_msg_id_key(&message.recipient, key),
                 columns::OWNED_MESSAGE_IDS,
             )?;
         }
@@ -98,7 +113,6 @@ impl Database {
                 Ok(MessageConfig {
                     sender: msg.sender,
                     recipient: msg.recipient,
-                    owner: msg.owner,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data,
@@ -132,27 +146,31 @@ mod tests {
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);
-        let _ = Storage::<MessageId, Message>::insert(&mut db, &first_id, &message).unwrap();
+        let _ =
+            Storage::<MessageId, Message>::insert(&mut db, &first_id, &message).unwrap();
 
         // insert a message with the second id with the same Owner
         let second_id = MessageId::new([2; 32]);
-        let _ = Storage::<MessageId, Message>::insert(&mut db, &second_id, &message).unwrap();
+        let _ =
+            Storage::<MessageId, Message>::insert(&mut db, &second_id, &message).unwrap();
 
-        // verify that 2 message IDs are associated with a single Owner
-        let owned_msg_ids = db.owned_message_ids(message.owner, None, None);
+        // verify that 2 message IDs are associated with a single Owner/Recipient
+        let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
         let _ = Storage::<MessageId, Message>::remove(&mut db, &first_id).unwrap();
 
         // verify that only second ID is left
-        let owned_msg_ids: Vec<_> = db.owned_message_ids(message.owner, None, None).collect();
+        let owned_msg_ids: Vec<_> = db
+            .owned_message_ids(message.recipient, None, None)
+            .collect();
         assert_eq!(owned_msg_ids.first().unwrap().as_ref().unwrap(), &second_id);
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
         let _ = Storage::<MessageId, Message>::remove(&mut db, &second_id).unwrap();
-        let owned_msg_ids = db.owned_message_ids(message.owner, None, None);
+        let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
 }

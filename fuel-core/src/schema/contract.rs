@@ -1,13 +1,34 @@
-use crate::database::{Database, KvStoreError};
-use crate::schema::scalars::{AssetId, ContractId, HexString, Salt, U64};
-use crate::state::IterDirection;
+use crate::{
+    database::{
+        Database,
+        KvStoreError,
+    },
+    schema::scalars::{
+        AssetId,
+        ContractId,
+        HexString,
+        Salt,
+        U64,
+    },
+    state::IterDirection,
+};
 use anyhow::anyhow;
 use async_graphql::{
-    connection::{query, Connection, Edge, EmptyFields},
-    Context, InputObject, Object,
+    connection::{
+        query,
+        Connection,
+        Edge,
+        EmptyFields,
+    },
+    Context,
+    InputObject,
+    Object,
 };
 use fuel_core_interfaces::common::{
-    fuel_storage::Storage, fuel_tx, fuel_types, fuel_vm,
+    fuel_storage::Storage,
+    fuel_tx,
+    fuel_types,
+    fuel_vm,
     fuel_vm::prelude::Contract as FuelVmContract,
 };
 use std::iter::IntoIterator;
@@ -28,18 +49,22 @@ impl Contract {
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let db = ctx.data_unchecked::<Database>().clone();
-        let contract = Storage::<fuel_types::ContractId, FuelVmContract>::get(&db, &self.0)?
-            .ok_or(KvStoreError::NotFound)?
-            .into_owned();
+        let contract =
+            Storage::<fuel_types::ContractId, FuelVmContract>::get(&db, &self.0)?
+                .ok_or(KvStoreError::NotFound)?
+                .into_owned();
         Ok(HexString(contract.into()))
     }
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
         let contract_id = self.0;
 
         let db = ctx.data_unchecked::<Database>().clone();
-        let salt = fuel_vm::storage::InterpreterStorage::storage_contract_root(&db, &contract_id)
-            .unwrap()
-            .expect("Contract does not exist");
+        let salt = fuel_vm::storage::InterpreterStorage::storage_contract_root(
+            &db,
+            &contract_id,
+        )
+        .unwrap()
+        .expect("Contract does not exist");
 
         let cleaned_salt: Salt = salt.clone().0.into();
 
@@ -62,7 +87,7 @@ impl ContractQuery {
         let contract_exists =
             Storage::<fuel_types::ContractId, FuelVmContract>::contains_key(&db, &id)?;
         if !contract_exists {
-            return Ok(None);
+            return Ok(None)
         }
         let contract = Contract(id);
         Ok(Some(contract))
@@ -113,11 +138,12 @@ impl ContractBalanceQuery {
 
         let asset_id: fuel_types::AssetId = asset.into();
 
-        let result = fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
-            &db,
-            &contract_id,
-            &asset_id,
-        );
+        let result =
+            fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
+                &db,
+                &contract_id,
+                &asset_id,
+            );
         let balance = result.unwrap().unwrap_or_default();
 
         Ok(ContractBalance {
@@ -135,7 +161,9 @@ impl ContractBalanceQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<
+        Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
+    > {
         let db = ctx.data_unchecked::<Database>().clone();
 
         query(
@@ -143,70 +171,76 @@ impl ContractBalanceQuery {
             before,
             first,
             last,
-            |after: Option<AssetId>, before: Option<AssetId>, first, last| async move {
-                // Calculate direction of which to iterate through rocksdb
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<AssetId>, before: Option<AssetId>, first, last| {
+                async move {
+                    // Calculate direction of which to iterate through rocksdb
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"))
+                    }
 
-                let after = after.map(fuel_tx::AssetId::from);
-                let before = before.map(fuel_tx::AssetId::from);
+                    let after = after.map(fuel_tx::AssetId::from);
+                    let before = before.map(fuel_tx::AssetId::from);
 
-                let start = if direction == IterDirection::Forward {
-                    after
-                } else {
-                    before
-                };
+                    let start = if direction == IterDirection::Forward {
+                        after
+                    } else {
+                        before
+                    };
 
-                let mut balances_iter =
-                    db.contract_balances(filter.contract.into(), start, Some(direction));
+                    let mut balances_iter = db.contract_balances(
+                        filter.contract.into(),
+                        start,
+                        Some(direction),
+                    );
 
-                let mut started = None;
-                if start.is_some() {
-                    started = balances_iter.next();
-                }
+                    let mut started = None;
+                    if start.is_some() {
+                        started = balances_iter.next();
+                    }
 
-                let mut balances = balances_iter
-                    .take(records_to_fetch + 1)
-                    .map(|balance| {
-                        let balance = balance?;
+                    let mut balances = balances_iter
+                        .take(records_to_fetch + 1)
+                        .map(|balance| {
+                            let balance = balance?;
 
-                        Ok(ContractBalance {
-                            contract: filter.contract.into(),
-                            amount: balance.1,
-                            asset_id: balance.0,
+                            Ok(ContractBalance {
+                                contract: filter.contract.into(),
+                                amount: balance.1,
+                                asset_id: balance.0,
+                            })
                         })
-                    })
-                    .collect::<Result<Vec<ContractBalance>, KvStoreError>>()?;
+                        .collect::<Result<Vec<ContractBalance>, KvStoreError>>()?;
 
-                let has_next_page = balances.len() > records_to_fetch;
+                    let has_next_page = balances.len() > records_to_fetch;
 
-                if has_next_page {
-                    balances.pop();
+                    if has_next_page {
+                        balances.pop();
+                    }
+
+                    if direction == IterDirection::Reverse {
+                        balances.reverse();
+                    }
+
+                    let mut connection =
+                        Connection::new(started.is_some(), has_next_page);
+                    connection.edges.extend(
+                        balances
+                            .into_iter()
+                            .map(|item| Edge::new(item.asset_id.into(), item)),
+                    );
+                    Ok::<Connection<AssetId, ContractBalance>, anyhow::Error>(connection)
                 }
-
-                if direction == IterDirection::Reverse {
-                    balances.reverse();
-                }
-
-                let mut connection = Connection::new(started.is_some(), has_next_page);
-                connection.edges.extend(
-                    balances
-                        .into_iter()
-                        .map(|item| Edge::new(item.asset_id.into(), item)),
-                );
-                Ok::<Connection<AssetId, ContractBalance>, anyhow::Error>(connection)
             },
         )
         .await

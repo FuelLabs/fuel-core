@@ -1,8 +1,16 @@
 use crate::{
-    database::{columns::CONTRACTS_CODE_ROOT, Database},
+    database::{
+        columns::CONTRACTS_CODE_ROOT,
+        Database,
+    },
     state::Error,
 };
-use fuel_core_interfaces::common::fuel_vm::prelude::{Bytes32, ContractId, Salt, Storage};
+use fuel_core_interfaces::common::fuel_vm::prelude::{
+    Bytes32,
+    ContractId,
+    Salt,
+    Storage,
+};
 use std::borrow::Cow;
 
 impl Storage<ContractId, (Salt, Bytes32)> for Database {
@@ -33,8 +41,11 @@ impl Storage<ContractId, (Salt, Bytes32)> for Database {
 mod tests {
     use super::*;
     use fuel_core_interfaces::common::fuel_vm::prelude::Contract;
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     #[test]
     fn get() {
@@ -71,8 +82,12 @@ mod tests {
         let salt: Salt = rng.gen();
 
         let mut database = Database::default();
-        Storage::<ContractId, (Salt, Bytes32)>::insert(&mut database, &contract_id, &(salt, root))
-            .unwrap();
+        Storage::<ContractId, (Salt, Bytes32)>::insert(
+            &mut database,
+            &contract_id,
+            &(salt, root),
+        )
+        .unwrap();
 
         let returned: (Salt, Bytes32) = database
             .get(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
@@ -98,7 +113,8 @@ mod tests {
             )
             .unwrap();
 
-        Storage::<ContractId, (Salt, Bytes32)>::remove(&mut database, &contract_id).unwrap();
+        Storage::<ContractId, (Salt, Bytes32)>::remove(&mut database, &contract_id)
+            .unwrap();
 
         assert!(!database
             .exists(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
@@ -122,8 +138,10 @@ mod tests {
             )
             .unwrap();
 
-        assert!(
-            Storage::<ContractId, (Salt, Bytes32)>::contains_key(&database, &contract_id).unwrap()
-        );
+        assert!(Storage::<ContractId, (Salt, Bytes32)>::contains_key(
+            &database,
+            &contract_id
+        )
+        .unwrap());
     }
 }

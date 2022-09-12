@@ -1,10 +1,23 @@
-use crate::database::utils::{Asset, AssetQuery, Banknote, BanknoteId, Excluder};
-use crate::database::{Database, KvStoreError};
-use crate::model::Coin;
-use crate::state::Error as StateError;
+use crate::{
+    database::{
+        utils::{
+            Asset,
+            AssetQuery,
+            Banknote,
+            BanknoteId,
+            Excluder,
+        },
+        Database,
+        KvStoreError,
+    },
+    model::Coin,
+    state::Error as StateError,
+};
 use core::mem::swap;
-use fuel_core_interfaces::common::fuel_tx::Address;
-use fuel_core_interfaces::model::Message;
+use fuel_core_interfaces::{
+    common::fuel_tx::Address,
+    model::Message,
+};
 use itertools::Itertools;
 use rand::prelude::*;
 use std::cmp::Reverse;
@@ -102,12 +115,12 @@ pub fn largest_first(
     for coin in inputs {
         // Break if we don't need any more coins
         if collected_amount >= query.asset.target {
-            break;
+            break
         }
 
         // Error if we can't fit more coins
         if banknotes.len() >= max_input {
-            return Err(CoinQueryError::NotEnoughInputs);
+            return Err(CoinQueryError::NotEnoughInputs)
         }
 
         // Add to list
@@ -117,7 +130,7 @@ pub fn largest_first(
 
     if collected_amount < query.asset.target {
         // TODO: Return the asset id and maybe collected amount
-        return Err(CoinQueryError::NotEnoughCoins);
+        return Err(CoinQueryError::NotEnoughCoins)
     }
 
     Ok(banknotes)
@@ -147,7 +160,7 @@ pub fn random_improve(
             if collected_amount >= target {
                 // Break if found banknote exceeds the upper limit
                 if banknote.amount() > &upper_target {
-                    break;
+                    break
                 }
 
                 // Break if adding doesn't improve the distance
@@ -163,7 +176,7 @@ pub fn random_improve(
                 let distance = abs_diff(target, change_amount);
                 let next_distance = abs_diff(target, change_amount + banknote.amount());
                 if next_distance >= distance {
-                    break;
+                    break
                 }
             }
 
@@ -190,8 +203,11 @@ pub fn random_improve(
 mod tests {
     use crate::test_utils::*;
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::common::fuel_types::AssetId;
-    use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx::Address};
+    use fuel_core_interfaces::common::{
+        fuel_asm::Word,
+        fuel_tx::Address,
+        fuel_types::AssetId,
+    };
 
     use super::*;
 
@@ -247,17 +263,25 @@ mod tests {
                 // This should return nothing
                 0 => assert_matches!(banknotes, Ok(banknotes) if banknotes.is_empty()),
                 // This range should return the largest banknotes
-                1..=5 => assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5]),
+                1..=5 => {
+                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5])
+                }
                 // This range should return the largest two banknotes
-                6..=9 => assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4]),
+                6..=9 => {
+                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4])
+                }
                 // This range should return the largest three banknotes
-                10..=12 => assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3]),
+                10..=12 => {
+                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3])
+                }
                 // This range should return the largest four banknotes
                 13..=14 => {
                     assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3, 2])
                 }
                 // This range should return all banknotes
-                15 => assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3, 2, 1]),
+                15 => {
+                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3, 2, 1])
+                }
                 // Asking for more than the owner's balance should error
                 _ => assert_matches!(banknotes, Err(CoinQueryError::NotEnoughCoins)),
             };

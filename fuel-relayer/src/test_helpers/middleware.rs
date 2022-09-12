@@ -1,14 +1,34 @@
 use async_trait::async_trait;
-use ethers_core::types::{Block, BlockId, Filter, Log, TxHash, H256, U256, U64};
-use ethers_providers::{
-    FilterWatcher, JsonRpcClient, Middleware, Provider, ProviderError, SyncingStatus,
+use ethers_core::types::{
+    Block,
+    BlockId,
+    Filter,
+    Log,
+    TxHash,
+    H256,
+    U256,
+    U64,
 };
-use serde::{de::DeserializeOwned, Serialize};
-use std::fmt;
-use std::io::BufWriter;
-use std::sync::Arc;
-use std::time::Duration;
-use std::{fmt::Debug, str::FromStr};
+use ethers_providers::{
+    FilterWatcher,
+    JsonRpcClient,
+    Middleware,
+    Provider,
+    ProviderError,
+    SyncingStatus,
+};
+use serde::{
+    de::DeserializeOwned,
+    Serialize,
+};
+use std::{
+    fmt,
+    fmt::Debug,
+    io::BufWriter,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -146,7 +166,8 @@ impl JsonRpcClient for MockMiddleware {
                     .cloned()
                     .unwrap_or_default();
                 let res = serde_json::to_value(&log)?;
-                let res: R = serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             } else {
                 self.trigger(TriggerType::GetBlockFilterChanges).await;
@@ -159,7 +180,8 @@ impl JsonRpcClient for MockMiddleware {
                     .unwrap_or_default();
 
                 let res = serde_json::to_value(&block_hashes)?;
-                let res: R = serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
         } else {
@@ -168,15 +190,13 @@ impl JsonRpcClient for MockMiddleware {
     }
 }
 
-/*
-Needed functionality for relayer to function:
-* syncing API
-* get_block_number API
-* get_logs API.
-* .watch() API for logs with filter. Impl LogStream
-    * LogsWatcher only uses .next()
-* get_block API using only HASH
-*/
+// Needed functionality for relayer to function:
+// syncing API
+// get_block_number API
+// get_logs API.
+// .watch() API for logs with filter. Impl LogStream
+// LogsWatcher only uses .next()
+// get_block API using only HASH
 
 #[async_trait]
 impl Middleware for MockMiddleware {
@@ -219,7 +239,9 @@ impl Middleware for MockMiddleware {
     }
 
     /// watch blocks
-    async fn watch_blocks(&self) -> Result<FilterWatcher<'_, Self::Provider, H256>, Self::Error> {
+    async fn watch_blocks(
+        &self,
+    ) -> Result<FilterWatcher<'_, Self::Provider, H256>, Self::Error> {
         let id = U256::one();
         let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
             .interval(Duration::from_secs(1));

@@ -1,19 +1,41 @@
-use super::{input::Input, output::Output, receipt::Receipt};
+use super::{
+    input::Input,
+    output::Output,
+    receipt::Receipt,
+};
 use crate::{
     database::Database,
     model::FuelBlockDb,
     schema::{
         block::Block,
         contract::Contract,
-        scalars::{AssetId, Bytes32, HexString, Salt, TransactionId, U64},
+        scalars::{
+            AssetId,
+            Bytes32,
+            HexString,
+            Salt,
+            TransactionId,
+            U64,
+        },
     },
     tx_pool::TransactionStatus as TxStatus,
 };
-use async_graphql::{Context, Enum, Object, Union};
-use chrono::{DateTime, Utc};
+use async_graphql::{
+    Context,
+    Enum,
+    Object,
+    Union,
+};
+use chrono::{
+    DateTime,
+    Utc,
+};
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage, fuel_tx, fuel_types, fuel_types::bytes::SerializableVec,
+        fuel_storage::Storage,
+        fuel_tx,
+        fuel_types,
+        fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
     },
     db::KvStoreError,
@@ -145,7 +167,9 @@ impl FailureStatus {
 impl From<TxStatus> for TransactionStatus {
     fn from(s: TxStatus) -> Self {
         match s {
-            TxStatus::Submitted { time } => TransactionStatus::Submitted(SubmittedStatus(time)),
+            TxStatus::Submitted { time } => {
+                TransactionStatus::Submitted(SubmittedStatus(time))
+            }
             TxStatus::Success {
                 block_id,
                 result,
@@ -222,7 +246,10 @@ impl Transaction {
         self.0.receipts_root().cloned().map(Bytes32)
     }
 
-    async fn status(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<TransactionStatus>> {
+    async fn status(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<TransactionStatus>> {
         let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let id = self.0.id();
@@ -242,7 +269,10 @@ impl Transaction {
         }
     }
 
-    async fn receipts(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<Vec<Receipt>>> {
+    async fn receipts(
+        &self,
+        ctx: &Context<'_>,
+    ) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let db = ctx.data_unchecked::<Database>();
         let receipts =
             Storage::<fuel_types::Bytes32, Vec<fuel_tx::Receipt>>::get(db, &self.0.id())?;
@@ -251,7 +281,9 @@ impl Transaction {
 
     async fn script(&self) -> Option<HexString> {
         match &self.0 {
-            fuel_tx::Transaction::Script { script, .. } => Some(HexString(script.clone())),
+            fuel_tx::Transaction::Script { script, .. } => {
+                Some(HexString(script.clone()))
+            }
             fuel_tx::Transaction::Create { .. } => None,
         }
     }

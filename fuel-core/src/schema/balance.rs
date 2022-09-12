@@ -1,14 +1,39 @@
-use crate::database::{Database, KvStoreError};
-use crate::model::{Coin as CoinModel, CoinStatus};
-use crate::schema::scalars::{Address, AssetId, U64};
-use crate::state::{Error, IterDirection};
-use anyhow::anyhow;
-use async_graphql::InputObject;
-use async_graphql::{
-    connection::{query, Connection, Edge, EmptyFields},
-    Context, Object,
+use crate::{
+    database::{
+        Database,
+        KvStoreError,
+    },
+    model::{
+        Coin as CoinModel,
+        CoinStatus,
+    },
+    schema::scalars::{
+        Address,
+        AssetId,
+        U64,
+    },
+    state::{
+        Error,
+        IterDirection,
+    },
 };
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx, fuel_types};
+use anyhow::anyhow;
+use async_graphql::{
+    connection::{
+        query,
+        Connection,
+        Edge,
+        EmptyFields,
+    },
+    Context,
+    InputObject,
+    Object,
+};
+use fuel_core_interfaces::common::{
+    fuel_storage::Storage,
+    fuel_tx,
+    fuel_types,
+};
 use itertools::Itertools;
 
 pub struct Balance {
@@ -90,7 +115,8 @@ impl BalanceQuery {
         after: Option<String>,
         last: Option<i32>,
         before: Option<String>,
-    ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
+    {
         let db = ctx.data_unchecked::<Database>();
 
         let balances = db
@@ -135,79 +161,83 @@ impl BalanceQuery {
             before,
             first,
             last,
-            |after: Option<AssetId>, before: Option<AssetId>, first, last| async move {
-                let (records_to_fetch, direction) = if let Some(first) = first {
-                    (first, IterDirection::Forward)
-                } else if let Some(last) = last {
-                    (last, IterDirection::Reverse)
-                } else {
-                    (0, IterDirection::Forward)
-                };
+            |after: Option<AssetId>, before: Option<AssetId>, first, last| {
+                async move {
+                    let (records_to_fetch, direction) = if let Some(first) = first {
+                        (first, IterDirection::Forward)
+                    } else if let Some(last) = last {
+                        (last, IterDirection::Reverse)
+                    } else {
+                        (0, IterDirection::Forward)
+                    };
 
-                if (first.is_some() && before.is_some())
-                    || (after.is_some() && before.is_some())
-                    || (last.is_some() && after.is_some())
-                {
-                    return Err(anyhow!("Wrong argument combination"));
-                }
+                    if (first.is_some() && before.is_some())
+                        || (after.is_some() && before.is_some())
+                        || (last.is_some() && after.is_some())
+                    {
+                        return Err(anyhow!("Wrong argument combination"))
+                    }
 
-                let after = after.map(fuel_tx::AssetId::from);
-                let before = before.map(fuel_tx::AssetId::from);
+                    let after = after.map(fuel_tx::AssetId::from);
+                    let before = before.map(fuel_tx::AssetId::from);
 
-                let start;
-                let end;
+                    let start;
+                    let end;
 
-                if direction == IterDirection::Forward {
-                    start = after;
-                    end = before;
-                } else {
-                    start = before;
-                    end = after;
-                }
+                    if direction == IterDirection::Forward {
+                        start = after;
+                        end = before;
+                    } else {
+                        start = before;
+                        end = after;
+                    }
 
-                let mut balances = balances.into_iter();
-                if direction == IterDirection::Reverse {
-                    balances = balances.rev().collect::<Vec<Balance>>().into_iter();
-                }
-                if let Some(start) = start {
-                    balances = balances
-                        .skip_while(|balance| balance.asset_id == start)
-                        .collect::<Vec<Balance>>()
-                        .into_iter();
-                }
-                let mut started = None;
-                if start.is_some() {
-                    // skip initial result
-                    started = balances.next();
-                }
+                    let mut balances = balances.into_iter();
+                    if direction == IterDirection::Reverse {
+                        balances = balances.rev().collect::<Vec<Balance>>().into_iter();
+                    }
+                    if let Some(start) = start {
+                        balances = balances
+                            .skip_while(|balance| balance.asset_id == start)
+                            .collect::<Vec<Balance>>()
+                            .into_iter();
+                    }
+                    let mut started = None;
+                    if start.is_some() {
+                        // skip initial result
+                        started = balances.next();
+                    }
 
-                // take desired amount of results
-                let balances = balances
-                    .take_while(|balance| {
-                        // take until we've reached the end
-                        if let Some(end) = end.as_ref() {
-                            if balance.asset_id == *end {
-                                return false;
+                    // take desired amount of results
+                    let balances = balances
+                        .take_while(|balance| {
+                            // take until we've reached the end
+                            if let Some(end) = end.as_ref() {
+                                if balance.asset_id == *end {
+                                    return false
+                                }
                             }
-                        }
-                        true
-                    })
-                    .take(records_to_fetch);
-                let mut balances: Vec<Balance> = balances.collect();
-                if direction == IterDirection::Reverse {
-                    balances.reverse();
+                            true
+                        })
+                        .take(records_to_fetch);
+                    let mut balances: Vec<Balance> = balances.collect();
+                    if direction == IterDirection::Reverse {
+                        balances.reverse();
+                    }
+
+                    let mut connection = Connection::new(
+                        started.is_some(),
+                        records_to_fetch <= balances.len(),
+                    );
+
+                    connection.edges.extend(
+                        balances
+                            .into_iter()
+                            .map(|item| Edge::new(item.asset_id.into(), item)),
+                    );
+
+                    Ok::<Connection<AssetId, Balance>, anyhow::Error>(connection)
                 }
-
-                let mut connection =
-                    Connection::new(started.is_some(), records_to_fetch <= balances.len());
-
-                connection.edges.extend(
-                    balances
-                        .into_iter()
-                        .map(|item| Edge::new(item.asset_id.into(), item)),
-                );
-
-                Ok::<Connection<AssetId, Balance>, anyhow::Error>(connection)
             },
         )
         .await

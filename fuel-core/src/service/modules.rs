@@ -1,6 +1,8 @@
 #![allow(clippy::let_unit_value)]
-use crate::database::Database;
-use crate::service::Config;
+use crate::{
+    database::Database,
+    service::Config,
+};
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
@@ -9,8 +11,10 @@ use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::txpool::TxPoolDb;
 use futures::future::join_all;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+};
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
@@ -46,8 +50,10 @@ impl Modules {
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
     // Initialize and bind all components
-    let block_importer = fuel_block_importer::Service::new(&config.block_importer, db).await?;
-    let block_producer = fuel_block_producer::Service::new(&config.block_producer, db).await?;
+    let block_importer =
+        fuel_block_importer::Service::new(&config.block_importer, db).await?;
+    let block_producer =
+        fuel_block_producer::Service::new(&config.block_producer, db).await?;
     let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
@@ -63,8 +69,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
         .import_block_event(block_importer.subscribe())
         .private_key(
-            hex::decode("c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b")
-                .unwrap(),
+            hex::decode(
+                "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",
+            )
+            .unwrap(),
         );
 
     let relayer_sender = {

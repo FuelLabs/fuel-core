@@ -2,12 +2,18 @@ use crate::Config;
 use fuel_core_interfaces::{
     bft::BftMpsc,
     block_importer::ImportBlockMpsc,
-    p2p::{BlockBroadcast, P2pRequestEvent},
+    p2p::{
+        BlockBroadcast,
+        P2pRequestEvent,
+    },
     relayer,
     sync::SyncMpsc,
 };
 use parking_lot::Mutex;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+};
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,

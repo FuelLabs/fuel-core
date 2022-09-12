@@ -1,14 +1,28 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
-    service::{Config, FuelService},
+    chain_config::{
+        CoinConfig,
+        StateConfig,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
 use fuel_core_interfaces::common::{
-    fuel_tx::{AssetId, Input, Output},
+    fuel_tx::{
+        AssetId,
+        Input,
+        Output,
+    },
     fuel_vm::prelude::Address,
 };
 use fuel_gql_client::client::schema::banknote::Banknote;
 use fuel_gql_client::{
-    client::{FuelClient, PageDirection, PaginationRequest},
+    client::{
+        FuelClient,
+        PageDirection,
+        PaginationRequest,
+    },
     fuel_tx::TransactionBuilder,
 };
 

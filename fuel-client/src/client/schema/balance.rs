@@ -1,5 +1,15 @@
-use crate::client::schema::{schema, Address, AssetId, PageInfo, U64};
-use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
+use crate::client::{
+    schema::{
+        schema,
+        Address,
+        AssetId,
+        PageInfo,
+        U64,
+    },
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BalanceArgs {

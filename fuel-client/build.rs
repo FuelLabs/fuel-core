@@ -1,11 +1,25 @@
-use schemafy_lib::{Expander, Schema};
-use std::env;
-use std::fs::{self, File};
-use std::io::prelude::*;
-use std::path::PathBuf;
-
 fn main() {
     println!("cargo:rerun-if-changed=./assets/debugAdapterProtocol.json");
+
+    #[cfg(feature = "dap")]
+    generate_dap_schema();
+}
+
+#[cfg(feature = "dap")]
+fn generate_dap_schema() {
+    use schemafy_lib::{
+        Expander,
+        Schema,
+    };
+    use std::{
+        env,
+        fs::{
+            self,
+            File,
+        },
+        io::prelude::*,
+        path::PathBuf,
+    };
 
     let path = env::var("CARGO_MANIFEST_DIR")
         .map(PathBuf::from)
@@ -13,7 +27,8 @@ fn main() {
         .expect("Failed to fetch JSON schema");
 
     let json = fs::read_to_string(&path).expect("Failed to parse JSON from schema");
-    let schema: Schema = serde_json::from_str(&json).expect("Failed to parse Schema from JSON");
+    let schema: Schema =
+        serde_json::from_str(&json).expect("Failed to parse Schema from JSON");
     let root_name = schema.title.clone().unwrap_or_else(|| "Root".to_owned());
 
     let path = path.into_os_string();

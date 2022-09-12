@@ -8,4 +8,7 @@ mod peer_info;
 mod request_response;
 mod service;
 
-pub use libp2p::{Multiaddr, PeerId};
+pub use libp2p::{
+    Multiaddr,
+    PeerId,
+};

@@ -1,8 +1,16 @@
 use crate::client::schema::{
-    contract::ContractIdFragment, schema, Address, AssetId, Bytes32, ConversionError,
-    ConversionError::MissingField, HexString, MessageId, U64,
+    contract::ContractIdFragment,
+    schema,
+    Address,
+    AssetId,
+    Bytes32,
+    ConversionError,
+    ConversionError::MissingField,
+    HexString,
+    MessageId,
+    U64,
 };
-use fuel_types::Word;
+use fuel_vm::fuel_types::Word;
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
@@ -322,7 +330,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .ok_or_else(|| MissingField("gas_used".to_string()))?
                     .into(),
             },
-            ReceiptType::MessageOut => fuel_tx::Receipt::MessageOut {
+            ReceiptType::MessageOut => ::fuel_vm::fuel_tx::Receipt::MessageOut {
                 message_id: schema
                     .message_id
                     .ok_or_else(|| MissingField("message_id".to_string()))?
