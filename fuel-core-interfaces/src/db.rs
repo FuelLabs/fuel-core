@@ -1,4 +1,4 @@
-use fuel_vm::prelude::InterpreterError;
+use crate::common::fuel_vm::prelude::InterpreterError;
 use std::io::ErrorKind;
 use thiserror::Error;
 
