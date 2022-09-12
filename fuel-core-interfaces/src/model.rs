@@ -5,6 +5,10 @@ mod messages;
 mod txpool;
 mod vote;
 
+use crate::common::fuel_types::{
+    Address,
+    Bytes32,
+};
 pub use block::{
     FuelBlock,
     FuelBlockConsensus,
@@ -16,10 +20,6 @@ pub use block_height::BlockHeight;
 pub use coin::{
     Coin,
     CoinStatus,
-};
-use fuel_types::{
-    Address,
-    Bytes32,
 };
 pub use messages::*;
 pub use txpool::{

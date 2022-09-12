@@ -238,7 +238,7 @@ impl FuelClient {
     pub async fn set_breakpoint(
         &self,
         session_id: &str,
-        contract: fuel_types::ContractId,
+        contract: ::fuel_vm::fuel_types::ContractId,
         pc: u64,
     ) -> io::Result<()> {
         let operation = SetBreakpoint::build(SetBreakpointArgs {
@@ -342,14 +342,17 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(&self, id: &str) -> io::Result<Vec<fuel_tx::Receipt>> {
+    pub async fn receipts(
+        &self,
+        id: &str,
+    ) -> io::Result<Vec<::fuel_vm::fuel_tx::Receipt>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
         })?;
 
-        let receipts: Result<Vec<fuel_tx::Receipt>, ConversionError> = tx
+        let receipts: Result<Vec<::fuel_vm::fuel_tx::Receipt>, ConversionError> = tx
             .receipts
             .unwrap_or_default()
             .into_iter()
@@ -532,7 +535,7 @@ impl FuelClient {
     pub async fn transparent_transaction(
         &self,
         id: &str,
-    ) -> io::Result<Option<fuel_tx::Transaction>> {
+    ) -> io::Result<Option<::fuel_vm::fuel_tx::Transaction>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;

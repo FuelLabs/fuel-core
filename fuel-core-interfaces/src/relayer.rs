@@ -1,12 +1,14 @@
+use crate::common::{
+    fuel_storage::Storage,
+    fuel_types::{
+        Address,
+        MessageId,
+    },
+};
 use async_trait::async_trait;
 use derive_more::{
     Deref,
     DerefMut,
-};
-use fuel_storage::Storage;
-use fuel_types::{
-    Address,
-    MessageId,
 };
 use std::{
     collections::HashMap,

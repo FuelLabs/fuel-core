@@ -3,7 +3,7 @@ use super::model::{
     FuelBlock,
     SealedFuelBlock,
 };
-use fuel_types::Bytes32;
+use crate::common::fuel_types::Bytes32;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
