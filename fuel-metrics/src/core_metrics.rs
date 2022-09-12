@@ -1,8 +1,10 @@
-use axum::response::IntoResponse;
-use hyper::{
-    header::CONTENT_TYPE,
-    Body,
-    Response,
+use axum::{
+    body::Body,
+    http::header::CONTENT_TYPE,
+    response::{
+        IntoResponse,
+        Response,
+    },
 };
 use lazy_static::lazy_static;
 use prometheus::{

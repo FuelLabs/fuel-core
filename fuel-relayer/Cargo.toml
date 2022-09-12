@@ -35,7 +35,7 @@ serde = "1.0"
 serde_json = "1.0"
 sha3 = "0.10"
 thiserror = "1.0"
-tokio = { version = "1.15", features = ["full"] }
+tokio = { version = "1.20", features = ["macros"]}
 tracing = "0.1"
 tracing-subscriber = "0.3.9"
 url = "2.2"
