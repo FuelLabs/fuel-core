@@ -9,6 +9,7 @@ use std::{
 
 use clap::Args;
 
+use fuel_core_interfaces::common::fuel_crypto::SecretKey;
 use fuel_p2p::{
     config::P2PConfig,
     Multiaddr,
@@ -104,17 +105,17 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 Some(path) => {
                     let phrase = std::fs::read_to_string(path)?;
 
-                    let secret_key =
-                        fuel_crypto::SecretKey::new_from_mnemonic_phrase_with_path(
-                            &phrase,
-                            "m/44'/60'/0'/0/0",
-                        )?;
+                    let secret_key = SecretKey::new_from_mnemonic_phrase_with_path(
+                        &phrase,
+                        "m/44'/60'/0'/0/0",
+                    )?;
 
                     fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }
                 _ => {
-                    let mut rand = fuel_crypto::rand::thread_rng();
-                    let secret_key = fuel_crypto::SecretKey::random(&mut rand);
+                    let mut rand =
+                        fuel_core_interfaces::common::fuel_crypto::rand::thread_rng();
+                    let secret_key = SecretKey::random(&mut rand);
 
                     fuel_p2p::config::convert_to_libp2p_keypair(&mut secret_key.to_vec())?
                 }

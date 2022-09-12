@@ -8,10 +8,10 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use fuel_crypto::{
+use fuel_core_interfaces::common::{
+    fuel_crypto::SecretKey,
+    fuel_tx::TransactionBuilder,
     fuel_types::Address,
-    SecretKey,
 };
 use fuel_gql_client::{
     client::{

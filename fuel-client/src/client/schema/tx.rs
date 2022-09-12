@@ -14,7 +14,7 @@ use crate::client::{
     PaginatedResult,
     PaginationRequest,
 };
-use fuel_types::{
+use fuel_vm::fuel_types::{
     bytes::Deserializable,
     Bytes32,
 };
@@ -89,12 +89,12 @@ pub struct OpaqueTransaction {
     pub status: Option<TransactionStatus>,
 }
 
-impl TryFrom<OpaqueTransaction> for fuel_tx::Transaction {
+impl TryFrom<OpaqueTransaction> for ::fuel_vm::fuel_tx::Transaction {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        fuel_tx::Transaction::from_bytes(bytes.as_slice())
+        ::fuel_vm::fuel_tx::Transaction::from_bytes(bytes.as_slice())
             .map_err(ConversionError::TransactionFromBytesError)
     }
 }
@@ -111,12 +111,12 @@ pub struct OpaqueReceipt {
     pub raw_payload: HexString,
 }
 
-impl TryFrom<OpaqueReceipt> for fuel_tx::Receipt {
+impl TryFrom<OpaqueReceipt> for ::fuel_vm::fuel_tx::Receipt {
     type Error = ConversionError;
 
     fn try_from(value: OpaqueReceipt) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        fuel_tx::Receipt::from_bytes(bytes.as_slice())
+        ::fuel_vm::fuel_tx::Receipt::from_bytes(bytes.as_slice())
             .map_err(ConversionError::ReceiptFromBytesError)
     }
 }
@@ -278,7 +278,7 @@ pub struct Submit {
 pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
-    use fuel_types::bytes::SerializableVec;
+    use fuel_vm::fuel_types::bytes::SerializableVec;
 
     pub mod transparent_receipt;
     pub mod transparent_tx;
@@ -330,7 +330,7 @@ pub mod tests {
     #[test]
     fn dry_run_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
         let query = DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx.to_bytes())),
             utxo_validation: None,
@@ -341,7 +341,7 @@ pub mod tests {
     #[test]
     fn submit_tx_gql_output() {
         use cynic::MutationBuilder;
-        let mut tx = fuel_tx::Transaction::default();
+        let mut tx = ::fuel_vm::fuel_tx::Transaction::default();
         let query = Submit::build(TxArg {
             tx: HexString(Bytes(tx.to_bytes())),
         });

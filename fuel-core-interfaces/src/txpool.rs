@@ -1,4 +1,15 @@
 use crate::{
+    common::{
+        fuel_storage::Storage,
+        fuel_tx::{
+            ContractId,
+            Transaction,
+            TxId,
+            UtxoId,
+        },
+        fuel_types::MessageId,
+        prelude::Contract,
+    },
     db::{
         Error as DbStateError,
         KvStoreError,
@@ -14,15 +25,6 @@ use derive_more::{
     Deref,
     DerefMut,
 };
-use fuel_storage::Storage;
-use fuel_tx::{
-    ContractId,
-    Transaction,
-    TxId,
-    UtxoId,
-};
-use fuel_types::MessageId;
-use fuel_vm::prelude::Contract;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{

@@ -5,13 +5,13 @@ use crate::helpers::{
     TestSetupBuilder,
 };
 use fuel_core_interfaces::common::{
+    fuel_crypto::SecretKey,
     fuel_tx::TransactionBuilder,
     fuel_vm::{
         consts::*,
         prelude::*,
     },
 };
-use fuel_crypto::SecretKey;
 use fuel_gql_client::client::{
     types::TransactionStatus,
     PageDirection,
