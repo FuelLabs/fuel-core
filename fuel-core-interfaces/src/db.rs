@@ -1,4 +1,23 @@
+pub use crate::common::fuel_vm::storage::{
+    ContractsAssets,
+    ContractsInfo,
+    ContractsRawCode,
+    ContractsState,
+};
 use crate::{
+    common::{
+        fuel_storage::Mappable,
+        fuel_tx::{
+            Transaction,
+            UtxoId,
+        },
+        fuel_types::{
+            Address,
+            Bytes32,
+            MessageId,
+        },
+        fuel_vm::prelude::InterpreterError,
+    },
     model::{
         Coin,
         ConsensusId,
@@ -9,26 +28,8 @@ use crate::{
     },
     relayer::StakingDiff,
 };
-use fuel_storage::Mappable;
-use fuel_tx::{
-    Transaction,
-    UtxoId,
-};
-use fuel_types::{
-    Address,
-    Bytes32,
-    MessageId,
-};
-use fuel_vm::prelude::InterpreterError;
 use std::io::ErrorKind;
 use thiserror::Error;
-
-pub use fuel_vm::storage::{
-    ContractsAssets,
-    ContractsInfo,
-    ContractsRawCode,
-    ContractsState,
-};
 
 /// The storage table of coins. Each [`Coin`](crate::model::Coin) is represented by unique `UtxoId`.
 pub struct Coins;

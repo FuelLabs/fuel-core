@@ -1,11 +1,15 @@
-use crate::model::BlockHeight;
+use crate::{
+    common::{
+        fuel_asm::Word,
+        fuel_tx::{
+            Address,
+            AssetId,
+        },
+    },
+    model::BlockHeight,
+};
 #[cfg(graphql)]
 use async_graphql::Enum;
-use fuel_asm::Word;
-use fuel_tx::{
-    Address,
-    AssetId,
-};
 
 /// Represents the user's coin for some asset with `asset_id`.
 /// The `Coin` is either `CoinStatus::Spent` or `CoinStatus::Unspent`. If the coin is unspent,

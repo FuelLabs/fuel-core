@@ -1,4 +1,11 @@
 use crate::{
+    common::{
+        fuel_storage::{
+            StorageAsMut,
+            StorageMutate,
+        },
+        fuel_types::Address,
+    },
     db::{
         DelegatesIndexes,
         KvStoreError,
@@ -21,11 +28,6 @@ use derive_more::{
     Deref,
     DerefMut,
 };
-use fuel_storage::{
-    StorageAsMut,
-    StorageMutate,
-};
-use fuel_types::Address;
 use std::{
     collections::HashMap,
     sync::Arc,

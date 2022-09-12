@@ -241,7 +241,7 @@ impl TxPool {
     pub async fn block_update(
         txpool: &RwLock<Self>, // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
-        txpool.write().await;
+        let _ = txpool.write().await;
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
     }
 

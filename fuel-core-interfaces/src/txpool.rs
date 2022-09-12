@@ -1,4 +1,20 @@
 use crate::{
+    common::{
+        fuel_storage::{
+            Storage,
+            StorageAsRef,
+            StorageInspect,
+        },
+        fuel_tx::{
+            ContractId,
+            Transaction,
+            TxId,
+            UtxoId,
+        },
+        fuel_types::MessageId,
+        fuel_vm::storage::ContractsRawCode,
+        prelude::Contract,
+    },
     db::{
         Coins,
         Error as DbStateError,
@@ -16,18 +32,6 @@ use derive_more::{
     Deref,
     DerefMut,
 };
-use fuel_storage::{
-    StorageAsRef,
-    StorageInspect,
-};
-use fuel_tx::{
-    ContractId,
-    Transaction,
-    TxId,
-    UtxoId,
-};
-use fuel_types::MessageId;
-use fuel_vm::storage::ContractsRawCode;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{
