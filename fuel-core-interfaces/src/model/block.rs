@@ -3,10 +3,7 @@ use super::ValidatorStake;
 use crate::{
     common::{
         fuel_crypto::Hasher,
-        fuel_merkle::{
-            binary::MerkleTree,
-            common::StorageMap,
-        },
+        fuel_merkle::binary::in_memory::MerkleTree,
         fuel_tx::{
             Address,
             AssetId,
@@ -86,14 +83,13 @@ impl FuelBlockHeader {
     }
 
     pub fn transactions_root(txs: &[Transaction]) -> Bytes32 {
-        let mut storage = StorageMap::new();
-        let mut tree = MerkleTree::new(&mut storage);
+        let mut tree = MerkleTree::new();
         for tx in txs {
             // serialize tx into canonical format for hashing
             let ser_tx = tx.clone().to_bytes();
-            tree.push(&ser_tx).expect("infallible storage");
+            tree.push(&ser_tx);
         }
-        tree.root().expect("infallible storage").into()
+        tree.root().into()
     }
 }
 
