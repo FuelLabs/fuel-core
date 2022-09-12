@@ -11,7 +11,6 @@ use fuel_vm::prelude::*;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
-    banknote::SpendQueryElementInput,
     block::BlockByIdArgs,
     coin::{
         Coin,
@@ -21,6 +20,7 @@ use schema::{
         Contract,
         ContractByIdArgs,
     },
+    resource::SpendQueryElementInput,
     tx::{
         TxArg,
         TxIdArgs,
@@ -61,7 +61,7 @@ use types::{
 };
 
 use crate::client::schema::{
-    banknote::ExcludeInput,
+    resource::ExcludeInput,
     tx::DryRunArg,
 };
 pub use schema::{
@@ -422,34 +422,34 @@ impl FuelClient {
         Ok(coins)
     }
 
-    /// Retrieve banknotes to spend in a transaction
-    pub async fn banknotes_to_spend(
+    /// Retrieve resources to spend in a transaction
+    pub async fn resources_to_spend(
         &self,
         owner: &str,
-        spend_query: Vec<(&str, u64)>,
-        max_inputs: Option<i32>,
+        spend_query: Vec<(&str, u64, Option<u64>)>,
         // (Utxos, messages)
         excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
-    ) -> io::Result<Vec<Vec<schema::banknote::Banknote>>> {
+    ) -> io::Result<Vec<Vec<schema::resource::Resource>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
-            .map(|(asset_id, amount)| -> Result<_, ConversionError> {
+            .map(|(asset_id, amount, max)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
                     asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
+                    max: max.clone().map(|max| max.into()),
                 })
             })
             .try_collect()?;
         let excluded_ids: Option<ExcludeInput> = excluded_ids
             .map(|tuple| ExcludeInput::from_tuple(tuple))
             .transpose()?;
-        let query = schema::banknote::BanknotesToSpendQuery::build(
-            &(owner, spend_query, max_inputs, excluded_ids).into(),
+        let query = schema::resource::ResourcesToSpendQuery::build(
+            &(owner, spend_query, excluded_ids).into(),
         );
 
-        let banknotes_per_asset = self.query(query).await?.banknotes_to_spend;
-        Ok(banknotes_per_asset)
+        let resources_per_asset = self.query(query).await?.resources_to_spend;
+        Ok(resources_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {

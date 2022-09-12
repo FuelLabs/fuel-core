@@ -37,41 +37,36 @@ pub struct SpendQueryElementInput {
     pub asset_id: AssetId,
     /// address of the owner
     pub amount: U64,
+    /// address of the owner
+    pub max: Option<U64>,
 }
 
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub enum Banknote {
+pub enum Resource {
     Coin(Coin),
     Message(Message),
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
-pub struct BanknotesToSpendArgs {
-    /// The Address of the utxo owner
+pub struct ResourcesToSpendArgs {
+    /// The `Address` of the assets' resources owner.
     owner: Address,
     /// The total amount of each asset type to spend
-    assets: Vec<SpendQueryElementInput>,
-    /// The max number of utxos that can be used
-    max_inputs: Option<i32>,
+    query_per_asset: Vec<SpendQueryElementInput>,
     /// A list of ids to exclude from the selection
     excluded_ids: Option<ExcludeInput>,
 }
 
-pub(crate) type BanknotesToSpendArgsTuple = (
-    Address,
-    Vec<SpendQueryElementInput>,
-    Option<i32>,
-    Option<ExcludeInput>,
-);
+pub(crate) type ResourcesToSpendArgsTuple =
+    (Address, Vec<SpendQueryElementInput>, Option<ExcludeInput>);
 
-impl From<BanknotesToSpendArgsTuple> for BanknotesToSpendArgs {
-    fn from(r: BanknotesToSpendArgsTuple) -> Self {
-        BanknotesToSpendArgs {
+impl From<ResourcesToSpendArgsTuple> for ResourcesToSpendArgs {
+    fn from(r: ResourcesToSpendArgsTuple) -> Self {
+        ResourcesToSpendArgs {
             owner: r.0,
-            assets: r.1,
-            max_inputs: r.2,
-            excluded_ids: r.3,
+            query_per_asset: r.1,
+            excluded_ids: r.2,
         }
     }
 }
@@ -80,9 +75,9 @@ impl From<BanknotesToSpendArgsTuple> for BanknotesToSpendArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "BanknotesToSpendArgs"
+    argument_struct = "ResourcesToSpendArgs"
 )]
-pub struct BanknotesToSpendQuery {
-    #[arguments(owner = &args.owner, assets = &args.assets, max_inputs = &args.max_inputs, excluded_ids = &args.excluded_ids)]
-    pub banknotes_to_spend: Vec<Vec<Banknote>>,
+pub struct ResourcesToSpendQuery {
+    #[arguments(owner = &args.owner, query_per_asset = &args.query_per_asset, excluded_ids = &args.excluded_ids)]
+    pub resources_to_spend: Vec<Vec<Resource>>,
 }

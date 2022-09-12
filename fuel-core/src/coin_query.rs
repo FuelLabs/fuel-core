@@ -3,9 +3,9 @@ use crate::{
         utils::{
             Asset,
             AssetQuery,
-            Banknote,
-            BanknoteId,
-            Excluder,
+            Exclude,
+            Resource,
+            ResourceId,
         },
         Database,
         KvStoreError,
@@ -15,12 +15,18 @@ use crate::{
 };
 use core::mem::swap;
 use fuel_core_interfaces::{
-    common::fuel_tx::Address,
+    common::{
+        fuel_tx::Address,
+        fuel_types::AssetId,
+    },
     model::Message,
 };
 use itertools::Itertools;
 use rand::prelude::*;
-use std::cmp::Reverse;
+use std::{
+    cmp::Reverse,
+    collections::HashSet,
+};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -33,64 +39,62 @@ pub enum CoinQueryError {
     NotEnoughCoins,
     #[error("not enough inputs")]
     NotEnoughInputs,
+    #[error("the query contains duplicate assets")]
+    DuplicateAssets(AssetId),
 }
 
 /// The prepared spend queries.
 pub struct SpendQuery {
     owner: Address,
-    /// Each `(asset_id, _)` is unique in the vector after construction in the `new`.
-    assets: Vec<Asset>,
-    excluder: Excluder,
-    max_inputs: usize,
+    query_per_asset: Vec<Asset>,
+    exclude: Exclude,
 }
 
 impl SpendQuery {
     // TODO: Check that number of `queries` is not too high(to prevent attacks).
     pub fn new(
         owner: Address,
-        assets: &[Asset],
-        exclude_vec: Option<Vec<BanknoteId>>,
-        max_inputs: Option<u64>,
-    ) -> Self {
-        let assets = assets
-            .iter()
-            .group_by(|asset| asset.id)
-            .into_iter()
-            .map(|(asset_id, group)| {
-                Asset::new(asset_id, group.map(|asset| asset.target).sum::<u64>())
-            })
-            .collect();
+        query_per_asset: &[Asset],
+        exclude_vec: Option<Vec<ResourceId>>,
+    ) -> Result<Self, CoinQueryError> {
+        let mut duplicate_checker = HashSet::new();
 
-        let excluder = if let Some(exclude_vec) = exclude_vec {
-            Excluder::new(exclude_vec)
+        for query in query_per_asset {
+            if duplicate_checker.contains(&query.id) {
+                return Err(CoinQueryError::DuplicateAssets(query.id))
+            }
+            duplicate_checker.insert(query.id.clone());
+        }
+
+        let exclude = if let Some(exclude_vec) = exclude_vec {
+            Exclude::new(exclude_vec)
         } else {
             Default::default()
         };
 
-        Self {
+        Ok(Self {
             owner,
-            assets,
-            excluder,
-            max_inputs: max_inputs.unwrap_or(u64::MAX) as usize,
-        }
+            query_per_asset: query_per_asset.into(),
+            exclude,
+        })
     }
 
-    /// Return [`Asset`]s grouped by `asset_id`.
+    /// Return [`Asset`]s.
     pub fn assets(&self) -> &Vec<Asset> {
-        &self.assets
+        &self.query_per_asset
     }
 
-    /// Return [`Asset`]s grouped by `asset_id`.
+    /// Return [`AssetQuery`]s.
     pub fn asset_queries<'a>(&'a self, db: &'a Database) -> Vec<AssetQuery<'a>> {
-        self.assets
+        self.query_per_asset
             .iter()
-            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.excluder), db))
+            .map(|asset| AssetQuery::new(&self.owner, asset, Some(&self.exclude), db))
             .collect()
     }
 
-    /// Returns excluder that contains information about excluded ids.
-    pub fn excluder(&self) -> &Excluder {
-        &self.excluder
+    /// Returns exclude that contains information about excluded ids.
+    pub fn exclude(&self) -> &Exclude {
+        &self.exclude
     }
 
     /// Returns the owner of the query.
@@ -104,13 +108,12 @@ impl SpendQuery {
 /// can't be satisfied.
 pub fn largest_first(
     query: &AssetQuery,
-    max_input: usize,
-) -> Result<Vec<Banknote<Coin, Message>>, CoinQueryError> {
+) -> Result<Vec<Resource<Coin, Message>>, CoinQueryError> {
     let mut inputs: Vec<_> = query.unspent_inputs().try_collect()?;
-    inputs.sort_by_key(|banknote| Reverse(*banknote.amount()));
+    inputs.sort_by_key(|resource| Reverse(*resource.amount()));
 
     let mut collected_amount = 0u64;
-    let mut banknotes = vec![];
+    let mut resources = vec![];
 
     for coin in inputs {
         // Break if we don't need any more coins
@@ -119,13 +122,13 @@ pub fn largest_first(
         }
 
         // Error if we can't fit more coins
-        if banknotes.len() >= max_input {
+        if resources.len() >= query.asset.max {
             return Err(CoinQueryError::NotEnoughInputs)
         }
 
         // Add to list
         collected_amount += coin.amount();
-        banknotes.push(coin.into_owned());
+        resources.push(coin.into_owned());
     }
 
     if collected_amount < query.asset.target {
@@ -133,33 +136,33 @@ pub fn largest_first(
         return Err(CoinQueryError::NotEnoughCoins)
     }
 
-    Ok(banknotes)
+    Ok(resources)
 }
 
 // An implementation of the method described on: https://iohk.io/en/blog/posts/2018/07/03/self-organisation-in-coin-selection/
 pub fn random_improve(
     db: &Database,
     spend_query: &SpendQuery,
-) -> Result<Vec<Vec<Banknote<Coin, Message>>>, CoinQueryError> {
-    let mut banknotes_per_asset = vec![];
+) -> Result<Vec<Vec<Resource<Coin, Message>>>, CoinQueryError> {
+    let mut resources_per_asset = vec![];
 
     for query in spend_query.asset_queries(db) {
         let mut inputs: Vec<_> = query.unspent_inputs().try_collect()?;
         inputs.shuffle(&mut thread_rng());
-        inputs.truncate(spend_query.max_inputs as usize);
+        inputs.truncate(query.asset.max);
 
         let mut collected_amount = 0;
-        let mut banknotes = vec![];
+        let mut resources = vec![];
 
         // Set parameters according to spec
         let target = query.asset.target;
         let upper_target = query.asset.target * 2;
 
-        for banknote in inputs {
+        for resource in inputs {
             // Try to improve the result by adding dust to the result.
             if collected_amount >= target {
-                // Break if found banknote exceeds the upper limit
-                if banknote.amount() > &upper_target {
+                // Break if found resource exceeds the upper limit
+                if resource.amount() > &upper_target {
                     break
                 }
 
@@ -174,29 +177,26 @@ pub fn random_improve(
                 };
                 let change_amount = collected_amount - target;
                 let distance = abs_diff(target, change_amount);
-                let next_distance = abs_diff(target, change_amount + banknote.amount());
+                let next_distance = abs_diff(target, change_amount + resource.amount());
                 if next_distance >= distance {
                     break
                 }
             }
 
             // Add to list
-            collected_amount += banknote.amount();
-            banknotes.push(banknote.into_owned());
+            collected_amount += resource.amount();
+            resources.push(resource.into_owned());
         }
 
         // Fallback to largest_first if we can't fit more coins
         if collected_amount < query.asset.target {
-            swap(
-                &mut banknotes,
-                &mut largest_first(&query, spend_query.max_inputs)?,
-            );
+            swap(&mut resources, &mut largest_first(&query)?);
         }
 
-        banknotes_per_asset.push(banknotes);
+        resources_per_asset.push(resources);
     }
 
-    Ok(banknotes_per_asset)
+    Ok(resources_per_asset)
 }
 
 #[cfg(test)]
@@ -221,34 +221,32 @@ mod tests {
             db.make_coin(owner, (i + 1) as Word, asset_ids[0]);
             db.make_coin(owner, (i + 1) as Word, asset_ids[1]);
         });
-        let query = |spend_query: &[Asset],
-                     max_input: usize|
-         -> Result<Vec<Vec<(AssetId, Word)>>, CoinQueryError> {
-            let result: Vec<_> = spend_query
-                .iter()
-                .map(|asset| {
-                    largest_first(
-                        &AssetQuery::new(&owner, &asset, None, db.as_ref()),
-                        max_input,
-                    )
-                    .map(|banknotes| {
-                        banknotes
-                            .iter()
-                            .map(|banknote| (*banknote.asset_id(), *banknote.amount()))
-                            .collect()
+        let query =
+            |spend_query: &[Asset]| -> Result<Vec<Vec<(AssetId, Word)>>, CoinQueryError> {
+                let result: Vec<_> = spend_query
+                    .iter()
+                    .map(|asset| {
+                        largest_first(&AssetQuery::new(&owner, &asset, None, db.as_ref()))
+                            .map(|resources| {
+                                resources
+                                    .iter()
+                                    .map(|resource| {
+                                        (*resource.asset_id(), *resource.amount())
+                                    })
+                                    .collect()
+                            })
                     })
-                })
-                .try_collect()?;
-            Ok(result)
-        };
+                    .try_collect()?;
+                Ok(result)
+            };
 
         // Query some targets, including higher than the owner's balance
         for target in 0..20 {
-            let banknotes = query(&[Asset::new(asset_ids[0], target)], usize::MAX);
+            let resources = query(&[Asset::new(asset_ids[0], target, u64::MAX)]);
 
             // Transform result for convenience
-            let banknotes = banknotes.map(|banknotes| {
-                banknotes[0]
+            let resources = resources.map(|resources| {
+                resources[0]
                     .iter()
                     .map(|(asset_id, amount)| {
                         // Check the asset ID before we drop it
@@ -261,46 +259,46 @@ mod tests {
 
             match target {
                 // This should return nothing
-                0 => assert_matches!(banknotes, Ok(banknotes) if banknotes.is_empty()),
-                // This range should return the largest banknotes
+                0 => assert_matches!(resources, Ok(resources) if resources.is_empty()),
+                // This range should return the largest resources
                 1..=5 => {
-                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5])
+                    assert_matches!(resources, Ok(resources) if resources == vec![5])
                 }
-                // This range should return the largest two banknotes
+                // This range should return the largest two resources
                 6..=9 => {
-                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4])
+                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4])
                 }
-                // This range should return the largest three banknotes
+                // This range should return the largest three resources
                 10..=12 => {
-                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3])
+                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3])
                 }
-                // This range should return the largest four banknotes
+                // This range should return the largest four resources
                 13..=14 => {
-                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3, 2])
+                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2])
                 }
-                // This range should return all banknotes
+                // This range should return all resources
                 15 => {
-                    assert_matches!(banknotes, Ok(banknotes) if banknotes == vec![5, 4, 3, 2, 1])
+                    assert_matches!(resources, Ok(resources) if resources == vec![5, 4, 3, 2, 1])
                 }
                 // Asking for more than the owner's balance should error
-                _ => assert_matches!(banknotes, Err(CoinQueryError::NotEnoughCoins)),
+                _ => assert_matches!(resources, Err(CoinQueryError::NotEnoughCoins)),
             };
         }
 
         // Query multiple asset IDs
-        let banknotes = query(
-            &[Asset::new(asset_ids[0], 3), Asset::new(asset_ids[1], 6)],
-            usize::MAX,
-        );
-        assert_matches!(banknotes, Ok(banknotes)
-        if banknotes == vec![
+        let resources = query(&[
+            Asset::new(asset_ids[0], 3, u64::MAX),
+            Asset::new(asset_ids[1], 6, u64::MAX),
+        ]);
+        assert_matches!(resources, Ok(resources)
+        if resources == vec![
             vec![(asset_ids[0], 5)],
             vec![(asset_ids[1], 5), (asset_ids[1], 4)]
         ]);
 
         // Query with too small max_inputs
-        let banknotes = query(&[Asset::new(asset_ids[0], 6)], 1);
-        assert_matches!(banknotes, Err(CoinQueryError::NotEnoughInputs));
+        let resources = query(&[Asset::new(asset_ids[0], 6, 1)]);
+        assert_matches!(resources, Err(CoinQueryError::NotEnoughInputs));
     }
 
     // #[test]

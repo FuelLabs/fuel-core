@@ -44,11 +44,6 @@ input BalanceFilterInput {
 	owner: Address!
 }
 
-"""
-The schema analog of the [`crate::database::utils::Banknote`].
-"""
-union Banknote = Coin | Message
-
 type Block {
 	id: BlockId!
 	height: U64!
@@ -261,7 +256,7 @@ input ExcludeInput {
 	"""
 	utxos: [UtxoId!]!
 	"""
-	Messages to exclude from teh selection.
+	Messages to exclude from the selection.
 	"""
 	messages: [MessageId!]!
 }
@@ -449,12 +444,17 @@ type Query {
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
 	"""
-	For each `spend_query`, get some spendable banknotes(of asset specified by the query) owned by
-	`owner` that add up at least the query amount. The returned banknotes are actual coins/messages
-	that can be spent. The number of banknotes is optimized to prevent dust accumulation.
-	Max number of banknotes and excluded banknotes can also be specified.
+	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
+	`owner` that add up at least the query amount. The returned resources are actual resources
+	that can be spent. The number of resources is optimized to prevent dust accumulation.
+	Max number of resources and excluded resources can also be specified.
+	
+	Returns:
+	The list of spendable resources per asset from the query. The length of the result is
+	the same as the length of `query_per_asset`. The ordering of assets and spendQuery
+	is the same.
 	"""
-	banknotesToSpend(owner: Address!, assets: [SpendQueryElementInput!]!, maxInputs: Int, excludedIds: ExcludeInput): [[Banknote!]!]!
+	resourcesToSpend(owner: Address!, queryPerAsset: [SpendQueryElementInput!]!, excludedIds: ExcludeInput): [[Resource!]!]!
 }
 
 type Receipt {
@@ -502,6 +502,11 @@ enum ReceiptType {
 	MESSAGE_OUT
 }
 
+"""
+The schema analog of the [`crate::database::utils::Resource`].
+"""
+union Resource = Coin | Message
+
 enum ReturnType {
 	RETURN
 	RETURN_DATA
@@ -523,13 +528,17 @@ scalar Salt
 
 input SpendQueryElementInput {
 	"""
-	Asset ID of the coins
+	Identifier of the asset to spend.
 	"""
 	assetId: AssetId!
 	"""
-	Target amount for the query
+	Target amount for the query.
 	"""
 	amount: U64!
+	"""
+	The maximum number of currencies for selection.
+	"""
+	max: U64
 }
 
 
