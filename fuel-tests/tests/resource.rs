@@ -96,13 +96,12 @@ async fn resources_to_spend() {
     // spend_query for 1 a and 1 b, but with all resources excluded
     let all_utxos: Vec<String> = resources_per_asset
         .iter()
-        .map(|resources| {
-            resources.into_iter().filter_map(|b| match b {
+        .flat_map(|resources| {
+            resources.iter().filter_map(|b| match b {
                 Resource::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
                 Resource::Message(_) => None,
             })
         })
-        .flatten()
         .collect();
     let all_resource_ids = all_utxos.iter().map(String::as_str).collect();
     let resources_per_asset = client

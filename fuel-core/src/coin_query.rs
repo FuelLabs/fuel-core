@@ -239,7 +239,7 @@ mod tests_coins {
                 let result: Vec<_> = spend_query
                     .iter()
                     .map(|asset| {
-                        largest_first(&AssetQuery::new(&owner, &asset, None, db.as_ref()))
+                        largest_first(&AssetQuery::new(&owner, asset, None, db.as_ref()))
                             .map(|resources| {
                                 resources
                                     .iter()
@@ -329,7 +329,7 @@ mod tests_coins {
                 coins.map(|coins| {
                     coins
                         .into_iter()
-                        .map(|coin| {
+                        .flat_map(|coin| {
                             coin.into_iter()
                                 .map(|resource| match resource {
                                     Resource::Coin { fields, .. } => {
@@ -349,7 +349,6 @@ mod tests_coins {
                                     )
                                 })
                         })
-                        .flatten()
                         .collect()
                 })
             };
@@ -436,12 +435,7 @@ mod tests_coins {
                 &SpendQuery::new(
                     owner,
                     &query_per_asset,
-                    Some(
-                        excluded_ids
-                            .into_iter()
-                            .map(|id| ResourceId::Utxo(id))
-                            .collect(),
-                    ),
+                    Some(excluded_ids.into_iter().map(ResourceId::Utxo).collect()),
                 )?,
             );
 
@@ -449,7 +443,7 @@ mod tests_coins {
             coins.map(|coins| {
                 coins
                     .into_iter()
-                    .map(|coin| {
+                    .flat_map(|coin| {
                         coin.into_iter()
                             .map(|resource| match resource {
                                 Resource::Coin { fields, .. } => {
@@ -466,7 +460,6 @@ mod tests_coins {
                                 )
                             })
                     })
-                    .flatten()
                     .collect()
             })
         };
