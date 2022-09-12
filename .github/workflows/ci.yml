@@ -333,7 +333,7 @@ jobs:
 
       - name: Build fuel-core
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'

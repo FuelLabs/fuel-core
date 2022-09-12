@@ -1,10 +1,10 @@
-use axum::response::IntoResponse;
+use axum::{
+    body::Body,
+    http::Request,
+    response::IntoResponse,
+};
 #[cfg(feature = "metrics")]
 use fuel_metrics::core_metrics::encode_metrics_response;
-use hyper::{
-    Body,
-    Request,
-};
 
 pub async fn metrics(_req: Request<Body>) -> impl IntoResponse {
     #[cfg(feature = "metrics")]
