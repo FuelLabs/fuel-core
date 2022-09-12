@@ -63,7 +63,7 @@ async fn coin() {
     assert!(coin.is_some());
 }
 
-// Backward fails, this is another issue
+// Backward fails, tracking in https://github.com/FuelLabs/fuel-core/issues/610
 #[rstest]
 #[tokio::test]
 async fn first_5_coins(
