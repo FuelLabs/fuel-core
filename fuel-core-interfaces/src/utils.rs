@@ -1,9 +1,11 @@
 pub mod signer {
-    use crate::signer::{
-        Signer,
-        SignerError,
+    use crate::{
+        common::fuel_types::Bytes32,
+        signer::{
+            Signer,
+            SignerError,
+        },
     };
-    use fuel_types::Bytes32;
 
     pub struct DummySigner {}
 

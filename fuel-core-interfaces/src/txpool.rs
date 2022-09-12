@@ -1,7 +1,6 @@
 use crate::{
     common::{
         fuel_storage::{
-            Storage,
             StorageAsRef,
             StorageInspect,
         },
@@ -13,7 +12,6 @@ use crate::{
         },
         fuel_types::MessageId,
         fuel_vm::storage::ContractsRawCode,
-        prelude::Contract,
     },
     db::{
         Coins,

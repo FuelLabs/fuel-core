@@ -223,6 +223,7 @@ mod tests {
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
+            fuel_crypto::fuel_types::Salt,
             fuel_storage::StorageAsRef,
             fuel_types::{
                 Address,
@@ -232,7 +233,6 @@ mod tests {
         db::Coins,
         model::Message,
     };
-    use fuel_crypto::fuel_types::Salt;
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,
