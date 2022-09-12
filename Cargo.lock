@@ -176,12 +176,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eab1c04a571841102f5345a8fc0f6bb3d31c315dec879b5c6e42e40ce7ffa34e"
 
 [[package]]
-name = "ascii_utils"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71938f30533e4d95a6d17aa530939da3842c2ab6f4f84b9dae68447e4129f74a"
-
-[[package]]
 name = "asn1_der"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -255,9 +249,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "4.0.12"
+version = "4.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "097754075ec057cf7d218886882026905e5f8be3a31572a2ffb1be1ef38136c8"
+checksum = "b7b4acd72d35f568664599c2cde503228b29910ca36656b653984c31c5a28cd6"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -268,7 +262,6 @@ dependencies = [
  "bytes",
  "chrono",
  "chrono-tz",
- "fast_chemail",
  "fnv",
  "futures-util",
  "http",
@@ -290,9 +283,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "4.0.12"
+version = "4.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7fa9b19ad10364c364a46847c7cc869992a3f8515105c76fa4fcda543787336"
+checksum = "9cead3c5f127c89b0abb2434c250409b9fe75763ee72583d4a90a412a927c8a8"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -306,23 +299,21 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "4.0.12"
+version = "4.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52bedfd99a0ddc329585274774cd637271eef9b4d6148f3bbb50b0ae1373ecf3"
+checksum = "9a2e30051a98bcecc8baab3f7a8b12e8e49b365afa81b598ad5dffa49d343f51"
 dependencies = [
  "async-graphql-value",
  "pest",
- "pest_generator",
- "proc-macro2",
  "serde",
  "serde_json",
 ]
 
 [[package]]
 name = "async-graphql-value"
-version = "4.0.12"
+version = "4.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f7b95ca40977a0b78089f20e80ecd34a564ed07d4e6a8641e85e652f7db0a12"
+checksum = "47c8c0d67fe10c7c49c6dcc9072b7a5c6c07af3b72b6e67cfb30ee070e2e940c"
 dependencies = [
  "bytes",
  "indexmap",
@@ -580,7 +571,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tower",
- "tower-http",
+ "tower-http 0.2.5",
  "tower-layer",
  "tower-service",
 ]
@@ -1539,9 +1530,9 @@ dependencies = [
 
 [[package]]
 name = "dirs"
-version = "3.0.2"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30baa043103c9d0c2a57cf537cc2f35623889dc0d405e6c3cccfadbc81c71309"
+checksum = "ca3aa72a6f96ea37bbc5aa912f6788242832f75369bdfdadcb0e38423f100059"
 dependencies = [
  "dirs-sys",
 ]
@@ -1705,7 +1696,7 @@ dependencies = [
  "sha2 0.10.5",
  "sha3",
  "thiserror",
- "uuid",
+ "uuid 0.8.2",
 ]
 
 [[package]]
@@ -1834,7 +1825,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
- "strum 0.24.1",
+ "strum",
  "syn",
  "thiserror",
  "tiny-keccak",
@@ -1961,15 +1952,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 
 [[package]]
-name = "fast_chemail"
-version = "0.9.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "495a39d30d624c2caabe6312bfead73e7717692b44e0b32df168c275a2e8e9e4"
-dependencies = [
- "ascii_utils",
-]
-
-[[package]]
 name = "fastrand"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2074,9 +2056,9 @@ checksum = "2022715d62ab30faffd124d40b76f4134a550a87792276512b18d63272333394"
 
 [[package]]
 name = "fuel-asm"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "135ef9990debd1fa257988a0a8be5b9d787decaba911cc3b97d7712a4b70328d"
+checksum = "6e4dcbfb02da27a232dc1a8dedcb8ed50ee3e981b40ce3618f96ce0f3c250f3e"
 dependencies = [
  "fuel-types",
  "serde",
@@ -2145,16 +2127,13 @@ dependencies = [
  "fuel-block-producer",
  "fuel-core-bft",
  "fuel-core-interfaces",
- "fuel-crypto",
  "fuel-metrics",
  "fuel-p2p",
  "fuel-relayer",
  "fuel-sync",
  "fuel-txpool",
  "futures",
- "graphql-parser",
  "hex",
- "hyper",
  "insta",
  "itertools",
  "lazy_static",
@@ -2163,16 +2142,16 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
- "strum 0.21.0",
- "strum_macros 0.21.1",
+ "strum",
+ "strum_macros",
  "tempfile",
  "thiserror",
  "tokio",
- "tower-http",
+ "tower-http 0.3.4",
  "tower-layer",
  "tracing",
  "tracing-subscriber",
- "uuid",
+ "uuid 1.1.2",
 ]
 
 [[package]]
@@ -2193,12 +2172,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_more",
- "fuel-asm",
- "fuel-crypto",
- "fuel-merkle",
- "fuel-storage",
- "fuel-tx",
- "fuel-types",
  "fuel-vm",
  "futures",
  "lazy_static",
@@ -2234,8 +2207,6 @@ dependencies = [
  "clap",
  "cynic",
  "derive_more",
- "fuel-tx",
- "fuel-types",
  "fuel-vm",
  "futures",
  "hex",
@@ -2267,7 +2238,6 @@ name = "fuel-metrics"
 version = "0.10.1"
 dependencies = [
  "axum",
- "hyper",
  "lazy_static",
  "prometheus",
 ]
@@ -2287,7 +2257,7 @@ dependencies = [
  "libp2p",
  "rand 0.8.5",
  "serde",
- "sha2 0.9.9",
+ "sha2 0.10.5",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -2351,7 +2321,6 @@ dependencies = [
  "chrono",
  "fuel-core",
  "fuel-core-interfaces",
- "fuel-crypto",
  "fuel-gql-client",
  "fuel-txpool",
  "futures",
@@ -2367,9 +2336,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "118b773c25dbf645457fbd9b0288ac923c044d03ce68f492e539c840c3595f5e"
+checksum = "d88b96bddf1c57f1d73a51f0f58ef67b294cdb722d5f80ee76d9cf84b986769e"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
@@ -2379,6 +2348,7 @@ dependencies = [
  "num-integer",
  "rand 0.8.5",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2408,9 +2378,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "516d60fc504570c0ad79f6dffcbd31687b15b76ecf8753bccaeae201baac29d2"
+checksum = "44bdbc4b0863a4d7d523b248d404821dc4e3b6d0034fbbf33f03b1f4283af663"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -3234,9 +3204,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p"
-version = "0.43.0"
+version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e8570e25fa03d4385405dbeaf540ba00e3ee50942f03d84e1a8928a029f35f9"
+checksum = "475ce2ac4a9727e53a519f6ee05b38abfcba8f0d39c4d24f103d184e36fd5b0f"
 dependencies = [
  "atomic",
  "bytes",
@@ -3319,9 +3289,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-gossipsub"
-version = "0.36.0"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f62943fba0b0dae02b87868620c52a581c54ec9fb04b5e195cf20313fc510c3"
+checksum = "a90c989a7c0969c2ab63e898da9bc735e3be53fb4f376e9c045ce516bcc9f928"
 dependencies = [
  "asynchronous-codec",
  "base64 0.13.0",
@@ -3347,9 +3317,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-identify"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f219b4d4660fe3a04bf5fe6b5970902b7c1918e25b2536be8c70efc480f88f8"
+checksum = "c5ef5a5b57904c7c33d6713ef918d239dc6b7553458f3475d87f8a18e9c651c8"
 dependencies = [
  "futures",
  "futures-timer",
@@ -3364,9 +3334,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-kad"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aead5ee2322a7b825c7633065370909c8383046f955cda5b56797e6904db7a72"
+checksum = "564e6bd64d177446399ed835b9451a8825b07929d6daa6a94e6405592974725e"
 dependencies = [
  "arrayvec 0.5.2",
  "asynchronous-codec",
@@ -3392,9 +3362,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-mdns"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54d1914576978e5f3b15ac99e2cda9b56471ce64f1cfc7c2b09ac0cee147175e"
+checksum = "611ae873c8e280ccfab0d57c7a13cac5644f364529e233114ff07863946058b0"
 dependencies = [
  "async-io",
  "data-encoding",
@@ -3413,9 +3383,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-metrics"
-version = "0.4.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d29e4e5e4c5aa567fe1ee3133afe088dc2d2fd104e20c5c2c5c2649f75129677"
+checksum = "985be799bb3796e0c136c768208c3c06604a38430571906a13dcfeda225a3b9d"
 dependencies = [
  "libp2p-core",
  "libp2p-gossipsub",
@@ -3468,9 +3438,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-ping"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ab44a12d372d6abdd326c468c1d5b002be06fbd923c5a799d6a9d3b36646ca3"
+checksum = "bf57a3c2e821331dda9fe612d4654d676ab6e33d18d9434a18cced72630df6ad"
 dependencies = [
  "futures",
  "futures-timer",
@@ -3484,9 +3454,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-request-response"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12388a73626d1727524069cce0bb05a9c428581de435278a070c55ae27cc7e73"
+checksum = "b5e6a6fc6c9ad95661f46989473b34bd2993d14a4de497ff3b2668a910d4b869"
 dependencies = [
  "async-trait",
  "bytes",
@@ -3502,9 +3472,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm"
-version = "0.34.0"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53ab2d4eb8ef2966b10fdf859245cdd231026df76d3c6ed2cf9e418a8f688ec9"
+checksum = "8f0c69ad9e8f7c5fc50ad5ad9c7c8b57f33716532a2b623197f69f93e374d14c"
 dependencies = [
  "either",
  "fnv",
@@ -4188,30 +4158,6 @@ checksum = "4b0560d531d1febc25a3c9398a62a71256c0178f2e3443baedd9ad4bb8c9deb4"
 dependencies = [
  "thiserror",
  "ucd-trie",
-]
-
-[[package]]
-name = "pest_generator"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5803d8284a629cc999094ecd630f55e91b561a1d1ba75e233b00ae13b91a69ad"
-dependencies = [
- "pest",
- "pest_meta",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "pest_meta"
-version = "2.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1538eb784f07615c6d9a8ab061089c6c54a344c5b4301db51990ca1c241e8c04"
-dependencies = [
- "once_cell",
- "pest",
- "sha-1 0.10.0",
 ]
 
 [[package]]
@@ -5519,29 +5465,11 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "strum"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaf86bbcfd1fa9670b7a129f64fc0c9fcbbfe4f1bc4210e9e98fe71ffc12cde2"
-
-[[package]]
-name = "strum"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
 dependencies = [
- "strum_macros 0.24.3",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d06aaeeee809dbc59eb4556183dd927df67db1540de5be8d3ec0b6636358a5ec"
-dependencies = [
- "heck 0.3.3",
- "proc-macro2",
- "quote",
- "syn",
+ "strum_macros",
 ]
 
 [[package]]
@@ -5926,6 +5854,24 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c530c8675c1dbf98facee631536fa116b5fb6382d7dd6dc1b118d970eafe3ba"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-range-header",
+ "pin-project-lite 0.2.9",
+ "tower-layer",
+ "tower-service",
  "tracing",
 ]
 
@@ -6271,6 +6217,15 @@ checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 dependencies = [
  "getrandom 0.2.7",
  "serde",
+]
+
+[[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+dependencies = [
+ "getrandom 0.2.7",
 ]
 
 [[package]]

@@ -201,9 +201,9 @@ pub struct RunResult {
 }
 
 impl RunResult {
-    pub fn receipts(&self) -> impl Iterator<Item = fuel_tx::Receipt> + '_ {
+    pub fn receipts(&self) -> impl Iterator<Item = ::fuel_vm::fuel_tx::Receipt> + '_ {
         self.json_receipts.iter().map(|r| {
-            serde_json::from_str::<fuel_tx::Receipt>(r)
+            serde_json::from_str::<::fuel_vm::fuel_tx::Receipt>(r)
                 .expect("Receipt deserialization failed, server/client version mismatch")
         })
     }
@@ -211,7 +211,7 @@ impl RunResult {
 
 impl fmt::Display for RunResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let receipts: Vec<fuel_tx::Receipt> = self.receipts().collect();
+        let receipts: Vec<::fuel_vm::fuel_tx::Receipt> = self.receipts().collect();
         f.debug_struct("RunResult")
             .field("breakpoint", &self.breakpoint)
             .field("receipts", &receipts)

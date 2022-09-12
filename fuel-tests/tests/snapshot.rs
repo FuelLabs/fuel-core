@@ -72,7 +72,6 @@ async fn snapshot_state_config() {
         messages: Some(vec![MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
-            owner: rng.gen(),
             nonce: rng.gen_range(0..1000),
             amount: rng.gen_range(0..1000),
             data: vec![],

@@ -177,7 +177,6 @@ impl FuelService {
                 let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
-                    owner: msg.owner,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data.clone(),
@@ -444,7 +443,6 @@ mod tests {
         let msg = MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
-            owner: rng.gen(),
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],

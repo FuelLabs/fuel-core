@@ -1,6 +1,6 @@
 use clap::Parser;
 use fuel_gql_client::client::FuelClient;
-use fuel_tx::Transaction;
+use fuel_vm::fuel_tx::Transaction;
 use serde_json::json;
 
 #[derive(Parser)]

@@ -1,19 +1,21 @@
 use crate::{
+    common::{
+        fuel_tx::{
+            TxId,
+            UtxoId,
+            ValidationError,
+        },
+        fuel_types::{
+            Bytes32,
+            ContractId,
+            MessageId,
+        },
+        fuel_vm::backtrace::Backtrace,
+    },
     db::KvStoreError,
     model::FuelBlock,
 };
 use async_trait::async_trait;
-use fuel_tx::{
-    TxId,
-    UtxoId,
-    ValidationError,
-};
-use fuel_types::{
-    Bytes32,
-    ContractId,
-    MessageId,
-};
-use fuel_vm::backtrace::Backtrace;
 use std::error::Error as StdError;
 use thiserror::Error;
 
