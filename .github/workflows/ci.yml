@@ -110,7 +110,7 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.0"
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
       - name: ${{ matrix.command }} ${{ matrix.args }}

@@ -1,11 +1,18 @@
 use crate::database::Database;
 use anyhow::Error as AnyError;
 use modules::Modules;
-use std::{net::SocketAddr, panic};
+use std::{
+    net::SocketAddr,
+    panic,
+};
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
-pub use config::{Config, DbType, VMConfig};
+pub use config::{
+    Config,
+    DbType,
+    VMConfig,
+};
 
 pub mod config;
 pub(crate) mod genesis;
