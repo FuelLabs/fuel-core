@@ -93,7 +93,7 @@ jobs:
           - command: clippy
             args: --all-targets --all-features
           - command: make
-            args: check --locked --workspace
+            args: check --locked
           - command: make
             args: test --all-targets --all-features
           - command: make
