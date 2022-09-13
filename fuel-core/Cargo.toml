@@ -84,7 +84,6 @@ insta = "1.8"
 metrics = ["dep:fuel-metrics"]
 default = ["rocksdb", "metrics", "debug"]
 debug = ["fuel-core-interfaces/debug"]
-test-helpers = []
 relayer = ["dep:fuel-relayer"]
 p2p = ["dep:fuel-p2p"]
 # features to enable in production, but increase build times
