@@ -1,11 +1,12 @@
-use fuel_vm::prelude::Input;
-
 use super::BlockHeight;
 use crate::{
-    common::fuel_types::{
-        Address,
-        MessageId,
-        Word,
+    common::{
+        fuel_types::{
+            Address,
+            MessageId,
+            Word,
+        },
+        fuel_vm::prelude::Input,
     },
     model::DaBlockHeight,
 };
