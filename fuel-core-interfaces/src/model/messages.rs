@@ -1,12 +1,11 @@
+use fuel_vm::prelude::Input;
+
 use super::BlockHeight;
 use crate::{
-    common::{
-        fuel_crypto::Hasher,
-        fuel_types::{
-            Address,
-            MessageId,
-            Word,
-        },
+    common::fuel_types::{
+        Address,
+        MessageId,
+        Word,
     },
     model::DaBlockHeight,
 };
@@ -28,13 +27,13 @@ pub struct Message {
 
 impl Message {
     pub fn id(&self) -> MessageId {
-        let mut hasher = Hasher::default();
-        hasher.input(self.sender);
-        hasher.input(self.recipient);
-        hasher.input(self.nonce.to_be_bytes());
-        hasher.input(self.amount.to_be_bytes());
-        hasher.input(&self.data);
-        MessageId::from(*hasher.digest())
+        Input::compute_message_id(
+            &self.sender,
+            &self.recipient,
+            self.nonce,
+            self.amount,
+            &self.data,
+        )
     }
 
     pub fn check(self) -> CheckedMessage {
