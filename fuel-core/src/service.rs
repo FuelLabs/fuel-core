@@ -44,7 +44,6 @@ impl FuelService {
         Self::init_service(database, config).await
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Used to initialize a service with a pre-existing database
     pub async fn from_database(
         database: Database,

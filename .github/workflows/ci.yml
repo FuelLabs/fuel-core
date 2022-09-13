@@ -93,17 +93,11 @@ jobs:
           - command: clippy
             args: --all-targets --all-features
           - command: make
-            args: build
-          - command: check
-            args: --locked --workspace
+            args: check --locked
           - command: test
-            args: --all-targets --all-features --workspace --exclude fuel-p2p
+            args: --all-targets --all-features --workspace
           - command: test
-            args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-          # Split p2p into its own job so that it can use a single threaded runner
-          - command: test
-            args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
-            skip-error: true
+            args: --all-targets --no-default-features --workspace
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -113,11 +107,10 @@ jobs:
         with:
           toolchain: stable
       - name: Install Cargo Make
-        uses: baptiste0928/cargo-install@v1
+        uses: davidB/rust-cargo-make@v1
         with:
-          crate: cargo-make
-          version: "0.35.16"
-      - uses: Swatinem/rust-cache@v1
+          version: "0.36.0"
+      - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
       - name: ${{ matrix.command }} ${{ matrix.args }}
