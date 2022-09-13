@@ -10,7 +10,7 @@ use crate::{
         DelegatesIndexes,
         KvStoreError,
         Messages,
-        StackingDiffs,
+        StakingDiffs,
         ValidatorsSet,
     },
     model::{
@@ -78,7 +78,7 @@ pub trait RelayerDb:
     StorageMutate<Messages, Error = KvStoreError>
     + StorageMutate<ValidatorsSet, Error = KvStoreError>
     + StorageMutate<DelegatesIndexes, Error = KvStoreError>
-    + StorageMutate<StackingDiffs, Error = KvStoreError>
+    + StorageMutate<StakingDiffs, Error = KvStoreError>
     + Send
     + Sync
 {
@@ -95,7 +95,7 @@ pub trait RelayerDb:
         da_height: DaBlockHeight,
         stakes: &StakingDiff,
     ) {
-        let _ = self.storage::<StackingDiffs>().insert(&da_height, stakes);
+        let _ = self.storage::<StakingDiffs>().insert(&da_height, stakes);
     }
 
     /// Query delegate index to find list of blocks that delegation changed
@@ -123,7 +123,7 @@ pub trait RelayerDb:
         }
         // get staking diff
         let staking_diff = self
-            .storage::<StackingDiffs>()
+            .storage::<StakingDiffs>()
             .get(&last_da_height)
             .expect("Expect to get data without problem")?;
 

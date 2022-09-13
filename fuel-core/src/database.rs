@@ -110,8 +110,8 @@ pub enum Column {
     /// See [`ValidatorsSet`](fuel_core_interfaces::db::ValidatorsSet)
     ValidatorsSet = 15,
     /// Contain diff between da blocks it contains new registers consensus key and new delegate sets.
-    /// See [`StackingDiffs`](fuel_core_interfaces::db::StackingDiffs)
-    StackingDiffs = 16,
+    /// See [`StakingDiffs`](fuel_core_interfaces::db::StakingDiffs)
+    StakingDiffs = 16,
     /// Maps delegate address with validator_set_diff index where last delegate change happened.
     /// See [`DelegatesIndexes`](fuel_core_interfaces::db::DelegatesIndexes)
     DelegatesIndexes = 17,
@@ -422,7 +422,7 @@ mod relayer {
             }
             let mut out = Vec::new();
             for diff in self.iter_all::<WrapU64Be, StakingDiff>(
-                Column::StackingDiffs,
+                Column::StakingDiffs,
                 None,
                 Some(from_da_height.to_be_bytes().to_vec()),
                 None,

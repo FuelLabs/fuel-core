@@ -40,7 +40,7 @@ impl Mappable for Coins {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of bridget from the Ethereum [`Message`](crate::model::Message)s.
+/// The storage table of bridged Ethereum [`Message`](crate::model::Message)s.
 pub struct Messages;
 
 impl Mappable for Messages {
@@ -77,10 +77,10 @@ impl Mappable for ValidatorsSet {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of relayer stacking diffs.
-pub struct StackingDiffs;
+/// The storage table of relayer staking diffs.
+pub struct StakingDiffs;
 
-impl Mappable for StackingDiffs {
+impl Mappable for StakingDiffs {
     type Key = DaBlockHeight;
     type SetValue = StakingDiff;
     type GetValue = Self::SetValue;

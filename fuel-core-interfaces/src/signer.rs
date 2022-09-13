@@ -14,3 +14,17 @@ pub enum SignerError {
     #[error("Private key not loaded")]
     KeyNotLoaded,
 }
+
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod helpers {
+    use super::*;
+
+    pub struct DummySigner {}
+
+    #[async_trait]
+    impl Signer for DummySigner {
+        async fn sign(&self, hash: &Bytes32) -> Result<Bytes32, SignerError> {
+            Ok(*hash)
+        }
+    }
+}

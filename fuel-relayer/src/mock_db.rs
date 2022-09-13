@@ -27,7 +27,7 @@ use fuel_core_interfaces::{
         DelegatesIndexes,
         KvStoreError,
         Messages,
-        StackingDiffs,
+        StakingDiffs,
         ValidatorsSet,
     },
     model::{
@@ -191,7 +191,7 @@ impl StorageMutate<DelegatesIndexes> for MockDb {
     }
 }
 
-impl StorageInspect<StackingDiffs> for MockDb {
+impl StorageInspect<StakingDiffs> for MockDb {
     type Error = KvStoreError;
 
     fn get(&self, key: &DaBlockHeight) -> Result<Option<Cow<StakingDiff>>, Self::Error> {
@@ -209,7 +209,7 @@ impl StorageInspect<StackingDiffs> for MockDb {
     }
 }
 
-impl StorageMutate<StackingDiffs> for MockDb {
+impl StorageMutate<StakingDiffs> for MockDb {
     fn insert(
         &mut self,
         key: &DaBlockHeight,
