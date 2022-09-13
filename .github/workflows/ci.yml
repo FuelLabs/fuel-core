@@ -98,7 +98,7 @@ jobs:
             args: --all-targets --all-features --workspace
           - command: test
             args: --all-targets --no-default-features --workspace
-    # disallow any job that takes longer than 30 minutes
+    # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
