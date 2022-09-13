@@ -1,19 +1,21 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
+use crate::common::{
+    fuel_crypto::Hasher,
+    fuel_tx::{
+        Address,
+        AssetId,
+        Bytes32,
+        Transaction,
+    },
+    fuel_types::Word,
+};
 use chrono::{
     DateTime,
     TimeZone,
     Utc,
 };
 use core::ops::Deref;
-use fuel_crypto::Hasher;
-use fuel_tx::{
-    Address,
-    AssetId,
-    Bytes32,
-    Transaction,
-};
-use fuel_types::Word;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]

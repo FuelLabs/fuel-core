@@ -48,7 +48,7 @@ jobs:
       - name: Run Cargo.toml linter
         run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -69,7 +69,7 @@ jobs:
         run: ./.github/workflows/scripts/verify_openssl.sh
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@master
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -119,7 +119,7 @@ jobs:
           command: ${{ matrix.command }}
           args: ${{ matrix.args }}
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -176,7 +176,7 @@ jobs:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always()
         with:
           status: ${{ job.status }}
@@ -235,7 +235,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           status: ${{ job.status }}
@@ -326,7 +326,7 @@ jobs:
 
       - name: Build fuel-core
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'
@@ -384,7 +384,7 @@ jobs:
           asset_content_type: application/gzip
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         # need to find a work-around to be able to run this action on mac
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
         with:
