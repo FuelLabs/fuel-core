@@ -5,7 +5,7 @@
 # cargo workspaces. Specifically, each task is run on workspace members indepedently, avoiding potential issues that
 # arise from feature unification (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification).
 # Feature unification allows two unrelated crates with the same depedency to enable features on eachother.
-# This is problematic when a crate is build independently (when publishing / being consumed from crates.io),
+# This is problematic when a crate is built independently (when publishing / being consumed from crates.io),
 # and it implicitly depended on features enabled by other crates in the same workspace.
 # While feature resolver v2 attempted to resolve this problem, it still comes up in certain scenarios.
 
