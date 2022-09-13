@@ -71,11 +71,11 @@ pub mod delegates_index;
 pub mod message;
 pub mod metadata;
 mod receipts;
+pub mod resource;
 pub mod staking_diffs;
 pub mod state;
 pub mod transaction;
 pub mod transactional;
-pub mod utils;
 pub mod validator_set;
 
 pub mod columns {

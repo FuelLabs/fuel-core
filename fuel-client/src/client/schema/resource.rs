@@ -48,6 +48,15 @@ pub enum Resource {
     Message(Message),
 }
 
+impl Resource {
+    pub fn amount(&self) -> u64 {
+        match self {
+            Resource::Coin(c) => c.amount.0,
+            Resource::Message(m) => m.amount.0,
+        }
+    }
+}
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ResourcesToSpendArgs {
     /// The `Address` of the assets' resources owner.

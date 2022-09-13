@@ -78,7 +78,7 @@ impl BalanceQuery {
 
         // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
         let balance = db
-            .owned_coins_utxos(&owner.0, None, None)
+            .owned_coins_ids(&owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
@@ -122,7 +122,7 @@ impl BalanceQuery {
 
         // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
         let balances = db
-            .owned_coins_utxos(&filter.owner.0, None, None)
+            .owned_coins_ids(&filter.owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)

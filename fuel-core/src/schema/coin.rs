@@ -150,8 +150,7 @@ impl CoinQuery {
 
                     let owner: fuel_tx::Address = filter.owner.into();
 
-                    let mut coin_ids =
-                        db.owned_coins_utxos(&owner, start, Some(direction));
+                    let mut coin_ids = db.owned_coins_ids(&owner, start, Some(direction));
                     let mut started = None;
                     if start.is_some() {
                         // skip initial result

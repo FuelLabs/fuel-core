@@ -1,8 +1,8 @@
 use crate::{
     database::{
-        utils::{
-            Asset,
+        resource::{
             AssetQuery,
+            AssetSpendTarget,
             Exclude,
             Resource,
             ResourceId,
@@ -46,7 +46,7 @@ pub enum CoinQueryError {
 /// The prepared spend queries.
 pub struct SpendQuery {
     owner: Address,
-    query_per_asset: Vec<Asset>,
+    query_per_asset: Vec<AssetSpendTarget>,
     exclude: Exclude,
 }
 
@@ -54,7 +54,7 @@ impl SpendQuery {
     // TODO: Check that number of `queries` is not too high(to prevent attacks).
     pub fn new(
         owner: Address,
-        query_per_asset: &[Asset],
+        query_per_asset: &[AssetSpendTarget],
         exclude_vec: Option<Vec<ResourceId>>,
     ) -> Result<Self, CoinQueryError> {
         let mut duplicate_checker = HashSet::new();
@@ -80,7 +80,7 @@ impl SpendQuery {
     }
 
     /// Return [`Asset`]s.
-    pub fn assets(&self) -> &Vec<Asset> {
+    pub fn assets(&self) -> &Vec<AssetSpendTarget> {
         &self.query_per_asset
     }
 
@@ -115,7 +115,7 @@ pub fn largest_first(
     let mut collected_amount = 0u64;
     let mut resources = vec![];
 
-    for coin in inputs {
+    for resource in inputs {
         // Break if we don't need any more coins
         if collected_amount >= query.asset.target {
             break
@@ -127,8 +127,8 @@ pub fn largest_first(
         }
 
         // Add to list
-        collected_amount += coin.amount();
-        resources.push(coin.into_owned());
+        collected_amount += resource.amount();
+        resources.push(resource.into_owned());
     }
 
     if collected_amount < query.asset.target {
@@ -207,14 +207,32 @@ impl From<StateError> for CoinQueryError {
 mod tests {
     use crate::{
         chain_config::ChainConfig,
-        test_utils::*,
+        database::Database,
+        model::{
+            Coin,
+            CoinStatus,
+        },
     };
     use assert_matches::assert_matches;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Word,
-        fuel_tx::Address,
-        fuel_types::AssetId,
+    use fuel_core_interfaces::{
+        common::{
+            fuel_asm::Word,
+            fuel_storage::Storage,
+            fuel_tx::{
+                Address,
+                AssetId,
+                Bytes32,
+                UtxoId,
+            },
+            fuel_types::MessageId,
+        },
+        model::{
+            BlockHeight,
+            DaBlockHeight,
+            Message,
+        },
     };
+    use itertools::Itertools;
 
     use super::*;
 
@@ -264,7 +282,7 @@ mod tests {
         use super::*;
 
         fn query(
-            spend_query: &[Asset],
+            spend_query: &[AssetSpendTarget],
             owner: &Address,
             db: &Database,
         ) -> Result<Vec<Vec<(AssetId, Word)>>, CoinQueryError> {
@@ -290,7 +308,7 @@ mod tests {
             // Query some targets, including higher than the owner's balance
             for target in 0..20 {
                 let resources = query(
-                    &[Asset::new(asset_ids[0], target, u64::MAX)],
+                    &[AssetSpendTarget::new(asset_ids[0], target, u64::MAX)],
                     &owner,
                     db.as_ref(),
                 );
@@ -344,7 +362,11 @@ mod tests {
             }
 
             // Query with too small max_inputs
-            let resources = query(&[Asset::new(asset_ids[0], 6, 1)], &owner, db.as_ref());
+            let resources = query(
+                &[AssetSpendTarget::new(asset_ids[0], 6, 1)],
+                &owner,
+                db.as_ref(),
+            );
             assert_matches!(resources, Err(CoinQueryError::MaxResourcesReached));
         }
 
@@ -370,8 +392,8 @@ mod tests {
         ) {
             let resources = query(
                 &[
-                    Asset::new(asset_ids[0], 3, u64::MAX),
-                    Asset::new(asset_ids[1], 6, u64::MAX),
+                    AssetSpendTarget::new(asset_ids[0], 3, u64::MAX),
+                    AssetSpendTarget::new(asset_ids[1], 6, u64::MAX),
                 ],
                 &owner,
                 db.as_ref(),
@@ -399,7 +421,7 @@ mod tests {
         use super::*;
 
         fn query(
-            query_per_asset: Vec<Asset>,
+            query_per_asset: Vec<AssetSpendTarget>,
             owner: Address,
             asset_ids: &[AssetId],
             db: &Database,
@@ -429,7 +451,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![Asset::new(asset_ids[0], amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_ids[0], amount, u64::MAX)],
                     owner,
                     asset_ids,
                     db.as_ref(),
@@ -471,7 +493,7 @@ mod tests {
 
             // Query with too small max_inputs
             let coins = query(
-                vec![Asset::new(
+                vec![AssetSpendTarget::new(
                     asset_ids[0],
                     6, // target
                     1, // max
@@ -506,8 +528,16 @@ mod tests {
             // Query multiple asset IDs
             let coins = query(
                 vec![
-                    Asset::new(asset_ids[0], 3 /* target */, 3 /* max */),
-                    Asset::new(asset_ids[1], 6 /* target */, 3 /* max */),
+                    AssetSpendTarget::new(
+                        asset_ids[0],
+                        3, // target
+                        3, // max
+                    ),
+                    AssetSpendTarget::new(
+                        asset_ids[1],
+                        6, // target
+                        3, // max
+                    ),
                 ],
                 owner,
                 asset_ids,
@@ -554,7 +584,7 @@ mod tests {
             db: TestDatabase,
             excluded_ids: Vec<ResourceId>,
         ) {
-            let query = |query_per_asset: Vec<Asset>,
+            let query = |query_per_asset: Vec<AssetSpendTarget>,
                          excluded_ids: Vec<ResourceId>|
              -> Result<Vec<(AssetId, u64)>, CoinQueryError> {
                 let coins = random_improve(
@@ -588,7 +618,7 @@ mod tests {
             // Query some amounts, including higher than the owner's balance
             for amount in 0..20 {
                 let coins = query(
-                    vec![Asset::new(asset_ids[0], amount, u64::MAX)],
+                    vec![AssetSpendTarget::new(asset_ids[0], amount, u64::MAX)],
                     excluded_ids.clone(),
                 );
 
@@ -667,6 +697,104 @@ mod tests {
                 .collect_vec();
 
             exclusion_assert(owner, &asset_ids, db, excluded_ids);
+        }
+    }
+
+    #[derive(Default)]
+    pub struct TestDatabase {
+        database: Database,
+        last_coin_index: u64,
+        last_message_index: u64,
+    }
+
+    impl TestDatabase {
+        pub fn make_coin(
+            &mut self,
+            owner: Address,
+            amount: Word,
+            asset_id: AssetId,
+        ) -> (UtxoId, Coin) {
+            let index = self.last_coin_index;
+            self.last_coin_index += 1;
+
+            let id = UtxoId::new(Bytes32::from([0u8; 32]), index.try_into().unwrap());
+            let coin = Coin {
+                owner,
+                amount,
+                asset_id,
+                maturity: Default::default(),
+                status: CoinStatus::Unspent,
+                block_created: Default::default(),
+            };
+
+            Storage::<UtxoId, Coin>::insert(&mut self.database, &id, &coin).unwrap();
+
+            (id, coin)
+        }
+
+        pub fn make_message(
+            &mut self,
+            owner: Address,
+            amount: Word,
+        ) -> (MessageId, Message) {
+            let nonce = self.last_message_index;
+            self.last_message_index += 1;
+
+            let message = Message {
+                sender: Default::default(),
+                recipient: owner,
+                nonce,
+                amount,
+                data: vec![],
+                da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                fuel_block_spend: None,
+            };
+
+            Storage::<MessageId, Message>::insert(
+                &mut self.database,
+                &message.id(),
+                &message,
+            )
+            .unwrap();
+
+            (message.id(), message)
+        }
+
+        pub fn owned_coins(&self, owner: &Address) -> Vec<(UtxoId, Coin)> {
+            self.database
+                .owned_coins_ids(owner, None, None)
+                .map(|res| {
+                    res.map(|id| {
+                        let coin = Storage::<UtxoId, Coin>::get(&self.database, &id)
+                            .unwrap()
+                            .unwrap();
+                        (id, coin.into_owned())
+                    })
+                })
+                .try_collect()
+                .unwrap()
+        }
+
+        pub fn owned_messages(&self, owner: &Address) -> Vec<Message> {
+            self.database
+                .owned_message_ids(owner, None, None)
+                .map(|res| {
+                    res.map(|id| {
+                        let message =
+                            Storage::<MessageId, Message>::get(&self.database, &id)
+                                .unwrap()
+                                .unwrap();
+                        message.into_owned()
+                    })
+                })
+                .try_collect()
+                .unwrap()
+        }
+    }
+
+    impl AsRef<Database> for TestDatabase {
+        fn as_ref(&self) -> &Database {
+            self.database.as_ref()
         }
     }
 }

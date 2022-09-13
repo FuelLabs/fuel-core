@@ -511,7 +511,7 @@ mod tests {
     }
 
     fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
-        db.owned_coins_utxos(owner, None, None)
+        db.owned_coins_ids(owner, None, None)
             .map(|r| {
                 r.and_then(|coin_id| {
                     Storage::<UtxoId, Coin>::get(db, &coin_id)

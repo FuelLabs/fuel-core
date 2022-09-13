@@ -1,11 +1,11 @@
 use crate::{
-    coin_query::{
+    database::{
+        resource::AssetSpendTarget,
+        Database,
+    },
+    resource_query::{
         random_improve,
         SpendQuery,
-    },
-    database::{
-        utils::Asset,
-        Database,
     },
     schema::{
         coin::Coin,
@@ -86,7 +86,7 @@ impl ResourceQuery {
         let query_per_asset = query_per_asset
             .into_iter()
             .map(|e| {
-                Asset::new(
+                AssetSpendTarget::new(
                     e.asset_id.0,
                     e.amount.0,
                     e.max
@@ -99,11 +99,11 @@ impl ResourceQuery {
             let utxos = exclude
                 .utxos
                 .into_iter()
-                .map(|utxo| crate::database::utils::ResourceId::Utxo(utxo.0));
+                .map(|utxo| crate::database::resource::ResourceId::Utxo(utxo.0));
             let messages = exclude
                 .messages
                 .into_iter()
-                .map(|message| crate::database::utils::ResourceId::Message(message.0));
+                .map(|message| crate::database::resource::ResourceId::Message(message.0));
             utxos.chain(messages).collect()
         });
 
@@ -117,12 +117,12 @@ impl ResourceQuery {
                 resources
                     .into_iter()
                     .map(|resource| match resource {
-                        crate::database::utils::Resource::Coin { id, fields } => {
+                        crate::database::resource::Resource::Coin { id, fields } => {
                             Resource::Coin(Coin(id, fields))
                         }
-                        crate::database::utils::Resource::Message { fields, .. } => {
-                            Resource::Message(Message(fields))
-                        }
+                        crate::database::resource::Resource::Message {
+                            fields, ..
+                        } => Resource::Message(Message(fields)),
                     })
                     .collect_vec()
             })

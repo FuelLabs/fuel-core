@@ -34,13 +34,13 @@ use std::{
 
 /// At least required `target` of the query per asset's `id` with `max` resources.
 #[derive(Clone)]
-pub struct Asset {
+pub struct AssetSpendTarget {
     pub id: AssetId,
     pub target: u64,
     pub max: usize,
 }
 
-impl Asset {
+impl AssetSpendTarget {
     pub fn new(id: AssetId, target: u64, max: u64) -> Self {
         Self {
             id,
@@ -73,7 +73,7 @@ impl Exclude {
 
 pub struct AssetQuery<'a> {
     pub owner: &'a Address,
-    pub asset: &'a Asset,
+    pub asset: &'a AssetSpendTarget,
     pub exclude: Option<&'a Exclude>,
     pub database: &'a Database,
 }
@@ -81,7 +81,7 @@ pub struct AssetQuery<'a> {
 impl<'a> AssetQuery<'a> {
     pub fn new(
         owner: &'a Address,
-        asset: &'a Asset,
+        asset: &'a AssetSpendTarget,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
     ) -> Self {
@@ -101,7 +101,7 @@ impl<'a> AssetQuery<'a> {
     ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
         let coins_iter = self
             .database
-            .owned_coins_utxos(self.owner, None, None)
+            .owned_coins_ids(self.owner, None, None)
             .filter_ok(|id| {
                 if let Some(exclude) = self.exclude {
                     !exclude.utxos.contains(id)

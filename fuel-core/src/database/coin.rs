@@ -88,7 +88,7 @@ impl Storage<UtxoId, Coin> for Database {
 }
 
 impl Database {
-    pub fn owned_coins_utxos(
+    pub fn owned_coins_ids(
         &self,
         owner: &Address,
         start_coin: Option<UtxoId>,

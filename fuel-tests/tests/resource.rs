@@ -5,7 +5,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    coin_query::CoinQueryError,
+    resource_query::CoinQueryError,
     service::{
         Config,
         FuelService,
@@ -88,7 +88,9 @@ mod coins {
             .unwrap();
         assert_eq!(resources_per_asset.len(), 2);
         assert_eq!(resources_per_asset[0].len(), 1);
+        assert!(resources_per_asset[0].amount() >= 1);
         assert_eq!(resources_per_asset[1].len(), 1);
+        assert!(resources_per_asset[1].amount() >= 1);
     }
 
     #[tokio::test]
@@ -109,7 +111,9 @@ mod coins {
             .unwrap();
         assert_eq!(resources_per_asset.len(), 2);
         assert_eq!(resources_per_asset[0].len(), 3);
+        assert!(resources_per_asset[0].amount() >= 300);
         assert_eq!(resources_per_asset[1].len(), 3);
+        assert!(resources_per_asset[1].amount() >= 300);
     }
 
     #[tokio::test]
@@ -423,7 +427,9 @@ mod messages_and_coins {
             .unwrap();
         assert_eq!(resources_per_asset.len(), 2);
         assert_eq!(resources_per_asset[0].len(), 1);
+        assert!(resources_per_asset[0].amount() >= 1);
         assert_eq!(resources_per_asset[1].len(), 1);
+        assert!(resources_per_asset[1].amount() >= 1);
     }
 
     #[tokio::test]
@@ -444,7 +450,9 @@ mod messages_and_coins {
             .unwrap();
         assert_eq!(resources_per_asset.len(), 2);
         assert_eq!(resources_per_asset[0].len(), 3);
+        assert!(resources_per_asset[0].amount() >= 300);
         assert_eq!(resources_per_asset[1].len(), 3);
+        assert!(resources_per_asset[1].amount() >= 300);
     }
 
     #[tokio::test]
@@ -617,5 +625,15 @@ impl ToStdErrorString for CoinQueryError {
     fn to_str_error_string(self) -> String {
         fuel_gql_client::client::from_strings_errors_to_std_error(vec![self.to_string()])
             .to_string()
+    }
+}
+
+trait CumulativeAmount {
+    fn amount(&self) -> u64;
+}
+
+impl CumulativeAmount for Vec<Resource> {
+    fn amount(&self) -> u64 {
+        self.iter().map(|resource| resource.amount()).sum()
     }
 }
