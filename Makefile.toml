@@ -1,0 +1,31 @@
+# This file inherits defaults from
+# https://github.com/sagiegurari/cargo-make/blob/0.36.0/src/lib/descriptor/makefiles/stable.toml
+
+# This is a configuration file for the cargo plugin `cargo-make`. We use this plugin because of it's handling around
+# cargo workspaces. Specifically, each task is run on workspace members indepedently, avoiding potential issues that
+# arise from feature unification (https://doc.rust-lang.org/cargo/reference/features.html#feature-unification).
+# Feature unification allows two unrelated crates with the same depedency to enable features on eachother.
+# This is problematic when a crate is built independently (when publishing / being consumed from crates.io),
+# and it implicitly depended on features enabled by other crates in the same workspace.
+# While feature resolver v2 attempted to resolve this problem, it still comes up in certain scenarios.
+
+# Disable built-in flows
+[config]
+skip_core_tasks = true
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.check]
+description = "Compile code without linking. Faster than build to detect problems."
+category = "Build"
+command = "cargo"
+args = ["check", "${@}"]
+# skip compilation checks on fuel-tests since it will be tested anyways
+env = { "CARGO_MAKE_WORKSPACE_SKIP_MEMBERS" = ["fuel-tests"] }
+
+[tasks.test]
+description = "Run tests on each workspace member"
+category = "Test"
+command = "cargo"
+args = ["test", "${@}"]
