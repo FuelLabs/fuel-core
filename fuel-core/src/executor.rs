@@ -35,11 +35,7 @@ use fuel_core_interfaces::{
             TransactionFee,
             UtxoId,
         },
-        fuel_types::{
-            bytes::SerializableVec,
-            ContractId,
-            MessageId,
-        },
+        fuel_types::bytes::SerializableVec,
         fuel_vm::{
             consts::REG_SP,
             prelude::{
