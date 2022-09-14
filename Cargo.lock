@@ -1665,6 +1665,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enum-iterator"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91a4ec26efacf4aeff80887a175a419493cb6f8b5480d26387eb0bd038976187"
+dependencies = [
+ "enum-iterator-derive",
+]
+
+[[package]]
+name = "enum-iterator-derive"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "828de45d0ca18782232dfb8f3ea9cc428e8ced380eb26a520baaacfc70de39ce"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2108,6 +2128,7 @@ dependencies = [
  "clap",
  "derive_more",
  "dirs",
+ "enum-iterator",
  "env_logger",
  "fuel-block-executor",
  "fuel-block-importer",
@@ -2208,9 +2229,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-merkle"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa59f2a4e6cd6d83a51981c5ac706d58fc8ef53700003948c826827b88cfff1"
+checksum = "c006505ab44132df81c7b38a438a3b8b5ec368b93f9294dcc75ee381c6939655"
 dependencies = [
  "digest 0.10.3",
  "fuel-storage",
@@ -2286,9 +2307,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-storage"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b9161e86d434a93088409530a4f71f42e074b3bbcbb7a27bfe666583f92fd7"
+checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 
 [[package]]
 name = "fuel-sync"
@@ -2323,9 +2344,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d88b96bddf1c57f1d73a51f0f58ef67b294cdb722d5f80ee76d9cf84b986769e"
+checksum = "e9045f94a95dda991ae16f8a4720cf6c1f5112c9911173726ed702eb4cb70204"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
@@ -2365,9 +2386,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.16.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bdbc4b0863a4d7d523b248d404821dc4e3b6d0034fbbf33f03b1f4283af663"
+checksum = "6ceb5384b74f8518f29e230af43a2cec64f51004e08d21d990090c622db96012"
 dependencies = [
  "anyhow",
  "fuel-asm",

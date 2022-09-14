@@ -24,12 +24,14 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx,
-    fuel_types,
-    fuel_vm,
-    fuel_vm::prelude::Contract as FuelVmContract,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsRef,
+        fuel_tx,
+        fuel_types,
+        fuel_vm,
+    },
+    db::ContractsRawCode,
 };
 use std::iter::IntoIterator;
 
@@ -49,10 +51,11 @@ impl Contract {
 
     async fn bytecode(&self, ctx: &Context<'_>) -> async_graphql::Result<HexString> {
         let db = ctx.data_unchecked::<Database>().clone();
-        let contract =
-            Storage::<fuel_types::ContractId, FuelVmContract>::get(&db, &self.0)?
-                .ok_or(KvStoreError::NotFound)?
-                .into_owned();
+        let contract = db
+            .storage::<ContractsRawCode>()
+            .get(&self.0)?
+            .ok_or(KvStoreError::NotFound)?
+            .into_owned();
         Ok(HexString(contract.into()))
     }
     async fn salt(&self, ctx: &Context<'_>) -> async_graphql::Result<Salt> {
@@ -84,8 +87,7 @@ impl ContractQuery {
     ) -> async_graphql::Result<Option<Contract>> {
         let id: fuel_types::ContractId = id.0;
         let db = ctx.data_unchecked::<Database>().clone();
-        let contract_exists =
-            Storage::<fuel_types::ContractId, FuelVmContract>::contains_key(&db, &id)?;
+        let contract_exists = db.storage::<ContractsRawCode>().contains_key(&id)?;
         if !contract_exists {
             return Ok(None)
         }
