@@ -1,25 +1,32 @@
 use anyhow::Result;
 use clap::Parser;
-use std::{
-    env,
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{env, path::PathBuf, str::FromStr};
 use tracing::log::warn;
 use tracing_subscriber::filter::EnvFilter;
 
 lazy_static::lazy_static! {
     pub static ref DEFAULT_DB_PATH: PathBuf = dirs::home_dir().unwrap().join(".fuel").join("db");
+    static ref LONG_VERSION: String = long_version();
 }
 
 pub mod run;
 pub mod snapshot;
+
+fn long_version() -> String {
+    format!(
+        "{} ({} {})",
+        env!("CARGO_PKG_VERSION"),
+        env!("VERGEN_GIT_SHA_SHORT"),
+        env!("VERGEN_GIT_COMMIT_DATE")
+    )
+}
 
 #[derive(Parser, Debug)]
 #[clap(
     name = "fuel-core",
     about = "Fuel client implementation",
     version,
+    long_version = &**LONG_VERSION,
     rename_all = "kebab-case"
 )]
 pub struct Opt {

@@ -80,6 +80,9 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
 ] }
 insta = "1.8"
 
+[build-dependencies]
+vergen = { version = "7", features = ["build", "git" ] }
+
 [features]
 metrics = ["dep:fuel-metrics"]
 default = ["rocksdb", "metrics", "debug"]
