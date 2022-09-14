@@ -19,7 +19,7 @@ harness = true
 [dependencies]
 async-std = "1.12"
 chrono = { version = "0.4", features = ["serde"] }
-fuel-core = { path = "../fuel-core", features = ["test-helpers"], default-features = false }
+fuel-core = { path = "../fuel-core", default-features = false }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
 fuel-txpool = { path = "../fuel-txpool" }

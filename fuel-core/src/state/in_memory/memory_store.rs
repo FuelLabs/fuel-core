@@ -1,14 +1,17 @@
-use crate::state::{
-    in_memory::{
-        column_key,
-        is_column,
+use crate::{
+    database::Column,
+    state::{
+        in_memory::{
+            column_key,
+            is_column,
+        },
+        BatchOperations,
+        ColumnId,
+        IterDirection,
+        KeyValueStore,
+        Result,
+        TransactableStorage,
     },
-    BatchOperations,
-    ColumnId,
-    IterDirection,
-    KeyValueStore,
-    Result,
-    TransactableStorage,
 };
 use itertools::Itertools;
 use std::{
@@ -24,7 +27,7 @@ pub struct MemoryStore {
 }
 
 impl KeyValueStore for MemoryStore {
-    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
@@ -33,20 +36,15 @@ impl KeyValueStore for MemoryStore {
             .cloned())
     }
 
-    fn put(
-        &self,
-        key: Vec<u8>,
-        column: ColumnId,
-        value: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>> {
+    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
             .expect("poisoned")
-            .insert(column_key(&key, column), value))
+            .insert(column_key(key, column), value))
     }
 
-    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
         Ok(self
             .inner
             .lock()
@@ -54,7 +52,7 @@ impl KeyValueStore for MemoryStore {
             .remove(&column_key(key, column)))
     }
 
-    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> Result<bool> {
         Ok(self
             .inner
             .lock()
@@ -64,7 +62,7 @@ impl KeyValueStore for MemoryStore {
 
     fn iter_all(
         &self,
-        column: ColumnId,
+        column: Column,
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,

@@ -9,7 +9,10 @@ use std::{
 
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
         fuel_tx::{
             Contract,
             ContractId,
@@ -18,8 +21,11 @@ use fuel_core_interfaces::{
         },
     },
     db::{
+        Coins,
+        ContractsRawCode,
         Error,
         KvStoreError,
+        Messages,
     },
     model::{
         Coin,
@@ -40,20 +46,10 @@ pub(crate) struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 
-impl Storage<UtxoId, Coin> for MockDb {
+// TODO: Generate storage implementation with macro.
+
+impl StorageInspect<Coins> for MockDb {
     type Error = KvStoreError;
-
-    fn insert(
-        &mut self,
-        key: &UtxoId,
-        value: &Coin,
-    ) -> Result<Option<Coin>, Self::Error> {
-        Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
-    }
-
-    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
-        Ok(self.data.lock().unwrap().coins.remove(key))
-    }
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, Self::Error> {
         Ok(self
@@ -70,25 +66,22 @@ impl Storage<UtxoId, Coin> for MockDb {
     }
 }
 
-impl Storage<ContractId, Contract> for MockDb {
-    type Error = Error;
-
+impl StorageMutate<Coins> for MockDb {
     fn insert(
         &mut self,
-        key: &ContractId,
-        value: &Contract,
-    ) -> Result<Option<Contract>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .contracts
-            .insert(*key, value.clone()))
+        key: &UtxoId,
+        value: &Coin,
+    ) -> Result<Option<Coin>, Self::Error> {
+        Ok(self.data.lock().unwrap().coins.insert(*key, value.clone()))
     }
 
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
-        Ok(self.data.lock().unwrap().contracts.remove(key))
+    fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, Self::Error> {
+        Ok(self.data.lock().unwrap().coins.remove(key))
     }
+}
+
+impl StorageInspect<ContractsRawCode> for MockDb {
+    type Error = Error;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Self::Error> {
         Ok(self
@@ -105,9 +98,44 @@ impl Storage<ContractId, Contract> for MockDb {
     }
 }
 
-impl Storage<MessageId, Message> for MockDb {
+impl StorageMutate<ContractsRawCode> for MockDb {
+    fn insert(
+        &mut self,
+        key: &ContractId,
+        value: &[u8],
+    ) -> Result<Option<Contract>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .contracts
+            .insert(*key, value.into()))
+    }
+
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Self::Error> {
+        Ok(self.data.lock().unwrap().contracts.remove(key))
+    }
+}
+
+impl StorageInspect<Messages> for MockDb {
     type Error = KvStoreError;
 
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .messages
+            .get(key)
+            .map(|i| Cow::Owned(i.clone())))
+    }
+
+    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
+        Ok(self.data.lock().unwrap().messages.contains_key(key))
+    }
+}
+
+impl StorageMutate<Messages> for MockDb {
     fn insert(
         &mut self,
         key: &MessageId,
@@ -123,20 +151,6 @@ impl Storage<MessageId, Message> for MockDb {
 
     fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
         Ok(self.data.lock().unwrap().messages.remove(key))
-    }
-
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .get(key)
-            .map(|i| Cow::Owned(i.clone())))
-    }
-
-    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
-        Ok(self.data.lock().unwrap().messages.contains_key(key))
     }
 }
 

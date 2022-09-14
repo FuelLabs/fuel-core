@@ -18,6 +18,7 @@ use fuel_core_interfaces::common::{
 };
 use fuel_gql_client::{
     client::{
+        schema::resource::Resource,
         FuelClient,
         PageDirection,
         PaginationRequest,
@@ -70,12 +71,11 @@ async fn balance() {
         .unwrap();
     assert_eq!(balance, 300);
 
-    // spend some coins and check again
-    let coins = client
-        .coins_to_spend(
+    // spend some resources and check again
+    let resources_per_asset = client
+        .resources_to_spend(
             format!("{:#x}", owner).as_str(),
-            vec![(format!("{:#x}", asset_id).as_str(), 1)],
-            None,
+            vec![(format!("{:#x}", asset_id).as_str(), 1, None)],
             None,
         )
         .await
@@ -84,16 +84,29 @@ async fn balance() {
     let mut tx = TransactionBuilder::script(vec![], vec![])
         .gas_limit(1_000_000)
         .to_owned();
-    for coin in coins {
-        tx.add_input(Input::CoinSigned {
-            utxo_id: coin.utxo_id.into(),
-            owner: coin.owner.into(),
-            amount: coin.amount.into(),
-            asset_id: coin.asset_id.into(),
-            maturity: coin.maturity.into(),
-            witness_index: 0,
-            tx_pointer: Default::default(),
-        });
+    for resources in resources_per_asset {
+        for resource in resources {
+            match resource {
+                Resource::Coin(coin) => tx.add_input(Input::CoinSigned {
+                    utxo_id: coin.utxo_id.into(),
+                    owner: coin.owner.into(),
+                    amount: coin.amount.into(),
+                    asset_id: coin.asset_id.into(),
+                    maturity: coin.maturity.into(),
+                    witness_index: 0,
+                    tx_pointer: Default::default(),
+                }),
+                Resource::Message(message) => tx.add_input(Input::MessageSigned {
+                    message_id: Default::default(),
+                    sender: message.sender.into(),
+                    amount: message.amount.into(),
+                    witness_index: 0,
+                    recipient: message.recipient.into(),
+                    nonce: message.nonce.into(),
+                    data: Default::default(),
+                }),
+            };
+        }
     }
     let tx = tx
         .add_output(Output::Coin {

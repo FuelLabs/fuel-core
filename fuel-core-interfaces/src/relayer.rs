@@ -1,8 +1,26 @@
-use crate::common::{
-    fuel_storage::Storage,
-    fuel_types::{
-        Address,
-        MessageId,
+use crate::{
+    common::{
+        fuel_storage::{
+            StorageAsMut,
+            StorageMutate,
+        },
+        fuel_types::Address,
+    },
+    db::{
+        DelegatesIndexes,
+        KvStoreError,
+        Messages,
+        StakingDiffs,
+        ValidatorsSet,
+    },
+    model::{
+        BlockHeight,
+        CheckedMessage,
+        ConsensusId,
+        DaBlockHeight,
+        SealedFuelBlock,
+        ValidatorId,
+        ValidatorStake,
     },
 };
 use async_trait::async_trait;
@@ -18,6 +36,8 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
+
+pub use thiserror::Error;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
@@ -55,37 +75,45 @@ impl StakingDiff {
 // But for ValidatorSet, it is little bit different.
 #[async_trait]
 pub trait RelayerDb:
-     Storage<MessageId, Message, Error = KvStoreError> // bridge messages
-    + Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>), Error = KvStoreError> // validator set
-    + Storage<Address, Vec<DaBlockHeight>,Error = KvStoreError> // delegate index
-    + Storage<DaBlockHeight, StakingDiff, Error = KvStoreError> // staking diff
+    StorageMutate<Messages, Error = KvStoreError>
+    + StorageMutate<ValidatorsSet, Error = KvStoreError>
+    + StorageMutate<DelegatesIndexes, Error = KvStoreError>
+    + StorageMutate<StakingDiffs, Error = KvStoreError>
     + Send
     + Sync
 {
-
-    /// add bridge message to database. Messages are not revertible.
-    async fn insert_message(
-        &mut self,
-        message: &CheckedMessage,
-    ) {
-        let _ = Storage::<MessageId, Message>::insert(self,message.id(),message.as_ref());
+    /// Add bridge message to database. Messages are not revertible.
+    async fn insert_message(&mut self, message: &CheckedMessage) {
+        let _ = self
+            .storage::<Messages>()
+            .insert(message.id(), message.as_ref());
     }
 
     /// Insert difference make on staking in this particular DA height.
-    async fn insert_staking_diff(&mut self, da_height: DaBlockHeight, stakes: &StakingDiff) {
-        let _ = Storage::<DaBlockHeight,StakingDiff>::insert(self, &da_height,stakes);
+    async fn insert_staking_diff(
+        &mut self,
+        da_height: DaBlockHeight,
+        stakes: &StakingDiff,
+    ) {
+        let _ = self.storage::<StakingDiffs>().insert(&da_height, stakes);
     }
 
     /// Query delegate index to find list of blocks that delegation changed
     /// iterate over list of indexed to find height that is less but closest to da_height
     /// Query that block StakeDiff to find actual delegation change.
-    async fn get_first_lesser_delegation(&mut self,delegate: &Address, da_height: DaBlockHeight) ->  Option<HashMap<ValidatorId,ValidatorStake>> {
-        // get delegate index
-        let delegate_index = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).expect("Expect to get data without problem")?;
+    async fn get_first_lesser_delegation(
+        &mut self,
+        delegate: &Address,
+        da_height: DaBlockHeight,
+    ) -> Option<HashMap<ValidatorId, ValidatorStake>> {
+        let delegate_index = self
+            .storage::<DelegatesIndexes>()
+            .get(delegate)
+            .expect("Expect to get data without problem")?;
         let mut last_da_height = 0;
         for index in delegate_index.iter() {
-            if  *index >= da_height {
-                break;
+            if *index >= da_height {
+                break
             }
             last_da_height = *index;
         }
@@ -94,37 +122,52 @@ pub trait RelayerDb:
             return None
         }
         // get staking diff
-        let staking_diff = Storage::<DaBlockHeight,StakingDiff>::get(self, &last_da_height).expect("Expect to get data without problem")?;
+        let staking_diff = self
+            .storage::<StakingDiffs>()
+            .get(&last_da_height)
+            .expect("Expect to get data without problem")?;
 
         staking_diff.delegations.get(delegate).unwrap().clone()
     }
 
-    async fn append_delegate_index(&mut self, delegate: &Address, da_height: DaBlockHeight) {
-        let new_indexes = if let Some(indexes) = Storage::<Address,Vec<DaBlockHeight>>::get(self,delegate).unwrap() {
+    async fn append_delegate_index(
+        &mut self,
+        delegate: &Address,
+        da_height: DaBlockHeight,
+    ) {
+        let new_indexes = if let Some(indexes) =
+            self.storage::<DelegatesIndexes>().get(delegate).unwrap()
+        {
             let mut indexes = (*indexes).clone();
             indexes.push(da_height);
             indexes
         } else {
             vec![da_height]
         };
-        Storage::<Address,Vec<DaBlockHeight>>::insert(self,delegate,&new_indexes).expect("Expect to insert without problem");
+        self.storage::<DelegatesIndexes>()
+            .insert(delegate, &new_indexes)
+            .expect("Expect to insert without problem");
     }
 
     /// get stakes difference between fuel blocks. Return vector of changed (some blocks are not going to have any change)
     async fn get_staking_diffs(
-            &self,
-            _from_da_height: DaBlockHeight,
-            _to_da_height: Option<DaBlockHeight>,
+        &self,
+        _from_da_height: DaBlockHeight,
+        _to_da_height: Option<DaBlockHeight>,
     ) -> Vec<(DaBlockHeight, StakingDiff)> {
         Vec::new()
     }
 
     /// Apply validators diff to validator set and update validators_da_height. This operation needs
     /// to be atomic.
-    async fn apply_validator_diffs(&mut self, da_height: DaBlockHeight, changes: &HashMap<ValidatorId,(ValidatorStake,Option<ConsensusId>)>) {
+    async fn apply_validator_diffs(
+        &mut self,
+        da_height: DaBlockHeight,
+        changes: &HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
+    ) {
         // this is reimplemented inside fuel-core db to assure it is atomic operation in case of poweroff situation
-        for ( address, stake) in changes {
-            let _ = Storage::<ValidatorId,(ValidatorStake,Option<ConsensusId>)>::insert(self,address,stake);
+        for (address, stake) in changes {
+            let _ = self.storage::<ValidatorsSet>().insert(address, stake);
         }
         self.set_validators_da_height(da_height).await;
     }
@@ -132,7 +175,8 @@ pub trait RelayerDb:
     /// current best block number
     async fn get_chain_height(&self) -> BlockHeight;
 
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>>;
+    async fn get_sealed_block(&self, height: BlockHeight)
+        -> Option<Arc<SealedFuelBlock>>;
 
     /// get validator set for current eth height
     async fn get_validators(&self) -> ValidatorSet;
@@ -155,7 +199,7 @@ pub trait RelayerDb:
     async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight;
 
     /// Set last committed finalized fuel height this means we are safe to remove consensus votes from db
-    /// as from this moment they are not needed any more 
+    /// as from this moment they are not needed any more
     async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight);
 }
 
@@ -221,22 +265,6 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 }
-
-pub use thiserror::Error;
-
-use crate::{
-    db::KvStoreError,
-    model::{
-        BlockHeight,
-        CheckedMessage,
-        ConsensusId,
-        DaBlockHeight,
-        Message,
-        SealedFuelBlock,
-        ValidatorId,
-        ValidatorStake,
-    },
-};
 
 #[derive(Error, Debug, PartialEq, Eq, Copy, Clone)]
 pub enum RelayerError {

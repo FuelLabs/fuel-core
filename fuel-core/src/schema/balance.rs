@@ -3,10 +3,7 @@ use crate::{
         Database,
         KvStoreError,
     },
-    model::{
-        Coin as CoinModel,
-        CoinStatus,
-    },
+    model::CoinStatus,
     schema::scalars::{
         Address,
         AssetId,
@@ -29,10 +26,13 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx,
-    fuel_types,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsRef,
+        fuel_tx,
+        fuel_types,
+    },
+    db::Coins,
 };
 use itertools::Itertools;
 
@@ -76,11 +76,14 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Balance> {
         let db = ctx.data_unchecked::<Database>();
 
+        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balance = db
-            .owned_coins(owner.into(), None, None)
+            .owned_coins_ids(&owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
-                Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
+                db.storage::<Coins>()
+                    .get(&id)
                     .transpose()
                     .ok_or(KvStoreError::NotFound)?
                     .map_err(Into::into)
@@ -119,11 +122,14 @@ impl BalanceQuery {
     {
         let db = ctx.data_unchecked::<Database>();
 
+        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balances = db
-            .owned_coins(filter.owner.into(), None, None)
+            .owned_coins_ids(&filter.owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
-                Storage::<fuel_tx::UtxoId, CoinModel>::get(db, &id)
+                db.storage::<Coins>()
+                    .get(&id)
                     .transpose()
                     .ok_or(KvStoreError::NotFound)?
                     .map_err(Into::into)

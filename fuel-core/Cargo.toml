@@ -32,6 +32,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.2", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
 dirs = "4.0"
+enum-iterator = "1.2"
 env_logger = "0.9"
 fuel-block-executor = { path = "../fuel-block-executor", version = "0.10.1" }
 fuel-block-importer = { path = "../fuel-block-importer", version = "0.10.1" }
@@ -84,7 +85,6 @@ insta = "1.8"
 metrics = ["dep:fuel-metrics"]
 default = ["rocksdb", "metrics", "debug"]
 debug = ["fuel-core-interfaces/debug"]
-test-helpers = []
 relayer = ["dep:fuel-relayer"]
 p2p = ["dep:fuel-p2p"]
 # features to enable in production, but increase build times
