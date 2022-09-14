@@ -19,7 +19,7 @@ impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = Bytes32;
     type SetValue = FuelBlockDb;
-    type GetValue = FuelBlockDb;
+    type GetValue = Self::SetValue;
 }
 
 /// The latest UTXO id of the contract. The contract's UTXO represents the unique id of the state.
@@ -31,7 +31,7 @@ impl Mappable for ContractsLatestUtxo {
     type Key = ContractId;
     /// The latest UTXO id.
     type SetValue = UtxoId;
-    type GetValue = UtxoId;
+    type GetValue = Self::SetValue;
 }
 
 /// Receipts of different hidden internal operations.
