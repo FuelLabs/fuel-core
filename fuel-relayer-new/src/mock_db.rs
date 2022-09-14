@@ -38,7 +38,7 @@ use fuel_core_interfaces::{
 };
 
 #[derive(Default)]
-pub(crate) struct Data {
+pub struct Data {
     pub messages: HashMap<MessageId, Message>,
     pub validators: HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
     pub delegator_index: HashMap<Address, Vec<DaBlockHeight>>,
@@ -52,7 +52,7 @@ pub(crate) struct Data {
 }
 
 #[derive(Default)]
-pub(crate) struct MockDb {
+pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 
