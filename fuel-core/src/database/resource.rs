@@ -4,7 +4,7 @@ use crate::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::StorageAsRef,
         fuel_tx::UtxoId,
         fuel_types::{
             Address,
@@ -14,8 +14,10 @@ use fuel_core_interfaces::{
         },
     },
     db::{
+        Coins,
         Error,
         KvStoreError,
+        Messages,
     },
     model::{
         Coin,
@@ -112,7 +114,10 @@ impl<'a> AssetQuery<'a> {
             })
             .map(|res| {
                 res.map(|id| {
-                    let coin = Storage::<UtxoId, Coin>::get(self.database, &id)?
+                    let coin = self
+                        .database
+                        .storage::<Coins>()
+                        .get(&id)?
                         .ok_or(KvStoreError::NotFound)?;
 
                     Ok::<_, KvStoreError>(Resource::Coin { id, fields: coin })
@@ -140,7 +145,10 @@ impl<'a> AssetQuery<'a> {
             })
             .map(|res| {
                 res.map(|id| {
-                    let message = Storage::<MessageId, Message>::get(self.database, &id)?
+                    let message = self
+                        .database
+                        .storage::<Messages>()
+                        .get(&id)?
                         .ok_or(KvStoreError::NotFound)?;
 
                     Ok::<_, KvStoreError>(Resource::Message {

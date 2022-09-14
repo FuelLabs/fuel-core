@@ -226,7 +226,10 @@ mod tests {
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Word,
-            fuel_storage::Storage,
+            fuel_storage::{
+                StorageAsMut,
+                StorageAsRef,
+            },
             fuel_tx::{
                 Address,
                 AssetId,
@@ -234,6 +237,10 @@ mod tests {
                 UtxoId,
             },
             fuel_types::MessageId,
+        },
+        db::{
+            Coins,
+            Messages,
         },
         model::{
             BlockHeight,
@@ -756,7 +763,8 @@ mod tests {
                 block_created: Default::default(),
             };
 
-            Storage::<UtxoId, Coin>::insert(&mut self.database, &id, &coin).unwrap();
+            let db = &mut self.database;
+            db.storage::<Coins>().insert(&id, &coin).unwrap();
 
             (id, coin)
         }
@@ -779,12 +787,10 @@ mod tests {
                 fuel_block_spend: None,
             };
 
-            Storage::<MessageId, Message>::insert(
-                &mut self.database,
-                &message.id(),
-                &message,
-            )
-            .unwrap();
+            let db = &mut self.database;
+            db.storage::<Messages>()
+                .insert(&message.id(), &message)
+                .unwrap();
 
             (message.id(), message)
         }
@@ -794,9 +800,8 @@ mod tests {
                 .owned_coins_ids(owner, None, None)
                 .map(|res| {
                     res.map(|id| {
-                        let coin = Storage::<UtxoId, Coin>::get(&self.database, &id)
-                            .unwrap()
-                            .unwrap();
+                        let coin =
+                            self.database.storage::<Coins>().get(&id).unwrap().unwrap();
                         (id, coin.into_owned())
                     })
                 })
@@ -809,10 +814,12 @@ mod tests {
                 .owned_message_ids(owner, None, None)
                 .map(|res| {
                     res.map(|id| {
-                        let message =
-                            Storage::<MessageId, Message>::get(&self.database, &id)
-                                .unwrap()
-                                .unwrap();
+                        let message = self
+                            .database
+                            .storage::<Messages>()
+                            .get(&id)
+                            .unwrap()
+                            .unwrap();
                         message.into_owned()
                     })
                 })

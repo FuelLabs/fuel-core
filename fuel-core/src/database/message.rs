@@ -181,7 +181,7 @@ mod tests {
 
         // remove the second message with its given id
         let _ = db.storage::<Messages>().remove(&second_id).unwrap();
-        let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
+        let owned_msg_ids = db.owned_message_ids(&message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }
 }
