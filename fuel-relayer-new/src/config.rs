@@ -23,16 +23,6 @@ pub fn keccak256(data: &'static str) -> H256 {
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
     Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
-pub(crate) static ETH_LOG_VALIDATOR_REGISTRATION: Lazy<H256> =
-    Lazy::new(|| keccak256("ValidatorRegistration(bytes,bytes)"));
-pub(crate) static ETH_LOG_VALIDATOR_UNREGISTRATION: Lazy<H256> =
-    Lazy::new(|| keccak256("ValidatorUnregistration(bytes)"));
-pub(crate) static ETH_LOG_DEPOSIT: Lazy<H256> =
-    Lazy::new(|| keccak256("Deposit(address,uint256)"));
-pub(crate) static ETH_LOG_WITHDRAWAL: Lazy<H256> =
-    Lazy::new(|| keccak256("Withdrawal(address,uint256)"));
-pub(crate) static ETH_LOG_DELEGATION: Lazy<H256> =
-    Lazy::new(|| keccak256("Delegation(address,bytes[],uint256[])"));
 pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
     Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
 
