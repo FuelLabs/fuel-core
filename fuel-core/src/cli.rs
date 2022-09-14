@@ -1,6 +1,10 @@
 use anyhow::Result;
 use clap::Parser;
-use std::{env, path::PathBuf, str::FromStr};
+use std::{
+    env,
+    path::PathBuf,
+    str::FromStr,
+};
 use tracing::log::warn;
 use tracing_subscriber::filter::EnvFilter;
 
