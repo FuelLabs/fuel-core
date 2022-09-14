@@ -5,7 +5,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    resource_query::CoinQueryError,
+    resource_query::ResourceQueryError,
     service::{
         Config,
         FuelService,
@@ -157,7 +157,11 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: asset_id_a,
+                collected_amount: 0,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -179,7 +183,11 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: asset_id_a,
+                collected_amount: 300,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -201,7 +209,7 @@ mod coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::MaxResourcesReached.to_str_error_string()
+            ResourceQueryError::MaxResourcesReached.to_str_error_string()
         );
     }
 }
@@ -310,7 +318,11 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: base_asset_id,
+                collected_amount: 0,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -329,7 +341,11 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: base_asset_id,
+                collected_amount: 300,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -348,7 +364,7 @@ mod messages {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::MaxResourcesReached.to_str_error_string()
+            ResourceQueryError::MaxResourcesReached.to_str_error_string()
         );
     }
 }
@@ -513,7 +529,11 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: asset_id_a,
+                collected_amount: 0,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -535,7 +555,11 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::InsufficientResources.to_str_error_string()
+            ResourceQueryError::InsufficientResources {
+                asset_id: asset_id_a,
+                collected_amount: 300,
+            }
+            .to_str_error_string()
         );
     }
 
@@ -557,7 +581,7 @@ mod messages_and_coins {
         assert!(resources_per_asset.is_err());
         assert_eq!(
             resources_per_asset.unwrap_err().to_string(),
-            CoinQueryError::MaxResourcesReached.to_str_error_string()
+            ResourceQueryError::MaxResourcesReached.to_str_error_string()
         );
     }
 }
@@ -613,7 +637,7 @@ async fn resources_to_spend_error_duplicate_asset_query() {
     assert!(resources_per_asset.is_err());
     assert_eq!(
         resources_per_asset.unwrap_err().to_string(),
-        CoinQueryError::DuplicateAssets(asset_id).to_str_error_string()
+        ResourceQueryError::DuplicateAssets(asset_id).to_str_error_string()
     );
 }
 
@@ -621,7 +645,7 @@ trait ToStdErrorString {
     fn to_str_error_string(self) -> String;
 }
 
-impl ToStdErrorString for CoinQueryError {
+impl ToStdErrorString for ResourceQueryError {
     fn to_str_error_string(self) -> String {
         fuel_gql_client::client::from_strings_errors_to_std_error(vec![self.to_string()])
             .to_string()

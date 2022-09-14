@@ -77,6 +77,7 @@ impl BalanceQuery {
         let db = ctx.data_unchecked::<Database>();
 
         // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balance = db
             .owned_coins_ids(&owner.0, None, None)
             .map(|res| -> Result<_, Error> {
@@ -121,6 +122,7 @@ impl BalanceQuery {
         let db = ctx.data_unchecked::<Database>();
 
         // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balances = db
             .owned_coins_ids(&filter.owner.0, None, None)
             .map(|res| -> Result<_, Error> {

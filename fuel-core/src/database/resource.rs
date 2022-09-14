@@ -96,6 +96,7 @@ impl<'a> AssetQuery<'a> {
     /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
     /// for the `asset_id`.
     // TODO: Optimize this by creating an index
+    //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
         &self,
     ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
