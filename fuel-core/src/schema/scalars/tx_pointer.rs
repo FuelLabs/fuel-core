@@ -1,9 +1,17 @@
 use async_graphql::{
-    connection::CursorType, InputValueError, InputValueResult, Scalar, ScalarType, Value,
+    connection::CursorType,
+    InputValueError,
+    InputValueResult,
+    Scalar,
+    ScalarType,
+    Value,
 };
 use fuel_core_interfaces::common::fuel_tx;
 use std::{
-    fmt::{Display, Formatter},
+    fmt::{
+        Display,
+        Formatter,
+    },
     str::FromStr,
 };
 

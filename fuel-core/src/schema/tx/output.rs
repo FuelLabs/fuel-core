@@ -1,7 +1,21 @@
-use crate::schema::contract::Contract;
-use crate::schema::scalars::{Address, AssetId, Bytes32, U64};
-use async_graphql::{Object, Union};
-use fuel_core_interfaces::common::{fuel_asm::Word, fuel_tx, fuel_types};
+use crate::schema::{
+    contract::Contract,
+    scalars::{
+        Address,
+        AssetId,
+        Bytes32,
+        U64,
+    },
+};
+use async_graphql::{
+    Object,
+    Union,
+};
+use fuel_core_interfaces::common::{
+    fuel_asm::Word,
+    fuel_tx,
+    fuel_types,
+};
 
 #[derive(Union)]
 pub enum Output {
@@ -142,10 +156,12 @@ impl From<&fuel_tx::Output> for Output {
                 balance_root: *balance_root,
                 state_root: *state_root,
             }),
-            fuel_tx::Output::Message { recipient, amount } => Output::Message(MessageOutput {
-                recipient: *recipient,
-                amount: *amount,
-            }),
+            fuel_tx::Output::Message { recipient, amount } => {
+                Output::Message(MessageOutput {
+                    recipient: *recipient,
+                    amount: *amount,
+                })
+            }
             fuel_tx::Output::Change {
                 to,
                 amount,

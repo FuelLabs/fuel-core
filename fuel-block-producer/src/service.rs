@@ -1,7 +1,13 @@
 use crate::Config;
-use fuel_core_interfaces::{block_producer::BlockProducerMpsc, txpool};
+use fuel_core_interfaces::{
+    block_producer::BlockProducerMpsc,
+    txpool,
+};
 use parking_lot::Mutex;
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{
+    sync::mpsc,
+    task::JoinHandle,
+};
 
 pub struct Service {
     join: Mutex<Option<JoinHandle<()>>>,

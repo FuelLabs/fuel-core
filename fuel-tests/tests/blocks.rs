@@ -1,15 +1,36 @@
-use chrono::{TimeZone, Utc};
-use fuel_core::{
-    database::Database,
-    model::{FuelBlockDb, FuelBlockHeader},
-    schema::scalars::BlockId,
-    service::{Config, FuelService},
+use chrono::{
+    TimeZone,
+    Utc,
 };
-use fuel_core_interfaces::common::fuel_tx;
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_types};
-use fuel_gql_client::client::types::TransactionStatus;
-use fuel_gql_client::client::{FuelClient, PageDirection, PaginationRequest};
-use itertools::{rev, Itertools};
+use fuel_core::{
+    database::{
+        storage::FuelBlocks,
+        Database,
+    },
+    model::{
+        FuelBlockDb,
+        FuelBlockHeader,
+    },
+    schema::scalars::BlockId,
+    service::{
+        Config,
+        FuelService,
+    },
+};
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsMut,
+    fuel_tx,
+};
+use fuel_gql_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
+};
+use itertools::{
+    rev,
+    Itertools,
+};
 
 #[tokio::test]
 async fn block() {
@@ -17,7 +38,7 @@ async fn block() {
     let block = FuelBlockDb::default();
     let id = block.id();
     let mut db = Database::default();
-    Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
+    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
 
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
@@ -58,7 +79,9 @@ async fn produce_block() {
         .await
         .unwrap();
 
-    if let TransactionStatus::Success { block_id, .. } = transaction_response.unwrap().status {
+    if let TransactionStatus::Success { block_id, .. } =
+        transaction_response.unwrap().status
+    {
         let block_height: u64 = client
             .block(block_id.to_string().as_str())
             .await
@@ -100,7 +123,9 @@ async fn produce_block_negative() {
         .await
         .unwrap();
 
-    if let TransactionStatus::Success { block_id, .. } = transaction_response.unwrap().status {
+    if let TransactionStatus::Success { block_id, .. } =
+        transaction_response.unwrap().status
+    {
         let block_height: u64 = client
             .block(block_id.to_string().as_str())
             .await
@@ -134,7 +159,7 @@ async fn block_connection_first_5() {
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
+        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
     }
 
     // setup server & client
@@ -179,7 +204,7 @@ async fn block_connection_last_5() {
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        Storage::<fuel_types::Bytes32, FuelBlockDb>::insert(&mut db, &id, &block).unwrap();
+        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
     }
 
     // setup server & client

@@ -1,10 +1,23 @@
-use crate::client::schema::tx::{OpaqueTransaction, TransactionStatus as SchemaTxStatus};
-use crate::client::schema::ConversionError;
-use chrono::{DateTime, Utc};
-use fuel_tx::Transaction;
-use fuel_types::bytes::Deserializable;
-use fuel_vm::prelude::ProgramState;
-use serde::{Deserialize, Serialize};
+use crate::client::schema::{
+    tx::{
+        OpaqueTransaction,
+        TransactionStatus as SchemaTxStatus,
+    },
+    ConversionError,
+};
+use chrono::{
+    DateTime,
+    Utc,
+};
+use fuel_vm::{
+    fuel_tx::Transaction,
+    fuel_types::bytes::Deserializable,
+    prelude::ProgramState,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResponse {
@@ -58,8 +71,9 @@ impl TryFrom<OpaqueTransaction> for TransactionResponse {
 
     fn try_from(value: OpaqueTransaction) -> Result<Self, Self::Error> {
         let bytes = value.raw_payload.0 .0;
-        let tx: fuel_tx::Transaction = fuel_tx::Transaction::from_bytes(bytes.as_slice())
-            .map_err(ConversionError::TransactionFromBytesError)?;
+        let tx: ::fuel_vm::fuel_tx::Transaction =
+            ::fuel_vm::fuel_tx::Transaction::from_bytes(bytes.as_slice())
+                .map_err(ConversionError::TransactionFromBytesError)?;
         let status = value
             .status
             .ok_or_else(|| ConversionError::MissingField("status".to_string()))?

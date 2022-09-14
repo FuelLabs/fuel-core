@@ -19,6 +19,20 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  rustfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+          components: rustfmt
+
+      - name: Rustfmt check
+        run: cargo +nightly fmt --all -- --check
+
   lint-toml-files:
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +48,7 @@ jobs:
       - name: Run Cargo.toml linter
         run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -55,7 +69,7 @@ jobs:
         run: ./.github/workflows/scripts/verify_openssl.sh
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@master
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -71,33 +85,32 @@ jobs:
     needs:
       - lint-toml-files
       - prevent-openssl
+      - rustfmt
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - command: fmt
-            args: --all --verbose -- --check
           - command: clippy
             args: --all-targets --all-features
-          - command: check
-            args: --all-targets --all-features
+          - command: make
+            args: check --locked
           - command: test
-            args: --all-targets --all-features --workspace --exclude fuel-p2p
+            args: --all-targets --all-features --workspace
           - command: test
-            args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-          # Split p2p into its own job so that it can use a single threaded runner
-          - command: test
-            args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
-            skip-error: true
-    # disallow any job that takes longer than 30 minutes
-    timeout-minutes: 30
+            args: --all-targets --no-default-features --workspace
+    # disallow any job that takes longer than 45 minutes
+    timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@v1
+      - name: Install Cargo Make
+        uses: davidB/rust-cargo-make@v1
+        with:
+          version: "0.36.0"
+      - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
       - name: ${{ matrix.command }} ${{ matrix.args }}
@@ -106,7 +119,7 @@ jobs:
           command: ${{ matrix.command }}
           args: ${{ matrix.args }}
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -163,7 +176,7 @@ jobs:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always()
         with:
           status: ${{ job.status }}
@@ -222,7 +235,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           status: ${{ job.status }}
@@ -313,7 +326,7 @@ jobs:
 
       - name: Build fuel-core
         run: |
-          cross build --profile=release --target ${{ matrix.job.target }} -p fuel-core
+          cross build --profile=release --target ${{ matrix.job.target }} --features "production" -p fuel-core
 
       - name: Strip release binary linux x86_64
         if: matrix.job.platform == 'linux'
@@ -371,7 +384,7 @@ jobs:
           asset_content_type: application/gzip
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         # need to find a work-around to be able to run this action on mac
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
         with:

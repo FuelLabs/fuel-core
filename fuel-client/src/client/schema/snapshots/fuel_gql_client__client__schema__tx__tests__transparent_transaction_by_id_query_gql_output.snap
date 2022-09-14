@@ -39,7 +39,6 @@ query Query($_0: TransactionId!) {
         recipient
         amount
         nonce
-        owner
         witnessIndex
         data
         predicate

@@ -1,5 +1,11 @@
-use fuel_core::service::{Config, FuelService};
-use fuel_gql_client::client::{schema::node_info::NodeInfo, FuelClient};
+use fuel_core::service::{
+    Config,
+    FuelService,
+};
+use fuel_gql_client::client::{
+    schema::node_info::NodeInfo,
+    FuelClient,
+};
 
 #[tokio::test]
 async fn node_info() {
