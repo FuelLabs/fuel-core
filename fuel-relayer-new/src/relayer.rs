@@ -1,13 +1,17 @@
+use crate::Config;
 use anyhow::Result;
-use ethers_providers::Http;
-use ethers_providers::Middleware;
-use ethers_providers::Provider;
-use ethers_providers::ProviderError;
+use ethers_providers::{
+    Http,
+    Middleware,
+    Provider,
+    ProviderError,
+};
+use fuel_core_interfaces::relayer::RelayerDb;
 use std::ops::Deref;
-use std::sync::Arc;
 use tokio::sync::watch;
 
 type Synced = watch::Receiver<bool>;
+type Database = Box<dyn RelayerDb>;
 
 pub struct RelayerHandle {
     synced: Synced,
@@ -19,34 +23,44 @@ where
 {
     synced: watch::Sender<bool>,
     middleware: P,
+    database: Database,
+    config: Config,
 }
 
 impl<P> Relayer<P>
 where
     P: Middleware<Error = ProviderError>,
 {
-    fn new(synced: watch::Sender<bool>, middleware: P) -> Self {
-        Self { synced, middleware }
+    fn new(
+        synced: watch::Sender<bool>,
+        middleware: P,
+        database: Database,
+        config: Config,
+    ) -> Self {
+        Self {
+            synced,
+            middleware,
+            database,
+            config,
+        }
     }
 }
 
 impl RelayerHandle {
-    pub fn start() -> Self {
+    pub fn start(database: Database, config: Config) -> Self {
         let middleware = todo!();
-        Self::start_inner::<Provider<Http>>(middleware)
+        Self::start_inner::<Provider<Http>>(middleware, database, config)
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
-    pub fn start_test<P>(middleware: P) -> Self
+    pub fn start_test<P>(middleware: P, database: Database, config: Config) -> Self
     where
         P: Middleware<Error = ProviderError>,
     {
-        use std::sync::Arc;
-
-        Self::start_inner(middleware)
+        Self::start_inner(middleware, database, config)
     }
 
-    fn start_inner<P>(middleware: P) -> Self
+    fn start_inner<P>(middleware: P, database: Database, config: Config) -> Self
     where
         P: Middleware<Error = ProviderError>,
     {
@@ -55,7 +69,7 @@ impl RelayerHandle {
         let r = Self {
             synced: synced.clone(),
         };
-        run(Relayer::new(tx, middleware));
+        run(Relayer::new(tx, middleware, database, config));
         r
     }
 
@@ -70,13 +84,22 @@ impl RelayerHandle {
 
 fn run<P>(relayer: Relayer<P>)
 where
-    P: Middleware<Error = ProviderError>,
+    P: Middleware<Error = ProviderError> + 'static,
 {
     let jh = tokio::task::spawn(async move {
         loop {
-            if relayer.synced.send(true).is_err() {
-                break;
+            let current_block_height = relayer
+                .middleware
+                .get_block_number()
+                .await
+                .unwrap()
+                .as_u64();
+            if relayer.database.get_finalized_da_height().await
+                < current_block_height.saturating_sub(relayer.config.da_finalization)
+            {
+                // then update da height and download events
             }
+
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     });
