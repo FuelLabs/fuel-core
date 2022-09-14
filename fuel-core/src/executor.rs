@@ -1,5 +1,10 @@
 use crate::{
     database::{
+        storage::{
+            ContractsLatestUtxo,
+            FuelBlocks,
+            Receipts,
+        },
         transaction::TransactionIndex,
         Database,
     },
@@ -8,7 +13,6 @@ use crate::{
         Coin,
         CoinStatus,
         FuelBlock,
-        FuelBlockDb,
     },
     service::Config,
     tx_pool::TransactionStatus,
@@ -18,7 +22,7 @@ use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
         fuel_merkle::binary::in_memory::MerkleTree,
-        fuel_storage::Storage,
+        fuel_storage,
         fuel_tx::{
             Address,
             AssetId,
@@ -45,6 +49,11 @@ use fuel_core_interfaces::{
             },
         },
     },
+    db::{
+        Coins,
+        Messages,
+        Transactions,
+    },
     executor::{
         Error,
         ExecutionMode,
@@ -55,6 +64,10 @@ use fuel_core_interfaces::{
         FuelBlockHeader,
         Message,
     },
+};
+use fuel_storage::{
+    StorageAsMut,
+    StorageAsRef,
 };
 use std::{
     ops::{
@@ -124,11 +137,13 @@ impl Executor {
 
         let mut block_db_transaction = self.database.transaction();
         // Insert the current headers (including time, block height, producer into the db tx)
-        Storage::<Bytes32, FuelBlockDb>::insert(
-            block_db_transaction.deref_mut(),
-            &Bytes32::zeroed(), // use id of zero as current block
-            &block.to_db_block(),
-        )?;
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .insert(
+                &Bytes32::zeroed(), // use id of zero as current block
+                &block.to_db_block(),
+            )?;
 
         let mut txs_merkle = MerkleTree::new();
         let mut tx_status = vec![];
@@ -138,10 +153,11 @@ impl Executor {
             let tx_id = tx.id();
 
             // Throw a clear error if the transaction id is a duplicate
-            if Storage::<Bytes32, Transaction>::contains_key(
-                block_db_transaction.deref_mut(),
-                &tx_id,
-            )? {
+            if block_db_transaction
+                .deref_mut()
+                .storage::<Transactions>()
+                .contains_key(&tx_id)?
+            {
                 return Err(Error::TransactionIdCollision(tx_id))
             }
 
@@ -241,11 +257,10 @@ impl Executor {
             }
 
             // Store tx into the block db transaction
-            Storage::<Bytes32, Transaction>::insert(
-                block_db_transaction.deref_mut(),
-                &tx_id,
-                vm_result.tx(),
-            )?;
+            block_db_transaction
+                .deref_mut()
+                .storage::<Transactions>()
+                .insert(&tx_id, vm_result.tx())?;
 
             // change the spent status of the tx inputs
             self.spend_inputs(
@@ -275,16 +290,14 @@ impl Executor {
                 let reason = vm_result
                     .receipts()
                     .iter()
-                    .find_map(|receipt| {
-                        match receipt {
-                            // Format as `Revert($rA)`
-                            Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
-                            // Display PanicReason e.g. `OutOfGas`
-                            Receipt::Panic { reason, .. } => {
-                                Some(format!("{}", reason.reason()))
-                            }
-                            _ => None,
+                    .find_map(|receipt| match receipt {
+                        // Format as `Revert($rA)`
+                        Receipt::Revert { ra, .. } => Some(format!("Revert({})", ra)),
+                        // Display PanicReason e.g. `OutOfGas`
+                        Receipt::Panic { reason, .. } => {
+                            Some(format!("{}", reason.reason()))
                         }
+                        _ => None,
                     })
                     .unwrap_or_else(|| format!("{:?}", vm_result.state()));
 
@@ -339,17 +352,16 @@ impl Executor {
         )?;
 
         // cleanup unfinalized headers (block height + time + producer)
-        Storage::<Bytes32, FuelBlockDb>::remove(
-            block_db_transaction.deref_mut(),
-            &Bytes32::zeroed(),
-        )?;
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .remove(&Bytes32::zeroed())?;
 
         // insert block into database
-        Storage::<Bytes32, FuelBlockDb>::insert(
-            block_db_transaction.deref_mut(),
-            &finalized_block_id,
-            &block.to_db_block(),
-        )?;
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .insert(&finalized_block_id, &block.to_db_block())?;
         block_db_transaction.commit()?;
         Ok(())
     }
@@ -365,7 +377,7 @@ impl Executor {
             match input {
                 Input::CoinSigned { utxo_id, .. }
                 | Input::CoinPredicate { utxo_id, .. } => {
-                    if let Some(coin) = Storage::<UtxoId, Coin>::get(db, utxo_id)? {
+                    if let Some(coin) = db.storage::<Coins>().get(utxo_id)? {
                         if coin.status == CoinStatus::Spent {
                             return Err(TransactionValidityError::CoinAlreadySpent(
                                 *utxo_id,
@@ -383,9 +395,7 @@ impl Executor {
                 Input::Contract { .. } => {}
                 Input::MessageSigned { message_id, .. }
                 | Input::MessagePredicate { message_id, .. } => {
-                    if let Some(message) =
-                        Storage::<MessageId, Message>::get(db, message_id)?
-                    {
+                    if let Some(message) = db.storage::<Messages>().get(message_id)? {
                         if message.fuel_block_spend.is_some() {
                             return Err(TransactionValidityError::MessageAlreadySpent(
                                 *message_id,
@@ -483,7 +493,8 @@ impl Executor {
                     ..
                 } => {
                     let block_created = if self.config.utxo_validation {
-                        Storage::<UtxoId, Coin>::get(db, utxo_id)?
+                        db.storage::<Coins>()
+                            .get(utxo_id)?
                             .ok_or(Error::TransactionValidity(
                                 TransactionValidityError::CoinDoesNotExist(*utxo_id),
                             ))?
@@ -493,8 +504,7 @@ impl Executor {
                         Default::default()
                     };
 
-                    Storage::<UtxoId, Coin>::insert(
-                        db,
+                    db.storage::<Coins>().insert(
                         utxo_id,
                         &Coin {
                             owner: *owner,
@@ -525,7 +535,8 @@ impl Executor {
                     ..
                 } => {
                     let da_height = if self.config.utxo_validation {
-                        Storage::<MessageId, Message>::get(db, message_id)?
+                        db.storage::<Messages>()
+                            .get(message_id)?
                             .ok_or(Error::TransactionValidity(
                                 TransactionValidityError::MessageDoesNotExist(
                                     *message_id,
@@ -537,8 +548,7 @@ impl Executor {
                         Default::default()
                     };
 
-                    Storage::<MessageId, Message>::insert(
-                        db,
+                    db.storage::<Messages>().insert(
                         message_id,
                         &Message {
                             da_height,
@@ -596,7 +606,7 @@ impl Executor {
                 } = input
                 {
                     let maybe_utxo_id =
-                        Storage::<ContractId, UtxoId>::get(db, contract_id)?;
+                        db.storage::<ContractsLatestUtxo>().get(contract_id)?;
                     let expected_utxo_id = if self.config.utxo_validation {
                         maybe_utxo_id
                             .ok_or(Error::ContractUtxoMissing(*contract_id))?
@@ -671,7 +681,8 @@ impl Executor {
                     if let Some(Input::Contract { contract_id, .. }) =
                         tx.inputs().get(*input_idx as usize)
                     {
-                        Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
+                        db.storage::<ContractsLatestUtxo>()
+                            .insert(contract_id, &utxo_id)?;
                     } else {
                         return Err(Error::TransactionValidity(
                             TransactionValidityError::InvalidContractInputIndex(utxo_id),
@@ -706,7 +717,8 @@ impl Executor {
                     db,
                 )?,
                 Output::ContractCreated { contract_id, .. } => {
-                    Storage::<ContractId, UtxoId>::insert(db, contract_id, &utxo_id)?;
+                    db.storage::<ContractsLatestUtxo>()
+                        .insert(contract_id, &utxo_id)?;
                 }
             }
         }
@@ -734,7 +746,7 @@ impl Executor {
                 block_created: fuel_height.into(),
             };
 
-            if Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?.is_some() {
+            if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
                 return Err(Error::OutputAlreadyExists)
             }
         }
@@ -748,7 +760,9 @@ impl Executor {
         receipts: &[Receipt],
         db: &mut Database,
     ) -> Result<(), Error> {
-        if Storage::<Bytes32, Vec<Receipt>>::insert(db, tx_id, &Vec::from(receipts))?
+        if db
+            .storage::<Receipts>()
+            .insert(tx_id, &Vec::from(receipts))?
             .is_some()
         {
             return Err(Error::OutputAlreadyExists)
@@ -1067,9 +1081,9 @@ mod tests {
             block_created,
         };
 
-        let mut db = Database::default();
+        let db = &mut Database::default();
         // initialize database with coin that was already spent
-        Storage::<UtxoId, Coin>::insert(&mut db, &spent_utxo_id, &coin).unwrap();
+        db.storage::<Coins>().insert(&spent_utxo_id, &coin).unwrap();
 
         // create an input referring to a coin that is already spent
         let input = Input::coin_signed(
@@ -1339,7 +1353,7 @@ mod tests {
             .build()
             .into();
 
-        let db = Database::default();
+        let db = &Database::default();
         let executor = Executor {
             database: db.clone(),
             config: Config::local_node(),
@@ -1356,12 +1370,11 @@ mod tests {
             .unwrap();
 
         // assert the tx coin is spent
-        let coin = Storage::<UtxoId, Coin>::get(
-            &db,
-            block.transactions[0].inputs()[0].utxo_id().unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+        let coin = db
+            .storage::<Coins>()
+            .get(block.transactions[0].inputs()[0].utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
     }
 
@@ -1389,7 +1402,7 @@ mod tests {
             asset_id: Default::default(),
         })
         .finalize();
-        let mut db = Database::default();
+        let db = &mut Database::default();
 
         // insert coin into state
         if let Input::CoinSigned {
@@ -1407,19 +1420,19 @@ mod tests {
             ..
         } = tx.inputs()[0]
         {
-            Storage::<UtxoId, Coin>::insert(
-                &mut db,
-                &utxo_id,
-                &Coin {
-                    owner,
-                    amount,
-                    asset_id,
-                    maturity: Default::default(),
-                    status: CoinStatus::Unspent,
-                    block_created: starting_block,
-                },
-            )
-            .unwrap();
+            db.storage::<Coins>()
+                .insert(
+                    &utxo_id,
+                    &Coin {
+                        owner,
+                        amount,
+                        asset_id,
+                        maturity: Default::default(),
+                        status: CoinStatus::Unspent,
+                        block_created: starting_block,
+                    },
+                )
+                .unwrap();
         }
 
         let executor = Executor {
@@ -1445,12 +1458,11 @@ mod tests {
             .unwrap();
 
         // assert the tx coin is spent
-        let coin = Storage::<UtxoId, Coin>::get(
-            &db,
-            block.transactions[0].inputs()[0].utxo_id().unwrap(),
-        )
-        .unwrap()
-        .unwrap();
+        let coin = db
+            .storage::<Coins>()
+            .get(block.transactions[0].inputs()[0].utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
         // assert block created from coin before spend is still intact (only a concern when utxo-validation is enabled)
         assert_eq!(coin.block_created, starting_block)
@@ -1675,7 +1687,7 @@ mod tests {
             .into();
         let tx2_id = tx2.id();
 
-        let database = Database::default();
+        let database = &Database::default();
         let executor = Executor {
             database: database.clone(),
             config: Config::local_node(),
@@ -1696,8 +1708,7 @@ mod tests {
             let id = fuel_tx::UtxoId::new(tx2_id, idx as u8);
             match output {
                 Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
-                    let maybe_utxo =
-                        Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+                    let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
                     assert!(maybe_utxo.is_some());
                     let utxo = maybe_utxo.unwrap();
                     assert!(utxo.amount > 0)
@@ -1723,7 +1734,7 @@ mod tests {
             .into();
         let tx_id = tx.id();
 
-        let database = Database::default();
+        let database = &Database::default();
         let executor = Executor {
             database: database.clone(),
             config: Config::local_node(),
@@ -1741,7 +1752,7 @@ mod tests {
 
         for idx in 0..2 {
             let id = UtxoId::new(tx_id, idx);
-            let maybe_utxo = Storage::<UtxoId, Coin>::get(&database, &id).unwrap();
+            let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();
             assert!(maybe_utxo.is_none());
         }
     }
@@ -1956,21 +1967,22 @@ mod tests {
         };
 
         // setup db with coin to spend
-        let mut database = Database::default();
+        let database = &mut &mut Database::default();
         let coin_input = &tx.inputs()[0];
-        Storage::<UtxoId, Coin>::insert(
-            &mut database,
-            coin_input.utxo_id().unwrap(),
-            &Coin {
-                owner: *coin_input.input_owner().unwrap(),
-                amount: coin_input.amount().unwrap(),
-                asset_id: *coin_input.asset_id().unwrap(),
-                maturity: (coin_input.maturity().unwrap()).into(),
-                block_created: 0u64.into(),
-                status: CoinStatus::Unspent,
-            },
-        )
-        .unwrap();
+        database
+            .storage::<Coins>()
+            .insert(
+                coin_input.utxo_id().unwrap(),
+                &Coin {
+                    owner: *coin_input.input_owner().unwrap(),
+                    amount: coin_input.amount().unwrap(),
+                    asset_id: *coin_input.asset_id().unwrap(),
+                    maturity: (coin_input.maturity().unwrap()).into(),
+                    block_created: 0u64.into(),
+                    status: CoinStatus::Unspent,
+                },
+            )
+            .unwrap();
 
         // make executor with db
         let executor = Executor {
@@ -1986,7 +1998,9 @@ mod tests {
             .await
             .unwrap();
 
-        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(&database, &tx.id())
+        let receipts = database
+            .storage::<Receipts>()
+            .get(&tx.id())
             .unwrap()
             .unwrap();
         assert_eq!(block_height as u64, receipts[0].val().unwrap());
@@ -2028,21 +2042,22 @@ mod tests {
         };
 
         // setup db with coin to spend
-        let mut database = Database::default();
+        let database = &mut &mut Database::default();
         let coin_input = &tx.inputs()[0];
-        Storage::<UtxoId, Coin>::insert(
-            &mut database,
-            coin_input.utxo_id().unwrap(),
-            &Coin {
-                owner: *coin_input.input_owner().unwrap(),
-                amount: coin_input.amount().unwrap(),
-                asset_id: *coin_input.asset_id().unwrap(),
-                maturity: (coin_input.maturity().unwrap()).into(),
-                block_created: 0u64.into(),
-                status: CoinStatus::Unspent,
-            },
-        )
-        .unwrap();
+        database
+            .storage::<Coins>()
+            .insert(
+                coin_input.utxo_id().unwrap(),
+                &Coin {
+                    owner: *coin_input.input_owner().unwrap(),
+                    amount: coin_input.amount().unwrap(),
+                    asset_id: *coin_input.asset_id().unwrap(),
+                    maturity: (coin_input.maturity().unwrap()).into(),
+                    block_created: 0u64.into(),
+                    status: CoinStatus::Unspent,
+                },
+            )
+            .unwrap();
 
         // make executor with db
         let executor = Executor {
@@ -2058,7 +2073,9 @@ mod tests {
             .await
             .unwrap();
 
-        let receipts = Storage::<Bytes32, Vec<Receipt>>::get(&database, &tx.id())
+        let receipts = database
+            .storage::<Receipts>()
+            .get(&tx.id())
             .unwrap()
             .unwrap();
 

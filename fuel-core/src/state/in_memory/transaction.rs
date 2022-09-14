@@ -1,19 +1,21 @@
-use crate::state::{
-    in_memory::{
-        column_key,
-        memory_store::MemoryStore,
+use crate::{
+    database::Column,
+    state::{
+        in_memory::{
+            column_key,
+            memory_store::MemoryStore,
+        },
+        BatchOperations,
+        DataSource,
+        IterDirection,
+        KeyValueStore,
+        Result,
+        TransactableStorage,
+        Transaction,
+        TransactionError,
+        TransactionResult,
+        WriteOperation,
     },
-    BatchOperations,
-    ColumnId,
-    DataSource,
-    IterDirection,
-    KeyValueStore,
-    Result,
-    TransactableStorage,
-    Transaction,
-    TransactionError,
-    TransactionResult,
-    WriteOperation,
 };
 use itertools::{
     EitherOrBoth,
@@ -59,7 +61,7 @@ impl MemoryTransactionView {
 }
 
 impl KeyValueStore for MemoryTransactionView {
-    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
         // try to fetch data from View layer if any changes to the key
         if self
             .changes
@@ -74,27 +76,22 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn put(
-        &self,
-        key: Vec<u8>,
-        column: ColumnId,
-        value: Vec<u8>,
-    ) -> Result<Option<Vec<u8>>> {
-        let k = column_key(&key, column);
+    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let k = column_key(key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
-        self.changes.lock().expect("poisoned lock").insert(
-            k,
-            WriteOperation::Insert(key.clone(), column, value.clone()),
-        );
-        let res = self.view_layer.put(key.clone(), column, value);
+        self.changes
+            .lock()
+            .expect("poisoned lock")
+            .insert(k, WriteOperation::Insert(key.into(), column, value.clone()));
+        let res = self.view_layer.put(key, column, value);
         if contained_key {
             res
         } else {
-            self.data_source.get(&key, column)
+            self.data_source.get(key, column)
         }
     }
 
-    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
         let k = column_key(key, column);
         let contained_key = self.changes.lock().expect("poisoned lock").contains_key(&k);
         self.changes
@@ -109,7 +106,7 @@ impl KeyValueStore for MemoryTransactionView {
         }
     }
 
-    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> Result<bool> {
         let k = column_key(key, column);
         if self.changes.lock().expect("poisoned lock").contains_key(&k) {
             self.view_layer.exists(key, column)
@@ -120,7 +117,7 @@ impl KeyValueStore for MemoryTransactionView {
 
     fn iter_all(
         &self,
-        column: ColumnId,
+        column: Column,
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
@@ -210,9 +207,9 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
-        view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        view.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         // test
-        let ret = view.get(&key, 0).unwrap();
+        let ret = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]))
     }
@@ -222,10 +219,10 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.get(&key, 0).unwrap();
+        let ret = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]))
     }
@@ -235,12 +232,12 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
-        view.delete(&key, 0).unwrap();
+        view.delete(&key, Column::Metadata).unwrap();
         // test
-        let ret = view.get(&key, 0).unwrap();
-        let original = store.get(&key, 0).unwrap();
+        let ret = view.get(&key, Column::Metadata).unwrap();
+        let original = store.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, None);
         // also ensure the original value is still intact and we aren't just passing
@@ -253,9 +250,11 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
-        let _ = view.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]);
+        let _ = view.put(&[0xA, 0xB, 0xC], Column::Metadata, vec![1, 2, 3]);
         // test
-        let ret = view.put(vec![0xA, 0xB, 0xC], 0, vec![2, 4, 6]).unwrap();
+        let ret = view
+            .put(&[0xA, 0xB, 0xC], Column::Metadata, vec![2, 4, 6])
+            .unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]))
     }
@@ -266,10 +265,10 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
-        view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        view.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         // test
-        let ret = view.delete(&key, 0).unwrap();
-        let get = view.get(&key, 0).unwrap();
+        let ret = view.delete(&key, Column::Metadata).unwrap();
+        let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]));
         assert_eq!(get, None)
@@ -280,11 +279,11 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.delete(&key, 0).unwrap();
-        let get = view.get(&key, 0).unwrap();
+        let ret = view.delete(&key, Column::Metadata).unwrap();
+        let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]));
         assert_eq!(get, None)
@@ -295,12 +294,12 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret1 = view.delete(&key, 0).unwrap();
-        let ret2 = view.delete(&key, 0).unwrap();
-        let get = view.get(&key, 0).unwrap();
+        let ret1 = view.delete(&key, Column::Metadata).unwrap();
+        let ret2 = view.delete(&key, Column::Metadata).unwrap();
+        let get = view.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret1, Some(vec![1, 2, 3]));
         assert_eq!(ret2, None);
@@ -313,9 +312,9 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store);
         let key = vec![0xA, 0xB, 0xC];
-        view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        view.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         // test
-        let ret = view.exists(&key, 0).unwrap();
+        let ret = view.exists(&key, Column::Metadata).unwrap();
         // verify
         assert!(ret)
     }
@@ -325,10 +324,10 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store);
         // test
-        let ret = view.exists(&key, 0).unwrap();
+        let ret = view.exists(&key, Column::Metadata).unwrap();
         // verify
         assert!(ret)
     }
@@ -338,12 +337,12 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
-        view.delete(&key, 0).unwrap();
+        view.delete(&key, Column::Metadata).unwrap();
         // test
-        let ret = view.exists(&key, 0).unwrap();
-        let original = store.exists(&key, 0).unwrap();
+        let ret = view.exists(&key, Column::Metadata).unwrap();
+        let original = store.exists(&key, Column::Metadata).unwrap();
         // verify
         assert!(!ret);
         // also ensure the original value is still intact and we aren't just passing
@@ -357,10 +356,10 @@ mod tests {
         let store = Arc::new(MemoryStore::default());
         let view = MemoryTransactionView::new(store.clone());
         let key = vec![0xA, 0xB, 0xC];
-        view.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        view.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         // test
         view.commit().unwrap();
-        let ret = store.get(&key, 0).unwrap();
+        let ret = store.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, Some(vec![1, 2, 3]))
     }
@@ -370,12 +369,12 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         let key = vec![0xA, 0xB, 0xC];
-        store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
         let view = MemoryTransactionView::new(store.clone());
         // test
-        view.delete(&key, 0).unwrap();
+        view.delete(&key, Column::Metadata).unwrap();
         view.commit().unwrap();
-        let ret = store.get(&key, 0).unwrap();
+        let ret = store.get(&key, Column::Metadata).unwrap();
         // verify
         assert_eq!(ret, None)
     }
@@ -387,12 +386,15 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
         store
             .transaction(|store| {
-                store.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+                store.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
                 Ok(())
             })
             .unwrap();
 
-        assert_eq!(store.get(&key, 0).unwrap().unwrap(), vec![1, 2, 3]);
+        assert_eq!(
+            store.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
     }
 
     #[test]
@@ -400,11 +402,13 @@ mod tests {
         let mut store = Arc::new(MemoryStore::default());
 
         let _ = store.transaction(|store| {
-            store.put(vec![0xA, 0xB, 0xC], 0, vec![1, 2, 3]).unwrap();
+            store
+                .put(&[0xA, 0xB, 0xC], Column::Metadata, vec![1, 2, 3])
+                .unwrap();
             TransactionResult::<()>::Err(TransactionError::Aborted)
         });
 
-        assert_eq!(store.get(&[0xA, 0xB, 0xC], 0).unwrap(), None);
+        assert_eq!(store.get(&[0xA, 0xB, 0xC], Column::Metadata).unwrap(), None);
     }
 
     #[test]
@@ -412,17 +416,17 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
-            store.put(vec![i], 0, vec![1]).unwrap();
+            store.put(&[i], Column::Metadata, vec![1]).unwrap();
         });
 
         let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(3).for_each(|i| {
-            view.put(vec![i], 0, vec![2]).unwrap();
+            view.put(&[i], Column::Metadata, vec![2]).unwrap();
         });
 
         let ret: Vec<_> = view
-            .iter_all(0, None, None, IterDirection::Forward)
+            .iter_all(Column::Metadata, None, None, IterDirection::Forward)
             .map_ok(|(k, _)| k[0])
             .try_collect()
             .unwrap();
@@ -435,17 +439,17 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
-            store.put(vec![i], 0, vec![1]).unwrap();
+            store.put(&[i], Column::Metadata, vec![1]).unwrap();
         });
 
         let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(3).for_each(|i| {
-            view.put(vec![i], 0, vec![2]).unwrap();
+            view.put(&[i], Column::Metadata, vec![2]).unwrap();
         });
 
         let ret: Vec<_> = view
-            .iter_all(0, None, None, IterDirection::Reverse)
+            .iter_all(Column::Metadata, None, None, IterDirection::Reverse)
             .map_ok(|(k, _)| k[0])
             .try_collect()
             .unwrap();
@@ -458,17 +462,17 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
-            store.put(vec![i], 0, vec![0xA]).unwrap();
+            store.put(&[i], Column::Metadata, vec![0xA]).unwrap();
         });
 
         let view = MemoryTransactionView::new(store);
         // test
         (0..10).step_by(2).for_each(|i| {
-            view.put(vec![i], 0, vec![0xB]).unwrap();
+            view.put(&[i], Column::Metadata, vec![0xB]).unwrap();
         });
 
         let ret: Vec<_> = view
-            .iter_all(0, None, None, IterDirection::Forward)
+            .iter_all(Column::Metadata, None, None, IterDirection::Forward)
             // return all the values from the iterator
             .map_ok(|(_, v)| v[0])
             .try_collect()
@@ -482,16 +486,16 @@ mod tests {
         // setup
         let store = Arc::new(MemoryStore::default());
         (0..10).step_by(2).for_each(|i| {
-            store.put(vec![i], 0, vec![0xA]).unwrap();
+            store.put(&[i], Column::Metadata, vec![0xA]).unwrap();
         });
 
         let view = MemoryTransactionView::new(store);
         // test
-        let _ = view.delete(&[0], 0).unwrap();
-        let _ = view.delete(&[6], 0).unwrap();
+        let _ = view.delete(&[0], Column::Metadata).unwrap();
+        let _ = view.delete(&[6], Column::Metadata).unwrap();
 
         let ret: Vec<_> = view
-            .iter_all(0, None, None, IterDirection::Forward)
+            .iter_all(Column::Metadata, None, None, IterDirection::Forward)
             // return all the values from the iterator
             .map_ok(|(k, _)| k[0])
             .try_collect()

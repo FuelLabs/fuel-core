@@ -1,6 +1,9 @@
 use crate::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::{
+            StorageAsRef,
+            StorageInspect,
+        },
         fuel_tx::{
             ContractId,
             Transaction,
@@ -8,11 +11,13 @@ use crate::{
             UtxoId,
         },
         fuel_types::MessageId,
-        prelude::Contract,
+        fuel_vm::storage::ContractsRawCode,
     },
     db::{
+        Coins,
         Error as DbStateError,
         KvStoreError,
+        Messages,
     },
     model::{
         ArcTx,
@@ -33,22 +38,25 @@ use tokio::sync::{
 };
 
 pub trait TxPoolDb:
-    Storage<UtxoId, Coin, Error = KvStoreError>
-    + Storage<ContractId, Contract, Error = DbStateError>
-    + Storage<MessageId, Message, Error = KvStoreError>
+    StorageInspect<Coins, Error = KvStoreError>
+    + StorageInspect<ContractsRawCode, Error = DbStateError>
+    + StorageInspect<Messages, Error = KvStoreError>
     + Send
     + Sync
 {
     fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        Storage::<UtxoId, Coin>::get(self, utxo_id).map(|t| t.map(|t| t.as_ref().clone()))
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
-        Storage::<ContractId, Contract>::contains_key(self, &contract_id)
+    fn contract_exist(&self, contract_id: &ContractId) -> Result<bool, DbStateError> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(&self, message_id: MessageId) -> Result<Option<Message>, KvStoreError> {
-        Storage::<MessageId, Message>::get(self, &message_id)
+    fn message(&self, message_id: &MessageId) -> Result<Option<Message>, KvStoreError> {
+        self.storage::<Messages>()
+            .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
 }
