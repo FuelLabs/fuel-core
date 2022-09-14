@@ -2,9 +2,7 @@
 
 use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_relayer_new::{
-    mock_db::MockDb,
-    test_helpers::middleware::MockMiddleware,
-    Relayer,
+    mock_db::MockDb, test_helpers::middleware::MockMiddleware, Relayer,
 };
 
 #[tokio::test]
@@ -12,6 +10,8 @@ async fn can_set_da_height() {
     let mock_db = MockDb::default();
     let relayer = Relayer::new();
     let middleware = MockMiddleware::default();
+
+    relayer.await_synced().await;
 
     assert_eq!(mock_db.get_finalized_da_height().await, 20);
 }
