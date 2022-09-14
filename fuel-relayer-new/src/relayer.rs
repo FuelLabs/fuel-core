@@ -1,32 +1,43 @@
-use std::sync::Arc;
+use anyhow::Result;
+use std::ops::Deref;
+use tokio::sync::watch;
 
-use tokio::sync::Notify;
+type Synced = watch::Receiver<bool>;
 
-type Synced = Arc<Notify>;
-
-pub struct Relayer {
+pub struct RelayerHandle {
     synced: Synced,
 }
 
-impl Relayer {
-    pub fn new() -> Self {
-        let synced = Arc::new(Notify::new());
+impl RelayerHandle {
+    pub fn start() -> Self {
+        let (tx, rx) = watch::channel(false);
+        let synced = rx;
         let r = Self {
             synced: synced.clone(),
         };
-        run(synced);
+        run(Relayer { synced: tx });
         r
     }
 
-    pub async fn await_synced(&self) {
-        self.synced.notified().await;
+    pub async fn await_synced(&self) -> Result<()> {
+        let mut rx = self.synced.clone();
+        if !rx.borrow_and_update().deref() {
+            rx.changed().await?;
+        }
+        Ok(())
     }
 }
 
-fn run(synced: Synced) {
+pub struct Relayer {
+    synced: watch::Sender<bool>,
+}
+
+fn run(relayer: Relayer) {
     let jh = tokio::task::spawn(async move {
         loop {
-            synced.notify_waiters();
+            if relayer.synced.send(true).is_err() {
+                break
+            }
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     });

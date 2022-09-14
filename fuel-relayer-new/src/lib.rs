@@ -14,4 +14,4 @@ pub use ethers_core::types::{
     H160,
     H256,
 };
-pub use relayer::Relayer;
+pub use relayer::RelayerHandle;
