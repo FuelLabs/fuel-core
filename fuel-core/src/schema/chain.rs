@@ -1,6 +1,8 @@
 use crate::{
-    database::Database,
-    model::FuelBlockDb,
+    database::{
+        storage::FuelBlocks,
+        Database,
+    },
     schema::{
         block::Block,
         scalars::U64,
@@ -12,9 +14,8 @@ use async_graphql::{
     Object,
 };
 use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
+    fuel_storage::StorageAsRef,
     fuel_tx,
-    fuel_types,
 };
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
@@ -92,8 +93,7 @@ impl ChainInfo {
         let db = ctx.data_unchecked::<Database>().clone();
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, &id)?
-            .unwrap_or_default();
+        let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
         Ok(Block(block.into_owned()))
     }
 

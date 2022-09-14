@@ -20,10 +20,13 @@ use async_graphql::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::StorageAsRef,
         fuel_types,
     },
-    db::KvStoreError,
+    db::{
+        KvStoreError,
+        Messages,
+    },
     model,
 };
 use itertools::Itertools;
@@ -127,12 +130,11 @@ impl MessageQuery {
                                 .iter()
                                 .take(records_to_fetch)
                                 .map(|msg_id| {
-                                    Storage::<fuel_types::MessageId, model::Message>::get(
-                                        &db, msg_id,
-                                    )
-                                    .transpose()
-                                    .ok_or(KvStoreError::NotFound)?
-                                    .map(|f| f.into_owned())
+                                    db.storage::<Messages>()
+                                        .get(msg_id)
+                                        .transpose()
+                                        .ok_or(KvStoreError::NotFound)?
+                                        .map(|f| f.into_owned())
                                 })
                                 .try_collect()?;
                             (messages, has_next_page, started.is_some())

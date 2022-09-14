@@ -1,7 +1,7 @@
 use crate::{
     chain_config::MessageConfig,
     database::{
-        columns,
+        Column,
         Database,
         KvStoreError,
     },
@@ -12,13 +12,17 @@ use crate::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
         fuel_types::{
             Address,
             Bytes32,
             MessageId,
         },
     },
+    db::Messages,
     model::Message,
 };
 use std::{
@@ -26,9 +30,19 @@ use std::{
     ops::Deref,
 };
 
-impl Storage<MessageId, Message> for Database {
+impl StorageInspect<Messages> for Database {
     type Error = KvStoreError;
 
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, KvStoreError> {
+        Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &MessageId) -> Result<bool, KvStoreError> {
+        Database::exists(self, key.as_ref(), Column::Messages).map_err(Into::into)
+    }
+}
+
+impl StorageMutate<Messages> for Database {
     fn insert(
         &mut self,
         key: &MessageId,
@@ -36,13 +50,13 @@ impl Storage<MessageId, Message> for Database {
     ) -> Result<Option<Message>, KvStoreError> {
         // insert primary record
         let result =
-            Database::insert(self, key.as_ref(), columns::MESSAGES, value.clone())?;
+            Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
 
         // insert secondary record by owner
-        Database::insert(
+        let _: Option<bool> = Database::insert(
             self,
             owner_msg_id_key(&value.recipient, key),
-            columns::OWNED_MESSAGE_IDS,
+            Column::OwnedMessageIds,
             true,
         )?;
 
@@ -51,25 +65,17 @@ impl Storage<MessageId, Message> for Database {
 
     fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, KvStoreError> {
         let result: Option<Message> =
-            Database::remove(self, key.as_ref(), columns::MESSAGES)?;
+            Database::remove(self, key.as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
             Database::remove::<bool>(
                 self,
                 &owner_msg_id_key(&message.recipient, key),
-                columns::OWNED_MESSAGE_IDS,
+                Column::OwnedMessageIds,
             )?;
         }
 
         Ok(result)
-    }
-
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, KvStoreError> {
-        Database::get(self, key.as_ref(), columns::MESSAGES).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &MessageId) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), columns::MESSAGES).map_err(Into::into)
     }
 }
 
@@ -81,7 +87,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<MessageId, Error>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
-            columns::OWNED_MESSAGE_IDS,
+            Column::OwnedMessageIds,
             Some(owner.as_ref().to_vec()),
             start_message_id.map(|msg_id| owner_msg_id_key(&owner, &msg_id)),
             direction,
@@ -100,7 +106,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
         let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(columns::MESSAGES, None, start, direction)
+        self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
     }
 
@@ -138,6 +144,7 @@ fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_interfaces::common::fuel_storage::StorageAsMut;
 
     #[test]
     fn owned_message_ids() {
@@ -146,20 +153,24 @@ mod tests {
 
         // insert a message with the first id
         let first_id = MessageId::new([1; 32]);
-        let _ =
-            Storage::<MessageId, Message>::insert(&mut db, &first_id, &message).unwrap();
+        let _ = db
+            .storage::<Messages>()
+            .insert(&first_id, &message)
+            .unwrap();
 
         // insert a message with the second id with the same Owner
         let second_id = MessageId::new([2; 32]);
-        let _ =
-            Storage::<MessageId, Message>::insert(&mut db, &second_id, &message).unwrap();
+        let _ = db
+            .storage::<Messages>()
+            .insert(&second_id, &message)
+            .unwrap();
 
         // verify that 2 message IDs are associated with a single Owner/Recipient
         let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 2);
 
         // remove the first message with its given id
-        let _ = Storage::<MessageId, Message>::remove(&mut db, &first_id).unwrap();
+        let _ = db.storage::<Messages>().remove(&first_id).unwrap();
 
         // verify that only second ID is left
         let owned_msg_ids: Vec<_> = db
@@ -169,7 +180,7 @@ mod tests {
         assert_eq!(owned_msg_ids.len(), 1);
 
         // remove the second message with its given id
-        let _ = Storage::<MessageId, Message>::remove(&mut db, &second_id).unwrap();
+        let _ = db.storage::<Messages>().remove(&second_id).unwrap();
         let owned_msg_ids = db.owned_message_ids(message.recipient, None, None);
         assert_eq!(owned_msg_ids.count(), 0);
     }

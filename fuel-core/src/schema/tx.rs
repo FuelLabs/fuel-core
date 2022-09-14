@@ -1,14 +1,15 @@
 use crate::{
     database::{
+        storage::{
+            FuelBlocks,
+            Receipts,
+        },
         transaction::OwnedTransactionIndexCursor,
         Database,
         KvStoreError,
     },
     executor::Executor,
-    model::{
-        BlockHeight,
-        FuelBlockDb,
-    },
+    model::BlockHeight,
     schema::scalars::{
         Address,
         Bytes32,
@@ -32,15 +33,12 @@ use async_graphql::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
-        fuel_tx::{
-            Bytes32 as FuelBytes32,
-            Receipt as FuelReceipt,
-            Transaction as FuelTx,
-        },
+        fuel_storage::StorageAsRef,
+        fuel_tx::Transaction as FuelTx,
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
+    db::Transactions,
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
@@ -85,7 +83,9 @@ impl TxQuery {
         if let Ok(Some(transaction)) = receiver.await {
             Ok(Some(Transaction((transaction.tx().deref()).clone())))
         } else {
-            Ok(Storage::<fuel_types::Bytes32, FuelTx>::get(db, &id)?
+            Ok(db
+                .storage::<Transactions>()
+                .get(&id)?
                 .map(|tx| Transaction(tx.into_owned())))
         }
     }
@@ -147,7 +147,7 @@ impl TxQuery {
                 let txs = all_block_ids
                     .flat_map(|block| {
                         block.map(|(block_height, block_id)| {
-                            Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &block_id)
+                            db.storage::<FuelBlocks>().get(&block_id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                                 .map(|fuel_block| {
@@ -180,7 +180,7 @@ impl TxQuery {
                     .iter()
                     .take(records_to_fetch)
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
-                        let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(db, tx_id)
+                        let tx = db.storage::<Transactions>().get(tx_id)
                             .transpose()
                             .ok_or(KvStoreError::NotFound)?;
 
@@ -279,11 +279,11 @@ impl TxQuery {
                         .take(records_to_fetch)
                         .map(|res| {
                             res.and_then(|(cursor, tx_id)| {
-                                let tx = Storage::<fuel_types::Bytes32, FuelTx>::get(
-                                    db, &tx_id,
-                                )?
-                                .ok_or(KvStoreError::NotFound)?
-                                .into_owned();
+                                let tx = db
+                                    .storage::<Transactions>()
+                                    .get(&tx_id)?
+                                    .ok_or(KvStoreError::NotFound)?
+                                    .into_owned();
                                 Ok((cursor, tx))
                             })
                         });
@@ -341,9 +341,11 @@ impl TxMutation {
         };
         executor.submit_txs(vec![Arc::new(tx)]).await?;
         // get receipts from db transaction
-        let receipts =
-            Storage::<FuelBytes32, Vec<FuelReceipt>>::get(transaction.deref(), &id)?
-                .unwrap_or_default();
+        let receipts = transaction
+            .deref()
+            .storage::<Receipts>()
+            .get(&id)?
+            .unwrap_or_default();
         Ok(receipts.iter().map(Into::into).collect())
     }
 

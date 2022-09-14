@@ -400,7 +400,7 @@ impl Dependency {
                     // verify message id integrity
                     Self::check_if_message_input_matches_id(input)?;
                     // since message id is derived, we don't need to double check all the fields
-                    if let Some(msg) = db.message(*message_id)? {
+                    if let Some(msg) = db.message(message_id)? {
                         // return an error if spent block is set
                         if msg.fuel_block_spend.is_some() {
                             return Err(
@@ -449,7 +449,7 @@ impl Dependency {
                             return Err(Error::NotInsertedMaxDepth.into())
                         }
                     } else {
-                        if !db.contract_exist(*contract_id)? {
+                        if !db.contract_exist(contract_id)? {
                             return Err(Error::NotInsertedInputContractNotExisting(
                                 *contract_id,
                             )

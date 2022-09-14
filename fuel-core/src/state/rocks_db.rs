@@ -1,15 +1,13 @@
 use crate::{
     database::{
-        columns,
-        columns::METADATA,
         metadata::{
             DB_VERSION,
             DB_VERSION_KEY,
         },
+        Column,
     },
     state::{
         BatchOperations,
-        ColumnId,
         Error,
         IterDirection,
         KVItem,
@@ -45,8 +43,14 @@ pub struct RocksDb {
 }
 
 impl RocksDb {
-    pub fn open<P: AsRef<Path>>(path: P, cols: u32) -> Result<RocksDb, Error> {
-        let cf_descriptors: Vec<_> = (0..cols)
+    pub fn default_open<P: AsRef<Path>>(path: P) -> Result<RocksDb, Error> {
+        Self::open(path, enum_iterator::all::<Column>().collect::<Vec<_>>())
+    }
+
+    pub fn open<P: AsRef<Path>>(path: P, columns: Vec<Column>) -> Result<RocksDb, Error> {
+        let cf_descriptors: Vec<_> = columns
+            .clone()
+            .into_iter()
             .map(|i| ColumnFamilyDescriptor::new(RocksDb::col_name(i), Self::cf_opts(i)))
             .collect();
 
@@ -58,7 +62,7 @@ impl RocksDb {
                 // setup cfs
                 match DB::open_cf(&opts, &path, &[] as &[&str]) {
                     Ok(db) => {
-                        for i in 0..cols {
+                        for i in columns {
                             db.create_cf(RocksDb::col_name(i), &opts)
                                 .map_err(|e| Error::DatabaseError(Box::new(e)))?;
                         }
@@ -76,12 +80,12 @@ impl RocksDb {
     }
 
     fn validate_or_set_db_version(&self) -> Result<(), Error> {
-        let data = self.get(DB_VERSION_KEY, METADATA)?;
+        let data = self.get(DB_VERSION_KEY, Column::Metadata)?;
         match data {
             None => {
                 self.put(
-                    DB_VERSION_KEY.to_vec(),
-                    METADATA,
+                    DB_VERSION_KEY,
+                    Column::Metadata,
                     DB_VERSION.to_be_bytes().to_vec(),
                 )?;
             }
@@ -97,35 +101,34 @@ impl RocksDb {
         Ok(())
     }
 
-    fn cf(&self, column: ColumnId) -> Arc<BoundColumnFamily> {
+    fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
         self.db
             .cf_handle(&*RocksDb::col_name(column))
             .expect("invalid column state")
     }
 
-    fn col_name(column: ColumnId) -> String {
-        format!("column-{}", column)
+    fn col_name(column: Column) -> String {
+        format!("column-{}", column as u32)
     }
 
-    fn cf_opts(column: ColumnId) -> Options {
+    fn cf_opts(column: Column) -> Options {
         let mut opts = Options::default();
         opts.create_if_missing(true);
 
-        if column == columns::OWNED_COINS {
-            // prefix is address length
-            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
-        }
-        if column == columns::TRANSACTIONS_BY_OWNER_BLOCK_IDX {
-            // prefix is address length
-            opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
-        }
+        match column {
+            Column::OwnedCoins | Column::TransactionsByOwnerBlockIdx => {
+                // prefix is address length
+                opts.set_prefix_extractor(SliceTransform::create_fixed_prefix(32))
+            }
+            _ => {}
+        };
 
         opts
     }
 }
 
 impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: ColumnId) -> crate::state::Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> crate::state::Result<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
@@ -146,8 +149,8 @@ impl KeyValueStore for RocksDb {
 
     fn put(
         &self,
-        key: Vec<u8>,
-        column: ColumnId,
+        key: &[u8],
+        column: Column,
         value: Vec<u8>,
     ) -> crate::state::Result<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
@@ -157,7 +160,7 @@ impl KeyValueStore for RocksDb {
                 .bytes_written_meter
                 .inc_by(value.len() as u64);
         }
-        let prev = self.get(&key, column)?;
+        let prev = self.get(key, column)?;
         self.db
             .put_cf(&self.cf(column), key, value)
             .map_err(|e| Error::DatabaseError(Box::new(e)))
@@ -167,7 +170,7 @@ impl KeyValueStore for RocksDb {
     fn delete(
         &self,
         key: &[u8],
-        column: ColumnId,
+        column: Column,
     ) -> crate::state::Result<Option<Vec<u8>>> {
         let prev = self.get(key, column)?;
         self.db
@@ -176,7 +179,7 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn exists(&self, key: &[u8], column: ColumnId) -> crate::state::Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> crate::state::Result<bool> {
         // use pinnable mem ref to avoid memcpy of values associated with the key
         // since we're just checking for the existence of the key
         self.db
@@ -187,7 +190,7 @@ impl KeyValueStore for RocksDb {
 
     fn iter_all(
         &self,
-        column: ColumnId,
+        column: Column,
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
@@ -297,28 +300,31 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    fn create_db(cols: u32) -> (RocksDb, TempDir) {
+    fn create_db() -> (RocksDb, TempDir) {
         let tmp_dir = TempDir::new().unwrap();
-        (RocksDb::open(tmp_dir.path(), cols).unwrap(), tmp_dir)
+        (RocksDb::default_open(tmp_dir.path()).unwrap(), tmp_dir)
     }
 
     #[test]
     fn can_put_and_read() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db(1);
-        db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
 
-        assert_eq!(db.get(&key, 0).unwrap().unwrap(), vec![1, 2, 3])
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        )
     }
 
     #[test]
     fn put_returns_previous_value() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db(1);
-        db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        let prev = db.put(key, 0, vec![2, 4, 6]).unwrap();
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        let prev = db.put(&key, Column::Metadata, vec![2, 4, 6]).unwrap();
 
         assert_eq!(prev, Some(vec![1, 2, 3]));
     }
@@ -327,21 +333,24 @@ mod tests {
     fn delete_and_get() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db(1);
-        db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        assert_eq!(db.get(&key, 0).unwrap().unwrap(), vec![1, 2, 3]);
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        assert_eq!(
+            db.get(&key, Column::Metadata).unwrap().unwrap(),
+            vec![1, 2, 3]
+        );
 
-        db.delete(&key, 0).unwrap();
-        assert_eq!(db.get(&key, 0).unwrap(), None);
+        db.delete(&key, Column::Metadata).unwrap();
+        assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
 
     #[test]
     fn key_exists() {
         let key = vec![0xA, 0xB, 0xC];
 
-        let (db, _tmp) = create_db(1);
-        db.put(key.clone(), 0, vec![1, 2, 3]).unwrap();
-        assert!(db.exists(&key, 0).unwrap());
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, vec![1, 2, 3]).unwrap();
+        assert!(db.exists(&key, Column::Metadata).unwrap());
     }
 
     #[test]
@@ -349,11 +358,15 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
         let value = vec![1, 2, 3];
 
-        let (db, _tmp) = create_db(1);
-        let ops = vec![WriteOperation::Insert(key.clone(), 0, value.clone())];
+        let (db, _tmp) = create_db();
+        let ops = vec![WriteOperation::Insert(
+            key.clone(),
+            Column::Metadata,
+            value.clone(),
+        )];
 
         db.batch_write(&mut ops.into_iter()).unwrap();
-        assert_eq!(db.get(&key, 0).unwrap().unwrap(), value)
+        assert_eq!(db.get(&key, Column::Metadata).unwrap().unwrap(), value)
     }
 
     #[test]
@@ -361,12 +374,12 @@ mod tests {
         let key = vec![0xA, 0xB, 0xC];
         let value = vec![1, 2, 3];
 
-        let (db, _tmp) = create_db(1);
-        db.put(key.clone(), 0, value).unwrap();
+        let (db, _tmp) = create_db();
+        db.put(&key, Column::Metadata, value).unwrap();
 
-        let ops = vec![WriteOperation::Remove(key.clone(), 0)];
+        let ops = vec![WriteOperation::Remove(key.clone(), Column::Metadata)];
         db.batch_write(&mut ops.into_iter()).unwrap();
 
-        assert_eq!(db.get(&key, 0).unwrap(), None);
+        assert_eq!(db.get(&key, Column::Metadata).unwrap(), None);
     }
 }

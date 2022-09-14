@@ -13,17 +13,20 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{
-        AssetId,
-        UtxoId,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsMut,
+        fuel_tx::{
+            AssetId,
+            UtxoId,
+        },
+        fuel_vm::prelude::{
+            Address,
+            Bytes32,
+            Word,
+        },
     },
-    fuel_vm::prelude::{
-        Address,
-        Bytes32,
-        Word,
-    },
+    db::Coins,
 };
 use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemeCoinStatus,
@@ -47,7 +50,7 @@ async fn coin() {
     let utxo_id = UtxoId::new(Default::default(), 5);
 
     let mut db = Database::default();
-    Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
+    db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
         .await
@@ -85,7 +88,7 @@ async fn first_5_coins() {
 
     let mut db = Database::default();
     for (utxo_id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
+        db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
     }
 
     // setup server & client
@@ -135,7 +138,7 @@ async fn only_asset_id_filtered_coins() {
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
+        db.storage::<Coins>().insert(&id, &coin).unwrap();
     }
 
     // setup server & client
@@ -192,7 +195,7 @@ async fn only_unspent_coins() {
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
+        db.storage::<Coins>().insert(&id, &coin).unwrap();
     }
 
     // setup server & client

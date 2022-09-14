@@ -9,13 +9,16 @@ use crate::{
     },
     state::{self,},
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{
-        Address,
-        AssetId,
-        UtxoId,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsRef,
+        fuel_tx::{
+            Address,
+            AssetId,
+            UtxoId,
+        },
     },
+    db::Coins,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -88,7 +91,8 @@ pub fn largest_first(
             let mut coins: Vec<(UtxoId, Coin)> = coin_ids
                 .into_iter()
                 .map(|id| {
-                    Storage::<UtxoId, Coin>::get(db, &id)
+                    db.storage::<Coins>()
+                        .get(&id)
                         .transpose()
                         .ok_or(KvStoreError::NotFound)?
                         .map(|coin| (id, coin.into_owned()))
@@ -168,7 +172,8 @@ pub fn random_improve(
             let coins: Vec<(UtxoId, Coin)> = coin_ids
                 .into_iter()
                 .map(|id| {
-                    Storage::<UtxoId, Coin>::get(db, &id)
+                    db.storage::<Coins>()
+                        .get(&id)
                         .transpose()
                         .ok_or(KvStoreError::NotFound)?
                         .map(|coin| (id, coin.into_owned()))
