@@ -355,8 +355,8 @@ mod tests {
             .await
             .unwrap();
 
-        let alice_coins = get_coins(&db, alice);
-        let bob_coins = get_coins(&db, bob)
+        let alice_coins = get_coins(&db, &alice);
+        let bob_coins = get_coins(&db, &bob)
             .into_iter()
             .map(|(_, coin)| coin)
             .collect_vec();
@@ -511,8 +511,8 @@ mod tests {
         assert_eq!(test_balance, ret)
     }
 
-    fn get_coins(db: &Database, owner: Address) -> Vec<(UtxoId, Coin)> {
-        db.owned_coins(owner, None, None)
+    fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
+        db.owned_coins_ids(owner, None, None)
             .map(|r| {
                 r.and_then(|coin_id| {
                     db.storage::<Coins>()

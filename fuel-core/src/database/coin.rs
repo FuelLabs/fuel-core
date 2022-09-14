@@ -14,20 +14,17 @@ use crate::{
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
-            StorageAsRef,
             StorageInspect,
             StorageMutate,
         },
         fuel_tx::{
             Address,
-            AssetId,
             Bytes32,
             UtxoId,
         },
     },
     db::Coins,
 };
-use itertools::Itertools;
 use std::borrow::Cow;
 
 fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {
@@ -92,16 +89,16 @@ impl StorageMutate<Coins> for Database {
 }
 
 impl Database {
-    pub fn owned_coins(
+    pub fn owned_coins_ids(
         &self,
-        owner: Address,
+        owner: &Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedCoins,
             Some(owner.as_ref().to_vec()),
-            start_coin.map(|b| owner_coin_id_key(&owner, &b)),
+            start_coin.map(|b| owner_coin_id_key(owner, &b)),
             direction,
         )
         // Safety: key is always 64 bytes
@@ -113,32 +110,6 @@ impl Database {
                 )
             })
         })
-    }
-
-    // TODO: Optimize this by creating an index
-    pub fn owned_coins_by_asset_id(
-        &self,
-        owner: Address,
-        asset_id: AssetId,
-        start_coin: Option<UtxoId>,
-        direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
-        self.iter_all::<Vec<u8>, bool>(
-            Column::OwnedCoins,
-            Some(owner.as_ref().to_vec()),
-            start_coin.map(|b| owner_coin_id_key(&owner, &b)),
-            direction,
-        )
-        // Safety: key is always 64 bytes
-        .map(|res| {
-            res.map(|(key, _)| {
-                UtxoId::new(
-                    unsafe { Bytes32::from_slice_unchecked(&key[32..64]) },
-                    key[64],
-                )
-            })
-        })
-        .filter_ok(move |id| self.storage::<Coins>().get(id).unwrap().unwrap().asset_id == asset_id)
     }
 
     pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {

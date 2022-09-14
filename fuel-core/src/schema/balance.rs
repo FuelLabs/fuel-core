@@ -76,8 +76,10 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Balance> {
         let db = ctx.data_unchecked::<Database>();
 
+        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balance = db
-            .owned_coins(owner.into(), None, None)
+            .owned_coins_ids(&owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 db.storage::<Coins>()
@@ -120,8 +122,10 @@ impl BalanceQuery {
     {
         let db = ctx.data_unchecked::<Database>();
 
+        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
+        //  https://github.com/FuelLabs/fuel-core/issues/614
         let balances = db
-            .owned_coins(filter.owner.into(), None, None)
+            .owned_coins_ids(&filter.owner.0, None, None)
             .map(|res| -> Result<_, Error> {
                 let id = res?;
                 db.storage::<Coins>()

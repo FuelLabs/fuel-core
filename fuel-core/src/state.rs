@@ -56,6 +56,10 @@ pub trait KeyValueStore {
     fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: Column) -> Result<bool>;
+    // TODO: Use `Option<&[u8]>` instead of `Option<Vec<u8>>`. Also decide, do we really need usage
+    //  of `Option`? If `len` is zero it is the same as `None`. Apply the same change for all upper
+    //  functions.
+    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn iter_all(
         &self,
         column: Column,

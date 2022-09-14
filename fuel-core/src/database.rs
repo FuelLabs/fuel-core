@@ -66,6 +66,7 @@ mod state;
 mod validator_set;
 
 pub mod metadata;
+pub mod resource;
 pub mod storage;
 pub mod transaction;
 pub mod transactional;
@@ -181,6 +182,9 @@ impl Database {
         }
     }
 
+    // TODO: Get `K` and `V` by reference to force compilation error for the current
+    //  code(we have many `Copy`).
+    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
@@ -223,6 +227,8 @@ impl Database {
             .transpose()
     }
 
+    // TODO: Rename to `contains_key` to be the same as `StorageInspect`
+    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn exists(&self, key: &[u8], column: Column) -> Result<bool, Error> {
         self.data.exists(key, column)
     }

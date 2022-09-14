@@ -224,6 +224,9 @@ impl KeyValueStore for RocksDb {
             .iterator_cf_opt(&self.cf(column), opts, iter_mode)
             .map(|item| {
                 item.map(|(key, value)| {
+                    // TODO: Avoid copy of the slices into vector.
+                    //  We can extract slice from the `Box` and put it inside the `Vec`
+                    //  https://github.com/FuelLabs/fuel-core/issues/622
                     let value_as_vec = value.to_vec();
                     let key_as_vec = key.to_vec();
                     #[cfg(feature = "metrics")]
