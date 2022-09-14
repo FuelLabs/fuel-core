@@ -2,10 +2,24 @@
 
 use crate::helpers::TestSetupBuilder;
 use fuel_core_interfaces::common::{
-    fuel_tx::{Input, Output, TransactionBuilder},
-    fuel_vm::{consts::REG_ONE, consts::REG_ZERO, prelude::Opcode},
+    fuel_tx::{
+        Input,
+        Output,
+        TransactionBuilder,
+    },
+    fuel_vm::{
+        consts::{
+            REG_ONE,
+            REG_ZERO,
+        },
+        prelude::Opcode,
+    },
 };
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use rand::{
+    rngs::StdRng,
+    Rng,
+    SeedableRng,
+};
 
 #[tokio::test]
 async fn transaction_with_predicates_is_rejected_when_feature_disabled() {

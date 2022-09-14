@@ -1,10 +1,27 @@
-use crate::{Config, TxPool};
+use crate::{
+    Config,
+    TxPool,
+};
 use anyhow::anyhow;
-use fuel_core_interfaces::block_importer::ImportBlockBroadcast;
-use fuel_core_interfaces::txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast};
+use fuel_core_interfaces::{
+    block_importer::ImportBlockBroadcast,
+    txpool::{
+        self,
+        TxPoolDb,
+        TxPoolMpsc,
+        TxStatusBroadcast,
+    },
+};
 use std::sync::Arc;
-use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::{
+        broadcast,
+        mpsc,
+        Mutex,
+        RwLock,
+    },
+    task::JoinHandle,
+};
 
 pub struct ServiceBuilder {
     sender: txpool::Sender,
@@ -63,7 +80,7 @@ impl ServiceBuilder {
 
     pub fn build(self) -> anyhow::Result<Service> {
         if self.db.is_none() || self.import_block_events.is_none() {
-            return Err(anyhow!("One of context items are not set"));
+            return Err(anyhow!("One of context items are not set"))
         }
         let service = Service::new(
             self.sender,
@@ -207,7 +224,10 @@ pub mod tests {
     use crate::MockDb;
     use fuel_core_interfaces::{
         common::fuel_tx::TransactionBuilder,
-        txpool::{Error as TxpoolError, TxStatus},
+        txpool::{
+            Error as TxpoolError,
+            TxStatus,
+        },
     };
     use tokio::sync::oneshot;
 
@@ -416,7 +436,8 @@ pub mod tests {
         let _rem = receiver.await.unwrap();
 
         assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
+                .await,
             Ok(Ok(TxStatusBroadcast {
                 tx: tx1,
                 status: TxStatus::SqueezedOut {
@@ -427,7 +448,8 @@ pub mod tests {
         );
 
         assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
+            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
+                .await,
             Ok(Ok(TxStatusBroadcast {
                 tx: tx2,
                 status: TxStatus::SqueezedOut {

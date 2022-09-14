@@ -1,11 +1,22 @@
-use crate::discovery::{mdns::MdnsWrapper, DiscoveryBehaviour};
+use crate::discovery::{
+    mdns::MdnsWrapper,
+    DiscoveryBehaviour,
+};
 use futures_timer::Delay;
 use libp2p::{
-    kad::{store::MemoryStore, Kademlia, KademliaConfig},
-    Multiaddr, PeerId,
+    kad::{
+        store::MemoryStore,
+        Kademlia,
+        KademliaConfig,
+    },
+    Multiaddr,
+    PeerId,
 };
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{
+        HashSet,
+        VecDeque,
+    },
     time::Duration,
 };
 use tracing::warn;
@@ -49,7 +60,10 @@ impl DiscoveryConfig {
     }
 
     /// Sets the amount of time to keep connections alive when they're idle
-    pub fn set_connection_idle_timeout(&mut self, connection_idle_timeout: Duration) -> &mut Self {
+    pub fn set_connection_idle_timeout(
+        &mut self,
+        connection_idle_timeout: Duration,
+    ) -> &mut Self {
         self.connection_idle_timeout = connection_idle_timeout;
         self
     }
@@ -90,12 +104,15 @@ impl DiscoveryConfig {
         let network = format!("/fuel/kad/{}/kad/1.0.0", network_name);
         kademlia_config.set_protocol_name(network.as_bytes().to_vec());
         kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
-        let mut kademlia = Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
+        let mut kademlia =
+            Kademlia::with_config(local_peer_id, memory_store, kademlia_config);
 
         // bootstrap nodes need to have their peer_id defined in the Multiaddr
         let bootstrap_nodes = bootstrap_nodes
             .into_iter()
-            .filter_map(|node| PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node)))
+            .filter_map(|node| {
+                PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node))
+            })
             .collect::<Vec<_>>();
 
         for (peer_id, address) in &bootstrap_nodes {

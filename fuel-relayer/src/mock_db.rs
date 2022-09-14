@@ -2,21 +2,48 @@ use async_trait::async_trait;
 
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    sync::{Arc, Mutex},
+    collections::{
+        BTreeMap,
+        HashMap,
+    },
+    sync::{
+        Arc,
+        Mutex,
+    },
 };
 
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
-        fuel_tx::{Address, MessageId},
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_tx::{
+            Address,
+            MessageId,
+        },
     },
-    db::KvStoreError,
+    db::{
+        DelegatesIndexes,
+        KvStoreError,
+        Messages,
+        StakingDiffs,
+        ValidatorsSet,
+    },
     model::{
-        BlockHeight, ConsensusId, DaBlockHeight, Message, SealedFuelBlock, ValidatorId,
+        BlockHeight,
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        SealedFuelBlock,
+        ValidatorId,
         ValidatorStake,
     },
-    relayer::{RelayerDb, StakingDiff, ValidatorSet},
+    relayer::{
+        RelayerDb,
+        StakingDiff,
+        ValidatorSet,
+    },
 };
 
 #[derive(Default)]
@@ -47,21 +74,10 @@ impl MockDb {
     }
 }
 
-impl Storage<MessageId, Message> for MockDb {
+// TODO: Generate `Storage` implementation with macro.
+
+impl StorageInspect<Messages> for MockDb {
     type Error = KvStoreError;
-
-    fn insert(&mut self, key: &MessageId, value: &Message) -> Result<Option<Message>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .insert(*key, value.clone()))
-    }
-
-    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
-        Ok(self.data.lock().unwrap().messages.remove(key))
-    }
 
     fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
         Ok(self
@@ -78,23 +94,27 @@ impl Storage<MessageId, Message> for MockDb {
     }
 }
 
-impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
-    type Error = KvStoreError;
-
+impl StorageMutate<Messages> for MockDb {
     fn insert(
         &mut self,
-        key: &ValidatorId,
-        value: &(ValidatorStake, Option<ConsensusId>),
-    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        Ok(self.data.lock().unwrap().validators.insert(*key, *value))
+        key: &MessageId,
+        value: &Message,
+    ) -> Result<Option<Message>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .messages
+            .insert(*key, value.clone()))
     }
 
-    fn remove(
-        &mut self,
-        key: &ValidatorId,
-    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        Ok(self.data.lock().unwrap().validators.remove(key))
+    fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
+        Ok(self.data.lock().unwrap().messages.remove(key))
     }
+}
+
+impl StorageInspect<ValidatorsSet> for MockDb {
+    type Error = KvStoreError;
 
     fn get(
         &self,
@@ -114,25 +134,25 @@ impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
     }
 }
 
-impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
-    type Error = KvStoreError;
-
+impl StorageMutate<ValidatorsSet> for MockDb {
     fn insert(
         &mut self,
-        key: &Address,
-        value: &Vec<DaBlockHeight>,
-    ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .delegator_index
-            .insert(*key, value.clone()))
+        key: &ValidatorId,
+        value: &(ValidatorStake, Option<ConsensusId>),
+    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
+        Ok(self.data.lock().unwrap().validators.insert(*key, *value))
     }
 
-    fn remove(&mut self, key: &Address) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
-        Ok(self.data.lock().unwrap().delegator_index.remove(key))
+    fn remove(
+        &mut self,
+        key: &ValidatorId,
+    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
+        Ok(self.data.lock().unwrap().validators.remove(key))
     }
+}
+
+impl StorageInspect<DelegatesIndexes> for MockDb {
+    type Error = KvStoreError;
 
     fn get(&self, key: &Address) -> Result<Option<Cow<Vec<DaBlockHeight>>>, Self::Error> {
         Ok(self
@@ -149,25 +169,30 @@ impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
     }
 }
 
-impl Storage<DaBlockHeight, StakingDiff> for MockDb {
-    type Error = KvStoreError;
-
+impl StorageMutate<DelegatesIndexes> for MockDb {
     fn insert(
         &mut self,
-        key: &DaBlockHeight,
-        value: &StakingDiff,
-    ) -> Result<Option<StakingDiff>, Self::Error> {
+        key: &Address,
+        value: &[DaBlockHeight],
+    ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
         Ok(self
             .data
             .lock()
             .unwrap()
-            .staking_diffs
-            .insert(*key, value.clone()))
+            .delegator_index
+            .insert(*key, value.into()))
     }
 
-    fn remove(&mut self, key: &DaBlockHeight) -> Result<Option<StakingDiff>, Self::Error> {
-        Ok(self.data.lock().unwrap().staking_diffs.remove(key))
+    fn remove(
+        &mut self,
+        key: &Address,
+    ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
+        Ok(self.data.lock().unwrap().delegator_index.remove(key))
     }
+}
+
+impl StorageInspect<StakingDiffs> for MockDb {
+    type Error = KvStoreError;
 
     fn get(&self, key: &DaBlockHeight) -> Result<Option<Cow<StakingDiff>>, Self::Error> {
         Ok(self
@@ -184,13 +209,38 @@ impl Storage<DaBlockHeight, StakingDiff> for MockDb {
     }
 }
 
+impl StorageMutate<StakingDiffs> for MockDb {
+    fn insert(
+        &mut self,
+        key: &DaBlockHeight,
+        value: &StakingDiff,
+    ) -> Result<Option<StakingDiff>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .staking_diffs
+            .insert(*key, value.clone()))
+    }
+
+    fn remove(
+        &mut self,
+        key: &DaBlockHeight,
+    ) -> Result<Option<StakingDiff>, Self::Error> {
+        Ok(self.data.lock().unwrap().staking_diffs.remove(key))
+    }
+}
+
 #[async_trait]
 impl RelayerDb for MockDb {
     async fn get_chain_height(&self) -> BlockHeight {
         self.data.lock().unwrap().chain_height
     }
 
-    async fn get_sealed_block(&self, height: BlockHeight) -> Option<Arc<SealedFuelBlock>> {
+    async fn get_sealed_block(
+        &self,
+        height: BlockHeight,
+    ) -> Option<Arc<SealedFuelBlock>> {
         self.data
             .lock()
             .unwrap()
@@ -244,7 +294,7 @@ impl RelayerDb for MockDb {
             if *block >= from_da_height {
                 if let Some(end_block) = to_da_height {
                     if *block > end_block {
-                        break;
+                        break
                     }
                 }
                 out.push((*block, diff.clone()));

@@ -1,19 +1,49 @@
-use crate::{database::Database, model::BlockHeight};
-use bech32::{ToBase32, Variant::Bech32m};
+use crate::{
+    database::Database,
+    model::BlockHeight,
+};
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_tx::ConsensusParameters,
-        fuel_types::{Address, AssetId, Bytes32, Salt},
+        fuel_types::{
+            Address,
+            AssetId,
+            Bytes32,
+            Salt,
+        },
         fuel_vm::fuel_types::Word,
     },
-    model::{DaBlockHeight, Message},
+    model::{
+        DaBlockHeight,
+        Message,
+    },
 };
 use itertools::Itertools;
-use rand::{rngs::StdRng, SeedableRng};
-use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, skip_serializing_none};
-use serialization::{HexNumber, HexType};
-use std::{io::ErrorKind, path::PathBuf, str::FromStr};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
+use serde::{
+    Deserialize,
+    Serialize,
+};
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+};
+use serialization::{
+    HexNumber,
+    HexType,
+};
+use std::{
+    io::ErrorKind,
+    path::PathBuf,
+    str::FromStr,
+};
 
 // Fuel Network human-readable part for bech32 encoding
 pub const FUEL_BECH32_HRP: &str = "fuel";
@@ -45,13 +75,17 @@ impl Default for ChainConfig {
 }
 
 impl ChainConfig {
+    pub const BASE_ASSET: AssetId = AssetId::zeroed();
+
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
         let mut rng = StdRng::seed_from_u64(10);
         let initial_coins = (0..5)
             .map(|_| {
-                let secret = fuel_core_interfaces::common::fuel_crypto::SecretKey::random(&mut rng);
+                let secret = fuel_core_interfaces::common::fuel_crypto::SecretKey::random(
+                    &mut rng,
+                );
                 let address = Address::from(*secret.public_key().hash());
                 let bech32_data = Bytes32::new(*address).to_base32();
                 let bech32_encoding =
@@ -197,8 +231,6 @@ pub struct MessageConfig {
     pub sender: Address,
     #[serde_as(as = "HexType")]
     pub recipient: Address,
-    #[serde_as(as = "HexType")]
-    pub owner: Address,
     #[serde_as(as = "HexNumber")]
     pub nonce: Word,
     #[serde_as(as = "HexNumber")]
@@ -215,7 +247,6 @@ impl From<MessageConfig> for Message {
         Message {
             sender: msg.sender,
             recipient: msg.recipient,
-            owner: msg.owner,
             nonce: msg.nonce,
             amount: msg.amount,
             data: msg.data,
@@ -228,11 +259,20 @@ impl From<MessageConfig> for Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::{fuel_asm::Opcode, fuel_vm::prelude::Contract};
-    use rand::prelude::StdRng;
-    use rand::{Rng, RngCore, SeedableRng};
-    use std::env::temp_dir;
-    use std::fs::write;
+    use fuel_core_interfaces::common::{
+        fuel_asm::Opcode,
+        fuel_vm::prelude::Contract,
+    };
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
+    use std::{
+        env::temp_dir,
+        fs::write,
+    };
 
     #[test]
     fn from_str_loads_from_file() {
@@ -243,7 +283,8 @@ mod tests {
         write(tmp_file.clone(), json).unwrap();
 
         // test loading config from file path string
-        let load_config: ChainConfig = tmp_file.to_string_lossy().into_owned().parse().unwrap();
+        let load_config: ChainConfig =
+            tmp_file.to_string_lossy().into_owned().parse().unwrap();
         assert_eq!(disk_config, load_config);
     }
 
@@ -258,7 +299,8 @@ mod tests {
     fn can_roundtrip_serialize_local_testnet_config() {
         let config = ChainConfig::local_testnet();
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -287,7 +329,8 @@ mod tests {
             ..ChainConfig::local_testnet()
         };
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -302,7 +345,8 @@ mod tests {
     fn can_roundtrip_simple_contract() {
         let config = test_config_contract(false, false);
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -317,7 +361,8 @@ mod tests {
     fn can_roundtrip_contract_with_state() {
         let config = test_config_contract(true, false);
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -332,7 +377,8 @@ mod tests {
     fn can_roundtrip_contract_with_balances() {
         let config = test_config_contract(false, true);
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -347,7 +393,8 @@ mod tests {
     fn can_roundtrip_simple_coin_state() {
         let config = test_config_coin_state();
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -362,7 +409,8 @@ mod tests {
     fn can_roundtrip_simple_message_state() {
         let config = test_message_config();
         let json = serde_json::to_string(&config).unwrap();
-        let deserialized_config: ChainConfig = serde_json::from_str(json.as_str()).unwrap();
+        let deserialized_config: ChainConfig =
+            serde_json::from_str(json.as_str()).unwrap();
         assert_eq!(config, deserialized_config);
     }
 
@@ -434,7 +482,6 @@ mod tests {
                 messages: Some(vec![MessageConfig {
                     sender: rng.gen(),
                     recipient: rng.gen(),
-                    owner: rng.gen(),
                     nonce: rng.gen(),
                     amount: rng.gen(),
                     data: vec![rng.gen()],

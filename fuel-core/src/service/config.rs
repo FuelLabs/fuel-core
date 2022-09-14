@@ -1,9 +1,16 @@
 use crate::chain_config::ChainConfig;
 use std::{
-    net::{Ipv4Addr, SocketAddr},
+    net::{
+        Ipv4Addr,
+        SocketAddr,
+    },
     path::PathBuf,
 };
-use strum_macros::{Display, EnumString, EnumVariantNames};
+use strum_macros::{
+    Display,
+    EnumString,
+    EnumVariantNames,
+};
 
 #[cfg(feature = "p2p")]
 use fuel_p2p;

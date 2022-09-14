@@ -10,7 +10,9 @@ We use an RFC process to maintain our code standards. They currently live in the
 
 ## Building and setting up a development workspace
 
-Fuel Core is mostly written in Rust, but includes components written in C++ (RocksDB). We are currently using the latest Rust stable toolchain.
+Fuel Core is mostly written in Rust, but includes components written in C++ (RocksDB).
+We are currently using the latest Rust stable toolchain to build the project.
+But for `rustfmt`, we use Rust nightly toolchain because it provides more code style features(you can check [`rustfmt.toml`](.rustfmt.toml)).
 
 ### Prerequisites
 
@@ -34,11 +36,12 @@ cd fuel-core
 
 `rustup` is the official toolchain manager for Rust.
 
-We use some additional components such as `rustfmt` and `clippy`, to install those:
+We use some additional components such as `clippy` and `rustfmt`(nightly), to install those:
 
 ```sh
-rustup component add rustfmt
 rustup component add clippy
+rustup toolchain install nightly
+rustup component add rustfmt --toolchain nightly
 ```
 
 ### Building and testing
@@ -56,14 +59,15 @@ This command will run `cargo build` and also dump the latest schema into `/asset
 Linting is done using rustfmt and clippy, which are each separate commands:
 
 ```sh
-cargo fmt --all --check
+cargo +nightly fmt --all --check
 ```
 
 ```sh
 cargo clippy --all-targets
 ```
 
-The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by Tower and will emulate a server/client structure.
+The test suite follows the Rust cargo standards. The GraphQL service will be instantiated by 
+Tower and will emulate a server/client structure.
 
 Testing is simply done using Cargo:
 

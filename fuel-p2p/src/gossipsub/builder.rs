@@ -1,17 +1,28 @@
 use libp2p::{
     gossipsub::{
-        FastMessageId, Gossipsub, GossipsubConfigBuilder, GossipsubMessage, MessageAuthenticity,
-        MessageId, PeerScoreParams, PeerScoreThresholds, RawGossipsubMessage,
+        FastMessageId,
+        Gossipsub,
+        GossipsubConfigBuilder,
+        GossipsubMessage,
+        MessageAuthenticity,
+        MessageId,
+        PeerScoreParams,
+        PeerScoreThresholds,
+        RawGossipsubMessage,
     },
     identity::Keypair,
 };
-use sha2::{Digest, Sha256};
+use sha2::{
+    Digest,
+    Sha256,
+};
 
 use crate::config::P2PConfig;
 
 pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
-    let gossip_message_id =
-        move |message: &GossipsubMessage| MessageId::from(&Sha256::digest(&message.data)[..20]);
+    let gossip_message_id = move |message: &GossipsubMessage| {
+        MessageId::from(&Sha256::digest(&message.data)[..20])
+    };
 
     let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
         FastMessageId::from(&Sha256::digest(&message.data)[..8])

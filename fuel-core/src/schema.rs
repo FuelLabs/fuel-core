@@ -1,4 +1,9 @@
-use async_graphql::{EmptySubscription, MergedObject, Schema, SchemaBuilder};
+use async_graphql::{
+    EmptySubscription,
+    MergedObject,
+    Schema,
+    SchemaBuilder,
+};
 
 pub mod balance;
 pub mod block;
@@ -9,6 +14,7 @@ pub mod dap;
 pub mod health;
 pub mod message;
 pub mod node_info;
+pub mod resource;
 pub mod scalars;
 pub mod tx;
 
@@ -25,6 +31,7 @@ pub struct Query(
     contract::ContractBalanceQuery,
     node_info::NodeQuery,
     message::MessageQuery,
+    resource::ResourceQuery,
 );
 
 #[derive(MergedObject, Default)]

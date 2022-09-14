@@ -1,28 +1,74 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
-use cynic::{http::SurfExt, Id, MutationBuilder, Operation, QueryBuilder};
+use cynic::{
+    http::SurfExt,
+    Id,
+    MutationBuilder,
+    Operation,
+    QueryBuilder,
+};
 use fuel_vm::prelude::*;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
     block::BlockByIdArgs,
-    coin::{Coin, CoinByIdArgs, SpendQueryElementInput},
-    contract::{Contract, ContractByIdArgs},
-    tx::{TxArg, TxIdArgs},
-    Bytes, ContinueTx, ContinueTxArgs, ConversionError, HexString, IdArg, MemoryArgs, RegisterArgs,
-    RunResult, SetBreakpoint, SetBreakpointArgs, SetSingleStepping, SetSingleSteppingArgs, StartTx,
-    StartTxArgs, TransactionId, U64,
+    coin::{
+        Coin,
+        CoinByIdArgs,
+    },
+    contract::{
+        Contract,
+        ContractByIdArgs,
+    },
+    resource::SpendQueryElementInput,
+    tx::{
+        TxArg,
+        TxIdArgs,
+    },
+    Bytes,
+    ContinueTx,
+    ContinueTxArgs,
+    ConversionError,
+    HexString,
+    IdArg,
+    MemoryArgs,
+    RegisterArgs,
+    RunResult,
+    SetBreakpoint,
+    SetBreakpointArgs,
+    SetSingleStepping,
+    SetSingleSteppingArgs,
+    StartTx,
+    StartTxArgs,
+    TransactionId,
+    U64,
 };
 use std::{
     convert::TryInto,
-    io::{self, ErrorKind},
+    io::{
+        self,
+        ErrorKind,
+    },
     net,
-    str::{self, FromStr},
+    str::{
+        self,
+        FromStr,
+    },
 };
-use types::{TransactionResponse, TransactionStatus};
+use types::{
+    TransactionResponse,
+    TransactionStatus,
+};
 
-use crate::client::schema::tx::DryRunArg;
-pub use schema::{PageDirection, PaginatedResult, PaginationRequest};
+use crate::client::schema::{
+    resource::ExcludeInput,
+    tx::DryRunArg,
+};
+pub use schema::{
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 
 use self::schema::block::ProduceBlockArgs;
 
@@ -62,6 +108,17 @@ where
     }
 }
 
+pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
+    let e = errors
+        .into_iter()
+        .fold(String::from("Response errors"), |mut s, e| {
+            s.push_str("; ");
+            s.push_str(e.as_str());
+            s
+        });
+    io::Error::new(io::ErrorKind::Other, e)
+}
+
 impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
@@ -75,17 +132,9 @@ impl FuelClient {
 
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
-            (_, Some(e)) => {
-                let e = e.into_iter().map(|e| e.message).fold(
-                    String::from("Response errors"),
-                    |mut s, e| {
-                        s.push_str("; ");
-                        s.push_str(e.as_str());
-                        s
-                    },
-                );
-                Err(io::Error::new(io::ErrorKind::Other, e))
-            }
+            (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                e.into_iter().map(|e| e.message).collect(),
+            )),
             _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
@@ -175,7 +224,12 @@ impl FuelClient {
         Ok(self.query(query).await?.register.0 as Word)
     }
 
-    pub async fn memory(&self, id: &str, start: usize, size: usize) -> io::Result<Vec<u8>> {
+    pub async fn memory(
+        &self,
+        id: &str,
+        start: usize,
+        size: usize,
+    ) -> io::Result<Vec<u8>> {
         let query = schema::Memory::build(&MemoryArgs {
             id: id.into(),
             start: start.into(),
@@ -190,7 +244,7 @@ impl FuelClient {
     pub async fn set_breakpoint(
         &self,
         session_id: &str,
-        contract: fuel_types::ContractId,
+        contract: ::fuel_vm::fuel_types::ContractId,
         pc: u64,
     ) -> io::Result<()> {
         let operation = SetBreakpoint::build(SetBreakpointArgs {
@@ -209,7 +263,11 @@ impl FuelClient {
         Ok(())
     }
 
-    pub async fn set_single_stepping(&self, session_id: &str, enable: bool) -> io::Result<()> {
+    pub async fn set_single_stepping(
+        &self,
+        session_id: &str,
+        enable: bool,
+    ) -> io::Result<()> {
         let operation = SetSingleStepping::build(SetSingleSteppingArgs {
             id: Id::new(session_id),
             enable,
@@ -218,7 +276,11 @@ impl FuelClient {
         Ok(())
     }
 
-    pub async fn start_tx(&self, session_id: &str, tx: &Transaction) -> io::Result<RunResult> {
+    pub async fn start_tx(
+        &self,
+        session_id: &str,
+        tx: &Transaction,
+    ) -> io::Result<RunResult> {
         let operation = StartTx::build(StartTxArgs {
             id: Id::new(session_id),
             tx: serde_json::to_string(tx).expect("Couldn't serialize tx to json"),
@@ -286,14 +348,17 @@ impl FuelClient {
         Ok(transactions)
     }
 
-    pub async fn receipts(&self, id: &str) -> io::Result<Vec<fuel_tx::Receipt>> {
+    pub async fn receipts(
+        &self,
+        id: &str,
+    ) -> io::Result<Vec<::fuel_vm::fuel_tx::Receipt>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
         })?;
 
-        let receipts: Result<Vec<fuel_tx::Receipt>, ConversionError> = tx
+        let receipts: Result<Vec<::fuel_vm::fuel_tx::Receipt>, ConversionError> = tx
             .receipts
             .unwrap_or_default()
             .into_iter()
@@ -314,7 +379,8 @@ impl FuelClient {
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
-        let query = schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
+        let query =
+            schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
 
         let block = self.query(query).await?.block;
 
@@ -359,52 +425,58 @@ impl FuelClient {
         Ok(coins)
     }
 
-    /// Retrieve coins to spend in a transaction
-    pub async fn coins_to_spend(
+    /// Retrieve resources to spend in a transaction
+    pub async fn resources_to_spend(
         &self,
         owner: &str,
-        spend_query: Vec<(&str, u64)>,
-        max_inputs: Option<i32>,
-        excluded_ids: Option<Vec<&str>>,
-    ) -> io::Result<Vec<schema::coin::Coin>> {
+        spend_query: Vec<(&str, u64, Option<u64>)>,
+        // (Utxos, messages)
+        excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
+    ) -> io::Result<Vec<Vec<schema::resource::Resource>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
-            .map(|(asset_id, amount)| -> Result<_, ConversionError> {
+            .map(|(asset_id, amount, max)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
                     asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
+                    max: (*max).map(|max| max.into()),
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<Vec<schema::UtxoId>> = excluded_ids
-            .map(|ids| ids.into_iter().map(schema::UtxoId::from_str).try_collect())
-            .transpose()?;
-        let query = schema::coin::CoinsToSpendQuery::build(
-            &(owner, spend_query, max_inputs, excluded_ids).into(),
+        let excluded_ids: Option<ExcludeInput> =
+            excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
+        let query = schema::resource::ResourcesToSpendQuery::build(
+            &(owner, spend_query, excluded_ids).into(),
         );
 
-        let coins = self.query(query).await?.coins_to_spend;
-        Ok(coins)
+        let resources_per_asset = self.query(query).await?.resources_to_spend;
+        Ok(resources_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {
-        let query =
-            schema::contract::ContractByIdQuery::build(ContractByIdArgs { id: id.parse()? });
+        let query = schema::contract::ContractByIdQuery::build(ContractByIdArgs {
+            id: id.parse()?,
+        });
         let contract = self.query(query).await?.contract;
         Ok(contract)
     }
 
-    pub async fn contract_balance(&self, id: &str, asset: Option<&str>) -> io::Result<u64> {
+    pub async fn contract_balance(
+        &self,
+        id: &str,
+        asset: Option<&str>,
+    ) -> io::Result<u64> {
         let asset_id: schema::AssetId = match asset {
             Some(asset) => asset.parse()?,
             None => schema::AssetId::default(),
         };
 
-        let query = schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
-            id: id.parse()?,
-            asset: asset_id,
-        });
+        let query =
+            schema::contract::ContractBalanceQuery::build(ContractBalanceQueryArgs {
+                id: id.parse()?,
+                asset: asset_id,
+            });
 
         let balance = self.query(query).await.unwrap().contract_balance.amount;
         Ok(balance.into())
@@ -440,7 +512,9 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
         let contract_id: schema::ContractId = contract.parse()?;
-        let query = schema::contract::ContractBalancesQuery::build(&(contract_id, request).into());
+        let query = schema::contract::ContractBalancesQuery::build(
+            &(contract_id, request).into(),
+        );
 
         let balances = self.query(query).await?.contract_balances.into();
 
@@ -452,7 +526,8 @@ impl FuelClient {
         owner: Option<&str>,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
-        let owner: Option<schema::Address> = owner.map(|owner| owner.parse()).transpose()?;
+        let owner: Option<schema::Address> =
+            owner.map(|owner| owner.parse()).transpose()?;
         let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
 
         let messages = self.query(query).await?.messages.into();
@@ -466,7 +541,7 @@ impl FuelClient {
     pub async fn transparent_transaction(
         &self,
         id: &str,
-    ) -> io::Result<Option<fuel_tx::Transaction>> {
+    ) -> io::Result<Option<::fuel_vm::fuel_tx::Transaction>> {
         let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;

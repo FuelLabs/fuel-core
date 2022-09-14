@@ -1,6 +1,6 @@
 use clap::Parser;
 use fuel_gql_client::client::FuelClient;
-use fuel_tx::Transaction;
+use fuel_vm::fuel_tx::Transaction;
 use serde_json::json;
 
 #[derive(Parser)]
@@ -32,7 +32,8 @@ struct CliArgs {
 
 impl CliArgs {
     async fn exec(&self) {
-        let client = FuelClient::new(self.endpoint.as_str()).expect("expected valid endpoint");
+        let client =
+            FuelClient::new(self.endpoint.as_str()).expect("expected valid endpoint");
 
         match &self.command {
             Command::Transaction(sub_cmd) => match sub_cmd {
