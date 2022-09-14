@@ -10,8 +10,8 @@ use fuel_relayer_new::{
 #[tokio::test]
 async fn can_set_da_height() {
     let mock_db = MockDb::default();
-    let relayer = RelayerHandle::start();
     let middleware = MockMiddleware::default();
+    let relayer = RelayerHandle::start_test(middleware);
 
     relayer.await_synced().await;
 
