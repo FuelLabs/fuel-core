@@ -2,10 +2,7 @@ use async_trait::async_trait;
 
 use std::{
     borrow::Cow,
-    collections::{
-        BTreeMap,
-        HashMap,
-    },
+    collections::HashMap,
     sync::{
         Arc,
         Mutex,
@@ -40,13 +37,9 @@ use fuel_core_interfaces::{
 #[derive(Default)]
 pub struct Data {
     pub messages: HashMap<MessageId, Message>,
-    pub validators: HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
-    pub delegator_index: HashMap<Address, Vec<DaBlockHeight>>,
-    pub staking_diffs: BTreeMap<DaBlockHeight, StakingDiff>,
 
     pub chain_height: BlockHeight,
     pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
-    pub validators_height: DaBlockHeight,
     pub finalized_da_height: DaBlockHeight,
     pub last_committed_finalized_fuel_height: BlockHeight,
 }
@@ -100,6 +93,7 @@ impl Storage<MessageId, Message> for MockDb {
     }
 }
 
+#[allow(unused_variables)]
 impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
     type Error = KvStoreError;
 
@@ -108,34 +102,29 @@ impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
         key: &ValidatorId,
         value: &(ValidatorStake, Option<ConsensusId>),
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        Ok(self.data.lock().unwrap().validators.insert(*key, *value))
+        todo!()
     }
 
     fn remove(
         &mut self,
         key: &ValidatorId,
     ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        Ok(self.data.lock().unwrap().validators.remove(key))
+        todo!()
     }
 
-    fn get(
-        &self,
+    fn get<'a>(
+        &'a self,
         key: &ValidatorId,
-    ) -> Result<Option<Cow<(ValidatorStake, Option<ConsensusId>)>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .validators
-            .get(key)
-            .map(|i| Cow::Owned(*i)))
+    ) -> Result<Option<Cow<'a, (ValidatorStake, Option<ConsensusId>)>>, Self::Error> {
+        todo!()
     }
 
     fn contains_key(&self, key: &ValidatorId) -> Result<bool, Self::Error> {
-        Ok(self.data.lock().unwrap().validators.contains_key(key))
+        todo!()
     }
 }
 
+#[allow(unused_variables)]
 impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
     type Error = KvStoreError;
 
@@ -144,36 +133,29 @@ impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
         key: &Address,
         value: &Vec<DaBlockHeight>,
     ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .delegator_index
-            .insert(*key, value.clone()))
+        todo!()
     }
 
     fn remove(
         &mut self,
         key: &Address,
     ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
-        Ok(self.data.lock().unwrap().delegator_index.remove(key))
+        todo!()
     }
 
-    fn get(&self, key: &Address) -> Result<Option<Cow<Vec<DaBlockHeight>>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .delegator_index
-            .get(key)
-            .map(|i| Cow::Owned(i.clone())))
+    fn get<'a>(
+        &'a self,
+        key: &Address,
+    ) -> Result<Option<Cow<'a, Vec<DaBlockHeight>>>, Self::Error> {
+        todo!()
     }
 
     fn contains_key(&self, key: &Address) -> Result<bool, Self::Error> {
-        Ok(self.data.lock().unwrap().delegator_index.contains_key(key))
+        todo!()
     }
 }
 
+#[allow(unused_variables)]
 impl Storage<DaBlockHeight, StakingDiff> for MockDb {
     type Error = KvStoreError;
 
@@ -182,33 +164,25 @@ impl Storage<DaBlockHeight, StakingDiff> for MockDb {
         key: &DaBlockHeight,
         value: &StakingDiff,
     ) -> Result<Option<StakingDiff>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .staking_diffs
-            .insert(*key, value.clone()))
+        todo!()
     }
 
     fn remove(
         &mut self,
         key: &DaBlockHeight,
     ) -> Result<Option<StakingDiff>, Self::Error> {
-        Ok(self.data.lock().unwrap().staking_diffs.remove(key))
+        todo!()
     }
 
-    fn get(&self, key: &DaBlockHeight) -> Result<Option<Cow<StakingDiff>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .staking_diffs
-            .get(key)
-            .map(|i| Cow::Owned(i.clone())))
+    fn get<'a>(
+        &'a self,
+        key: &DaBlockHeight,
+    ) -> Result<Option<Cow<'a, StakingDiff>>, Self::Error> {
+        todo!()
     }
 
     fn contains_key(&self, key: &DaBlockHeight) -> Result<bool, Self::Error> {
-        Ok(self.data.lock().unwrap().staking_diffs.contains_key(key))
+        todo!()
     }
 }
 
@@ -228,21 +202,6 @@ impl RelayerDb for MockDb {
             .sealed_blocks
             .get(&height)
             .cloned()
-    }
-
-    // TODO: Remove
-    async fn get_validators(&self) -> ValidatorSet {
-        self.data.lock().unwrap().validators.clone()
-    }
-
-    // TODO: Remove
-    async fn set_validators_da_height(&self, height: DaBlockHeight) {
-        self.data.lock().unwrap().validators_height = height;
-    }
-
-    // TODO: Remove
-    async fn get_validators_da_height(&self) -> DaBlockHeight {
-        self.data.lock().unwrap().validators_height
     }
 
     async fn set_finalized_da_height(&self, height: DaBlockHeight) {
@@ -268,23 +227,26 @@ impl RelayerDb for MockDb {
     }
 
     // TODO: Remove
+    async fn get_validators(&self) -> ValidatorSet {
+        todo!()
+    }
+
+    // TODO: Remove
+    async fn set_validators_da_height(&self, _height: DaBlockHeight) {
+        todo!()
+    }
+
+    // TODO: Remove
+    async fn get_validators_da_height(&self) -> DaBlockHeight {
+        todo!()
+    }
+
+    // TODO: Remove
     async fn get_staking_diffs(
         &self,
-        from_da_height: DaBlockHeight,
-        to_da_height: Option<DaBlockHeight>,
+        _from_da_height: DaBlockHeight,
+        _to_da_height: Option<DaBlockHeight>,
     ) -> Vec<(DaBlockHeight, StakingDiff)> {
-        let mut out = Vec::new();
-        let diffs = &self.data.lock().unwrap().staking_diffs;
-        for (block, diff) in diffs {
-            if *block >= from_da_height {
-                if let Some(end_block) = to_da_height {
-                    if *block > end_block {
-                        break
-                    }
-                }
-                out.push((*block, diff.clone()));
-            }
-        }
-        out
+        todo!()
     }
 }

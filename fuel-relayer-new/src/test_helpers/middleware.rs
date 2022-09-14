@@ -224,7 +224,32 @@ impl Middleware for MockMiddleware {
     /// used for initial sync to get logs of already finalized diffs
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
         self.trigger(TriggerType::GetLogs(filter)).await;
-        Ok(Vec::new())
+        let r = self
+            .data
+            .lock()
+            .await
+            .logs_batch
+            .iter()
+            .flat_map(|logs| {
+                logs.iter().filter_map(|log| {
+                    let r = match filter.address.as_ref()? {
+                        ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
+                        ethers_core::types::ValueOrArray::Array(v) => {
+                            v.iter().any(|v| log.address == *v)
+                        }
+                    };
+                    let log_block_num = log.block_number?;
+                    let r = r
+                        && log_block_num
+                            >= filter.block_option.get_from_block()?.as_number()?
+                        && log_block_num
+                            <= filter.block_option.get_to_block()?.as_number()?;
+                    r.then(|| log)
+                })
+            })
+            .cloned()
+            .collect();
+        Ok(r)
     }
 
     /// used for initial sync to get block hash. Other fields can be ignored.

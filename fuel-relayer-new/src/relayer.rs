@@ -1,5 +1,11 @@
 use crate::Config;
 use anyhow::Result;
+use ethers_core::types::{
+    Filter,
+    Log,
+    ValueOrArray,
+    H160,
+};
 use ethers_providers::{
     Http,
     Middleware,
@@ -9,6 +15,9 @@ use ethers_providers::{
 use fuel_core_interfaces::relayer::RelayerDb;
 use std::ops::Deref;
 use tokio::sync::watch;
+
+#[cfg(test)]
+mod test;
 
 type Synced = watch::Receiver<bool>;
 type Database = Box<dyn RelayerDb>;
@@ -29,7 +38,7 @@ where
 
 impl<P> Relayer<P>
 where
-    P: Middleware<Error = ProviderError>,
+    P: Middleware<Error = ProviderError> + 'static,
 {
     fn new(
         synced: watch::Sender<bool>,
@@ -43,6 +52,20 @@ where
             database,
             config,
         }
+    }
+
+    async fn download_logs(
+        &self,
+        current_local_block_height: u64,
+        latest_finalized_block: u64,
+    ) -> Result<Vec<Log>, ProviderError> {
+        download_logs(
+            current_local_block_height,
+            latest_finalized_block,
+            self.config.eth_v2_listening_contracts.clone(),
+            &self.eth_node,
+        )
+        .await
     }
 }
 
@@ -92,27 +115,52 @@ where
                 relayer.eth_node.get_block_number().await.unwrap().as_u64();
             let latest_finalized_block =
                 current_block_height.saturating_sub(relayer.config.da_finalization);
-            let out_of_sync =
-                relayer.database.get_finalized_da_height().await < latest_finalized_block;
+            let current_local_block_height =
+                relayer.database.get_finalized_da_height().await;
+            let out_of_sync = current_local_block_height < latest_finalized_block;
 
             // Update our state for handles.
-            let sent = relayer.synced.send_if_modified(|last_state| {
+            relayer.synced.send_if_modified(|last_state| {
                 let in_sync = !out_of_sync;
                 let changed = *last_state == in_sync;
                 *last_state |= in_sync;
                 changed
             });
-            sent;
 
             if out_of_sync {
+                // Download events
+                let logs = relayer
+                    .download_logs(current_local_block_height, latest_finalized_block)
+                    .await
+                    .unwrap();
+                // TODO: Turn logs into eth events
+                // TODO: Add messages to database
+
+                // Update finalized height in database.
                 relayer
                     .database
                     .set_finalized_da_height(latest_finalized_block)
                     .await;
-                // then update da height and download events
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     });
+}
+
+async fn download_logs<P>(
+    current_local_block_height: u64,
+    latest_finalized_block: u64,
+    contracts: Vec<H160>,
+    eth_node: &P,
+) -> Result<Vec<Log>, ProviderError>
+where
+    P: Middleware<Error = ProviderError> + 'static,
+{
+    let filter = Filter::new()
+        .from_block(current_local_block_height)
+        .to_block(latest_finalized_block)
+        .address(ValueOrArray::Array(contracts));
+
+    eth_node.get_logs(&filter).await
 }

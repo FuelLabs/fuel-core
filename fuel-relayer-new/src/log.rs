@@ -123,16 +123,7 @@ impl TryFrom<&Log> for EthEventLog {
 #[cfg(test)]
 pub mod tests {
 
-    use bytes::{
-        Bytes,
-        BytesMut,
-    };
-    use ethers_core::types::{
-        Bytes as EthersBytes,
-        H160,
-        H256,
-        U64,
-    };
+    use ethers_core::types::U64;
     use rand::{
         rngs::StdRng,
         Rng,
@@ -140,78 +131,10 @@ pub mod tests {
     };
 
     use super::*;
-    use crate::config;
-
-    pub fn eth_log_message(
-        eth_block: u64,
-        sender: Address,
-        receipient: Address,
-        owner: Address,
-        nonce: u32,
-        amount: u32,
-        data: Vec<u8>,
-    ) -> Log {
-        let mut b: Vec<u8> = Vec::new();
-        // owner nonce amount data
-        // 32 + 32 + 32 + dyn
-
-        b.extend(owner.as_ref());
-        b.extend(H256::from_low_u64_be(nonce as u64).as_ref());
-        b.extend(H256::from_low_u64_be(amount as u64).as_ref());
-        b.extend(H256::from_low_u64_be(128).as_ref());
-        b.extend(H256::from_low_u64_be(data.len() as u64).as_ref());
-
-        // data takes as lest 32 bytes;
-        let data_size = ((data.len() / 32) + 1) * 32;
-        let start = b.len();
-        // resize buffer to be able to extend data.
-        b.resize(b.len() + data_size, 0);
-        for (i, data) in data.iter().enumerate() {
-            b[start + i] = *data;
-        }
-
-        log_default(
-            eth_block,
-            vec![
-                *config::ETH_LOG_MESSAGE,
-                H256::from_slice(sender.as_ref()),
-                H256::from_slice(receipient.as_ref()),
-            ],
-            BytesMut::from_iter(b.into_iter()).freeze(),
-        )
-    }
-
-    pub fn eth_log_fuel_block_committed(
-        eth_block: u64,
-        block_root: Bytes32,
-        fuel_height: u32,
-    ) -> Log {
-        log_default(
-            eth_block,
-            vec![
-                *config::ETH_FUEL_BLOCK_COMMITTED,
-                H256::from_slice(block_root.as_ref()),
-                H256::from_low_u64_be(fuel_height as u64),
-            ],
-            Bytes::new(),
-        )
-    }
-
-    fn log_default(eth_block: u64, topics: Vec<H256>, data: Bytes) -> Log {
-        Log {
-            address: H160::zero(), // we don't check or use this
-            topics,
-            data: EthersBytes(data),
-            block_hash: None,
-            block_number: Some(U64([eth_block])),
-            transaction_hash: None,
-            transaction_index: None,
-            log_index: None,
-            transaction_log_index: None,
-            log_type: None,
-            removed: Some(false),
-        }
-    }
+    use crate::test_helpers::{
+        eth_log_fuel_block_committed,
+        eth_log_message,
+    };
 
     #[test]
     fn eth_event_fuel_block_commit_from_log() {
@@ -230,6 +153,7 @@ pub mod tests {
         assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
 
         let height = height as u64;
+        let block_root = block_root.into();
         assert_eq!(
             fuel_log.unwrap(),
             EthEventLog::FuelBlockCommitted { block_root, height },
@@ -241,18 +165,16 @@ pub mod tests {
     fn eth_event_message_try_from_log() {
         let rng = &mut StdRng::seed_from_u64(2322u64);
         let eth_block: u64 = rng.gen();
-        let sender: Address = rng.gen();
-        let receipient: Address = rng.gen();
-        let owner: Address = rng.gen();
+        let owner: [u8; 32] = rng.gen();
+        let owner_2: [u8; 20] = (&owner[..20]).try_into().unwrap();
         let nonce: u32 = rng.gen();
         let amount: u32 = rng.gen();
         let data: Vec<u8> = vec![1u8];
 
         let log = eth_log_message(
+            Default::default(),
             eth_block,
-            sender,
-            receipient,
-            owner,
+            owner_2.into(),
             nonce,
             amount,
             data.clone(),
@@ -268,9 +190,9 @@ pub mod tests {
         assert_eq!(
             fuel_log.unwrap(),
             EthEventLog::Message(MessageLog {
-                sender,
-                recipient: receipient,
-                owner,
+                sender: Default::default(),
+                recipient: Default::default(),
+                owner: owner.into(),
                 nonce: nonce as u64,
                 amount: amount as u64,
                 data,
