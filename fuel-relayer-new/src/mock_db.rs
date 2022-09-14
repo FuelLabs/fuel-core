@@ -230,14 +230,17 @@ impl RelayerDb for MockDb {
             .cloned()
     }
 
+    // TODO: Remove
     async fn get_validators(&self) -> ValidatorSet {
         self.data.lock().unwrap().validators.clone()
     }
 
+    // TODO: Remove
     async fn set_validators_da_height(&self, height: DaBlockHeight) {
         self.data.lock().unwrap().validators_height = height;
     }
 
+    // TODO: Remove
     async fn get_validators_da_height(&self) -> DaBlockHeight {
         self.data.lock().unwrap().validators_height
     }
@@ -264,6 +267,7 @@ impl RelayerDb for MockDb {
             .last_committed_finalized_fuel_height = block_height;
     }
 
+    // TODO: Remove
     async fn get_staking_diffs(
         &self,
         from_da_height: DaBlockHeight,

@@ -114,34 +114,6 @@ mod tests {
             .unwrap()
         );
         assert_eq!(
-            *ETH_LOG_VALIDATOR_REGISTRATION,
-            H256::from_str(
-                "0xb880ae9a41c67ab61e670929983ea383810f2a09e384b5d1e40a6a8d123e643f"
-            )
-            .unwrap()
-        );
-        assert_eq!(
-            *ETH_LOG_DEPOSIT,
-            H256::from_str(
-                "0xe1fffcc4923d04b559f4d29a8bfc6cda04eb5b0d3c460751c2402c5c5cc9109c"
-            )
-            .unwrap()
-        );
-        assert_eq!(
-            *ETH_LOG_WITHDRAWAL,
-            H256::from_str(
-                "0x7fcf532c15f0a6db0bd6d0e038bea71d30d808c7d98cb3bf7268a95bf5081b65"
-            )
-            .unwrap()
-        );
-        assert_eq!(
-            *ETH_LOG_DELEGATION,
-            H256::from_str(
-                "0xb304243c5b5465a0f6a6b44be45b6906650d542c8e1dd33b0630f72b2f454081"
-            )
-            .unwrap()
-        );
-        assert_eq!(
             *ETH_FUEL_BLOCK_COMMITTED,
             H256::from_str(
                 "0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872"

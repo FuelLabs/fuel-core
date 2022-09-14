@@ -2300,6 +2300,7 @@ dependencies = [
  "ethers-signers",
  "features",
  "fuel-core-interfaces",
+ "fuel-relayer-new",
  "futures",
  "hex",
  "once_cell",

@@ -41,6 +41,7 @@ tracing-subscriber = "0.3.9"
 url = "2.2"
 
 [dev-dependencies]
+fuel-relayer-new ={ path = ".", features = ["test-helpers"]}
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", features = [
     "test-helpers",
 ] }
