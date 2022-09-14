@@ -50,7 +50,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            da_finalization: 64,
+            da_finalization: 100,
             // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet

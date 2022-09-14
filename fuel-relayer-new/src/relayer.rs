@@ -22,7 +22,7 @@ where
     P: Middleware<Error = ProviderError>,
 {
     synced: watch::Sender<bool>,
-    middleware: P,
+    eth_node: P,
     database: Database,
     config: Config,
 }
@@ -33,13 +33,13 @@ where
 {
     fn new(
         synced: watch::Sender<bool>,
-        middleware: P,
+        eth_node: P,
         database: Database,
         config: Config,
     ) -> Self {
         Self {
             synced,
-            middleware,
+            eth_node,
             database,
             config,
         }
@@ -48,28 +48,28 @@ where
 
 impl RelayerHandle {
     pub fn start(database: Database, config: Config) -> Self {
-        let middleware = todo!();
-        Self::start_inner::<Provider<Http>>(middleware, database, config)
+        let eth_node = todo!();
+        Self::start_inner::<Provider<Http>>(eth_node, database, config)
     }
 
     #[cfg(any(test, feature = "test-helpers"))]
-    pub fn start_test<P>(middleware: P, database: Database, config: Config) -> Self
+    pub fn start_test<P>(eth_node: P, database: Database, config: Config) -> Self
     where
-        P: Middleware<Error = ProviderError>,
+        P: Middleware<Error = ProviderError> + 'static,
     {
-        Self::start_inner(middleware, database, config)
+        Self::start_inner(eth_node, database, config)
     }
 
-    fn start_inner<P>(middleware: P, database: Database, config: Config) -> Self
+    fn start_inner<P>(eth_node: P, database: Database, config: Config) -> Self
     where
-        P: Middleware<Error = ProviderError>,
+        P: Middleware<Error = ProviderError> + 'static,
     {
         let (tx, rx) = watch::channel(false);
         let synced = rx;
         let r = Self {
             synced: synced.clone(),
         };
-        run(Relayer::new(tx, middleware, database, config));
+        run(Relayer::new(tx, eth_node, database, config));
         r
     }
 
@@ -88,15 +88,27 @@ where
 {
     let jh = tokio::task::spawn(async move {
         loop {
-            let current_block_height = relayer
-                .middleware
-                .get_block_number()
-                .await
-                .unwrap()
-                .as_u64();
-            if relayer.database.get_finalized_da_height().await
-                < current_block_height.saturating_sub(relayer.config.da_finalization)
-            {
+            let current_block_height =
+                relayer.eth_node.get_block_number().await.unwrap().as_u64();
+            let latest_finalized_block =
+                current_block_height.saturating_sub(relayer.config.da_finalization);
+            let out_of_sync =
+                relayer.database.get_finalized_da_height().await < latest_finalized_block;
+
+            // Update our state for handles.
+            let sent = relayer.synced.send_if_modified(|last_state| {
+                let in_sync = !out_of_sync;
+                let changed = *last_state == in_sync;
+                *last_state |= in_sync;
+                changed
+            });
+            sent;
+
+            if out_of_sync {
+                relayer
+                    .database
+                    .set_finalized_da_height(latest_finalized_block)
+                    .await;
                 // then update da height and download events
             }
 

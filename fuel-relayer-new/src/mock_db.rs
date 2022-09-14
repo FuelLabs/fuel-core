@@ -51,7 +51,7 @@ pub struct Data {
     pub last_committed_finalized_fuel_height: BlockHeight,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
