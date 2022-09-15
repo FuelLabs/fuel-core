@@ -5,7 +5,6 @@ use bytes::{
     BytesMut,
 };
 use ethers_core::types::{
-    Address,
     Bytes as EthersBytes,
     Log,
     H160,
@@ -13,7 +12,10 @@ use ethers_core::types::{
     U64,
 };
 use fuel_core_interfaces::{
-    common::fuel_merkle::common::Bytes32,
+    common::{
+        fuel_merkle::common::Bytes32,
+        prelude::Address,
+    },
     model::{
         CheckedMessage,
         Message,

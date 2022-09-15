@@ -1,4 +1,7 @@
-use crate::Config;
+use crate::{
+    log::EthEventLog,
+    Config,
+};
 use anyhow::Result;
 use ethers_core::types::{
     Filter,
@@ -12,8 +15,14 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_interfaces::relayer::RelayerDb;
-use std::ops::Deref;
+use fuel_core_interfaces::{
+    model::Message,
+    relayer::RelayerDb,
+};
+use std::{
+    convert::TryInto,
+    ops::Deref,
+};
 use tokio::sync::watch;
 
 #[cfg(test)]
@@ -105,7 +114,7 @@ impl RelayerHandle {
     }
 }
 
-fn run<P>(relayer: Relayer<P>)
+fn run<P>(mut relayer: Relayer<P>)
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -133,8 +142,27 @@ where
                     .download_logs(current_local_block_height, latest_finalized_block)
                     .await
                     .unwrap();
-                // TODO: Turn logs into eth events
-                // TODO: Add messages to database
+
+                // Turn logs into eth events
+                let events: Vec<EthEventLog> =
+                    logs.iter().map(|l| l.try_into().unwrap()).collect();
+                for event in events {
+                    match event {
+                        EthEventLog::Message(m) => {
+                            let m: Message = (&m).into();
+                            // Add messages to database
+                            relayer.database.insert(&m.id(), &m).unwrap();
+                        }
+                        EthEventLog::FuelBlockCommitted { block_root, height } => {
+                            // TODO: Check if this is greater then current.
+                            relayer
+                                .database
+                                .set_last_committed_finalized_fuel_height(height.into())
+                                .await;
+                        }
+                        EthEventLog::Ignored => todo!(),
+                    }
+                }
 
                 // Update finalized height in database.
                 relayer
