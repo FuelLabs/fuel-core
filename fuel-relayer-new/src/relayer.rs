@@ -22,8 +22,12 @@ use fuel_core_interfaces::{
 use std::{
     convert::TryInto,
     ops::Deref,
+    sync::Arc,
 };
 use tokio::sync::watch;
+
+mod state;
+mod synced;
 
 #[cfg(test)]
 mod test;
@@ -40,7 +44,7 @@ where
     P: Middleware<Error = ProviderError>,
 {
     synced: watch::Sender<bool>,
-    eth_node: P,
+    eth_node: Arc<P>,
     database: Database,
     config: Config,
 }
@@ -57,7 +61,7 @@ where
     ) -> Self {
         Self {
             synced,
-            eth_node,
+            eth_node: Arc::new(eth_node),
             database,
             config,
         }
@@ -108,6 +112,7 @@ impl RelayerHandle {
     pub async fn await_synced(&self) -> Result<()> {
         let mut rx = self.synced.clone();
         if !rx.borrow_and_update().deref() {
+            dbg!();
             rx.changed().await?;
         }
         Ok(())
@@ -127,14 +132,6 @@ where
             let current_local_block_height =
                 relayer.database.get_finalized_da_height().await;
             let out_of_sync = current_local_block_height < latest_finalized_block;
-
-            // Update our state for handles.
-            relayer.synced.send_if_modified(|last_state| {
-                let in_sync = !out_of_sync;
-                let changed = *last_state == in_sync;
-                *last_state |= in_sync;
-                changed
-            });
 
             if out_of_sync {
                 // Download events
@@ -169,6 +166,44 @@ where
                     .database
                     .set_finalized_da_height(latest_finalized_block)
                     .await;
+            }
+
+            let current_fuel_block_height = relayer.database.get_chain_height().await;
+            let current_finalized_fuel_block_height = relayer
+                .database
+                .get_last_committed_finalized_fuel_height()
+                .await;
+            let need_to_publish =
+                current_fuel_block_height > current_finalized_fuel_block_height;
+
+            // Update our state for handles.
+            relayer.synced.send_if_modified(|last_state| {
+                let in_sync = !dbg!(out_of_sync) || !dbg!(need_to_publish);
+                let changed = *last_state != dbg!(in_sync) && in_sync;
+                *last_state |= in_sync;
+                dbg!(changed)
+            });
+
+            if need_to_publish {
+                dbg!();
+                if let Some(contract) = relayer.config.eth_v2_commit_contract.clone() {
+                    let client =
+                        crate::abi::fuel::Fuel::new(contract, relayer.eth_node.clone());
+                    client
+                        .commit_block(
+                            current_block_height.try_into().unwrap(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                            Default::default(),
+                        )
+                        .call()
+                        .await
+                        .unwrap();
+                }
             }
 
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;

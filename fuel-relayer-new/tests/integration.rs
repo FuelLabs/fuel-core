@@ -141,3 +141,25 @@ async fn can_get_committed_block() {
         5u64.into()
     );
 }
+
+#[tokio::test]
+async fn can_publish_fuel_block() {
+    let mock_db = MockDb::default();
+    let eth_node = MockMiddleware::default();
+    mock_db.data.lock().unwrap().chain_height = 1u32.into();
+    // Setup the eth node with a block high enough that there
+    // will be some finalized blocks.
+    eth_node.data.lock().await.best_block.number = Some(200.into());
+    let relayer = RelayerHandle::start_test(
+        eth_node,
+        Box::new(mock_db.clone()),
+        Default::default(),
+    );
+
+    relayer.await_synced().await.unwrap();
+
+    assert_eq!(
+        mock_db.get_last_committed_finalized_fuel_height().await,
+        1u32.into()
+    );
+}
