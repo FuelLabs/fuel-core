@@ -1,6 +1,6 @@
 use crate::{
     database::{
-        columns::CONTRACTS_STATE,
+        Column,
         Database,
     },
     state::{
@@ -9,60 +9,68 @@ use crate::{
         MultiKey,
     },
 };
-use fuel_core_interfaces::common::fuel_vm::{
-    crypto,
-    prelude::{
-        Bytes32,
-        ContractId,
-        MerkleRoot,
-        MerkleStorage,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_vm::{
+            crypto,
+            prelude::{
+                Bytes32,
+                ContractId,
+                MerkleRoot,
+                MerkleRootStorage,
+            },
+        },
     },
+    db::ContractsState,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
 
-impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
+impl StorageInspect<ContractsState<'_>> for Database {
     type Error = Error;
 
+    fn get(&self, key: &(&ContractId, &Bytes32)) -> Result<Option<Cow<Bytes32>>, Error> {
+        let key = MultiKey::new(key);
+        self.get(key.as_ref(), Column::ContractsState)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Error> {
+        let key = MultiKey::new(key);
+        self.exists(key.as_ref(), Column::ContractsState)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<ContractsState<'_>> for Database {
     fn insert(
         &mut self,
-        parent: &ContractId,
-        key: &Bytes32,
+        key: &(&ContractId, &Bytes32),
         value: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::insert(self, key.as_ref().to_vec(), CONTRACTS_STATE, *value)
+        let key = MultiKey::new(key);
+        Database::insert(self, key.as_ref(), Column::ContractsState, *value)
             .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
-        parent: &ContractId,
-        key: &Bytes32,
+        key: &(&ContractId, &Bytes32),
     ) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new((parent, key));
-        Database::remove(self, key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
+        let key = MultiKey::new(key);
+        Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
     }
+}
 
-    fn get(
-        &self,
-        parent: &ContractId,
-        key: &Bytes32,
-    ) -> Result<Option<Cow<Bytes32>>, Error> {
-        let key = MultiKey::new((parent, key));
-        self.get(key.as_ref(), CONTRACTS_STATE).map_err(Into::into)
-    }
-
-    fn contains_key(&self, parent: &ContractId, key: &Bytes32) -> Result<bool, Error> {
-        let key = MultiKey::new((parent, key));
-        self.exists(key.as_ref(), CONTRACTS_STATE)
-            .map_err(Into::into)
-    }
-
+impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
     fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
         let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
             self,
-            CONTRACTS_STATE,
+            Column::ContractsState,
             Some(parent.as_ref().to_vec()),
             None,
             Some(IterDirection::Forward),
@@ -84,27 +92,27 @@ impl MerkleStorage<ContractId, Bytes32, Bytes32> for Database {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fuel_core_interfaces::common::fuel_storage::StorageAsMut;
 
     #[test]
     fn get() {
         let storage_id: (ContractId, Bytes32) =
             (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+        let key = &(&storage_id.0, &storage_id.1);
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
+            .storage::<ContractsState>()
+            .insert(key, &stored_value)
             .unwrap();
 
         assert_eq!(
-            MerkleStorage::<ContractId, Bytes32, Bytes32>::get(
-                &database,
-                &storage_id.0,
-                &storage_id.1
-            )
-            .unwrap()
-            .unwrap()
-            .into_owned(),
+            *database
+                .storage::<ContractsState>()
+                .get(key)
+                .unwrap()
+                .unwrap(),
             stored_value
         );
     }
@@ -114,18 +122,17 @@ mod tests {
         let storage_id: (ContractId, Bytes32) =
             (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+        let key = &(&storage_id.0, &storage_id.1);
 
-        let mut database = Database::default();
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-            &mut database,
-            &storage_id.0,
-            &storage_id.1,
-            &stored_value,
-        )
-        .unwrap();
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsState>()
+            .insert(key, &stored_value)
+            .unwrap();
 
-        let returned: Bytes32 = database
-            .get(MultiKey::new(storage_id).as_ref(), CONTRACTS_STATE)
+        let returned: Bytes32 = *database
+            .storage::<ContractsState>()
+            .get(key)
             .unwrap()
             .unwrap();
         assert_eq!(returned, stored_value);
@@ -136,21 +143,19 @@ mod tests {
         let storage_id: (ContractId, Bytes32) =
             (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+        let key = &(&storage_id.0, &storage_id.1);
 
-        let mut database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
+            .storage::<ContractsState>()
+            .insert(key, &stored_value)
             .unwrap();
 
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::remove(
-            &mut database,
-            &storage_id.0,
-            &storage_id.1,
-        )
-        .unwrap();
+        database.storage::<ContractsState>().remove(key).unwrap();
 
         assert!(!database
-            .exists(MultiKey::new(storage_id).as_ref(), CONTRACTS_STATE)
+            .storage::<ContractsState>()
+            .contains_key(key)
             .unwrap());
     }
 
@@ -159,18 +164,18 @@ mod tests {
         let storage_id: (ContractId, Bytes32) =
             (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+        let key = &(&storage_id.0, &storage_id.1);
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(MultiKey::new(storage_id), CONTRACTS_STATE, stored_value)
+            .storage::<ContractsState>()
+            .insert(key, &stored_value)
             .unwrap();
 
-        assert!(MerkleStorage::<ContractId, Bytes32, Bytes32>::contains_key(
-            &database,
-            &storage_id.0,
-            &storage_id.1
-        )
-        .unwrap());
+        assert!(database
+            .storage::<ContractsState>()
+            .contains_key(key)
+            .unwrap());
     }
 
     #[test]
@@ -178,21 +183,16 @@ mod tests {
         let storage_id: (ContractId, Bytes32) =
             (ContractId::from([1u8; 32]), Bytes32::from([1u8; 32]));
         let stored_value: Bytes32 = Bytes32::from([2u8; 32]);
+        let key = &(&storage_id.0, &storage_id.1);
 
-        let mut database = Database::default();
+        let database = &mut Database::default();
 
-        MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(
-            &mut database,
-            &storage_id.0,
-            &storage_id.1,
-            &stored_value,
-        )
-        .unwrap();
+        database
+            .storage::<ContractsState>()
+            .insert(key, &stored_value)
+            .unwrap();
 
-        let root = MerkleStorage::<ContractId, Bytes32, Bytes32>::root(
-            &mut database,
-            &storage_id.0,
-        );
+        let root = database.storage::<ContractsState>().root(&storage_id.0);
         assert!(root.is_ok())
     }
 }
