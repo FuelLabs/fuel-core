@@ -92,8 +92,9 @@ impl ChainConfig {
                     bech32::encode(FUEL_BECH32_HRP, &bech32_data, Bech32m).unwrap();
 
                 tracing::info!(
-                    "PrivateKey({:#x}), Address({}), Balance({})",
+                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
+                    address,
                     bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
