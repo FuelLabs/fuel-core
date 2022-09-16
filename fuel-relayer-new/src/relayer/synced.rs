@@ -2,8 +2,17 @@ use tokio::sync::watch;
 
 use super::state::*;
 
-fn update_synced(synced: &watch::Sender<bool>, state: SyncState) {
-    // TODO: match state to synced
+pub fn update_synced(synced: &watch::Sender<bool>, state: &SyncState) {
+    update_synced_inner(synced, state.is_synced())
+}
+
+/// Updates the sender state but only notifies if the
+/// state has become synced.
+fn update_synced_inner(synced: &watch::Sender<bool>, is_synced: bool) {
+    synced.send_if_modified(|last_state| {
+        *last_state = is_synced;
+        is_synced
+    });
 }
 
 #[cfg(test)]
@@ -11,25 +20,23 @@ mod tests {
     use super::*;
     use test_case::test_case;
 
-    #[test_case(
-        EthLocal::finalized(0)
-            .with_remote(EthRemote::current(200).finalization_period(100))
-            .with_fuel(FuelLocal::current(0).finalized(0)),
-        false
-        => (false, false) ; "not synced, local eth finalize behind remote => not synced and wait"
-    )]
-    #[test_case(
-        EthLocal::finalized(0)
-            .with_remote(EthRemote::current(200).finalization_period(100))
-            .with_fuel(FuelLocal::current(0).finalized(0)),
-        true
-        => (false, false) ; "synced, local eth finalize behind remote => not synced and wait"
-    )]
-    fn can_update_sync(state: SyncState, currently_synced: bool) -> (bool, bool) {
-        let (tx, rx) = watch::channel(currently_synced);
+    // The input is the sync state change of the relayer and
+    // on the result is the `RelayerHandle` observed state.
+    //
+    // `should_wait` means calls to `await_synced` will yield
+    // until a future state change that puts the relayer in sync
+    // with the ethereum node.
+    //
+    // previous_state, new_state => (state, should_wait)
+    #[test_case(false, false => (false, true))]
+    #[test_case(false, true => (true, false))]
+    #[test_case(true, true => (true, false))]
+    #[test_case(true, false => (false, true))]
+    fn can_update_sync(was_synced: bool, is_synced: bool) -> (bool, bool) {
+        let (tx, rx) = watch::channel(was_synced);
         assert!(!rx.has_changed().unwrap());
-        update_synced(&tx, state);
+        update_synced_inner(&tx, is_synced);
         let is_in_sync = *rx.borrow();
-        (is_in_sync, rx.has_changed().unwrap())
+        (is_in_sync, !rx.has_changed().unwrap())
     }
 }

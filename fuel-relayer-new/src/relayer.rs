@@ -24,6 +24,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
+use synced::update_synced;
 use tokio::sync::watch;
 
 mod state;
@@ -69,12 +70,10 @@ where
 
     async fn download_logs(
         &self,
-        current_local_block_height: u64,
-        latest_finalized_block: u64,
+        eth_sync_gap: &state::EthSyncGap,
     ) -> Result<Vec<Log>, ProviderError> {
         download_logs(
-            current_local_block_height,
-            latest_finalized_block,
+            eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             &self.eth_node,
         )
@@ -112,7 +111,6 @@ impl RelayerHandle {
     pub async fn await_synced(&self) -> Result<()> {
         let mut rx = self.synced.clone();
         if !rx.borrow_and_update().deref() {
-            dbg!();
             rx.changed().await?;
         }
         Ok(())
@@ -125,20 +123,28 @@ where
 {
     let jh = tokio::task::spawn(async move {
         loop {
-            let current_block_height =
-                relayer.eth_node.get_block_number().await.unwrap().as_u64();
-            let latest_finalized_block =
-                current_block_height.saturating_sub(relayer.config.da_finalization);
-            let current_local_block_height =
-                relayer.database.get_finalized_da_height().await;
-            let out_of_sync = current_local_block_height < latest_finalized_block;
-
-            if out_of_sync {
-                // Download events
-                let logs = relayer
-                    .download_logs(current_local_block_height, latest_finalized_block)
+            let fuel_state = state::FuelLocal::current(
+                relayer.database.get_chain_height().await.into(),
+            )
+            .finalized(
+                relayer
+                    .database
+                    .get_last_committed_finalized_fuel_height()
                     .await
-                    .unwrap();
+                    .into(),
+            );
+            let eth_state = state::EthRemote::current(
+                relayer.eth_node.get_block_number().await.unwrap().as_u64(),
+            )
+            .finalization_period(relayer.config.da_finalization)
+            .with_local(state::EthLocal::finalized(
+                relayer.database.get_finalized_da_height().await,
+            ));
+            let state = eth_state.with_fuel(fuel_state);
+
+            if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
+                // Download events
+                let logs = relayer.download_logs(&eth_sync_gap).await.unwrap();
 
                 // Turn logs into eth events
                 let events: Vec<EthEventLog> =
@@ -164,34 +170,17 @@ where
                 // Update finalized height in database.
                 relayer
                     .database
-                    .set_finalized_da_height(latest_finalized_block)
+                    .set_finalized_da_height(eth_sync_gap.latest())
                     .await;
             }
 
-            let current_fuel_block_height = relayer.database.get_chain_height().await;
-            let current_finalized_fuel_block_height = relayer
-                .database
-                .get_last_committed_finalized_fuel_height()
-                .await;
-            let need_to_publish =
-                current_fuel_block_height > current_finalized_fuel_block_height;
-
-            // Update our state for handles.
-            relayer.synced.send_if_modified(|last_state| {
-                let in_sync = !dbg!(out_of_sync) || !dbg!(need_to_publish);
-                let changed = *last_state != dbg!(in_sync) && in_sync;
-                *last_state |= in_sync;
-                dbg!(changed)
-            });
-
-            if need_to_publish {
-                dbg!();
+            if let Some(new_block_height) = state.needs_to_publish_fuel() {
                 if let Some(contract) = relayer.config.eth_v2_commit_contract.clone() {
                     let client =
                         crate::abi::fuel::Fuel::new(contract, relayer.eth_node.clone());
                     client
                         .commit_block(
-                            current_block_height.try_into().unwrap(),
+                            new_block_height,
                             Default::default(),
                             Default::default(),
                             Default::default(),
@@ -206,14 +195,15 @@ where
                 }
             }
 
+            update_synced(&relayer.synced, &state);
+
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
     });
 }
 
 async fn download_logs<P>(
-    current_local_block_height: u64,
-    latest_finalized_block: u64,
+    eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
     eth_node: &P,
 ) -> Result<Vec<Log>, ProviderError>
@@ -221,8 +211,8 @@ where
     P: Middleware<Error = ProviderError> + 'static,
 {
     let filter = Filter::new()
-        .from_block(current_local_block_height)
-        .to_block(latest_finalized_block)
+        .from_block(eth_sync_gap.oldest())
+        .to_block(eth_sync_gap.latest())
         .address(ValueOrArray::Array(contracts));
 
     eth_node.get_logs(&filter).await

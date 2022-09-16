@@ -4,12 +4,21 @@ use bytes::{
     Bytes,
     BytesMut,
 };
-use ethers_core::types::{
-    Bytes as EthersBytes,
-    Log,
-    H160,
-    H256,
-    U64,
+use ethers_contract::EthEvent;
+use ethers_core::{
+    abi::Tokenize,
+    types::{
+        Bytes as EthersBytes,
+        Filter,
+        Log,
+        H160,
+        H256,
+        U64,
+    },
+};
+use ethers_providers::{
+    Middleware,
+    ProviderError,
 };
 use fuel_core_interfaces::{
     common::{
@@ -39,6 +48,39 @@ impl LogTestHelper for Log {
             EthEventLog::Message(m) => Message::from(&m).check(),
             _ => panic!("This log does not form a message"),
         }
+    }
+}
+
+///
+pub fn event_to_log<E>(event: E, abi: &ethers_core::abi::Abi) -> Log
+where
+    E: EthEvent,
+    E: Tokenize,
+{
+    let e = abi.event(&<E as EthEvent>::name()).unwrap();
+    let mut topics = vec![E::signature()];
+    let mut data = vec![];
+    for (t, indexed) in event
+        .into_tokens()
+        .into_iter()
+        .zip(e.inputs.iter().map(|ep| ep.indexed))
+    {
+        if indexed {
+            let bytes = ethers_core::abi::encode(&[t]);
+            if bytes.len() == 32 {
+                let t: [u8; 32] = bytes.try_into().unwrap();
+                topics.push(t.into());
+            } else {
+                todo!("Hash the encoded bytes as Keccak256")
+            }
+        } else {
+            data.push(t);
+        }
+    }
+    Log {
+        topics,
+        data: ethers_core::abi::encode(&data[..]).into(),
+        ..Default::default()
     }
 }
 

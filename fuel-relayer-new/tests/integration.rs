@@ -35,7 +35,9 @@ async fn can_set_da_height() {
         Default::default(),
     );
 
+    dbg!();
     relayer.await_synced().await.unwrap();
+    dbg!();
 
     assert_eq!(mock_db.get_finalized_da_height().await, 100);
 }

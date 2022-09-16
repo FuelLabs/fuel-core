@@ -54,7 +54,9 @@ impl Default for Config {
             // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
-            eth_v2_commit_contract: None,
+            eth_v2_commit_contract: Some(
+                H160::from_str("0x03E4538018285e1c03CCce2F92C9538c87606911").unwrap(),
+            ),
             eth_v2_listening_contracts: vec![H160::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )

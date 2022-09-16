@@ -1,13 +1,16 @@
 use async_trait::async_trait;
-use ethers_core::types::{
-    Block,
-    BlockId,
-    Filter,
-    Log,
-    TxHash,
-    H256,
-    U256,
-    U64,
+use ethers_core::{
+    abi::AbiDecode,
+    types::{
+        Block,
+        BlockId,
+        Filter,
+        Log,
+        TxHash,
+        H256,
+        U256,
+        U64,
+    },
 };
 use ethers_providers::{
     FilterWatcher,
@@ -31,6 +34,8 @@ use std::{
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
+
+use crate::test_helpers::event_to_log;
 
 #[async_trait]
 pub trait TriggerHandle: Send {
@@ -282,5 +287,40 @@ impl Middleware for MockMiddleware {
         let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
             .interval(Duration::from_secs(1));
         Ok(filter)
+    }
+    async fn call(
+        &self,
+        tx: &ethers_core::types::transaction::eip2718::TypedTransaction,
+        _block: Option<BlockId>,
+    ) -> Result<ethers_core::types::Bytes, Self::Error> {
+        use crate::abi::fuel::*;
+        let calls = FuelCalls::decode(tx.data().unwrap()).unwrap();
+        let address = match tx.to().unwrap() {
+            ethers_core::types::NameOrAddress::Address(a) => a.clone(),
+            _ => unreachable!(),
+        };
+        match calls {
+            FuelCalls::CommitBlock(CommitBlockCall {
+                minimum_block_number,
+                ..
+            }) => {
+                let event = BlockCommittedFilter {
+                    height: minimum_block_number,
+                    ..Default::default()
+                };
+                let mut log = event_to_log(event, &*crate::abi::fuel::fuel::FUEL_ABI);
+                log.address = address;
+
+                {
+                    let mut lock = self.data.lock().await;
+                    *lock.best_block.number.as_mut().unwrap() += 1.into();
+                    let height = lock.best_block.number.unwrap();
+                    log.block_number = Some(height);
+                    lock.logs_batch.push(vec![log]);
+                }
+                Ok(Default::default())
+            }
+            _ => todo!(),
+        }
     }
 }

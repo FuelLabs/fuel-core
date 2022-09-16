@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::{
     abi,
     config,
@@ -98,8 +100,11 @@ impl TryFrom<&Log> for EthEventLog {
                 if log.topics.len() != 3 {
                     return Err(anyhow!("Malformed topics for FuelBlockCommitted"))
                 }
-                let block_root =
-                    unsafe { Bytes32::from_slice_unchecked(log.topics[1].as_ref()) };
+
+                let block_root: [u8; 32] = log.topics[1].try_into().map_err(|_| {
+                    anyhow!("Malformed block root topic for FuelBlockCommitted")
+                })?;
+                let block_root = Bytes32::new(block_root);
 
                 let height = <[u8; 4]>::try_from(&log.topics[2][28..])
                     .map(u32::from_be_bytes)
@@ -126,10 +131,7 @@ pub mod tests {
     };
 
     use super::*;
-    use crate::test_helpers::{
-        eth_log_fuel_block_committed,
-        eth_log_message,
-    };
+    use crate::test_helpers::eth_log_fuel_block_committed;
 
     #[test]
     fn eth_event_fuel_block_commit_from_log() {

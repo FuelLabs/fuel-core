@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 pub(crate) mod abi;
 pub(crate) mod config;
 pub(crate) mod log;

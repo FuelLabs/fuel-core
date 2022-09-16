@@ -19,12 +19,12 @@ async fn can_download_logs() {
     ];
     eth_node.data.lock().await.logs_batch = vec![logs.clone()];
 
-    let current_local_block_height = 0;
-    let latest_finalized_block = 5;
+    let remote = state::EthRemote::current(20).finalization_period(15);
+    let eth_state = state::EthLocal::finalized(2).with_remote(remote);
+
     let contracts = vec![Default::default()];
     let result = download_logs(
-        current_local_block_height,
-        latest_finalized_block,
+        &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
         &eth_node,
     )
