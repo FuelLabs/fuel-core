@@ -1,4 +1,7 @@
-use crate::client::schema::{schema, U64};
+use crate::client::schema::{
+    schema,
+    U64,
+};
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

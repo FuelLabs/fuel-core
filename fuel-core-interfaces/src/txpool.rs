@@ -1,39 +1,67 @@
-use crate::model::ArcTx;
 use crate::{
-    db::{Error as DbStateError, KvStoreError},
-    model::TxInfo,
-    model::{Coin, Message},
+    common::{
+        fuel_storage::{
+            StorageAsRef,
+            StorageInspect,
+        },
+        fuel_tx::{
+            ContractId,
+            Transaction,
+            TxId,
+            UtxoId,
+        },
+        fuel_types::MessageId,
+        fuel_vm::storage::ContractsRawCode,
+    },
+    db::{
+        Coins,
+        Error as DbStateError,
+        KvStoreError,
+        Messages,
+    },
+    model::{
+        ArcTx,
+        Coin,
+        Message,
+        TxInfo,
+    },
 };
-use derive_more::{Deref, DerefMut};
-use fuel_storage::Storage;
-use fuel_tx::{ContractId, UtxoId};
-use fuel_tx::{Transaction, TxId};
-use fuel_types::MessageId;
-use fuel_vm::prelude::Contract;
+use derive_more::{
+    Deref,
+    DerefMut,
+};
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{
+    mpsc,
+    oneshot,
+};
 
 pub trait TxPoolDb:
-    Storage<UtxoId, Coin, Error = KvStoreError>
-    + Storage<ContractId, Contract, Error = DbStateError>
-    + Storage<MessageId, Message, Error = KvStoreError>
+    StorageInspect<Coins, Error = KvStoreError>
+    + StorageInspect<ContractsRawCode, Error = DbStateError>
+    + StorageInspect<Messages, Error = KvStoreError>
     + Send
     + Sync
 {
     fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        Storage::<UtxoId, Coin>::get(self, utxo_id).map(|t| t.map(|t| t.as_ref().clone()))
+        self.storage::<Coins>()
+            .get(utxo_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
     }
 
-    fn contract_exist(&self, contract_id: ContractId) -> Result<bool, DbStateError> {
-        Storage::<ContractId, Contract>::contains_key(self, &contract_id)
+    fn contract_exist(&self, contract_id: &ContractId) -> Result<bool, DbStateError> {
+        self.storage::<ContractsRawCode>().contains_key(contract_id)
     }
 
-    fn message(&self, message_id: MessageId) -> Result<Option<Message>, KvStoreError> {
-        Storage::<MessageId, Message>::get(self, &message_id).map(|t| t.map(|t| t.as_ref().clone()))
+    fn message(&self, message_id: &MessageId) -> Result<Option<Message>, KvStoreError> {
+        self.storage::<Messages>()
+            .get(message_id)
+            .map(|t| t.map(|t| t.as_ref().clone()))
     }
 }
 
+/// RPC client for doing calls to the TxPool through an MPSC channel.
 #[derive(Clone, Deref, DerefMut)]
 pub struct Sender(mpsc::Sender<TxPoolMpsc>);
 
@@ -63,7 +91,10 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn find_dependent(
+        &self,
+        ids: Vec<TxId>,
+    ) -> anyhow::Result<Vec<Arc<Transaction>>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::FindDependent { ids, response })
             .await?;
@@ -90,6 +121,8 @@ impl Sender {
     }
 }
 
+/// RPC commands that can be sent to the TxPool through an MPSC channel.
+/// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.
@@ -178,7 +211,9 @@ pub enum Error {
         "Transaction is not inserted. A higher priced tx {0:#x} is already spending this messageId: {1:#x}"
     )]
     NotInsertedCollisionMessageId(TxId, MessageId),
-    #[error("Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}")]
+    #[error(
+        "Transaction is not inserted. Dependent UTXO output is not existing: {0:#x}"
+    )]
     NotInsertedOutputNotExisting(UtxoId),
     #[error("Transaction is not inserted. UTXO input contract is not existing: {0:#x}")]
     NotInsertedInputContractNotExisting(ContractId),

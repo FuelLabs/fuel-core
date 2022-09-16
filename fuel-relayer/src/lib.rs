@@ -5,6 +5,8 @@ pub(crate) mod log;
 pub(crate) mod pending_blocks;
 pub(crate) mod validators;
 
+#[cfg(test)]
+mod mock_db;
 mod relayer;
 mod service;
 #[cfg(test)]
@@ -12,6 +14,12 @@ pub mod test_helpers;
 
 pub use config::Config;
 pub use relayer::Relayer;
-pub use service::{Service, ServiceBuilder};
+pub use service::{
+    Service,
+    ServiceBuilder,
+};
 
-pub use ethers_core::types::{H160, H256};
+pub use ethers_core::types::{
+    H160,
+    H256,
+};

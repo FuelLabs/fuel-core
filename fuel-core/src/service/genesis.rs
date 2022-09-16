@@ -1,17 +1,44 @@
 use crate::{
-    chain_config::{ContractConfig, StateConfig},
-    database::Database,
-    service::{config::Config, FuelService},
+    chain_config::{
+        ContractConfig,
+        StateConfig,
+    },
+    database::{
+        storage::ContractsLatestUtxo,
+        Database,
+    },
+    service::{
+        config::Config,
+        FuelService,
+    },
 };
 use anyhow::Result;
-use fuel_core_interfaces::model::Message;
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::{MerkleStorage, Storage},
-        fuel_tx::{Contract, MessageId, UtxoId},
-        fuel_types::{bytes::WORD_SIZE, AssetId, Bytes32, ContractId, Salt, Word},
+        fuel_storage::StorageAsMut,
+        fuel_tx::{
+            Contract,
+            UtxoId,
+        },
+        fuel_types::{
+            bytes::WORD_SIZE,
+            Bytes32,
+            ContractId,
+        },
     },
-    model::{Coin, CoinStatus},
+    db::{
+        Coins,
+        ContractsAssets,
+        ContractsInfo,
+        ContractsRawCode,
+        ContractsState,
+        Messages,
+    },
+    model::{
+        Coin,
+        CoinStatus,
+        Message,
+    },
 };
 use itertools::Itertools;
 
@@ -52,7 +79,11 @@ impl FuelService {
                         Bytes32::try_from(
                             (0..(Bytes32::LEN - WORD_SIZE))
                                 .map(|_| 0u8)
-                                .chain((generated_output_index / 255).to_be_bytes().into_iter())
+                                .chain(
+                                    (generated_output_index / 255)
+                                        .to_be_bytes()
+                                        .into_iter(),
+                                )
                                 .collect_vec()
                                 .as_slice(),
                         )
@@ -73,7 +104,7 @@ impl FuelService {
                     block_created: coin.block_created.unwrap_or_default(),
                 };
 
-                let _ = Storage::<UtxoId, Coin>::insert(db, &utxo_id, &coin)?;
+                let _ = db.storage::<Coins>().insert(&utxo_id, &coin)?;
             }
         }
         Ok(())
@@ -82,21 +113,22 @@ impl FuelService {
     fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<()> {
         // initialize contract state
         if let Some(contracts) = &state.contracts {
-            for (generated_output_index, contract_config) in contracts.iter().enumerate() {
+            for (generated_output_index, contract_config) in contracts.iter().enumerate()
+            {
                 let contract = Contract::from(contract_config.code.as_slice());
                 let salt = contract_config.salt;
                 let root = contract.root();
-                let contract_id = contract.id(&salt, &root, &Contract::default_state_root());
+                let contract_id =
+                    contract.id(&salt, &root, &Contract::default_state_root());
                 // insert contract code
-                let _ = Storage::<ContractId, Contract>::insert(db, &contract_id, &contract)?;
+                let _ = db
+                    .storage::<ContractsRawCode>()
+                    .insert(&contract_id, contract.as_ref())?;
                 // insert contract root
-                let _ = Storage::<ContractId, (Salt, Bytes32)>::insert(
-                    db,
-                    &contract_id,
-                    &(salt, root),
-                )?;
-                let _ = Storage::<ContractId, UtxoId>::insert(
-                    db,
+                let _ = db
+                    .storage::<ContractsInfo>()
+                    .insert(&contract_id, &(salt, root))?;
+                let _ = db.storage::<ContractsLatestUtxo>().insert(
                     &contract_id,
                     &UtxoId::new(
                         // generated transaction id([0..[out_index/255]])
@@ -130,7 +162,8 @@ impl FuelService {
         // insert state related to contract
         if let Some(contract_state) = &contract.state {
             for (key, value) in contract_state {
-                MerkleStorage::<ContractId, Bytes32, Bytes32>::insert(db, contract_id, key, value)?;
+                db.storage::<ContractsState>()
+                    .insert(&(contract_id, key), value)?;
             }
         }
         Ok(())
@@ -142,7 +175,6 @@ impl FuelService {
                 let message = Message {
                     sender: msg.sender,
                     recipient: msg.recipient,
-                    owner: msg.owner,
                     nonce: msg.nonce,
                     amount: msg.amount,
                     data: msg.data.clone(),
@@ -150,7 +182,7 @@ impl FuelService {
                     fuel_block_spend: None,
                 };
 
-                Storage::<MessageId, Message>::insert(db, &message.id(), &message)?;
+                db.storage::<Messages>().insert(&message.id(), &message)?;
             }
         }
 
@@ -165,7 +197,8 @@ impl FuelService {
         // insert balances related to contract
         if let Some(balances) = &contract.balances {
             for (key, value) in balances {
-                MerkleStorage::<ContractId, AssetId, Word>::insert(db, contract_id, key, value)?;
+                db.storage::<ContractsAssets>()
+                    .insert(&(contract_id, key), value)?;
             }
         }
         Ok(())
@@ -174,21 +207,40 @@ impl FuelService {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use super::*;
-    use crate::chain_config::{
-        ChainConfig, CoinConfig, ContractConfig, MessageConfig, StateConfig,
+
+    use crate::{
+        chain_config::{
+            ChainConfig,
+            CoinConfig,
+            ContractConfig,
+            MessageConfig,
+            StateConfig,
+        },
+        model::BlockHeight,
+        service::config::Config,
     };
-    use crate::model::BlockHeight;
-    use crate::service::config::Config;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Opcode,
-        fuel_types::{Address, AssetId, Word},
+    use fuel_core_interfaces::{
+        common::{
+            fuel_asm::Opcode,
+            fuel_crypto::fuel_types::Salt,
+            fuel_storage::StorageAsRef,
+            fuel_types::{
+                Address,
+                AssetId,
+            },
+        },
+        db::Coins,
+        model::Message,
     };
-    use fuel_core_interfaces::model::Message;
     use itertools::Itertools;
-    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        RngCore,
+        SeedableRng,
+    };
+    use std::vec;
 
     #[tokio::test]
     async fn config_initializes_chain_name() {
@@ -242,7 +294,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids() {
+    async fn config_state_initializes_multiple_coins_with_different_owners_and_asset_ids()
+    {
         let mut rng = StdRng::seed_from_u64(10);
 
         // a coin with all options set
@@ -253,7 +306,8 @@ mod tests {
         let alice_block_created = Some(rng.next_u32().into());
         let alice_tx_id = Some(rng.gen());
         let alice_output_index = Some(rng.gen());
-        let alice_utxo_id = UtxoId::new(alice_tx_id.unwrap(), alice_output_index.unwrap());
+        let alice_utxo_id =
+            UtxoId::new(alice_tx_id.unwrap(), alice_output_index.unwrap());
 
         // a coin with minimal options set
         let bob: Address = rng.gen();
@@ -301,8 +355,8 @@ mod tests {
             .await
             .unwrap();
 
-        let alice_coins = get_coins(&db, alice);
-        let bob_coins = get_coins(&db, bob)
+        let alice_coins = get_coins(&db, &alice);
+        let bob_coins = get_coins(&db, &bob)
             .into_iter()
             .map(|(_, coin)| coin)
             .collect_vec();
@@ -369,7 +423,9 @@ mod tests {
             .await
             .unwrap();
 
-        let ret = MerkleStorage::<ContractId, Bytes32, Bytes32>::get(&db, &id, &test_key)
+        let ret = db
+            .storage::<ContractsState>()
+            .get(&(&id, &test_key))
             .unwrap()
             .expect("Expect a state entry to exist with test_key")
             .into_owned();
@@ -385,7 +441,6 @@ mod tests {
         let msg = MessageConfig {
             sender: rng.gen(),
             recipient: rng.gen(),
-            owner: rng.gen(),
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],
@@ -397,13 +452,15 @@ mod tests {
             ..Default::default()
         });
 
-        let db = Database::default();
+        let db = &Database::default();
 
-        FuelService::initialize_state(&config, &db).unwrap();
+        FuelService::initialize_state(&config, db).unwrap();
 
         let expected_msg: Message = msg.into();
 
-        let ret_msg = Storage::<MessageId, Message>::get(&db, &expected_msg.id())
+        let ret_msg = db
+            .storage::<Messages>()
+            .get(&expected_msg.id())
             .unwrap()
             .unwrap()
             .into_owned();
@@ -444,7 +501,9 @@ mod tests {
             .await
             .unwrap();
 
-        let ret = MerkleStorage::<ContractId, AssetId, Word>::get(&db, &id, &test_asset_id)
+        let ret = db
+            .storage::<ContractsAssets<'_>>()
+            .get(&(&id, &test_asset_id))
             .unwrap()
             .expect("Expected a balance to be present")
             .into_owned();
@@ -452,11 +511,12 @@ mod tests {
         assert_eq!(test_balance, ret)
     }
 
-    fn get_coins(db: &Database, owner: Address) -> Vec<(UtxoId, Coin)> {
-        db.owned_coins(owner, None, None)
+    fn get_coins(db: &Database, owner: &Address) -> Vec<(UtxoId, Coin)> {
+        db.owned_coins_ids(owner, None, None)
             .map(|r| {
                 r.and_then(|coin_id| {
-                    Storage::<UtxoId, Coin>::get(db, &coin_id)
+                    db.storage::<Coins>()
+                        .get(&coin_id)
                         .map_err(Into::into)
                         .map(|v| (coin_id, v.unwrap().into_owned()))
                 })

@@ -1,9 +1,21 @@
-use crate::schema::scalars::TxPointer;
 use crate::schema::{
     contract::Contract,
-    scalars::{Address, AssetId, Bytes32, ContractId, HexString, MessageId, UtxoId, U64},
+    scalars::{
+        Address,
+        AssetId,
+        Bytes32,
+        ContractId,
+        HexString,
+        MessageId,
+        TxPointer,
+        UtxoId,
+        U64,
+    },
 };
-use async_graphql::{Object, Union};
+use async_graphql::{
+    Object,
+    Union,
+};
 use fuel_core_interfaces::common::fuel_tx;
 
 #[derive(Union)]
@@ -101,7 +113,6 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: U64,
-    owner: Address,
     witness_index: u8,
     data: HexString,
     predicate: HexString,
@@ -128,10 +139,6 @@ impl InputMessage {
 
     async fn nonce(&self) -> U64 {
         self.nonce
-    }
-
-    async fn owner(&self) -> Address {
-        self.owner
     }
 
     async fn witness_index(&self) -> u8 {
@@ -212,7 +219,6 @@ impl From<&fuel_tx::Input> for Input {
                 recipient,
                 amount,
                 nonce,
-                owner,
                 witness_index,
                 data,
             } => Input::Message(InputMessage {
@@ -221,7 +227,6 @@ impl From<&fuel_tx::Input> for Input {
                 recipient: Address(*recipient),
                 amount: (*amount).into(),
                 nonce: (*nonce).into(),
-                owner: Address(*owner),
                 witness_index: *witness_index,
                 data: HexString(data.clone()),
                 predicate: HexString(Default::default()),
@@ -233,7 +238,6 @@ impl From<&fuel_tx::Input> for Input {
                 recipient,
                 amount,
                 nonce,
-                owner,
                 data,
                 predicate,
                 predicate_data,
@@ -243,7 +247,6 @@ impl From<&fuel_tx::Input> for Input {
                 recipient: Address(*recipient),
                 amount: (*amount).into(),
                 nonce: (*nonce).into(),
-                owner: Address(*owner),
                 witness_index: Default::default(),
                 data: HexString(data.clone()),
                 predicate: HexString(predicate.clone()),

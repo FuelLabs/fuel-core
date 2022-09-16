@@ -1,5 +1,17 @@
-use crate::client::schema::{schema, AssetId, ContractId, HexString, PageInfo, Salt, U64};
-use crate::client::{PageDirection, PaginatedResult, PaginationRequest};
+use crate::client::{
+    schema::{
+        schema,
+        AssetId,
+        ContractId,
+        HexString,
+        PageInfo,
+        Salt,
+        U64,
+    },
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ContractByIdArgs {

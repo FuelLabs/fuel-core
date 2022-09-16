@@ -1,14 +1,33 @@
-use crate::database::transactional::DatabaseTransaction;
-use crate::database::Database;
-use crate::schema::scalars::U64;
-use async_graphql::{Context, Object, SchemaBuilder, ID};
+use crate::{
+    database::{
+        transactional::DatabaseTransaction,
+        Database,
+    },
+    schema::scalars::U64,
+};
+use async_graphql::{
+    Context,
+    Object,
+    SchemaBuilder,
+    ID,
+};
 use fuel_core_interfaces::common::{
     fuel_tx::ConsensusParameters,
-    fuel_vm::{consts, prelude::*},
+    fuel_vm::{
+        consts,
+        prelude::*,
+    },
 };
 use futures::lock::Mutex;
-use std::{collections::HashMap, io, sync};
-use tracing::{debug, trace};
+use std::{
+    collections::HashMap,
+    io,
+    sync,
+};
+use tracing::{
+    debug,
+    trace,
+};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
@@ -36,7 +55,7 @@ impl ConcreteStorage {
     pub fn memory(&self, id: &ID, start: usize, size: usize) -> Option<&[u8]> {
         let (end, overflow) = start.overflowing_add(size);
         if overflow || end > consts::VM_MAX_RAM as usize {
-            return None;
+            return None
         }
 
         self.vm.get(id).map(|vm| &vm.memory()[start..end])
@@ -203,7 +222,12 @@ impl DapMutation {
         Ok(true)
     }
 
-    async fn execute(&self, ctx: &Context<'_>, id: ID, op: String) -> async_graphql::Result<bool> {
+    async fn execute(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+        op: String,
+    ) -> async_graphql::Result<bool> {
         trace!("Execute encoded op {}", op);
 
         let op: Opcode = serde_json::from_str(op.as_str())?;
@@ -306,9 +330,9 @@ impl DapMutation {
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        let state_ref = vm
-            .transact(checked_tx)
-            .map_err(|err| async_graphql::Error::new(format!("Transaction failed: {err:?}")))?;
+        let state_ref = vm.transact(checked_tx).map_err(|err| {
+            async_graphql::Error::new(format!("Transaction failed: {err:?}"))
+        })?;
 
         let json_receipts = state_ref
             .receipts()
@@ -411,7 +435,10 @@ mod gql_types {
     //! GraphQL type wrappers
     use async_graphql::*;
 
-    use crate::schema::scalars::{ContractId, U64};
+    use crate::schema::scalars::{
+        ContractId,
+        U64,
+    };
 
     #[cfg(feature = "debug")]
     use fuel_core_interfaces::common::fuel_vm::prelude::Breakpoint as FuelBreakpoint;

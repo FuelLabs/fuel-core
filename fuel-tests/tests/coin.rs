@@ -1,17 +1,36 @@
 use fuel_core::{
-    chain_config::{CoinConfig, StateConfig},
     database::Database,
-    model::{Coin, CoinStatus},
-    service::{Config, FuelService},
+    model::{
+        Coin,
+        CoinStatus,
+    },
+    service::{
+        Config,
+        FuelService,
+    },
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{AssetId, UtxoId},
-    fuel_vm::prelude::{Address, Bytes32, Word},
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsMut,
+        fuel_tx::{
+            AssetId,
+            UtxoId,
+        },
+        fuel_vm::prelude::{
+            Address,
+            Bytes32,
+            Word,
+        },
+    },
+    db::Coins,
 };
 use fuel_gql_client::client::{
-    schema::coin::CoinStatus as SchemeCoinStatus, FuelClient, PageDirection, PaginationRequest,
+    schema::coin::CoinStatus as SchemeCoinStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest,
 };
+use rstest::rstest;
 
 #[tokio::test]
 async fn coin() {
@@ -28,7 +47,7 @@ async fn coin() {
     let utxo_id = UtxoId::new(Default::default(), 5);
 
     let mut db = Database::default();
-    Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
+    db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
         .await
@@ -43,8 +62,12 @@ async fn coin() {
     assert!(coin.is_some());
 }
 
+// Backward fails, tracking in https://github.com/FuelLabs/fuel-core/issues/610
+#[rstest]
 #[tokio::test]
-async fn first_5_coins() {
+async fn first_5_coins(
+    #[values(PageDirection::Forward)] pagination_direction: PageDirection,
+) {
     let owner = Address::default();
 
     // setup test data in the node
@@ -66,7 +89,7 @@ async fn first_5_coins() {
 
     let mut db = Database::default();
     for (utxo_id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &utxo_id, &coin).unwrap();
+        db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
     }
 
     // setup server & client
@@ -83,7 +106,7 @@ async fn first_5_coins() {
             PaginationRequest {
                 cursor: None,
                 results: 5,
-                direction: PageDirection::Forward,
+                direction: pagination_direction,
             },
         )
         .await
@@ -116,7 +139,7 @@ async fn only_asset_id_filtered_coins() {
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
+        db.storage::<Coins>().insert(&id, &coin).unwrap();
     }
 
     // setup server & client
@@ -146,17 +169,19 @@ async fn only_asset_id_filtered_coins() {
         .all(|c| asset_id == c.asset_id.into()));
 }
 
+#[rstest]
 #[tokio::test]
-async fn only_unspent_coins() {
-    let owner = Address::default();
-
+async fn only_unspent_coins(
+    #[values(Address::default(), Address::from([16; 32]))] owner: Address,
+    #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
+) {
     // setup test data in the node
     let coins: Vec<(UtxoId, Coin)> = (1..10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                asset_id: Default::default(),
+                asset_id,
                 maturity: Default::default(),
                 status: if i <= 5 {
                     CoinStatus::Unspent
@@ -173,7 +198,7 @@ async fn only_unspent_coins() {
 
     let mut db = Database::default();
     for (id, coin) in coins {
-        Storage::<UtxoId, Coin>::insert(&mut db, &id, &coin).unwrap();
+        db.storage::<Coins>().insert(&id, &coin).unwrap();
     }
 
     // setup server & client
@@ -186,7 +211,7 @@ async fn only_unspent_coins() {
     let coins = client
         .coins(
             format!("{:#x}", owner).as_str(),
-            None,
+            Some(format!("{:#x}", asset_id).as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,
@@ -201,128 +226,4 @@ async fn only_unspent_coins() {
         .results
         .into_iter()
         .all(|c| c.status == SchemeCoinStatus::Unspent));
-}
-
-#[tokio::test]
-async fn coins_to_spend() {
-    let owner = Address::default();
-    let asset_id_a = AssetId::new([1u8; 32]);
-    let asset_id_b = AssetId::new([2u8; 32]);
-
-    // setup config
-    let mut config = Config::local_node();
-    config.chain_conf.initial_state = Some(StateConfig {
-        height: None,
-        contracts: None,
-        coins: Some(
-            vec![
-                (owner, 50, asset_id_a),
-                (owner, 100, asset_id_a),
-                (owner, 150, asset_id_a),
-                (owner, 50, asset_id_b),
-                (owner, 100, asset_id_b),
-                (owner, 150, asset_id_b),
-            ]
-            .into_iter()
-            .map(|(owner, amount, asset_id)| CoinConfig {
-                tx_id: None,
-                output_index: None,
-                block_created: None,
-                maturity: None,
-                owner,
-                amount,
-                asset_id,
-            })
-            .collect(),
-        ),
-        messages: None,
-    });
-
-    // setup server & client
-    let srv = FuelService::new_node(config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    // empty spend_query
-    let coins = client
-        .coins_to_spend(format!("{:#x}", owner).as_str(), vec![], None, None)
-        .await
-        .unwrap();
-    assert!(coins.is_empty());
-
-    // spend_query for 1 a and 1 b
-    let coins = client
-        .coins_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![
-                (format!("{:#x}", asset_id_a).as_str(), 1),
-                (format!("{:#x}", asset_id_b).as_str(), 1),
-            ],
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(coins.len(), 2);
-
-    // spend_query for 300 a and 300 b
-    let coins = client
-        .coins_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![
-                (format!("{:#x}", asset_id_a).as_str(), 300),
-                (format!("{:#x}", asset_id_b).as_str(), 300),
-            ],
-            None,
-            None,
-        )
-        .await
-        .unwrap();
-    assert_eq!(coins.len(), 6);
-
-    // spend_query for 1 a and 1 b, but with all coins excluded
-    let all_coin_ids = coins
-        .iter()
-        .map(|c| format!("{:#x}", c.utxo_id))
-        .collect::<Vec<String>>();
-    let all_coin_ids = all_coin_ids.iter().map(String::as_str).collect();
-    let coins = client
-        .coins_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![
-                (format!("{:#x}", asset_id_a).as_str(), 1),
-                (format!("{:#x}", asset_id_b).as_str(), 1),
-            ],
-            None,
-            Some(all_coin_ids),
-        )
-        .await;
-    assert!(coins.is_err());
-
-    // not enough coins
-    let coins = client
-        .coins_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![
-                (format!("{:#x}", asset_id_a).as_str(), 301),
-                (format!("{:#x}", asset_id_b).as_str(), 301),
-            ],
-            None,
-            None,
-        )
-        .await;
-    assert!(coins.is_err());
-
-    // not enough inputs
-    let coins = client
-        .coins_to_spend(
-            format!("{:#x}", owner).as_str(),
-            vec![
-                (format!("{:#x}", asset_id_a).as_str(), 300),
-                (format!("{:#x}", asset_id_b).as_str(), 300),
-            ],
-            5.into(),
-            None,
-        )
-        .await;
-    assert!(coins.is_err());
 }

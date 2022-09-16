@@ -1,24 +1,49 @@
 use crate::{
     log::EthEventLog,
-    pending_blocks::{IsReverted, PendingBlocks},
+    pending_blocks::{
+        IsReverted,
+        PendingBlocks,
+    },
     validators::Validators,
 };
 use fuel_core_interfaces::common::fuel_types::Bytes20;
 use ethers_core::types::Log;
 use ethers_providers::Middleware;
 use fuel_core_interfaces::{
-    common::{fuel_tx::Address, fuel_types::MessageId},
-    model::{
-        BlockHeight, CheckedMessage, ConsensusId, DaBlockHeight, Message, SealedFuelBlock,
-        ValidatorId, ValidatorStake,
+    common::{
+        fuel_tx::Address,
+        fuel_types::MessageId,
     },
-    relayer::{RelayerDb, StakingDiff, ValidatorDiff},
+    model::{
+        BlockHeight,
+        CheckedMessage,
+        ConsensusId,
+        DaBlockHeight,
+        Message,
+        SealedFuelBlock,
+        ValidatorId,
+        ValidatorStake,
+    },
+    relayer::{
+        RelayerDb,
+        StakingDiff,
+        ValidatorDiff,
+    },
 };
 use std::{
-    collections::{hash_map::Entry, HashMap, VecDeque},
+    collections::{
+        hash_map::Entry,
+        HashMap,
+        VecDeque,
+    },
     sync::Arc,
 };
-use tracing::{debug, error, info, warn};
+use tracing::{
+    debug,
+    error,
+    info,
+    warn,
+};
 
 pub struct FinalizationQueue {
     /// Pending stakes/assets/withdrawals. Before they are finalized
@@ -154,10 +179,12 @@ impl FinalizationQueue {
             for (da_height, events) in
                 std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
             {
-                lowest_removed_da_height = DaBlockHeight::min(lowest_removed_da_height, da_height);
+                lowest_removed_da_height =
+                    DaBlockHeight::min(lowest_removed_da_height, da_height);
                 // mark all removed pending block commits as reverted.
                 for event in events {
-                    if let EthEventLog::FuelBlockCommitted { block_root, height } = event {
+                    if let EthEventLog::FuelBlockCommitted { block_root, height } = event
+                    {
                         self.blocks.handle_block_commit(
                             block_root,
                             height.into(),
@@ -178,12 +205,12 @@ impl FinalizationQueue {
     pub async fn append_eth_log(&mut self, log: Log) {
         if log.block_number.is_none() {
             error!(target:"relayer", "Block number not found in eth log");
-            return;
+            return
         }
         let event = EthEventLog::try_from(&log);
         if let Err(err) = event {
             warn!(target:"relayer", "Eth Event not formatted properly:{}",err);
-            return;
+            return
         }
         let removed = log.removed.unwrap_or(false);
         let da_height = log.block_number.unwrap().as_u64() as DaBlockHeight;
@@ -192,7 +219,7 @@ impl FinalizationQueue {
         // bundle removed events and return
         if removed {
             self.bundle_removed_events(event, da_height);
-            return;
+            return
         }
         self.remove_bundled_reverted_events();
         // apply new event to pending queue
@@ -200,7 +227,11 @@ impl FinalizationQueue {
     }
 
     /// Append da events before to finalization queue.
-    async fn append_da_events(&mut self, fuel_event: EthEventLog, da_height: DaBlockHeight) {
+    async fn append_da_events(
+        &mut self,
+        fuel_event: EthEventLog,
+        da_height: DaBlockHeight,
+    ) {
         if let Some(front) = self.pending.back() {
             if front.da_height != da_height {
                 self.pending.push_back(DaBlockDiff::new(da_height))
@@ -267,16 +298,16 @@ impl FinalizationQueue {
                 "We received finalized height {} but we already have {}",
                 finalized_da_height, self.finalized_da_height
             );
-            return;
+            return
         }
         self.remove_bundled_reverted_events();
 
-        //TODO to be paranoid, recheck every block and all events got from eth client.
+        // TODO to be paranoid, recheck every block and all events got from eth client.
 
         let mut validators: HashMap<ValidatorId, Option<ConsensusId>> = HashMap::new();
         while let Some(diff) = self.pending.front_mut() {
             if diff.da_height > finalized_da_height {
-                break;
+                break
             }
             info!("flush eth log:{:?} diff:{:?}", diff.da_height, diff);
 
@@ -342,12 +373,17 @@ impl FinalizationQueue {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use crate::log::tests::*;
-    use fuel_core_interfaces::{common::fuel_types::Address, db::helpers::DummyDb};
-    use rand::rngs::StdRng;
-    use rand::{Rng, SeedableRng};
+    use crate::{
+        log::tests::*,
+        mock_db::MockDb,
+    };
+    use fuel_core_interfaces::common::fuel_types::Address;
+    use rand::{
+        rngs::StdRng,
+        Rng,
+        SeedableRng,
+    };
 
     #[tokio::test]
     pub async fn check_messages_on_multiple_eth_blocks() {
@@ -359,9 +395,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -408,9 +452,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -440,13 +492,20 @@ mod tests {
 
         let acc1: Address = rng.gen();
         let recipient = rng.gen();
-        let sender = rng.gen();
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -454,7 +513,6 @@ mod tests {
         let test_message = Message {
             sender: acc1,
             recipient,
-            owner: sender,
             nonce: 40,
             amount: 0,
             data: vec![],
@@ -469,7 +527,7 @@ mod tests {
                     2,
                     test_message.sender,
                     test_message.recipient,
-                    test_message.owner,
+                    test_message.recipient,
                     test_message.nonce as u32,
                     test_message.amount as u32,
                     test_message.data.clone(),
@@ -478,26 +536,45 @@ mod tests {
             ])
             .await;
 
-        let mut db = DummyDb::filled();
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, Some(c1))),);
-        assert_eq!(db.data.lock().validators.get(&v2), None,);
-        assert_eq!(db.data.lock().messages.len(), 0,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(0, Some(c1))),
+        );
+        assert_eq!(db.data.lock().unwrap().validators.get(&v2), None,);
+        assert_eq!(db.data.lock().unwrap().messages.len(), 0,);
 
         queue.commit_diffs(&mut db, 2).await;
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, Some(c2))),
+        );
+        assert_eq!(db.data.lock().unwrap().messages.len(), 1,);
         // ensure committed message id matches message id from the log
         assert_eq!(
-            db.data.lock().messages.values().next().unwrap().id(),
+            db.data
+                .lock()
+                .unwrap()
+                .messages
+                .values()
+                .next()
+                .unwrap()
+                .id(),
             test_message.id()
         );
 
         queue.commit_diffs(&mut db, 3).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(0, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, Some(c2))),);
-        assert_eq!(db.data.lock().messages.len(), 1,);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(0, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, Some(c2))),
+        );
+        assert_eq!(db.data.lock().unwrap().messages.len(), 1,);
     }
 
     #[tokio::test]
@@ -515,9 +592,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -534,20 +619,36 @@ mod tests {
                 eth_log_withdrawal(3, delegator1, 7),
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s2, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(s2, None)),
+        );
 
         queue.commit_diffs(&mut db, 2).await;
         let s13 = s1 + s3;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s13, Some(c1))),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s13, Some(c1))),
+        );
 
         queue.commit_diffs(&mut db, 3).await;
 
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s3, Some(c1))),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s3, Some(c1))),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, None)),
+        );
     }
 
     #[tokio::test]
@@ -564,9 +665,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -584,15 +693,28 @@ mod tests {
                 eth_log_withdrawal(2, delegator2, 0), // amount does nothing
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         queue.commit_diffs(&mut db, 1).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(s1, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(s1, None)),
+        );
 
         queue.commit_diffs(&mut db, 2).await;
-        assert_eq!(db.data.lock().validators.get(&v1), Some(&(s1, None)),);
-        assert_eq!(db.data.lock().validators.get(&v2), Some(&(0, None)),);
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v1),
+            Some(&(s1, None)),
+        );
+        assert_eq!(
+            db.data.lock().unwrap().validators.get(&v2),
+            Some(&(0, None)),
+        );
     }
 
     #[tokio::test]
@@ -605,9 +727,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -643,9 +773,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(10u64),
             BlockHeight::from(0u64),
         );
@@ -663,7 +801,8 @@ mod tests {
 
         queue.append_eth_logs(vec![reg1_revert, reg2_revert]).await;
 
-        let mut db = DummyDb::filled();
+        let mut db = MockDb::default();
+
         queue.commit_diffs(&mut db, 1).await;
 
         assert_eq!(queue.pending.len(), 0)
@@ -687,9 +826,17 @@ mod tests {
 
         let mut queue = FinalizationQueue::new(
             0,
+<<<<<<< HEAD
             Some(Bytes20::zero()),
             &(hex::decode("79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b")
                 .unwrap()),
+=======
+            Some(H160::zero()),
+            &(hex::decode(
+                "79afbf7147841fca72b45a1978dd7669470ba67abbe5c220062924380c9c364b",
+            )
+            .unwrap()),
+>>>>>>> origin/master
             BlockHeight::from(0u64),
             BlockHeight::from(0u64),
         );
@@ -709,7 +856,8 @@ mod tests {
                 eth_log_withdrawal(4, delegator2, 0),
             ])
             .await;
-        let mut db = DummyDb::filled();
+
+        let mut db = MockDb::default();
 
         // finalize all logs
         queue.commit_diffs(&mut db, 5).await;

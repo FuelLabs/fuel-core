@@ -1,21 +1,42 @@
-use super::{GossipsubCodec, NetworkCodec, RequestResponseConverter};
+use super::{
+    GossipsubCodec,
+    NetworkCodec,
+    RequestResponseConverter,
+};
 use crate::{
-    gossipsub::messages::{GossipTopicTag, GossipsubBroadcastRequest, GossipsubMessage},
+    gossipsub::messages::{
+        GossipTopicTag,
+        GossipsubBroadcastRequest,
+        GossipsubMessage,
+    },
     request_response::messages::{
-        IntermediateResponse, OutboundResponse, RequestMessage, ResponseMessage, MAX_REQUEST_SIZE,
+        IntermediateResponse,
+        OutboundResponse,
+        RequestMessage,
+        ResponseMessage,
+        MAX_REQUEST_SIZE,
         REQUEST_RESPONSE_PROTOCOL_ID,
     },
 };
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWriteExt};
+use futures::{
+    AsyncRead,
+    AsyncWriteExt,
+};
 use libp2p::{
     core::{
-        upgrade::{read_length_prefixed, write_length_prefixed},
+        upgrade::{
+            read_length_prefixed,
+            write_length_prefixed,
+        },
         ProtocolName,
     },
     request_response::RequestResponseCodec,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::io;
 
 #[derive(Debug, Clone)]
@@ -35,13 +56,17 @@ impl BincodeCodec {
 
     /// Helper method for decoding data
     /// Reusable across `RequestResponseCodec` and `GossipsubCodec`
-    fn deserialize<'a, R: Deserialize<'a>>(&self, encoded_data: &'a [u8]) -> Result<R, io::Error> {
+    fn deserialize<'a, R: Deserialize<'a>>(
+        &self,
+        encoded_data: &'a [u8],
+    ) -> Result<R, io::Error> {
         bincode::deserialize(encoded_data)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
     fn serialize<D: Serialize>(&self, data: &D) -> Result<Vec<u8>, io::Error> {
-        bincode::serialize(&data).map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+        bincode::serialize(&data)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 
@@ -145,8 +170,12 @@ impl GossipsubCodec for BincodeCodec {
         gossipsub_tag: GossipTopicTag,
     ) -> Result<Self::ResponseMessage, io::Error> {
         let decoded_response = match gossipsub_tag {
-            GossipTopicTag::NewTx => GossipsubMessage::NewTx(self.deserialize(encoded_data)?),
-            GossipTopicTag::NewBlock => GossipsubMessage::NewBlock(self.deserialize(encoded_data)?),
+            GossipTopicTag::NewTx => {
+                GossipsubMessage::NewTx(self.deserialize(encoded_data)?)
+            }
+            GossipTopicTag::NewBlock => {
+                GossipsubMessage::NewBlock(self.deserialize(encoded_data)?)
+            }
             GossipTopicTag::ConsensusVote => {
                 GossipsubMessage::ConsensusVote(self.deserialize(encoded_data)?)
             }
@@ -166,9 +195,9 @@ impl RequestResponseConverter for BincodeCodec {
         inter_msg: &Self::IntermediateResponse,
     ) -> Result<Self::ResponseMessage, io::Error> {
         match inter_msg {
-            IntermediateResponse::ResponseBlock(block_bytes) => Ok(ResponseMessage::ResponseBlock(
-                self.deserialize(block_bytes)?,
-            )),
+            IntermediateResponse::ResponseBlock(block_bytes) => Ok(
+                ResponseMessage::ResponseBlock(self.deserialize(block_bytes)?),
+            ),
         }
     }
 

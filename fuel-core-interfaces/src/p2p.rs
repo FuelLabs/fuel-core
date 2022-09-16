@@ -1,6 +1,13 @@
-use super::model::{BlockHeight, FuelBlock, SealedFuelBlock};
-use crate::model::ConsensusVote;
-use fuel_tx::Transaction;
+use super::model::{
+    BlockHeight,
+    FuelBlock,
+    SealedFuelBlock,
+};
+use crate::{
+    common::fuel_tx::Transaction,
+    model::ConsensusVote,
+};
+use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -31,4 +38,11 @@ pub enum P2pRequestEvent {
     BroadcastConsensusVote {
         vote: Arc<ConsensusVote>,
     },
+    Stop,
+}
+
+#[async_trait]
+pub trait P2pDb: Send + Sync {
+    async fn get_sealed_block(&self, height: BlockHeight)
+        -> Option<Arc<SealedFuelBlock>>;
 }

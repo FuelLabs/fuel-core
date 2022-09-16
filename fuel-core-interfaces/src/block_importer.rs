@@ -1,5 +1,9 @@
-use super::model::{ConsensusVote, FuelBlock, SealedFuelBlock};
-use fuel_types::Bytes32;
+use super::model::{
+    ConsensusVote,
+    FuelBlock,
+    SealedFuelBlock,
+};
+use crate::common::fuel_types::Bytes32;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]

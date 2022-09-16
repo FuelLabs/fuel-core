@@ -1,4 +1,7 @@
-use super::model::{FuelBlock, SealedFuelBlock};
+use super::model::{
+    FuelBlock,
+    SealedFuelBlock,
+};
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::oneshot;

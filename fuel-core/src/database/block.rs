@@ -1,46 +1,85 @@
 use crate::{
-    database::{columns::BLOCKS, columns::BLOCK_IDS, Database, KvStoreError},
-    model::{BlockHeight, FuelBlockDb},
-    state::{Error, IterDirection},
+    database::{
+        storage::FuelBlocks,
+        Column,
+        Database,
+        KvStoreError,
+    },
+    model::{
+        BlockHeight,
+        FuelBlockDb,
+    },
+    state::{
+        Error,
+        IterDirection,
+    },
 };
-use fuel_core_interfaces::common::{fuel_storage::Storage, fuel_tx::Bytes32};
-use std::borrow::Cow;
-use std::convert::{TryFrom, TryInto};
+use fuel_core_interfaces::common::{
+    fuel_storage::{
+        StorageInspect,
+        StorageMutate,
+    },
+    fuel_tx::Bytes32,
+};
+use std::{
+    borrow::Cow,
+    convert::{
+        TryFrom,
+        TryInto,
+    },
+};
 
-impl Storage<Bytes32, FuelBlockDb> for Database {
+impl StorageInspect<FuelBlocks> for Database {
     type Error = KvStoreError;
 
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockDb>>, KvStoreError> {
+        Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
+        Database::exists(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlocks> for Database {
     fn insert(
         &mut self,
         key: &Bytes32,
         value: &FuelBlockDb,
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        Database::insert(self, value.headers.height, BLOCK_IDS, *key)?;
-        Database::insert(self, key.as_ref(), BLOCKS, value.clone()).map_err(Into::into)
+        let _: Option<BlockHeight> = Database::insert(
+            self,
+            value.headers.height.to_be_bytes(),
+            Column::FuelBlockIds,
+            *key,
+        )?;
+        Database::insert(self, key.as_ref(), Column::FuelBlocks, value)
+            .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        let block: Option<FuelBlockDb> = Database::remove(self, key.as_ref(), BLOCKS)?;
+        let block: Option<FuelBlockDb> =
+            Database::remove(self, key.as_ref(), Column::FuelBlocks)?;
         if let Some(block) = &block {
-            let _: Option<Bytes32> =
-                Database::remove(self, &block.headers.height.to_bytes(), BLOCK_IDS)?;
+            let _: Option<Bytes32> = Database::remove(
+                self,
+                &block.headers.height.to_be_bytes(),
+                Column::FuelBlockIds,
+            )?;
         }
         Ok(block)
-    }
-
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockDb>>, KvStoreError> {
-        Database::get(self, key.as_ref(), BLOCKS).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), BLOCKS).map_err(Into::into)
     }
 }
 
 impl Database {
     pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
         let block_entry: Option<(Vec<u8>, Bytes32)> = self
-            .iter_all(BLOCK_IDS, None, None, Some(IterDirection::Reverse))
+            .iter_all(
+                Column::FuelBlockIds,
+                None,
+                None,
+                Some(IterDirection::Reverse),
+            )
             .next()
             .transpose()?;
         // get block height from most recently indexed block
@@ -57,7 +96,7 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
-        Database::get(self, &height.to_bytes()[..], BLOCK_IDS)
+        Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
     }
 
     pub fn all_block_ids(
@@ -66,7 +105,7 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(BlockHeight, Bytes32), Error>> + '_ {
         let start = start.map(|b| b.to_bytes().to_vec());
-        self.iter_all::<Vec<u8>, Bytes32>(BLOCK_IDS, None, start, direction)
+        self.iter_all::<Vec<u8>, Bytes32>(Column::FuelBlockIds, None, start, direction)
             .map(|res| {
                 let (height, id) = res?;
                 Ok((

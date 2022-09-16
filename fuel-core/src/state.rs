@@ -1,5 +1,14 @@
-use crate::state::in_memory::transaction::MemoryTransactionView;
-use std::{fmt::Debug, marker::PhantomData, sync::Arc};
+use crate::{
+    database::Column,
+    state::in_memory::transaction::MemoryTransactionView,
+};
+use std::{
+    fmt::Debug,
+    marker::PhantomData,
+    sync::Arc,
+};
+
+pub use fuel_core_interfaces::db::Error;
 
 pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource = Arc<dyn TransactableStorage>;
@@ -13,7 +22,7 @@ pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>> {
 }
 
 impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
-    pub fn new(key: (K1, K2)) -> Self {
+    pub fn new(key: &(K1, K2)) -> Self {
         Self {
             _marker_1: Default::default(),
             _marker_2: Default::default(),
@@ -43,13 +52,17 @@ impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
 pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
-    fn get(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
-    fn put(&self, key: Vec<u8>, column: ColumnId, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
-    fn delete(&self, key: &[u8], column: ColumnId) -> Result<Option<Vec<u8>>>;
-    fn exists(&self, key: &[u8], column: ColumnId) -> Result<bool>;
+    fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
+    fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
+    fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
+    fn exists(&self, key: &[u8], column: Column) -> Result<bool>;
+    // TODO: Use `Option<&[u8]>` instead of `Option<Vec<u8>>`. Also decide, do we really need usage
+    //  of `Option`? If `len` is zero it is the same as `None`. Apply the same change for all upper
+    //  functions.
+    //  https://github.com/FuelLabs/fuel-core/issues/622
     fn iter_all(
         &self,
-        column: ColumnId,
+        column: Column,
         prefix: Option<Vec<u8>>,
         start: Option<Vec<u8>>,
         direction: IterDirection,
@@ -68,15 +81,16 @@ impl Default for IterDirection {
     }
 }
 
-pub use fuel_core_interfaces::db::Error;
-
 pub trait BatchOperations: KeyValueStore {
-    fn batch_write(&self, entries: &mut dyn Iterator<Item = WriteOperation>) -> Result<()> {
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = WriteOperation>,
+    ) -> Result<()> {
         for entry in entries {
             match entry {
                 // TODO: error handling
                 WriteOperation::Insert(key, column, value) => {
-                    let _ = self.put(key, column, value);
+                    let _ = self.put(&key, column, value);
                 }
                 WriteOperation::Remove(key, column) => {
                     let _ = self.delete(&key, column);
@@ -89,8 +103,8 @@ pub trait BatchOperations: KeyValueStore {
 
 #[derive(Debug)]
 pub enum WriteOperation {
-    Insert(Vec<u8>, ColumnId, Vec<u8>),
-    Remove(Vec<u8>, ColumnId),
+    Insert(Vec<u8>, Column, Vec<u8>),
+    Remove(Vec<u8>, Column),
 }
 
 pub trait Transaction {
@@ -101,7 +115,10 @@ pub trait Transaction {
 
 pub type TransactionResult<T> = core::result::Result<T, TransactionError>;
 
-pub trait TransactableStorage: KeyValueStore + BatchOperations + Debug + Send + Sync {}
+pub trait TransactableStorage:
+    KeyValueStore + BatchOperations + Debug + Send + Sync
+{
+}
 
 #[derive(Clone, Debug)]
 pub enum TransactionError {

@@ -1,12 +1,30 @@
 use crate::client::schema::{
     contract::ContractIdFragment,
     schema,
-    tx::{tests::transparent_receipt::Receipt, TransactionStatus, TxIdArgs},
-    Address, AssetId, Bytes32, ConnectionArgs, ConversionError, HexString, MessageId, PageInfo,
-    Salt, TransactionId, TxPointer, UtxoId, U64,
+    tx::{
+        tests::transparent_receipt::Receipt,
+        TransactionStatus,
+        TxIdArgs,
+    },
+    Address,
+    AssetId,
+    Bytes32,
+    ConnectionArgs,
+    ConversionError,
+    HexString,
+    MessageId,
+    PageInfo,
+    Salt,
+    TransactionId,
+    TxPointer,
+    UtxoId,
+    U64,
 };
-use core::convert::{TryFrom, TryInto};
-use fuel_tx::StorageSlot;
+use core::convert::{
+    TryFrom,
+    TryInto,
+};
+use fuel_vm::fuel_tx::StorageSlot;
 use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
@@ -81,7 +99,9 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 maturity: tx.maturity.into(),
                 receipts_root: tx
                     .receipts_root
-                    .ok_or_else(|| ConversionError::MissingField("receipts_root".to_string()))?
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("receipts_root".to_string())
+                    })?
                     .into(),
                 script: tx
                     .script
@@ -89,71 +109,83 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .into(),
                 script_data: tx
                     .script_data
-                    .ok_or_else(|| ConversionError::MissingField("script_data".to_string()))?
-                    .into(),
-                inputs: tx
-                    .inputs
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
-                outputs: tx
-                    .outputs
-                    .into_iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
-                witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
-                metadata: None,
-            },
-            false => Self::Create {
-                gas_price: tx.gas_price.into(),
-                gas_limit: tx.gas_limit.into(),
-                maturity: tx.maturity.into(),
-                bytecode_length: tx
-                    .bytecode_length
-                    .ok_or_else(|| ConversionError::MissingField("bytecode_length".to_string()))?
-                    .into(),
-                bytecode_witness_index: tx
-                    .bytecode_witness_index
                     .ok_or_else(|| {
-                        ConversionError::MissingField("bytecode_witness_index".to_string())
+                        ConversionError::MissingField("script_data".to_string())
                     })?
-                    .try_into()?,
-                salt: tx
-                    .salt
-                    .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
                     .into(),
-                storage_slots: tx
-                    .storage_slots
-                    .ok_or_else(|| ConversionError::MissingField("storage_slots".to_string()))?
-                    .into_iter()
-                    .map(|slot| {
-                        if slot.0 .0.len() != 64 {
-                            return Err(ConversionError::BytesLength);
-                        }
-                        let key = &slot.0 .0[0..32];
-                        let value = &slot.0 .0[32..];
-                        Ok(StorageSlot::new(
-                            // unwrap is safe because length is checked
-                            fuel_types::Bytes32::try_from(key)
-                                .map_err(|_| ConversionError::BytesLength)?,
-                            fuel_types::Bytes32::try_from(value)
-                                .map_err(|_| ConversionError::BytesLength)?,
-                        ))
-                    })
-                    .try_collect()?,
                 inputs: tx
                     .inputs
                     .into_iter()
                     .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Input>, ConversionError>>()?,
+                    .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>(
+                    )?,
                 outputs: tx
                     .outputs
                     .into_iter()
                     .map(TryInto::try_into)
-                    .collect::<Result<Vec<fuel_tx::Output>, ConversionError>>()?,
+                    .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
+                    )?,
                 witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
                 metadata: None,
             },
+            false => {
+                Self::Create {
+                    gas_price: tx.gas_price.into(),
+                    gas_limit: tx.gas_limit.into(),
+                    maturity: tx.maturity.into(),
+                    bytecode_length: tx
+                        .bytecode_length
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("bytecode_length".to_string())
+                        })?
+                        .into(),
+                    bytecode_witness_index: tx
+                        .bytecode_witness_index
+                        .ok_or_else(|| {
+                            ConversionError::MissingField(
+                                "bytecode_witness_index".to_string(),
+                            )
+                        })?
+                        .try_into()?,
+                    salt: tx
+                        .salt
+                        .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
+                        .into(),
+                    storage_slots: tx
+                        .storage_slots
+                        .ok_or_else(|| {
+                            ConversionError::MissingField("storage_slots".to_string())
+                        })?
+                        .into_iter()
+                        .map(|slot| {
+                            if slot.0 .0.len() != 64 {
+                                return Err(ConversionError::BytesLength)
+                            }
+                            let key = &slot.0 .0[0..32];
+                            let value = &slot.0 .0[32..];
+                            Ok(StorageSlot::new(
+                                // unwrap is safe because length is checked
+                                ::fuel_vm::fuel_types::Bytes32::try_from(key)
+                                    .map_err(|_| ConversionError::BytesLength)?,
+                                ::fuel_vm::fuel_types::Bytes32::try_from(value)
+                                    .map_err(|_| ConversionError::BytesLength)?,
+                            ))
+                        })
+                        .try_collect()?,
+                    inputs: tx
+                        .inputs
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>()?,
+                    outputs: tx
+                        .outputs
+                        .into_iter()
+                        .map(TryInto::try_into)
+                        .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>()?,
+                    witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+                    metadata: None,
+                }
+            }
         })
     }
 }
@@ -198,21 +230,20 @@ pub struct InputMessage {
     recipient: Address,
     amount: U64,
     nonce: U64,
-    owner: Address,
     witness_index: i32,
     data: HexString,
     predicate: HexString,
     predicate_data: HexString,
 }
 
-impl TryFrom<Input> for fuel_tx::Input {
+impl TryFrom<Input> for ::fuel_vm::fuel_tx::Input {
     type Error = ConversionError;
 
-    fn try_from(input: Input) -> Result<fuel_tx::Input, Self::Error> {
+    fn try_from(input: Input) -> Result<::fuel_vm::fuel_tx::Input, Self::Error> {
         Ok(match input {
             Input::InputCoin(coin) => {
                 if coin.predicate.0 .0.is_empty() {
-                    fuel_tx::Input::CoinSigned {
+                    ::fuel_vm::fuel_tx::Input::CoinSigned {
                         utxo_id: coin.utxo_id.into(),
                         owner: coin.owner.into(),
                         amount: coin.amount.into(),
@@ -222,7 +253,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                         maturity: coin.maturity.into(),
                     }
                 } else {
-                    fuel_tx::Input::CoinPredicate {
+                    ::fuel_vm::fuel_tx::Input::CoinPredicate {
                         utxo_id: coin.utxo_id.into(),
                         owner: coin.owner.into(),
                         amount: coin.amount.into(),
@@ -234,7 +265,7 @@ impl TryFrom<Input> for fuel_tx::Input {
                     }
                 }
             }
-            Input::InputContract(contract) => fuel_tx::Input::Contract {
+            Input::InputContract(contract) => ::fuel_vm::fuel_tx::Input::Contract {
                 utxo_id: contract.utxo_id.into(),
                 balance_root: contract.balance_root.into(),
                 state_root: contract.state_root.into(),
@@ -243,24 +274,22 @@ impl TryFrom<Input> for fuel_tx::Input {
             },
             Input::InputMessage(message) => {
                 if message.predicate.0 .0.is_empty() {
-                    fuel_tx::Input::MessageSigned {
+                    ::fuel_vm::fuel_tx::Input::MessageSigned {
                         message_id: message.message_id.into(),
                         sender: message.sender.into(),
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
                         witness_index: message.witness_index.try_into()?,
                         data: message.data.into(),
                     }
                 } else {
-                    fuel_tx::Input::MessagePredicate {
+                    ::fuel_vm::fuel_tx::Input::MessagePredicate {
                         message_id: message.message_id.into(),
                         sender: message.sender.into(),
                         recipient: message.recipient.into(),
                         amount: message.amount.into(),
                         nonce: message.nonce.into(),
-                        owner: message.owner.into(),
                         data: message.data.into(),
                         predicate: message.predicate.into(),
                         predicate_data: message.predicate_data.into(),
@@ -328,7 +357,7 @@ pub struct ContractCreated {
     state_root: Bytes32,
 }
 
-impl TryFrom<Output> for fuel_tx::Output {
+impl TryFrom<Output> for ::fuel_vm::fuel_tx::Output {
     type Error = ConversionError;
 
     fn try_from(value: Output) -> Result<Self, Self::Error> {
