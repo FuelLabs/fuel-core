@@ -29,11 +29,11 @@ use fuel_gql_client::client::{
 mod coins {
     use super::*;
 
-    async fn setup() -> (Address, AssetId, AssetId, FuelClient) {
-        let owner = Address::default();
-        let asset_id_a = AssetId::new([1u8; 32]);
-        let asset_id_b = AssetId::new([2u8; 32]);
-
+    async fn setup(
+        owner: Address,
+        asset_id_a: AssetId,
+        asset_id_b: AssetId,
+    ) -> FuelClient {
         // setup config
         let mut config = Config::local_node();
         config.chain_conf.initial_state = Some(StateConfig {
@@ -65,14 +65,26 @@ mod coins {
 
         // setup server & client
         let srv = FuelService::new_node(config).await.unwrap();
-        let client = FuelClient::from(srv.bound_address);
-
-        (owner, asset_id_a, asset_id_b, client)
+        FuelClient::from(srv.bound_address)
     }
 
+    #[rstest::rstest]
     #[tokio::test]
-    async fn resources_to_spend_coins_query_target_1() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn resources_to_spend(
+        #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
+        owner: Address,
+        #[values(AssetId::new([16u8; 32]), AssetId::new([1u8; 32]))] asset_id_a: AssetId,
+        #[values(AssetId::new([2u8; 32]), AssetId::new([99u8; 32]))] asset_id_b: AssetId,
+    ) {
+        query_target_1(owner, asset_id_a, asset_id_b).await;
+        query_target_300(owner, asset_id_a, asset_id_b).await;
+        exclude_all(owner, asset_id_a, asset_id_b).await;
+        query_more_than_we_have(owner, asset_id_a, asset_id_b).await;
+        query_limit_resources(owner, asset_id_a, asset_id_b).await;
+    }
+
+    async fn query_target_1(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
+        let client = setup(owner, asset_id_a, asset_id_b).await;
 
         // spend_query for 1 a and 1 b
         let resources_per_asset = client
@@ -93,9 +105,8 @@ mod coins {
         assert!(resources_per_asset[1].amount() >= 1);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_target_300() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_target_300(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
+        let client = setup(owner, asset_id_a, asset_id_b).await;
 
         // spend_query for 300 a and 300 b
         let resources_per_asset = client
@@ -116,9 +127,8 @@ mod coins {
         assert!(resources_per_asset[1].amount() >= 300);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_messages_exclude_all() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn exclude_all(owner: Address, asset_id_a: AssetId, asset_id_b: AssetId) {
+        let client = setup(owner, asset_id_a, asset_id_b).await;
 
         // query all resources
         let resources_per_asset = client
@@ -165,9 +175,12 @@ mod coins {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_more_than_we_have() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_more_than_we_have(
+        owner: Address,
+        asset_id_a: AssetId,
+        asset_id_b: AssetId,
+    ) {
+        let client = setup(owner, asset_id_a, asset_id_b).await;
 
         // not enough resources
         let resources_per_asset = client
@@ -191,9 +204,12 @@ mod coins {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_limit_resources() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_limit_resources(
+        owner: Address,
+        asset_id_a: AssetId,
+        asset_id_b: AssetId,
+    ) {
+        let client = setup(owner, asset_id_a, asset_id_b).await;
 
         // not enough inputs
         let resources_per_asset = client
@@ -217,8 +233,7 @@ mod coins {
 mod messages {
     use super::*;
 
-    async fn setup() -> (Address, AssetId, FuelClient) {
-        let owner = Address::default();
+    async fn setup(owner: Address) -> (AssetId, FuelClient) {
         let base_asset_id = ChainConfig::BASE_ASSET;
 
         // setup config
@@ -247,12 +262,24 @@ mod messages {
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
-        (owner, base_asset_id, client)
+        (base_asset_id, client)
     }
 
+    #[rstest::rstest]
     #[tokio::test]
-    async fn resources_to_spend_coins_query_target_1() {
-        let (owner, base_asset_id, client) = setup().await;
+    async fn resources_to_spend(
+        #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
+        owner: Address,
+    ) {
+        query_target_1(owner).await;
+        query_target_300(owner).await;
+        exclude_all(owner).await;
+        query_more_than_we_have(owner).await;
+        query_limit_resources(owner).await;
+    }
+
+    async fn query_target_1(owner: Address) {
+        let (base_asset_id, client) = setup(owner).await;
 
         // query resources for `base_asset_id` and target 1
         let resources_per_asset = client
@@ -266,9 +293,8 @@ mod messages {
         assert_eq!(resources_per_asset.len(), 1);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_target_300() {
-        let (owner, base_asset_id, client) = setup().await;
+    async fn query_target_300(owner: Address) {
+        let (base_asset_id, client) = setup(owner).await;
 
         // query for 300 base assets
         let resources_per_asset = client
@@ -283,9 +309,8 @@ mod messages {
         assert_eq!(resources_per_asset[0].len(), 3);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_messages_exclude_all() {
-        let (owner, base_asset_id, client) = setup().await;
+    async fn exclude_all(owner: Address) {
+        let (base_asset_id, client) = setup(owner).await;
 
         // query for 300 base assets
         let resources_per_asset = client
@@ -326,9 +351,8 @@ mod messages {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_more_than_we_have() {
-        let (owner, base_asset_id, client) = setup().await;
+    async fn query_more_than_we_have(owner: Address) {
+        let (base_asset_id, client) = setup(owner).await;
 
         // max resources reached
         let resources_per_asset = client
@@ -349,9 +373,8 @@ mod messages {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_limit_resources() {
-        let (owner, base_asset_id, client) = setup().await;
+    async fn query_limit_resources(owner: Address) {
+        let (base_asset_id, client) = setup(owner).await;
 
         // not enough inputs
         let resources_per_asset = client
@@ -373,10 +396,8 @@ mod messages {
 mod messages_and_coins {
     use super::*;
 
-    async fn setup() -> (Address, AssetId, AssetId, FuelClient) {
-        let owner = Address::default();
+    async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {
         let asset_id_a = ChainConfig::BASE_ASSET;
-        let asset_id_b = AssetId::new([1u8; 32]);
 
         // setup config
         let mut config = Config::local_node();
@@ -422,12 +443,25 @@ mod messages_and_coins {
         let srv = FuelService::new_node(config).await.unwrap();
         let client = FuelClient::from(srv.bound_address);
 
-        (owner, asset_id_a, asset_id_b, client)
+        (asset_id_a, client)
     }
 
+    #[rstest::rstest]
     #[tokio::test]
-    async fn resources_to_spend_coins_query_target_1() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn resources_to_spend(
+        #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
+        owner: Address,
+        #[values(AssetId::new([1u8; 32]), AssetId::new([99u8; 32]))] asset_id_b: AssetId,
+    ) {
+        query_target_1(owner, asset_id_b).await;
+        query_target_300(owner, asset_id_b).await;
+        exclude_all(owner, asset_id_b).await;
+        query_more_than_we_have(owner, asset_id_b).await;
+        query_limit_resources(owner, asset_id_b).await;
+    }
+
+    async fn query_target_1(owner: Address, asset_id_b: AssetId) {
+        let (asset_id_a, client) = setup(owner, asset_id_b).await;
 
         // query resources for `base_asset_id` and target 1
         let resources_per_asset = client
@@ -448,9 +482,8 @@ mod messages_and_coins {
         assert!(resources_per_asset[1].amount() >= 1);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_target_300() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_target_300(owner: Address, asset_id_b: AssetId) {
+        let (asset_id_a, client) = setup(owner, asset_id_b).await;
 
         // query for 300 base assets
         let resources_per_asset = client
@@ -471,9 +504,8 @@ mod messages_and_coins {
         assert!(resources_per_asset[1].amount() >= 300);
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_messages_exclude_all() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn exclude_all(owner: Address, asset_id_b: AssetId) {
+        let (asset_id_a, client) = setup(owner, asset_id_b).await;
 
         // query for 300 base assets
         let resources_per_asset = client
@@ -537,9 +569,8 @@ mod messages_and_coins {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_more_than_we_have() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_more_than_we_have(owner: Address, asset_id_b: AssetId) {
+        let (asset_id_a, client) = setup(owner, asset_id_b).await;
 
         // max resources reached
         let resources_per_asset = client
@@ -563,9 +594,8 @@ mod messages_and_coins {
         );
     }
 
-    #[tokio::test]
-    async fn resources_to_spend_coins_query_limit_resources() {
-        let (owner, asset_id_a, asset_id_b, client) = setup().await;
+    async fn query_limit_resources(owner: Address, asset_id_b: AssetId) {
+        let (asset_id_a, client) = setup(owner, asset_id_b).await;
 
         // not enough inputs
         let resources_per_asset = client
@@ -586,9 +616,7 @@ mod messages_and_coins {
     }
 }
 
-async fn empty_setup() -> (Address, FuelClient) {
-    let owner = Address::default();
-
+async fn empty_setup() -> FuelClient {
     // setup config
     let mut config = Config::local_node();
     config.chain_conf.initial_state = Some(StateConfig {
@@ -600,14 +628,16 @@ async fn empty_setup() -> (Address, FuelClient) {
 
     // setup server & client
     let srv = FuelService::new_node(config).await.unwrap();
-    let client = FuelClient::from(srv.bound_address);
-
-    (owner, client)
+    FuelClient::from(srv.bound_address)
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn resources_to_spend_empty() {
-    let (owner, client) = empty_setup().await;
+async fn resources_to_spend_empty(
+    #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
+    owner: Address,
+) {
+    let client = empty_setup().await;
 
     // empty spend_query
     let resources_per_asset = client
@@ -617,10 +647,14 @@ async fn resources_to_spend_empty() {
     assert!(resources_per_asset.is_empty());
 }
 
+#[rstest::rstest]
 #[tokio::test]
-async fn resources_to_spend_error_duplicate_asset_query() {
-    let (owner, client) = empty_setup().await;
-    let asset_id = AssetId::new([1u8; 32]);
+async fn resources_to_spend_error_duplicate_asset_query(
+    #[values(Address::default(), Address::from([5; 32]), Address::from([16; 32]))]
+    owner: Address,
+    #[values(AssetId::new([1u8; 32]), AssetId::new([99u8; 32]))] asset_id: AssetId,
+) {
+    let client = empty_setup().await;
 
     // the queries with the same id
     let resources_per_asset = client
