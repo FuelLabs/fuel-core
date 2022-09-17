@@ -31,6 +31,7 @@ use std::{
     Deref,
     Hash,
 )]
+#[repr(transparent)]
 pub struct BlockHeight(u32);
 
 impl From<BlockHeight> for Vec<u8> {

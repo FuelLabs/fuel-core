@@ -310,7 +310,7 @@ impl InterpreterStorage for Database {
         let id = self.block_hash(height)?;
         let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
         block
-            .headers
+            .header
             .time
             .timestamp()
             .try_into()
@@ -326,7 +326,7 @@ impl InterpreterStorage for Database {
         let height = self.get_block_height()?.unwrap_or_default();
         let id = self.block_hash(height.into())?;
         let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
-        Ok(block.headers.producer)
+        Ok(block.header.producer)
     }
 }
 

@@ -87,13 +87,6 @@ pub enum Error {
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
     CorruptedBlockState(Box<dyn StdError + Send + Sync>),
-    #[error(
-        "missing transaction data for tx {transaction_id:#x} in block {block_id:#x}"
-    )]
-    MissingTransactionData {
-        block_id: Bytes32,
-        transaction_id: Bytes32,
-    },
     #[error("Transaction({transaction_id:#x}) execution error: {error:?}")]
     VmExecution {
         error: fuel_vm::prelude::InterpreterError,

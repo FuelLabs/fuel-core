@@ -1,4 +1,8 @@
-use std::cmp::Reverse;
+use std::{
+    cmp::Reverse,
+    ops::Deref,
+    sync::Arc,
+};
 
 use crate::Config;
 use fuel_core_interfaces::common::{
@@ -7,7 +11,7 @@ use fuel_core_interfaces::common::{
 };
 
 pub fn select_transactions(
-    mut includable_txs: Vec<CheckedTransaction>,
+    mut includable_txs: Vec<Arc<CheckedTransaction>>,
     config: &Config,
 ) -> Vec<CheckedTransaction> {
     // Select all txs that fit into the block, preferring ones with higher gas price.
@@ -35,6 +39,7 @@ pub fn select_transactions(
                 false
             }
         })
+        .map(|tx| tx.deref().clone())
         .collect()
 }
 
@@ -90,7 +95,9 @@ mod tests {
                     amount: 0,
                     asset_id: Default::default(),
                 })
-                .finalize_checked(
+                // The block producer assumes transactions are already checked
+                // so it doesn't need to compute valid sigs for tests
+                .finalize_checked_without_signature(
                     0,
                     &ConsensusParameters {
                         gas_price_factor: 1,
@@ -98,6 +105,7 @@ mod tests {
                     },
                 )
             })
+            .map(Arc::new)
             .collect();
 
         select_transactions(

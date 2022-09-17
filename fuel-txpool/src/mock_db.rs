@@ -35,14 +35,14 @@ use fuel_core_interfaces::{
 };
 
 #[derive(Default)]
-pub(crate) struct Data {
+pub struct Data {
     pub coins: HashMap<UtxoId, Coin>,
     pub contracts: HashMap<ContractId, Contract>,
     pub messages: HashMap<MessageId, Message>,
 }
 
 #[derive(Default)]
-pub(crate) struct MockDb {
+pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 

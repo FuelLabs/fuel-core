@@ -7,15 +7,27 @@ use crate::{
     },
     Config,
 };
-use anyhow::Result;
+use anyhow::{
+    Context,
+    Result,
+};
 use chrono::Utc;
 use fuel_core_interfaces::{
-    block_producer::BlockProducerMpsc,
+    block_producer::{
+        BlockProducer as Trait,
+        Error::{
+            GenesisBlock,
+            InvalidDaFinalizationState,
+            MissingBlock,
+        },
+    },
     common::{
+        crypto::ephemeral_merkle_root,
         fuel_tx::CheckedTransaction,
         fuel_types::Bytes32,
     },
     executor::{
+        Error,
         ExecutionMode,
         Executor,
     },
@@ -26,164 +38,151 @@ use fuel_core_interfaces::{
         FuelBlockHeader,
     },
 };
-use std::{
-    cmp::max,
-    sync::Arc,
-};
-use tokio::sync::mpsc;
 use tracing::{
-    info,
-    warn,
+    debug,
+    error,
 };
 
+#[cfg(test)]
+mod tests;
 mod transaction_selector;
 
-/// The default distance to trail the DA layer. We trail the finalized da height by some
-/// margin to ensure all peers have adequate time to finalize the same blocks.
-pub const DA_HEIGHT_TRAIL: u64 = 10;
-
-pub struct Task {
-    pub receiver: mpsc::Receiver<BlockProducerMpsc>,
+pub struct Producer<'a> {
     pub config: Config,
-    pub db: Box<dyn BlockProducerDatabase>,
-    pub relayer: Box<dyn Relayer>,
-    pub txpool: Box<dyn TxPool>,
-    pub executor: Box<dyn Executor>,
+    pub db: &'a dyn BlockProducerDatabase,
+    pub txpool: &'a dyn TxPool,
+    pub executor: &'a dyn Executor,
+    pub relayer: &'a dyn Relayer,
 }
 
-impl Task {
-    pub async fn spawn(mut self) -> mpsc::Receiver<BlockProducerMpsc> {
-        loop {
-            tokio::select! {
-                maybe_event = self.receiver.recv() => {
-                    if !self.event_handler(maybe_event).await {
-                        // stop task if event handler indicates stop
-                        break;
-                    }
-                }
-            }
-        }
-        info!("block producer service stopped.");
-        self.receiver
-    }
-
-    async fn event_handler(&mut self, event: Option<BlockProducerMpsc>) -> bool {
-        match event {
-            Some(BlockProducerMpsc::Produce { height, response }) => {
-                info!(
-                    "handling block production request for height {}, with validator id {}",
-                    height, self.config.validator_id
-                );
-                let produced_block =
-                    self.produce_block(height).await.map(Box::new).map(Arc::new);
-                if let Err(e) = response.send(produced_block) {
-                    // this isn't strictly an error since a block production request can be started
-                    // at any time from anywhere.
-                    warn!("block production requester dropped response: {:?}", e)
-                }
-
-                // allow task to continue processing
-                true
-            }
-            Some(BlockProducerMpsc::Stop) => false,
-            None => false,
-        }
-    }
-
+#[async_trait::async_trait]
+impl<'a> Trait for Producer<'a> {
+    /// Produces a block for the specified height
     async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
         //  - get previous block info (hash, root, etc)
-        //  - select reasonable da_height from relayer
-        //  - get current consensus key from relayer based on selected da_height
+        //  - select best da_height from relayer
         //  - get available txs from txpool
         //  - select best txs based on factors like:
         //      1. fees
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
-        //  - Sign block with production key
 
         let previous_block_info = self.previous_block_info(height).await?;
         let new_da_height = self
             .select_new_da_height(previous_block_info.da_height)
             .await?;
-        let producer_id = self
-            .relayer
-            .get_block_production_key(self.config.validator_id, new_da_height)
-            .await?;
+
+        // transaction selection could use a plugin based approach in the
+        // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
         let best_transactions = self.select_best_transactions(height).await?;
 
         let header = FuelBlockHeader {
             height,
             number: new_da_height,
             parent_hash: previous_block_info.hash,
-            prev_root: previous_block_info.transaction_root,
+            // TODO: this needs to be updated using a proper BMT MMR
+            prev_root: previous_block_info.prev_root,
+            // This will be set by the executor
             transactions_root: Default::default(),
             time: Utc::now(),
-            producer: producer_id,
+            // TODO: is this field required?
+            producer: self.config.validator_id,
             metadata: None,
         };
         let mut block = FuelBlock {
             header,
             transactions: best_transactions.into_iter().map(Into::into).collect(),
         };
-        self.executor
+        let result = self
+            .executor
             .execute(&mut block, ExecutionMode::Production)
-            .await?;
+            .await;
 
+        if let Err(
+            Error::VmExecution { transaction_id, .. }
+            | Error::TransactionIdCollision(transaction_id),
+        ) = &result
+        {
+            // TODO: if block execution fails due to any transaction validity errors,
+            //          should those txs be removed from the txpool? While this
+            //          theoretically shouldn't happen due to txpool validation rules,
+            //          it is a possibility.
+            error!(
+                "faulty tx prevented block production: {:#x}",
+                transaction_id
+            );
+        }
+
+        let _ = result.context(format!(
+            "Failed to produce block {:?} due to execution failure",
+            block
+        ))?;
+
+        debug!("Produced block: {:?}", &block);
         Ok(block)
     }
+}
 
+impl<'a> Producer<'a> {
     async fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {
-        let trailed_best_height = self
-            .relayer
-            .get_best_finalized_da_height()
-            .await?
-            .saturating_sub(DA_HEIGHT_TRAIL);
-        // we prefer to use the trailed_best_height, but use max to ensure height is
-        // at least as good as previous block.
-        Ok(max(trailed_best_height, previous_da_height))
+        let best_height = self.relayer.get_best_finalized_da_height().await?;
+        if best_height < previous_da_height {
+            // If this happens, it could mean a block was erroneously imported
+            // without waiting for our relayer's da_height to catch up to imported da_height.
+            return Err(InvalidDaFinalizationState {
+                best: best_height,
+                previous_block: previous_da_height,
+            }
+            .into())
+        }
+        Ok(best_height)
     }
 
     async fn select_best_transactions(
         &self,
         block_height: BlockHeight,
     ) -> Result<Vec<CheckedTransaction>> {
-        let includable_txs = self.txpool.get_includable_txs().await?;
-        // TODO: The transaction pool should return transactions that are already checked
-        let includable_txs = includable_txs
-            .into_iter()
-            .map(|tx| {
-                CheckedTransaction::check(
-                    (*tx).clone(),
-                    block_height.into(),
-                    &self.config.consensus_params,
-                )
-            })
-            .collect::<Result<_, _>>()?;
-        Ok(select_transactions(includable_txs, &self.config))
+        let includable_txs = self.txpool.get_includable_txs(block_height).await?;
+        let selected_txs = select_transactions(includable_txs, &self.config);
+        Ok(selected_txs)
     }
 
     async fn previous_block_info(
         &self,
         height: BlockHeight,
     ) -> Result<PreviousBlockInfo> {
-        // if this is the first block (ooh wee!), fill in base metadata from genesis
-        if height <= 1u32.into() {
+        // block 0 is reserved for genesis
+        if height == 0u32.into() {
+            return Err(GenesisBlock.into())
+        }
+        // if this is the first block, fill in base metadata from genesis
+        else if height == 1u32.into() {
             // use best finalized height for first block
             let best_da_height = self.relayer.get_best_finalized_da_height().await?;
             Ok(PreviousBlockInfo {
                 hash: Default::default(),
-                transaction_root: Default::default(),
+                // TODO: what should initial genesis and root be?
+                prev_root: Default::default(),
                 da_height: best_da_height,
             })
         } else {
             // get info from previous block height
-            let previous_block = self.db.get_block(height - 1u32.into())?;
+            let prev_height = height - 1u32.into();
+            let previous_block = self
+                .db
+                .get_block(prev_height)?
+                .ok_or(MissingBlock(prev_height))?;
+            // TODO: this should use a proper BMT MMR
+            let hash = previous_block.id();
+            let prev_root =
+                ephemeral_merkle_root(vec![previous_block.header.prev_root, hash].iter());
+
             Ok(PreviousBlockInfo {
-                hash: previous_block.id(),
-                transaction_root: previous_block.header.transactions_root,
+                hash,
+                prev_root,
                 da_height: previous_block.header.number,
             })
         }
@@ -192,6 +191,6 @@ impl Task {
 
 struct PreviousBlockInfo {
     hash: Bytes32,
-    transaction_root: Bytes32,
+    prev_root: Bytes32,
     da_height: DaBlockHeight,
 }

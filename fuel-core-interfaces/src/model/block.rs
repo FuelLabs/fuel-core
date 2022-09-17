@@ -112,13 +112,13 @@ impl Default for FuelBlockHeader {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockDb {
-    pub headers: FuelBlockHeader,
+    pub header: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
 }
 
 impl FuelBlockDb {
     pub fn id(&self) -> Bytes32 {
-        self.headers.id()
+        self.header.id()
     }
 }
 
@@ -137,7 +137,7 @@ impl FuelBlock {
 
     pub fn to_db_block(&self) -> FuelBlockDb {
         FuelBlockDb {
-            headers: self.header.clone(),
+            header: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }
