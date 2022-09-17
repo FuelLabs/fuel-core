@@ -160,13 +160,11 @@ impl<'a> Producer<'a> {
         }
         // if this is the first block, fill in base metadata from genesis
         else if height == 1u32.into() {
-            // use best finalized height for first block
-            let best_da_height = self.relayer.get_best_finalized_da_height().await?;
+            // TODO: what should initial genesis data be here?
             Ok(PreviousBlockInfo {
                 hash: Default::default(),
-                // TODO: what should initial genesis and root be?
                 prev_root: Default::default(),
-                da_height: best_da_height,
+                da_height: 0,
             })
         } else {
             // get info from previous block height
