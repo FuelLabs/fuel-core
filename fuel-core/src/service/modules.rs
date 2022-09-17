@@ -109,16 +109,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     block_importer.start().await;
 
-    // TODO: Enable block producer when relayer, executor and db are implemented
-    // block_producer
-    //     .start(
-    //         Box::new(txpool_builder.sender().clone()),
-    //         todo!(),
-    //         todo!(),
-    //         todo!(),
-    //     )
-    //     .await;
-
     bft.start(
         relayer_sender.clone(),
         tx_request_event.clone(),
