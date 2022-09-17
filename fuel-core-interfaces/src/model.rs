@@ -1,5 +1,6 @@
 mod block;
 mod block_height;
+mod da_block_height;
 mod coin;
 mod messages;
 mod txpool;
@@ -16,6 +17,7 @@ pub use block::{
     FuelBlockHeader,
     SealedFuelBlock,
 };
+pub use da_block_height::DaBlockHeight;
 pub use block_height::BlockHeight;
 pub use coin::{
     Coin,
@@ -28,7 +30,6 @@ pub use txpool::{
 };
 pub use vote::ConsensusVote;
 
-pub type DaBlockHeight = u64;
 pub type ValidatorStake = u64;
 
 /// Validator address used for registration of validator on DA layer

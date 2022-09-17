@@ -105,7 +105,7 @@ impl FinalizationQueue {
             pending: VecDeque::new(),
             validators: Validators::default(),
             bundled_removed_eth_events: Vec::new(),
-            finalized_da_height: 0,
+            finalized_da_height: DaBlockHeight::from(0u64),
         }
     }
 
@@ -176,7 +176,7 @@ impl FinalizationQueue {
                 self.bundled_removed_eth_events.len()
             );
 
-            let mut lowest_removed_da_height = DaBlockHeight::MAX;
+            let mut lowest_removed_da_height = DaBlockHeight::from(u64::MAX);
 
             for (da_height, events) in
                 std::mem::take(&mut self.bundled_removed_eth_events).into_iter()
@@ -215,7 +215,7 @@ impl FinalizationQueue {
             return
         }
         let removed = log.removed.unwrap_or(false);
-        let da_height = log.block_number.unwrap().as_u64() as DaBlockHeight;
+        let da_height = DaBlockHeight::from(log.block_number.unwrap().as_u64());
         let event = event.unwrap();
         debug!("append inbound log:{:?}", event);
         // bundle removed events and return

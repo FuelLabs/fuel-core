@@ -139,8 +139,8 @@ impl Relayer {
         );
         // should be always more then last finalized_da_heights
 
-        let best_finalized_block = provider.get_block_number().await?.as_u64()
-            - self.ctx.config.da_finalization();
+        let best_finalized_block = DaBlockHeight::from(provider.get_block_number().await?.as_u64()
+            - self.ctx.config.da_finalization().as_u64());
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
@@ -153,11 +153,11 @@ impl Relayer {
             last_finalized_da_height, best_finalized_block
         );
 
-        for start in (last_finalized_da_height..best_finalized_block).step_by(step) {
-            let end = min(start + step as DaBlockHeight, best_finalized_block);
-            if (start - last_finalized_da_height)
+        for start in (last_finalized_da_height.as_u64()..best_finalized_block.as_u64()).step_by(step) {
+            let end = min(DaBlockHeight::from(start + step as u64), best_finalized_block);
+            if (DaBlockHeight::from(start) - last_finalized_da_height)
                 % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
-                == 0
+                == DaBlockHeight::from(0u64)
             {
                 info!("getting log from height:{}", start);
             }
@@ -165,7 +165,7 @@ impl Relayer {
             // TODO  can be parallelized
             let filter = Filter::new()
                 .from_block(start)
-                .to_block(end)
+                .to_block(end.as_u64())
                 .address(ValueOrArray::Array(contracts.clone()));
             let logs = handle_interrupt!(self, provider.get_logs(&filter))??;
             self.queue.append_eth_logs(logs).await;
@@ -196,7 +196,7 @@ impl Relayer {
 
             // 2. sync overlap from LastIncludedEthBlock-> BestEthBlock) they are saved in dequeue.
             let filter = Filter::new()
-                .from_block(last_included_block)
+                .from_block(last_included_block.as_u64())
                 .to_block(best_block)
                 .address(ValueOrArray::Array(contracts.clone()));
 
@@ -233,13 +233,13 @@ impl Relayer {
 
         // 5. Continue to active listen on eth events. and prune(commit to db) dequeue for older finalized events
         let finalized_da_height =
-            best_block.as_u64() as DaBlockHeight - self.ctx.config.da_finalization();
+            DaBlockHeight::from(best_block.as_u64()) - self.ctx.config.da_finalization();
         self.queue
             .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)
             .await;
 
         watchers
-            .map(|(w1, w2)| (best_block.as_u64() as DaBlockHeight, w1, w2))
+            .map(|(w1, w2)| (DaBlockHeight::from(best_block.as_u64()), w1, w2))
             .ok_or_else(|| RelayerError::ProviderError.into())
     }
 
@@ -383,8 +383,7 @@ impl Relayer {
         trace!("Received new block hash:{:x?}", block_hash);
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
-                let finalized_da_height = da_height.as_u64() as DaBlockHeight
-                    - self.ctx.config.da_finalization();
+                let finalized_da_height = DaBlockHeight::from(da_height.as_u64()) - self.ctx.config.da_finalization();
 
                 self.queue
                     .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)

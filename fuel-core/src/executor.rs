@@ -60,6 +60,7 @@ use fuel_core_interfaces::{
     model::{
         FuelBlockHeader,
         Message,
+        DaBlockHeight
     },
 };
 use fuel_storage::{
@@ -191,7 +192,7 @@ impl Executor {
                     block_db_transaction.deref(),
                     tx,
                     block.header.height,
-                    block.header.number,
+                    block.header.da_height,
                 )?;
                 // validate transaction signature
                 tx.validate_input_signature()
@@ -377,7 +378,7 @@ impl Executor {
         db: &Database,
         transaction: &Transaction,
         block_height: BlockHeight,
-        block_da_height: BlockHeight,
+        block_da_height: DaBlockHeight,
     ) -> Result<(), TransactionValidityError> {
         for input in transaction.inputs() {
             match input {
@@ -407,7 +408,7 @@ impl Executor {
                                 *message_id,
                             ))
                         }
-                        if BlockHeight::from(message.da_height) > block_da_height {
+                        if message.da_height.as_u64() > block_da_height.as_u64() {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
                             ))
