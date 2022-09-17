@@ -3,9 +3,11 @@ use super::model::{
     FuelBlock,
     SealedFuelBlock,
 };
-use crate::model::ConsensusVote;
+use crate::{
+    common::fuel_tx::Transaction,
+    model::ConsensusVote,
+};
 use async_trait::async_trait;
-use fuel_tx::Transaction;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 

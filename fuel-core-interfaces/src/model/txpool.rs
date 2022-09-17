@@ -1,8 +1,8 @@
+use crate::common::fuel_tx::Transaction;
 use chrono::{
     DateTime,
     Utc,
 };
-use fuel_tx::Transaction;
 use std::{
     ops::Deref,
     sync::Arc,

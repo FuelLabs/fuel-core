@@ -4,8 +4,13 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    database::Database,
-    model::FuelBlockDb,
+    database::{
+        storage::{
+            FuelBlocks,
+            Receipts,
+        },
+        Database,
+    },
     schema::{
         block::Block,
         contract::Contract,
@@ -32,7 +37,7 @@ use chrono::{
 };
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
+        fuel_storage::StorageAsRef,
         fuel_tx,
         fuel_types,
         fuel_types::bytes::SerializableVec,
@@ -117,7 +122,9 @@ pub struct SuccessStatus {
 impl SuccessStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let db = ctx.data_unchecked::<Database>();
-        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &self.block_id)?
+        let block = db
+            .storage::<FuelBlocks>()
+            .get(&self.block_id)?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
         let block = Block(block);
@@ -144,7 +151,9 @@ pub struct FailureStatus {
 impl FailureStatus {
     async fn block(&self, ctx: &Context<'_>) -> async_graphql::Result<Block> {
         let db = ctx.data_unchecked::<Database>();
-        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &self.block_id)?
+        let block = db
+            .storage::<FuelBlocks>()
+            .get(&self.block_id)?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
         let block = Block(block);
@@ -274,8 +283,7 @@ impl Transaction {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<Vec<Receipt>>> {
         let db = ctx.data_unchecked::<Database>();
-        let receipts =
-            Storage::<fuel_types::Bytes32, Vec<fuel_tx::Receipt>>::get(db, &self.0.id())?;
+        let receipts = db.storage::<Receipts>().get(&self.0.id())?;
         Ok(receipts.map(|receipts| receipts.iter().cloned().map(Receipt).collect()))
     }
 

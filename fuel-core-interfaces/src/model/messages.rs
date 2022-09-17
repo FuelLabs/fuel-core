@@ -1,12 +1,16 @@
 use super::BlockHeight;
-use crate::model::DaBlockHeight;
-use core::ops::Deref;
-use fuel_crypto::Hasher;
-use fuel_types::{
-    Address,
-    MessageId,
-    Word,
+use crate::{
+    common::{
+        fuel_types::{
+            Address,
+            MessageId,
+            Word,
+        },
+        fuel_vm::prelude::Input,
+    },
+    model::DaBlockHeight,
 };
+use core::ops::Deref;
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -24,13 +28,13 @@ pub struct Message {
 
 impl Message {
     pub fn id(&self) -> MessageId {
-        let mut hasher = Hasher::default();
-        hasher.input(self.sender);
-        hasher.input(self.recipient);
-        hasher.input(self.nonce.to_be_bytes());
-        hasher.input(self.amount.to_be_bytes());
-        hasher.input(&self.data);
-        MessageId::from(*hasher.digest())
+        Input::compute_message_id(
+            &self.sender,
+            &self.recipient,
+            self.nonce,
+            self.amount,
+            &self.data,
+        )
     }
 
     pub fn check(self) -> CheckedMessage {
