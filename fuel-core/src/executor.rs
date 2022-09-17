@@ -408,7 +408,7 @@ impl Executor {
                                 *message_id,
                             ))
                         }
-                        if message.da_height.as_u64() > block_da_height.as_u64() {
+                        if message.da_height > block_da_height {
                             return Err(TransactionValidityError::MessageSpendTooEarly(
                                 *message_id,
                             ))
