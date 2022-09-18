@@ -58,9 +58,9 @@ use fuel_core_interfaces::{
         Transactions,
     },
     model::{
+        DaBlockHeight,
         FuelBlockHeader,
         Message,
-        DaBlockHeight
     },
 };
 use fuel_storage::{
@@ -981,6 +981,7 @@ mod tests {
         },
         model::{
             CheckedMessage,
+            DaBlockHeight,
             Message,
         },
         relayer::RelayerDb,
@@ -1872,7 +1873,7 @@ mod tests {
             nonce: rng.gen(),
             amount: 1000,
             data: vec![],
-            da_height,
+            da_height: DaBlockHeight(da_height),
             fuel_block_spend: None,
         };
 

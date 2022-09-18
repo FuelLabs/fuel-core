@@ -423,17 +423,17 @@ mod tests {
 
         if let EthEventLog::Message(message) = &message1_db {
             let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 0);
+            assert_eq!(msg.da_height, DaBlockHeight(0));
             assert_eq!(diff1.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::Message(message) = &message2_db {
             let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 1);
+            assert_eq!(msg.da_height, DaBlockHeight(1));
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
         if let EthEventLog::Message(message) = &message3_db {
             let msg = Message::from(message).check();
-            assert_eq!(msg.da_height, 1);
+            assert_eq!(msg.da_height, DaBlockHeight(1));
             assert_eq!(diff2.messages.get(msg.id()), Some(&msg));
         }
     }
@@ -500,7 +500,7 @@ mod tests {
             nonce: 40,
             amount: 0,
             data: vec![],
-            da_height: 2,
+            da_height: DaBlockHeight(2),
             fuel_block_spend: None,
         };
         queue
@@ -522,7 +522,7 @@ mod tests {
 
         let mut db = MockDb::default();
 
-        queue.commit_diffs(&mut db, 1).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(1)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(0, Some(c1))),
@@ -530,7 +530,7 @@ mod tests {
         assert_eq!(db.data.lock().unwrap().validators.get(&v2), None,);
         assert_eq!(db.data.lock().unwrap().messages.len(), 0,);
 
-        queue.commit_diffs(&mut db, 2).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(2)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v2),
             Some(&(0, Some(c2))),
@@ -549,7 +549,7 @@ mod tests {
             test_message.id()
         );
 
-        queue.commit_diffs(&mut db, 3).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(3)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(0, None)),
@@ -600,7 +600,7 @@ mod tests {
 
         let mut db = MockDb::default();
 
-        queue.commit_diffs(&mut db, 1).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(1)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(s1, None)),
@@ -610,14 +610,14 @@ mod tests {
             Some(&(s2, None)),
         );
 
-        queue.commit_diffs(&mut db, 2).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(2)).await;
         let s13 = s1 + s3;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(s13, Some(c1))),
         );
 
-        queue.commit_diffs(&mut db, 3).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(3)).await;
 
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
@@ -668,7 +668,7 @@ mod tests {
 
         let mut db = MockDb::default();
 
-        queue.commit_diffs(&mut db, 1).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(1)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(s1, None)),
@@ -678,7 +678,7 @@ mod tests {
             Some(&(s1, None)),
         );
 
-        queue.commit_diffs(&mut db, 2).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(2)).await;
         assert_eq!(
             db.data.lock().unwrap().validators.get(&v1),
             Some(&(s1, None)),
@@ -763,7 +763,7 @@ mod tests {
 
         let mut db = MockDb::default();
 
-        queue.commit_diffs(&mut db, 1).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(1)).await;
 
         assert_eq!(queue.pending.len(), 0)
     }
@@ -814,36 +814,36 @@ mod tests {
         let mut db = MockDb::default();
 
         // finalize all logs
-        queue.commit_diffs(&mut db, 5).await;
+        queue.commit_diffs(&mut db, DaBlockHeight(5)).await;
 
-        let set = queue.get_validators(6, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(6), &mut db).await;
         assert_eq!(set, None);
 
-        let set = queue.get_validators(5, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(5), &mut db).await;
         assert!(set.is_some(), "Should be some for 5");
         let set = set.unwrap();
         assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
         assert_eq!(set.get(&v2), None);
 
-        let set = queue.get_validators(4, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(4), &mut db).await;
         assert!(set.is_some(), "Should be some for 4");
         let set = set.unwrap();
         assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
         assert_eq!(set.get(&v2), None);
 
-        let set = queue.get_validators(3, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(3), &mut db).await;
         assert!(set.is_some(), "Should be some for 3");
         let set = set.unwrap();
         assert_eq!(set.get(&v1), Some(&(s1 + s3, Some(cons1))));
         assert_eq!(set.get(&v2), None);
 
-        let set = queue.get_validators(2, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(2), &mut db).await;
         assert!(set.is_some(), "Should be some for 2");
         let set = set.unwrap();
         assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));
         assert_eq!(set.get(&v2), Some(&(s1, Some(cons2))));
 
-        let set = queue.get_validators(1, &mut db).await;
+        let set = queue.get_validators(DaBlockHeight(1), &mut db).await;
         assert!(set.is_some(), "Should be some for 1");
         let set = set.unwrap();
         assert_eq!(set.get(&v1), Some(&(s1, Some(cons1))));

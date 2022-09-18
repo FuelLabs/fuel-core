@@ -13,7 +13,8 @@ use std::{
     time::Duration,
 };
 
-pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = DaBlockHeight{0: 1000u64};
+pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight =
+    DaBlockHeight(1000u64);
 pub(crate) const NUMBER_OF_TRIES_FOR_INITIAL_SYNC: u64 = 10;
 
 pub fn keccak256(data: &'static str) -> H256 {

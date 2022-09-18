@@ -1,5 +1,7 @@
-use crate::model::BlockHeight;
-use crate::model::DaBlockHeight;
+use crate::model::{
+    BlockHeight,
+    DaBlockHeight,
+};
 use core::fmt;
 use fuel_core_interfaces::common::fuel_types::{
     bytes::WORD_SIZE,

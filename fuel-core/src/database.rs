@@ -423,7 +423,9 @@ mod relayer {
                     };
                     use std::io::Cursor;
                     let mut i = Cursor::new(i);
-                    Self(DaBlockHeight::from(i.read_u64::<BigEndian>().unwrap_or_default()))
+                    Self(DaBlockHeight::from(
+                        i.read_u64::<BigEndian>().unwrap_or_default(),
+                    ))
                 }
             }
             let mut out = Vec::new();

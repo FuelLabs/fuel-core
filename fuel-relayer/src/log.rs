@@ -635,7 +635,7 @@ pub mod tests {
                 nonce: nonce as u64,
                 amount: amount as u64,
                 data,
-                da_height: eth_block
+                da_height: DaBlockHeight(eth_block)
             }),
             "Decoded log does not match data we encoded"
         );

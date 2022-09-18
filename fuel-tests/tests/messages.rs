@@ -8,10 +8,13 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_crypto::SecretKey,
-    fuel_tx::TransactionBuilder,
-    fuel_types::Address,
+use fuel_core_interfaces::{
+    common::{
+        fuel_crypto::SecretKey,
+        fuel_tx::TransactionBuilder,
+        fuel_types::Address,
+    },
+    model::DaBlockHeight,
 };
 use fuel_gql_client::{
     client::{
@@ -41,7 +44,7 @@ async fn can_submit_genesis_message() {
         nonce: rng.gen(),
         amount: rng.gen(),
         data: vec![rng.gen()],
-        da_height: 0,
+        da_height: DaBlockHeight(0),
     };
     let tx1 = TransactionBuilder::script(vec![], vec![])
         .add_unsigned_message_input(

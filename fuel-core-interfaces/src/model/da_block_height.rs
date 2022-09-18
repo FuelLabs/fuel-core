@@ -6,7 +6,11 @@ use derive_more::{
     Into,
 };
 
-use std::ops::{Add, Sub, Rem};
+use std::ops::{
+    Add,
+    Rem,
+    Sub,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(

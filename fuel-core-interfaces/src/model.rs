@@ -1,7 +1,7 @@
 mod block;
 mod block_height;
-mod da_block_height;
 mod coin;
+mod da_block_height;
 mod messages;
 mod txpool;
 mod vote;
@@ -17,12 +17,12 @@ pub use block::{
     FuelBlockHeader,
     SealedFuelBlock,
 };
-pub use da_block_height::DaBlockHeight;
 pub use block_height::BlockHeight;
 pub use coin::{
     Coin,
     CoinStatus,
 };
+pub use da_block_height::DaBlockHeight;
 pub use messages::*;
 pub use txpool::{
     ArcTx,

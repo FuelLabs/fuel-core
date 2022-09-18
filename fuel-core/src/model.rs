@@ -1,8 +1,8 @@
 pub use fuel_core_interfaces::model::{
-    DaBlockHeight,
     BlockHeight,
     Coin,
     CoinStatus,
+    DaBlockHeight,
     FuelBlock,
     FuelBlockDb,
     FuelBlockHeader,

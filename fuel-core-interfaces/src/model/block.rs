@@ -1,16 +1,18 @@
 pub use super::BlockHeight;
 use super::ValidatorStake;
-use crate::common::{
-    fuel_crypto::Hasher,
-    fuel_tx::{
-        Address,
-        AssetId,
-        Bytes32,
-        Transaction,
+use crate::{
+    common::{
+        fuel_crypto::Hasher,
+        fuel_tx::{
+            Address,
+            AssetId,
+            Bytes32,
+            Transaction,
+        },
+        fuel_types::Word,
     },
-    fuel_types::Word,
+    model::DaBlockHeight,
 };
-use crate::model::DaBlockHeight;
 use chrono::{
     DateTime,
     TimeZone,

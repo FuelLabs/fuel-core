@@ -139,8 +139,10 @@ impl Relayer {
         );
         // should be always more then last finalized_da_heights
 
-        let best_finalized_block = DaBlockHeight::from(provider.get_block_number().await?.as_u64()
-            - self.ctx.config.da_finalization().as_u64());
+        let best_finalized_block = DaBlockHeight::from(
+            provider.get_block_number().await?.as_u64()
+                - self.ctx.config.da_finalization().as_u64(),
+        );
 
         // 1. sync from HardCoddedContractCreatingBlock->BestEthBlock-100)
         let step = self.ctx.config.initial_sync_step(); // do some stats on optimal value
@@ -153,8 +155,13 @@ impl Relayer {
             last_finalized_da_height, best_finalized_block
         );
 
-        for start in (last_finalized_da_height.as_u64()..best_finalized_block.as_u64()).step_by(step) {
-            let end = min(DaBlockHeight::from(start + step as u64), best_finalized_block);
+        for start in (last_finalized_da_height.as_u64()..best_finalized_block.as_u64())
+            .step_by(step)
+        {
+            let end = min(
+                DaBlockHeight::from(start + step as u64),
+                best_finalized_block,
+            );
             if (DaBlockHeight::from(start) - last_finalized_da_height)
                 % config::REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS
                 == DaBlockHeight::from(0u64)
@@ -383,7 +390,8 @@ impl Relayer {
         trace!("Received new block hash:{:x?}", block_hash);
         if let Some(block) = provider.get_block(BlockId::Hash(block_hash)).await? {
             if let Some(da_height) = block.number {
-                let finalized_da_height = DaBlockHeight::from(da_height.as_u64()) - self.ctx.config.da_finalization();
+                let finalized_da_height = DaBlockHeight::from(da_height.as_u64())
+                    - self.ctx.config.da_finalization();
 
                 self.queue
                     .commit_diffs(self.ctx.db.as_mut(), finalized_da_height)
@@ -428,6 +436,7 @@ mod test {
     use ethers_providers::SyncingStatus;
     use fuel_core_interfaces::{
         common::fuel_tx::Address,
+        model::DaBlockHeight,
         relayer::RelayerRequest,
     };
     use tokio::sync::mpsc;
@@ -447,7 +456,7 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync_checks_pending_eth_client_and_handling_stop() {
         let config = Config {
-            eth_v2_contracts_deployment: 5,
+            eth_v2_contracts_deployment: DaBlockHeight(5),
             initial_sync_refresh: Duration::from_millis(10),
             ..Default::default()
         };
@@ -493,8 +502,8 @@ mod test {
     #[tokio::test]
     pub async fn sync_first_n_finalized_blocks() {
         let config = Config {
-            eth_v2_contracts_deployment: 100, // start from block 1
-            da_finalization: 30,
+            eth_v2_contracts_deployment: DaBlockHeight(100), // start from block 1
+            da_finalization: DaBlockHeight(30),
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
         };
@@ -551,8 +560,8 @@ mod test {
     #[tokio::test]
     pub async fn initial_sync() {
         let config = Config {
-            eth_v2_contracts_deployment: 100, // start from block 1
-            da_finalization: 30,
+            eth_v2_contracts_deployment: DaBlockHeight(100), // start from block 1
+            da_finalization: DaBlockHeight(30),
             initial_sync_step: 2, // make 2 steps of 2 blocks
             ..Default::default()
         };
