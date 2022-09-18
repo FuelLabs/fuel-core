@@ -19,12 +19,12 @@
 
 The file describes the possible workflow of the FS service 
 and its relationship with P2P and BI.
-During the review process, we must select which way to go, and the document's 
+During the review process, team must select which way to go, and the document's 
 final version will contain only the selected way with a proper overview.
 
 The first final version of the document will describe the implementation 
 of the FS for the PoA version of the FC. It may contain our assumptions 
-and ideas for the next evolution of the FS for PoS(or maybe we will 
+and ideas for the next evolution of the FS for PoS(or maybe FS will 
 have several evolution points).
 
 All names are not final and can be suggested by the reviewers=)
@@ -52,7 +52,7 @@ channels. But FS knows about P2P(an example of descending service)
 and may request some information directly by calling the `async` method. 
 The same applies to BI. FS notifies all subscribers that it synced a valid block(sealed or not sealed).
 
-Those rules are rough, and we can have cases where some functionality 
+Those rules are rough, and services can have cases where some functionality 
 requires direct access and some pub-sub model. So it should be decided 
 individually. But after comparison, the third rule covers all our needs 
 for now, and the description below will use this rule. We can stop 
@@ -122,8 +122,8 @@ pub trait BlocksFetcher: Punisher<BlockReason> {
 The FS stores the reference(or a wrapper structure around P2P to allow `mut` 
 methods) to the P2P and interacts with it periodically. 
 All data is received from the channel and processed by FS to update the 
-inner state of the synchronization. If FS requires more data to finish the synchronization, 
-we will request it. If some data is invalid or corrupted, the FS reports 
+inner state of the synchronization. FS requests data from P2P for synchronization each time when it is required. 
+If some data is invalid or corrupted, the FS reports 
 it to P2P, and P2P can punish the sender of the data by decreasing the 
 reputation(or blacklisting). FS calls `Gossiper::gossip` at the end of block synchronization.
 
@@ -193,7 +193,7 @@ We have three ways of gossiping(about new block) implementation:
 The first and second approaches require an additional request/response 
 round to get the block. But the network passive resource consumption is 
 low. With the first approach, malicious peers can report unreal heights, 
-and we need to handle those cases in the code. With the second case, we 
+and FS needs to handle those cases in the code. With the second case, FS 
 can verify the block's validity and start the synchronization process 
 only in the case of validity.
 
@@ -206,9 +206,14 @@ We already need to support syncing with requests/responses in the
 code for outdated nodes. So, using the third approach doesn't win much 
 regarding the codebase size.
 
-The second approach is our choice. When we receive the sealed block header, 
-we can already be sure it is not a fake sync process. The passive load for 
+The second approach is our choice. When FS receives the sealed block header, 
+it can already be sure this is not a fake sync process. The passive load for 
 the network is low.
+
+But it is not problem to try to sync to not valid height. P2P will 
+request blocks for that height from the peer who reported it, and it will 
+decrease the reputation. So we can use an approach with heights too. It requires
+proper handling of this case.
 
 #### Node behaviour
 
@@ -229,7 +234,7 @@ It gossips the blocks received from the network, from the block producer, and fr
 ##### Ask about new data
 
 The network gossips a new block by default with an `ABGT` interval with 
-the [rule above](#gossip-about-new-data). But we can have cases where 
+the [rule above](#gossip-about-new-data). But it is possible to have cases where 
 someone forgot to notify another node.
 
 FS has an internal timer that pings the P2P every `ABGT + Const`
@@ -238,72 +243,100 @@ commit or timer tick. P2P, on each ping, asks neighbors about the latest block h
 
 ### The blocks synchronization on block header event
 
-TODO: Rework this section to support cases where we can change the block producer
+FS has two synchronization phases, one is active, and another is pending. 
+Each phase has its range of blocks to sync. They don't overlap and are 
+linked. The purpose of the pending phase is to collect and join new 
+block headers while the active phase syncs the previous range. When 
+the first phase finishes synchronization, it takes some range from the 
+pending phase, joins with the remaining range from the active phase, 
+and requests blocks for the final range.
 
-FS has two synchronization structs, one is active, and another is pending. 
-Each struct has its range of blocks to sync. They don't overlap and are 
-linked. The purpose of the pending struct is to collect and join new 
-block headers while the active struct syncs the previous range. When 
-the first struct finishes synchronization, it swaps with the second 
-struct, and the process repeats.
-
-Because each block header is sealed, and we know the block producer 
+Because each block header is sealed, and FS knows the block producer 
 of each block, it allows us to verify the validity of the header 
 and be sure that the block range is actual without fake heights.
 
 #### Fork
 
-If we get the valid sealed block header but already have another block for this height, it is a case of the fork.
+If FS gets the valid sealed block header but already have another block for this height, it is a case of the fork.
 - For the PoA version: We ignore it and try to find blocks that link with our version of the blockchain. We should report it to the node manager(via logs, or maybe we want to do something more).
 - For the PoS version: We should have rules in the consensus for this case.
 
 #### Queuing of the block header
 
-When FS receives a block header, first we check:
+When FS receives a block header, first FS checks:
 - Is it a valid header? It should be signed by the expected, for the node, producer/consensus at according height.
   - No -> `Punisher::report`.
   - Yes -> Next step.
-  - Not sure. Not sure. It is possible in the cases when we change the 
-  block producer/consensus. The node on the current height is sure 
-  about the block producer of the next block but can't predict it.
 - Is it a new height?
-  - No -> Ignore (Maybe report some neutral error to P2P to prevent DDoS) if it is already in the blockchain, either go to [fork](#fork).
+  - No -> Is it already in the blockchain?
+    - Yes -> Ignore(Maybe report some neutral error to P2P to prevent DDoS)
+    - No -> It is case of the [fork](#fork).
   - Yes -> Next step.
+- Is synchronization in progress?
+  - No -> Create an active phase and init it. Start synchronization process.
+  - Yes -> Next step.
+- Is this height already handled by the active phase?
+  - Yes -> If the header is the same?
+    - Yes -> Ignore
+    - No -> It is case of the [fork](#fork).
+    - Don't know because it is in the middle of the range ->
+      FS inserts this header into mapping and will check it later, 
+      when blocks will come.
+  - No -> Insert the header into range of the pending phase.
 
-TODO: Rework this part
+Each valid modification of the active or pending phase triggers requesting 
+blocks for the active phase from P2P. P2P is responsible for managing how 
+to process those requests. P2P decides which peers to ask, manages timeouts, 
+and manages duplicate requests from other services.
 
+P2P is also responsible for punishing nodes that send not requested information. 
+Other nodes can only share information about their last block header(But it also 
+should be limited because each node applies the block only once).
 
-#### The active struct
+The P2P's responsibility can be part of the synchronizer instead, and it can store 
+the information about the height of the peers and has an internal 
+reputation who ask about blocks. It will make FS contain the full 
+logic about synchronization but will duplicate reputation.
 
-TODO: Rework this part
+#### The active phase
 
-#### The pending struct
+Active phase has a range of currently syncing blocks. Each time FS 
+receives a block header, it stores this header in a separate mapping. 
+It is optional for FS because it only helps find forks. When FS receives 
+the block for corresponding height, it compares headers.
 
-TODO: Rework this part
+If the range is extensive, FS splits it into batches, and only the first batch is
+a part of the active phase, the remaining range is part of the pending phase.
+FS requests only one batch simultaneously from P2P. It is possible to 
+request several batches in parallel in the future.
+
+When blocks come, it checks that they are valid and linked. 
+If all checks pass, FS forward the blocks to BI and starts 
+[commit process](#the-commit-of-the-blocks). If blocks are not valid, FS reports 
+invalidity to P2P and requests block range again.
 
 ### The commit of the blocks
 
 When FS receives blocks linked to the current latest block of the 
-blockchain, we start to commit them(`BlockCommiter::commit`). Only one 
+blockchain, FS starts to commit them(`BlockCommiter::commit`). Only one 
 commit can be run in the BI at the exact moment, so BI has local mutex 
 only for `commit` to prevent multiple commits.
 
 `BlockCommiter::commit` return the result of execution:
-- In the case of successful execution, we mark the job finished and 
-remove it. We wait for the event from the channel to clean up other jobs 
-related to the same height.
+- In the case of successful execution. FS waits for the event from the 
+channel to remove committed blocks from the active phase, and join a new range from
+pending phase.
 - It can be an error that those blocks already are committed. It is a 
 good case because another job has already committed blocks. Do the same 
 as in the case of successful execution.
-- It can be an error that BI got some error during execution. It is a 
-bad case. Call `Punisher::report` to report an invalid block. If we get
-invalid blocks from many other peers, maybe we need to report this information 
-to the node owner via logs(perhaps something is wrong with the node's 
-software).
+- It can be an error that BI got some error during execution. It is a
+bad case, and it means that FS got a valid block signed by the producer, 
+but FS can't apply it to the blockchain. Report it to logs and notify the node owner.
 
 #### On block commit event
 
 FS gossips about the node's latest via `Gossiper::gossip`.
 
-FS clean-ups all synchronization jobs where the maximum height of the 
-range is less or equal to the maximum committed height.
+FS removes committed blocks from the range of active phase. After FS 
+fulfills it with a new range from the pending phase. The new range should 
+always be <= the batch size. FS requests a new fulfilled range from P2P.
