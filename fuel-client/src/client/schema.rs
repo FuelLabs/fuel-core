@@ -26,6 +26,7 @@ pub mod contract;
 pub mod message;
 pub mod node_info;
 pub mod primitives;
+pub mod resource;
 pub mod tx;
 
 #[derive(cynic::QueryFragment, Debug)]

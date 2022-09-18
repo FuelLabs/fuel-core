@@ -1,46 +1,59 @@
 use crate::{
     database::{
-        columns::CONTRACTS_CODE_ROOT,
+        Column,
         Database,
     },
     state::Error,
 };
-use fuel_core_interfaces::common::fuel_vm::prelude::{
-    Bytes32,
-    ContractId,
-    Salt,
-    Storage,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_vm::prelude::{
+            Bytes32,
+            ContractId,
+            Salt,
+        },
+    },
+    db::ContractsInfo,
 };
 use std::borrow::Cow;
 
-impl Storage<ContractId, (Salt, Bytes32)> for Database {
+impl StorageInspect<ContractsInfo> for Database {
     type Error = Error;
 
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
+        Database::get(self, key.as_ref(), Column::ContractsInfo)
+    }
+
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
+        Database::exists(self, key.as_ref(), Column::ContractsInfo)
+    }
+}
+
+impl StorageMutate<ContractsInfo> for Database {
     fn insert(
         &mut self,
         key: &ContractId,
         value: &(Salt, Bytes32),
     ) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::insert(self, key.as_ref(), CONTRACTS_CODE_ROOT, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsInfo, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::remove(self, key.as_ref(), CONTRACTS_CODE_ROOT)
-    }
-
-    fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
-        Database::get(self, key.as_ref(), CONTRACTS_CODE_ROOT)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        Database::exists(self, key.as_ref(), CONTRACTS_CODE_ROOT)
+        Database::remove(self, key.as_ref(), Column::ContractsInfo)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_vm::prelude::Contract;
+    use fuel_core_interfaces::common::{
+        fuel_storage::StorageAsMut,
+        fuel_vm::prelude::Contract,
+    };
     use rand::{
         rngs::StdRng,
         Rng,
@@ -55,17 +68,16 @@ mod tests {
         let root = contract.root();
         let salt: Salt = rng.gen();
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(
-                contract_id.as_ref().to_vec(),
-                CONTRACTS_CODE_ROOT,
-                (salt, root),
-            )
+            .storage::<ContractsInfo>()
+            .insert(&contract_id, &(salt, root))
             .unwrap();
 
         assert_eq!(
-            Storage::<ContractId, (Salt, Bytes32)>::get(&database, &contract_id)
+            database
+                .storage::<ContractsInfo>()
+                .get(&contract_id)
                 .unwrap()
                 .unwrap()
                 .into_owned(),
@@ -81,16 +93,15 @@ mod tests {
         let root = contract.root();
         let salt: Salt = rng.gen();
 
-        let mut database = Database::default();
-        Storage::<ContractId, (Salt, Bytes32)>::insert(
-            &mut database,
-            &contract_id,
-            &(salt, root),
-        )
-        .unwrap();
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsInfo>()
+            .insert(&contract_id, &(salt, root))
+            .unwrap();
 
-        let returned: (Salt, Bytes32) = database
-            .get(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
+        let returned: (Salt, Bytes32) = *database
+            .storage::<ContractsInfo>()
+            .get(&contract_id)
             .unwrap()
             .unwrap();
         assert_eq!(returned, (salt, root));
@@ -104,20 +115,19 @@ mod tests {
         let root = contract.root();
         let salt: Salt = rng.gen();
 
-        let mut database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(
-                contract_id.as_ref().to_vec(),
-                CONTRACTS_CODE_ROOT,
-                (salt, root),
-            )
+            .storage::<ContractsInfo>()
+            .insert(&contract_id, &(salt, root))
             .unwrap();
 
-        Storage::<ContractId, (Salt, Bytes32)>::remove(&mut database, &contract_id)
+        database
+            .storage::<ContractsInfo>()
+            .remove(&contract_id)
             .unwrap();
 
         assert!(!database
-            .exists(contract_id.as_ref(), CONTRACTS_CODE_ROOT)
+            .exists(contract_id.as_ref(), Column::ContractsInfo)
             .unwrap());
     }
 
@@ -129,19 +139,15 @@ mod tests {
         let root = contract.root();
         let salt: Salt = rng.gen();
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(
-                contract_id.as_ref().to_vec(),
-                CONTRACTS_CODE_ROOT,
-                (salt, root),
-            )
+            .storage::<ContractsInfo>()
+            .insert(&contract_id, &(salt, root))
             .unwrap();
 
-        assert!(Storage::<ContractId, (Salt, Bytes32)>::contains_key(
-            &database,
-            &contract_id
-        )
-        .unwrap());
+        assert!(database
+            .storage::<ContractsInfo>()
+            .contains_key(&contract_id)
+            .unwrap());
     }
 }

@@ -26,6 +26,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
+use rstest::rstest;
 
 #[tokio::test]
 async fn can_submit_genesis_message() {
@@ -181,16 +182,19 @@ async fn messages_by_owner_returns_messages_for_the_given_owner() {
     assert_eq!(result.results[0].recipient.0 .0, owner_b);
 }
 
+#[rstest]
 #[tokio::test]
-async fn messages_empty_results_for_owner_with_no_messages() {
+async fn messages_empty_results_for_owner_with_no_messages(
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+    #[values(Address::new([16; 32]), Address::new([0; 32]))] owner: Address,
+) {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let owner = Address::new([1; 32]);
     let request = PaginationRequest {
         cursor: None,
         results: 5,
-        direction: PageDirection::Forward,
+        direction,
     };
 
     let result = client

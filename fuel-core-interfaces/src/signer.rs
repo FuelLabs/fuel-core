@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use thiserror::Error;
 
 /// Dummy signer that will be removed in next pull request.
-/// TODO do not use.
+/// TODO: Do not use.
 #[async_trait]
 pub trait Signer {
     async fn sign(&self, hash: &Bytes32) -> Result<Bytes32, SignerError>;
