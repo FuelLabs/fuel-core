@@ -92,10 +92,10 @@ pub enum FetchRequest {
     BlocksByHash([Bytes32]),
 }
 
-pub trait Gossiper {
+// TODO: `D` should implement some bound that allows to serialize it for gossiping.
+pub trait Gossiper<D> {
     /// Gossips some `data` to the network.
-    // TODO: `D` should implement some bound that allows to serialize it for gossiping.
-    fn gossip<D>(&self, data: &D);
+    fn gossip(&self, data: &D);
 }
 
 pub trait Punisher<Reason> {
@@ -186,7 +186,7 @@ The section contains the description of the flow for the second type.
 
 We have three ways of gossiping(about new block) implementation:
 
-1. Gossip only the height of a new block.
+1. Gossip the height and block hash of a new block.
 1. Gossip the header of a new block with the producer's seal(or consensus seal).
 1. Gossip the entire block.
 
