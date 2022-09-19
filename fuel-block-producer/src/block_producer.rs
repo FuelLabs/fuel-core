@@ -156,7 +156,7 @@ impl<'a> Producer<'a> {
     ) -> Result<PreviousBlockInfo> {
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            return Err(GenesisBlock.into())
+            Err(GenesisBlock.into())
         }
         // if this is the first block, fill in base metadata from genesis
         else if height == 1u32.into() {
