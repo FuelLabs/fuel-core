@@ -107,7 +107,7 @@ pub trait Punisher<Reason> {
     fn report<D>(&mut self, data: D, verdict: Verdict<Reason>);
 }
 
-pub trait BlocksFetcher: Punisher<BlockReason> {
+pub trait BlocksFetcher: Punisher<BlockReason> + Gossiper {
     /// Returns structure that can be used to subscribe for `BlockBroadcast`.
     fn sender(&self) -> &Sender<BlockBroadcast>;
 
