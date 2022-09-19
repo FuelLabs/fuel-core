@@ -92,7 +92,7 @@ async fn block_producer() -> Result<()> {
         txpool_db
             .storage::<Coins>()
             .insert(
-                &UtxoId::new(coin.id.clone().into(), coin.index),
+                &UtxoId::new(coin.id.into(), coin.index),
                 &Coin {
                     owner: coin.address(),
                     amount: COIN_AMOUNT,
