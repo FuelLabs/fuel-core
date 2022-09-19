@@ -6,6 +6,7 @@ use ethers_core::{
         BlockId,
         Filter,
         Log,
+        Transaction,
         TxHash,
         H256,
         U256,
@@ -16,10 +17,12 @@ use ethers_providers::{
     FilterWatcher,
     JsonRpcClient,
     Middleware,
+    PendingTransaction,
     Provider,
     ProviderError,
     SyncingStatus,
 };
+use parking_lot::Mutex;
 use serde::{
     de::DeserializeOwned,
     Serialize,
@@ -33,31 +36,30 @@ use std::{
     time::Duration,
 };
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 use crate::test_helpers::event_to_log;
 
-#[async_trait]
-pub trait TriggerHandle: Send {
-    async fn run<'a>(&mut self, _data: &mut MockData, _trigger: TriggerType<'a>) {}
-}
+// pub trait TriggerHandle: Send {
+//     fn run<'a>(&mut self, _data: &mut MockData, _trigger: TriggerType<'a>) {}
+// }
 
-pub struct EmptyTriggerHand {}
-impl TriggerHandle for EmptyTriggerHand {}
+// pub struct EmptyTriggerHand {}
+// impl TriggerHandle for EmptyTriggerHand {}
 
 #[derive(Clone)]
 pub struct MockMiddleware {
     pub inner: Box<Option<Provider<MockMiddleware>>>,
-    pub data: Arc<Mutex<MockData>>,
-    pub handler: Arc<Mutex<Box<dyn TriggerHandle>>>,
+    data: Arc<parking_lot::Mutex<InnerState>>,
+    before_event: Arc<Mutex<Option<EventFn>>>,
+    after_event: Arc<Mutex<Option<EventFn>>>,
 }
 
-impl fmt::Debug for MockMiddleware {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MockMiddleware")
-            .field("data", &self.data)
-            .finish()
-    }
+pub type EventFn = Box<dyn for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync>;
+
+#[derive(Default)]
+struct InnerState {
+    data: MockData,
+    override_fn: Option<Box<dyn FnMut(&mut MockData) + Send + Sync>>,
 }
 
 #[derive(Debug)]
@@ -68,6 +70,74 @@ pub struct MockData {
     pub logs_batch_index: usize,
     pub blocks_batch: Vec<Vec<H256>>,
     pub blocks_batch_index: usize,
+}
+
+impl MockMiddleware {
+    fn before_event<'a>(&self, trigger: TriggerType<'a>) {
+        let mut be = self.before_event.lock();
+        if let Some(be) = be.as_mut() {
+            self.update_data(|data| be(data, trigger))
+        }
+    }
+
+    fn after_event<'a>(&self, trigger: TriggerType<'a>) {
+        let mut ae = self.after_event.lock();
+        if let Some(ae) = ae.as_mut() {
+            self.update_data(|data| ae(data, trigger))
+        }
+    }
+
+    pub fn update_data<R>(&self, delta: impl FnOnce(&mut MockData) -> R) -> R {
+        self.data.lock().update(delta)
+    }
+
+    pub fn set_before_event(
+        &self,
+        f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
+    ) {
+        *self.before_event.lock() = Some(Box::new(f));
+    }
+
+    pub fn set_after_event(
+        &self,
+        f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
+    ) {
+        *self.after_event.lock() = Some(Box::new(f));
+    }
+
+    pub fn set_state_override(
+        &self,
+        f: impl FnMut(&mut MockData) + Send + Sync + 'static,
+    ) {
+        self.data.lock().override_fn = Some(Box::new(f));
+    }
+}
+
+impl InnerState {
+    fn update<R>(&mut self, delta: impl FnOnce(&mut MockData) -> R) -> R {
+        let r = delta(&mut self.data);
+        let f = self.override_fn.as_mut();
+        if let Some(f) = f {
+            f(&mut self.data);
+        }
+        r
+    }
+}
+
+impl Debug for InnerState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InnerState")
+            .field("data", &self.data)
+            .finish()
+    }
+}
+
+impl fmt::Debug for MockMiddleware {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MockMiddleware")
+            .field("data", &self.data)
+            .finish()
+    }
 }
 
 impl Default for MockData {
@@ -99,31 +169,15 @@ impl Default for MockMiddleware {
         // address which you'll be sending transactions from
         let mut s = Self {
             inner: Box::new(None),
-            data: Arc::new(Mutex::new(MockData::default())),
-            handler: Arc::new(Mutex::new(Box::new(EmptyTriggerHand {}))),
+            data: Arc::new(Mutex::new(InnerState::default())),
+            before_event: Arc::new(Mutex::new(None)),
+            after_event: Arc::new(Mutex::new(None)),
         };
         let sc = s.clone();
         s.inner = Box::new(Some(Provider::new(sc)));
         s
     }
 }
-
-impl MockMiddleware {
-    pub async fn trigger_handle(&self, trigger_handle: Box<dyn TriggerHandle>) {
-        *self.handler.lock().await = trigger_handle;
-    }
-
-    pub async fn insert_log_batch(&mut self, logs: Vec<Log>) {
-        self.data.lock().await.logs_batch.push(logs)
-    }
-
-    async fn trigger<'a>(&self, trigger: TriggerType<'a>) {
-        let mut data = self.data.lock().await;
-        let mut handler = self.handler.lock().await;
-        handler.run(&mut data, trigger).await
-    }
-}
-
 #[derive(Error, Debug)]
 /// Thrown when an error happens at the Nonce Manager
 pub enum MockMiddlewareError {
@@ -142,6 +196,7 @@ pub enum TriggerType<'a> {
     GetBlock(BlockId),
     GetLogFilterChanges,
     GetBlockFilterChanges,
+    Call,
 }
 
 #[async_trait]
@@ -155,42 +210,16 @@ impl JsonRpcClient for MockMiddleware {
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
     {
-        if method == "eth_getFilterChanges" {
-            let buffer = BufWriter::new(Vec::new());
-            let mut ser = serde_json::Serializer::new(buffer);
-            params.serialize(&mut ser)?;
-            let out = ser.into_inner().buffer().to_vec();
-            let parameters: Vec<U256> = serde_json::from_slice(&out)?;
-            if parameters[0] == U256::zero() {
-                self.trigger(TriggerType::GetLogFilterChanges).await;
-                // It is logs
-                let data = self.data.lock().await;
-                let log = data
-                    .logs_batch
-                    .get(data.logs_batch_index)
-                    .cloned()
-                    .unwrap_or_default();
-                let res = serde_json::to_value(&log)?;
-                let res: R =
-                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
-                Ok(res)
-            } else {
-                self.trigger(TriggerType::GetBlockFilterChanges).await;
-                // It is block hashes
-                let data = self.data.lock().await;
-                let block_hashes = data
-                    .blocks_batch
-                    .get(data.blocks_batch_index)
-                    .cloned()
-                    .unwrap_or_default();
-
-                let res = serde_json::to_value(&block_hashes)?;
+        match method {
+            "eth_getTransactionByHash" => {
+                dbg!();
+                let txn = Some(Transaction::default());
+                let res = serde_json::to_value(&txn)?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
-        } else {
-            panic!("Request not mocked: {}", method);
+            _ => panic!("Request not mocked: {}", method),
         }
     }
 }
@@ -213,47 +242,56 @@ impl Middleware for MockMiddleware {
         unreachable!("There is no inner provider here")
     }
 
+    fn provider(&self) -> &Provider<Self::Provider> {
+        self.inner.as_ref().as_ref().unwrap()
+    }
+
     /// Needs for initial sync of relayer
     async fn syncing(&self) -> Result<SyncingStatus, Self::Error> {
-        self.trigger(TriggerType::Syncing).await;
-        Ok(self.data.lock().await.is_syncing.clone())
+        self.before_event(TriggerType::Syncing);
+        let r = Ok(self.update_data(|data| data.is_syncing.clone()));
+        self.after_event(TriggerType::Syncing);
+        r
     }
 
     /// Used in initial sync to get current best eth block
     async fn get_block_number(&self) -> Result<U64, Self::Error> {
         let this = self;
-        let _ = this.trigger(TriggerType::GetBlockNumber).await;
-        Ok(self.data.lock().await.best_block.number.unwrap())
+        let _ = this.before_event(TriggerType::GetBlockNumber);
+        let r = Ok(self.update_data(|data| data.best_block.number.unwrap()));
+        self.after_event(TriggerType::GetBlockNumber);
+        r
     }
 
     /// used for initial sync to get logs of already finalized diffs
     async fn get_logs(&self, filter: &Filter) -> Result<Vec<Log>, Self::Error> {
-        self.trigger(TriggerType::GetLogs(filter)).await;
-        let r = self
-            .data
-            .lock()
-            .await
-            .logs_batch
-            .iter()
-            .flat_map(|logs| {
-                logs.iter().filter_map(|log| {
-                    let r = match filter.address.as_ref()? {
-                        ethers_core::types::ValueOrArray::Value(v) => log.address == *v,
-                        ethers_core::types::ValueOrArray::Array(v) => {
-                            v.iter().any(|v| log.address == *v)
-                        }
-                    };
-                    let log_block_num = log.block_number?;
-                    let r = r
-                        && log_block_num
-                            >= filter.block_option.get_from_block()?.as_number()?
-                        && log_block_num
-                            <= filter.block_option.get_to_block()?.as_number()?;
-                    r.then(|| log)
+        self.before_event(TriggerType::GetLogs(filter));
+        let r = self.update_data(|data| {
+            data.logs_batch
+                .iter()
+                .flat_map(|logs| {
+                    logs.iter().filter_map(|log| {
+                        let r = match filter.address.as_ref()? {
+                            ethers_core::types::ValueOrArray::Value(v) => {
+                                log.address == *v
+                            }
+                            ethers_core::types::ValueOrArray::Array(v) => {
+                                v.iter().any(|v| log.address == *v)
+                            }
+                        };
+                        let log_block_num = log.block_number?;
+                        let r = r
+                            && log_block_num
+                                >= filter.block_option.get_from_block()?.as_number()?
+                            && log_block_num
+                                <= filter.block_option.get_to_block()?.as_number()?;
+                        r.then(|| log)
+                    })
                 })
-            })
-            .cloned()
-            .collect();
+                .cloned()
+                .collect()
+        });
+        self.after_event(TriggerType::GetLogs(filter));
         Ok(r)
     }
 
@@ -263,37 +301,33 @@ impl Middleware for MockMiddleware {
         block_hash_or_number: T,
     ) -> Result<Option<Block<TxHash>>, Self::Error> {
         let block_id = block_hash_or_number.into();
-        self.trigger(TriggerType::GetBlock(block_id)).await;
+        self.before_event(TriggerType::GetBlock(block_id));
         // TODO change
-        Ok(Some(self.data.lock().await.best_block.clone()))
+        let r = Ok(Some(self.update_data(|data| data.best_block.clone())));
+        self.after_event(TriggerType::GetBlock(block_id));
+        r
     }
 
-    /// watch blocks
-    async fn watch_blocks(
-        &self,
-    ) -> Result<FilterWatcher<'_, Self::Provider, H256>, Self::Error> {
-        let id = U256::one();
-        let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
-            .interval(Duration::from_secs(1));
-        Ok(filter)
-    }
-
-    /// watch logs
-    async fn watch<'b>(
-        &'b self,
-        _filter: &Filter,
-    ) -> Result<FilterWatcher<'b, Self::Provider, Log>, Self::Error> {
-        let id = U256::zero();
-        let filter = FilterWatcher::new(id, self.inner.as_ref().as_ref().unwrap())
-            .interval(Duration::from_secs(1));
-        Ok(filter)
-    }
     async fn call(
         &self,
         tx: &ethers_core::types::transaction::eip2718::TypedTransaction,
         _block: Option<BlockId>,
     ) -> Result<ethers_core::types::Bytes, Self::Error> {
+        todo!()
+    }
+
+    async fn send_transaction<
+        T: Into<ethers_core::types::transaction::eip2718::TypedTransaction> + Send + Sync,
+    >(
+        &self,
+        tx: T,
+        _block: Option<BlockId>,
+    ) -> Result<ethers_providers::PendingTransaction<'_, Self::Provider>, Self::Error>
+    {
+        self.before_event(TriggerType::Call);
+
         use crate::abi::fuel::*;
+        let tx = tx.into();
         let calls = FuelCalls::decode(tx.data().unwrap()).unwrap();
         let address = match tx.to().unwrap() {
             ethers_core::types::NameOrAddress::Address(a) => a.clone(),
@@ -311,16 +345,33 @@ impl Middleware for MockMiddleware {
                 let mut log = event_to_log(event, &*crate::abi::fuel::fuel::FUEL_ABI);
                 log.address = address;
 
-                {
-                    let mut lock = self.data.lock().await;
-                    *lock.best_block.number.as_mut().unwrap() += 1.into();
-                    let height = lock.best_block.number.unwrap();
+                self.update_data(move |data| {
+                    *data.best_block.number.as_mut().unwrap() += 1.into();
+                    let height = data.best_block.number.unwrap();
                     log.block_number = Some(height);
-                    lock.logs_batch.push(vec![log]);
-                }
-                Ok(Default::default())
+                    data.logs_batch.push(vec![log]);
+                });
             }
             _ => todo!(),
         }
+
+        let r = PendingTransaction::new(Default::default(), self.provider());
+
+        self.after_event(TriggerType::Call);
+        Ok(r)
+    }
+
+    async fn get_transaction<T: Send + Sync + Into<TxHash>>(
+        &self,
+        transaction_hash: T,
+    ) -> Result<Option<ethers_core::types::Transaction>, Self::Error> {
+        todo!()
+    }
+
+    async fn get_transaction_receipt<T: Send + Sync + Into<TxHash>>(
+        &self,
+        transaction_hash: T,
+    ) -> Result<Option<ethers_core::types::TransactionReceipt>, Self::Error> {
+        todo!()
     }
 }

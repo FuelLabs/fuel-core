@@ -42,6 +42,7 @@ pub struct Data {
     pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
     pub finalized_da_height: DaBlockHeight,
     pub last_committed_finalized_fuel_height: BlockHeight,
+    pub pending_committed_fuel_height: Option<BlockHeight>,
 }
 
 #[derive(Default, Clone)]
@@ -224,6 +225,14 @@ impl RelayerDb for MockDb {
             .lock()
             .unwrap()
             .last_committed_finalized_fuel_height = block_height;
+    }
+
+    async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {
+        self.data.lock().unwrap().pending_committed_fuel_height
+    }
+
+    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>) {
+        self.data.lock().unwrap().pending_committed_fuel_height = block_height;
     }
 
     // TODO: Remove

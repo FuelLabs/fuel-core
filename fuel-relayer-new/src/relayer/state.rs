@@ -16,15 +16,17 @@ pub struct SyncState {
 #[derive(Debug)]
 pub struct EthState {
     remote: EthHeights,
-    local: Height,
+    local: EthHeight,
 }
 
 #[derive(Debug)]
 pub struct FuelState {
+    remote: Option<FuelHeight>,
     local: FuelHeights,
 }
 
-type Height = u64;
+type EthHeight = u64;
+type FuelHeight = u32;
 
 #[derive(Clone, Debug)]
 struct Heights<T>(RangeInclusive<T>);
@@ -39,7 +41,7 @@ pub struct EthSyncGap(Heights<u64>);
 
 impl SyncState {
     pub fn is_synced(&self) -> bool {
-        self.eth.is_synced() && self.fuel.is_synced()
+        self.eth.is_synced() && self.fuel.is_synced() && self.fuel.nothing_pending()
     }
 
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
@@ -62,7 +64,11 @@ impl EthState {
 
 impl FuelState {
     fn is_synced(&self) -> bool {
-        self.local.finalized() >= self.local.current()
+        self.local.finalized() >= self.local.current() || self.remote.is_some()
+    }
+
+    fn nothing_pending(&self) -> bool {
+        self.remote.is_none()
     }
 
     pub fn needs_to_publish(&self) -> Option<u32> {

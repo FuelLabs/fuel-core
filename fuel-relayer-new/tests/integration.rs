@@ -14,7 +14,10 @@ use fuel_relayer_new::{
     fuel::fuel::BlockCommittedFilter,
     mock_db::MockDb,
     test_helpers::{
-        middleware::MockMiddleware,
+        middleware::{
+            MockMiddleware,
+            TriggerType,
+        },
         LogTestHelper,
     },
     Config,
@@ -28,7 +31,7 @@ async fn can_set_da_height() {
     let eth_node = MockMiddleware::default();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.data.lock().await.best_block.number = Some(200.into());
+    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
     let relayer = RelayerHandle::start_test(
         eth_node,
         Box::new(mock_db.clone()),
@@ -87,10 +90,10 @@ async fn can_get_messages() {
         },
     ];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
-    eth_node.data.lock().await.logs_batch = vec![logs.clone()];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.data.lock().await.best_block.number = Some(200.into());
+    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
     let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
 
     relayer.await_synced().await.unwrap();
@@ -130,10 +133,10 @@ async fn can_get_committed_block() {
             ..Default::default()
         },
     ];
-    eth_node.data.lock().await.logs_batch = vec![logs.clone()];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.data.lock().await.best_block.number = Some(200.into());
+    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
     let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
 
     relayer.await_synced().await.unwrap();
@@ -147,16 +150,69 @@ async fn can_get_committed_block() {
 #[tokio::test]
 async fn can_publish_fuel_block() {
     let mock_db = MockDb::default();
+    let mut config = Config::default();
+    config.da_finalization = 1u64.into();
     let eth_node = MockMiddleware::default();
     mock_db.data.lock().unwrap().chain_height = 1u32.into();
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
-    eth_node.data.lock().await.best_block.number = Some(200.into());
-    let relayer = RelayerHandle::start_test(
-        eth_node,
-        Box::new(mock_db.clone()),
-        Default::default(),
+    eth_node.update_data(|data| data.best_block.number = Some(1.into()));
+    eth_node.set_after_event(|data, event| {
+        if let TriggerType::Call = event {
+            assert_eq!(data.best_block.number.unwrap().as_u64(), 2);
+            data.best_block.number = Some(data.best_block.number.unwrap() + 1);
+        }
+    });
+    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
+
+    relayer.await_synced().await.unwrap();
+
+    assert_eq!(
+        mock_db.get_last_committed_finalized_fuel_height().await,
+        1u32.into()
     );
+}
+
+#[tokio::test]
+async fn does_not_double_publish_fuel_block() {
+    let mock_db = MockDb::default();
+    let mut config = Config::default();
+    config.da_finalization = 1u64.into();
+    let eth_node = MockMiddleware::default();
+    mock_db.data.lock().unwrap().chain_height = 1u32.into();
+    // Setup the eth node with a block high enough that there
+    // will be some finalized blocks.
+    eth_node.update_data(|data| data.best_block.number = Some(1.into()));
+
+    let mut counter = 0;
+    eth_node.set_state_override(move |data| {
+        if counter == 0 && !data.logs_batch.is_empty() {
+            data.logs_batch.clear();
+            counter += 1;
+        }
+    });
+
+    let mut call_counter = 0;
+    let mut get_block_counter = 0;
+    let db = mock_db.clone();
+    eth_node.set_after_event(move |data, event| match event {
+        TriggerType::Call => {
+            call_counter += 1;
+            if get_block_counter < 10 {
+                assert!(call_counter == 1);
+            }
+            data.best_block.number = Some(data.best_block.number.unwrap() + 1);
+        }
+        TriggerType::GetBlockNumber => {
+            get_block_counter += 1;
+            if get_block_counter == 10 {
+                db.data.lock().unwrap().pending_committed_fuel_height = None;
+            }
+        }
+        _ => (),
+    });
+
+    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
 
     relayer.await_synced().await.unwrap();
 

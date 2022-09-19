@@ -132,7 +132,14 @@ where
                     .get_last_committed_finalized_fuel_height()
                     .await
                     .into(),
-            );
+            )
+            .with_remote(state::FuelRemote::pending(
+                relayer
+                    .database
+                    .get_pending_committed_fuel_height()
+                    .await
+                    .map(u32::from),
+            ));
             let eth_state = state::EthRemote::current(
                 relayer.eth_node.get_block_number().await.unwrap().as_u64(),
             )
@@ -162,6 +169,10 @@ where
                                 .database
                                 .set_last_committed_finalized_fuel_height(height.into())
                                 .await;
+                            relayer
+                                .database
+                                .set_pending_committed_fuel_height(None)
+                                .await;
                         }
                         EthEventLog::Ignored => todo!(),
                     }
@@ -176,22 +187,29 @@ where
 
             if let Some(new_block_height) = state.needs_to_publish_fuel() {
                 if let Some(contract) = relayer.config.eth_v2_commit_contract.clone() {
+                    relayer
+                        .database
+                        .set_pending_committed_fuel_height(Some(new_block_height.into()))
+                        .await;
                     let client =
                         crate::abi::fuel::Fuel::new(contract, relayer.eth_node.clone());
-                    client
-                        .commit_block(
-                            new_block_height,
-                            Default::default(),
-                            Default::default(),
-                            Default::default(),
-                            Default::default(),
-                            Default::default(),
-                            Default::default(),
-                            Default::default(),
-                        )
-                        .call()
+                    let txn = client.commit_block(
+                        new_block_height,
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                        Default::default(),
+                    );
+                    let pending_transaction = txn
+                        .send()
                         .await
-                        .unwrap();
+                        .unwrap()
+                        .interval(std::time::Duration::from_millis(100))
+                        .inspect(|txn| eprintln!("{:?}", txn));
+                    pending_transaction.await.unwrap().unwrap();
                 }
             }
 

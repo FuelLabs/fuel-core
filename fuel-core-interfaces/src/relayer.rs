@@ -157,6 +157,12 @@ pub trait RelayerDb:
     /// Set last committed finalized fuel height this means we are safe to remove consensus votes from db
     /// as from this moment they are not needed any more 
     async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight);
+    
+    /// If there is currently a committed fuel block pending finalization then return it.
+    async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight>;
+
+    /// Set a currently pending committed fuel block.
+    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>);
 }
 
 pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>;

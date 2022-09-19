@@ -516,4 +516,43 @@ impl RelayerDb for Database {
             );
         }
     }
+
+    async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {
+        match self.get(metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY, METADATA) {
+            Ok(res) => res,
+            Err(err) => {
+                panic!(
+                    "set_last_committed_finalized_fuel_height database corruption, err:{:?}",
+                    err
+                );
+            }
+        }
+    }
+
+    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>) {
+        match block_height {
+            Some(block_height) => {
+                if let Err(err) = self.insert(
+                    metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY,
+                    METADATA,
+                    block_height,
+                ) {
+                    panic!(
+                        "set_pending_committed_fuel_height should always succeed: {:?}",
+                        err
+                    );
+                }
+            }
+            None => {
+                if let Err(err) =
+                    self.remove::<BlockHeight>(metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY, METADATA)
+                {
+                    panic!(
+                        "set_pending_committed_fuel_height should always succeed: {:?}",
+                        err
+                    );
+                }
+            }
+        }
+    }
 }

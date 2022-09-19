@@ -17,7 +17,7 @@ async fn can_download_logs() {
             ..Default::default()
         },
     ];
-    eth_node.data.lock().await.logs_batch = vec![logs.clone()];
+    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
 
     let remote = state::EthRemote::current(20).finalization_period(15);
     let eth_state = state::EthLocal::finalized(2).with_remote(remote);

@@ -14,6 +14,12 @@ pub struct FuelLocal;
 pub struct FuelLocalCurrent(u32);
 pub struct FuelLocalFinalized(u32);
 
+pub struct FuelLocalHeights(FuelHeights);
+
+pub struct FuelRemote;
+
+pub struct FuelRemotePending(Option<u32>);
+
 impl EthRemote {
     pub fn current(height: u64) -> EthRemoteCurrent {
         EthRemoteCurrent(height)
@@ -69,17 +75,37 @@ impl FuelLocal {
 }
 
 impl FuelLocalCurrent {
-    pub fn finalized(self, height: u32) -> FuelState {
-        FuelState {
-            local: FuelHeights::new(self.0, height),
-        }
+    pub fn finalized(self, height: u32) -> FuelLocalHeights {
+        FuelLocalHeights(FuelHeights::new(self.0, height))
     }
 }
 
 impl FuelLocalFinalized {
-    pub fn current(self, height: u32) -> FuelState {
+    pub fn current(self, height: u32) -> FuelLocalHeights {
+        FuelLocalHeights(FuelHeights::new(height, self.0))
+    }
+}
+
+impl FuelRemote {
+    pub fn pending(height: Option<u32>) -> FuelRemotePending {
+        FuelRemotePending(height)
+    }
+}
+
+impl FuelRemotePending {
+    pub fn with_local(self, local: FuelLocalHeights) -> FuelState {
         FuelState {
-            local: FuelHeights::new(height, self.0),
+            remote: self.0,
+            local: local.0,
+        }
+    }
+}
+
+impl FuelLocalHeights {
+    pub fn with_remote(self, remote: FuelRemotePending) -> FuelState {
+        FuelState {
+            remote: remote.0,
+            local: self.0,
         }
     }
 }
