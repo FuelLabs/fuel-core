@@ -544,9 +544,10 @@ impl RelayerDb for Database {
                 }
             }
             None => {
-                if let Err(err) =
-                    self.remove::<BlockHeight>(metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY, METADATA)
-                {
+                if let Err(err) = self.remove::<BlockHeight>(
+                    metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY,
+                    METADATA,
+                ) {
                     panic!(
                         "set_pending_committed_fuel_height should always succeed: {:?}",
                         err

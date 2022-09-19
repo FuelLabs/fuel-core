@@ -2,11 +2,13 @@ use async_trait::async_trait;
 use ethers_core::{
     abi::AbiDecode,
     types::{
+        transaction::eip2718::TypedTransaction,
         Block,
         BlockId,
         Filter,
         Log,
         Transaction,
+        TransactionReceipt,
         TxHash,
         H256,
         U256,
@@ -212,9 +214,20 @@ impl JsonRpcClient for MockMiddleware {
     {
         match method {
             "eth_getTransactionByHash" => {
-                dbg!();
-                let txn = Some(Transaction::default());
-                let res = serde_json::to_value(&txn)?;
+                let mut txn = Transaction::default();
+                txn.block_number = self.update_data(|data| data.best_block.number);
+                let res = serde_json::to_value(Some(txn))?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                Ok(res)
+            }
+            "eth_getTransactionReceipt" => {
+                let mut txn = TransactionReceipt::default();
+                txn.block_number = self.update_data(|data| {
+                    data.best_block.number = Some(data.best_block.number.unwrap() + 1u64);
+                    data.best_block.number
+                });
+                let res = serde_json::to_value(Some(txn))?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
@@ -308,14 +321,6 @@ impl Middleware for MockMiddleware {
         r
     }
 
-    async fn call(
-        &self,
-        tx: &ethers_core::types::transaction::eip2718::TypedTransaction,
-        _block: Option<BlockId>,
-    ) -> Result<ethers_core::types::Bytes, Self::Error> {
-        todo!()
-    }
-
     async fn send_transaction<
         T: Into<ethers_core::types::transaction::eip2718::TypedTransaction> + Send + Sync,
     >(
@@ -359,19 +364,5 @@ impl Middleware for MockMiddleware {
 
         self.after_event(TriggerType::Call);
         Ok(r)
-    }
-
-    async fn get_transaction<T: Send + Sync + Into<TxHash>>(
-        &self,
-        transaction_hash: T,
-    ) -> Result<Option<ethers_core::types::Transaction>, Self::Error> {
-        todo!()
-    }
-
-    async fn get_transaction_receipt<T: Send + Sync + Into<TxHash>>(
-        &self,
-        transaction_hash: T,
-    ) -> Result<Option<ethers_core::types::TransactionReceipt>, Self::Error> {
-        todo!()
     }
 }

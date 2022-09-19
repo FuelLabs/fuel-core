@@ -208,7 +208,7 @@ where
                         .await
                         .unwrap()
                         .interval(std::time::Duration::from_millis(100))
-                        .inspect(|txn| eprintln!("{:?}", txn));
+                        .confirmations(0);
                     pending_transaction.await.unwrap().unwrap();
                 }
             }
