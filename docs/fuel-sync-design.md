@@ -267,6 +267,9 @@ When FS receives a block header, first FS checks:
 - Is it a valid header? It should be signed by the expected, for the node, producer/consensus at according height.
   - No -> `Punisher::report`.
   - Yes -> Next step.
+  - Don't know. The Ethereum part is not synced yet to this height. If the height is 
+  not far from the local ethereum height(the height returned by the 
+  ethereum node), we ignore this header and do not punish the sender.
 - Is it a new height?
   - No -> Is it already in the blockchain?
     - Yes -> Ignore(Maybe report some neutral error to P2P to prevent DDoS)
