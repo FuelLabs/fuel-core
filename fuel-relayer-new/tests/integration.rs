@@ -1,12 +1,22 @@
 #![cfg(feature = "test-helpers")]
 
+use std::sync::Arc;
+
 use ethers_contract::EthEvent;
 use ethers_core::{
     abi::Tokenizable,
     types::Log,
 };
 use fuel_core_interfaces::{
-    common::prelude::Storage,
+    common::prelude::{
+        Bytes32,
+        Storage,
+    },
+    model::{
+        FuelBlock,
+        FuelBlockHeader,
+        SealedFuelBlock,
+    },
     relayer::RelayerDb,
 };
 use fuel_relayer_new::{
@@ -24,6 +34,21 @@ use fuel_relayer_new::{
     RelayerHandle,
     H256,
 };
+
+fn make_block(height: u32, eth_number: u64, prev_root: Bytes32) -> SealedFuelBlock {
+    SealedFuelBlock {
+        block: FuelBlock {
+            header: FuelBlockHeader {
+                height: height.into(),
+                number: eth_number.into(),
+                prev_root,
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
 
 #[tokio::test]
 async fn can_set_da_height() {
@@ -71,7 +96,7 @@ async fn can_get_messages() {
         ethers_core::abi::encode(&[message])
     };
 
-    let config = Config::default();
+    let config = Config::default_test();
 
     let logs = vec![
         Log {
@@ -115,7 +140,7 @@ async fn can_get_committed_block() {
         vec![BlockCommittedFilter::signature(), H256::default(), h.into()]
     };
 
-    let config = Config::default();
+    let config = Config::default_test();
 
     let logs = vec![
         Log {
@@ -150,10 +175,15 @@ async fn can_get_committed_block() {
 #[tokio::test]
 async fn can_publish_fuel_block() {
     let mock_db = MockDb::default();
-    let mut config = Config::default();
+    let mut config = Config::default_test();
     config.da_finalization = 1u64.into();
     let eth_node = MockMiddleware::default();
-    mock_db.data.lock().unwrap().chain_height = 1u32.into();
+    {
+        let mut lock = mock_db.data.lock().unwrap();
+        lock.chain_height = 1u32.into();
+        lock.sealed_blocks
+            .insert(1u32.into(), Arc::new(make_block(1, 1, Default::default())));
+    };
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(1.into()));
@@ -176,10 +206,15 @@ async fn can_publish_fuel_block() {
 #[tokio::test]
 async fn does_not_double_publish_fuel_block() {
     let mock_db = MockDb::default();
-    let mut config = Config::default();
+    let mut config = Config::default_test();
     config.da_finalization = 1u64.into();
     let eth_node = MockMiddleware::default();
-    mock_db.data.lock().unwrap().chain_height = 1u32.into();
+    {
+        let mut lock = mock_db.data.lock().unwrap();
+        lock.chain_height = 1u32.into();
+        lock.sealed_blocks
+            .insert(1u32.into(), Arc::new(make_block(1, 1, Default::default())));
+    };
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(1.into()));

@@ -68,6 +68,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .config(config.relayer.clone())
         .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
         .import_block_event(block_importer.subscribe())
+        // TODO: Put in config
         .private_key(
             hex::decode(
                 "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",

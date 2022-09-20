@@ -19,8 +19,13 @@ async fn can_download_logs() {
     ];
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
 
-    let remote = state::EthRemote::current(20).finalization_period(15);
-    let eth_state = state::EthLocal::finalized(2).with_remote(remote);
+    let eth_state = super::state::test_builder::TestDataSource {
+        eth_remote_current: 20,
+        eth_remote_finalization_period: 15,
+        eth_local_finalized: 2,
+        ..Default::default()
+    };
+    let eth_state = state::build(&eth_state).await.unwrap();
 
     let contracts = vec![Default::default()];
     let result = download_logs(

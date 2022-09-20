@@ -13,9 +13,6 @@ use std::{
     time::Duration,
 };
 
-pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
-pub(crate) const NUMBER_OF_TRIES_FOR_INITIAL_SYNC: u64 = 10;
-
 pub fn keccak256(data: &'static str) -> H256 {
     let out = Keccak256::digest(data.as_bytes());
     H256::from_slice(out.as_slice())
@@ -27,11 +24,12 @@ pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
     Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
 
 #[derive(Clone, Debug)]
+/// Configuration settings for the [`Relayer`](crate::relayer::Relayer).
 pub struct Config {
     /// Number of da block after which messages/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
-    pub eth_client: Option<String>,
+    pub eth_client: Option<url::Url>,
     /// Ethereum chain_id.
     pub eth_chain_id: u64,
     /// Contract to publish commit fuel block.  
@@ -45,6 +43,8 @@ pub struct Config {
     pub initial_sync_step: usize,
     /// Refresh rate of waiting for eth client to finish its initial sync.
     pub initial_sync_refresh: Duration,
+    /// Pending eth transaction interval time
+    pub pending_eth_interval: Duration,
 }
 
 impl Default for Config {
@@ -64,11 +64,18 @@ impl Default for Config {
             eth_v2_contracts_deployment: 0,
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
+            pending_eth_interval: Duration::from_secs(6),
         }
     }
 }
 
+#[allow(missing_docs)]
 impl Config {
+    pub fn default_test() -> Self {
+        let mut s = Self::default();
+        s.pending_eth_interval = Duration::from_millis(100);
+        s
+    }
     pub fn eth_v2_contracts_deployment(&self) -> DaBlockHeight {
         self.eth_v2_contracts_deployment
     }
@@ -81,8 +88,8 @@ impl Config {
         self.da_finalization
     }
 
-    pub fn eth_client(&self) -> Option<&str> {
-        self.eth_client.as_deref()
+    pub fn eth_client(&self) -> Option<&url::Url> {
+        self.eth_client.as_ref()
     }
 
     pub fn initial_sync_step(&self) -> usize {

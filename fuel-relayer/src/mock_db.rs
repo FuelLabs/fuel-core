@@ -288,7 +288,10 @@ impl RelayerDb for MockDb {
         todo!()
     }
 
-    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>) {
+    async fn set_pending_committed_fuel_height(
+        &self,
+        _block_height: Option<BlockHeight>,
+    ) {
         todo!()
     }
 }

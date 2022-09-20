@@ -2,7 +2,6 @@ use async_trait::async_trait;
 use ethers_core::{
     abi::AbiDecode,
     types::{
-        transaction::eip2718::TypedTransaction,
         Block,
         BlockId,
         Filter,
@@ -11,12 +10,10 @@ use ethers_core::{
         TransactionReceipt,
         TxHash,
         H256,
-        U256,
         U64,
     },
 };
 use ethers_providers::{
-    FilterWatcher,
     JsonRpcClient,
     Middleware,
     PendingTransaction,
@@ -32,21 +29,12 @@ use serde::{
 use std::{
     fmt,
     fmt::Debug,
-    io::BufWriter,
     str::FromStr,
     sync::Arc,
-    time::Duration,
 };
 use thiserror::Error;
 
 use crate::test_helpers::event_to_log;
-
-// pub trait TriggerHandle: Send {
-//     fn run<'a>(&mut self, _data: &mut MockData, _trigger: TriggerType<'a>) {}
-// }
-
-// pub struct EmptyTriggerHand {}
-// impl TriggerHandle for EmptyTriggerHand {}
 
 #[derive(Clone)]
 pub struct MockMiddleware {
@@ -207,7 +195,7 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
@@ -344,6 +332,7 @@ impl Middleware for MockMiddleware {
                 ..
             }) => {
                 let event = BlockCommittedFilter {
+                    // FIX: this should be fuel height
                     height: minimum_block_number,
                     ..Default::default()
                 };

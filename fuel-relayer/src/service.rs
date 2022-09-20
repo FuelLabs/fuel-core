@@ -182,10 +182,10 @@ impl Service {
             if let Some(context) = self.context.lock().await.take() {
                 let uri = context.config.eth_client.clone().unwrap_or_default();
                 if uri.starts_with("http") {
-                    self.run(&mut *join, context, Self::provider_http(&uri))
+                    self.run(&mut join, context, Self::provider_http(&uri))
                         .await
                 } else if uri.starts_with("ws") {
-                    self.run(&mut *join, context, Self::provider_ws(&uri).await)
+                    self.run(&mut join, context, Self::provider_ws(&uri).await)
                         .await
                 } else {
                     *self.context.lock().await = Some(context);

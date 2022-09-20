@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use std::convert::TryFrom;
 
 use bytes::{
@@ -9,16 +11,11 @@ use ethers_core::{
     abi::Tokenize,
     types::{
         Bytes as EthersBytes,
-        Filter,
         Log,
         H160,
         H256,
         U64,
     },
-};
-use ethers_providers::{
-    Middleware,
-    ProviderError,
 };
 use fuel_core_interfaces::{
     common::{
@@ -51,7 +48,6 @@ impl LogTestHelper for Log {
     }
 }
 
-///
 pub fn event_to_log<E>(event: E, abi: &ethers_core::abi::Abi) -> Log
 where
     E: EthEvent,

@@ -1,3 +1,4 @@
+#![allow(missing_docs)]
 use ethers_contract::abigen;
 
 pub mod fuel {
