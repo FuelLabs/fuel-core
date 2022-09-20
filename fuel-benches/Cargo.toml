@@ -1,0 +1,19 @@
+[package]
+name = "fuel-core-benches"
+version = "0.0.0"
+edition = "2021"
+license = "BUSL-1.1"
+publish = false
+
+[dependencies]
+fuel-core = { path = "../fuel-core" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+rand = "0.8"
+tempfile = "3.3"
+
+[dev-dependencies]
+criterion = "0.4"
+
+[[bench]]
+name = "vm"
+harness = false
