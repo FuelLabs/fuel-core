@@ -1,24 +1,15 @@
 #![allow(clippy::let_unit_value)]
-use crate::{
-    database::Database,
-    service::Config,
-};
+use crate::{database::Database, service::Config};
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool::{
-    Sender,
-    TxPoolDb,
-};
+use fuel_core_interfaces::txpool::{Sender, TxPoolDb};
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
-    sync::{
-        broadcast,
-        mpsc,
-    },
+    sync::{broadcast, mpsc},
     task::JoinHandle,
 };
 
@@ -112,12 +103,12 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     // Ok so plug these into something
     // let (tx_consensus, _) = mpsc::channel(100);
-    let (_tx_transaction, incoming_tx_reciever) = broadcast::channel(100);
+    let (_tx_transaction, incoming_tx_receiver) = broadcast::channel(100);
 
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
-        .incoming_tx_receiver(incoming_tx_reciever)
+        .incoming_tx_receiver(incoming_tx_receiver)
         .network_sender(tx_request_event.clone())
         .import_block_event(block_importer.subscribe())
         .tx_status_sender(tx_status_sender)
