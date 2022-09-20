@@ -15,12 +15,12 @@ use schema::{
     coin::{
         Coin,
         CoinByIdArgs,
-        SpendQueryElementInput,
     },
     contract::{
         Contract,
         ContractByIdArgs,
     },
+    resource::SpendQueryElementInput,
     tx::{
         TxArg,
         TxIdArgs,
@@ -60,7 +60,10 @@ use types::{
     TransactionStatus,
 };
 
-use crate::client::schema::tx::DryRunArg;
+use crate::client::schema::{
+    resource::ExcludeInput,
+    tx::DryRunArg,
+};
 pub use schema::{
     PageDirection,
     PaginatedResult,
@@ -105,6 +108,17 @@ where
     }
 }
 
+pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
+    let e = errors
+        .into_iter()
+        .fold(String::from("Response errors"), |mut s, e| {
+            s.push_str("; ");
+            s.push_str(e.as_str());
+            s
+        });
+    io::Error::new(io::ErrorKind::Other, e)
+}
+
 impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
@@ -118,17 +132,9 @@ impl FuelClient {
 
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
-            (_, Some(e)) => {
-                let e = e.into_iter().map(|e| e.message).fold(
-                    String::from("Response errors"),
-                    |mut s, e| {
-                        s.push_str("; ");
-                        s.push_str(e.as_str());
-                        s
-                    },
-                );
-                Err(io::Error::new(io::ErrorKind::Other, e))
-            }
+            (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                e.into_iter().map(|e| e.message).collect(),
+            )),
             _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
     }
@@ -419,33 +425,33 @@ impl FuelClient {
         Ok(coins)
     }
 
-    /// Retrieve coins to spend in a transaction
-    pub async fn coins_to_spend(
+    /// Retrieve resources to spend in a transaction
+    pub async fn resources_to_spend(
         &self,
         owner: &str,
-        spend_query: Vec<(&str, u64)>,
-        max_inputs: Option<i32>,
-        excluded_ids: Option<Vec<&str>>,
-    ) -> io::Result<Vec<schema::coin::Coin>> {
+        spend_query: Vec<(&str, u64, Option<u64>)>,
+        // (Utxos, messages)
+        excluded_ids: Option<(Vec<&str>, Vec<&str>)>,
+    ) -> io::Result<Vec<Vec<schema::resource::Resource>>> {
         let owner: schema::Address = owner.parse()?;
         let spend_query: Vec<SpendQueryElementInput> = spend_query
             .iter()
-            .map(|(asset_id, amount)| -> Result<_, ConversionError> {
+            .map(|(asset_id, amount, max)| -> Result<_, ConversionError> {
                 Ok(SpendQueryElementInput {
                     asset_id: asset_id.parse()?,
                     amount: (*amount).into(),
+                    max: (*max).map(|max| max.into()),
                 })
             })
             .try_collect()?;
-        let excluded_ids: Option<Vec<schema::UtxoId>> = excluded_ids
-            .map(|ids| ids.into_iter().map(schema::UtxoId::from_str).try_collect())
-            .transpose()?;
-        let query = schema::coin::CoinsToSpendQuery::build(
-            &(owner, spend_query, max_inputs, excluded_ids).into(),
+        let excluded_ids: Option<ExcludeInput> =
+            excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
+        let query = schema::resource::ResourcesToSpendQuery::build(
+            &(owner, spend_query, excluded_ids).into(),
         );
 
-        let coins = self.query(query).await?.coins_to_spend;
-        Ok(coins)
+        let resources_per_asset = self.query(query).await?.resources_to_spend;
+        Ok(resources_per_asset)
     }
 
     pub async fn contract(&self, id: &str) -> io::Result<Option<Contract>> {

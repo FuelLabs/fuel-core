@@ -7,12 +7,14 @@ use super::{
 use crate::client::schema::{
     schema,
     Address,
+    MessageId,
     U64,
 };
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Message {
+    pub message_id: MessageId,
     pub amount: U64,
     pub sender: Address,
     pub recipient: Address,
