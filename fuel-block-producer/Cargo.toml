@@ -26,3 +26,4 @@ rand = "0.8"
 
 [features]
 test-helpers = ["fuel-core-interfaces/test-helpers"]
+
