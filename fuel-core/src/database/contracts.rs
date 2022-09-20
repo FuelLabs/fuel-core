@@ -1,12 +1,8 @@
 use crate::{
     chain_config::ContractConfig,
     database::{
-        columns::{
-            BALANCES,
-            CONTRACTS,
-            CONTRACTS_STATE,
-            CONTRACT_UTXO_ID,
-        },
+        storage::ContractsLatestUtxo,
+        Column,
         Database,
         InterpreterStorage,
     },
@@ -16,69 +12,77 @@ use crate::{
         MultiKey,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::UtxoId,
-    fuel_types::{
-        Bytes32,
-        Word,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageAsRef,
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_tx::UtxoId,
+        fuel_types::{
+            Bytes32,
+            Word,
+        },
+        fuel_vm::prelude::{
+            AssetId,
+            Contract,
+            ContractId,
+        },
     },
-    fuel_vm::prelude::{
-        AssetId,
-        Contract,
-        ContractId,
-        Storage,
-    },
+    db::ContractsRawCode,
 };
 use std::borrow::Cow;
 
-impl Storage<ContractId, Contract> for Database {
+impl StorageInspect<ContractsRawCode> for Database {
     type Error = Error;
 
-    fn insert(
-        &mut self,
-        key: &ContractId,
-        value: &Contract,
-    ) -> Result<Option<Contract>, Error> {
-        Database::insert(self, key.as_ref(), CONTRACTS, value.clone())
-    }
-
-    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
-        Database::remove(self, key.as_ref(), CONTRACTS)
-    }
-
     fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
-        self.get(key.as_ref(), CONTRACTS)
+        self.get(key.as_ref(), Column::ContractsRawCode)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        self.exists(key.as_ref(), CONTRACTS)
+        self.exists(key.as_ref(), Column::ContractsRawCode)
     }
 }
 
-impl Storage<ContractId, UtxoId> for Database {
+impl StorageMutate<ContractsRawCode> for Database {
+    fn insert(
+        &mut self,
+        key: &ContractId,
+        value: &[u8],
+    ) -> Result<Option<Contract>, Error> {
+        Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
+    }
+
+    fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
+        Database::remove(self, key.as_ref(), Column::ContractsRawCode)
+    }
+}
+
+impl StorageInspect<ContractsLatestUtxo> for Database {
     type Error = Error;
 
+    fn get(&self, key: &ContractId) -> Result<Option<Cow<UtxoId>>, Self::Error> {
+        self.get(key.as_ref(), Column::ContractsLatestUtxo)
+    }
+
+    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
+        self.exists(key.as_ref(), Column::ContractsLatestUtxo)
+    }
+}
+
+impl StorageMutate<ContractsLatestUtxo> for Database {
     fn insert(
         &mut self,
         key: &ContractId,
         value: &UtxoId,
     ) -> Result<Option<UtxoId>, Self::Error> {
-        Database::insert(self, key.as_ref(), CONTRACT_UTXO_ID, *value)
+        Database::insert(self, key.as_ref(), Column::ContractsLatestUtxo, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
-        Database::remove(self, key.as_ref(), CONTRACT_UTXO_ID)
-    }
-
-    fn get<'a>(
-        &'a self,
-        key: &ContractId,
-    ) -> Result<Option<Cow<'a, UtxoId>>, Self::Error> {
-        self.get(key.as_ref(), CONTRACT_UTXO_ID)
-    }
-
-    fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), CONTRACT_UTXO_ID)
+        Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
     }
 }
 
@@ -90,10 +94,10 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
         self.iter_all::<Vec<u8>, Word>(
-            BALANCES,
+            Column::ContractsAssets,
             Some(contract.as_ref().to_vec()),
             start_asset
-                .map(|asset_id| MultiKey::new((&contract, &asset_id)).as_ref().to_vec()),
+                .map(|asset_id| MultiKey::new(&(&contract, &asset_id)).as_ref().to_vec()),
             direction,
         )
         .map(|res| {
@@ -107,16 +111,17 @@ impl Database {
         &self,
     ) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
         let configs = self
-            .iter_all::<Vec<u8>, Word>(CONTRACTS, None, None, None)
+            .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None, None, None)
             .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
                 let contract_id =
                     ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
 
-                let code: Vec<u8> =
-                    Storage::<ContractId, Contract>::get(self, &contract_id)?
-                        .unwrap()
-                        .into_owned()
-                        .into();
+                let code: Vec<u8> = self
+                    .storage::<ContractsRawCode>()
+                    .get(&contract_id)?
+                    .unwrap()
+                    .into_owned()
+                    .into();
 
                 let salt = InterpreterStorage::storage_contract_root(self, &contract_id)?
                     .unwrap()
@@ -125,7 +130,7 @@ impl Database {
 
                 let state = Some(
                     self.iter_all::<Vec<u8>, Bytes32>(
-                        CONTRACTS_STATE,
+                        Column::ContractsState,
                         Some(contract_id.as_ref().to_vec()),
                         None,
                         None,
@@ -145,7 +150,7 @@ impl Database {
 
                 let balances = Some(
                     self.iter_all::<Vec<u8>, u64>(
-                        BALANCES,
+                        Column::ContractsAssets,
                         Some(contract_id.as_ref().to_vec()),
                         None,
                         None,
@@ -177,21 +182,27 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fuel_core_interfaces::common::fuel_tx::TxId;
+    use fuel_core_interfaces::common::{
+        fuel_storage::StorageAsMut,
+        fuel_tx::TxId,
+    };
 
     #[test]
     fn contract_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
-        let database = Database::default();
+        let database = &mut Database::default();
 
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract.clone())
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
             .unwrap();
 
         assert_eq!(
-            Storage::<ContractId, Contract>::get(&database, &contract_id)
+            database
+                .storage::<ContractsRawCode>()
+                .get(&contract_id)
                 .unwrap()
                 .unwrap()
                 .into_owned(),
@@ -204,14 +215,18 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
-        let mut database = Database::default();
-        Storage::<ContractId, Contract>::insert(&mut database, &contract_id, &contract)
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
             .unwrap();
 
         let returned: Contract = database
-            .get(contract_id.as_ref(), CONTRACTS)
+            .storage::<ContractsRawCode>()
+            .get(&contract_id)
             .unwrap()
-            .unwrap();
+            .unwrap()
+            .into_owned();
         assert_eq!(returned, contract);
     }
 
@@ -220,14 +235,21 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
-        let mut database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract)
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
             .unwrap();
 
-        Storage::<ContractId, Contract>::remove(&mut database, &contract_id).unwrap();
+        database
+            .storage::<ContractsRawCode>()
+            .remove(&contract_id)
+            .unwrap();
 
-        assert!(!database.exists(contract_id.as_ref(), CONTRACTS).unwrap());
+        assert!(!database
+            .storage::<ContractsRawCode>()
+            .contains_key(&contract_id)
+            .unwrap());
     }
 
     #[test]
@@ -235,15 +257,16 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACTS, contract)
+            .storage::<ContractsRawCode>()
+            .insert(&contract_id, contract.as_ref())
             .unwrap();
 
-        assert!(
-            Storage::<ContractId, Contract>::contains_key(&database, &contract_id)
-                .unwrap()
-        );
+        assert!(database
+            .storage::<ContractsRawCode>()
+            .contains_key(&contract_id)
+            .unwrap());
     }
 
     #[test]
@@ -251,14 +274,17 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
-        let database = Database::default();
+        let database = &mut Database::default();
 
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
+            .storage::<ContractsLatestUtxo>()
+            .insert(&contract_id, &utxo_id)
             .unwrap();
 
         assert_eq!(
-            Storage::<ContractId, UtxoId>::get(&database, &contract_id)
+            database
+                .storage::<ContractsLatestUtxo>()
+                .get(&contract_id)
                 .unwrap()
                 .unwrap()
                 .into_owned(),
@@ -271,12 +297,15 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
-        let mut database = Database::default();
-        Storage::<ContractId, UtxoId>::insert(&mut database, &contract_id, &utxo_id)
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsLatestUtxo>()
+            .insert(&contract_id, &utxo_id)
             .unwrap();
 
-        let returned: UtxoId = database
-            .get(contract_id.as_ref(), CONTRACT_UTXO_ID)
+        let returned: UtxoId = *database
+            .storage::<ContractsLatestUtxo>()
+            .get(&contract_id)
             .unwrap()
             .unwrap();
         assert_eq!(returned, utxo_id);
@@ -287,15 +316,20 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
-        let mut database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
+            .storage::<ContractsLatestUtxo>()
+            .insert(&contract_id, &utxo_id)
             .unwrap();
 
-        Storage::<ContractId, UtxoId>::remove(&mut database, &contract_id).unwrap();
+        database
+            .storage::<ContractsLatestUtxo>()
+            .remove(&contract_id)
+            .unwrap();
 
         assert!(!database
-            .exists(contract_id.as_ref(), CONTRACT_UTXO_ID)
+            .storage::<ContractsLatestUtxo>()
+            .contains_key(&contract_id)
             .unwrap());
     }
 
@@ -304,13 +338,15 @@ mod tests {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
-        let database = Database::default();
+        let database = &mut Database::default();
         database
-            .insert(contract_id.as_ref().to_vec(), CONTRACT_UTXO_ID, utxo_id)
+            .storage::<ContractsLatestUtxo>()
+            .insert(&contract_id, &utxo_id)
             .unwrap();
 
-        assert!(
-            Storage::<ContractId, UtxoId>::contains_key(&database, &contract_id).unwrap()
-        );
+        assert!(database
+            .storage::<ContractsLatestUtxo>()
+            .contains_key(&contract_id)
+            .unwrap());
     }
 }

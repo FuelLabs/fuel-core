@@ -13,13 +13,22 @@ use std::{
 
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::Storage,
         fuel_tx::{
             Address,
             MessageId,
         },
+        prelude::{
+            StorageInspect,
+            StorageMutate,
+        },
     },
-    db::KvStoreError,
+    db::{
+        DelegatesIndexes,
+        KvStoreError,
+        Messages,
+        StakingDiffs,
+        ValidatorsSet,
+    },
     model::{
         BlockHeight,
         ConsensusId,
@@ -52,9 +61,24 @@ pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 
-impl Storage<MessageId, Message> for MockDb {
+impl StorageInspect<Messages> for MockDb {
     type Error = KvStoreError;
 
+    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
+        Ok(self
+            .data
+            .lock()
+            .unwrap()
+            .messages
+            .get(key)
+            .map(|i| Cow::Owned(i.clone())))
+    }
+
+    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
+        Ok(self.data.lock().unwrap().messages.contains_key(key))
+    }
+}
+impl StorageMutate<Messages> for MockDb {
     fn insert(
         &mut self,
         key: &MessageId,
@@ -71,61 +95,14 @@ impl Storage<MessageId, Message> for MockDb {
     fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, Self::Error> {
         Ok(self.data.lock().unwrap().messages.remove(key))
     }
-
-    fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, Self::Error> {
-        Ok(self
-            .data
-            .lock()
-            .unwrap()
-            .messages
-            .get(key)
-            .map(|i| Cow::Owned(i.clone())))
-    }
-
-    fn contains_key(&self, key: &MessageId) -> Result<bool, Self::Error> {
-        Ok(self.data.lock().unwrap().messages.contains_key(key))
-    }
 }
 
 #[allow(unused_variables)]
-impl Storage<ValidatorId, (ValidatorStake, Option<ConsensusId>)> for MockDb {
-    type Error = KvStoreError;
-
-    fn insert(
-        &mut self,
-        key: &ValidatorId,
-        value: &(ValidatorStake, Option<ConsensusId>),
-    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        todo!()
-    }
-
-    fn remove(
-        &mut self,
-        key: &ValidatorId,
-    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
-        todo!()
-    }
-
-    fn get<'a>(
-        &'a self,
-        key: &ValidatorId,
-    ) -> Result<Option<Cow<'a, (ValidatorStake, Option<ConsensusId>)>>, Self::Error> {
-        todo!()
-    }
-
-    fn contains_key(&self, key: &ValidatorId) -> Result<bool, Self::Error> {
-        todo!()
-    }
-}
-
-#[allow(unused_variables)]
-impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
-    type Error = KvStoreError;
-
+impl StorageMutate<DelegatesIndexes> for MockDb {
     fn insert(
         &mut self,
         key: &Address,
-        value: &Vec<DaBlockHeight>,
+        value: &[DaBlockHeight],
     ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
         todo!()
     }
@@ -136,7 +113,11 @@ impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
     ) -> Result<Option<Vec<DaBlockHeight>>, Self::Error> {
         todo!()
     }
+}
 
+#[allow(unused_variables)]
+impl StorageInspect<DelegatesIndexes> for MockDb {
+    type Error = KvStoreError;
     fn get<'a>(
         &'a self,
         key: &Address,
@@ -150,9 +131,7 @@ impl Storage<Address, Vec<DaBlockHeight>> for MockDb {
 }
 
 #[allow(unused_variables)]
-impl Storage<DaBlockHeight, StakingDiff> for MockDb {
-    type Error = KvStoreError;
-
+impl StorageMutate<StakingDiffs> for MockDb {
     fn insert(
         &mut self,
         key: &DaBlockHeight,
@@ -167,6 +146,10 @@ impl Storage<DaBlockHeight, StakingDiff> for MockDb {
     ) -> Result<Option<StakingDiff>, Self::Error> {
         todo!()
     }
+}
+#[allow(unused_variables)]
+impl StorageInspect<StakingDiffs> for MockDb {
+    type Error = KvStoreError;
 
     fn get<'a>(
         &'a self,
@@ -179,6 +162,48 @@ impl Storage<DaBlockHeight, StakingDiff> for MockDb {
         todo!()
     }
 }
+
+#[allow(unused_variables)]
+impl StorageMutate<ValidatorsSet> for MockDb {
+    fn insert(
+        &mut self,
+        key: &ValidatorId,
+        value: &(ValidatorStake, Option<ConsensusId>),
+    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
+        todo!()
+    }
+
+    fn remove(
+        &mut self,
+        key: &ValidatorId,
+    ) -> Result<Option<(ValidatorStake, Option<ConsensusId>)>, Self::Error> {
+        todo!()
+    }
+}
+
+#[allow(unused_variables)]
+impl StorageInspect<ValidatorsSet> for MockDb {
+    type Error = KvStoreError;
+
+    fn get(
+        &self,
+        key: &ValidatorId,
+    ) -> Result<Option<Cow<(ValidatorStake, Option<ConsensusId>)>>, Self::Error> {
+        todo!()
+    }
+
+    fn contains_key(&self, key: &ValidatorId) -> Result<bool, Self::Error> {
+        todo!()
+    }
+}
+// #[allow(unused_variables)]
+// impl StorageInspect<StakingDiffs> for MockDb {
+//     type Error = KvStoreError;
+// }
+// #[allow(unused_variables)]
+// impl StorageInspect<StakingDiffs> for MockDb {
+//     type Error = KvStoreError;
+// }
 
 #[async_trait]
 impl RelayerDb for MockDb {

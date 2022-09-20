@@ -8,10 +8,11 @@ use ethers_core::{
     types::Log,
 };
 use fuel_core_interfaces::{
-    common::prelude::{
-        Bytes32,
-        Storage,
+    common::{
+        fuel_storage::StorageInspect,
+        prelude::Bytes32,
     },
+    db::Messages,
     model::{
         FuelBlock,
         FuelBlockHeader,
@@ -124,7 +125,12 @@ async fn can_get_messages() {
     relayer.await_synced().await.unwrap();
 
     for msg in expected_messages {
-        assert_eq!(mock_db.get(msg.id()).unwrap().unwrap().as_ref(), &*msg);
+        assert_eq!(
+            &*StorageInspect::<Messages>::get(&mock_db, msg.id())
+                .unwrap()
+                .unwrap(),
+            &*msg
+        );
     }
 }
 

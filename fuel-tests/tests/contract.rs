@@ -29,35 +29,36 @@ async fn test_contract_salt() {
     assert_eq!("0x", &salt.to_string()[..2]);
 }
 
+#[rstest]
 #[tokio::test]
-async fn test_contract_balance() {
-    for test_bal in 0..10 {
-        let mut test_builder = TestSetupBuilder::new(SEED);
-        let (_, contract_id) = test_builder
-            .setup_contract(vec![], Some(vec![(AssetId::new([1u8; 32]), test_bal)]));
+async fn test_contract_balance(
+    #[values(AssetId::new([1u8; 32]), AssetId::new([0u8; 32]), AssetId::new([16u8; 32]))]
+    asset: AssetId,
+    #[values(100, 0, 18446744073709551615)] test_balance: u64,
+) {
+    let mut test_builder = TestSetupBuilder::new(SEED);
+    let (_, contract_id) =
+        test_builder.setup_contract(vec![], Some(vec![(asset, test_balance)]));
 
-        // spin up node
-        let TestContext { client, .. } = test_builder.finalize().await;
+    // spin up node
+    let TestContext { client, .. } = test_builder.finalize().await;
 
-        let asset_id = AssetId::new([1u8; 32]);
+    let balance = client
+        .contract_balance(
+            format!("{:#x}", contract_id).as_str(),
+            Some(format!("{:#x}", asset).as_str()),
+        )
+        .await
+        .unwrap();
 
-        let balance = client
-            .contract_balance(
-                format!("{:#x}", contract_id).as_str(),
-                Some(format!("{:#x}", asset_id).as_str()),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(balance, test_bal);
-    }
+    assert_eq!(balance, test_balance);
 }
 
 #[rstest]
-#[case(PageDirection::Forward)]
-#[case(PageDirection::Backward)]
 #[tokio::test]
-async fn test_first_5_contract_balances(#[case] direction: PageDirection) {
+async fn test_5_contract_balances(
+    #[values(PageDirection::Forward, PageDirection::Backward)] direction: PageDirection,
+) {
     let mut test_builder = TestSetupBuilder::new(SEED);
     let (_, contract_id) = test_builder.setup_contract(
         vec![],

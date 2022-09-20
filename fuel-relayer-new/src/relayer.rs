@@ -22,6 +22,7 @@ use ethers_providers::{
     ProviderError,
 };
 use fuel_core_interfaces::{
+    db::Messages,
     model::{
         FuelBlockHeader,
         Message,
@@ -434,9 +435,10 @@ async fn write_logs(database: &mut dyn RelayerDb, logs: Vec<Log>) -> anyhow::Res
     for event in events {
         match event {
             EthEventLog::Message(m) => {
+                use fuel_core_interfaces::common::fuel_storage::StorageMutate;
                 let m: Message = (&m).into();
                 // Add messages to database
-                database.insert(&m.id(), &m)?;
+                StorageMutate::<Messages>::insert(database, &m.id(), &m)?;
             }
             EthEventLog::FuelBlockCommitted { height, .. } => {
                 // TODO: Check if this is greater then current.
