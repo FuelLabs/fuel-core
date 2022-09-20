@@ -13,7 +13,6 @@ members = [
   "fuel-metrics",
   "fuel-p2p",
   "fuel-relayer",
-  "fuel-relayer-new",
   "fuel-sync",
   "fuel-tests",
   "fuel-txpool",

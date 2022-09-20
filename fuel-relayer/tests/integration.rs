@@ -20,7 +20,7 @@ use fuel_core_interfaces::{
     },
     relayer::RelayerDb,
 };
-use fuel_relayer_new::{
+use fuel_relayer::{
     bridge::message::SentMessageFilter,
     fuel::fuel::BlockCommittedFilter,
     mock_db::MockDb,
