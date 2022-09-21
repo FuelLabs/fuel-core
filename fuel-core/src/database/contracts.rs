@@ -38,11 +38,11 @@ impl StorageInspect<ContractsRawCode> for Database {
     type Error = Error;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<Contract>>, Error> {
-        self.get(key.as_ref(), Column::ContractsRawCode)
+        self._get(key.as_ref(), Column::ContractsRawCode)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        self.exists(key.as_ref(), Column::ContractsRawCode)
+        self._contains_key(key.as_ref(), Column::ContractsRawCode)
     }
 }
 
@@ -52,11 +52,11 @@ impl StorageMutate<ContractsRawCode> for Database {
         key: &ContractId,
         value: &[u8],
     ) -> Result<Option<Contract>, Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
+        self._insert(key.as_ref(), Column::ContractsRawCode, value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsRawCode)
+        self._remove(key.as_ref(), Column::ContractsRawCode)
     }
 }
 
@@ -64,11 +64,11 @@ impl StorageInspect<ContractsLatestUtxo> for Database {
     type Error = Error;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<UtxoId>>, Self::Error> {
-        self.get(key.as_ref(), Column::ContractsLatestUtxo)
+        self._get(key.as_ref(), Column::ContractsLatestUtxo)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Self::Error> {
-        self.exists(key.as_ref(), Column::ContractsLatestUtxo)
+        self._contains_key(key.as_ref(), Column::ContractsLatestUtxo)
     }
 }
 
@@ -78,11 +78,11 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
         key: &ContractId,
         value: &UtxoId,
     ) -> Result<Option<UtxoId>, Self::Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsLatestUtxo, *value)
+        self._insert(key.as_ref(), Column::ContractsLatestUtxo, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
+        self._remove(key.as_ref(), Column::ContractsLatestUtxo)
     }
 }
 

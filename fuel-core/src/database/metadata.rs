@@ -22,7 +22,7 @@ pub(crate) const DB_VERSION: u32 = 0;
 impl Database {
     pub fn init(&self, config: &Config) -> Result<(), Error> {
         // check only for one field if it initialized or not.
-        self.insert(
+        self._insert(
             CHAIN_NAME_KEY,
             Column::Metadata,
             config.chain_conf.chain_name.clone(),
@@ -42,14 +42,15 @@ impl Database {
             .and_then(|c| c.height)
             .unwrap_or_default();
 
-        let _: Option<u32> = self.insert(DB_VERSION_KEY, Column::Metadata, DB_VERSION)?;
+        let _: Option<u32> =
+            self._insert(DB_VERSION_KEY, Column::Metadata, DB_VERSION)?;
         let _: Option<BlockHeight> =
-            self.insert(CHAIN_HEIGHT_KEY, Column::Metadata, chain_height)?;
+            self._insert(CHAIN_HEIGHT_KEY, Column::Metadata, chain_height)?;
         let _: Option<BlockHeight> =
-            self.insert(FINALIZED_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+            self._insert(FINALIZED_DA_HEIGHT_KEY, Column::Metadata, 0)?;
         let _: Option<BlockHeight> =
-            self.insert(VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, 0)?;
-        let _: Option<BlockHeight> = self.insert(
+            self._insert(VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+        let _: Option<BlockHeight> = self._insert(
             LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
             Column::Metadata,
             0,
@@ -58,10 +59,10 @@ impl Database {
     }
 
     pub fn get_chain_name(&self) -> Result<Option<String>, Error> {
-        self.get(CHAIN_NAME_KEY, Column::Metadata)
+        self._get(CHAIN_NAME_KEY, Column::Metadata)
     }
 
     pub fn get_starting_chain_height(&self) -> Result<Option<BlockHeight>, Error> {
-        self.get(CHAIN_HEIGHT_KEY, Column::Metadata)
+        self._get(CHAIN_HEIGHT_KEY, Column::Metadata)
     }
 }

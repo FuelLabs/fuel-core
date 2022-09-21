@@ -25,11 +25,11 @@ impl StorageInspect<ContractsInfo> for Database {
     type Error = Error;
 
     fn get(&self, key: &ContractId) -> Result<Option<Cow<(Salt, Bytes32)>>, Error> {
-        Database::get(self, key.as_ref(), Column::ContractsInfo)
+        self._get(key.as_ref(), Column::ContractsInfo)
     }
 
     fn contains_key(&self, key: &ContractId) -> Result<bool, Error> {
-        Database::exists(self, key.as_ref(), Column::ContractsInfo)
+        self._contains_key(key.as_ref(), Column::ContractsInfo)
     }
 }
 
@@ -39,11 +39,11 @@ impl StorageMutate<ContractsInfo> for Database {
         key: &ContractId,
         value: &(Salt, Bytes32),
     ) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsInfo, *value)
+        self._insert(key.as_ref(), Column::ContractsInfo, *value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {
-        Database::remove(self, key.as_ref(), Column::ContractsInfo)
+        self._remove(key.as_ref(), Column::ContractsInfo)
     }
 }
 
@@ -127,7 +127,7 @@ mod tests {
             .unwrap();
 
         assert!(!database
-            .exists(contract_id.as_ref(), Column::ContractsInfo)
+            ._contains_key(contract_id.as_ref(), Column::ContractsInfo)
             .unwrap());
     }
 

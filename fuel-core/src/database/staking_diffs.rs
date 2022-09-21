@@ -18,11 +18,12 @@ impl StorageInspect<StakingDiffs> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &DaBlockHeight) -> Result<Option<Cow<StakingDiff>>, KvStoreError> {
-        Database::get(self, &key.to_be_bytes(), Column::StakingDiffs).map_err(Into::into)
+        self._get(&key.to_be_bytes(), Column::StakingDiffs)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &DaBlockHeight) -> Result<bool, KvStoreError> {
-        Database::exists(self, &key.to_be_bytes(), Column::StakingDiffs)
+        self._contains_key(&key.to_be_bytes(), Column::StakingDiffs)
             .map_err(Into::into)
     }
 }
@@ -33,7 +34,7 @@ impl StorageMutate<StakingDiffs> for Database {
         key: &DaBlockHeight,
         value: &StakingDiff,
     ) -> Result<Option<StakingDiff>, KvStoreError> {
-        Database::insert(self, key.to_be_bytes(), Column::StakingDiffs, value.clone())
+        self._insert(key.to_be_bytes(), Column::StakingDiffs, value.clone())
             .map_err(Into::into)
     }
 
@@ -41,7 +42,7 @@ impl StorageMutate<StakingDiffs> for Database {
         &mut self,
         key: &DaBlockHeight,
     ) -> Result<Option<StakingDiff>, KvStoreError> {
-        Database::remove(self, &key.to_be_bytes(), Column::StakingDiffs)
+        self._remove(&key.to_be_bytes(), Column::StakingDiffs)
             .map_err(Into::into)
     }
 }

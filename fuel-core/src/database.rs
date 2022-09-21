@@ -185,7 +185,7 @@ impl Database {
     // TODO: Get `K` and `V` by reference to force compilation error for the current
     //  code(we have many `Copy`).
     //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
+    fn _insert<K: AsRef<[u8]>, V: Serialize, R: DeserializeOwned>(
         &self,
         key: K,
         column: Column,
@@ -205,7 +205,7 @@ impl Database {
         }
     }
 
-    fn remove<V: DeserializeOwned>(
+    fn _remove<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -216,7 +216,7 @@ impl Database {
             .transpose()
     }
 
-    fn get<V: DeserializeOwned>(
+    fn _get<V: DeserializeOwned>(
         &self,
         key: &[u8],
         column: Column,
@@ -229,7 +229,7 @@ impl Database {
 
     // TODO: Rename to `contains_key` to be the same as `StorageInspect`
     //  https://github.com/FuelLabs/fuel-core/issues/622
-    fn exists(&self, key: &[u8], column: Column) -> Result<bool, Error> {
+    fn _contains_key(&self, key: &[u8], column: Column) -> Result<bool, Error> {
         self.data.exists(key, column)
     }
 
@@ -488,14 +488,14 @@ mod relayer {
 
         async fn set_finalized_da_height(&self, block: DaBlockHeight) {
             let _: Option<BlockHeight> = self
-                .insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, block)
+                ._insert(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata, block)
                 .unwrap_or_else(|err| {
                     panic!("set_finalized_da_height should always succeed: {:?}", err);
                 });
         }
 
         async fn get_finalized_da_height(&self) -> DaBlockHeight {
-            match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata) {
+            match self._get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata) {
                 Ok(res) => {
                     return res.expect(
                         "get_finalized_da_height value should be always present and set",
@@ -509,14 +509,14 @@ mod relayer {
 
         async fn set_validators_da_height(&self, block: DaBlockHeight) {
             let _: Option<BlockHeight> = self
-                .insert(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, block)
+                ._insert(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, block)
                 .unwrap_or_else(|err| {
                     panic!("set_validators_da_height should always succeed: {:?}", err);
                 });
         }
 
         async fn get_validators_da_height(&self) -> DaBlockHeight {
-            match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata) {
+            match self._get(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata) {
                 Ok(res) => {
                     return res.expect(
                         "get_validators_da_height value should be always present and set",
@@ -532,7 +532,7 @@ mod relayer {
         }
 
         async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight {
-            match self.get(
+            match self._get(
                 metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
                 Column::Metadata,
             ) {
@@ -554,7 +554,7 @@ mod relayer {
             block_height: BlockHeight,
         ) {
             let _: Option<BlockHeight> = self
-                .insert(
+                ._insert(
                     metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
                     Column::Metadata,
                     block_height,

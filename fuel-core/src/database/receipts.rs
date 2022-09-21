@@ -20,11 +20,13 @@ impl StorageInspect<Receipts> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<Vec<Receipt>>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::Receipts).map_err(Into::into)
+        self._get(key.as_ref(), Column::Receipts)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::Receipts).map_err(Into::into)
+        self._contains_key(key.as_ref(), Column::Receipts)
+            .map_err(Into::into)
     }
 }
 
@@ -34,10 +36,12 @@ impl StorageMutate<Receipts> for Database {
         key: &Bytes32,
         value: &[Receipt],
     ) -> Result<Option<Vec<Receipt>>, KvStoreError> {
-        Database::insert(self, key.as_ref(), Column::Receipts, value).map_err(Into::into)
+        self._insert(key.as_ref(), Column::Receipts, value)
+            .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<Vec<Receipt>>, KvStoreError> {
-        Database::remove(self, key.as_ref(), Column::Receipts).map_err(Into::into)
+        self._remove(key.as_ref(), Column::Receipts)
+            .map_err(Into::into)
     }
 }

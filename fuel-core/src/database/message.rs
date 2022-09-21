@@ -34,11 +34,13 @@ impl StorageInspect<Messages> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &MessageId) -> Result<Option<Cow<Message>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        self._get(key.as_ref(), Column::Messages)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &MessageId) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::Messages).map_err(Into::into)
+        self._contains_key(key.as_ref(), Column::Messages)
+            .map_err(Into::into)
     }
 }
 
@@ -49,11 +51,10 @@ impl StorageMutate<Messages> for Database {
         value: &Message,
     ) -> Result<Option<Message>, KvStoreError> {
         // insert primary record
-        let result =
-            Database::insert(self, key.as_ref(), Column::Messages, value.clone())?;
+        let result = self._insert(key.as_ref(), Column::Messages, value.clone())?;
 
         // insert secondary record by owner
-        let _: Option<bool> = Database::insert(
+        let _: Option<bool> = Database::_insert(
             self,
             owner_msg_id_key(&value.recipient, key),
             Column::OwnedMessageIds,
@@ -64,11 +65,10 @@ impl StorageMutate<Messages> for Database {
     }
 
     fn remove(&mut self, key: &MessageId) -> Result<Option<Message>, KvStoreError> {
-        let result: Option<Message> =
-            Database::remove(self, key.as_ref(), Column::Messages)?;
+        let result: Option<Message> = self._remove(key.as_ref(), Column::Messages)?;
 
         if let Some(message) = &result {
-            Database::remove::<bool>(
+            Database::_remove::<bool>(
                 self,
                 &owner_msg_id_key(&message.recipient, key),
                 Column::OwnedMessageIds,

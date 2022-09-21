@@ -34,11 +34,13 @@ impl StorageInspect<Transactions> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+        self._get(key.as_ref(), Column::Transactions)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+        self._contains_key(key.as_ref(), Column::Transactions)
+            .map_err(Into::into)
     }
 }
 
@@ -48,12 +50,13 @@ impl StorageMutate<Transactions> for Database {
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        Database::insert(self, key.as_ref(), Column::Transactions, value.clone())
+        self._insert(key.as_ref(), Column::Transactions, value.clone())
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
-        Database::remove(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+        self._remove(key.as_ref(), Column::Transactions)
+            .map_err(Into::into)
     }
 }
 
@@ -102,7 +105,7 @@ impl Database {
         tx_idx: TransactionIndex,
         tx_id: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
-        self.insert(
+        self._insert(
             owned_tx_index_key(owner, block_height, tx_idx),
             Column::TransactionsByOwnerBlockIdx,
             *tx_id,
@@ -114,14 +117,14 @@ impl Database {
         tx_id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.insert(tx_id, Column::TransactionStatus, status)
+        self._insert(tx_id, Column::TransactionStatus, status)
     }
 
     pub fn get_tx_status(
         &self,
         tx_id: &Bytes32,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.get(&tx_id.deref()[..], Column::TransactionStatus)
+        self._get(&tx_id.deref()[..], Column::TransactionStatus)
     }
 }
 

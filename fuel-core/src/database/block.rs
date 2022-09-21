@@ -33,11 +33,13 @@ impl StorageInspect<FuelBlocks> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &Bytes32) -> Result<Option<Cow<FuelBlockDb>>, KvStoreError> {
-        Database::get(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+        self._get(key.as_ref(), Column::FuelBlocks)
+            .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), Column::FuelBlocks).map_err(Into::into)
+        self._contains_key(key.as_ref(), Column::FuelBlocks)
+            .map_err(Into::into)
     }
 }
 
@@ -47,21 +49,21 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &Bytes32,
         value: &FuelBlockDb,
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        let _: Option<BlockHeight> = Database::insert(
+        let _: Option<BlockHeight> = Database::_insert(
             self,
             value.headers.height.to_be_bytes(),
             Column::FuelBlockIds,
             *key,
         )?;
-        Database::insert(self, key.as_ref(), Column::FuelBlocks, value)
+        self._insert(key.as_ref(), Column::FuelBlocks, value)
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<FuelBlockDb>, KvStoreError> {
         let block: Option<FuelBlockDb> =
-            Database::remove(self, key.as_ref(), Column::FuelBlocks)?;
+            self._remove(key.as_ref(), Column::FuelBlocks)?;
         if let Some(block) = &block {
-            let _: Option<Bytes32> = Database::remove(
+            let _: Option<Bytes32> = Database::_remove(
                 self,
                 &block.headers.height.to_be_bytes(),
                 Column::FuelBlockIds,
@@ -96,7 +98,7 @@ impl Database {
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
-        Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
+        self._get(&height.to_bytes()[..], Column::FuelBlockIds)
     }
 
     pub fn all_block_ids(

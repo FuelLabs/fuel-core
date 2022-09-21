@@ -35,13 +35,13 @@ impl StorageInspect<ContractsState<'_>> for Database {
 
     fn get(&self, key: &(&ContractId, &Bytes32)) -> Result<Option<Cow<Bytes32>>, Error> {
         let key = MultiKey::new(key);
-        self.get(key.as_ref(), Column::ContractsState)
+        self._get(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Error> {
         let key = MultiKey::new(key);
-        self.exists(key.as_ref(), Column::ContractsState)
+        self._contains_key(key.as_ref(), Column::ContractsState)
             .map_err(Into::into)
     }
 }
@@ -53,7 +53,7 @@ impl StorageMutate<ContractsState<'_>> for Database {
         value: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new(key);
-        Database::insert(self, key.as_ref(), Column::ContractsState, *value)
+        self._insert(key.as_ref(), Column::ContractsState, *value)
             .map_err(Into::into)
     }
 
@@ -62,20 +62,21 @@ impl StorageMutate<ContractsState<'_>> for Database {
         key: &(&ContractId, &Bytes32),
     ) -> Result<Option<Bytes32>, Error> {
         let key = MultiKey::new(key);
-        Database::remove(self, key.as_ref(), Column::ContractsState).map_err(Into::into)
+        self._remove(key.as_ref(), Column::ContractsState)
+            .map_err(Into::into)
     }
 }
 
 impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
     fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
-        let items: Vec<_> = Database::iter_all::<Vec<u8>, Bytes32>(
-            self,
-            Column::ContractsState,
-            Some(parent.as_ref().to_vec()),
-            None,
-            Some(IterDirection::Forward),
-        )
-        .try_collect()?;
+        let items: Vec<_> = self
+            .iter_all::<Vec<u8>, Bytes32>(
+                Column::ContractsState,
+                Some(parent.as_ref().to_vec()),
+                None,
+                Some(IterDirection::Forward),
+            )
+            .try_collect()?;
 
         let root = items
             .iter()
