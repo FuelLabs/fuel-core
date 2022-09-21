@@ -2,13 +2,10 @@ use std::{
     io,
     iter,
 };
-
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
     TransactionBuilder,
 };
-use tempfile::TempDir;
-
 pub use fuel_core::database::Database;
 pub use fuel_core_interfaces::common::{
     consts::*,
@@ -17,7 +14,7 @@ pub use fuel_core_interfaces::common::{
 pub use rand::Rng;
 
 fn new_db() -> io::Result<Database> {
-    TempDir::new().and_then(|t| Database::open(t.as_ref()).map_err(|e| e.into()))
+    Ok(Database::default())
 }
 
 pub struct ContractCode {
