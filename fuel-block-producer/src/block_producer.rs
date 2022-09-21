@@ -68,9 +68,7 @@ impl<'a> Trait for Producer<'a> {
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
         let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self
-            .select_new_da_height(previous_block_info.da_height)
-            .await?;
+        let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
 
         // transaction selection could use a plugin based approach in the
         // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
@@ -125,7 +123,7 @@ impl<'a> Trait for Producer<'a> {
 }
 
 impl<'a> Producer<'a> {
-    async fn select_new_da_height(
+    fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {
