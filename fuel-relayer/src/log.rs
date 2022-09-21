@@ -27,7 +27,6 @@ use fuel_core_interfaces::{
 pub struct MessageLog {
     pub sender: Address,
     pub recipient: Address,
-    pub owner: Address,
     pub nonce: Word,
     pub amount: Word,
     pub data: Vec<u8>,
@@ -79,7 +78,6 @@ impl TryFrom<&Log> for EthEventLog {
                 let amount = message.amount;
                 let data = message.data.to_vec();
                 let nonce = message.nonce;
-                let owner = Address::from(message.owner);
                 let recipient = Address::from(message.recipient);
                 let sender = Address::from(message.sender);
 
@@ -89,7 +87,6 @@ impl TryFrom<&Log> for EthEventLog {
                     nonce,
                     sender,
                     recipient,
-                    owner,
                     // Safety: logs without block numbers are rejected by
                     // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
                     // If block_number is none, that means the log is pending.

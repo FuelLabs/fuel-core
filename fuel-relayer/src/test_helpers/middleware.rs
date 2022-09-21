@@ -34,7 +34,7 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::test_helpers::event_to_log;
+use crate::test_helpers::EvtToLog;
 
 #[derive(Clone)]
 pub struct MockMiddleware {
@@ -336,7 +336,7 @@ impl Middleware for MockMiddleware {
                     height: minimum_block_number,
                     ..Default::default()
                 };
-                let mut log = event_to_log(event, &*crate::abi::fuel::fuel::FUEL_ABI);
+                let mut log = event.into_log();
                 log.address = address;
 
                 self.update_data(move |data| {

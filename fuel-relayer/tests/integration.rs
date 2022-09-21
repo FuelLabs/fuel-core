@@ -3,10 +3,7 @@
 use std::sync::Arc;
 
 use ethers_contract::EthEvent;
-use ethers_core::{
-    abi::Tokenizable,
-    types::Log,
-};
+use ethers_core::types::Log;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageInspect,
@@ -29,6 +26,7 @@ use fuel_relayer::{
             MockMiddleware,
             TriggerType,
         },
+        EvtToLog,
         LogTestHelper,
     },
     Config,
@@ -64,9 +62,7 @@ async fn can_set_da_height() {
         Default::default(),
     );
 
-    dbg!();
     relayer.await_synced().await.unwrap();
-    dbg!();
 
     assert_eq!(mock_db.get_finalized_da_height().await, 100);
 }
@@ -76,45 +72,20 @@ async fn can_get_messages() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
 
-    let topics = vec![
-        SentMessageFilter::signature(),
-        H256::default(),
-        H256::default(),
-    ];
-    let message = |nonce| {
+    let config = Config::default_test();
+    let contract_address = config.eth_v2_listening_contracts[0].into();
+    let message = |nonce, block_number: u64| {
         let message = SentMessageFilter {
             nonce,
             ..Default::default()
         };
-        let mut message = message.into_token();
-        match &mut message {
-            ethers_core::abi::Token::Tuple(message) => {
-                message.remove(0);
-                message.remove(0);
-            }
-            _ => (),
-        }
-        ethers_core::abi::encode(&[message])
+        let mut log = message.into_log();
+        log.address = contract_address;
+        log.block_number = Some(block_number.into());
+        log
     };
 
-    let config = Config::default_test();
-
-    let logs = vec![
-        Log {
-            address: config.eth_v2_listening_contracts[0].into(),
-            topics: topics.clone(),
-            data: message(1).into(),
-            block_number: Some(3.into()),
-            ..Default::default()
-        },
-        Log {
-            address: config.eth_v2_listening_contracts[0].into(),
-            topics,
-            data: message(2).into(),
-            block_number: Some(5.into()),
-            ..Default::default()
-        },
-    ];
+    let logs = vec![message(1, 3), message(2, 5)];
     let expected_messages: Vec<_> = logs.iter().map(|l| l.to_msg()).collect();
     eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
     // Setup the eth node with a block high enough that there

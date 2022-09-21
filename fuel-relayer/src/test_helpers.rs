@@ -39,12 +39,28 @@ pub trait LogTestHelper {
     fn to_msg(&self) -> CheckedMessage;
 }
 
+pub trait EvtToLog {
+    fn into_log(self) -> Log;
+}
+
 impl LogTestHelper for Log {
     fn to_msg(&self) -> CheckedMessage {
         match EthEventLog::try_from(self).unwrap() {
             EthEventLog::Message(m) => Message::from(&m).check(),
             _ => panic!("This log does not form a message"),
         }
+    }
+}
+
+impl EvtToLog for crate::abi::bridge::message::SentMessageFilter {
+    fn into_log(self) -> Log {
+        event_to_log(self, &*crate::abi::bridge::message::MESSAGE_ABI)
+    }
+}
+
+impl EvtToLog for crate::abi::fuel::fuel::BlockCommittedFilter {
+    fn into_log(self) -> Log {
+        event_to_log(self, &*crate::abi::fuel::fuel::FUEL_ABI)
     }
 }
 

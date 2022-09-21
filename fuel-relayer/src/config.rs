@@ -1,27 +1,19 @@
+use ethers_contract::EthEvent;
 use ethers_core::types::{
     H160,
     H256,
 };
 use fuel_core_interfaces::model::DaBlockHeight;
 use once_cell::sync::Lazy;
-use sha3::{
-    Digest,
-    Keccak256,
-};
 use std::{
     str::FromStr,
     time::Duration,
 };
 
-pub fn keccak256(data: &'static str) -> H256 {
-    let out = Keccak256::digest(data.as_bytes());
-    H256::from_slice(out.as_slice())
-}
-
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
-    Lazy::new(|| keccak256("SentMessage(bytes32,bytes32,bytes32,uint64,uint64,bytes)"));
+    Lazy::new(|| crate::abi::bridge::message::SentMessageFilter::signature());
 pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
-    Lazy::new(|| keccak256("BlockCommitted(bytes32,uint32)"));
+    Lazy::new(|| crate::fuel::fuel::BlockCommittedFilter::signature());
 
 #[derive(Clone, Debug)]
 /// Configuration settings for the [`Relayer`](crate::relayer::Relayer).
@@ -106,28 +98,5 @@ impl Config {
 
     pub fn eth_v2_commit_contract(&self) -> Option<H160> {
         self.eth_v2_commit_contract
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::config::*;
-
-    #[test]
-    pub fn test_function_signatures() {
-        assert_eq!(
-            *ETH_LOG_MESSAGE,
-            H256::from_str(
-                "0x6e777c34951035560591fac300515942821cca139ab8a514eb117129048e21b2"
-            )
-            .unwrap()
-        );
-        assert_eq!(
-            *ETH_FUEL_BLOCK_COMMITTED,
-            H256::from_str(
-                "0xacd88c3d7181454636347207da731b757b80b2696b26d8e1b378d2ab5ed3e872"
-            )
-            .unwrap()
-        );
     }
 }

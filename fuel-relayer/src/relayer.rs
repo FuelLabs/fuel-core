@@ -374,7 +374,7 @@ where
     // message_root: merkle root of of messages within this block
     // message count within this block
 
-    let mut block = crate::abi::fuel::fuel::BlockHeader::default();
+    let mut block = crate::abi::fuel::fuel::SidechainBlockHeader::default();
 
     // minimum eth block height
     let eth_block_number = *new_block.number;
@@ -384,13 +384,10 @@ where
     // prev_root merkle root of all previous blocks
     block.previous_block_root = *new_block.prev_root;
 
-    block.block_number = eth_block_number;
-
     let txn = client.commit_block(
         eth_block_number,
         Default::default(),
         block,
-        Default::default(),
         Default::default(),
         Default::default(),
         Default::default(),
