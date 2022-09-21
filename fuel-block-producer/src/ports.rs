@@ -9,10 +9,9 @@ use fuel_core_interfaces::{
 };
 use std::sync::Arc;
 
-#[async_trait]
 pub trait Relayer: Sync + Send {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
+    fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
 }
 
 #[async_trait]

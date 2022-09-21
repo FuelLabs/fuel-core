@@ -46,10 +46,9 @@ pub struct MockRelayer {
     pub best_finalized_height: DaBlockHeight,
 }
 
-#[async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
+    fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
     }
 }

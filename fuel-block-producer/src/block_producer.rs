@@ -128,7 +128,7 @@ impl<'a> Producer<'a> {
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {
-        let best_height = self.relayer.get_best_finalized_da_height().await?;
+        let best_height = self.relayer.get_best_finalized_da_height()?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
             // without waiting for our relayer's da_height to catch up to imported da_height.
