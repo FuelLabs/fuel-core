@@ -85,8 +85,9 @@ impl<'a> Trait for Producer<'a> {
             // This will be set by the executor
             transactions_root: Default::default(),
             time: Utc::now(),
-            // TODO: is this field required?
-            producer: self.config.validator_id,
+            // TODO: producer identity will be removed from the header eventually
+            //       and stored in the sealed block consensus info instead.
+            producer: Default::default(),
             metadata: None,
         };
         let mut block = FuelBlock {
