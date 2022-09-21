@@ -67,7 +67,7 @@ impl<'a> Trait for Producer<'a> {
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
 
-        let previous_block_info = self.previous_block_info(height).await?;
+        let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self
             .select_new_da_height(previous_block_info.da_height)
             .await?;
@@ -151,10 +151,7 @@ impl<'a> Producer<'a> {
         Ok(selected_txs)
     }
 
-    async fn previous_block_info(
-        &self,
-        height: BlockHeight,
-    ) -> Result<PreviousBlockInfo> {
+    fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
         // block 0 is reserved for genesis
         if height == 0u32.into() {
             Err(GenesisBlock.into())
