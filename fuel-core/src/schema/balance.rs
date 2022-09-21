@@ -85,7 +85,7 @@ impl BalanceQuery {
             &owner,
             &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
             None,
-            &db,
+            db,
         )
         .unspent_resources()
         .map(|res| res.map(|resource| *resource.amount()))
@@ -123,7 +123,7 @@ impl BalanceQuery {
 
         let mut amounts_per_asset = HashMap::new();
 
-        for resource in AssetsQuery::new(&owner, None, None, &db).unspent_resources() {
+        for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
             let resource = resource?;
             *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
                 resource.amount();
