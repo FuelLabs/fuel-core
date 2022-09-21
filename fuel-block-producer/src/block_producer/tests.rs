@@ -53,16 +53,9 @@ async fn can_produce_initial_block() {
     let ctx = TestContext::default();
     let producer = ctx.producer();
 
-    let err = producer
-        .produce_block(0u32.into())
-        .await
-        .expect_err("expected failure");
+    let result = producer.produce_block(1u32.into()).await;
 
-    assert!(
-        matches!(err.downcast_ref::<Error>(), Some(Error::GenesisBlock)),
-        "unexpected err {:?}",
-        err
-    );
+    assert!(result.is_ok());
 }
 
 #[tokio::test]
