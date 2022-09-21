@@ -41,7 +41,7 @@ There are three possible ways how to implement those relationships:
 
 1. Every service knows about other services related somehow to it. It 
 can be interpreted as: each service struct containing reference to other 
-services inside and using the `async/await` mechanism to interact.
+services inside and using the sync/async mechanism to interact.
 1. Every service knows nothing about other services. It can be interpreted 
 as: each service struct using channels for communication and knowing 
 nothing about subscribers/listeners.
@@ -49,7 +49,7 @@ nothing about subscribers/listeners.
 ascending services. As an example: P2P service knows nothing about its 
 listeners(ascending services), and it only propagates information via 
 channels. But FS knows about P2P(an example of descending service)
-and may request some information directly by calling the `async` method. 
+and may request some information directly by calling the sync/async methods. 
 The same applies to BI. FS notifies all subscribers that it synced a valid block(sealed or not sealed).
 
 Those rules are rough, and services can have cases where some functionality 
@@ -90,6 +90,8 @@ pub enum FetchRequest {
     HeadersByHash([Bytes32]),
     BlocksByRanges([Range<BlockHeight>]),
     BlocksByHash([Bytes32]),
+    /// Ask neighbors about the latest block height
+    Heartbeat,
 }
 
 // TODO: `D` should implement some bound that allows to serialize it for gossiping.
@@ -110,9 +112,6 @@ pub trait Punisher<Reason> {
 pub trait BlocksFetcher: Punisher<BlockReason> + Gossiper {
     /// Returns structure that can be used to subscribe for `BlockBroadcast`.
     fn sender(&self) -> &Sender<BlockBroadcast>;
-
-    /// Pings the block fetcher to fetch a new latest block header and broadcasts it.
-    fn ping(&mut self);
 
     /// Fetches the data(somehow, maybe in parallel) and broadcasts ready parts.
     fn fetch(&mut self, request: FetchRequest);
