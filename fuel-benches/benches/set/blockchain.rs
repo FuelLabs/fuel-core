@@ -13,10 +13,11 @@ pub fn run(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("blockchain");
 
+    // TODO Add cases with 1m+
+    // Blocked by https://github.com/FuelLabs/fuel-core/issues/636
     let cases = vec![
         1, 10, 100, 1_000, 10_000,
         100_000,
-        // 1_000_000 - I/O error in BAL; investigate
     ];
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
