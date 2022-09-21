@@ -143,7 +143,6 @@ async fn balance() {
         .add_witness(Default::default())
         .finalize();
 
-    // TODO: Doesn't work for `MessageSigned` because `fuel-tx` doesn't support it
     client.submit(&tx).await.unwrap();
 
     let balance = client
