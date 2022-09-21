@@ -1,12 +1,10 @@
-use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        StateConfig,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
+use fuel_chain_config::chain_config::{
+    CoinConfig,
+    StateConfig,
+};
+use fuel_core::service::{
+    Config,
+    FuelService,
 };
 use fuel_core_interfaces::common::{
     fuel_tx::{

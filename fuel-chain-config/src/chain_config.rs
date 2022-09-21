@@ -1,6 +1,6 @@
-use crate::{
-    database::Database,
-    model::BlockHeight,
+use crate::serialization::{
+    HexNumber,
+    HexType,
 };
 use fuel_core_interfaces::{
     common::{
@@ -13,7 +13,9 @@ use fuel_core_interfaces::{
         },
         fuel_vm::fuel_types::Word,
     },
+    db::Error,
     model::{
+        BlockHeight,
         DaBlockHeight,
         Message,
     },
@@ -31,17 +33,12 @@ use serde_with::{
     serde_as,
     skip_serializing_none,
 };
-use serialization::{
-    HexNumber,
-    HexType,
-};
+
 use std::{
     io::ErrorKind,
     path::PathBuf,
     str::FromStr,
 };
-
-pub mod serialization;
 
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
@@ -142,6 +139,13 @@ pub enum ProductionStrategy {
     ProofOfStake,
 }
 
+pub trait ChainConfigDb {
+    fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>>;
+    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error>;
+    fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error>;
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error>;
+}
+
 // TODO: do streaming deserialization to handle large state configs
 #[serde_as]
 #[skip_serializing_none]
@@ -160,7 +164,10 @@ pub struct StateConfig {
 }
 
 impl StateConfig {
-    pub fn generate_state_config(db: Database) -> anyhow::Result<Self> {
+    pub fn generate_state_config<T>(db: T) -> anyhow::Result<Self>
+    where
+        T: ChainConfigDb,
+    {
         Ok(StateConfig {
             coins: db.get_coin_config()?,
             contracts: db.get_contract_config()?,

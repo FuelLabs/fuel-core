@@ -1,12 +1,10 @@
-use fuel_core::{
-    chain_config::{
-        MessageConfig,
-        StateConfig,
-    },
-    service::{
-        Config,
-        FuelService,
-    },
+use fuel_chain_config::chain_config::{
+    MessageConfig,
+    StateConfig,
+};
+use fuel_core::service::{
+    Config,
+    FuelService,
 };
 use fuel_core_interfaces::common::{
     fuel_crypto::SecretKey,

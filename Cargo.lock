@@ -2214,6 +2214,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-chain-config"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fuel-core-interfaces",
+ "hex",
+ "insta",
+ "itertools",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tracing",
+]
+
+[[package]]
 name = "fuel-core"
 version = "0.10.1"
 dependencies = [
@@ -2233,6 +2249,7 @@ dependencies = [
  "fuel-block-executor",
  "fuel-block-importer",
  "fuel-block-producer",
+ "fuel-chain-config",
  "fuel-core-bft",
  "fuel-core-interfaces",
  "fuel-metrics",
@@ -2438,6 +2455,7 @@ version = "0.0.0"
 dependencies = [
  "async-std",
  "chrono",
+ "fuel-chain-config",
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-gql-client",

@@ -1,10 +1,10 @@
+use fuel_chain_config::chain_config::{
+    CoinConfig,
+    ContractConfig,
+    MessageConfig,
+    StateConfig,
+};
 use fuel_core::{
-    chain_config::{
-        CoinConfig,
-        ContractConfig,
-        MessageConfig,
-        StateConfig,
-    },
     database::Database,
     service::{
         Config,

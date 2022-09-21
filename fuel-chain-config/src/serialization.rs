@@ -1,8 +1,10 @@
-use crate::model::BlockHeight;
 use core::fmt;
-use fuel_core_interfaces::common::fuel_types::{
-    bytes::WORD_SIZE,
-    Word,
+use fuel_core_interfaces::{
+    common::fuel_types::{
+        bytes::WORD_SIZE,
+        Word,
+    },
+    model::BlockHeight,
 };
 use serde::{
     de::Error,

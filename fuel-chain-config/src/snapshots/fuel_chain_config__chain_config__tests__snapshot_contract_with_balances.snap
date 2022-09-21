@@ -1,6 +1,5 @@
 ---
-source: fuel-core/src/genesis.rs
-assertion_line: 275
+source: fuel-chain-config/src/chain_config.rs
 expression: json
 ---
 {
