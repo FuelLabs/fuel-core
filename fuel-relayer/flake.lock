@@ -1,0 +1,129 @@
+{
+  "nodes": {
+    "dapptools": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1663083918,
+        "narHash": "sha256-JVRKYeHidAdaqzypn4UZvJ/1WGCt8nK7VUm5W7KDZyA=",
+        "owner": "dapphub",
+        "repo": "dapptools",
+        "rev": "01ef8ea418c3fe49089a44d56013d8fcc34a1ec2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dapphub",
+        "ref": "master",
+        "repo": "dapptools",
+        "type": "github"
+      }
+    },
+    "fuel-v1-contracts": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1659016279,
+        "narHash": "sha256-naEkyaXa5BROsIDas1sYdJ5mvZPK1j/ftB7i7k5BqzM=",
+        "owner": "FuelLabs",
+        "repo": "fuel-merkle-sol",
+        "rev": "90e8463074d9c038ef7f0b15d3bb91549812bb02",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FuelLabs",
+        "repo": "fuel-merkle-sol",
+        "type": "github"
+      }
+    },
+    "fuel-v2-contracts": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1660957336,
+        "narHash": "sha256-J+jgpJabagUwE6Orlb5kqfBGS11psBBw5SoghUoeQyA=",
+        "ref": "refs/heads/master",
+        "rev": "3161ba9a80b827bfbb9fbc9c8f2db421db30d230",
+        "revCount": 209,
+        "type": "git",
+        "url": "ssh://git@github.com/fuellabs/fuel-v2-contracts/"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@github.com/fuellabs/fuel-v2-contracts/"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1663494472,
+        "narHash": "sha256-fSowlaoXXWcAM8m9wA6u+eTJJtvruYHMA+Lb/tFi/qM=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f677051b8dc0b5e2a9348941c99eea8c4b0ff28f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1653917367,
+        "narHash": "sha256-04MsJC0g9kE01nBuXThMppZK+yvCZECQnUaZKSU+HJo=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "437c8e6554911095f0557d524e9d2ffe1c26e33a",
+        "type": "github"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
+    "npm": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
+      "locked": {
+        "lastModified": 1662627485,
+        "narHash": "sha256-Kg8u2ekU0+MsuLzgKqiaus3HquLLo2Qq+oGbQfIppos=",
+        "owner": "serokell",
+        "repo": "nix-npm-buildpackage",
+        "rev": "cab951dd024dd367511d48440de6f93664ee35aa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "serokell",
+        "repo": "nix-npm-buildpackage",
+        "type": "github"
+      }
+    },
+    "open-zeppelin": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1663664413,
+        "narHash": "sha256-fsbrzBAdsImPitwb7klreZT8fQh89PH/DqH/St4iwDU=",
+        "owner": "OpenZeppelin",
+        "repo": "openzeppelin-contracts",
+        "rev": "8769b19860863ed14e82ac78eb0d09449a49290b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "OpenZeppelin",
+        "repo": "openzeppelin-contracts",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "dapptools": "dapptools",
+        "fuel-v1-contracts": "fuel-v1-contracts",
+        "fuel-v2-contracts": "fuel-v2-contracts",
+        "nixpkgs": "nixpkgs",
+        "npm": "npm",
+        "open-zeppelin": "open-zeppelin"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
