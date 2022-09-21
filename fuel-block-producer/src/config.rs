@@ -12,7 +12,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            max_gas_per_block: 1_000_000, // TODO: pick a reasonable default value
+            // TODO: pick a reasonable default value based on gas scheduling analysis
+            max_gas_per_block: 10 * ConsensusParameters::DEFAULT.max_gas_per_tx,
             consensus_params: Default::default(),
         }
     }
