@@ -4,12 +4,10 @@ use derive_more::{
     Display,
     From,
     Into,
+    Rem,
     Sub,
 };
-use std::ops::{
-    Add,
-    Rem,
-};
+use std::ops::Add;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
@@ -26,9 +24,11 @@ use std::ops::{
     Display,
     Into,
     From,
+    Rem,
     Deref,
     Hash,
 )]
+#[rem(forward)]
 pub struct DaBlockHeight(pub u64);
 
 impl From<DaBlockHeight> for Vec<u8> {
@@ -48,14 +48,6 @@ impl Add<u64> for DaBlockHeight {
 
     fn add(self, other: u64) -> Self::Output {
         Self::from(self.0 + other)
-    }
-}
-
-impl Rem for DaBlockHeight {
-    type Output = Self;
-
-    fn rem(self, other: Self) -> Self::Output {
-        Self::from(self.0 % other.as_u64())
     }
 }
 
