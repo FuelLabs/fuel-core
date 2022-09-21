@@ -1,15 +1,24 @@
 #![allow(clippy::let_unit_value)]
-use crate::{database::Database, service::Config};
+use crate::{
+    database::Database,
+    service::Config,
+};
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool::{Sender, TxPoolDb};
+use fuel_core_interfaces::txpool::{
+    Sender,
+    TxPoolDb,
+};
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
-    sync::{broadcast, mpsc},
+    sync::{
+        broadcast,
+        mpsc,
+    },
     task::JoinHandle,
 };
 

@@ -1,13 +1,29 @@
-use crate::{Config, TxPool};
+use crate::{
+    Config,
+    TxPool,
+};
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    p2p::{P2pRequestEvent, TransactionBroadcast},
-    txpool::{self, TxPoolDb, TxPoolMpsc, TxStatusBroadcast},
+    p2p::{
+        P2pRequestEvent,
+        TransactionBroadcast,
+    },
+    txpool::{
+        self,
+        TxPoolDb,
+        TxPoolMpsc,
+        TxStatusBroadcast,
+    },
 };
 use std::sync::Arc;
 use tokio::{
-    sync::{broadcast, mpsc, Mutex, RwLock},
+    sync::{
+        broadcast,
+        mpsc,
+        Mutex,
+        RwLock,
+    },
     task::JoinHandle,
 };
 use tracing::error;
@@ -115,7 +131,7 @@ impl ServiceBuilder {
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
         {
-            return Err(anyhow!("One of context items are not set"));
+            return Err(anyhow!("One of context items are not set"))
         }
         let service = Service::new(
             self.txpool_sender.unwrap(),
@@ -285,9 +301,18 @@ pub mod tests {
     use crate::MockDb;
     use fuel_core_interfaces::{
         common::fuel_tx::TransactionBuilder,
-        txpool::{Error as TxpoolError, Sender, TxPoolMpsc, TxStatus, TxStatusBroadcast},
+        txpool::{
+            Error as TxpoolError,
+            Sender,
+            TxPoolMpsc,
+            TxStatus,
+            TxStatusBroadcast,
+        },
     };
-    use tokio::sync::{mpsc::error::TryRecvError, oneshot};
+    use tokio::sync::{
+        mpsc::error::TryRecvError,
+        oneshot,
+    };
 
     #[tokio::test]
     async fn test_start_stop() {
