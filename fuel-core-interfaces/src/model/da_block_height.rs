@@ -1,10 +1,10 @@
 use derive_more::{
     Add,
-    Sub, 
     Deref,
     Display,
     From,
     Into,
+    Sub,
 };
 use std::ops::{
     Add,
