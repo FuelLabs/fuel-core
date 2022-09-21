@@ -1,5 +1,6 @@
 use derive_more::{
     Add,
+    Sub, 
     Deref,
     Display,
     From,
@@ -8,11 +9,11 @@ use derive_more::{
 use std::ops::{
     Add,
     Rem,
-    Sub,
 };
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
+    Sub,
     Copy,
     Clone,
     Debug,
@@ -47,14 +48,6 @@ impl Add<u64> for DaBlockHeight {
 
     fn add(self, other: u64) -> Self::Output {
         Self::from(self.0 + other)
-    }
-}
-
-impl Sub for DaBlockHeight {
-    type Output = Self;
-
-    fn sub(self, other: Self) -> Self::Output {
-        Self::from(self.0 - other.as_u64())
     }
 }
 
