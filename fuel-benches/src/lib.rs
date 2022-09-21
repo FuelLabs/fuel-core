@@ -1,20 +1,21 @@
-use std::{
-    io,
-    iter,
-};
+pub use fuel_core::database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
     TransactionBuilder,
 };
-pub use fuel_core::database::Database;
 pub use fuel_core_interfaces::common::{
     consts::*,
     prelude::*,
 };
 pub use rand::Rng;
+use std::{
+    io,
+    iter,
+};
 
-fn new_db() -> io::Result<Database> {
-    Ok(Database::default())
+fn new_db() -> Database {
+    // when rocksdb is enabled, this creates a new db instance with a temporary path
+    Database::default()
 }
 
 pub struct ContractCode {
@@ -128,7 +129,7 @@ impl VmBench {
         let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        let mut db = new_db()?;
+        let mut db = new_db();
 
         db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
@@ -288,7 +289,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             prepare_db,
         } = case;
 
-        let mut db = db.map(Ok).unwrap_or_else(new_db)?;
+        let mut db = db.unwrap_or_else(new_db);
 
         if prepare_script.iter().any(|op| matches!(op, Opcode::RET(_))) {
             return Err(io::Error::new(
