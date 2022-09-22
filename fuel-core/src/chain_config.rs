@@ -474,7 +474,7 @@ mod tests {
                     nonce: rng.gen(),
                     amount: rng.gen(),
                     data: vec![rng.gen()],
-                    da_height: rng.gen(),
+                    da_height: DaBlockHeight(rng.gen()),
                 }]),
                 ..Default::default()
             }),

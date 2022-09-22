@@ -1,4 +1,7 @@
-use crate::model::BlockHeight;
+use crate::model::{
+    BlockHeight,
+    DaBlockHeight,
+};
 use core::fmt;
 use fuel_core_interfaces::common::fuel_types::{
     bytes::WORD_SIZE,
@@ -69,6 +72,26 @@ impl SerializeAs<BlockHeight> for HexNumber {
 
 impl<'de> DeserializeAs<'de, BlockHeight> for HexNumber {
     fn deserialize_as<D>(deserializer: D) -> Result<BlockHeight, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let number: u64 = HexNumber::deserialize_as(deserializer)?;
+        Ok(number.into())
+    }
+}
+
+impl SerializeAs<DaBlockHeight> for HexNumber {
+    fn serialize_as<S>(value: &DaBlockHeight, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let number: u64 = (*value).into();
+        HexNumber::serialize_as(&number, serializer)
+    }
+}
+
+impl<'de> DeserializeAs<'de, DaBlockHeight> for HexNumber {
+    fn deserialize_as<D>(deserializer: D) -> Result<DaBlockHeight, D::Error>
     where
         D: Deserializer<'de>,
     {
