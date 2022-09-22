@@ -119,7 +119,6 @@ async fn block_producer() -> Result<()> {
         config: fuel_block_producer::config::Config {
             max_gas_per_block,
             consensus_params,
-            ..Default::default()
         },
         db: &mock_db,
         txpool: &TxPoolAdapter {
