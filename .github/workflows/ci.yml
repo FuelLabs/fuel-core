@@ -92,10 +92,8 @@ jobs:
         include:
           - command: clippy
             args: --all-targets --all-features
-          # Temporarily disabling cargo make check until the following issue is addressed:
-          # https://github.com/sagiegurari/cargo-make/issues/712
-          - command: check
-            args: --all-targets --all-features --locked
+          - command: make
+            args: check --locked
           - command: test
             args: --all-targets --all-features --workspace
           - command: test
