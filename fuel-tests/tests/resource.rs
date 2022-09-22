@@ -11,10 +11,7 @@ use fuel_core_interfaces::{
         fuel_tx::AssetId,
         fuel_vm::prelude::Address,
     },
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-    },
+    model::DaBlockHeight,
 };
 use fuel_gql_client::client::{
     schema::resource::Resource,
@@ -258,7 +255,7 @@ mod messages {
                         nonce: nonce as u64,
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                        da_height: DaBlockHeight::from(1u64),
                     })
                     .collect(),
             ),
@@ -446,7 +443,7 @@ mod messages_and_coins {
                         nonce: nonce as u64,
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                        da_height: DaBlockHeight::from(1u64),
                     })
                     .collect(),
             ),

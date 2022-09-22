@@ -229,7 +229,10 @@ mod tests {
             },
         },
         db::Coins,
-        model::Message,
+        model::{
+            DaBlockHeight,
+            Message,
+        },
     };
     use itertools::Itertools;
     use rand::{
@@ -442,7 +445,7 @@ mod tests {
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],
-            da_height: 0,
+            da_height: DaBlockHeight(0),
         };
 
         config.chain_conf.initial_state = Some(StateConfig {

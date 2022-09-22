@@ -20,7 +20,10 @@ use fuel_core_interfaces::{
         },
         fuel_vm::prelude::AssetId,
     },
-    model::BlockHeight,
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+    },
 };
 use rand::{
     rngs::StdRng,
@@ -75,7 +78,7 @@ async fn snapshot_state_config() {
             nonce: rng.gen_range(0..1000),
             amount: rng.gen_range(0..1000),
             data: vec![],
-            da_height: rng.gen_range(0..1000),
+            da_height: DaBlockHeight(rng.gen_range(0..1000)),
         }]),
     };
 

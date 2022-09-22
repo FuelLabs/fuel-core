@@ -243,7 +243,6 @@ mod tests {
             Messages,
         },
         model::{
-            BlockHeight,
             DaBlockHeight,
             Message,
         },
@@ -783,7 +782,7 @@ mod tests {
                 nonce,
                 amount,
                 data: vec![],
-                da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                da_height: DaBlockHeight::from(1u64),
                 fuel_block_spend: None,
             };
 
