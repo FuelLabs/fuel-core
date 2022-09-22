@@ -1,19 +1,22 @@
-use std::{
-    cmp::Reverse,
-    ops::Deref,
-    sync::Arc,
-};
-
-use crate::Config;
 use fuel_core_interfaces::common::{
     fuel_tx::CheckedTransaction,
     fuel_types::Word,
 };
+use std::{
+    cmp::Reverse,
+    sync::Arc,
+};
+
+// TODO: This logic should be housed in the txpool,
+//  as it will have the most efficient way to select txs.
+
+// transaction selection could use a plugin based approach in the
+// future for block producers to customize block building (e.g. alternative priorities besides gas fees)
 
 pub fn select_transactions(
     mut includable_txs: Vec<Arc<CheckedTransaction>>,
-    config: &Config,
-) -> Vec<CheckedTransaction> {
+    max_gas: u64,
+) -> Vec<Arc<CheckedTransaction>> {
     // Select all txs that fit into the block, preferring ones with higher gas price.
     //
     // Future improvements to this algorithm may take into account the parallel nature of
@@ -29,7 +32,7 @@ pub fn select_transactions(
         .filter(|tx| {
             let tx_block_space = tx.max_fee();
             if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
-                if new_used_space <= config.max_gas_per_block {
+                if new_used_space <= max_gas {
                     used_block_space = new_used_space;
                     true
                 } else {
@@ -39,7 +42,6 @@ pub fn select_transactions(
                 false
             }
         })
-        .map(|tx| tx.deref().clone())
         .collect()
 }
 
@@ -108,22 +110,16 @@ mod tests {
             .map(Arc::new)
             .collect();
 
-        select_transactions(
-            txs,
-            &Config {
-                max_gas_per_block: block_gas_limit,
-                ..Default::default()
-            },
-        )
-        .into_iter()
-        .map(|tx| {
-            let tx = tx.transaction();
-            TxGas {
-                limit: tx.gas_limit(),
-                price: tx.gas_price(),
-            }
-        })
-        .collect()
+        select_transactions(txs, block_gas_limit)
+            .into_iter()
+            .map(|tx| {
+                let tx = tx.transaction();
+                TxGas {
+                    limit: tx.gas_limit(),
+                    price: tx.gas_price(),
+                }
+            })
+            .collect()
     }
 
     #[test]

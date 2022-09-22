@@ -1,5 +1,4 @@
 use crate::{
-    block_producer::transaction_selector::select_transactions,
     db::BlockProducerDatabase,
     ports::{
         Relayer,
@@ -23,7 +22,6 @@ use fuel_core_interfaces::{
     },
     common::{
         crypto::ephemeral_merkle_root,
-        fuel_tx::CheckedTransaction,
         fuel_types::Bytes32,
     },
     executor::{
@@ -38,6 +36,7 @@ use fuel_core_interfaces::{
         FuelBlockHeader,
     },
 };
+use std::ops::Deref;
 use tracing::{
     debug,
     error,
@@ -45,7 +44,6 @@ use tracing::{
 
 #[cfg(test)]
 mod tests;
-mod transaction_selector;
 
 pub struct Producer<'a> {
     pub config: Config,
@@ -70,9 +68,10 @@ impl<'a> Trait for Producer<'a> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
 
-        // transaction selection could use a plugin based approach in the
-        // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
-        let best_transactions = self.select_best_transactions(height).await?;
+        let best_transactions = self
+            .txpool
+            .get_includable_txs(height, self.config.max_gas_per_block)
+            .await?;
 
         let header = FuelBlockHeader {
             height,
@@ -90,7 +89,10 @@ impl<'a> Trait for Producer<'a> {
         };
         let mut block = FuelBlock {
             header,
-            transactions: best_transactions.into_iter().map(Into::into).collect(),
+            transactions: best_transactions
+                .into_iter()
+                .map(|tx| tx.deref().clone().into())
+                .collect(),
         };
         let result = self
             .executor
@@ -138,15 +140,6 @@ impl<'a> Producer<'a> {
             .into())
         }
         Ok(best_height)
-    }
-
-    async fn select_best_transactions(
-        &self,
-        block_height: BlockHeight,
-    ) -> Result<Vec<CheckedTransaction>> {
-        let includable_txs = self.txpool.get_includable_txs(block_height).await?;
-        let selected_txs = select_transactions(includable_txs, &self.config);
-        Ok(selected_txs)
     }
 
     fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {

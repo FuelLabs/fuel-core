@@ -61,6 +61,7 @@ impl TxPool for MockTxPool {
     async fn get_includable_txs(
         &self,
         _block_height: BlockHeight,
+        _max_gas: u64,
     ) -> Result<Vec<Arc<CheckedTransaction>>> {
         Ok(self.0.iter().cloned().map(Arc::new).collect())
     }
