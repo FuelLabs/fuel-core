@@ -1,14 +1,14 @@
 [package]
+edition = "2021"
 name = "xtask"
 version = "0.0.0"
-edition.workspace = true
-license.workspace = true
+license = "BUSL-1.1"
 publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { workspace = true }
-fuel-core = { workspace = true, default-features = false }
+clap = { version = "3.1", features = ["env", "derive"] }
+fuel-core = { path = "../fuel-core", default-features = false }
 
 [features]
 default = ["fuel-core/default"]

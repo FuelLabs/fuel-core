@@ -1,17 +1,17 @@
 [package]
 name = "fuel-metrics"
-version.workspace = true
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "0.10.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+categories = ["cryptography::cryptocurrencies"]
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel metrics"
 
 [dependencies]
-axum = { workspace = true }
-lazy_static = { workspace = true }
+axum = "0.4"
+lazy_static = "1.4"
 prometheus = "0.13"
 

@@ -1,8 +1,8 @@
 [package]
 name = "fuel-tests"
 version = "0.0.0"
-edition.workspace = true
-license.workspace = true
+edition = "2021"
+license = "BUSL-1.1"
 publish = false
 # Disable automatic test target discovery. This allows us to run all the integ tests as a single binary target (lib.rs)
 # instead of each integ test file being its own compiled & linked binary which is the default behavior. Linking with
@@ -17,20 +17,21 @@ path = "tests/lib.rs"
 harness = true
 
 [dependencies]
-chrono = { workspace = true, features = ["serde"] }
-fuel-core = { workspace = true, default-features = false }
-fuel-core-interfaces = { workspace = true, features = ["test-helpers"] }
-fuel-gql-client = { workspace = true, features = ["test-helpers"] }
-fuel-txpool = { workspace = true }
-futures = { workspace = true }
-insta = { workspace = true }
-itertools = { workspace = true }
-rand = { workspace = true }
-reqwest = { workspace = true }
-rstest = { workspace = true }
-serde_json = { workspace = true }
-tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+async-std = "1.12"
+chrono = { version = "0.4", features = ["serde"] }
+fuel-core = { path = "../fuel-core", default-features = false }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
+fuel-txpool = { path = "../fuel-txpool" }
+futures = "0.3"
+insta = "1.8"
+itertools = "0.10"
+rand = "0.8"
+reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
+rstest = { version = "0.13" }
+serde_json = "1.0"
+tempfile = "3.3"
+tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
 
 [features]
 metrics = ["fuel-core/rocksdb", "fuel-core/metrics"]

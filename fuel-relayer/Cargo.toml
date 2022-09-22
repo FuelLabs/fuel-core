@@ -1,20 +1,19 @@
 [package]
 name = "fuel-relayer"
-version.workspace = true
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "0.10.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "fuel", "fuel-vm"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel Relayer"
 
 [dependencies]
-anyhow = { workspace = true }
-async-trait = { workspace = true }
+anyhow = "1.0"
+async-trait = "0.1"
 bytes = "1.1"
-chrono = { workspace = true }
+chrono = "0.4"
 env_logger = "0.9"
 ethers-contract = { version = "0.17", default-features = false, features = [
     "abigen",
@@ -27,22 +26,22 @@ ethers-providers = { version = "0.17", default-features = false, features = [
 ] }
 ethers-signers = { version = "0.17", default-features = false }
 features = "0.10"
-fuel-core-interfaces = { workspace = true }
-futures = { workspace = true }
-hex = { workspace = true }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.10.1" }
+futures = "0.3"
+hex = "0.4"
 once_cell = "1.4"
-parking_lot = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
+parking_lot = "0.12"
+serde = "1.0"
+serde_json = "1.0"
 sha3 = "0.10"
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"]}
-tracing = { workspace = true }
+thiserror = "1.0"
+tokio = { version = "1.20", features = ["macros"]}
+tracing = "0.1"
 tracing-subscriber = "0.3.9"
 url = "2.2"
 
 [dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
+fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", features = [
     "test-helpers",
 ] }
 rand = "0.8"

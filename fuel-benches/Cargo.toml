@@ -1,20 +1,15 @@
 [package]
 name = "fuel-core-benches"
 version = "0.0.0"
-authors.workspace = true
-categories.workspace = true
-edition.workspace = true
-homepage.workspace = true
-keywords.workspace = true
-license.workspace = true
-repository.workspace = true
+edition = "2021"
+license = "BUSL-1.1"
 publish = false
 
 [dependencies]
 fuel-core = { path = "../fuel-core" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
-rand = { workspace = true }
-tempfile = { workspace = true }
+rand = "0.8"
+tempfile = "3.3"
 
 [dev-dependencies]
 criterion = "0.4"
