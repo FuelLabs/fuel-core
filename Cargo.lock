@@ -2436,7 +2436,6 @@ dependencies = [
 name = "fuel-tests"
 version = "0.0.0"
 dependencies = [
- "async-std",
  "chrono",
  "fuel-core",
  "fuel-core-interfaces",
@@ -2479,7 +2478,7 @@ dependencies = [
  "chrono",
  "fuel-core-interfaces",
  "futures",
- "parking_lot 0.11.2",
+ "parking_lot 0.12.1",
  "thiserror",
  "tokio",
  "tracing",

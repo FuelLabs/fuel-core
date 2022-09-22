@@ -1,13 +1,13 @@
 [package]
 name = "fuel-core"
-version = "0.10.1"
-authors = ["Fuel Labs <contact@fuel.sh>"]
-categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
-edition = "2021"
-homepage = "https://fuel.network/"
-keywords = ["blockchain", "cryptocurrencies", "fuel-vm", "vm"]
-license = "BUSL-1.1"
-repository = "https://github.com/FuelLabs/fuel-core"
+version.workspace = true
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "Fuel client."
 
 [[bin]]
@@ -18,54 +18,54 @@ path = "src/main.rs"
 test = false
 
 [dependencies]
-anyhow = "1.0"
+anyhow = { workspace = true }
 async-graphql = { version = "4.0", features = [
     "chrono",
     "chrono-tz",
     "tracing",
 ], default-features = false }
-async-trait = "0.1"
-axum = { version = "0.4" }
-bincode = "1.3"
+async-trait = { workspace = true }
+axum = { workspace = true }
+bincode = { workspace = true }
 byteorder = "1.4.3"
-chrono = { version = "0.4", features = ["serde"] }
-clap = { version = "3.2", features = ["env", "derive"] }
-derive_more = { version = "0.99" }
+chrono = { workspace = true, features = ["serde"] }
+clap = { workspace = true }
+derive_more = { workspace = true }
 dirs = "4.0"
 enum-iterator = "1.2"
 env_logger = "0.9"
-fuel-block-executor = { path = "../fuel-block-executor", version = "0.10.1" }
-fuel-block-importer = { path = "../fuel-block-importer", version = "0.10.1" }
-fuel-block-producer = { path = "../fuel-block-producer", version = "0.10.1" }
-fuel-core-bft = { path = "../fuel-core-bft", version = "0.10.1" }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
+fuel-block-executor = { workspace = true }
+fuel-block-importer = { workspace = true }
+fuel-block-producer = { workspace = true }
+fuel-core-bft = { workspace = true }
+fuel-core-interfaces = { workspace = true, features = [
     "serde",
 ] }
-fuel-metrics = { path = "../fuel-metrics", version = "0.10.1", optional = true }
-fuel-p2p = { path = "../fuel-p2p", version = "0.10.1", optional = true }
-fuel-relayer = { path = "../fuel-relayer", version = "0.10.1", optional = true }
-fuel-sync = { path = "../fuel-sync", version = "0.10.1" }
-fuel-txpool = { path = "../fuel-txpool", version = "0.10.1" }
-futures = "0.3"
-hex = { version = "0.4", features = ["serde"] }
-itertools = "0.10"
-lazy_static = "1.4"
-rand = "0.8"
+fuel-metrics = { workspace = true, optional = true }
+fuel-p2p = { workspace = true, optional = true }
+fuel-relayer = { workspace = true, optional = true }
+fuel-sync = { workspace = true }
+fuel-txpool = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true, features = ["serde"] }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+rand = { workspace = true }
 rocksdb = { version = "0.19", default-features = false, features = [
     "lz4",
     "multi-threaded-cf"
 ], optional = true }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["raw_value"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["raw_value"] }
 serde_with = "1.11"
 strum = "0.24"
 strum_macros = "0.24"
-tempfile = "3.3"
-thiserror = "1.0"
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tower-layer = "0.3"
-tracing = "0.1"
+tracing = { workspace = true }
 tracing-subscriber = { version = "0.3", features = [
     "ansi",
     "env-filter",
@@ -79,7 +79,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = [
     "serde",
     "test-helpers",
 ] }
-insta = "1.8"
+insta = { workspace = true }
 
 [features]
 metrics = ["dep:fuel-metrics"]
