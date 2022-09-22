@@ -76,7 +76,7 @@ impl Validators {
                 let mut validators = self.set.clone();
                 // get staking diffs to revert from our current set.
                 let diffs = db
-                    .get_staking_diffs(da_height + 1, Some(self.da_height))
+                    .get_staking_diffs(da_height + 1u64, Some(self.da_height))
                     .await;
 
                 for (diff_height, diff) in diffs.into_iter().rev() {
@@ -164,7 +164,7 @@ impl Validators {
         let mut validators = HashMap::new();
         // get staking diffs.
         let diffs = db
-            .get_staking_diffs(self.da_height + 1, Some(da_height))
+            .get_staking_diffs(self.da_height + 1u64, Some(da_height))
             .await;
         let mut delegates_cached: HashMap<
             Address,
