@@ -369,7 +369,7 @@ pub mod tests {
     async fn test_filter_by_negative() {
         let config = Config::default();
         let db = Box::new(MockDb::default());
-        let (bs, _br) = broadcast::channel(10);
+        let (_bs, br) = broadcast::channel(10);
         let (_incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
@@ -379,7 +379,7 @@ pub mod tests {
             .config(config)
             .db(db)
             .incoming_tx_receiver(incoming_tx_receiver)
-            .import_block_event(bs.subscribe())
+            .import_block_event(br)
             .tx_status_sender(tx_status_sender)
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
