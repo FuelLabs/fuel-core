@@ -61,9 +61,6 @@ impl ServiceBuilder {
             config: Default::default(),
         }
     }
-    pub fn sender(&mut self) -> &relayer::Sender {
-        &self.sender
-    }
 
     pub fn private_key(&mut self, private_key: Vec<u8>) -> &mut Self {
         self.private_key = Some(private_key);

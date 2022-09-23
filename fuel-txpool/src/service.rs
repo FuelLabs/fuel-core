@@ -274,6 +274,7 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let mut join = self.join.lock().await;
         let join_handle = join.take();
+
         if let Some(join_handle) = join_handle {
             let _ = self.txpool_sender.send(TxPoolMpsc::Stop).await;
             let context = self.context.clone();
@@ -322,7 +323,7 @@ pub mod tests {
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
-        let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (_incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
@@ -512,7 +513,7 @@ pub mod tests {
         let (bs, _br) = broadcast::channel(10);
 
         let (network_sender, _) = mpsc::channel(100);
-        let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (_incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
@@ -583,7 +584,7 @@ pub mod tests {
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
-        let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (_incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
@@ -655,7 +656,7 @@ pub mod tests {
 
         // Meant to simulate p2p's channels which hook in to communicate with txpool
         let (network_sender, _) = mpsc::channel(100);
-        let (_, incoming_tx_receiver) = broadcast::channel(100);
+        let (_incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 

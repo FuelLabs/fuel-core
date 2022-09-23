@@ -63,12 +63,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
-    // create builders
     #[cfg(feature = "relayer")]
     let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
-    let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
 
-    // initiate fields for builders
     #[cfg(feature = "relayer")]
     relayer_builder
         .config(config.relayer.clone())
@@ -81,10 +78,13 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             .unwrap(),
         );
 
+    #[cfg(feature = "relayer")]
+    let relayer = relayer_builder.build()?;
+
     let relayer_sender = {
         #[cfg(feature = "relayer")]
         {
-            relayer_builder.sender().clone()
+            relayer.sender().clone()
         }
         #[cfg(not(feature = "relayer"))]
         {
@@ -93,43 +93,40 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     };
 
     #[cfg(feature = "p2p")]
-    let (tx_request_event, rx_request_event) = mpsc::channel(100);
+    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
     #[cfg(feature = "p2p")]
-    let (tx_block, rx_block) = mpsc::channel(100);
+    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
 
     #[cfg(not(feature = "p2p"))]
-    let (tx_request_event, _) = mpsc::channel(100);
+    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
     #[cfg(not(feature = "p2p"))]
-    let (_, rx_block) = mpsc::channel(100);
+    let (_, block_event_receiver) = mpsc::channel(100);
 
-    // Meant to simulate p2p's channels which hook in to communicate with txpool
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
 
     // Remove once tx_status events are used
     tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
-    // Ok so plug these into something
-    // let (tx_consensus, _) = mpsc::channel(100);
-    let (_tx_transaction, incoming_tx_receiver) = broadcast::channel(100);
-
+    let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
-        .network_sender(tx_request_event.clone())
+        .network_sender(p2p_request_event_sender.clone())
         .import_block_event(block_importer.subscribe())
         .tx_status_sender(tx_status_sender)
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
+    let txpool = txpool_builder.build()?;
 
     block_importer.start().await;
-
-    block_producer.start(txpool_builder.sender().clone()).await;
+    block_producer.start(txpool.sender().clone()).await;
     bft.start(
         relayer_sender.clone(),
-        tx_request_event.clone(),
+        p2p_request_event_sender.clone(),
         block_producer.sender().clone(),
         block_importer.sender().clone(),
         block_importer.subscribe(),
@@ -137,18 +134,13 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     .await;
 
     sync.start(
-        rx_block,
-        tx_request_event.clone(),
+        block_event_receiver,
+        p2p_request_event_sender.clone(),
         relayer_sender,
         bft.sender().clone(),
         block_importer.sender().clone(),
     )
     .await;
-
-    // build services
-    #[cfg(feature = "relayer")]
-    let relayer = relayer_builder.build()?;
-    let txpool = txpool_builder.build()?;
 
     // start services
     #[cfg(feature = "relayer")]
@@ -161,18 +153,16 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
     #[cfg(feature = "p2p")]
     let (tx_consensus, _) = mpsc::channel(100);
-    #[cfg(feature = "p2p")]
-    let (tx_transaction, _) = broadcast::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = fuel_p2p::orchestrator::Service::new(
         config.p2p.clone(),
         p2p_db,
-        tx_request_event,
-        rx_request_event,
+        p2p_request_event_sender,
+        p2p_request_event_receiver,
         tx_consensus,
-        tx_transaction,
-        tx_block,
+        incoming_tx_sender,
+        block_event_sender,
     );
 
     #[cfg(feature = "p2p")]
