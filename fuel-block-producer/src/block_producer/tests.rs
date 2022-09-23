@@ -219,6 +219,7 @@ impl TestContext {
             txpool: &self.txpool,
             executor: &*self.executor,
             relayer: &self.relayer,
+            lock: Default::default(),
         }
     }
 }

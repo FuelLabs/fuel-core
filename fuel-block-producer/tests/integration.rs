@@ -127,6 +127,7 @@ async fn block_producer() -> Result<()> {
         },
         executor: &MockExecutor(mock_db.clone()),
         relayer: &MockRelayer::default(),
+        lock: Default::default(),
     };
 
     // Add new transactions

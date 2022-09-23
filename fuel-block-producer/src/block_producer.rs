@@ -37,6 +37,7 @@ use fuel_core_interfaces::{
     },
 };
 use std::ops::Deref;
+use tokio::sync::Mutex;
 use tracing::{
     debug,
     error,
@@ -51,6 +52,9 @@ pub struct Producer<'a> {
     pub txpool: &'a dyn TxPool,
     pub executor: &'a dyn Executor,
     pub relayer: &'a dyn Relayer,
+    // use a tokio lock since we want callers to yeild until the previous block
+    // execution has completed (which may take a while).
+    pub lock: Mutex<()>,
 }
 
 #[async_trait::async_trait]
@@ -64,6 +68,9 @@ impl<'a> Trait for Producer<'a> {
         //      1. fees
         //      2. parallel throughput
         //  - Execute block with production mode to correctly malleate txs outputs and block headers
+
+        // prevent simultaneous block production calls, the guard will drop at the end of this fn.
+        let _production_guard = self.lock.lock().await;
 
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
