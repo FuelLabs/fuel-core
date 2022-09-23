@@ -23,7 +23,3 @@ members = [
 codegen-units = 1
 lto = "fat"
 panic = "abort"
-
-[patch.crates-io]
-# blocked by https://github.com/FuelLabs/fuel-tx/pull/189
-fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx" }

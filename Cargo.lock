@@ -2452,8 +2452,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.20.0"
-source = "git+https://github.com/FuelLabs/fuel-tx#e8ba6bf59c47ddcc814710c6262d1588d18dc09f"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2ceb5716e2ef684c937a33d8caecc6904ff36880b61f8d74b3bde11b102e3b2"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
