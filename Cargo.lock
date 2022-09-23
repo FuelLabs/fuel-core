@@ -649,6 +649,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dabbe35f96fb9507f7330793dc490461b2962659ac5d427181e451a623751d1"
 
 [[package]]
+name = "bech32"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1091,7 +1097,7 @@ checksum = "c94090a6663f224feae66ab01e41a2555a8296ee07b5f20dab8888bdefc9f617"
 dependencies = [
  "base58check",
  "base64 0.12.3",
- "bech32",
+ "bech32 0.7.3",
  "blake2",
  "digest 0.10.5",
  "generic-array 0.14.6",
@@ -2222,6 +2228,7 @@ dependencies = [
  "async-graphql",
  "async-trait",
  "axum",
+ "bech32 0.9.1",
  "bincode",
  "byteorder",
  "chrono",
