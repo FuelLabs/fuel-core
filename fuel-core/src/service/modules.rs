@@ -64,22 +64,21 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
     #[cfg(feature = "relayer")]
-    let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
+    let relayer = {
+        let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
+        relayer_builder
+            .config(config.relayer.clone())
+            .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
+            .import_block_event(block_importer.subscribe())
+            .private_key(
+                hex::decode(
+                    "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",
+                )
+                .unwrap(),
+            );
 
-    #[cfg(feature = "relayer")]
-    relayer_builder
-        .config(config.relayer.clone())
-        .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
-        .import_block_event(block_importer.subscribe())
-        .private_key(
-            hex::decode(
-                "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",
-            )
-            .unwrap(),
-        );
-
-    #[cfg(feature = "relayer")]
-    let relayer = relayer_builder.build()?;
+        relayer_builder.build()?
+    };
 
     let relayer_sender = {
         #[cfg(feature = "relayer")]
@@ -92,16 +91,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         }
     };
 
-    #[cfg(feature = "p2p")]
-    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(feature = "p2p")]
-    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
-
-    #[cfg(not(feature = "p2p"))]
-    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(not(feature = "p2p"))]
-    let (_, block_event_receiver) = mpsc::channel(100);
-
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
 
     // Remove once tx_status events are used
@@ -110,6 +99,30 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
+    #[cfg(feature = "p2p")]
+    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
+    #[cfg(feature = "p2p")]
+    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+
+    #[cfg(not(feature = "p2p"))]
+    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+    #[cfg(not(feature = "p2p"))]
+    let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
+
+    #[cfg(feature = "p2p")]
+    let network_service = {
+        let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
+        let (tx_consensus, _) = mpsc::channel(100);
+        fuel_p2p::orchestrator::Service::new(
+            config.p2p.clone(),
+            p2p_db,
+            p2p_request_event_sender.clone(),
+            p2p_request_event_receiver,
+            tx_consensus,
+            incoming_tx_sender,
+            block_event_sender,
+        )
+    };
     #[cfg(not(feature = "p2p"))]
     {
         let keep_alive = Box::new(incoming_tx_sender);
@@ -121,12 +134,17 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
-        .network_sender(p2p_request_event_sender.clone())
         .import_block_event(block_importer.subscribe())
         .tx_status_sender(tx_status_sender)
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
+
+    #[cfg(feature = "p2p")]
+    txpool_builder.network_sender(p2p_request_event_sender.clone());
+
     let txpool = txpool_builder.build()?;
+
+    // start services
 
     block_importer.start().await;
     block_producer.start(txpool.sender().clone()).await;
@@ -148,33 +166,17 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     )
     .await;
 
-    // start services
     #[cfg(feature = "relayer")]
     if config.relayer.eth_client.is_some() {
         relayer.start().await?;
     }
-    txpool.start().await?;
-
-    #[cfg(feature = "p2p")]
-    let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
-    #[cfg(feature = "p2p")]
-    let (tx_consensus, _) = mpsc::channel(100);
-
-    #[cfg(feature = "p2p")]
-    let network_service = fuel_p2p::orchestrator::Service::new(
-        config.p2p.clone(),
-        p2p_db,
-        p2p_request_event_sender,
-        p2p_request_event_receiver,
-        tx_consensus,
-        incoming_tx_sender,
-        block_event_sender,
-    );
 
     #[cfg(feature = "p2p")]
     if !config.p2p.network_name.is_empty() {
         network_service.start().await?;
     }
+
+    txpool.start().await?;
 
     Ok(Modules {
         txpool: Arc::new(txpool),

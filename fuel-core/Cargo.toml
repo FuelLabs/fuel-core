@@ -86,6 +86,6 @@ metrics = ["dep:fuel-metrics"]
 default = ["rocksdb", "metrics", "debug"]
 debug = ["fuel-core-interfaces/debug"]
 relayer = ["dep:fuel-relayer"]
-p2p = ["dep:fuel-p2p"]
+p2p = ["dep:fuel-p2p", "fuel-txpool/p2p" ]
 # features to enable in production, but increase build times
 production = ["rocksdb?/jemalloc"]
