@@ -111,12 +111,12 @@ async fn cant_produce_if_no_previous_block() {
 #[tokio::test]
 async fn cant_produce_if_previous_block_da_height_too_high() {
     // setup previous block with a high da_height
-    let prev_da_height = 100;
+    let prev_da_height = 100u64.into();
     let prev_height = 1u32.into();
     let previous_block = FuelBlockDb {
         header: FuelBlockHeader {
             height: prev_height,
-            number: prev_da_height,
+            da_height: prev_da_height,
             ..Default::default()
         },
         transactions: vec![],
@@ -131,7 +131,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let ctx = TestContext {
         relayer: MockRelayer {
             // set our relayer best finalized height to less than previous
-            best_finalized_height: prev_da_height - 1,
+            best_finalized_height: prev_da_height - 1u64.into(),
             ..Default::default()
         },
         ..TestContext::default_from_db(db)
@@ -149,7 +149,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
             Some(Error::InvalidDaFinalizationState {
                 previous_block,
                 best
-            }) if *previous_block == prev_da_height && *best == prev_da_height - 1
+            }) if *previous_block == prev_da_height && *best == prev_da_height - 1u64.into()
         ),
         "unexpected err {:?}",
         err

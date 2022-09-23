@@ -75,7 +75,7 @@ impl<'a> Trait for Producer<'a> {
 
         let header = FuelBlockHeader {
             height,
-            number: new_da_height,
+            da_height: new_da_height,
             parent_hash: previous_block_info.hash,
             // TODO: this needs to be updated using a proper BMT MMR
             prev_root: previous_block_info.prev_root,
@@ -153,7 +153,7 @@ impl<'a> Producer<'a> {
             Ok(PreviousBlockInfo {
                 hash: Default::default(),
                 prev_root: Default::default(),
-                da_height: 0,
+                da_height: Default::default(),
             })
         } else {
             // get info from previous block height
@@ -170,7 +170,7 @@ impl<'a> Producer<'a> {
             Ok(PreviousBlockInfo {
                 hash,
                 prev_root,
-                da_height: previous_block.header.number,
+                da_height: previous_block.header.da_height,
             })
         }
     }

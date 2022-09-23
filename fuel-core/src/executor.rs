@@ -181,7 +181,7 @@ impl Executor {
                     block_db_transaction.deref(),
                     tx,
                     block.header.height,
-                    block.header.number,
+                    block.header.da_height,
                 )?;
                 // validate transaction signature
                 tx.validate_input_signature()
@@ -873,6 +873,7 @@ mod tests {
         },
         model::{
             CheckedMessage,
+            DaBlockHeight,
             Message,
         },
         relayer::RelayerDb,
@@ -1764,7 +1765,7 @@ mod tests {
             nonce: rng.gen(),
             amount: 1000,
             data: vec![],
-            da_height,
+            da_height: DaBlockHeight(da_height),
             fuel_block_spend: None,
         };
 
