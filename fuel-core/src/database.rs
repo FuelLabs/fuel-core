@@ -412,7 +412,7 @@ mod relayer {
                 }
                 to_da_height
             } else {
-                DaBlockHeight::MAX
+                DaBlockHeight::from(u64::MAX)
             };
             struct WrapU64Be(pub DaBlockHeight);
             impl From<Vec<u8>> for WrapU64Be {
@@ -423,7 +423,9 @@ mod relayer {
                     };
                     use std::io::Cursor;
                     let mut i = Cursor::new(i);
-                    Self(i.read_u64::<BigEndian>().unwrap_or_default())
+                    Self(DaBlockHeight::from(
+                        i.read_u64::<BigEndian>().unwrap_or_default(),
+                    ))
                 }
             }
             let mut out = Vec::new();
