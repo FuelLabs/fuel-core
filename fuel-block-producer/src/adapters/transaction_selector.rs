@@ -30,7 +30,7 @@ pub fn select_transactions(
     includable_txs
         .into_iter()
         .filter(|tx| {
-            let tx_block_space = tx.max_fee();
+            let tx_block_space = tx.max_gas();
             if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
                 if new_used_space <= max_gas {
                     used_block_space = new_used_space;
@@ -128,8 +128,45 @@ mod tests {
         assert!(selected.is_empty());
     }
 
+    #[rstest::rstest]
     #[test]
-    fn selector_prefers_highest_gas_txs_and_sorts() {
+    #[case(1000, vec![])]
+    #[case(2500, vec![TxGas { price: 5, limit: 1000 }])]
+    #[case(5000, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 2, limit: 1000 }])
+    ]
+    #[case(7500, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 4, limit: 3000 }
+    ])]
+    #[case(10_000, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 4, limit: 3000 },
+        TxGas { price: 2, limit: 1000 }
+    ])]
+    #[case(12_500, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 4, limit: 3000 },
+        TxGas { price: 3, limit: 2000 }
+    ])]
+    #[case(15_000, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 4, limit: 3000 },
+        TxGas { price: 3, limit: 2000 },
+        TxGas { price: 2, limit: 1000 }
+    ])]
+    #[case(17_500, vec![
+        TxGas { price: 5, limit: 1000 },
+        TxGas { price: 4, limit: 3000 },
+        TxGas { price: 3, limit: 2000 },
+        TxGas { price: 2, limit: 1000 },
+        TxGas { price: 1, limit: 1000 }
+    ])]
+    fn selector_prefers_highest_gas_txs_and_sorts(
+        #[case] selection_limit: u64,
+        #[case] expected_txs: Vec<TxGas>,
+    ) {
         #[rustfmt::skip]
         let original = [
             TxGas { price: 3, limit: 2000 },
@@ -139,17 +176,12 @@ mod tests {
             TxGas { price: 2, limit: 1000 },
         ];
 
-        #[rustfmt::skip]
-        let ordered = [
-            TxGas { price: 5, limit: 1000 },
-            TxGas { price: 4, limit: 3000 },
-            TxGas { price: 3, limit: 2000 },
-            TxGas { price: 2, limit: 1000 },
-            TxGas { price: 1, limit: 1000 },
-        ];
-
-        let selected = make_txs_and_select(&original, 1_000_000);
-        assert_eq!(ordered, selected.as_slice());
+        let selected = make_txs_and_select(&original, selection_limit);
+        assert_eq!(
+            expected_txs, selected,
+            "Wrong txs selected for max_gas: {}",
+            selection_limit
+        );
     }
 
     #[test]

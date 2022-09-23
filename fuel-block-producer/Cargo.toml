@@ -23,6 +23,7 @@ fuel-block-producer = { path = "../fuel-block-producer", features = ["test-helpe
 fuel-txpool = { path = "../fuel-txpool", features = ["test-helpers"] }
 itertools = "0.10"
 rand = "0.8"
+rstest = "0.15"
 
 [features]
 test-helpers = ["fuel-core-interfaces/test-helpers"]

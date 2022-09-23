@@ -130,20 +130,16 @@ async fn block_producer() -> Result<()> {
     };
 
     // Add new transactions
-    let txsize = make_tx(&coins[0], 1, 1).metered_bytes_size() as u64;
+    let txsize = make_tx(&coins[0], 1, 1).metered_bytes_size() as u64
+        * consensus_params.gas_per_byte;
 
-    // max_fee = gas_price * (txsize + limit)
-    let gas_prices = [10, 20, 15];
-    let min_fees = gas_prices.map(|g| g * txsize);
-    let small_limit = gas_prices[0] * 2;
+    let small_limit = 100;
     assert!(
-        min_fees[0] + min_fees[1] + small_limit * 2 < max_gas_per_block,
+        (txsize + small_limit) * 2 < max_gas_per_block,
         "Incorrect test: no space in block"
     );
-    let limit2_takes_whole_block = (max_gas_per_block / gas_prices[2])
-        .checked_sub(txsize)
-        .unwrap();
-
+    let limit2_takes_whole_block = max_gas_per_block.checked_sub(txsize).unwrap();
+    let gas_prices = [10, 20, 15];
     let results: Vec<_> = txpool
         .sender()
         .insert(
