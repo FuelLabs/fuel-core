@@ -217,7 +217,10 @@ mod tests {
             MessageConfig,
             StateConfig,
         },
-        model::BlockHeight,
+        model::{
+            BlockHeight,
+            DaBlockHeight,
+        },
         service::config::Config,
     };
     use fuel_core_interfaces::{
@@ -444,7 +447,7 @@ mod tests {
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],
-            da_height: 0,
+            da_height: DaBlockHeight(0),
         };
 
         config.chain_conf.initial_state = Some(StateConfig {
