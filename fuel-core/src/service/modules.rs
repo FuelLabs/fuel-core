@@ -110,6 +110,12 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
+    #[cfg(not(feature = "p2p"))]
+    {
+        let keep_alive = Box::new(incoming_tx_sender);
+        Box::leak(keep_alive);
+    }
+
     let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
     txpool_builder
         .config(config.txpool.clone())
