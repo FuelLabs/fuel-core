@@ -37,9 +37,7 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
-    txpool::{
-        Sender as TxPoolSender,
-    }
+    txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
     Config as TxPoolConfig,
@@ -52,7 +50,10 @@ use rand::{
     SeedableRng,
 };
 use std::sync::Arc;
-use tokio::sync::{ broadcast, mpsc};
+use tokio::sync::{
+    broadcast,
+    mpsc,
+};
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
@@ -111,7 +112,6 @@ async fn block_producer() -> Result<()> {
 
     let (import_block_events_tx, import_block_events_rx) = broadcast::channel(16);
 
-    
     let mut txpool_builder = TxPoolServiceBuilder::new();
 
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
@@ -121,7 +121,6 @@ async fn block_producer() -> Result<()> {
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
-
 
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
