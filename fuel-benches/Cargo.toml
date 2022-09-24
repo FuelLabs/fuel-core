@@ -9,10 +9,9 @@ publish = false
 fuel-core = { path = "../fuel-core" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 rand = "0.8"
-tempfile = "3.3"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = { version = "0.4", features = ["html_reports"] }
 
 [[bench]]
 name = "vm"

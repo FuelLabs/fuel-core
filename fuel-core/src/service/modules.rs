@@ -8,9 +8,16 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 #[cfg(feature = "relayer")]
 use fuel_core_interfaces::relayer::RelayerDb;
-use fuel_core_interfaces::txpool::{
-    Sender,
-    TxPoolDb,
+use fuel_core_interfaces::{
+    block_producer::BlockProducer,
+    model::{
+        BlockHeight,
+        FuelBlock,
+    },
+    txpool::{
+      Sender,
+      TxPoolDb,
+     }
 };
 use futures::future::join_all;
 use std::sync::Arc;
@@ -21,11 +28,12 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tracing::info;
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
     pub block_importer: Arc<fuel_block_importer::Service>,
-    pub block_producer: Arc<fuel_block_producer::Service>,
+    pub block_producer: Arc<dyn BlockProducer>,
     pub bft: Arc<fuel_core_bft::Service>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
@@ -39,7 +47,6 @@ impl Modules {
         let stops: Vec<JoinHandle<()>> = vec![
             self.txpool.stop().await,
             self.block_importer.stop().await,
-            self.block_producer.stop().await,
             self.bft.stop().await,
             self.sync.stop().await,
             #[cfg(feature = "p2p")]
@@ -58,8 +65,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // Initialize and bind all components
     let block_importer =
         fuel_block_importer::Service::new(&config.block_importer, db).await?;
-    let block_producer =
-        fuel_block_producer::Service::new(&config.block_producer, db).await?;
+    let block_producer = Arc::new(DummyBlockProducer);
     let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
@@ -148,10 +154,11 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     block_importer.start().await;
     block_producer.start(txpool.sender().clone()).await;
+
     bft.start(
         relayer_sender.clone(),
         p2p_request_event_sender.clone(),
-        block_producer.sender().clone(),
+        block_producer.clone(),
         block_importer.sender().clone(),
         block_importer.subscribe(),
     )
@@ -181,7 +188,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     Ok(Modules {
         txpool: Arc::new(txpool),
         block_importer: Arc::new(block_importer),
-        block_producer: Arc::new(block_producer),
+        block_producer,
         bft: Arc::new(bft),
         sync: Arc::new(sync),
         #[cfg(feature = "relayer")]
@@ -189,4 +196,15 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         #[cfg(feature = "p2p")]
         network_service: Arc::new(network_service),
     })
+}
+
+// TODO: replace this with the real block producer
+struct DummyBlockProducer;
+
+#[async_trait::async_trait]
+impl BlockProducer for DummyBlockProducer {
+    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
+        info!("block production called for height {:?}", height);
+        Ok(Default::default())
+    }
 }

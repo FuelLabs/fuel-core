@@ -68,7 +68,7 @@ impl FuelService {
     }
 
     /// initialize coins
-    fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<()> {
+    pub fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<()> {
         // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
         let mut generated_output_index: u64 = 0;
         if let Some(coins) = &state.coins {
