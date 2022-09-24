@@ -27,5 +27,5 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", f
 ] }
 
 [features]
+p2p = []
 test-helpers = ["fuel-core-interfaces/test-helpers"]
-p2p= []

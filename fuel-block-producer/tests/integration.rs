@@ -122,30 +122,9 @@ async fn block_producer() -> Result<()> {
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
-    #[cfg(feature = "p2p")]
-    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(feature = "p2p")]
-    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
 
-    #[cfg(feature = "p2p")]
-    let network_service = {
-        let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
-        let (tx_consensus, _) = mpsc::channel(100);
-        fuel_p2p::orchestrator::Service::new(
-            config.p2p.clone(),
-            p2p_db,
-            p2p_request_event_sender.clone(),
-            p2p_request_event_receiver,
-            tx_consensus,
-            incoming_tx_sender,
-            block_event_sender,
-        )
-    };
-    #[cfg(not(feature = "p2p"))]
-    {
-        let keep_alive = Box::new(incoming_tx_sender);
-        Box::leak(keep_alive);
-    }
+    let keep_alive = Box::new(incoming_tx_sender);
+    Box::leak(keep_alive);
 
     txpool_builder
         .config(TxPoolConfig::default())
@@ -155,6 +134,12 @@ async fn block_producer() -> Result<()> {
         .tx_status_sender(tx_status_sender)
         .txpool_sender(TxPoolSender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
+
+    #[cfg(feature = "p2p")]
+    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+    #[cfg(feature = "p2p")]
+    txpool_builder.network_sender(p2p_request_event_sender.clone());
+    
 
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
