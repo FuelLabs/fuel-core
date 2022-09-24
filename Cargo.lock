@@ -194,16 +194,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
-name = "async-attributes"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
-dependencies = [
- "quote",
- "syn",
-]
-
-[[package]]
 name = "async-channel"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -396,7 +386,6 @@ version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
 dependencies = [
- "async-attributes",
  "async-channel",
  "async-global-executor",
  "async-io",
@@ -2214,9 +2203,17 @@ name = "fuel-block-producer"
 version = "0.10.1"
 dependencies = [
  "anyhow",
+ "async-trait",
+ "chrono",
+ "fuel-block-producer",
  "fuel-core-interfaces",
+ "fuel-txpool",
+ "itertools",
  "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "rstest",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2461,9 +2458,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.20.0"
+version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9045f94a95dda991ae16f8a4720cf6c1f5112c9911173726ed702eb4cb70204"
+checksum = "b2ceb5716e2ef684c937a33d8caecc6904ff36880b61f8d74b3bde11b102e3b2"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
@@ -4986,11 +4983,10 @@ dependencies = [
 
 [[package]]
 name = "rstest"
-version = "0.13.0"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b939295f93cb1d12bc1a83cf9ee963199b133fb8a79832dd51b68bb9f59a04dc"
+checksum = "e9c9dc66cc29792b663ffb5269be669f1613664e69ad56441fdb895c2347b930"
 dependencies = [
- "async-std",
  "futures",
  "futures-timer",
  "rstest_macros",
@@ -4999,9 +4995,9 @@ dependencies = [
 
 [[package]]
 name = "rstest_macros"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f78aba848123782ba59340928ec7d876ebe745aa0365d6af8a630f19a5c16116"
+checksum = "5015e68a0685a95ade3eee617ff7101ab6a3fc689203101ca16ebc16f2b89c66"
 dependencies = [
  "cfg-if",
  "proc-macro2",

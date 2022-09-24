@@ -3,13 +3,17 @@ use super::ValidatorStake;
 use crate::{
     common::{
         fuel_crypto::Hasher,
+        fuel_merkle::binary::in_memory::MerkleTree,
         fuel_tx::{
             Address,
             AssetId,
             Bytes32,
             Transaction,
         },
-        fuel_types::Word,
+        fuel_types::{
+            bytes::SerializableVec,
+            Word,
+        },
     },
     model::DaBlockHeight,
 };
@@ -77,6 +81,16 @@ impl FuelBlockHeader {
             self.hash()
         }
     }
+
+    pub fn transactions_root(txs: &[Transaction]) -> Bytes32 {
+        let mut tree = MerkleTree::new();
+        for tx in txs {
+            // serialize tx into canonical format for hashing
+            let ser_tx = tx.clone().to_bytes();
+            tree.push(&ser_tx);
+        }
+        tree.root().into()
+    }
 }
 
 impl Default for FuelBlockHeader {
@@ -98,13 +112,13 @@ impl Default for FuelBlockHeader {
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FuelBlockDb {
-    pub headers: FuelBlockHeader,
+    pub header: FuelBlockHeader,
     pub transactions: Vec<Bytes32>,
 }
 
 impl FuelBlockDb {
     pub fn id(&self) -> Bytes32 {
-        self.headers.id()
+        self.header.id()
     }
 }
 
@@ -123,7 +137,7 @@ impl FuelBlock {
 
     pub fn to_db_block(&self) -> FuelBlockDb {
         FuelBlockDb {
-            headers: self.header.clone(),
+            header: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }
