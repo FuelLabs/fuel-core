@@ -15,9 +15,9 @@ use fuel_core_interfaces::{
         FuelBlock,
     },
     txpool::{
-      Sender,
-      TxPoolDb,
-     }
+        Sender,
+        TxPoolDb,
+    },
 };
 use futures::future::join_all;
 use std::sync::Arc;
@@ -153,7 +153,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // start services
 
     block_importer.start().await;
-    block_producer.start(txpool.sender().clone()).await;
+    // block_producer.start(txpool.sender().clone()).await;
 
     bft.start(
         relayer_sender.clone(),

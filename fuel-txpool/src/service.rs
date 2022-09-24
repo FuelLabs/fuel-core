@@ -178,6 +178,7 @@ impl Context {
             tokio::select! {
                 new_transaction = self.incoming_tx_receiver.recv() => {
                     if new_transaction.is_err() {
+                        println!("Wack");
                         error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
                         break;
                     }
@@ -186,11 +187,13 @@ impl Context {
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
+                    println!("Progressing to move");
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                         match new_transaction.unwrap() {
                             TransactionBroadcast::NewTransaction ( tx ) => {
                                 let txs = vec!(Arc::new(tx));
+                                println!("Progressing to insert");
                                 TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await
                             }
                         }
@@ -238,19 +241,18 @@ impl Context {
                         TxPoolMpsc::Stop => {}
                     }});
                 }
-                
-                block_updated = self.import_block_events.recv() => {
 
+                block_updated = self.import_block_receiver.recv() => {
 
                   if let Ok(block_updated) = block_updated {
-
                         match block_updated {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let txpool = txpool.clone();
-                                TxPool::block_update(txpool.as_ref(), block).await
-                                tokio::spawn( async move {
-                                     TxPool::block_update(txpool.as_ref(), block).await
-                                });
+                                TxPool::block_update(txpool.as_ref(), block).await;
+                                // TODO : Not working well
+                                // tokio::spawn( async move {
+                                //      TxPool::block_update(txpool.as_ref(), block).await
+                                // });
                             },
                             ImportBlockBroadcast::SealedFuelBlockImported { block: _, is_created_by_self: _ } => {
                                 // TODO: what to do with sealed blocks?

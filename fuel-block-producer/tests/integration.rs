@@ -37,8 +37,10 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
+    txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
+    Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
 };
@@ -48,7 +50,10 @@ use rand::{
     SeedableRng,
 };
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{
+    broadcast,
+    mpsc,
+};
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
@@ -108,8 +113,25 @@ async fn block_producer() -> Result<()> {
     let (import_block_events_tx, import_block_events_rx) = broadcast::channel(16);
 
     let mut txpool_builder = TxPoolServiceBuilder::new();
-    txpool_builder.db(Box::new(txpool_db));
-    txpool_builder.import_block_event(import_block_events_rx);
+    txpool_builder
+        .db(Box::new(txpool_db))
+        .import_block_event(import_block_events_rx)
+        .config(TxPoolConfig::default());
+
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+    let (_, incoming_tx_receiver) = broadcast::channel(100);
+
+    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
+
+    // Remove once tx_status events are used
+    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+
+    txpool_builder
+        .incoming_tx_receiver(incoming_tx_receiver)
+        .tx_status_sender(tx_status_sender)
+        .txpool_sender(TxPoolSender::new(txpool_sender))
+        .txpool_receiver(txpool_receiver);
+
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
 
@@ -139,6 +161,7 @@ async fn block_producer() -> Result<()> {
         (txsize + small_limit) * 2 < max_gas_per_block,
         "Incorrect test: no space in block"
     );
+
     let limit2_takes_whole_block = max_gas_per_block.checked_sub(txsize).unwrap();
     let gas_prices = [10, 20, 15];
     let results: Vec<_> = txpool
@@ -208,6 +231,8 @@ async fn block_producer() -> Result<()> {
 
     // Check that the generated block looks right
     assert_eq!(generated_block.transactions.len(), 0);
+
+    println!("Made it here");
 
     Ok(())
 }
