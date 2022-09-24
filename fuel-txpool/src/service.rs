@@ -178,7 +178,6 @@ impl Context {
             tokio::select! {
                 new_transaction = self.incoming_tx_receiver.recv() => {
                     if new_transaction.is_err() {
-                        println!("Wack");
                         error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
                         break;
                     }

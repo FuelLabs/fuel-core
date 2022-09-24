@@ -37,7 +37,9 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
-    txpool::Sender as TxPoolSender,
+    txpool::{
+        Sender as TxPoolSender,
+    }
 };
 use fuel_txpool::{
     Config as TxPoolConfig,
@@ -50,10 +52,7 @@ use rand::{
     SeedableRng,
 };
 use std::sync::Arc;
-use tokio::sync::{
-    broadcast,
-    mpsc,
-};
+use tokio::sync::{ broadcast, mpsc};
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
@@ -112,22 +111,48 @@ async fn block_producer() -> Result<()> {
 
     let (import_block_events_tx, import_block_events_rx) = broadcast::channel(16);
 
+    
     let mut txpool_builder = TxPoolServiceBuilder::new();
-    txpool_builder
-        .db(Box::new(txpool_db))
-        .import_block_event(import_block_events_rx)
-        .config(TxPoolConfig::default());
-
-    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
-    let (_, incoming_tx_receiver) = broadcast::channel(100);
 
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
 
     // Remove once tx_status events are used
     tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
 
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+
+
+    #[cfg(feature = "p2p")]
+    let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
+    #[cfg(feature = "p2p")]
+    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+
+    #[cfg(feature = "p2p")]
+    let network_service = {
+        let p2p_db: Arc<dyn P2pDb> = Arc::new(database.clone());
+        let (tx_consensus, _) = mpsc::channel(100);
+        fuel_p2p::orchestrator::Service::new(
+            config.p2p.clone(),
+            p2p_db,
+            p2p_request_event_sender.clone(),
+            p2p_request_event_receiver,
+            tx_consensus,
+            incoming_tx_sender,
+            block_event_sender,
+        )
+    };
+    #[cfg(not(feature = "p2p"))]
+    {
+        let keep_alive = Box::new(incoming_tx_sender);
+        Box::leak(keep_alive);
+    }
+
     txpool_builder
+        .config(TxPoolConfig::default())
+        .db(Box::new(txpool_db))
         .incoming_tx_receiver(incoming_tx_receiver)
+        .import_block_event(import_block_events_rx)
         .tx_status_sender(tx_status_sender)
         .txpool_sender(TxPoolSender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
@@ -161,7 +186,6 @@ async fn block_producer() -> Result<()> {
         (txsize + small_limit) * 2 < max_gas_per_block,
         "Incorrect test: no space in block"
     );
-
     let limit2_takes_whole_block = max_gas_per_block.checked_sub(txsize).unwrap();
     let gas_prices = [10, 20, 15];
     let results: Vec<_> = txpool
@@ -231,8 +255,6 @@ async fn block_producer() -> Result<()> {
 
     // Check that the generated block looks right
     assert_eq!(generated_block.transactions.len(), 0);
-
-    println!("Made it here");
 
     Ok(())
 }
