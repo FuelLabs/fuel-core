@@ -122,7 +122,6 @@ async fn block_producer() -> Result<()> {
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
 
-
     let keep_alive = Box::new(incoming_tx_sender);
     Box::leak(keep_alive);
 
@@ -139,7 +138,6 @@ async fn block_producer() -> Result<()> {
     let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
     #[cfg(feature = "p2p")]
     txpool_builder.network_sender(p2p_request_event_sender.clone());
-    
 
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
