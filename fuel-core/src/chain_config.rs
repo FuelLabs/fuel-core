@@ -2,6 +2,10 @@ use crate::{
     database::Database,
     model::BlockHeight,
 };
+use bech32::{
+    ToBase32,
+    Variant::Bech32m,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_tx::ConsensusParameters,
@@ -40,6 +44,9 @@ use std::{
     path::PathBuf,
     str::FromStr,
 };
+
+// Fuel Network human-readable part for bech32 encoding
+pub const FUEL_BECH32_HRP: &str = "fuel";
 
 pub mod serialization;
 
@@ -80,10 +87,15 @@ impl ChainConfig {
                     &mut rng,
                 );
                 let address = Address::from(*secret.public_key().hash());
+                let bech32_data = Bytes32::new(*address).to_base32();
+                let bech32_encoding =
+                    bech32::encode(FUEL_BECH32_HRP, &bech32_data, Bech32m).unwrap();
+
                 tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x}), Balance({})",
+                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
                     secret,
                     address,
+                    bech32_encoding,
                     TESTNET_INITIAL_BALANCE
                 );
                 CoinConfig {

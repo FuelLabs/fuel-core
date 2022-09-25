@@ -4,10 +4,7 @@ use crate::{
         Database,
         KvStoreError,
     },
-    executor::{
-        ExecutionMode,
-        Executor,
-    },
+    executor::Executor,
     model::{
         BlockHeight,
         FuelBlock,
@@ -45,6 +42,7 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::Transactions,
+    executor::ExecutionMode,
 };
 use itertools::Itertools;
 use std::{
@@ -63,7 +61,7 @@ impl Block {
     }
 
     async fn height(&self) -> U64 {
-        self.0.headers.height.into()
+        self.0.header.height.into()
     }
 
     async fn transactions(
@@ -86,11 +84,11 @@ impl Block {
     }
 
     async fn time(&self) -> DateTime<Utc> {
-        self.0.headers.time
+        self.0.header.time
     }
 
     async fn producer(&self) -> Address {
-        self.0.headers.producer.into()
+        self.0.header.producer.into()
     }
 }
 
@@ -221,10 +219,7 @@ impl BlockQuery {
                     );
 
                     connection.edges.extend(blocks.into_iter().map(|item| {
-                        Edge::new(
-                            item.headers.height.to_usize(),
-                            Block(item.into_owned()),
-                        )
+                        Edge::new(item.header.height.to_usize(), Block(item.into_owned()))
                     }));
 
                     Ok::<Connection<usize, Block>, anyhow::Error>(connection)

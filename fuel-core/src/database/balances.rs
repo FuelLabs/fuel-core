@@ -75,7 +75,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
         let root = items
             .iter()
             .filter_map(|(key, value)| {
-                (&key[..parent.len()] == parent.as_ref()).then(|| (key, value))
+                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
             })
             .sorted_by_key(|t| t.0)
             .map(|(_, value)| value.to_be_bytes());

@@ -51,7 +51,7 @@ impl StorageMutate<FuelBlocks> for Database {
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
         let _: Option<BlockHeight> = Database::_insert(
             self,
-            value.headers.height.to_be_bytes(),
+            value.header.height.to_be_bytes(),
             Column::FuelBlockIds,
             *key,
         )?;
@@ -65,7 +65,7 @@ impl StorageMutate<FuelBlocks> for Database {
         if let Some(block) = &block {
             let _: Option<Bytes32> = Database::_remove(
                 self,
-                &block.headers.height.to_be_bytes(),
+                &block.header.height.to_be_bytes(),
                 Column::FuelBlockIds,
             )?;
         }
