@@ -6,6 +6,7 @@ mod contract;
 mod dap;
 mod debugger;
 mod health;
+mod tx_gossip;
 mod helpers;
 mod messages;
 #[cfg(feature = "metrics")]
