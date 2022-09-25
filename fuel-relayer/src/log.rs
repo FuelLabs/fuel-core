@@ -124,7 +124,7 @@ impl TryFrom<&Log> for EthEventLog {
                     // Safety: logs without block numbers are rejected by
                     // FinalizationQueue::append_eth_log before the conversion to EthEventLog happens.
                     // If block_number is none, that means the log is pending.
-                    da_height: log.block_number.unwrap().as_u64(),
+                    da_height: DaBlockHeight::from(log.block_number.unwrap().as_u64()),
                 })
             }
             n if n == *config::ETH_LOG_VALIDATOR_REGISTRATION => {
@@ -635,7 +635,7 @@ pub mod tests {
                 nonce: nonce as u64,
                 amount: amount as u64,
                 data,
-                da_height: eth_block
+                da_height: DaBlockHeight(eth_block)
             }),
             "Decoded log does not match data we encoded"
         );

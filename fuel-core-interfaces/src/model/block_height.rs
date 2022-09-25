@@ -4,6 +4,7 @@ use derive_more::{
     Display,
     From,
     Into,
+    Sub,
 };
 use std::{
     array::TryFromSliceError,
@@ -23,12 +24,14 @@ use std::{
     PartialOrd,
     Eq,
     Add,
+    Sub,
     Display,
     Into,
     From,
     Deref,
     Hash,
 )]
+#[repr(transparent)]
 pub struct BlockHeight(u32);
 
 impl From<BlockHeight> for Vec<u8> {

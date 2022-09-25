@@ -30,6 +30,7 @@ use fuel_gql_client::client::{
     PageDirection,
     PaginationRequest,
 };
+use rstest::rstest;
 
 #[tokio::test]
 async fn coin() {
@@ -61,8 +62,12 @@ async fn coin() {
     assert!(coin.is_some());
 }
 
+// Backward fails, tracking in https://github.com/FuelLabs/fuel-core/issues/610
+#[rstest]
 #[tokio::test]
-async fn first_5_coins() {
+async fn first_5_coins(
+    #[values(PageDirection::Forward)] pagination_direction: PageDirection,
+) {
     let owner = Address::default();
 
     // setup test data in the node
@@ -101,7 +106,7 @@ async fn first_5_coins() {
             PaginationRequest {
                 cursor: None,
                 results: 5,
-                direction: PageDirection::Forward,
+                direction: pagination_direction,
             },
         )
         .await
@@ -164,17 +169,19 @@ async fn only_asset_id_filtered_coins() {
         .all(|c| asset_id == c.asset_id.into()));
 }
 
+#[rstest]
 #[tokio::test]
-async fn only_unspent_coins() {
-    let owner = Address::default();
-
+async fn only_unspent_coins(
+    #[values(Address::default(), Address::from([16; 32]))] owner: Address,
+    #[values(AssetId::from([1u8; 32]), AssetId::from([32u8; 32]))] asset_id: AssetId,
+) {
     // setup test data in the node
     let coins: Vec<(UtxoId, Coin)> = (1..10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
                 amount: i as Word,
-                asset_id: Default::default(),
+                asset_id,
                 maturity: Default::default(),
                 status: if i <= 5 {
                     CoinStatus::Unspent
@@ -204,7 +211,7 @@ async fn only_unspent_coins() {
     let coins = client
         .coins(
             format!("{:#x}", owner).as_str(),
-            None,
+            Some(format!("{:#x}", asset_id).as_str()),
             PaginationRequest {
                 cursor: None,
                 results: 10,

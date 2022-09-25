@@ -21,7 +21,5 @@ thiserror = "1.0"
 tokio = { version = "1.14", default-features = false, features = ["sync"] }
 tracing = "0.1"
 
-[dev-dependencies]
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
-    "test-helpers",
-] }
+[features]
+test-helpers = ["fuel-core-interfaces/test-helpers"]
