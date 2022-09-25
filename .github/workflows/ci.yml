@@ -397,8 +397,8 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
     
-    # Deploy Fuel Core Ephemeral Developer Environment
-    deploy-eph-env:
+  # Deploy Fuel Core Ephemeral Developer Environment
+  deploy-eph-env:
     if: github.ref != 'refs/heads/master'
     needs:
       - publish-docker-image
