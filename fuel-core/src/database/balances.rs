@@ -3,10 +3,10 @@ use crate::{
         Column,
         Database,
     },
+    multikey,
     state::{
         Error,
         IterDirection,
-        MultiKey,
     },
 };
 use fuel_core_interfaces::{
@@ -35,13 +35,17 @@ impl StorageInspect<ContractsAssets<'_>> for Database {
     type Error = Error;
 
     fn get(&self, key: &(&ContractId, &AssetId)) -> Result<Option<Cow<Word>>, Error> {
-        let key = MultiKey::new(key);
-        self._get(key.as_ref(), Column::ContractsAssets)
+        self._get(
+            &multikey!(key.0, ContractId, key.1, AssetId),
+            Column::ContractsAssets,
+        )
     }
 
     fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Error> {
-        let key = MultiKey::new(key);
-        self._contains_key(key.as_ref(), Column::ContractsAssets)
+        self._contains_key(
+            &multikey!(key.0, ContractId, key.1, AssetId),
+            Column::ContractsAssets,
+        )
     }
 }
 
@@ -51,13 +55,18 @@ impl StorageMutate<ContractsAssets<'_>> for Database {
         key: &(&ContractId, &AssetId),
         value: &Word,
     ) -> Result<Option<Word>, Error> {
-        let key = MultiKey::new(key);
-        self._insert(key.as_ref(), Column::ContractsAssets, *value)
+        self._insert(
+            &multikey!(key.0, ContractId, key.1, AssetId),
+            Column::ContractsAssets,
+            value,
+        )
     }
 
     fn remove(&mut self, key: &(&ContractId, &AssetId)) -> Result<Option<Word>, Error> {
-        let key = MultiKey::new(key);
-        self._remove(key.as_ref(), Column::ContractsAssets)
+        self._remove(
+            &multikey!(key.0, ContractId, key.1, AssetId),
+            Column::ContractsAssets,
+        )
     }
 }
 
@@ -66,7 +75,7 @@ impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
         let items: Vec<_> = self
             .iter_all::<Vec<u8>, Word>(
                 Column::ContractsAssets,
-                Some(parent.as_ref().to_vec()),
+                Some(parent.to_vec()),
                 None,
                 Some(IterDirection::Forward),
             )

@@ -50,7 +50,7 @@ impl StorageMutate<Transactions> for Database {
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        self._insert(key.as_ref(), Column::Transactions, value.clone())
+        self._insert(key.as_ref(), Column::Transactions, value)
             .map_err(Into::into)
     }
 
@@ -87,8 +87,9 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<(OwnedTransactionIndexCursor, Bytes32), Error>> + '_
     {
-        let start = start
-            .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
+        let start = start.map(|cursor| {
+            owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx).to_vec()
+        });
         self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
             Column::TransactionsByOwnerBlockIdx,
             Some(owner.to_vec()),
@@ -106,25 +107,25 @@ impl Database {
         tx_id: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
         self._insert(
-            owned_tx_index_key(owner, block_height, tx_idx),
+            owned_tx_index_key(owner, block_height, tx_idx).as_ref(),
             Column::TransactionsByOwnerBlockIdx,
-            *tx_id,
+            tx_id,
         )
     }
 
     pub fn update_tx_status(
         &self,
         tx_id: &Bytes32,
-        status: TransactionStatus,
+        status: &TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self._insert(tx_id, Column::TransactionStatus, status)
+        self._insert(tx_id.as_ref(), Column::TransactionStatus, status)
     }
 
     pub fn get_tx_status(
         &self,
         tx_id: &Bytes32,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self._get(&tx_id.deref()[..], Column::TransactionStatus)
+        self._get(&tx_id.as_ref(), Column::TransactionStatus)
     }
 }
 
@@ -132,13 +133,15 @@ fn owned_tx_index_key(
     owner: &Address,
     height: BlockHeight,
     tx_idx: TransactionIndex,
-) -> Vec<u8> {
+) -> [u8; 40] {
     // generate prefix to enable sorted indexing of transactions by owner
     // owner + block_height + tx_idx
-    let mut key = Vec::with_capacity(40);
-    key.extend(owner.as_ref());
-    key.extend(height.to_bytes());
-    key.extend(tx_idx.to_be_bytes());
+    let mut key = [0; 40];
+    key[..Address::LEN].copy_from_slice(owner.as_ref());
+    const HEIGHT_SIZE: usize = ::core::mem::size_of::<BlockHeight>();
+    let height: [u8; HEIGHT_SIZE] = height.to_bytes();
+    key[Address::LEN..Address::LEN + HEIGHT_SIZE].copy_from_slice(height.as_ref());
+    key[Address::LEN + HEIGHT_SIZE..].copy_from_slice(tx_idx.to_be_bytes().as_ref());
     key
 }
 

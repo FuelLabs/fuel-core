@@ -2,9 +2,11 @@ use crate::{
     database::Column,
     state::in_memory::transaction::MemoryTransactionView,
 };
+use fuel_core_interfaces::common::fuel_tx::UtxoId;
 use std::{
     fmt::Debug,
     marker::PhantomData,
+    mem,
     sync::Arc,
 };
 
@@ -14,39 +16,34 @@ pub type Result<T> = core::result::Result<T, Error>;
 pub type DataSource = Arc<dyn TransactableStorage>;
 pub type ColumnId = u32;
 
-#[derive(Clone, Debug, Default)]
-pub struct MultiKey<K1: AsRef<[u8]>, K2: AsRef<[u8]>> {
-    _marker_1: PhantomData<K1>,
-    _marker_2: PhantomData<K2>,
-    inner: Vec<u8>,
+const UTXO_ID_SIZE: usize = 32 + 1;
+
+pub trait UtxoIdAsRef {
+    fn as_ref(&self) -> &[u8];
 }
 
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> MultiKey<K1, K2> {
-    pub fn new(key: &(K1, K2)) -> Self {
-        Self {
-            _marker_1: Default::default(),
-            _marker_2: Default::default(),
-            inner: key
-                .0
-                .as_ref()
-                .iter()
-                .chain(key.1.as_ref().iter())
-                .copied()
-                .collect(),
-        }
-    }
-}
-
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> AsRef<[u8]> for MultiKey<K1, K2> {
+impl UtxoIdAsRef for UtxoId {
     fn as_ref(&self) -> &[u8] {
-        self.inner.as_slice()
+        let array = unsafe { mem::transmute::<&UtxoId, &[u8; UTXO_ID_SIZE]>(self) };
+        array.as_ref()
     }
 }
 
-impl<K1: AsRef<[u8]>, K2: AsRef<[u8]>> From<MultiKey<K1, K2>> for Vec<u8> {
-    fn from(key: MultiKey<K1, K2>) -> Vec<u8> {
-        key.inner
-    }
+#[macro_export]
+macro_rules! multikey {
+    ($left:expr, $left_ty:ty, $right:expr, $right_ty:ty) => {{
+        use $crate::state::UtxoIdAsRef as _;
+
+        let left: &$left_ty = $left;
+        let right: &$right_ty = $right;
+        const LSIZE: usize = <$left_ty>::LEN;
+        const RSIZE: usize = <$right_ty>::LEN;
+        const SIZE: usize = LSIZE + RSIZE;
+        let mut key: [u8; SIZE] = [0; SIZE];
+        key[..LSIZE].copy_from_slice(left.as_ref());
+        key[LSIZE..].copy_from_slice(right.as_ref());
+        key
+    }};
 }
 
 pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
@@ -56,10 +53,11 @@ pub trait KeyValueStore {
     fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: Column) -> Result<bool>;
-    // TODO: Use `Option<&[u8]>` instead of `Option<Vec<u8>>`. Also decide, do we really need usage
-    //  of `Option`? If `len` is zero it is the same as `None`. Apply the same change for all upper
-    //  functions.
-    //  https://github.com/FuelLabs/fuel-core/issues/622
+    /// Returns an iterator over all items of the table with `column`.
+    /// The `prefix` allows iterating only over data with the corresponding prefix.
+    /// The `start` specifies the start element of the iteration.
+    ///
+    /// # Note: `prefix` and `start` should be `Vec` because the iterator owns it.
     fn iter_all(
         &self,
         column: Column,

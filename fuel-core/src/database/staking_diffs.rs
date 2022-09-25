@@ -34,7 +34,7 @@ impl StorageMutate<StakingDiffs> for Database {
         key: &DaBlockHeight,
         value: &StakingDiff,
     ) -> Result<Option<StakingDiff>, KvStoreError> {
-        self._insert(key.to_be_bytes(), Column::StakingDiffs, value.clone())
+        self._insert(&key.to_be_bytes(), Column::StakingDiffs, value)
             .map_err(Into::into)
     }
 

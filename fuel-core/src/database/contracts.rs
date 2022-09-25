@@ -9,7 +9,6 @@ use crate::{
     state::{
         Error,
         IterDirection,
-        MultiKey,
     },
 };
 use fuel_core_interfaces::{
@@ -78,7 +77,7 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
         key: &ContractId,
         value: &UtxoId,
     ) -> Result<Option<UtxoId>, Self::Error> {
-        self._insert(key.as_ref(), Column::ContractsLatestUtxo, *value)
+        self._insert(key.as_ref(), Column::ContractsLatestUtxo, value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
@@ -95,9 +94,10 @@ impl Database {
     ) -> impl Iterator<Item = Result<(AssetId, Word), Error>> + '_ {
         self.iter_all::<Vec<u8>, Word>(
             Column::ContractsAssets,
-            Some(contract.as_ref().to_vec()),
-            start_asset
-                .map(|asset_id| MultiKey::new(&(&contract, &asset_id)).as_ref().to_vec()),
+            Some(contract.to_vec()),
+            start_asset.map(|asset_id| {
+                crate::multikey!(&contract, ContractId, &asset_id, AssetId).to_vec()
+            }),
             direction,
         )
         .map(|res| {

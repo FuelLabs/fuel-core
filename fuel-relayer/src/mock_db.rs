@@ -276,11 +276,11 @@ impl RelayerDb for MockDb {
             .last_committed_finalized_fuel_height
     }
 
-    async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
+    async fn set_last_committed_finalized_fuel_height(&self, block_height: &BlockHeight) {
         self.data
             .lock()
             .unwrap()
-            .last_committed_finalized_fuel_height = block_height;
+            .last_committed_finalized_fuel_height = *block_height;
     }
 
     async fn get_staking_diffs(

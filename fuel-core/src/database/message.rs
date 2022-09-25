@@ -5,6 +5,7 @@ use crate::{
         Database,
         KvStoreError,
     },
+    multikey,
     state::{
         Error,
         IterDirection,
@@ -51,14 +52,13 @@ impl StorageMutate<Messages> for Database {
         value: &Message,
     ) -> Result<Option<Message>, KvStoreError> {
         // insert primary record
-        let result = self._insert(key.as_ref(), Column::Messages, value.clone())?;
+        let result = self._insert(key.as_ref(), Column::Messages, value)?;
 
         // insert secondary record by owner
-        let _: Option<bool> = Database::_insert(
-            self,
-            owner_msg_id_key(&value.recipient, key),
+        let _: Option<bool> = self._insert(
+            multikey!(&value.recipient, Address, key, MessageId).as_ref(),
             Column::OwnedMessageIds,
-            true,
+            &true,
         )?;
 
         Ok(result)
@@ -70,7 +70,7 @@ impl StorageMutate<Messages> for Database {
         if let Some(message) = &result {
             Database::_remove::<bool>(
                 self,
-                &owner_msg_id_key(&message.recipient, key),
+                multikey!(&message.recipient, Address, key, MessageId).as_ref(),
                 Column::OwnedMessageIds,
             )?;
         }
@@ -89,7 +89,7 @@ impl Database {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedMessageIds,
             Some(owner.to_vec()),
-            start_message_id.map(|msg_id| owner_msg_id_key(owner, &msg_id)),
+            start_message_id.map(|msg_id| crate::multikey!(owner, Address, &msg_id, MessageId).to_vec()),
             direction,
         )
         // Safety: key is always 64 bytes
@@ -105,9 +105,13 @@ impl Database {
         start: Option<MessageId>,
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<Message, Error>> + '_ {
-        let start = start.map(|v| v.deref().to_vec());
-        self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
-            .map(|res| res.map(|(_, message)| message))
+        self.iter_all::<Vec<u8>, Message>(
+            Column::Messages,
+            None,
+            start.map(|v| v.deref().to_vec()),
+            direction,
+        )
+        .map(|res| res.map(|(_, message)| message))
     }
 
     pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
@@ -129,16 +133,6 @@ impl Database {
 
         Ok(Some(configs))
     }
-}
-
-/// Get a Key by chaining Owner + MessageId
-fn owner_msg_id_key(owner: &Address, msg_id: &MessageId) -> Vec<u8> {
-    owner
-        .as_ref()
-        .iter()
-        .chain(msg_id.as_ref().iter())
-        .copied()
-        .collect()
 }
 
 #[cfg(test)]

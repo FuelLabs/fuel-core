@@ -96,7 +96,7 @@ impl Executor {
             // set status to submitted
             db.update_tx_status(
                 &tx.id(),
-                TransactionStatus::Submitted { time: Utc::now() },
+                &TransactionStatus::Submitted { time: Utc::now() },
             )?;
         }
 
@@ -828,7 +828,7 @@ impl Executor {
                     *block_id = finalized_block_id;
                 }
             }
-            db.update_tx_status(tx_id, status.clone())?;
+            db.update_tx_status(tx_id, status)?;
         }
         Ok(())
     }

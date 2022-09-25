@@ -25,7 +25,7 @@ impl Database {
         self._insert(
             CHAIN_NAME_KEY,
             Column::Metadata,
-            config.chain_conf.chain_name.clone(),
+            config.chain_conf.chain_name.as_bytes(),
         )
         .and_then(|v: Option<String>| {
             if v.is_some() {
@@ -43,17 +43,17 @@ impl Database {
             .unwrap_or_default();
 
         let _: Option<u32> =
-            self._insert(DB_VERSION_KEY, Column::Metadata, DB_VERSION)?;
+            self._insert(DB_VERSION_KEY, Column::Metadata, &DB_VERSION)?;
         let _: Option<BlockHeight> =
-            self._insert(CHAIN_HEIGHT_KEY, Column::Metadata, chain_height)?;
+            self._insert(CHAIN_HEIGHT_KEY, Column::Metadata, &chain_height)?;
         let _: Option<BlockHeight> =
-            self._insert(FINALIZED_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+            self._insert(FINALIZED_DA_HEIGHT_KEY, Column::Metadata, &0)?;
         let _: Option<BlockHeight> =
-            self._insert(VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, 0)?;
+            self._insert(VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, &0)?;
         let _: Option<BlockHeight> = self._insert(
             LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
             Column::Metadata,
-            0,
+            &0,
         )?;
         Ok(())
     }

@@ -6,9 +6,11 @@ use crate::{
         KvStoreError,
     },
     model::Coin,
+    multikey,
     state::{
         Error,
         IterDirection,
+        UtxoIdAsRef,
     },
 };
 use fuel_core_interfaces::{
@@ -27,35 +29,15 @@ use fuel_core_interfaces::{
 };
 use std::borrow::Cow;
 
-fn owner_coin_id_key(owner: &Address, coin_id: &UtxoId) -> Vec<u8> {
-    owner
-        .as_ref()
-        .iter()
-        .chain(utxo_id_to_bytes(coin_id).iter())
-        .copied()
-        .collect()
-}
-
-// 32 Bytes for Tx_id + 1 byte for output_index
-const SIZE_OF_UTXO_ID: usize = 264;
-
-fn utxo_id_to_bytes(utxo_id: &UtxoId) -> Vec<u8> {
-    let mut out = Vec::with_capacity(SIZE_OF_UTXO_ID);
-    out.extend(utxo_id.tx_id().as_ref().iter());
-    out.push(utxo_id.output_index());
-    out
-}
-
 impl StorageInspect<Coins> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &UtxoId) -> Result<Option<Cow<Coin>>, KvStoreError> {
-        self._get(&utxo_id_to_bytes(key), Column::Coins)
-            .map_err(Into::into)
+        self._get(key.as_ref(), Column::Coins).map_err(Into::into)
     }
 
     fn contains_key(&self, key: &UtxoId) -> Result<bool, KvStoreError> {
-        self._contains_key(&utxo_id_to_bytes(key), Column::Coins)
+        self._contains_key(key.as_ref(), Column::Coins)
             .map_err(Into::into)
     }
 }
@@ -66,21 +48,22 @@ impl StorageMutate<Coins> for Database {
         key: &UtxoId,
         value: &Coin,
     ) -> Result<Option<Coin>, KvStoreError> {
-        let coin_by_owner: Vec<u8> = owner_coin_id_key(&value.owner, key);
+        let coin_by_owner = multikey!(&value.owner, Address, key, UtxoId);
         // insert primary record
-        let insert = self._insert(utxo_id_to_bytes(key), Column::Coins, value)?;
+        let insert = self._insert(key.as_ref(), Column::Coins, value)?;
         // insert secondary index by owner
-        let _: Option<bool> = self._insert(coin_by_owner, Column::OwnedCoins, true)?;
+        let _: Option<bool> =
+            self._insert(coin_by_owner.as_ref(), Column::OwnedCoins, &true)?;
         Ok(insert)
     }
 
     fn remove(&mut self, key: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        let coin: Option<Coin> = self._remove(&utxo_id_to_bytes(key), Column::Coins)?;
+        let coin: Option<Coin> = self._remove(key.as_ref(), Column::Coins)?;
 
         // cleanup secondary index
         if let Some(coin) = &coin {
-            let key = owner_coin_id_key(&coin.owner, key);
-            let _: Option<bool> = self._remove(key.as_slice(), Column::OwnedCoins)?;
+            let key = multikey!(&coin.owner, Address, key, UtxoId);
+            let _: Option<bool> = self._remove(key.as_ref(), Column::OwnedCoins)?;
         }
 
         Ok(coin)
@@ -88,16 +71,16 @@ impl StorageMutate<Coins> for Database {
 }
 
 impl Database {
-    pub fn owned_coins_ids(
-        &self,
-        owner: &Address,
+    pub fn owned_coins_ids<'a>(
+        &'a self,
+        owner: &'a Address,
         start_coin: Option<UtxoId>,
         direction: Option<IterDirection>,
-    ) -> impl Iterator<Item = Result<UtxoId, Error>> + '_ {
+    ) -> impl Iterator<Item = Result<UtxoId, Error>> + 'a {
         self.iter_all::<Vec<u8>, bool>(
             Column::OwnedCoins,
-            Some(owner.as_ref().to_vec()),
-            start_coin.map(|b| owner_coin_id_key(owner, &b)),
+            Some(owner.to_vec()),
+            start_coin.map(|b| multikey!(owner, Address, &b, UtxoId).to_vec()),
             direction,
         )
         // Safety: key is always 64 bytes

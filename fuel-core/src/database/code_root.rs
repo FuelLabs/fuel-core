@@ -39,7 +39,7 @@ impl StorageMutate<ContractsInfo> for Database {
         key: &ContractId,
         value: &(Salt, Bytes32),
     ) -> Result<Option<(Salt, Bytes32)>, Error> {
-        self._insert(key.as_ref(), Column::ContractsInfo, *value)
+        self._insert(key.as_ref(), Column::ContractsInfo, value)
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<(Salt, Bytes32)>, Error> {

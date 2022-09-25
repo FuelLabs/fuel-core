@@ -3,10 +3,10 @@ use crate::{
         Column,
         Database,
     },
+    multikey,
     state::{
         Error,
         IterDirection,
-        MultiKey,
     },
 };
 use fuel_core_interfaces::{
@@ -34,15 +34,19 @@ impl StorageInspect<ContractsState<'_>> for Database {
     type Error = Error;
 
     fn get(&self, key: &(&ContractId, &Bytes32)) -> Result<Option<Cow<Bytes32>>, Error> {
-        let key = MultiKey::new(key);
-        self._get(key.as_ref(), Column::ContractsState)
-            .map_err(Into::into)
+        self._get(
+            &multikey!(key.0, ContractId, key.1, Bytes32),
+            Column::ContractsState,
+        )
+        .map_err(Into::into)
     }
 
     fn contains_key(&self, key: &(&ContractId, &Bytes32)) -> Result<bool, Error> {
-        let key = MultiKey::new(key);
-        self._contains_key(key.as_ref(), Column::ContractsState)
-            .map_err(Into::into)
+        self._contains_key(
+            &multikey!(key.0, ContractId, key.1, Bytes32),
+            Column::ContractsState,
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -52,18 +56,23 @@ impl StorageMutate<ContractsState<'_>> for Database {
         key: &(&ContractId, &Bytes32),
         value: &Bytes32,
     ) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new(key);
-        self._insert(key.as_ref(), Column::ContractsState, *value)
-            .map_err(Into::into)
+        self._insert(
+            &multikey!(key.0, ContractId, key.1, Bytes32),
+            Column::ContractsState,
+            value,
+        )
+        .map_err(Into::into)
     }
 
     fn remove(
         &mut self,
         key: &(&ContractId, &Bytes32),
     ) -> Result<Option<Bytes32>, Error> {
-        let key = MultiKey::new(key);
-        self._remove(key.as_ref(), Column::ContractsState)
-            .map_err(Into::into)
+        self._remove(
+            &multikey!(key.0, ContractId, key.1, Bytes32),
+            Column::ContractsState,
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -72,7 +81,7 @@ impl MerkleRootStorage<ContractId, ContractsState<'_>> for Database {
         let items: Vec<_> = self
             .iter_all::<Vec<u8>, Bytes32>(
                 Column::ContractsState,
-                Some(parent.as_ref().to_vec()),
+                Some(parent.to_vec()),
                 None,
                 Some(IterDirection::Forward),
             )

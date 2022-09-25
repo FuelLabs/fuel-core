@@ -363,7 +363,7 @@ impl FinalizationQueue {
         let last_committed_fin_fuel_height =
             self.blocks.handle_da_finalization(finalized_da_height);
 
-        db.set_last_committed_finalized_fuel_height(last_committed_fin_fuel_height)
+        db.set_last_committed_finalized_fuel_height(&last_committed_fin_fuel_height)
             .await;
         self.finalized_da_height = finalized_da_height;
         // bump validator set to last finalized block

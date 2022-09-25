@@ -49,11 +49,10 @@ impl StorageMutate<FuelBlocks> for Database {
         key: &Bytes32,
         value: &FuelBlockDb,
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
-        let _: Option<BlockHeight> = Database::_insert(
-            self,
-            value.header.height.to_be_bytes(),
+        let _: Option<BlockHeight> = self._insert(
+            &value.header.height.to_be_bytes(),
             Column::FuelBlockIds,
-            *key,
+            key,
         )?;
         self._insert(key.as_ref(), Column::FuelBlocks, value)
             .map_err(Into::into)
