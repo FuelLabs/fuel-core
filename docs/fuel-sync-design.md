@@ -86,7 +86,7 @@ pub enum Verdict<Reason> {
 }
 
 pub enum FetchRequest {
-    HeadersByRanges([Range<BlockHeight>]),
+    HeadersByRange(Range<BlockHeight>),
     HeadersByHash([Bytes32]),
     BlocksByRanges([Range<BlockHeight>]),
     BlocksByHash([Bytes32]),
