@@ -151,7 +151,7 @@ pub trait BlocksCommitter {
     /// 
     /// Return errors if something is wrong during the commit process.
     /// The state is not updated in that case.
-    fn commit(&mut self, blocks: [FuelBlock]) -> Result<(), CommitError>;
+    fn commit(&mut self, blocks: [Sealed<FuelBlock>]) -> Result<(), CommitError>;
 
     /// Returns the last committed block header.
     fn last_block_header(&self) -> FuelBlockHeader;
