@@ -1,5 +1,5 @@
 use crate::database::Database;
-use fuel_chain_config::chain_config::ChainConfig;
+use fuel_chain_config::ChainConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,

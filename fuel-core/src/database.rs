@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use fuel_chain_config::chain_config::{
+use fuel_chain_config::{
     ChainConfigDb,
     CoinConfig,
     ContractConfig,
@@ -364,7 +364,7 @@ impl ChainConfigDb for Database {
 
     fn get_message_config(
         &self,
-    ) -> Result<Option<Vec<fuel_chain_config::chain_config::MessageConfig>>, Error> {
+    ) -> Result<Option<Vec<fuel_chain_config::MessageConfig>>, Error> {
         Self::get_message_config(self)
     }
 }

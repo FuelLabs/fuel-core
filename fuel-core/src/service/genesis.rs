@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use anyhow::Result;
-use fuel_chain_config::chain_config::{
+use fuel_chain_config::{
     ContractConfig,
     StateConfig,
 };
@@ -213,7 +213,7 @@ mod tests {
         model::BlockHeight,
         service::config::Config,
     };
-    use fuel_chain_config::chain_config::{
+    use fuel_chain_config::{
         ChainConfig,
         CoinConfig,
         MessageConfig,

@@ -1,4 +1,4 @@
-use fuel_chain_config::chain_config::{
+use fuel_chain_config::config::{
     CoinConfig,
     ContractConfig,
     MessageConfig,

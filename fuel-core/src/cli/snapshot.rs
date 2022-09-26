@@ -28,7 +28,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
 #[cfg(feature = "rocksdb")]
 pub async fn exec(command: Command) -> anyhow::Result<()> {
     use anyhow::Context;
-    use fuel_chain_config::chain_config::{
+    use fuel_chain_config::{
         ChainConfig,
         StateConfig,
     };

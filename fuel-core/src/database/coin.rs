@@ -10,7 +10,7 @@ use crate::{
         IterDirection,
     },
 };
-use fuel_chain_config::chain_config::CoinConfig;
+use fuel_chain_config::CoinConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{

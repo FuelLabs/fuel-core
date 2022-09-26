@@ -1,4 +1,4 @@
-use fuel_chain_config::chain_config::StateConfig;
+use fuel_chain_config::config::StateConfig;
 use fuel_core::{
     resource_query::ResourceQueryError,
     service::{
@@ -19,7 +19,7 @@ use fuel_gql_client::client::{
 };
 
 mod coins {
-    use fuel_chain_config::chain_config::{
+    use fuel_chain_config::config::{
         CoinConfig,
         StateConfig,
     };
@@ -228,7 +228,7 @@ mod coins {
 }
 
 mod messages {
-    use fuel_chain_config::chain_config::{
+    use fuel_chain_config::config::{
         ChainConfig,
         MessageConfig,
         StateConfig,
@@ -397,7 +397,7 @@ mod messages {
 
 // It is combination of coins and messages test cases.
 mod messages_and_coins {
-    use fuel_chain_config::chain_config::{
+    use fuel_chain_config::config::{
         ChainConfig,
         CoinConfig,
         MessageConfig,

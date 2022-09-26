@@ -1,4 +1,4 @@
-use fuel_chain_config::chain_config::ChainConfig;
+use fuel_chain_config::ChainConfig;
 use std::{
     net::{
         Ipv4Addr,
