@@ -4,10 +4,8 @@ use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
     core::{
-        connection::{
-            ConnectionId,
-            ListenerId,
-        },
+        connection::ConnectionId,
+        transport::ListenerId,
         ConnectedPoint,
     },
     kad::{
@@ -398,7 +396,7 @@ mod tests {
             .into_authentic(&keypair)
             .unwrap();
 
-        let transport = core::transport::MemoryTransport
+        let transport = core::transport::MemoryTransport::default()
             .upgrade(core::upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(yamux::YamuxConfig::default())

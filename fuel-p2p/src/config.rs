@@ -9,6 +9,10 @@ use libp2p::{
     },
     mplex,
     noise,
+    tcp::{
+        GenTcpConfig,
+        TcpTransport,
+    },
     yamux,
     Multiaddr,
     PeerId,
@@ -122,10 +126,14 @@ pub(crate) async fn build_transport(
     local_keypair: Keypair,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
+        let generate_tcp_transpot =
+            || TcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+
+        let tcp = generate_tcp_transpot();
+
         let ws_tcp =
-            libp2p::websocket::WsConfig::new(libp2p::tcp::TcpConfig::new().nodelay(true))
-                .or_transport(tcp);
+            libp2p::websocket::WsConfig::new(generate_tcp_transpot()).or_transport(tcp);
+
         libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
     };
 
