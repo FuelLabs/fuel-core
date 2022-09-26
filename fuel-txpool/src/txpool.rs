@@ -174,6 +174,7 @@ impl TxPool {
                         tx: tx.clone(),
                         status: TxStatus::Submitted,
                     });
+                    #[cfg(feature = "p2p")]
                     let _ = network_sender
                         .send(P2pRequestEvent::BroadcastNewTransaction {
                             transaction: tx.clone(),
