@@ -123,7 +123,9 @@ pub(crate) async fn build_transport(
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
-        let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
+        let ws_tcp =
+            libp2p::websocket::WsConfig::new(libp2p::tcp::TcpConfig::new().nodelay(true))
+                .or_transport(tcp);
         libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
     };
 
