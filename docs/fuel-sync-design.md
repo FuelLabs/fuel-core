@@ -128,7 +128,7 @@ All data is received from the channel and processed by FS to update the
 inner state of the synchronization. FS requests data from P2P for synchronization each time when it is required. 
 If some data is invalid or corrupted, the FS reports 
 it to P2P, and P2P can punish the sender of the data by decreasing the 
-reputation(or blacklisting). FS calls `Gossiper::gossip` at the end of block synchronization.
+reputation(or blacklisting). FS calls `Gossiper::gossiping` at the end of block synchronization.
 
 The same approach can be used between the P2P and TP. 
 `Punisher` trait adds a mechanism for [reputation management](https://github.com/FuelLabs/fuel-core/issues/460).
@@ -341,7 +341,7 @@ but FS can't apply it to the blockchain. Report it to logs and notify the node o
 
 #### On block commit event
 
-FS gossips about the node's latest via `Gossiper::gossip`.
+FS gossips about the node's latest via `Gossiper::gossiping`.
 
 FS removes committed blocks from the range of active phase. After FS 
 fulfills it with a new range from the pending phase. The new range should 
