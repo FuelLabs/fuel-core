@@ -94,10 +94,14 @@ pub enum FetchRequest {
     Heartbeat,
 }
 
-// TODO: `D` should implement some bound that allows to serialize it for gossiping.
+pub enum Gossip {
+    Transaction(Transaction),
+    Block(Sealed<Block>)
+}
+
 pub trait Gossiper<D> {
-    /// Gossips some `data` to the network.
-    fn gossip(&self, data: &D);
+    /// Gossiping a `data` to the network.
+    fn gossiping(&self, data: &Gossip);
 }
 
 pub trait Punisher<Reason> {
