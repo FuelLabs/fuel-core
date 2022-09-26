@@ -48,7 +48,6 @@ use fuel_core_interfaces::{
 #[derive(Default)]
 pub struct Data {
     pub messages: HashMap<MessageId, Message>,
-
     pub chain_height: BlockHeight,
     pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
     pub finalized_da_height: DaBlockHeight,
