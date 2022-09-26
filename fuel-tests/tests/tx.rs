@@ -2,10 +2,7 @@ use crate::helpers::TestContext;
 use chrono::Utc;
 use fuel_core::{
     database::Database,
-    executor::{
-        ExecutionMode,
-        Executor,
-    },
+    executor::Executor,
     model::{
         FuelBlock,
         FuelBlockHeader,
@@ -15,12 +12,15 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_tx,
-    fuel_vm::{
-        consts::*,
-        prelude::*,
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx,
+        fuel_vm::{
+            consts::*,
+            prelude::*,
+        },
     },
+    executor::ExecutionMode,
 };
 use fuel_gql_client::client::{
     types::TransactionStatus,

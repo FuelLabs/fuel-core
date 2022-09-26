@@ -35,15 +35,12 @@ mod tests {
         path::PathBuf,
     };
 
-    use crate::config::{
-        chain::ChainConfig,
-        state::StateConfig,
-    };
-
     use super::{
+        chain::ChainConfig,
         coin::CoinConfig,
         contract::ContractConfig,
         message::MessageConfig,
+        state::StateConfig,
     };
 
     #[test]
