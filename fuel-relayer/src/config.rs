@@ -11,9 +11,9 @@ use std::{
 };
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
-    Lazy::new(|| crate::abi::bridge::message::SentMessageFilter::signature());
+    Lazy::new(crate::abi::bridge::message::SentMessageFilter::signature);
 pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
-    Lazy::new(|| crate::fuel::fuel::BlockCommittedFilter::signature());
+    Lazy::new(crate::abi::fuel::fuel::BlockCommittedFilter::signature);
 
 #[derive(Clone, Debug)]
 /// Configuration settings for the [`Relayer`](crate::relayer::Relayer).
@@ -64,9 +64,10 @@ impl Default for Config {
 #[allow(missing_docs)]
 impl Config {
     pub fn default_test() -> Self {
-        let mut s = Self::default();
-        s.pending_eth_interval = Duration::from_millis(100);
-        s
+        Self {
+            pending_eth_interval: Duration::from_millis(100),
+            ..Default::default()
+        }
     }
     pub fn eth_v2_contracts_deployment(&self) -> DaBlockHeight {
         self.eth_v2_contracts_deployment

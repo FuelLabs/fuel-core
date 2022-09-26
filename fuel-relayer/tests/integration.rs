@@ -1,13 +1,25 @@
 #![cfg(feature = "test-helpers")]
 
-use std::sync::Arc;
+use std::{
+    io::Read,
+    sync::Arc,
+};
 
 use ethers_contract::EthEvent;
-use ethers_core::types::Log;
+use ethers_core::types::{
+    Log,
+    U256,
+};
 use fuel_core_interfaces::{
     common::{
+        crypto,
         fuel_storage::StorageInspect,
-        prelude::Bytes32,
+        prelude::{
+            Bytes32,
+            Output,
+            SizedBytes,
+            Transaction,
+        },
     },
     db::Messages,
     model::{
@@ -34,7 +46,21 @@ use fuel_relayer::{
     H256,
 };
 
-fn make_block(height: u32, eth_number: u64, prev_root: Bytes32) -> SealedFuelBlock {
+fn make_block(
+    height: u32,
+    eth_number: u64,
+    prev_root: Bytes32,
+    output_amount: u64,
+) -> SealedFuelBlock {
+    let mut out = Transaction::default();
+    match &mut out {
+        Transaction::Script { outputs, .. } | Transaction::Create { outputs, .. } => {
+            *outputs = vec![Output::Message {
+                recipient: Default::default(),
+                amount: output_amount,
+            }];
+        }
+    }
     SealedFuelBlock {
         block: FuelBlock {
             header: FuelBlockHeader {
@@ -43,7 +69,7 @@ fn make_block(height: u32, eth_number: u64, prev_root: Bytes32) -> SealedFuelBlo
                 prev_root,
                 ..Default::default()
             },
-            ..Default::default()
+            transactions: vec![out],
         },
         ..Default::default()
     }
@@ -158,16 +184,41 @@ async fn can_publish_fuel_block() {
     {
         let mut lock = mock_db.data.lock().unwrap();
         lock.chain_height = 1u32.into();
-        lock.sealed_blocks
-            .insert(1u32.into(), Arc::new(make_block(1, 1, Default::default())));
+        lock.sealed_blocks.insert(
+            1u32.into(),
+            Arc::new(make_block(1, 1, Default::default(), 1)),
+        );
+        lock.sealed_blocks.insert(
+            0u32.into(),
+            Arc::new(make_block(0, 0, Default::default(), 1)),
+        );
     };
+
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
     eth_node.update_data(|data| data.best_block.number = Some(1.into()));
-    eth_node.set_after_event(|data, event| {
-        if let TriggerType::Call = event {
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut tx = Some(tx);
+    eth_node.set_after_event(move |data, event| {
+        if let TriggerType::Send = event {
             assert_eq!(data.best_block.number.unwrap().as_u64(), 2);
             data.best_block.number = Some(data.best_block.number.unwrap() + 1);
+            assert_eq!(data.incoming_message_roots.len(), 1);
+            let expected_timestamp: [u8; 32] = U256::from(1).into();
+            let expected_timestamp: H256 = expected_timestamp.into();
+            let mut msg = Output::Message {
+                recipient: Default::default(),
+                amount: 1,
+            };
+            let mut buf = vec![0u8; msg.serialized_size()];
+            msg.read(&mut buf).unwrap();
+            let msg = crypto::ephemeral_merkle_root(vec![buf].into_iter());
+            assert_eq!(
+                *data.incoming_message_roots.get(&msg).unwrap(),
+                expected_timestamp
+            );
+            tx.take().unwrap().send(()).unwrap();
         }
     });
     let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
@@ -178,6 +229,10 @@ async fn can_publish_fuel_block() {
         mock_db.get_last_committed_finalized_fuel_height().await,
         1u32.into()
     );
+    tokio::time::timeout(std::time::Duration::from_secs(5), rx)
+        .await
+        .unwrap()
+        .unwrap();
 }
 
 #[tokio::test]
@@ -189,8 +244,14 @@ async fn does_not_double_publish_fuel_block() {
     {
         let mut lock = mock_db.data.lock().unwrap();
         lock.chain_height = 1u32.into();
-        lock.sealed_blocks
-            .insert(1u32.into(), Arc::new(make_block(1, 1, Default::default())));
+        lock.sealed_blocks.insert(
+            1u32.into(),
+            Arc::new(make_block(1, 1, Default::default(), 1)),
+        );
+        lock.sealed_blocks.insert(
+            0u32.into(),
+            Arc::new(make_block(0, 0, Default::default(), 1)),
+        );
     };
     // Setup the eth node with a block high enough that there
     // will be some finalized blocks.
@@ -208,7 +269,7 @@ async fn does_not_double_publish_fuel_block() {
     let mut get_block_counter = 0;
     let db = mock_db.clone();
     eth_node.set_after_event(move |data, event| match event {
-        TriggerType::Call => {
+        TriggerType::Send => {
             call_counter += 1;
             if get_block_counter < 10 {
                 assert!(call_counter == 1);

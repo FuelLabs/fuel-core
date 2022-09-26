@@ -239,10 +239,12 @@ impl RelayerDb for MockDb {
     }
 
     async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight) {
-        self.data
+        let d = &mut self
+            .data
             .lock()
             .unwrap()
-            .last_committed_finalized_fuel_height = block_height;
+            .last_committed_finalized_fuel_height;
+        *d = BlockHeight::from(d.max(*block_height));
     }
 
     async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {

@@ -21,12 +21,14 @@ use ethers_providers::{
     ProviderError,
     SyncingStatus,
 };
+use fuel_core_interfaces::common::prelude::Bytes32;
 use parking_lot::Mutex;
 use serde::{
     de::DeserializeOwned,
     Serialize,
 };
 use std::{
+    collections::HashMap,
     fmt,
     fmt::Debug,
     str::FromStr,
@@ -60,6 +62,8 @@ pub struct MockData {
     pub logs_batch_index: usize,
     pub blocks_batch: Vec<Vec<H256>>,
     pub blocks_batch_index: usize,
+    // mapping(bytes32 => uint256) public s_incomingMessageRoots;
+    pub incoming_message_roots: HashMap<Bytes32, H256>,
 }
 
 impl MockMiddleware {
@@ -149,6 +153,7 @@ impl Default for MockData {
             logs_batch_index: 0,
             blocks_batch: Vec::new(),
             blocks_batch_index: 0,
+            incoming_message_roots: Default::default(),
         }
     }
 }
@@ -186,7 +191,7 @@ pub enum TriggerType<'a> {
     GetBlock(BlockId),
     GetLogFilterChanges,
     GetBlockFilterChanges,
-    Call,
+    Send,
 }
 
 #[async_trait]
@@ -317,7 +322,7 @@ impl Middleware for MockMiddleware {
         _block: Option<BlockId>,
     ) -> Result<ethers_providers::PendingTransaction<'_, Self::Provider>, Self::Error>
     {
-        self.before_event(TriggerType::Call);
+        self.before_event(TriggerType::Send);
 
         use crate::abi::fuel::*;
         let tx = tx.into();
@@ -329,6 +334,11 @@ impl Middleware for MockMiddleware {
         match calls {
             FuelCalls::CommitBlock(CommitBlockCall {
                 minimum_block_number,
+                new_block_header:
+                    SidechainBlockHeader {
+                        message_outputs_root,
+                        ..
+                    },
                 ..
             }) => {
                 let event = BlockCommittedFilter {
@@ -338,12 +348,17 @@ impl Middleware for MockMiddleware {
                 };
                 let mut log = event.into_log();
                 log.address = address;
+                let message_root: Bytes32 = message_outputs_root.into();
 
                 self.update_data(move |data| {
                     *data.best_block.number.as_mut().unwrap() += 1.into();
+                    data.best_block.timestamp += 1.into();
+                    let timestamp: [u8; 32] = data.best_block.timestamp.into();
                     let height = data.best_block.number.unwrap();
                     log.block_number = Some(height);
                     data.logs_batch.push(vec![log]);
+                    data.incoming_message_roots
+                        .insert(message_root, timestamp.into());
                 });
             }
             _ => todo!(),
@@ -351,7 +366,7 @@ impl Middleware for MockMiddleware {
 
         let r = PendingTransaction::new(Default::default(), self.provider());
 
-        self.after_event(TriggerType::Call);
+        self.after_event(TriggerType::Send);
         Ok(r)
     }
 }

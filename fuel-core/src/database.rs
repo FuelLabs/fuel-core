@@ -553,7 +553,22 @@ mod relayer {
             &self,
             block_height: BlockHeight,
         ) {
-            let _: Option<BlockHeight> = self
+            let txn = self.transaction();
+            if block_height
+                > txn
+                    .get(
+                        metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
+                        Column::Metadata,
+                    )
+                    .unwrap_or_else(|err| {
+                        panic!(
+                            "get_last_committed_finalized_fuel_height should always succeed: {:?}",
+                            err
+                        );
+                    })
+                    .unwrap_or_default()
+            {
+                let _: Option<BlockHeight> = self
                 .insert(
                     metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
                     Column::Metadata,
@@ -565,6 +580,7 @@ mod relayer {
                         err
                     );
                 });
+            }
         }
 
         async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {

@@ -14,6 +14,7 @@ use ethers_core::types::{
     Log,
     ValueOrArray,
     H160,
+    H256,
 };
 use ethers_providers::{
     Http,
@@ -22,15 +23,23 @@ use ethers_providers::{
     ProviderError,
 };
 use fuel_core_interfaces::{
+    common::{
+        crypto,
+        prelude::{
+            Output,
+            SizedBytes,
+        },
+    },
     db::Messages,
     model::{
-        FuelBlockHeader,
+        FuelBlock,
         Message,
     },
     relayer::RelayerDb,
 };
 use std::{
     convert::TryInto,
+    io::Read,
     ops::Deref,
     sync::{
         atomic::AtomicBool,
@@ -111,18 +120,45 @@ where
         write_logs(self.database.as_mut(), logs).await
     }
 
-    async fn publish_fuel_block(&mut self, new_block_height: u32) {
+    async fn get_blocks_for_publishing(
+        &mut self,
+        new_block_height: u32,
+    ) -> anyhow::Result<Option<(FuelBlock, FuelBlock, H256)>> {
+        let new_block = self
+            .database
+            .get_sealed_block(new_block_height.into())
+            .await
+            .map(|b| b.block.clone());
+        let previous_block = self
+            .database
+            .get_sealed_block(
+                new_block_height
+                    .checked_sub(1)
+                    .ok_or_else(|| anyhow::anyhow!("Tried to publish the genesis block"))?
+                    .into(),
+            )
+            .await
+            .map(|b| b.block.clone());
+        match (new_block, previous_block) {
+            (Some(new_block), Some(previous_block)) => Ok(self
+                .eth_node
+                .get_block((*new_block.header.number) as u64)
+                .await?
+                .and_then(|eth_block| {
+                    Some((new_block, previous_block, eth_block.hash?))
+                })),
+            _ => Ok(None),
+        }
+    }
+
+    async fn publish_fuel_block(&mut self, new_block_height: u32) -> anyhow::Result<()> {
         if !self.is_pending_committed_fuel_height() {
             if let Some(contract) = self.config.eth_v2_commit_contract {
-                // FIXME: This should probably be a sync write that flushes to disk to
-                // avoid sending duplicate transactions to eth.
-                match self
-                    .database
-                    .get_sealed_block(new_block_height.into())
-                    .await
-                    .map(|b| b.block.header.clone())
-                {
-                    Some(new_block) => {
+                match self.get_blocks_for_publishing(new_block_height).await? {
+                    Some((new_block, previous_block, eth_block)) => {
+                        // FIXME: This should probably be a sync write that flushes to disk to
+                        // avoid sending duplicate transactions to eth.
+
                         self.database
                             .set_pending_committed_fuel_height(Some(
                                 new_block_height.into(),
@@ -135,6 +171,8 @@ where
                             self.config.da_finalization as usize,
                             self.config.pending_eth_interval,
                             new_block,
+                            previous_block,
+                            eth_block,
                         );
 
                         self.add_pending_committed_fuel_height(jh);
@@ -146,6 +184,7 @@ where
                 }
             }
         }
+        Ok(())
     }
 
     fn is_pending_committed_fuel_height(&mut self) -> bool {
@@ -323,7 +362,7 @@ where
                 }
 
                 if let Some(new_block_height) = state.needs_to_publish_fuel() {
-                    relayer.publish_fuel_block(new_block_height).await;
+                    relayer.publish_fuel_block(new_block_height).await?;
                 }
 
                 update_synced(&relayer.synced, &state);
@@ -363,35 +402,31 @@ fn spawn_pending_committed_block<P>(
     eth_node: Arc<P>,
     confirmations: usize,
     interval: core::time::Duration,
-    new_block: FuelBlockHeader,
+    new_block: FuelBlock,
+    previous_block: FuelBlock,
+    eth_block_hash: H256,
 ) -> tokio::task::JoinHandle<()>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
     let client = crate::abi::fuel::Fuel::new(contract, eth_node);
 
-    // TODO: Add pr to add to fuel block header.
-    // message_root: merkle root of of messages within this block
-    // message count within this block
-
-    let mut block = crate::abi::fuel::fuel::SidechainBlockHeader::default();
-
     // minimum eth block height
-    let eth_block_number = *new_block.number;
+    let eth_block_number = *new_block.header.number;
 
-    // fuel block height
-    block.height = *new_block.height;
-    // prev_root merkle root of all previous blocks
-    block.previous_block_root = *new_block.prev_root;
+    // Currently not using theses fields.
+    let validators = Default::default();
+    let stakes = Default::default();
+    let signatures = Default::default();
 
     let txn = client.commit_block(
         eth_block_number,
-        Default::default(),
-        block,
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
+        eth_block_hash.into(),
+        new_block.into(),
+        previous_block.into(),
+        validators,
+        stakes,
+        signatures,
     );
     tokio::task::spawn(async move {
         if let Err(e) = await_pending_committed_block(txn, confirmations, interval).await
@@ -438,7 +473,6 @@ async fn write_logs(database: &mut dyn RelayerDb, logs: Vec<Log>) -> anyhow::Res
                 StorageMutate::<Messages>::insert(database, &m.id(), &m)?;
             }
             EthEventLog::FuelBlockCommitted { height, .. } => {
-                // TODO: Check if this is greater then current.
                 database
                     .set_last_committed_finalized_fuel_height(height.into())
                     .await;
@@ -449,4 +483,48 @@ async fn write_logs(database: &mut dyn RelayerDb, logs: Vec<Log>) -> anyhow::Res
         }
     }
     Ok(())
+}
+
+impl From<FuelBlock> for crate::abi::fuel::fuel::SidechainBlockHeader {
+    fn from(block: FuelBlock) -> Self {
+        Self {
+            height: *block.header.height,
+            previous_block_root: *block.header.prev_root,
+            transaction_root: *block.header.transactions_root,
+            message_outputs_root: *generate_message_root(block),
+            // Currently not using these fields.
+            validator_set_hash: Default::default(),
+            required_stake: Default::default(),
+        }
+    }
+}
+
+fn generate_message_root(
+    block: FuelBlock,
+) -> fuel_core_interfaces::common::prelude::Bytes32 {
+    // The collect is needed to get an ExactSizeIterator
+    #[allow(clippy::needless_collect)]
+    let messages: Vec<_> = block
+        .transactions
+        .into_iter()
+        .flat_map(|t| match t {
+            fuel_core_interfaces::common::prelude::Transaction::Script {
+                outputs,
+                ..
+            }
+            | fuel_core_interfaces::common::prelude::Transaction::Create {
+                outputs,
+                ..
+            } => outputs.into_iter().filter(Output::is_message),
+        })
+        .map(|mut message| {
+            let mut buf = vec![0u8; message.serialized_size()];
+            message.read_exact(&mut buf).expect(
+                "This is safe because we have checked the size of buf is correct",
+            );
+            buf
+        })
+        .collect();
+
+    crypto::ephemeral_merkle_root(messages.into_iter())
 }
