@@ -6,7 +6,6 @@ mod contract;
 mod dap;
 mod debugger;
 mod health;
-mod tx_gossip;
 mod helpers;
 mod messages;
 #[cfg(feature = "metrics")]
@@ -15,3 +14,4 @@ mod node_info;
 mod resource;
 mod snapshot;
 mod tx;
+mod tx_gossip;
