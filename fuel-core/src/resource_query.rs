@@ -215,7 +215,6 @@ impl From<StateError> for ResourceQueryError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        chain_config::ChainConfig,
         database::Database,
         model::{
             Coin,
@@ -223,6 +222,7 @@ mod tests {
         },
     };
     use assert_matches::assert_matches;
+    use fuel_chain_config::ChainConfig;
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Word,

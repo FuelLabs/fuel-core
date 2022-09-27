@@ -38,6 +38,7 @@ env_logger = "0.9"
 fuel-block-executor = { path = "../fuel-block-executor", version = "0.10.1" }
 fuel-block-importer = { path = "../fuel-block-importer", version = "0.10.1" }
 fuel-block-producer = { path = "../fuel-block-producer", version = "0.10.1" }
+fuel-chain-config = { path = "../fuel-chain-config", version = "0.10.1" }
 fuel-core-bft = { path = "../fuel-core-bft", version = "0.10.1" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
     "serde",

@@ -156,6 +156,7 @@ jobs:
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-chain-config/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml

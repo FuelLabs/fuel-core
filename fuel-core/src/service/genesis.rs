@@ -1,8 +1,4 @@
 use crate::{
-    chain_config::{
-        ContractConfig,
-        StateConfig,
-    },
     database::{
         storage::ContractsLatestUtxo,
         Database,
@@ -13,6 +9,10 @@ use crate::{
     },
 };
 use anyhow::Result;
+use fuel_chain_config::{
+    ContractConfig,
+    StateConfig,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsMut,
@@ -210,18 +210,13 @@ mod tests {
     use super::*;
 
     use crate::{
-        chain_config::{
-            ChainConfig,
-            CoinConfig,
-            ContractConfig,
-            MessageConfig,
-            StateConfig,
-        },
-        model::{
-            BlockHeight,
-            DaBlockHeight,
-        },
+        model::BlockHeight,
         service::config::Config,
+    };
+    use fuel_chain_config::{
+        ChainConfig,
+        CoinConfig,
+        MessageConfig,
     };
     use fuel_core_interfaces::{
         common::{
@@ -234,7 +229,10 @@ mod tests {
             },
         },
         db::Coins,
-        model::Message,
+        model::{
+            DaBlockHeight,
+            Message,
+        },
     };
     use itertools::Itertools;
     use rand::{

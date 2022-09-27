@@ -11,6 +11,11 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_chain_config::{
+    ChainConfigDb,
+    CoinConfig,
+    ContractConfig,
+};
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
@@ -339,6 +344,28 @@ impl P2pDb for Database {
         height: BlockHeight,
     ) -> Option<Arc<SealedFuelBlock>> {
         <Self as RelayerDb>::get_sealed_block(self, height).await
+    }
+}
+
+/// Implement `ChainConfigDb` so that `Database` can be passed to
+/// `StateConfig's` `generate_state_config()` method
+impl ChainConfigDb for Database {
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
+        Self::get_block_height(self)
+    }
+
+    fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
+        Self::get_coin_config(self)
+    }
+
+    fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
+        Self::get_contract_config(self)
+    }
+
+    fn get_message_config(
+        &self,
+    ) -> Result<Option<Vec<fuel_chain_config::MessageConfig>>, Error> {
+        Self::get_message_config(self)
     }
 }
 
