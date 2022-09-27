@@ -2458,7 +2458,6 @@ version = "0.0.0"
 dependencies = [
  "async-std",
  "chrono",
- "fuel-chain-config",
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-gql-client",

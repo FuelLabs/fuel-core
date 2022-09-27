@@ -1,5 +1,10 @@
-use fuel_chain_config::config::StateConfig;
 use fuel_core::{
+    chain_config::{
+        ChainConfig,
+        CoinConfig,
+        MessageConfig,
+        StateConfig,
+    },
     resource_query::ResourceQueryError,
     service::{
         Config,
@@ -19,11 +24,6 @@ use fuel_gql_client::client::{
 };
 
 mod coins {
-    use fuel_chain_config::config::{
-        CoinConfig,
-        StateConfig,
-    };
-
     use super::*;
 
     async fn setup(
@@ -228,12 +228,6 @@ mod coins {
 }
 
 mod messages {
-    use fuel_chain_config::config::{
-        ChainConfig,
-        MessageConfig,
-        StateConfig,
-    };
-
     use super::*;
 
     async fn setup(owner: Address) -> (AssetId, FuelClient) {
@@ -397,13 +391,6 @@ mod messages {
 
 // It is combination of coins and messages test cases.
 mod messages_and_coins {
-    use fuel_chain_config::config::{
-        ChainConfig,
-        CoinConfig,
-        MessageConfig,
-        StateConfig,
-    };
-
     use super::*;
 
     async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {
