@@ -2218,7 +2218,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-chain-config"
-version = "0.1.0"
+version = "0.10.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
