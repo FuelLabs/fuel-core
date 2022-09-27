@@ -209,8 +209,6 @@ impl Context {
 
                     #[cfg(feature = "p2p")]
                     let network_sender = self.network_sender.clone();
-                    #[cfg(not(feature = "p2p"))]
-                    let (network_sender, _) = mpsc::channel(100);
 
                     // This is little bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
@@ -220,8 +218,12 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
+                            #[cfg(feature = "p2p")]
                             let _ = response.send(TxPool::insert_with_broadcast(txpool, db.as_ref().as_ref(), tx_status_sender, network_sender, txs).await);
+                            #[cfg(not(feature = "p2p"))]
+                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await);
                         }
+
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
                         }

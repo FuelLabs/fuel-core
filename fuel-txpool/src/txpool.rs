@@ -13,7 +13,6 @@ use fuel_core_interfaces::{
         FuelBlock,
         TxInfo,
     },
-    p2p::P2pRequestEvent,
     txpool::{
         TxPoolDb,
         TxStatus,
@@ -27,9 +26,13 @@ use std::{
 };
 use tokio::sync::{
     broadcast,
-    mpsc,
     RwLock,
 };
+
+#[cfg(feature = "p2p")]
+use fuel_core_interfaces::p2p::P2pRequestEvent;
+#[cfg(feature = "p2p")]
+use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -147,6 +150,7 @@ impl TxPool {
         Ok(())
     }
 
+    #[cfg(feature = "p2p")]
     pub async fn insert_with_broadcast(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
@@ -174,7 +178,6 @@ impl TxPool {
                         tx: tx.clone(),
                         status: TxStatus::Submitted,
                     });
-                    #[cfg(feature = "p2p")]
                     let _ = network_sender
                         .send(P2pRequestEvent::BroadcastNewTransaction {
                             transaction: tx.clone(),

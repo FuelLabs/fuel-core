@@ -145,7 +145,6 @@ impl PeerInfoBehaviour {
             }
             _ => {
                 self.peers.insert(*peer_id, PeerInfo::new(connected_point));
-                dbg!(&peer_id);
             }
         }
     }
