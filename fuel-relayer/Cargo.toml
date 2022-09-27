@@ -35,13 +35,13 @@ serde = "1.0"
 serde_json = "1.0"
 sha3 = "0.10"
 thiserror = "1.0"
-tokio = { version = "1.20", features = ["macros"]}
+tokio = { version = "1.20", features = ["macros"] }
 tracing = "0.1"
 tracing-subscriber = "0.3.9"
 url = "2.2"
 
 [dev-dependencies]
-fuel-relayer = { path = ".", features = ["test-helpers"]}
+fuel-relayer = { path = ".", features = ["test-helpers"] }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", features = [
     "test-helpers",
 ] }
@@ -51,4 +51,3 @@ test-case = "2.2"
 
 [features]
 test-helpers = ["fuel-core-interfaces/test-helpers"]
-
