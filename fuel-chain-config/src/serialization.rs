@@ -1,11 +1,13 @@
-use crate::model::{
-    BlockHeight,
-    DaBlockHeight,
-};
 use core::fmt;
-use fuel_core_interfaces::common::fuel_types::{
-    bytes::WORD_SIZE,
-    Word,
+use fuel_core_interfaces::{
+    common::fuel_types::{
+        bytes::WORD_SIZE,
+        Word,
+    },
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+    },
 };
 use serde::{
     de::Error,
