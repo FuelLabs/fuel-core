@@ -115,7 +115,7 @@ pub trait RelayerDb:
             if *index >= da_height {
                 break
             }
-            last_da_height = *index;
+            last_da_height = **index;
         }
         // means that first delegate is in future or not existing in current delegate_index
         if last_da_height == 0 {
@@ -124,7 +124,7 @@ pub trait RelayerDb:
         // get staking diff
         let staking_diff = self
             .storage::<StakingDiffs>()
-            .get(&last_da_height)
+            .get(&last_da_height.into())
             .expect("Expect to get data without problem")?;
 
         staking_diff.delegations.get(delegate).unwrap().clone()

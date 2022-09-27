@@ -147,11 +147,24 @@ impl Context {
                         TxPoolMpsc::Stop => {}
                     }});
                 }
-                _block_updated = self.import_block_events.recv() => {
-                    let txpool = txpool.clone();
-                    tokio::spawn( async move {
-                        TxPool::block_update(txpool.as_ref()).await
-                    });
+                block_updated = self.import_block_events.recv() => {
+                    if let Ok(block_updated) = block_updated {
+
+                        match block_updated {
+                            ImportBlockBroadcast::PendingFuelBlockImported { block } => {
+                                let txpool = txpool.clone();
+                                TxPool::block_update(txpool.as_ref(), block).await
+                                // TODO: Should this be done in a separate task? Like this:
+                                // tokio::spawn( async move {
+                                //     TxPool::block_update(txpool.as_ref(), block).await
+                                // });
+                            },
+                            ImportBlockBroadcast::SealedFuelBlockImported { block: _, is_created_by_self: _ } => {
+                                // TODO: what to do with sealed blocks?
+                                todo!("Sealed block");
+                            }
+                        };
+                    }
                 }
             }
         }

@@ -65,7 +65,7 @@ fn make_block(
         block: FuelBlock {
             header: FuelBlockHeader {
                 height: height.into(),
-                number: eth_number.into(),
+                da_height: eth_number.into(),
                 prev_root,
                 ..Default::default()
             },
@@ -90,7 +90,7 @@ async fn can_set_da_height() {
 
     relayer.await_synced().await.unwrap();
 
-    assert_eq!(mock_db.get_finalized_da_height().await, 100);
+    assert_eq!(*mock_db.get_finalized_da_height().await, 100);
 }
 
 #[tokio::test]

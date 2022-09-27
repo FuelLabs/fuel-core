@@ -1,5 +1,4 @@
 use crate::{
-    chain_config::ContractConfig,
     database::{
         storage::ContractsLatestUtxo,
         Column,
@@ -12,6 +11,7 @@ use crate::{
         MultiKey,
     },
 };
+use fuel_chain_config::ContractConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{

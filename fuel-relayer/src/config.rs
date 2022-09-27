@@ -42,7 +42,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            da_finalization: 100,
+            da_finalization: DaBlockHeight::from(100u64),
             // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
@@ -53,7 +53,7 @@ impl Default for Config {
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contracts_deployment: 0,
+            eth_v2_contracts_deployment: DaBlockHeight::from(0u64),
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
             pending_eth_interval: Duration::from_secs(6),

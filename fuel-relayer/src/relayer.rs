@@ -142,7 +142,7 @@ where
         match (new_block, previous_block) {
             (Some(new_block), Some(previous_block)) => Ok(self
                 .eth_node
-                .get_block((*new_block.header.number) as u64)
+                .get_block(*new_block.header.da_height)
                 .await?
                 .and_then(|eth_block| {
                     Some((new_block, previous_block, eth_block.hash?))
@@ -168,7 +168,7 @@ where
                         let jh = spawn_pending_committed_block(
                             contract,
                             self.eth_node.clone(),
-                            self.config.da_finalization as usize,
+                            *self.config.da_finalization as usize,
                             self.config.pending_eth_interval,
                             new_block,
                             previous_block,
@@ -292,7 +292,7 @@ where
     }
 
     fn finalization_period(&self) -> u64 {
-        self.config.da_finalization
+        *self.config.da_finalization
     }
 }
 
@@ -302,7 +302,7 @@ where
     P: Middleware<Error = ProviderError>,
 {
     async fn finalized(&self) -> u64 {
-        self.database.get_finalized_da_height().await
+        *self.database.get_finalized_da_height().await
     }
 }
 
@@ -357,7 +357,7 @@ where
                     // Update finalized height in database.
                     relayer
                         .database
-                        .set_finalized_da_height(eth_sync_gap.latest())
+                        .set_finalized_da_height(eth_sync_gap.latest().into())
                         .await;
                 }
 
@@ -412,7 +412,16 @@ where
     let client = crate::abi::fuel::Fuel::new(contract, eth_node);
 
     // minimum eth block height
-    let eth_block_number = *new_block.header.number;
+    let eth_block_number: u32 = match (*new_block.header.da_height).try_into() {
+        Ok(h) => h,
+        Err(_) => {
+            tracing::error!(
+                "eth height was truncated to fit into u32 from: {}",
+                new_block.header.da_height
+            );
+            *new_block.header.da_height as u32
+        }
+    };
 
     // Currently not using theses fields.
     let validators = Default::default();

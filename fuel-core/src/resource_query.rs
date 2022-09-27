@@ -215,7 +215,6 @@ impl From<StateError> for ResourceQueryError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        chain_config::ChainConfig,
         database::Database,
         model::{
             Coin,
@@ -223,6 +222,7 @@ mod tests {
         },
     };
     use assert_matches::assert_matches;
+    use fuel_chain_config::ChainConfig;
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Word,
@@ -243,7 +243,6 @@ mod tests {
             Messages,
         },
         model::{
-            BlockHeight,
             DaBlockHeight,
             Message,
         },
@@ -783,7 +782,7 @@ mod tests {
                 nonce,
                 amount,
                 data: vec![],
-                da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                da_height: DaBlockHeight::from(1u64),
                 fuel_block_spend: None,
             };
 
