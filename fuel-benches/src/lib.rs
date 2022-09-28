@@ -1,20 +1,57 @@
-use std::{
-    io,
-    iter,
-};
-
-use fuel_core_interfaces::common::fuel_tx::TransactionBuilder;
-use tempfile::TempDir;
-
 pub use fuel_core::database::Database;
+use fuel_core_interfaces::common::fuel_tx::{
+    StorageSlot,
+    TransactionBuilder,
+};
 pub use fuel_core_interfaces::common::{
     consts::*,
     prelude::*,
 };
 pub use rand::Rng;
+use std::{
+    io,
+    iter,
+};
 
-fn new_db() -> io::Result<Database> {
-    TempDir::new().and_then(|t| Database::open(t.as_ref()).map_err(|e| e.into()))
+fn new_db() -> Database {
+    // when rocksdb is enabled, this creates a new db instance with a temporary path
+    Database::default()
+}
+
+pub struct ContractCode {
+    pub contract: Contract,
+    pub salt: Salt,
+    pub id: ContractId,
+    pub root: Bytes32,
+    pub storage_root: Bytes32,
+    pub slots: Vec<StorageSlot>,
+}
+
+impl From<Vec<u8>> for ContractCode {
+    fn from(contract: Vec<u8>) -> Self {
+        let contract = Contract::from(contract);
+        let slots = vec![];
+        let salt = VmBench::SALT;
+        let storage_root = Contract::initial_state_root(slots.iter());
+        let root = contract.root();
+        let id = contract.id(&salt, &root, &storage_root);
+
+        Self {
+            contract,
+            id,
+            root,
+            storage_root,
+            salt,
+            slots,
+        }
+    }
+}
+
+pub struct PrepareCall {
+    ra: RegisterId,
+    rb: RegisterId,
+    rc: RegisterId,
+    rd: RegisterId,
 }
 
 pub struct VmBench {
@@ -30,6 +67,10 @@ pub struct VmBench {
     pub witnesses: Vec<Witness>,
     pub db: Option<Database>,
     pub instruction: Opcode,
+    pub prepare_call: Option<PrepareCall>,
+    pub dummy_contract: Option<ContractId>,
+    pub contract_code: Option<ContractCode>,
+    pub prepare_db: Option<Box<dyn FnMut(Database) -> io::Result<Database>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +80,9 @@ pub struct VmBenchPrepared {
 }
 
 impl VmBench {
+    pub const SALT: Salt = Salt::zeroed();
+    pub const CONTRACT: ContractId = ContractId::zeroed();
+
     pub fn new(instruction: Opcode) -> Self {
         Self {
             params: ConsensusParameters::default(),
@@ -53,6 +97,10 @@ impl VmBench {
             witnesses: vec![],
             db: None,
             instruction,
+            prepare_call: None,
+            dummy_contract: None,
+            contract_code: None,
+            prepare_db: None,
         }
     }
 
@@ -60,7 +108,7 @@ impl VmBench {
     where
         R: Rng,
     {
-        let bench = Self::new(Opcode::CALL(0x10, REG_ZERO, 0x11, 0x12));
+        let bench = Self::new(instruction);
 
         let program = iter::once(instruction)
             .chain(iter::once(Opcode::RET(REG_ONE)))
@@ -71,41 +119,21 @@ impl VmBench {
         let salt = rng.gen();
 
         let contract = Contract::from(program.as_ref());
-        let contract_root = contract.root();
         let state_root = Contract::default_state_root();
-        let contract = contract.id(&salt, &contract_root, &state_root);
+        let id = VmBench::CONTRACT;
 
         let utxo_id = rng.gen();
         let balance_root = rng.gen();
         let tx_pointer = rng.gen();
 
-        let input =
-            Input::contract(utxo_id, balance_root, state_root, tx_pointer, contract);
-        let output = Output::contract_created(contract, state_root);
-
-        let bytecode_witness = 0;
-        let tx = Transaction::create(
-            bench.gas_price,
-            bench.gas_limit,
-            bench.maturity,
-            bytecode_witness,
-            salt,
-            vec![],
-            vec![],
-            vec![output],
-            vec![program],
-        )
-        .check(bench.height, &bench.params)?;
-
+        let input = Input::contract(utxo_id, balance_root, state_root, tx_pointer, id);
         let output = Output::contract(0, rng.gen(), rng.gen());
 
-        let mut db = new_db()?;
+        let mut db = new_db();
 
-        let mut txtor = Transactor::new(&mut db, bench.params);
+        db.deploy_contract_with_id(&salt, &[], &contract, &state_root, &id)?;
 
-        txtor.transact(tx);
-
-        let data = contract
+        let data = id
             .iter()
             .copied()
             .chain((0 as Word).to_be_bytes().iter().copied())
@@ -121,12 +149,20 @@ impl VmBench {
             Opcode::MOVI(0x12, 100_000),
         ];
 
+        let prepare_call = PrepareCall {
+            ra: 0x10,
+            rb: REG_ZERO,
+            rc: 0x11,
+            rd: 0x12,
+        };
+
         Ok(bench
             .with_db(db)
             .with_data(data)
             .with_input(input)
             .with_output(output)
-            .with_prepare_script(prepare_script))
+            .with_prepare_script(prepare_script)
+            .with_prepare_call(prepare_call))
     }
 
     pub fn with_db(mut self, db: Database) -> Self {
@@ -184,6 +220,29 @@ impl VmBench {
         self
     }
 
+    pub fn with_prepare_call(mut self, call: PrepareCall) -> Self {
+        self.prepare_call.replace(call);
+        self
+    }
+
+    pub fn with_dummy_contract(mut self, dummy_contract: ContractId) -> Self {
+        self.dummy_contract.replace(dummy_contract);
+        self
+    }
+
+    pub fn with_contract_code(mut self, contract_code: ContractCode) -> Self {
+        self.contract_code.replace(contract_code);
+        self
+    }
+
+    pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
+    where
+        F: FnMut(Database) -> io::Result<Database> + 'static,
+    {
+        self.prepare_db.replace(Box::new(prepare_db));
+        self
+    }
+
     pub fn prepare(self) -> io::Result<VmBenchPrepared> {
         self.try_into()
     }
@@ -196,7 +255,14 @@ impl VmBenchPrepared {
             instruction,
         } = self;
 
-        Ok(vm.instruction(instruction).map(|_| ())?)
+        let (op, ra, rb, rc, rd, _imm) = instruction.into_inner();
+
+        match op {
+            OpcodeRepr::CALL => Ok(vm
+                .prepare_call(ra, rb, rc, rd)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?),
+            _ => Ok(vm.instruction(instruction).map(|_| ())?),
+        }
     }
 }
 
@@ -217,9 +283,13 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             witnesses,
             db,
             instruction,
+            prepare_call,
+            dummy_contract,
+            contract_code,
+            prepare_db,
         } = case;
 
-        let db = db.map(Ok).unwrap_or_else(new_db)?;
+        let mut db = db.unwrap_or_else(new_db);
 
         if prepare_script.iter().any(|op| matches!(op, Opcode::RET(_))) {
             return Err(io::Error::new(
@@ -235,6 +305,60 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             .collect();
 
         let mut tx = TransactionBuilder::script(prepare_script, data);
+
+        if let Some(contract) = dummy_contract {
+            let code = iter::once(Opcode::RET(REG_ONE));
+            let code: Vec<u8> = code.collect();
+            let code = Contract::from(code);
+            let root = code.root();
+
+            let input = tx.inputs().len();
+            let output =
+                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let input = Input::contract(
+                UtxoId::default(),
+                Bytes32::zeroed(),
+                Bytes32::zeroed(),
+                TxPointer::default(),
+                contract,
+            );
+
+            tx.add_input(input);
+            tx.add_output(output);
+
+            db.deploy_contract_with_id(&VmBench::SALT, &[], &code, &root, &contract)?;
+        }
+
+        if let Some(ContractCode {
+            contract,
+            salt,
+            id,
+            root,
+            slots,
+            storage_root,
+        }) = contract_code
+        {
+            let input = tx.inputs().len();
+            let output =
+                Output::contract(input as u8, Bytes32::zeroed(), Bytes32::zeroed());
+            let input = Input::contract(
+                UtxoId::default(),
+                Bytes32::zeroed(),
+                storage_root,
+                TxPointer::default(),
+                id,
+            );
+
+            tx.add_input(input);
+            tx.add_output(output);
+
+            db.deploy_contract_with_id(&salt, &slots, &contract, &root, &id)?;
+        }
+
+        let db = match prepare_db {
+            Some(mut prepare_db) => prepare_db(db)?,
+            None => db,
+        };
 
         inputs.into_iter().for_each(|i| {
             tx.add_input(i);
@@ -260,9 +384,15 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         txtor.transact(tx);
 
-        Ok(Self {
-            vm: txtor.interpreter(),
-            instruction,
-        })
+        let mut vm = txtor.interpreter();
+
+        if let Some(p) = prepare_call {
+            let PrepareCall { ra, rb, rc, rd } = p;
+
+            vm.prepare_call(ra, rb, rc, rd)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        }
+
+        Ok(Self { vm, instruction })
     }
 }

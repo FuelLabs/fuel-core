@@ -1,6 +1,5 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         MessageConfig,
         StateConfig,
@@ -16,10 +15,7 @@ use fuel_core_interfaces::{
         fuel_tx::AssetId,
         fuel_vm::prelude::Address,
     },
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-    },
+    model::DaBlockHeight,
 };
 use fuel_gql_client::client::{
     schema::resource::Resource,
@@ -234,7 +230,7 @@ mod messages {
     use super::*;
 
     async fn setup(owner: Address) -> (AssetId, FuelClient) {
-        let base_asset_id = ChainConfig::BASE_ASSET;
+        let base_asset_id = AssetId::BASE;
 
         // setup config
         let mut config = Config::local_node();
@@ -252,7 +248,7 @@ mod messages {
                         nonce: nonce as u64,
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                        da_height: DaBlockHeight::from(1u64),
                     })
                     .collect(),
             ),
@@ -397,7 +393,7 @@ mod messages_and_coins {
     use super::*;
 
     async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {
-        let asset_id_a = ChainConfig::BASE_ASSET;
+        let asset_id_a = AssetId::BASE;
 
         // setup config
         let mut config = Config::local_node();
@@ -433,7 +429,7 @@ mod messages_and_coins {
                         nonce: nonce as u64,
                         amount,
                         data: vec![],
-                        da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                        da_height: DaBlockHeight::from(1u64),
                     })
                     .collect(),
             ),

@@ -59,7 +59,7 @@ Info about fuel-relayer structure:
       * `PendingBlocks`: Handles what block are committed to the contract and what is the best block inside fuel network. This is the place where we do packing of eth transaction and bundling of block commits.
       * `Validators`:  Has a last finalized validator set. Handles saving of diffs to database and applying that diff current validator set.
 
-`Log` mod contains type casting from eth log to event that we can digest. `bin/testrun.rs` is simple run with DummyDb for manual testing.
+`Log` mod contains type casting from eth log to event that we can digest.
 
 Communication channels that we have:
 
