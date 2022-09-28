@@ -1,9 +1,12 @@
 use crate::{
     database::{
+        resource::{
+            AssetQuery,
+            AssetSpendTarget,
+            AssetsQuery,
+        },
         Database,
-        KvStoreError,
     },
-    model::CoinStatus,
     schema::scalars::{
         Address,
         AssetId,
@@ -26,15 +29,15 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-        fuel_types,
-    },
-    db::Coins,
+use fuel_core_interfaces::common::{
+    fuel_tx,
+    fuel_types,
 };
 use itertools::Itertools;
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+};
 
 pub struct Balance {
     owner: fuel_types::Address,
@@ -75,37 +78,32 @@ impl BalanceQuery {
         #[graphql(desc = "asset_id of the coin")] asset_id: AssetId,
     ) -> async_graphql::Result<Balance> {
         let db = ctx.data_unchecked::<Database>();
+        let owner = owner.into();
+        let asset_id = asset_id.into();
 
-        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
-        //  https://github.com/FuelLabs/fuel-core/issues/614
-        let balance = db
-            .owned_coins_ids(&owner.0, None, None)
-            .map(|res| -> Result<_, Error> {
-                let id = res?;
-                db.storage::<Coins>()
-                    .get(&id)
-                    .transpose()
-                    .ok_or(KvStoreError::NotFound)?
-                    .map_err(Into::into)
-            })
-            .filter_ok(|coin| {
-                coin.status == CoinStatus::Unspent && coin.asset_id == asset_id.into()
-            })
-            .try_fold(
-                Balance {
-                    owner: owner.into(),
-                    amount: 0u64,
-                    asset_id: asset_id.into(),
-                },
-                |mut balance, res| -> Result<_, Error> {
-                    let coin = res?;
+        let balance = AssetQuery::new(
+            &owner,
+            &AssetSpendTarget::new(asset_id, u64::MAX, u64::MAX),
+            None,
+            db,
+        )
+        .unspent_resources()
+        .map(|res| res.map(|resource| *resource.amount()))
+        .try_fold(
+            Balance {
+                owner,
+                amount: 0u64,
+                asset_id,
+            },
+            |mut balance, res| -> Result<_, Error> {
+                let amount = res?;
 
-                    // Increase the balance
-                    balance.amount += coin.amount;
+                // Increase the balance
+                balance.amount += amount;
 
-                    Ok(balance)
-                },
-            )?;
+                Ok(balance)
+            },
+        )?;
 
         Ok(balance)
     }
@@ -121,46 +119,31 @@ impl BalanceQuery {
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
         let db = ctx.data_unchecked::<Database>();
+        let owner = filter.owner.into();
 
-        // TODO: Reuse [`AssetQuery`](crate::database::utils::AssetQuery) with messages
-        //  https://github.com/FuelLabs/fuel-core/issues/614
-        let balances = db
-            .owned_coins_ids(&filter.owner.0, None, None)
-            .map(|res| -> Result<_, Error> {
-                let id = res?;
-                db.storage::<Coins>()
-                    .get(&id)
-                    .transpose()
-                    .ok_or(KvStoreError::NotFound)?
-                    .map_err(Into::into)
+        let mut amounts_per_asset = HashMap::new();
+
+        for resource in AssetsQuery::new(&owner, None, None, db).unspent_resources() {
+            let resource = resource?;
+            *amounts_per_asset.entry(*resource.asset_id()).or_default() +=
+                resource.amount();
+        }
+
+        let mut balances = amounts_per_asset
+            .into_iter()
+            .map(|(asset_id, amount)| Balance {
+                owner,
+                amount,
+                asset_id,
             })
-            .filter_ok(|coin| coin.status == CoinStatus::Unspent)
-            .try_fold(
-                vec![] as Vec<Balance>,
-                |mut balances, res| -> Result<_, Error> {
-                    let coin = res?;
-
-                    // Get or create the balance for the asset
-                    let balance = if let Some(i) =
-                        balances.iter().position(|b| b.asset_id == coin.asset_id)
-                    {
-                        &mut balances[i]
-                    } else {
-                        let balance = Balance {
-                            owner: filter.owner.into(),
-                            amount: 0,
-                            asset_id: coin.asset_id,
-                        };
-                        balances.push(balance);
-                        balances.last_mut().unwrap()
-                    };
-
-                    // Increase the balance
-                    balance.amount += coin.amount;
-
-                    Ok(balances)
-                },
-            )?;
+            .collect_vec();
+        balances.sort_by(|l, r| {
+            if l.asset_id < r.asset_id {
+                Ordering::Less
+            } else {
+                Ordering::Greater
+            }
+        });
 
         query(
             after,

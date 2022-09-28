@@ -1,5 +1,4 @@
 use crate::{
-    chain_config::MessageConfig,
     database::{
         Column,
         Database,
@@ -10,6 +9,7 @@ use crate::{
         IterDirection,
     },
 };
+use fuel_chain_config::MessageConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
