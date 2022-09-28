@@ -1,8 +1,4 @@
 use crate::{
-    chain_config::{
-        ContractConfig,
-        StateConfig,
-    },
     database::{
         storage::ContractsLatestUtxo,
         Database,
@@ -13,6 +9,10 @@ use crate::{
     },
 };
 use anyhow::Result;
+use fuel_chain_config::{
+    ContractConfig,
+    StateConfig,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsMut,
@@ -68,7 +68,7 @@ impl FuelService {
     }
 
     /// initialize coins
-    fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<()> {
+    pub fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<()> {
         // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
         let mut generated_output_index: u64 = 0;
         if let Some(coins) = &state.coins {
@@ -210,15 +210,13 @@ mod tests {
     use super::*;
 
     use crate::{
-        chain_config::{
-            ChainConfig,
-            CoinConfig,
-            ContractConfig,
-            MessageConfig,
-            StateConfig,
-        },
         model::BlockHeight,
         service::config::Config,
+    };
+    use fuel_chain_config::{
+        ChainConfig,
+        CoinConfig,
+        MessageConfig,
     };
     use fuel_core_interfaces::{
         common::{
@@ -231,7 +229,10 @@ mod tests {
             },
         },
         db::Coins,
-        model::Message,
+        model::{
+            DaBlockHeight,
+            Message,
+        },
     };
     use itertools::Itertools;
     use rand::{
@@ -444,7 +445,7 @@ mod tests {
             nonce: rng.gen(),
             amount: rng.gen(),
             data: vec![rng.gen()],
-            da_height: 0,
+            da_height: DaBlockHeight(0),
         };
 
         config.chain_conf.initial_state = Some(StateConfig {

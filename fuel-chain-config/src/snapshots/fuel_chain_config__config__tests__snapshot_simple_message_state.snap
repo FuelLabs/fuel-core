@@ -1,22 +1,19 @@
 ---
-source: fuel-core/src/genesis.rs
-assertion_line: 275
+source: fuel-chain-config/src/config.rs
 expression: json
 ---
 {
   "chain_name": "local_testnet",
   "block_production": "Instant",
   "initial_state": {
-    "contracts": [
+    "messages": [
       {
-        "code": "0x24400000",
-        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "balances": [
-          [
-            "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
-            "0xe46d13fb359a76c9"
-          ]
-        ]
+        "sender": "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
+        "recipient": "0xc9fba417a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00",
+        "nonce": "0xf4c4c9f506cc05a3",
+        "amount": "0x43bd0a27cb68f270",
+        "data": "0xbc",
+        "da_height": "0x6438200d0d1865b1"
       }
     ]
   },
