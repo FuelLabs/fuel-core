@@ -18,10 +18,7 @@ use fuel_core_interfaces::{
         },
         fuel_vm::prelude::Address,
     },
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-    },
+    model::DaBlockHeight,
 };
 use fuel_gql_client::{
     client::{
@@ -71,7 +68,7 @@ async fn balance() {
                     nonce: nonce as u64,
                     amount,
                     data: vec![],
-                    da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                    da_height: DaBlockHeight::from(1usize),
                 })
                 .collect(),
         ),
@@ -198,7 +195,7 @@ async fn first_5_balances() {
                     nonce: nonce as u64,
                     amount,
                     data: vec![],
-                    da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                    da_height: DaBlockHeight::from(1usize),
                 })
                 .collect(),
         ),

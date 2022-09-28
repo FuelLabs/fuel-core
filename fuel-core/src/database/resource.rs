@@ -124,13 +124,11 @@ impl<'a> AssetsQuery<'a> {
             .map(|results| Ok(results??))
             .filter_ok(|coin| {
                 if let Resource::Coin { fields, .. } = coin {
-                    let allowed = if let Some(assets) = &self.assets {
-                        assets.contains(&fields.asset_id)
-                    } else {
-                        true
-                    };
-
-                    allowed && fields.status == CoinStatus::Unspent
+                    let is_unspent = fields.status == CoinStatus::Unspent;
+                    self.assets
+                        .as_ref()
+                        .map(|assets| assets.contains(&fields.asset_id) && is_unspent)
+                        .unwrap_or(is_unspent)
                 } else {
                     true
                 }
@@ -170,11 +168,10 @@ impl<'a> AssetsQuery<'a> {
             });
 
         coins_iter.chain(messages_iter.take_while(|_| {
-            if let Some(assets) = &self.assets {
-                assets.contains(&AssetId::BASE)
-            } else {
-                true
-            }
+            self.assets
+                .as_ref()
+                .map(|assets| assets.contains(&AssetId::BASE))
+                .unwrap_or(true)
         }))
     }
 }
