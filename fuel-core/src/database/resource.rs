@@ -1,7 +1,4 @@
-use crate::{
-    chain_config::ChainConfig,
-    database::Database,
-};
+use crate::database::Database;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -174,7 +171,7 @@ impl<'a> AssetsQuery<'a> {
 
         coins_iter.chain(messages_iter.take_while(|_| {
             if let Some(assets) = &self.assets {
-                assets.contains(&ChainConfig::BASE_ASSET)
+                assets.contains(&AssetId::BASE)
             } else {
                 true
             }
@@ -247,7 +244,7 @@ where
     pub fn asset_id(&self) -> &AssetId {
         match self {
             Resource::Coin { fields, .. } => &fields.borrow().asset_id,
-            Resource::Message { .. } => &ChainConfig::BASE_ASSET,
+            Resource::Message { .. } => &AssetId::BASE,
         }
     }
 }

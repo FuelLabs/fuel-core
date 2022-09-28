@@ -1,6 +1,5 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         MessageConfig,
         StateConfig,
@@ -37,7 +36,7 @@ use fuel_gql_client::{
 #[tokio::test]
 async fn balance() {
     let owner = Address::default();
-    let asset_id = ChainConfig::BASE_ASSET;
+    let asset_id = AssetId::BASE;
 
     // setup config
     let mut config = Config::local_node();

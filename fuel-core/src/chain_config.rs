@@ -68,8 +68,6 @@ impl Default for ChainConfig {
 }
 
 impl ChainConfig {
-    pub const BASE_ASSET: AssetId = AssetId::zeroed();
-
     pub fn local_testnet() -> Self {
         // endow some preset accounts with an initial balance
         tracing::info!("Initial Accounts");
