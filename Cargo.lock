@@ -2475,9 +2475,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.20.1"
+version = "0.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2ceb5716e2ef684c937a33d8caecc6904ff36880b61f8d74b3bde11b102e3b2"
+checksum = "2e6e4b2fb996102f086dd40f2d3f4f173aac03f2998a865d8b2248e76bb04c7f"
 dependencies = [
  "fuel-asm",
  "fuel-crypto",
@@ -2507,9 +2507,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-types"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56401a22fd943e25c3ad2c776181ede580ce29177f35a0fc28e3e836656e0393"
+checksum = "403dcac5f0788a8fbdb6cfa0e5690dd4fe4278648da674d7e430711abf90b570"
 dependencies = [
  "rand 0.8.5",
  "serde",
