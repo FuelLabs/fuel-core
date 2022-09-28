@@ -2,7 +2,7 @@
 
 ## Changelog
 
-- TODO: Date of PR creation/approval
+- Created: 28.09.2022
 
 ## Glossary
 
@@ -17,27 +17,47 @@
 
 ## Overview
 
-The file describes the possible workflow of the FS service 
-and its relationship with P2P and BI.
-During the review process, team must select which way to go, and the document's 
-final version will contain only the selected way with a proper overview.
+The file describes the workflow of the FS service and its relationship with P2P, CM and BI.
+During the review process, the team selected which way to go, and the 
+document's final version contains the selected way with a detailed overview 
+and rejected ways for history.
 
-The first final version of the document will describe the implementation 
-of the FS for the PoA version of the FC. It may contain our assumptions 
-and ideas for the next evolution of the FS for PoS(or maybe FS will 
-have several evolution points).
+The final version of the document describes the implementation
+of the FS for the PoA version of the FC. It also contains our assumptions
+and ideas for the next evolution of the FS for PoS.
 
-All names are not final and can be suggested by the reviewers=)
+All types mentioned in the design only describe their primary goal. 
+The implementation should use the type that fits better. For example, 
+instead of slices of objects, better works vectors because the caller 
+should own data.
 
 ## Relationship with P2P and BI
 
 ![img.png](diagrams/fuel-core-design-fuel-sync-part.png)
 
-The FS is a connection point between:
-- In the PoA version P2P and BI
-- In the PoS is also additionally connects P2P with CM
+The FS is a connection point between P2P, CM and BI. FS manages receiving 
+blocks from P2P, validation of them with CM, and forwarding them to BI 
+for commit.
 
-There are three possible ways how to implement those relationships:
+Fs use the following rule to manage relationship:
+
+> Every service **may** know about descending services but nothing about
+ascending services. As an example: P2P service knows nothing about its
+listeners(ascending services), and it only propagates information via
+channels. But FS knows about P2P(an example of descending service)
+and may request some information directly by calling the sync/async methods.
+The same applies to BI and CM.
+
+This rule is rough, and services can have cases where some functionality
+requires direct access and some pub-sub model. So it should be decided
+individually. But after comparison and discussion, this rule covers all our needs
+for now, and the description below will use this rule. We can stop
+following this rule if it makes development harder, adds some complexity,
+or forces us to write ugly code with workarounds.
+
+FS - is ascending service for P2P, BI, CM.
+
+Other rejected by the team possible rules of the services' relationship:
 
 1. Every service knows about other services related somehow to it. It 
 can be interpreted as: each service struct containing reference to other 
@@ -45,19 +65,6 @@ services inside and using the sync/async mechanism to interact.
 1. Every service knows nothing about other services. It can be interpreted 
 as: each service struct using channels for communication and knowing 
 nothing about subscribers/listeners.
-1. Every service **may** know about descending services but nothing about 
-ascending services. As an example: P2P service knows nothing about its 
-listeners(ascending services), and it only propagates information via 
-channels. But FS knows about P2P(an example of descending service)
-and may request some information directly by calling the sync/async methods. 
-The same applies to BI. FS notifies all subscribers that it synced a valid block(sealed or not sealed).
-
-Those rules are rough, and services can have cases where some functionality 
-requires direct access and some pub-sub model. So it should be decided 
-individually. But after comparison, the third rule covers all our needs 
-for now, and the description below will use this rule. We can stop 
-following this rule if it makes development harder, adds some complexity, 
-or forces us to write ugly code with workarounds.
 
 ### P2P service requirements
 
@@ -95,13 +102,13 @@ pub enum FetchRequest {
 }
 
 pub enum Gossip {
-    Transaction(Transaction),
-    Block(Sealed<Block>)
+  Transaction(Transaction),
+  Block(Sealed<Block>)
 }
 
-pub trait Gossiper<D> {
-    /// Gossiping a `data` to the network.
-    fn gossiping(&self, data: &Gossip);
+pub trait Gossiper {
+  /// Gossiping a `data` to the network.
+  fn gossiping(&self, data: &Gossip);
 }
 
 pub trait Punisher<Reason> {
@@ -113,9 +120,9 @@ pub trait Punisher<Reason> {
     fn report<D>(&mut self, data: D, verdict: Verdict<Reason>);
 }
 
-pub trait BlocksFetcher: Punisher<BlockReason> + Gossiper {
-    /// Returns structure that can be used to subscribe for `BlockBroadcast`.
-    fn sender(&self) -> &Sender<BlockBroadcast>;
+pub trait BlocksFetcher: Punisher<BlockReason> {
+    /// Subscribes for `BlockBroadcast` events.
+    fn subscribe(&self) -> Receiver<BlockBroadcast>;
 
     /// Fetches the data(somehow, maybe in parallel) and broadcasts ready parts.
     fn fetch(&mut self, request: FetchRequest);
@@ -128,7 +135,7 @@ All data is received from the channel and processed by FS to update the
 inner state of the synchronization. FS requests data from P2P for synchronization each time when it is required. 
 If some data is invalid or corrupted, the FS reports 
 it to P2P, and P2P can punish the sender of the data by decreasing the 
-reputation(or blacklisting). FS calls `Gossiper::gossiping` at the end of block synchronization.
+reputation(or blacklisting).
 
 The same approach can be used between the P2P and TP. 
 `Punisher` trait adds a mechanism for [reputation management](https://github.com/FuelLabs/fuel-core/issues/460).
@@ -139,16 +146,17 @@ The same approach can be used between the P2P and TP.
 
 The FS is ascending service for the BI because BI knows nothing about 
 other services; it only executes blocks and updates the state of the 
-blockchain. At the end of the block commit, it notifies subscribers.
+blockchain. At the end of the block commit, it notifies subscribers 
+about the block and calls `Gossiper::gossiping`.
 
 ```rust
 pub enum CommitBroadcast {
-    Blocks([FuelBlock]),
+    Blocks([Sealed<FuelBlock>]),
 }
 
 pub trait BlocksCommitter {
-    /// Returns structure that can be used to subscribe for `CommitBroadcast`.
-    fn sender(&self) -> &Sender<CommitBroadcast>;
+    /// Subscribes for `CommitBroadcast` event.
+    fn subscribe(&self) -> Receiver<CommitBroadcast>;
 
     /// Commits the blocks to the database. Executes each block from 
     /// `blocks`, validates it, and updates the state.
@@ -162,32 +170,39 @@ pub trait BlocksCommitter {
 }
 ```
 
-FS needs to subscribe to committed blocks because blocks can be generated 
-by the block production service(or consensus). The FS can use the result 
-of the `commit` function to update the inner state of the synchronization 
-in case of an error. Also, `sender` method is helpful for a TP 
-to prune committed transactions.
+The FS can use the result of the `commit` function to update the inner state 
+of the synchronization and report in case of an error. The `subscribe` method 
+is helpful for a TP to prune committed transactions.
+
+### CM requirements
+
+The CM is descending service for the FS and used only to validate blocks.
+CM knows all information about the current consensus and can do this validation.
+
+```rust
+pub trait SealValidator {
+    /// Validates that the seals of the block are correct according to the consensus rules.
+    fn validate(&mut self, blocks: [Sealed<FuelBlock>]) -> Verdict<BlockReason>;
+}
+```
+
+After validation of seals, FS forwards block to BI.
 
 ### Remark
 
 The actual implementation may have different types but with the same 
-meaning. If the P2P and BI provide described functionality, it is enough 
+meaning. If the P2P, CM and BI provide described functionality, it is enough 
 to implement FS and connect services fully.
 
 ## The blocks synchronization flow
 
-FS has two types of synchronization:
-- During PoS consensus. It includes validation of blocks, transactions, 
-and signatures. A partially sealed(not all participants of consensus 
-signed it) block may be the starting point of the synchronization.
-- During sync with the network. The start point is a sealed block or 
-block header.
-
-The section contains the description of the flow for the second type. 
+The start point of synchronization is a sealed block or block header. 
+Not sealed blocks are part of the consensus, and P2P forwards them to 
+the consensus subscription channel.
 
 ### The block propagation in the network
 
-We have three ways of gossiping(about new block) implementation:
+We have three possible ways of gossiping(about new block):
 
 1. Gossip the height and block hash of a new block.
 1. Gossip the header of a new block with the producer's seal(or consensus seal).
@@ -209,7 +224,7 @@ We already need to support syncing with requests/responses in the
 code for outdated nodes. So, using the third approach doesn't win much 
 regarding the codebase size.
 
-The second approach is our choice. When FS receives the sealed block header, 
+The second approach is our choice for PoA. When FS receives the sealed block header, 
 it can already be sure this is not a fake sync process. The passive load for 
 the network is low.
 
@@ -220,7 +235,7 @@ proper handling of this case.
 
 #### Node behaviour
 
-All nodes have the same FS, so it is enough to describe the work of FS.
+All nodes have the same FS, so it is enough to describe the general work of FS.
 
 ##### Gossip about new data
 
@@ -228,11 +243,9 @@ Each node gossips only information that is validated by itself and can be
 proved by itself. It means the node gossips the block header only after 
 committing the block.
 
-The final destination of all blocks is BI. FS subscribes to events from 
-the BI service and gossips the information about the latest block to 
-the network on each commit via the `Gossiper` trait implemented by P2P.
-
-It gossips the blocks received from the network, from the block producer, and from the consensus.
+The final destination of all blocks is BI, so BI is responsible for 
+calling `Gossiper::gossiping` of P2P. It gossips the blocks received 
+from the network and from the consensus(when the node is block producer).
 
 ##### Ask about new data
 
@@ -267,7 +280,7 @@ If FS gets the valid sealed block header but already have another block for this
 #### Queuing of the block header
 
 When FS receives a block header, first FS checks:
-- Is it a valid header? It should be signed by the expected, for the node, producer/consensus at according height.
+- Is it a valid header? Blocks should be linked, and signatures should match. After, forwards blocks to the CM to verify producer/consensus at the according height.
   - No -> `Punisher::report`.
   - Yes -> Next step.
   - Don't know. The Ethereum part is not synced yet to this height. If the height is 
@@ -316,10 +329,11 @@ a part of the active phase, the remaining range is part of the pending phase.
 FS requests only one batch simultaneously from P2P. It is possible to 
 request several batches in parallel in the future.
 
-When blocks come, it checks that they are valid and linked. 
-If all checks pass, FS forward the blocks to BI and starts 
-[commit process](#the-commit-of-the-blocks). If blocks are not valid, FS reports 
-invalidity to P2P and requests block range again.
+When blocks come, it checks that they are valid, linked, and adequately 
+sealed(the check is done via CM). If all checks pass, FS forward the blocks 
+to BI and starts [commit process](#the-commit-of-the-blocks). 
+If blocks are not valid, FS reports invalidity to P2P and requests block range again.
+
 
 ### The commit of the blocks
 
@@ -329,20 +343,13 @@ commit can be run in the BI at the exact moment, so BI has local mutex
 only for `commit` to prevent multiple commits.
 
 `BlockCommiter::commit` return the result of execution:
-- In the case of successful execution. FS waits for the event from the 
-channel to remove committed blocks from the active phase, and join a new range from
-pending phase.
+- In the case of successful execution. FS removes committed blocks from 
+the range of active phase. After FS fulfills it with a new range from 
+the pending phase. The new range should always be <= the batch size. 
+FS requests a new fulfilled range from P2P.
 - It can be an error that those blocks already are committed. It is a 
-good case because another job has already committed blocks. Do the same 
-as in the case of successful execution.
+case of [fork](#fork), but it is still good because another job has already 
+committed blocks. Do the same as in the case of successful execution.
 - It can be an error that BI got some error during execution. It is a
 bad case, and it means that FS got a valid block signed by the producer, 
 but FS can't apply it to the blockchain. Report it to logs and notify the node owner.
-
-#### On block commit event
-
-FS gossips about the node's latest via `Gossiper::gossiping`.
-
-FS removes committed blocks from the range of active phase. After FS 
-fulfills it with a new range from the pending phase. The new range should 
-always be <= the batch size. FS requests a new fulfilled range from P2P.
