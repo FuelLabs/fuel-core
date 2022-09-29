@@ -400,7 +400,7 @@ jobs:
     
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
-    if: startsWith(github.ref, 'refs/heads/preview/*')
+    if: startsWith(github.ref, 'refs/heads/preview/')
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
