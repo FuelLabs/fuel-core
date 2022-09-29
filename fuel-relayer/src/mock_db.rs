@@ -246,12 +246,12 @@ impl RelayerDb for MockDb {
         *d = BlockHeight::from(d.max(*block_height));
     }
 
-    async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {
+    async fn get_last_published_fuel_height(&self) -> Option<BlockHeight> {
         self.data.lock().unwrap().pending_committed_fuel_height
     }
 
-    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>) {
-        self.data.lock().unwrap().pending_committed_fuel_height = block_height;
+    async fn set_last_published_fuel_height(&self, block_height: BlockHeight) {
+        self.data.lock().unwrap().pending_committed_fuel_height = Some(block_height);
     }
 
     // TODO: Remove

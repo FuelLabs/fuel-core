@@ -15,8 +15,7 @@ pub(crate) const FINALIZED_DA_HEIGHT_KEY: &[u8] = b"finalized_da_height";
 pub(crate) const VALIDATORS_DA_HEIGHT_KEY: &[u8] = b"current_validator_set";
 pub(crate) const LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY: &[u8] =
     b"last_committed_finalized_block_height";
-pub(crate) const PENDING_COMMITTED_BLOCK_HEIGHT_KEY: &[u8] =
-    b"pending_committed_block_height";
+pub(crate) const LAST_PUBLISHED_BLOCK_HEIGHT_KEY: &[u8] = b"last_publish_block_height";
 
 /// Can be used to perform migrations in the future.
 pub(crate) const DB_VERSION: u32 = 0;

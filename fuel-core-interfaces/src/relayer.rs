@@ -203,11 +203,11 @@ pub trait RelayerDb:
     /// The block height is only updated if it is greater then the currently stored height.
     async fn set_last_committed_finalized_fuel_height(&self, block_height: BlockHeight);
 
-    /// If there is currently a committed fuel block pending finalization then return it.
-    async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight>;
+    /// Get the last fuel block height that was published to the da layer.
+    async fn get_last_published_fuel_height(&self) -> Option<BlockHeight>;
 
-    /// Set a currently pending committed fuel block.
-    async fn set_pending_committed_fuel_height(&self, block_height: Option<BlockHeight>);
+    /// Set the last fuel block height that was published to the da layer.
+    async fn set_last_published_fuel_height(&self, block_height: BlockHeight);
 }
 
 pub type ValidatorSet = HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>;

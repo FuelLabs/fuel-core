@@ -612,11 +612,8 @@ mod relayer {
             }
         }
 
-        async fn get_pending_committed_fuel_height(&self) -> Option<BlockHeight> {
-            match self.get(
-                metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY,
-                Column::Metadata,
-            ) {
+        async fn get_last_published_fuel_height(&self) -> Option<BlockHeight> {
+            match self.get(metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY, Column::Metadata) {
                 Ok(res) => res,
                 Err(err) => {
                     panic!(
@@ -627,34 +624,16 @@ mod relayer {
             }
         }
 
-        async fn set_pending_committed_fuel_height(
-            &self,
-            block_height: Option<BlockHeight>,
-        ) {
-            match block_height {
-                Some(block_height) => {
-                    if let Err(err) = self.insert::<_, _, BlockHeight>(
-                        metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY,
-                        Column::Metadata,
-                        block_height,
-                    ) {
-                        panic!(
-                        "set_pending_committed_fuel_height should always succeed: {:?}",
-                        err
-                    );
-                    }
-                }
-                None => {
-                    if let Err(err) = self.remove::<BlockHeight>(
-                        metadata::PENDING_COMMITTED_BLOCK_HEIGHT_KEY,
-                        Column::Metadata,
-                    ) {
-                        panic!(
-                        "set_pending_committed_fuel_height should always succeed: {:?}",
-                        err
-                    );
-                    }
-                }
+        async fn set_last_published_fuel_height(&self, block_height: BlockHeight) {
+            if let Err(err) = self.insert::<_, _, BlockHeight>(
+                metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY,
+                Column::Metadata,
+                block_height,
+            ) {
+                panic!(
+                    "set_pending_committed_fuel_height should always succeed: {:?}",
+                    err
+                );
             }
         }
     }

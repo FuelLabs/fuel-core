@@ -1,4 +1,7 @@
-use core::ops::RangeInclusive;
+use core::{
+    ops::RangeInclusive,
+    time::Duration,
+};
 pub use state_builder::*;
 use std::ops::Deref;
 
@@ -21,34 +24,51 @@ pub struct EthState {
 
 #[derive(Debug)]
 pub struct FuelState {
-    remote: Option<FuelHeight>,
-    local: FuelHeights,
+    local: MessageState,
 }
 
 type EthHeight = u64;
-type FuelHeight = u32;
+
+#[derive(Debug, Clone)]
+pub struct MessageState {
+    times: MessageTimes,
+    num_unpublished: MessagesPending,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MessageRoot;
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct MessageOrder {
+    pub block_number: u32,
+    pub transaction_index: u16,
+    pub output_index: u8,
+}
 
 #[derive(Clone, Debug)]
 struct Heights<T>(RangeInclusive<T>);
 
 #[derive(Debug)]
 struct EthHeights(Heights<u64>);
-#[derive(Debug)]
-struct FuelHeights(Heights<u32>);
 
 #[derive(Clone, Debug)]
 pub struct EthSyncGap(Heights<u64>);
 
+#[derive(Clone, Debug)]
+pub struct MessageTimes(Heights<Duration>);
+
+#[derive(Clone, Debug)]
+pub struct MessagesPending(Heights<usize>);
+
 impl SyncState {
     pub fn is_synced(&self) -> bool {
-        self.eth.is_synced() && self.fuel.is_synced() && self.fuel.nothing_pending()
+        self.eth.is_synced() && self.fuel.is_synced()
     }
 
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
         self.eth.needs_to_sync_eth()
     }
 
-    pub fn needs_to_publish_fuel(&self) -> Option<u32> {
+    pub fn needs_to_publish_fuel(&self) -> bool {
         self.fuel.needs_to_publish()
     }
 }
@@ -64,15 +84,11 @@ impl EthState {
 
 impl FuelState {
     fn is_synced(&self) -> bool {
-        self.local.finalized() >= self.local.current() || self.remote.is_some()
+        !self.local.due_for_publish()
     }
 
-    fn nothing_pending(&self) -> bool {
-        self.remote.is_none()
-    }
-
-    pub fn needs_to_publish(&self) -> Option<u32> {
-        (!self.is_synced()).then(|| self.local.current())
+    pub fn needs_to_publish(&self) -> bool {
+        self.local.due_for_publish()
     }
 }
 
@@ -97,20 +113,28 @@ impl EthSyncGap {
         *self.0 .0.end()
     }
 }
-
-impl FuelHeights {
-    fn new(current: u32, finalized: u32) -> Self {
-        Self(Heights(finalized..=current))
+impl MessageState {
+    fn due_for_publish(&self) -> bool {
+        *self.num_unpublished.start() > 0
+            && (self.num_unpublished.is_empty() || self.times.is_empty())
     }
 }
 
-impl<T: Copy> Heights<T> {
-    fn current(&self) -> T {
-        *self.0.end()
+impl MessageTimes {
+    fn new(duration_since_last_sent: Duration, interval: Duration) -> Self {
+        Self(Heights(duration_since_last_sent..=interval))
     }
+}
 
+impl MessagesPending {
+    fn new(num_unpublished: usize, min_to_force_publish: usize) -> Self {
+        Self(Heights(num_unpublished..=min_to_force_publish))
+    }
+}
+
+impl<T: Clone> Heights<T> {
     fn finalized(&self) -> T {
-        *self.0.start()
+        self.0.start().clone()
     }
 }
 
@@ -122,10 +146,18 @@ impl Deref for EthHeights {
     }
 }
 
-impl Deref for FuelHeights {
-    type Target = Heights<u32>;
+impl Deref for MessageTimes {
+    type Target = RangeInclusive<Duration>;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0 .0
+    }
+}
+
+impl Deref for MessagesPending {
+    type Target = RangeInclusive<usize>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0 .0
     }
 }

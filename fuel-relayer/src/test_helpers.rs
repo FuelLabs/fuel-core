@@ -18,10 +18,7 @@ use ethers_core::{
     },
 };
 use fuel_core_interfaces::{
-    common::{
-        fuel_merkle::common::Bytes32,
-        prelude::Address,
-    },
+    common::prelude::Address,
     model::{
         CheckedMessage,
         Message,
@@ -128,23 +125,6 @@ pub fn eth_log_message(
         eth_block,
         vec![*config::ETH_LOG_MESSAGE, H256::default(), H256::default()],
         BytesMut::from_iter(b.into_iter()).freeze(),
-    )
-}
-
-pub fn eth_log_fuel_block_committed(
-    eth_block: u64,
-    block_root: Bytes32,
-    fuel_height: u32,
-) -> Log {
-    log_default(
-        Default::default(),
-        eth_block,
-        vec![
-            *config::ETH_FUEL_BLOCK_COMMITTED,
-            H256::from_slice(block_root.as_ref()),
-            H256::from_low_u64_be(fuel_height as u64),
-        ],
-        Bytes::new(),
     )
 }
 

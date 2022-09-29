@@ -5,11 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use ethers_contract::EthEvent;
-use ethers_core::types::{
-    Log,
-    U256,
-};
+use ethers_core::types::U256;
 use fuel_core_interfaces::{
     common::{
         crypto,
@@ -31,7 +27,6 @@ use fuel_core_interfaces::{
 };
 use fuel_relayer::{
     bridge::message::SentMessageFilter,
-    fuel::fuel::BlockCommittedFilter,
     mock_db::MockDb,
     test_helpers::{
         middleware::{
@@ -132,54 +127,11 @@ async fn can_get_messages() {
 }
 
 #[tokio::test]
-async fn can_get_committed_block() {
-    let mock_db = MockDb::default();
-    let eth_node = MockMiddleware::default();
-
-    let topics = |height: u32| {
-        let mut h = vec![0u8; 28];
-        h.extend(height.to_be_bytes());
-        let h: [u8; 32] = h.try_into().unwrap();
-        vec![BlockCommittedFilter::signature(), H256::default(), h.into()]
-    };
-
-    let config = Config::default_test();
-
-    let logs = vec![
-        Log {
-            address: config.eth_v2_listening_contracts[0].into(),
-            topics: topics(3),
-            data: vec![].into(),
-            block_number: Some(3.into()),
-            ..Default::default()
-        },
-        Log {
-            address: config.eth_v2_listening_contracts[0].into(),
-            topics: topics(5),
-            data: vec![].into(),
-            block_number: Some(5.into()),
-            ..Default::default()
-        },
-    ];
-    eth_node.update_data(|data| data.logs_batch = vec![logs.clone()]);
-    // Setup the eth node with a block high enough that there
-    // will be some finalized blocks.
-    eth_node.update_data(|data| data.best_block.number = Some(200.into()));
-    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
-
-    relayer.await_synced().await.unwrap();
-
-    assert_eq!(
-        mock_db.get_last_committed_finalized_fuel_height().await,
-        5u64.into()
-    );
-}
-
-#[tokio::test]
 async fn can_publish_fuel_block() {
     let mock_db = MockDb::default();
     let mut config = Config::default_test();
     config.da_finalization = 1u64.into();
+    config.fuel_min_force_publish = 1;
     let eth_node = MockMiddleware::default();
     {
         let mut lock = mock_db.data.lock().unwrap();
@@ -226,8 +178,8 @@ async fn can_publish_fuel_block() {
     relayer.await_synced().await.unwrap();
 
     assert_eq!(
-        mock_db.get_last_committed_finalized_fuel_height().await,
-        1u32.into()
+        mock_db.get_last_published_fuel_height().await,
+        Some(1u32.into())
     );
     tokio::time::timeout(std::time::Duration::from_secs(5), rx)
         .await
@@ -240,6 +192,7 @@ async fn does_not_double_publish_fuel_block() {
     let mock_db = MockDb::default();
     let mut config = Config::default_test();
     config.da_finalization = 1u64.into();
+    config.fuel_min_force_publish = 1;
     let eth_node = MockMiddleware::default();
     {
         let mut lock = mock_db.data.lock().unwrap();
@@ -290,7 +243,7 @@ async fn does_not_double_publish_fuel_block() {
     relayer.await_synced().await.unwrap();
 
     assert_eq!(
-        mock_db.get_last_committed_finalized_fuel_height().await,
-        1u32.into()
+        mock_db.get_last_published_fuel_height().await,
+        Some(1u32.into())
     );
 }

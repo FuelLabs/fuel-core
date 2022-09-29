@@ -41,10 +41,11 @@ tracing-subscriber = "0.3.9"
 url = "2.2"
 
 [dev-dependencies]
-fuel-relayer = { path = ".", features = ["test-helpers"] }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", features = [
     "test-helpers",
 ] }
+fuel-relayer = { path = ".", features = ["test-helpers"] }
+mockall = "0.11"
 rand = "0.8"
 tracing-test = "0.2"
 test-case = "2.2"

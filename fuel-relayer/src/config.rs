@@ -12,8 +12,6 @@ use std::{
 
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
     Lazy::new(crate::abi::bridge::message::SentMessageFilter::signature);
-pub(crate) static ETH_FUEL_BLOCK_COMMITTED: Lazy<H256> =
-    Lazy::new(crate::abi::fuel::fuel::BlockCommittedFilter::signature);
 
 #[derive(Clone, Debug)]
 /// Configuration settings for the [`Relayer`](crate::relayer::Relayer).
@@ -37,6 +35,12 @@ pub struct Config {
     pub initial_sync_refresh: Duration,
     /// Pending eth transaction interval time
     pub pending_eth_interval: Duration,
+    /// Amount of time before we will publish a fuel block
+    /// if there is at least one pending output message.
+    pub fuel_publish_window: Duration,
+    /// Number of pending output messages that will force
+    /// a publish regardless of the amount of time elapsed.
+    pub fuel_min_force_publish: usize,
 }
 
 impl Default for Config {
@@ -57,6 +61,8 @@ impl Default for Config {
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
             pending_eth_interval: Duration::from_secs(6),
+            fuel_publish_window: Duration::from_secs(10),
+            fuel_min_force_publish: 10,
         }
     }
 }

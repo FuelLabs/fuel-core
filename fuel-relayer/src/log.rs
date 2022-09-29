@@ -1,5 +1,3 @@
-use std::convert::TryInto;
-
 use crate::{
     abi,
     config,
@@ -13,7 +11,6 @@ use ethers_core::{
 use fuel_core_interfaces::{
     common::fuel_types::{
         Address,
-        Bytes32,
         Word,
     },
     model::{
@@ -51,7 +48,6 @@ impl From<&MessageLog> for Message {
 pub enum EthEventLog {
     // Bridge message from da side
     Message(MessageLog),
-    FuelBlockCommitted { block_root: Bytes32, height: Word },
     Ignored,
 }
 
@@ -93,106 +89,9 @@ impl TryFrom<&Log> for EthEventLog {
                     da_height: DaBlockHeight::from(log.block_number.unwrap().as_u64()),
                 })
             }
-            n if n == *config::ETH_FUEL_BLOCK_COMMITTED => {
-                if log.topics.len() != 3 {
-                    return Err(anyhow!("Malformed topics for FuelBlockCommitted"))
-                }
-
-                let block_root: [u8; 32] = log.topics[1].try_into().map_err(|_| {
-                    anyhow!("Malformed block root topic for FuelBlockCommitted")
-                })?;
-                let block_root = Bytes32::new(block_root);
-
-                let height = <[u8; 4]>::try_from(&log.topics[2][28..])
-                    .map(u32::from_be_bytes)
-                    .expect("Slice bounds are predefined")
-                    as u64;
-
-                Self::FuelBlockCommitted { block_root, height }
-            }
             _ => Self::Ignored,
         };
 
         Ok(log)
     }
-}
-
-#[cfg(test)]
-pub mod tests {
-
-    use ethers_core::types::U64;
-    use rand::{
-        rngs::StdRng,
-        Rng,
-        SeedableRng,
-    };
-
-    use super::*;
-    use crate::test_helpers::eth_log_fuel_block_committed;
-
-    #[test]
-    fn eth_event_fuel_block_commit_from_log() {
-        let rng = &mut StdRng::seed_from_u64(2322u64);
-        let eth_block = rng.gen();
-        let block_root = rng.gen();
-        let height: u32 = rng.gen();
-
-        let log = eth_log_fuel_block_committed(eth_block, block_root, height);
-        assert_eq!(
-            Some(U64([eth_block])),
-            log.block_number,
-            "Block number not set"
-        );
-        let fuel_log = EthEventLog::try_from(&log);
-        assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
-
-        let height = height as u64;
-        let block_root = block_root.into();
-        assert_eq!(
-            fuel_log.unwrap(),
-            EthEventLog::FuelBlockCommitted { block_root, height },
-            "Decoded log does not match data we encoded"
-        );
-    }
-
-    // #[test]
-    // fn eth_event_message_try_from_log() {
-    //     let rng = &mut StdRng::seed_from_u64(2322u64);
-    //     let eth_block: u64 = rng.gen();
-    //     let owner: [u8; 32] = rng.gen();
-    //     let owner_2: [u8; 20] = (&owner[..20]).try_into().unwrap();
-    //     let nonce: u32 = rng.gen();
-    //     let amount: u32 = rng.gen();
-    //     let data: Vec<u8> = vec![1u8];
-
-    //     let log = eth_log_message(
-    //         Default::default(),
-    //         eth_block,
-    //         owner_2.into(),
-    //         nonce,
-    //         amount,
-    //         data.clone(),
-    //     );
-    //     assert_eq!(
-    //         Some(U64([eth_block])),
-    //         log.block_number,
-    //         "Block number not set"
-    //     );
-    //     let fuel_log = EthEventLog::try_from(&log);
-    //     assert!(fuel_log.is_ok(), "Parsing error:{:?}", fuel_log);
-
-    //     assert_eq!(
-    //         fuel_log.unwrap(),
-    //         EthEventLog::Message(MessageLog {
-    //             sender: Default::default(),
-    //             recipient: Default::default(),
-    //             owner: owner.into(),
-    //             nonce: nonce as u64,
-    //             amount: amount as u64,
-    //             data,
-    //             da_height: DaBlockHeight(eth_block)
-    //         }),
-    //         "Decoded log does not match data we encoded"
-    //     );
-    // }
 }

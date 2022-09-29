@@ -1,4 +1,5 @@
 //! Type safe state building
+
 use super::*;
 use async_trait::async_trait;
 
@@ -14,19 +15,17 @@ pub trait EthLocal {
 }
 
 #[async_trait]
-pub trait FuelRemote {
-    async fn pending(&self) -> Option<u32>;
-}
-
-#[async_trait]
 pub trait FuelLocal {
-    async fn current(&self) -> u32;
-    async fn finalized(&self) -> u32;
+    fn message_time_window(&self) -> Duration;
+    fn min_messages_to_force_publish(&self) -> usize;
+    async fn last_sent_time(&self) -> Option<Duration>;
+    async fn latest_block_time(&self) -> Option<Duration>;
+    async fn num_unpublished_messages(&self) -> usize;
 }
 
 pub async fn build_eth<T>(t: &T) -> anyhow::Result<EthState>
 where
-    T: EthRemote + EthLocal,
+    T: EthRemote + EthLocal + ?Sized,
 {
     Ok(EthState {
         remote: EthHeights::new(t.current().await?, t.finalization_period()),
@@ -36,17 +35,28 @@ where
 
 pub async fn build_fuel<T>(t: &T) -> FuelState
 where
-    T: FuelRemote + FuelLocal,
+    T: FuelLocal + ?Sized,
 {
+    let last = t.last_sent_time().await.unwrap_or_default();
+    let latest = t.latest_block_time().await.unwrap_or(Duration::MAX);
+    let duration_since_last_publish = latest.saturating_sub(last);
     FuelState {
-        local: FuelHeights::new(t.current().await, t.finalized().await),
-        remote: t.pending().await,
+        local: MessageState {
+            times: MessageTimes::new(
+                duration_since_last_publish,
+                t.message_time_window(),
+            ),
+            num_unpublished: MessagesPending::new(
+                t.num_unpublished_messages().await,
+                t.min_messages_to_force_publish(),
+            ),
+        },
     }
 }
 
 pub async fn build<T>(t: &T) -> anyhow::Result<SyncState>
 where
-    T: EthRemote + EthLocal + FuelLocal + FuelRemote,
+    T: EthRemote + EthLocal + FuelLocal + ?Sized,
 {
     Ok(SyncState {
         eth: build_eth(t).await?,
@@ -62,9 +72,11 @@ pub mod test_builder {
         pub eth_remote_current: u64,
         pub eth_remote_finalization_period: u64,
         pub eth_local_finalized: u64,
-        pub fuel_local_current: u32,
-        pub fuel_local_finalized: u32,
-        pub fuel_remote_pending: Option<u32>,
+        pub message_time_window: Duration,
+        pub min_messages_to_force_publish: usize,
+        pub last_sent_time: Option<Duration>,
+        pub latest_block_time: Option<Duration>,
+        pub num_unpublished_messages: usize,
     }
 
     #[async_trait]
@@ -85,141 +97,25 @@ pub mod test_builder {
     }
 
     #[async_trait]
-    impl FuelRemote for TestDataSource {
-        async fn pending(&self) -> Option<u32> {
-            self.fuel_remote_pending
-        }
-    }
-
-    #[async_trait]
     impl FuelLocal for TestDataSource {
-        async fn current(&self) -> u32 {
-            self.fuel_local_current
+        fn message_time_window(&self) -> Duration {
+            self.message_time_window
         }
 
-        async fn finalized(&self) -> u32 {
-            self.fuel_local_finalized
+        fn min_messages_to_force_publish(&self) -> usize {
+            self.min_messages_to_force_publish
+        }
+
+        async fn last_sent_time(&self) -> Option<Duration> {
+            self.last_sent_time
+        }
+
+        async fn latest_block_time(&self) -> Option<Duration> {
+            self.latest_block_time
+        }
+
+        async fn num_unpublished_messages(&self) -> usize {
+            self.num_unpublished_messages
         }
     }
 }
-
-// pub struct EthRemote;
-// pub struct EthRemoteCurrent(u64);
-// pub struct EthRemoteFinalizationPeriod(u64);
-
-// pub struct EthRemoteHeights(EthHeights);
-
-// pub struct EthLocal;
-// pub struct EthLocalFinalized(u64);
-
-// pub struct FuelLocal;
-// pub struct FuelLocalCurrent(u32);
-// pub struct FuelLocalFinalized(u32);
-
-// pub struct FuelLocalHeights(FuelHeights);
-
-// pub struct FuelRemote;
-
-// pub struct FuelRemotePending(Option<u32>);
-
-// impl EthRemote {
-//     pub fn current(height: u64) -> EthRemoteCurrent {
-//         EthRemoteCurrent(height)
-//     }
-//     pub fn finalization_period(p: u64) -> EthRemoteFinalizationPeriod {
-//         EthRemoteFinalizationPeriod(p)
-//     }
-// }
-
-// impl EthRemoteCurrent {
-//     pub fn finalization_period(self, p: u64) -> EthRemoteHeights {
-//         EthRemoteHeights(EthHeights::new(self.0, p))
-//     }
-// }
-
-// impl EthRemoteFinalizationPeriod {
-//     pub fn current(self, height: u64) -> EthRemoteHeights {
-//         EthRemoteHeights(EthHeights::new(height, self.0))
-//     }
-// }
-
-// impl EthLocal {
-//     pub fn finalized(f: u64) -> EthLocalFinalized {
-//         EthLocalFinalized(f)
-//     }
-// }
-
-// impl EthRemoteHeights {
-//     pub fn with_local(self, f: EthLocalFinalized) -> EthState {
-//         EthState {
-//             remote: self.0,
-//             local: f.0,
-//         }
-//     }
-// }
-
-// impl EthLocalFinalized {
-//     pub fn with_remote(self, remote: EthRemoteHeights) -> EthState {
-//         EthState {
-//             remote: remote.0,
-//             local: self.0,
-//         }
-//     }
-// }
-
-// impl FuelLocal {
-//     pub fn current(height: u32) -> FuelLocalCurrent {
-//         FuelLocalCurrent(height)
-//     }
-//     pub fn finalized(height: u32) -> FuelLocalFinalized {
-//         FuelLocalFinalized(height)
-//     }
-// }
-
-// impl FuelLocalCurrent {
-//     pub fn finalized(self, height: u32) -> FuelLocalHeights {
-//         FuelLocalHeights(FuelHeights::new(self.0, height))
-//     }
-// }
-
-// impl FuelLocalFinalized {
-//     pub fn current(self, height: u32) -> FuelLocalHeights {
-//         FuelLocalHeights(FuelHeights::new(height, self.0))
-//     }
-// }
-
-// impl FuelRemote {
-//     pub fn pending(height: Option<u32>) -> FuelRemotePending {
-//         FuelRemotePending(height)
-//     }
-// }
-
-// impl FuelRemotePending {
-//     pub fn with_local(self, local: FuelLocalHeights) -> FuelState {
-//         FuelState {
-//             remote: self.0,
-//             local: local.0,
-//         }
-//     }
-// }
-
-// impl FuelLocalHeights {
-//     pub fn with_remote(self, remote: FuelRemotePending) -> FuelState {
-//         FuelState {
-//             remote: remote.0,
-//             local: self.0,
-//         }
-//     }
-// }
-
-// impl FuelState {
-//     pub fn with_eth(self, eth: EthState) -> SyncState {
-//         SyncState { eth, fuel: self }
-//     }
-// }
-
-// impl EthState {
-//     pub fn with_fuel(self, fuel: FuelState) -> SyncState {
-//         SyncState { eth: self, fuel }
-//     }
-// }
