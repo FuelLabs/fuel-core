@@ -98,16 +98,12 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     };
 
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(feature = "p2p")]
-    let (block_event_sender, block_event_receiver) = mpsc::channel(100);
-
     #[cfg(not(feature = "p2p"))]
     let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(not(feature = "p2p"))]
-    let (_block_event_sender, block_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = {
