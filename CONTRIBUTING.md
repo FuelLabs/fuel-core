@@ -1,4 +1,4 @@
-# Contributing to Fuel Core
+# TEST Contributing to Fuel Core
 
 Thanks for your interest in contributing to Fuel Core! This document outlines some the conventions on building, running, and testing Fuel Core.
 
