@@ -186,13 +186,11 @@ impl Context {
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
-                    println!("Progressing to move");
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                         match new_transaction.unwrap() {
                             TransactionBroadcast::NewTransaction ( tx ) => {
                                 let txs = vec!(Arc::new(tx));
-                                println!("Progressing to insert");
                                 TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await
                             }
                         }
