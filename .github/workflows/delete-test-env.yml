@@ -10,6 +10,7 @@ env:
 jobs:
   # Delete Ephemeral Test Environment
   delete-test-enviromment:
+    if: github.ref == 'refs/heads/preview/*'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
