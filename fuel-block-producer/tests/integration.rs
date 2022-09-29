@@ -135,9 +135,10 @@ async fn block_producer() -> Result<()> {
         .txpool_receiver(txpool_receiver);
 
     #[cfg(feature = "p2p")]
-    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
-    #[cfg(feature = "p2p")]
-    txpool_builder.network_sender(p2p_request_event_sender.clone());
+    {
+        let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+        txpool_builder.network_sender(p2p_request_event_sender.clone());
+    }
 
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;

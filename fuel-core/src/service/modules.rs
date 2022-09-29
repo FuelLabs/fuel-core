@@ -153,7 +153,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     // start services
 
     block_importer.start().await;
-    // block_producer.start(txpool.sender().clone()).await;
 
     bft.start(
         relayer_sender.clone(),

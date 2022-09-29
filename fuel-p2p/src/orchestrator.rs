@@ -8,12 +8,10 @@ use fuel_core_interfaces::p2p::{
     P2pRequestEvent,
     TransactionBroadcast,
 };
-
-use tokio::sync::broadcast;
-
 use libp2p::request_response::RequestId;
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             Receiver,
             Sender,

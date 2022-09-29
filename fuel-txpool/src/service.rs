@@ -244,15 +244,14 @@ impl Context {
                 }
 
                 block_updated = self.import_block_receiver.recv() => {
-
                   if let Ok(block_updated) = block_updated {
                         match block_updated {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let txpool = txpool.clone();
-                                TxPool::block_update(txpool.as_ref(), block).await;
-                                // TODO : Not working well
+                                TxPool::block_update(txpool.as_ref(), block).await
+                                // TODO: Should this be done in a separate task? Like this:
                                 // tokio::spawn( async move {
-                                //      TxPool::block_update(txpool.as_ref(), block).await
+                                //     TxPool::block_update(txpool.as_ref(), block).await
                                 // });
                             },
                             ImportBlockBroadcast::SealedFuelBlockImported { block: _, is_created_by_self: _ } => {
