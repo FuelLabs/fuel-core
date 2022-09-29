@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(test)]
+mod test;
+
 pub(crate) async fn download_logs<P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,

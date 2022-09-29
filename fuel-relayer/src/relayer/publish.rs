@@ -143,3 +143,31 @@ impl From<FuelBlock> for crate::abi::fuel::fuel::SidechainBlockHeader {
         }
     }
 }
+
+pub(crate) async fn num_unpublished_messages(database: &dyn RelayerDb) -> usize {
+    let mut height = database
+        .get_last_published_fuel_height()
+        .await
+        .unwrap_or_default();
+
+    let mut count = 0;
+
+    while let Some(block) = database.get_sealed_block(height).await {
+        count += block
+            .block
+            .transactions
+            .iter()
+            .map(|t| {
+                t.outputs()
+                    .iter()
+                    .filter(|o| matches!(o, Output::Message { .. }))
+                    .count()
+            })
+            .sum::<usize>();
+        height = match height.checked_add(1) {
+            Some(h) => h.into(),
+            None => return count,
+        }
+    }
+    count
+}

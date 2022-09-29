@@ -297,32 +297,7 @@ where
     }
 
     async fn num_unpublished_messages(&self) -> usize {
-        let mut height = self
-            .database
-            .get_last_published_fuel_height()
-            .await
-            .unwrap_or_default();
-
-        let mut count = 0;
-
-        while let Some(block) = self.database.get_sealed_block(height).await {
-            count += block
-                .block
-                .transactions
-                .iter()
-                .map(|t| {
-                    t.outputs()
-                        .iter()
-                        .filter(|o| matches!(o, Output::Message { .. }))
-                        .count()
-                })
-                .sum::<usize>();
-            height = match height.checked_add(1) {
-                Some(h) => h.into(),
-                None => return count,
-            }
-        }
-        count
+        num_unpublished_messages(self.database.as_ref()).await
     }
 }
 
