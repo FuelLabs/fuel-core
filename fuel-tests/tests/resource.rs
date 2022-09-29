@@ -1,6 +1,5 @@
 use fuel_core::{
     chain_config::{
-        ChainConfig,
         CoinConfig,
         MessageConfig,
         StateConfig,
@@ -231,7 +230,7 @@ mod messages {
     use super::*;
 
     async fn setup(owner: Address) -> (AssetId, FuelClient) {
-        let base_asset_id = ChainConfig::BASE_ASSET;
+        let base_asset_id = AssetId::BASE;
 
         // setup config
         let mut config = Config::local_node();
@@ -394,7 +393,7 @@ mod messages_and_coins {
     use super::*;
 
     async fn setup(owner: Address, asset_id_b: AssetId) -> (AssetId, FuelClient) {
-        let asset_id_a = ChainConfig::BASE_ASSET;
+        let asset_id_a = AssetId::BASE;
 
         // setup config
         let mut config = Config::local_node();

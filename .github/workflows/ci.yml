@@ -397,7 +397,35 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+    
+  # Deploy Fuel Core Ephemeral Developer Environment
+  deploy-eph-env:
+    if: github.ref == 'refs/heads/preview/*'
+    needs:
+      - publish-docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Environment Variables
+        run: |
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
+          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF})"  >> $GITHUB_ENV
 
+      - name: Deploy Fuel Core Ephemeral Developer Environment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Deploy Fuel-Core on k8s
+          repo: FuelLabs/fuel-deployment
+          ref: refs/heads/master
+          token: ${{ secrets.REPO_TOKEN }}
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+        env:
+          K8S: 'eks'
+          CONFIG: 'fuel-dev1'
+          ENV: 'fueldevsway.env'
+          DELETE_INFRA: true
+  
   # Deploy Latest Fuel-Core Release
   deploy:
     if: github.ref == 'refs/heads/master'
