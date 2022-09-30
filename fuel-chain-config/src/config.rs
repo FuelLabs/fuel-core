@@ -1,268 +1,27 @@
-use crate::{
-    database::Database,
-    model::BlockHeight,
-};
-use bech32::{
-    ToBase32,
-    Variant::Bech32m,
-};
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::ConsensusParameters,
-        fuel_types::{
-            Address,
-            AssetId,
-            Bytes32,
-            Salt,
-        },
-        fuel_vm::fuel_types::Word,
-    },
-    model::{
-        DaBlockHeight,
-        Message,
-    },
-};
-use itertools::Itertools;
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
-};
-use serde::{
-    Deserialize,
-    Serialize,
-};
-use serde_with::{
-    serde_as,
-    skip_serializing_none,
-};
-use serialization::{
-    HexNumber,
-    HexType,
-};
-use std::{
-    io::ErrorKind,
-    path::PathBuf,
-    str::FromStr,
-};
+mod chain;
+mod coin;
+mod contract;
+mod message;
+mod state;
 
-// Fuel Network human-readable part for bech32 encoding
-pub const FUEL_BECH32_HRP: &str = "fuel";
-
-pub mod serialization;
-
-pub const LOCAL_TESTNET: &str = "local_testnet";
-pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
-
-#[skip_serializing_none]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct ChainConfig {
-    pub chain_name: String,
-    pub block_production: ProductionStrategy,
-    #[serde(default)]
-    pub initial_state: Option<StateConfig>,
-    pub transaction_parameters: ConsensusParameters,
-}
-
-impl Default for ChainConfig {
-    fn default() -> Self {
-        Self {
-            chain_name: "local".into(),
-            block_production: ProductionStrategy::Instant,
-            transaction_parameters: ConsensusParameters::DEFAULT,
-            initial_state: None,
-        }
-    }
-}
-
-impl ChainConfig {
-    pub const BASE_ASSET: AssetId = AssetId::zeroed();
-
-    pub fn local_testnet() -> Self {
-        // endow some preset accounts with an initial balance
-        tracing::info!("Initial Accounts");
-        let mut rng = StdRng::seed_from_u64(10);
-        let initial_coins = (0..5)
-            .map(|_| {
-                let secret = fuel_core_interfaces::common::fuel_crypto::SecretKey::random(
-                    &mut rng,
-                );
-                let address = Address::from(*secret.public_key().hash());
-                let bech32_data = Bytes32::new(*address).to_base32();
-                let bech32_encoding =
-                    bech32::encode(FUEL_BECH32_HRP, &bech32_data, Bech32m).unwrap();
-
-                tracing::info!(
-                    "PrivateKey({:#x}), Address({:#x} [bech32: {}]), Balance({})",
-                    secret,
-                    address,
-                    bech32_encoding,
-                    TESTNET_INITIAL_BALANCE
-                );
-                CoinConfig {
-                    tx_id: None,
-                    output_index: None,
-                    block_created: None,
-                    maturity: None,
-                    owner: address,
-                    amount: TESTNET_INITIAL_BALANCE,
-                    asset_id: Default::default(),
-                }
-            })
-            .collect_vec();
-
-        Self {
-            chain_name: LOCAL_TESTNET.to_string(),
-            block_production: ProductionStrategy::Instant,
-            initial_state: Some(StateConfig {
-                coins: Some(initial_coins),
-                ..StateConfig::default()
-            }),
-            transaction_parameters: ConsensusParameters::DEFAULT,
-        }
-    }
-}
-
-impl FromStr for ChainConfig {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            LOCAL_TESTNET => Ok(Self::local_testnet()),
-            s => {
-                // Attempt to load chain config from path
-                let path = PathBuf::from(s.to_string());
-                let contents = std::fs::read(path)?;
-                serde_json::from_slice(&contents).map_err(|e| {
-                    std::io::Error::new(
-                        ErrorKind::InvalidData,
-                        anyhow::Error::new(e).context(format!(
-                            "an error occurred while loading the chain config file {}",
-                            s
-                        )),
-                    )
-                })
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub enum ProductionStrategy {
-    Instant,
-    Manual,
-    RoundRobin,
-    ProofOfStake,
-}
-
-// TODO: do streaming deserialization to handle large state configs
-#[serde_as]
-#[skip_serializing_none]
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-pub struct StateConfig {
-    /// Spendable coins
-    pub coins: Option<Vec<CoinConfig>>,
-    /// Contract state
-    pub contracts: Option<Vec<ContractConfig>>,
-    /// Messages from Layer 1
-    pub messages: Option<Vec<MessageConfig>>,
-    /// Starting block height (useful for flattened fork networks)
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub height: Option<BlockHeight>,
-}
-
-impl StateConfig {
-    pub fn generate_state_config(db: Database) -> anyhow::Result<Self> {
-        Ok(StateConfig {
-            coins: db.get_coin_config()?,
-            contracts: db.get_contract_config()?,
-            messages: db.get_message_config()?,
-            height: db.get_block_height()?,
-        })
-    }
-}
-
-#[skip_serializing_none]
-#[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct CoinConfig {
-    /// auto-generated if None
-    #[serde_as(as = "Option<HexType>")]
-    #[serde(default)]
-    pub tx_id: Option<Bytes32>,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub output_index: Option<u64>,
-    /// used if coin is forked from another chain to preserve id
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub block_created: Option<BlockHeight>,
-    #[serde_as(as = "Option<HexNumber>")]
-    #[serde(default)]
-    pub maturity: Option<BlockHeight>,
-    #[serde_as(as = "HexType")]
-    pub owner: Address,
-    #[serde_as(as = "HexNumber")]
-    pub amount: u64,
-    #[serde_as(as = "HexType")]
-    pub asset_id: AssetId,
-}
-
-#[skip_serializing_none]
-#[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub struct ContractConfig {
-    #[serde_as(as = "HexType")]
-    pub code: Vec<u8>,
-    #[serde_as(as = "HexType")]
-    pub salt: Salt,
-    #[serde_as(as = "Option<Vec<(HexType, HexType)>>")]
-    #[serde(default)]
-    pub state: Option<Vec<(Bytes32, Bytes32)>>,
-    #[serde_as(as = "Option<Vec<(HexType, HexNumber)>>")]
-    #[serde(default)]
-    pub balances: Option<Vec<(AssetId, u64)>>,
-}
-
-#[skip_serializing_none]
-#[serde_as]
-#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
-pub struct MessageConfig {
-    #[serde_as(as = "HexType")]
-    pub sender: Address,
-    #[serde_as(as = "HexType")]
-    pub recipient: Address,
-    #[serde_as(as = "HexNumber")]
-    pub nonce: Word,
-    #[serde_as(as = "HexNumber")]
-    pub amount: Word,
-    #[serde_as(as = "HexType")]
-    pub data: Vec<u8>,
-    /// The block height from the parent da layer that originated this message
-    #[serde_as(as = "HexNumber")]
-    pub da_height: DaBlockHeight,
-}
-
-impl From<MessageConfig> for Message {
-    fn from(msg: MessageConfig) -> Self {
-        Message {
-            sender: msg.sender,
-            recipient: msg.recipient,
-            nonce: msg.nonce,
-            amount: msg.amount,
-            data: msg.data,
-            da_height: msg.da_height,
-            fuel_block_spend: None,
-        }
-    }
-}
+pub use chain::*;
+pub use coin::*;
+pub use contract::*;
+pub use message::*;
+pub use state::*;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use fuel_core_interfaces::common::{
-        fuel_asm::Opcode,
-        fuel_vm::prelude::Contract,
+    use fuel_core_interfaces::{
+        common::{
+            fuel_asm::Opcode,
+            fuel_vm::prelude::Contract,
+            prelude::{
+                AssetId,
+                Bytes32,
+            },
+        },
+        model::DaBlockHeight,
     };
     use rand::{
         prelude::StdRng,
@@ -273,6 +32,15 @@ mod tests {
     use std::{
         env::temp_dir,
         fs::write,
+        path::PathBuf,
+    };
+
+    use super::{
+        chain::ChainConfig,
+        coin::CoinConfig,
+        contract::ContractConfig,
+        message::MessageConfig,
+        state::StateConfig,
     };
 
     #[test]
