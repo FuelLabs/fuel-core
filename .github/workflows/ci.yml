@@ -400,7 +400,7 @@ jobs:
     
   # Deploy Fuel Core Ephemeral Developer Environment
   deploy-eph-env:
-    if: github.ref == 'refs/heads/preview/*'
+    if:  startsWith(github.head_ref, 'preview/')
     needs:
       - publish-docker-image
     runs-on: ubuntu-latest
@@ -410,7 +410,7 @@ jobs:
           tag=(`echo $GITHUB_SHA | cut -c1-7`)
           echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
           echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
-          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF})"  >> $GITHUB_ENV
+          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF} | cut -c 9-)"  >> $GITHUB_ENV
 
       - name: Deploy Fuel Core Ephemeral Developer Environment
         uses: benc-uk/workflow-dispatch@v1
