@@ -1,22 +1,19 @@
 use async_trait::async_trait;
-use ethers_core::{
-    abi::AbiDecode,
-    types::{
-        Block,
-        BlockId,
-        Filter,
-        Log,
-        Transaction,
-        TransactionReceipt,
-        TxHash,
-        H256,
-        U64,
-    },
+use ethers_core::types::{
+    Block,
+    BlockId,
+    Filter,
+    Log,
+    Transaction,
+    TransactionReceipt,
+    TxHash,
+    H256,
+    U64,
 };
 use ethers_providers::{
     JsonRpcClient,
+    LogQuery,
     Middleware,
-    PendingTransaction,
     Provider,
     ProviderError,
     SyncingStatus,
@@ -35,8 +32,6 @@ use std::{
     sync::Arc,
 };
 use thiserror::Error;
-
-use crate::test_helpers::EvtToLog;
 
 #[derive(Clone)]
 pub struct MockMiddleware {
@@ -200,7 +195,7 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
@@ -221,6 +216,23 @@ impl JsonRpcClient for MockMiddleware {
                     data.best_block.number
                 });
                 let res = serde_json::to_value(Some(txn))?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                Ok(res)
+            }
+            "eth_blockNumber" => {
+                let r = self.get_block_number().await.unwrap();
+                let res = serde_json::to_value(r)?;
+                let res: R =
+                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
+                Ok(res)
+            }
+            "eth_getLogs" => {
+                let params = serde_json::to_value(params)?;
+                let params: Vec<Filter> =
+                    serde_json::from_value(params).map_err(Self::Error::SerdeJson)?;
+                let r = self.get_logs(&params[0]).await.unwrap();
+                let res = serde_json::to_value(r)?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
@@ -314,59 +326,11 @@ impl Middleware for MockMiddleware {
         r
     }
 
-    async fn send_transaction<
-        T: Into<ethers_core::types::transaction::eip2718::TypedTransaction> + Send + Sync,
-    >(
-        &self,
-        tx: T,
-        _block: Option<BlockId>,
-    ) -> Result<ethers_providers::PendingTransaction<'_, Self::Provider>, Self::Error>
-    {
-        self.before_event(TriggerType::Send);
-
-        use crate::abi::fuel::*;
-        let tx = tx.into();
-        let calls = FuelCalls::decode(tx.data().unwrap()).unwrap();
-        let address = match tx.to().unwrap() {
-            ethers_core::types::NameOrAddress::Address(a) => a.clone(),
-            _ => unreachable!(),
-        };
-        match calls {
-            FuelCalls::CommitBlock(CommitBlockCall {
-                minimum_block_number,
-                new_block_header:
-                    SidechainBlockHeader {
-                        message_outputs_root,
-                        ..
-                    },
-                ..
-            }) => {
-                let event = BlockCommittedFilter {
-                    // FIX: this should be fuel height
-                    height: minimum_block_number,
-                    ..Default::default()
-                };
-                let mut log = event.into_log();
-                log.address = address;
-                let message_root: Bytes32 = message_outputs_root.into();
-
-                self.update_data(move |data| {
-                    *data.best_block.number.as_mut().unwrap() += 1.into();
-                    data.best_block.timestamp += 1.into();
-                    let timestamp: [u8; 32] = data.best_block.timestamp.into();
-                    let height = data.best_block.number.unwrap();
-                    log.block_number = Some(height);
-                    data.logs_batch.push(vec![log]);
-                    data.incoming_message_roots
-                        .insert(message_root, timestamp.into());
-                });
-            }
-            _ => todo!(),
-        }
-
-        let r = PendingTransaction::new(Default::default(), self.provider());
-
-        self.after_event(TriggerType::Send);
-        Ok(r)
+    fn get_logs_paginated<'a>(
+        &'a self,
+        filter: &Filter,
+        page_size: u64,
+    ) -> LogQuery<'a, Self::Provider> {
+        LogQuery::new(Self::provider(&self), filter).with_page_size(page_size)
     }
 }

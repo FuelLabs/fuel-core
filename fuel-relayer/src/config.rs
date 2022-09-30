@@ -41,12 +41,15 @@ pub struct Config {
     /// Number of pending output messages that will force
     /// a publish regardless of the amount of time elapsed.
     pub fuel_min_force_publish: usize,
+    /// Number of pages or blocks containing logs that
+    /// should be downloaded in a single call to the da layer
+    pub log_pag_size: u64,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            da_finalization: DaBlockHeight::from(100u64),
+            da_finalization: DaBlockHeight::from(Self::DEFAULT_DA_FINALIZATION),
             // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
@@ -63,12 +66,16 @@ impl Default for Config {
             pending_eth_interval: Duration::from_secs(6),
             fuel_publish_window: Duration::from_secs(10),
             fuel_min_force_publish: 10,
+            log_pag_size: Self::DEFAULT_LOG_PAGE_SIZE,
         }
     }
 }
 
 #[allow(missing_docs)]
 impl Config {
+    pub const DEFAULT_LOG_PAGE_SIZE: u64 = 5;
+    pub const DEFAULT_DA_FINALIZATION: u64 = 100;
+
     pub fn default_test() -> Self {
         Self {
             pending_eth_interval: Duration::from_millis(100),

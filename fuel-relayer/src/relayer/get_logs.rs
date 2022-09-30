@@ -6,17 +6,40 @@ mod test;
 pub(crate) async fn download_logs<P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
-    eth_node: &P,
+    eth_node: Arc<P>,
+    page_size: u64,
 ) -> Result<Vec<Log>, ProviderError>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    let filter = Filter::new()
-        .from_block(eth_sync_gap.oldest())
-        .to_block(eth_sync_gap.latest())
-        .address(ValueOrArray::Array(contracts));
+    use futures::TryStreamExt;
 
-    eth_node.get_logs(&filter).await
+    futures::stream::try_unfold(
+        eth_sync_gap.page(page_size),
+        |mut page: state::EthSyncPage| {
+            let contracts = contracts.clone();
+            let eth_node = eth_node.clone();
+            async move {
+                if page.is_empty() {
+                    Ok(None)
+                } else {
+                    let filter = Filter::new()
+                        .from_block(page.oldest())
+                        .to_block(page.latest())
+                        .address(ValueOrArray::Array(contracts));
+
+                    page.reduce();
+
+                    eth_node
+                        .get_logs(&filter)
+                        .await
+                        .map(|logs| Some((logs, page)))
+                }
+            }
+        },
+    )
+    .try_concat()
+    .await
 }
 
 pub(crate) async fn write_logs(

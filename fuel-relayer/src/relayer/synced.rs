@@ -2,7 +2,7 @@ use tokio::sync::watch;
 
 use super::state::*;
 
-pub fn update_synced(synced: &watch::Sender<bool>, state: &SyncState) {
+pub fn update_synced(synced: &watch::Sender<bool>, state: &EthState) {
     update_synced_inner(synced, state.is_synced())
 }
 

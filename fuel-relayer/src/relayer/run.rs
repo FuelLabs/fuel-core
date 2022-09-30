@@ -3,8 +3,7 @@ use super::{
     state::{
         EthLocal,
         EthRemote,
-        FuelLocal,
-        SyncState,
+        EthState,
     },
 };
 
@@ -17,7 +16,7 @@ use fuel_core_interfaces::model::DaBlockHeight;
 mod test;
 
 #[async_trait]
-pub trait RelayerData: EthRemote + EthLocal + FuelLocal {
+pub trait RelayerData: EthRemote + EthLocal {
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()>;
 
     async fn download_logs(
@@ -29,16 +28,14 @@ pub trait RelayerData: EthRemote + EthLocal + FuelLocal {
 
     async fn set_finalized_da_height(&self, height: DaBlockHeight);
 
-    fn update_synced(&self, state: &SyncState);
-
-    async fn publish_fuel_block(&mut self) -> anyhow::Result<()>;
+    fn update_synced(&self, state: &EthState);
 }
 
 pub async fn run(relayer: &mut (dyn RelayerData + Send + Sync)) -> anyhow::Result<()> {
     // Await the eth node to sync.
     relayer.wait_if_eth_syncing().await?;
 
-    let state = state::build(relayer).await?;
+    let state = state::build_eth(relayer).await?;
 
     if let Some(eth_sync_gap) = state.needs_to_sync_eth() {
         // Download events
@@ -51,10 +48,6 @@ pub async fn run(relayer: &mut (dyn RelayerData + Send + Sync)) -> anyhow::Resul
         relayer
             .set_finalized_da_height(eth_sync_gap.latest().into())
             .await;
-    }
-
-    if state.needs_to_publish_fuel() {
-        relayer.publish_fuel_block().await?;
     }
 
     relayer.update_synced(&state);

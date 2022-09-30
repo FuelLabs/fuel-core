@@ -14,7 +14,6 @@ use ethers_core::types::{
     Log,
     ValueOrArray,
     H160,
-    H256,
 };
 use ethers_providers::{
     Http,
@@ -24,24 +23,12 @@ use ethers_providers::{
     SyncingStatus,
 };
 use fuel_core_interfaces::{
-    common::{
-        crypto,
-        prelude::{
-            Output,
-            SizedBytes,
-        },
-    },
     db::Messages,
-    model::{
-        FuelBlock,
-        Message,
-        SealedFuelBlock,
-    },
+    model::Message,
     relayer::RelayerDb,
 };
 use std::{
     convert::TryInto,
-    io::Read,
     ops::Deref,
     sync::{
         atomic::AtomicBool,
@@ -53,12 +40,10 @@ use tokio::sync::watch;
 
 use self::{
     get_logs::*,
-    publish::*,
     run::RelayerData,
 };
 
 mod get_logs;
-mod publish;
 mod run;
 mod state;
 mod synced;
@@ -121,26 +106,14 @@ where
         download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
-            &self.eth_node,
+            self.eth_node.clone(),
+            self.config.log_pag_size,
         )
         .await
     }
 
     async fn write_logs(&mut self, logs: Vec<Log>) -> anyhow::Result<()> {
         write_logs(self.database.as_mut(), logs).await
-    }
-    async fn publish_fuel_block(&mut self) -> anyhow::Result<()> {
-        match self.config.eth_v2_commit_contract {
-            Some(contract) => {
-                publish_fuel_block(
-                    self.database.as_mut(),
-                    self.eth_node.clone(),
-                    contract,
-                )
-                .await
-            }
-            None => Ok(()),
-        }
     }
 
     async fn set_finalized_da_height(
@@ -150,7 +123,7 @@ where
         self.database.set_finalized_da_height(height).await
     }
 
-    fn update_synced(&self, state: &state::SyncState) {
+    fn update_synced(&self, state: &state::EthState) {
         update_synced(&self.synced, state)
     }
 
@@ -264,43 +237,6 @@ where
     }
 }
 
-#[async_trait]
-impl<P> state::FuelLocal for Relayer<P>
-where
-    P: Middleware<Error = ProviderError>,
-{
-    fn message_time_window(&self) -> std::time::Duration {
-        self.config.fuel_publish_window
-    }
-
-    fn min_messages_to_force_publish(&self) -> usize {
-        self.config.fuel_min_force_publish
-    }
-
-    async fn last_sent_time(&self) -> Option<Duration> {
-        match self.database.get_last_published_fuel_height().await {
-            Some(height) => self
-                .database
-                .get_sealed_block(height)
-                .await
-                .and_then(|block| get_unix_time_from_block(block.as_ref())),
-            None => None,
-        }
-    }
-
-    async fn latest_block_time(&self) -> Option<Duration> {
-        let height = self.database.get_chain_height().await;
-        self.database
-            .get_sealed_block(height)
-            .await
-            .and_then(|block| get_unix_time_from_block(block.as_ref()))
-    }
-
-    async fn num_unpublished_messages(&self) -> usize {
-        num_unpublished_messages(self.database.as_ref()).await
-    }
-}
-
 fn run<P>(mut relayer: Relayer<P>) -> RelayerShutdown
 where
     P: Middleware<Error = ProviderError> + 'static,
@@ -321,9 +257,4 @@ where
         join_handle,
         shutdown,
     }
-}
-
-fn get_unix_time_from_block(block: &SealedFuelBlock) -> Option<Duration> {
-    let t: std::time::SystemTime = block.block.header.time.into();
-    t.duration_since(std::time::UNIX_EPOCH).ok()
 }

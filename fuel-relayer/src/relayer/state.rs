@@ -1,7 +1,4 @@
-use core::{
-    ops::RangeInclusive,
-    time::Duration,
-};
+use core::ops::RangeInclusive;
 pub use state_builder::*;
 use std::ops::Deref;
 
@@ -11,29 +8,12 @@ mod state_builder;
 mod test;
 
 #[derive(Debug)]
-pub struct SyncState {
-    eth: EthState,
-    fuel: FuelState,
-}
-
-#[derive(Debug)]
 pub struct EthState {
     remote: EthHeights,
     local: EthHeight,
 }
 
-#[derive(Debug)]
-pub struct FuelState {
-    local: MessageState,
-}
-
 type EthHeight = u64;
-
-#[derive(Debug, Clone)]
-pub struct MessageState {
-    times: MessageTimes,
-    num_unpublished: MessagesPending,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MessageRoot;
@@ -54,41 +34,18 @@ struct EthHeights(Heights<u64>);
 pub struct EthSyncGap(Heights<u64>);
 
 #[derive(Clone, Debug)]
-pub struct MessageTimes(Heights<Duration>);
-
-#[derive(Clone, Debug)]
-pub struct MessagesPending(Heights<usize>);
-
-impl SyncState {
-    pub fn is_synced(&self) -> bool {
-        self.eth.is_synced() && self.fuel.is_synced()
-    }
-
-    pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
-        self.eth.needs_to_sync_eth()
-    }
-
-    pub fn needs_to_publish_fuel(&self) -> bool {
-        self.fuel.needs_to_publish()
-    }
+pub struct EthSyncPage {
+    current: RangeInclusive<u64>,
+    size: u64,
+    end: u64,
 }
 
 impl EthState {
-    fn is_synced(&self) -> bool {
+    pub fn is_synced(&self) -> bool {
         self.local >= self.remote.finalized()
     }
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
         (!self.is_synced()).then(|| EthSyncGap::new(self.local, self.remote.finalized()))
-    }
-}
-
-impl FuelState {
-    fn is_synced(&self) -> bool {
-        !self.local.due_for_publish()
-    }
-
-    pub fn needs_to_publish(&self) -> bool {
-        self.local.due_for_publish()
     }
 }
 
@@ -101,7 +58,7 @@ impl EthHeights {
 }
 
 impl EthSyncGap {
-    fn new(local: u64, remote: u64) -> Self {
+    pub(crate) fn new(local: u64, remote: u64) -> Self {
         Self(Heights(local..=remote))
     }
 
@@ -112,23 +69,38 @@ impl EthSyncGap {
     pub fn latest(&self) -> u64 {
         *self.0 .0.end()
     }
-}
-impl MessageState {
-    fn due_for_publish(&self) -> bool {
-        *self.num_unpublished.start() > 0
-            && (self.num_unpublished.is_empty() || self.times.is_empty())
+
+    pub fn page(&self, page_size: u64) -> EthSyncPage {
+        EthSyncPage {
+            current: self.oldest()
+                ..=self
+                    .oldest()
+                    .saturating_add(page_size.saturating_sub(1))
+                    .min(self.latest()),
+            size: page_size,
+            end: self.latest(),
+        }
     }
 }
 
-impl MessageTimes {
-    fn new(duration_since_last_sent: Duration, interval: Duration) -> Self {
-        Self(Heights(duration_since_last_sent..=interval))
+impl EthSyncPage {
+    pub fn reduce(&mut self) {
+        dbg!(&self.current);
+        self.current = self.current.start().saturating_add(self.size)
+            ..=self.current.end().saturating_add(self.size).min(self.end);
+        dbg!(&self.current);
     }
-}
 
-impl MessagesPending {
-    fn new(num_unpublished: usize, min_to_force_publish: usize) -> Self {
-        Self(Heights(num_unpublished..=min_to_force_publish))
+    pub fn is_empty(&self) -> bool {
+        self.current.is_empty() || self.size == 0
+    }
+
+    pub fn oldest(&self) -> u64 {
+        *self.current.start()
+    }
+
+    pub fn latest(&self) -> u64 {
+        *self.current.end()
     }
 }
 
@@ -143,21 +115,5 @@ impl Deref for EthHeights {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl Deref for MessageTimes {
-    type Target = RangeInclusive<Duration>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
-    }
-}
-
-impl Deref for MessagesPending {
-    type Target = RangeInclusive<usize>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0 .0
     }
 }

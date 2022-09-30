@@ -1,5 +1,4 @@
 use crate::relayer::state::test_builder::TestDataSource;
-use core::time::Duration;
 
 use super::*;
 
@@ -22,8 +21,6 @@ async fn can_set_da_height() {
             eth_remote_current: 300,
             eth_remote_finalization_period: 100,
             eth_local_finalized: 0,
-            min_messages_to_force_publish: 1,
-            ..Default::default()
         },
     );
     run(&mut relayer).await.unwrap();
@@ -54,26 +51,6 @@ async fn logs_are_downloaded_and_written() {
     run(&mut relayer).await.unwrap();
 }
 
-#[tokio::test]
-async fn needs_to_publish_fuel() {
-    let mut relayer = MockRelayerData::default();
-    relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));
-    relayer.expect_update_synced().return_const(());
-    relayer.expect_publish_fuel_block().returning(|| Ok(()));
-    test_data_source(
-        &mut relayer,
-        TestDataSource {
-            eth_remote_current: 300,
-            eth_remote_finalization_period: 100,
-            eth_local_finalized: 200,
-            min_messages_to_force_publish: 1,
-            num_unpublished_messages: 10,
-            ..Default::default()
-        },
-    );
-    run(&mut relayer).await.unwrap();
-}
-
 mockall::mock! {
     RelayerData {}
 
@@ -89,15 +66,6 @@ mockall::mock! {
     }
 
     #[async_trait]
-    impl FuelLocal for RelayerData {
-        fn message_time_window(&self) -> Duration;
-        fn min_messages_to_force_publish(&self) -> usize;
-        async fn last_sent_time(&self) -> Option<Duration>;
-        async fn latest_block_time(&self) -> Option<Duration>;
-        async fn num_unpublished_messages(&self) -> usize;
-    }
-
-    #[async_trait]
     impl RelayerData for RelayerData{
         async fn wait_if_eth_syncing(&self) -> anyhow::Result<()>;
 
@@ -110,9 +78,8 @@ mockall::mock! {
 
         async fn set_finalized_da_height(&self, height: DaBlockHeight);
 
-        fn update_synced(&self, state: &SyncState);
+        fn update_synced(&self, state: &EthState);
 
-        async fn publish_fuel_block(&mut self) -> anyhow::Result<()>;
     }
 
 }
@@ -124,16 +91,4 @@ fn test_data_source(mock: &mut MockRelayerData, data: TestDataSource) {
     mock.expect_finalization_period().returning(move || out);
     let out = data.eth_local_finalized;
     mock.expect_finalized().returning(move || out);
-    let out = data.message_time_window;
-    mock.expect_message_time_window().returning(move || out);
-    let out = data.min_messages_to_force_publish;
-    mock.expect_min_messages_to_force_publish()
-        .returning(move || out);
-    let out = data.last_sent_time;
-    mock.expect_last_sent_time().returning(move || out);
-    let out = data.latest_block_time;
-    mock.expect_latest_block_time().returning(move || out);
-    let out = data.num_unpublished_messages;
-    mock.expect_num_unpublished_messages()
-        .returning(move || out);
 }

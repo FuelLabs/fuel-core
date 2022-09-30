@@ -55,12 +55,6 @@ impl EvtToLog for crate::abi::bridge::message::SentMessageFilter {
     }
 }
 
-impl EvtToLog for crate::abi::fuel::fuel::BlockCommittedFilter {
-    fn into_log(self) -> Log {
-        event_to_log(self, &*crate::abi::fuel::fuel::FUEL_ABI)
-    }
-}
-
 pub fn event_to_log<E>(event: E, abi: &ethers_core::abi::Abi) -> Log
 where
     E: EthEvent,

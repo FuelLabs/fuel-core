@@ -25,13 +25,14 @@ async fn can_download_logs() {
         eth_local_finalized: 2,
         ..Default::default()
     };
-    let eth_state = state::build(&eth_state).await.unwrap();
+    let eth_state = state::build_eth(&eth_state).await.unwrap();
 
     let contracts = vec![Default::default()];
     let result = download_logs(
         &eth_state.needs_to_sync_eth().unwrap(),
         contracts,
-        &eth_node,
+        Arc::new(eth_node),
+        Config::DEFAULT_LOG_PAGE_SIZE,
     )
     .await
     .unwrap();
