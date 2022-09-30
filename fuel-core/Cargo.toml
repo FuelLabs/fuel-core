@@ -73,6 +73,7 @@ tracing-subscriber = { version = "0.3", features = [
     "env-filter",
     "json",
 ] }
+url = "2.2"
 uuid = { version = "1.1", features = ["v4"] }
 
 [dev-dependencies]

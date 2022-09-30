@@ -52,24 +52,35 @@ mod synced;
 mod test;
 
 type Synced = watch::Receiver<bool>;
+type NotifySynced = watch::Sender<bool>;
 type Database = Box<dyn RelayerDb>;
 
 /// Handle for interacting with the [`Relayer`].
 pub struct RelayerHandle {
+    /// Receives signals when the relayer reaches consistency with the DA layer.
     synced: Synced,
+    /// Gracefully shuts down the relayer.
     shutdown: RelayerShutdown,
 }
 
-pub struct Relayer<P>
+/// The actual relayer that runs on a background task
+/// to sync with the DA layer.
+struct Relayer<P>
 where
     P: Middleware<Error = ProviderError>,
 {
-    synced: watch::Sender<bool>,
+    /// Sends signals when the relayer reaches consistency with the DA layer.
+    synced: NotifySynced,
+    /// The node that communicates with Ethereum.
     eth_node: Arc<P>,
+    /// The fuel database.
     database: Database,
+    /// Configuration settings.
     config: Config,
 }
 
+/// Shutdown handle for gracefully ending
+/// the background relayer task.
 struct RelayerShutdown {
     join_handle: tokio::task::JoinHandle<anyhow::Result<()>>,
     shutdown: Arc<AtomicBool>,
@@ -79,8 +90,9 @@ impl<P> Relayer<P>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
+    /// Create a new relayer.
     fn new(
-        synced: watch::Sender<bool>,
+        synced: NotifySynced,
         eth_node: P,
         database: Database,
         config: Config,
@@ -107,7 +119,7 @@ where
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             self.eth_node.clone(),
-            self.config.log_pag_size,
+            self.config.log_page_size,
         )
         .await
     }
@@ -237,6 +249,7 @@ where
     }
 }
 
+/// Main background run loop.
 fn run<P>(mut relayer: Relayer<P>) -> RelayerShutdown
 where
     P: Middleware<Error = ProviderError> + 'static,
@@ -246,9 +259,17 @@ where
         let shutdown = shutdown.clone();
         async move {
             while !shutdown.load(core::sync::atomic::Ordering::Relaxed) {
+                let now = std::time::Instant::now();
                 run::run(&mut relayer).await?;
 
-                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                // Sleep the loop so the da node is not spammed.
+                tokio::time::sleep(
+                    relayer
+                        .config
+                        .sync_minimum_duration
+                        .saturating_sub(now.elapsed()),
+                )
+                .await;
             }
             Ok(())
         }

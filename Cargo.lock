@@ -2307,6 +2307,7 @@ dependencies = [
  "tower-layer",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid 1.1.2",
 ]
 

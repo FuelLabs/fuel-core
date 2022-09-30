@@ -5,15 +5,20 @@ use async_trait::async_trait;
 
 #[async_trait]
 pub trait EthRemote {
+    /// The current block height on the Ethereum node.
     async fn current(&self) -> anyhow::Result<u64>;
+    /// The amount of blocks to wait before we consider an
+    /// eth block finalized.
     fn finalization_period(&self) -> u64;
 }
 
 #[async_trait]
 pub trait EthLocal {
+    /// The current finalized eth block that the relayer has seen.
     async fn finalized(&self) -> u64;
 }
 
+/// Build the Ethereum state.
 pub async fn build_eth<T>(t: &T) -> anyhow::Result<EthState>
 where
     T: EthRemote + EthLocal + ?Sized,

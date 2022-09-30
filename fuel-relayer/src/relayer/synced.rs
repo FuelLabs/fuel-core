@@ -1,8 +1,16 @@
+//! Synced State
+//! Handles the logic for updating the [`RelayerHandle`](crate::RelayerHandle)
+//! if the relayer has reached a consistent state with the DA layer.
+
 use tokio::sync::watch;
 
-use super::state::*;
+use super::{
+    state::*,
+    NotifySynced,
+};
 
-pub fn update_synced(synced: &watch::Sender<bool>, state: &EthState) {
+/// Notify the handle if the state is synced with the DA layer.
+pub fn update_synced(synced: &NotifySynced, state: &EthState) {
     update_synced_inner(synced, state.is_synced())
 }
 

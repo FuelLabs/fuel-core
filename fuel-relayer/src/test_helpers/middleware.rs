@@ -12,20 +12,17 @@ use ethers_core::types::{
 };
 use ethers_providers::{
     JsonRpcClient,
-    LogQuery,
     Middleware,
     Provider,
     ProviderError,
     SyncingStatus,
 };
-use fuel_core_interfaces::common::prelude::Bytes32;
 use parking_lot::Mutex;
 use serde::{
     de::DeserializeOwned,
     Serialize,
 };
 use std::{
-    collections::HashMap,
     fmt,
     fmt::Debug,
     str::FromStr,
@@ -55,10 +52,6 @@ pub struct MockData {
     pub best_block: Block<TxHash>,
     pub logs_batch: Vec<Vec<Log>>,
     pub logs_batch_index: usize,
-    pub blocks_batch: Vec<Vec<H256>>,
-    pub blocks_batch_index: usize,
-    // mapping(bytes32 => uint256) public s_incomingMessageRoots;
-    pub incoming_message_roots: HashMap<Bytes32, H256>,
 }
 
 impl MockMiddleware {
@@ -80,6 +73,7 @@ impl MockMiddleware {
         self.data.lock().update(delta)
     }
 
+    /// Set a callback before an event.
     pub fn set_before_event(
         &self,
         f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
@@ -87,6 +81,7 @@ impl MockMiddleware {
         *self.before_event.lock() = Some(Box::new(f));
     }
 
+    /// Set a callback after an event.
     pub fn set_after_event(
         &self,
         f: impl for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync + 'static,
@@ -94,6 +89,7 @@ impl MockMiddleware {
         *self.after_event.lock() = Some(Box::new(f));
     }
 
+    /// Set a callback to override state any time the state is changed.
     pub fn set_state_override(
         &self,
         f: impl FnMut(&mut MockData) + Send + Sync + 'static,
@@ -146,9 +142,6 @@ impl Default for MockData {
             is_syncing: SyncingStatus::IsFalse,
             logs_batch: Vec::new(),
             logs_batch_index: 0,
-            blocks_batch: Vec::new(),
-            blocks_batch_index: 0,
-            incoming_message_roots: Default::default(),
         }
     }
 }
@@ -195,7 +188,7 @@ impl JsonRpcClient for MockMiddleware {
     type Error = ProviderError;
 
     /// Sends a request with the provided JSON-RPC and parameters serialized as JSON
-    async fn request<T, R>(&self, method: &str, params: T) -> Result<R, Self::Error>
+    async fn request<T, R>(&self, method: &str, _params: T) -> Result<R, Self::Error>
     where
         T: Debug + Serialize + Send + Sync,
         R: DeserializeOwned,
@@ -220,35 +213,10 @@ impl JsonRpcClient for MockMiddleware {
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
-            "eth_blockNumber" => {
-                let r = self.get_block_number().await.unwrap();
-                let res = serde_json::to_value(r)?;
-                let res: R =
-                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
-                Ok(res)
-            }
-            "eth_getLogs" => {
-                let params = serde_json::to_value(params)?;
-                let params: Vec<Filter> =
-                    serde_json::from_value(params).map_err(Self::Error::SerdeJson)?;
-                let r = self.get_logs(&params[0]).await.unwrap();
-                let res = serde_json::to_value(r)?;
-                let res: R =
-                    serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
-                Ok(res)
-            }
             _ => panic!("Request not mocked: {}", method),
         }
     }
 }
-
-// Needed functionality for relayer to function:
-// syncing API
-// get_block_number API
-// get_logs API.
-// .watch() API for logs with filter. Impl LogStream
-// LogsWatcher only uses .next()
-// get_block API using only HASH
 
 #[async_trait]
 impl Middleware for MockMiddleware {
@@ -320,17 +288,8 @@ impl Middleware for MockMiddleware {
     ) -> Result<Option<Block<TxHash>>, Self::Error> {
         let block_id = block_hash_or_number.into();
         self.before_event(TriggerType::GetBlock(block_id));
-        // TODO change
         let r = Ok(Some(self.update_data(|data| data.best_block.clone())));
         self.after_event(TriggerType::GetBlock(block_id));
         r
-    }
-
-    fn get_logs_paginated<'a>(
-        &'a self,
-        filter: &Filter,
-        page_size: u64,
-    ) -> LogQuery<'a, Self::Provider> {
-        LogQuery::new(Self::provider(&self), filter).with_page_size(page_size)
     }
 }

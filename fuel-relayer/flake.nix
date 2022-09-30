@@ -1,4 +1,8 @@
 {
+  description = ''
+    A Nix flake for compiling and extracting the fuel contract abi.
+  '';
+
   inputs = {
     open-zeppelin = {
       url = "github:OpenZeppelin/openzeppelin-contracts";
@@ -49,7 +53,7 @@
           then 
             echo "Invalid input. Must provide output directoy" >&2; exit 1;
           fi
-          declare -a arr=("FuelSidechain" "FuelMessagePortal")
+          declare -a arr=("FuelMessagePortal")
           for i in "''${arr[@]}"
           do  
             (cat ${inputs.self.packages."${system}".build-abi-json}/build/"$i".abi) | jq '.' > "$1"/"$i".json

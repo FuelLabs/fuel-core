@@ -40,7 +40,7 @@ async fn can_get_messages() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
 
-    let config = Config::default_test();
+    let config = Config::default();
     let contract_address = config.eth_v2_listening_contracts[0].into();
     let message = |nonce, block_number: u64| {
         let message = SentMessageFilter {

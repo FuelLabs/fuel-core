@@ -51,11 +51,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1663494472,
-        "narHash": "sha256-fSowlaoXXWcAM8m9wA6u+eTJJtvruYHMA+Lb/tFi/qM=",
+        "lastModified": 1664370076,
+        "narHash": "sha256-NDnIo0nxJozLwEw0VPM+RApMA90uTfbvaNNtC5eB7Os=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "f677051b8dc0b5e2a9348941c99eea8c4b0ff28f",
+        "rev": "854fdc68881791812eddd33b2fed94b954979a8e",
         "type": "github"
       },
       "original": {
@@ -84,11 +84,11 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1662627485,
-        "narHash": "sha256-Kg8u2ekU0+MsuLzgKqiaus3HquLLo2Qq+oGbQfIppos=",
+        "lastModified": 1664286682,
+        "narHash": "sha256-OBdpqW2zpwYF/JWUk013rbMdIC3R17ynX78tQPbfHNw=",
         "owner": "serokell",
         "repo": "nix-npm-buildpackage",
-        "rev": "cab951dd024dd367511d48440de6f93664ee35aa",
+        "rev": "bc0c4989f664ff262d3ab39cad9dc0f6f1c10017",
         "type": "github"
       },
       "original": {
@@ -100,11 +100,11 @@
     "open-zeppelin": {
       "flake": false,
       "locked": {
-        "lastModified": 1663664413,
-        "narHash": "sha256-fsbrzBAdsImPitwb7klreZT8fQh89PH/DqH/St4iwDU=",
+        "lastModified": 1664402754,
+        "narHash": "sha256-Yj+YrCTmAcEYrl39YKYg3gL+rHABQi9PAqO01cC9cCc=",
         "owner": "OpenZeppelin",
         "repo": "openzeppelin-contracts",
-        "rev": "8769b19860863ed14e82ac78eb0d09449a49290b",
+        "rev": "26dddee1c05ff91264ae24c5c172bd05827cf5d8",
         "type": "github"
       },
       "original": {
