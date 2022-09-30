@@ -163,7 +163,7 @@ pub trait BlocksCommitter {
     /// 
     /// Return errors if something is wrong during the commit process.
     /// The state is not updated in that case.
-    fn commit(&mut self, blocks: [Sealed<FuelBlock>]) -> Result<(), CommitError>;
+    async fn commit(&mut self, blocks: [Sealed<FuelBlock>]) -> Result<(), CommitError>;
 
     /// Returns the last committed block header.
     fn last_block_header(&self) -> FuelBlockHeader;
@@ -182,8 +182,24 @@ CM knows all information about the current consensus and can do this validation.
 ```rust
 pub trait SealValidator {
     /// Validates that the seals of the block are correct according to the consensus rules.
-    fn validate(&mut self, blocks: [Sealed<FuelBlock>]) -> Verdict<BlockReason>;
+    async fn validate(&mut self, blocks: [Sealed<FuelBlock>]) -> Verdict<BlockReason>;
 }
+```
+
+If CM can't validate information because the Relayer is not synced enough, 
+it awaits synchronization of the Relayer if the blocks are not far away.
+
+The inner logic looks like:
+
+```mermaid
+flowchart
+    a["if block.da_height > relayer.da_height"] -- no --> b["Validate seals"]
+    b -- valid --> s["Verdict<BlockReason>::Positive"]
+    b -- invalid --> f["Verdict<BlockReason>::Negative"]
+    a -- yes --> c["awaits synchronization of the Relayer"]
+    c --> d["if block.da_height > relayer.da_height + CONST(adjustable margin)"]
+    d -- yes --> f
+    d -- no --> a
 ```
 
 After validation of seals, FS forwards block to BI.
@@ -280,15 +296,14 @@ If FS gets the valid sealed block header but already have another block for this
 #### Queuing of the block header
 
 When FS receives a block header, first FS checks:
-- Is it a valid header? Blocks should be linked, and signatures should match. After, forwards blocks to the CM to verify producer/consensus at the according height.
+- Is it a valid header? Blocks should be linked, and signatures should match.
+After, forwards blocks to the CM and awaits verification of producer/consensus
+at the according height.
   - No -> `Punisher::report`.
   - Yes -> Next step.
-  - Don't know. The Ethereum part is not synced yet to this height. If the height is 
-  not far from the local ethereum height(the height returned by the 
-  ethereum node), we ignore this header and do not punish the sender.
 - Is it a new height?
   - No -> Is it already in the blockchain?
-    - Yes -> Ignore(Maybe report some neutral error to P2P to prevent DDoS)
+    - Yes -> `Punisher::report` with the "duplicate" reason. P2P decides what to do with duplicating packages.
     - No -> It is case of the [fork](#fork).
   - Yes -> Next step.
 - Is synchronization in progress?
@@ -296,7 +311,7 @@ When FS receives a block header, first FS checks:
   - Yes -> Next step.
 - Is this height already handled by the active phase?
   - Yes -> If the header is the same?
-    - Yes -> Ignore
+    - Yes -> `Punisher::report` with the "duplicate" reason. P2P decides what to do with duplicating packages.
     - No -> It is case of the [fork](#fork).
     - Don't know because it is in the middle of the range ->
       FS inserts this header into mapping and will check it later, 
