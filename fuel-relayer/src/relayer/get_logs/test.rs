@@ -109,7 +109,6 @@ async fn can_paginate_logs(input: Input) -> Expected {
     } = input;
     let eth_node = MockMiddleware::default();
 
-    dbg!(logs.len());
     eth_node.update_data(|data| {
         data.logs_batch = vec![logs];
         data.best_block.number =
