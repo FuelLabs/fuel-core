@@ -1,5 +1,4 @@
 use crate::database::Database;
-use fuel_chain_config::ChainConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -71,30 +70,31 @@ impl Exclude {
     }
 }
 
-pub struct AssetQuery<'a> {
+pub struct AssetsQuery<'a> {
     pub owner: &'a Address,
-    pub asset: &'a AssetSpendTarget,
+    pub assets: Option<HashSet<&'a AssetId>>,
     pub exclude: Option<&'a Exclude>,
     pub database: &'a Database,
 }
 
-impl<'a> AssetQuery<'a> {
+impl<'a> AssetsQuery<'a> {
     pub fn new(
         owner: &'a Address,
-        asset: &'a AssetSpendTarget,
+        assets: Option<HashSet<&'a AssetId>>,
         exclude: Option<&'a Exclude>,
         database: &'a Database,
     ) -> Self {
         Self {
             owner,
-            asset,
+            assets,
             exclude,
             database,
         }
     }
 
-    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
-    /// for the `asset_id`.
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`.
+    ///
+    /// # Note: The resources of different type are not grouped by the `asset_id`.
     // TODO: Optimize this by creating an index
     //  https://github.com/FuelLabs/fuel-core/issues/588
     pub fn unspent_resources(
@@ -124,8 +124,11 @@ impl<'a> AssetQuery<'a> {
             .map(|results| Ok(results??))
             .filter_ok(|coin| {
                 if let Resource::Coin { fields, .. } = coin {
-                    fields.asset_id == self.asset.id
-                        && fields.status == CoinStatus::Unspent
+                    let is_unspent = fields.status == CoinStatus::Unspent;
+                    self.assets
+                        .as_ref()
+                        .map(|assets| assets.contains(&fields.asset_id) && is_unspent)
+                        .unwrap_or(is_unspent)
                 } else {
                     true
                 }
@@ -164,8 +167,47 @@ impl<'a> AssetQuery<'a> {
                 }
             });
 
-        coins_iter
-            .chain(messages_iter.take_while(|_| self.asset.id == ChainConfig::BASE_ASSET))
+        coins_iter.chain(messages_iter.take_while(|_| {
+            self.assets
+                .as_ref()
+                .map(|assets| assets.contains(&AssetId::BASE))
+                .unwrap_or(true)
+        }))
+    }
+}
+
+pub struct AssetQuery<'a> {
+    pub owner: &'a Address,
+    pub asset: &'a AssetSpendTarget,
+    pub exclude: Option<&'a Exclude>,
+    pub database: &'a Database,
+    query: AssetsQuery<'a>,
+}
+
+impl<'a> AssetQuery<'a> {
+    pub fn new(
+        owner: &'a Address,
+        asset: &'a AssetSpendTarget,
+        exclude: Option<&'a Exclude>,
+        database: &'a Database,
+    ) -> Self {
+        let mut allowed = HashSet::new();
+        allowed.insert(&asset.id);
+        Self {
+            owner,
+            asset,
+            exclude,
+            database,
+            query: AssetsQuery::new(owner, Some(allowed), exclude, database),
+        }
+    }
+
+    /// Returns the iterator over all valid(spendable, allowed by `exclude`) resources of the `owner`
+    /// for the `asset_id`.
+    pub fn unspent_resources(
+        &self,
+    ) -> impl Iterator<Item = Result<Resource<Cow<Coin>, Cow<Message>>, Error>> + '_ {
+        self.query.unspent_resources()
     }
 }
 
@@ -199,7 +241,7 @@ where
     pub fn asset_id(&self) -> &AssetId {
         match self {
             Resource::Coin { fields, .. } => &fields.borrow().asset_id,
-            Resource::Message { .. } => &ChainConfig::BASE_ASSET,
+            Resource::Message { .. } => &AssetId::BASE,
         }
     }
 }
