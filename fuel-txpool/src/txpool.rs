@@ -28,6 +28,8 @@ use tokio::sync::{
     broadcast,
     RwLock,
 };
+#[cfg(feature = "metrics")]
+use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -67,6 +69,14 @@ impl TxPool {
 
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
+
+        #[cfg(feature = "metrics")]
+        {
+            // TODO fix lossy issues here
+            let current_average_gas_price = TXPOOL_METRICS.average_gas_price_gauge.get();
+            let new_avg = current_average_gas_price + tx.gas_price() as i64;
+            TXPOOL_METRICS.average_gas_price_gauge.set(new_avg);
+        }
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into())
