@@ -13,4 +13,4 @@ description = "Fuel Block Importer"
 anyhow = "1.0"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1" }
 parking_lot = "0.12"
-tokio = { version = "1.14", features = ["full"] }
+tokio = { version = "1.21", features = ["full"] }
