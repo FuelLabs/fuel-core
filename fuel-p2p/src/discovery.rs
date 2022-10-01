@@ -382,7 +382,10 @@ mod tests {
         identity::Keypair,
         multiaddr::Protocol,
         noise,
-        swarm::SwarmEvent,
+        swarm::{
+            SwarmBuilder,
+            SwarmEvent,
+        },
         yamux,
         Multiaddr,
         PeerId,
@@ -394,6 +397,7 @@ mod tests {
             HashSet,
             VecDeque,
         },
+        num::NonZeroU8,
         task::Poll,
         time::Duration,
     };
@@ -430,7 +434,11 @@ mod tests {
         };
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
-        let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
+        let swarm_builder =
+            SwarmBuilder::new(transport, behaviour, keypair.public().to_peer_id())
+                .dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
+
+        let mut swarm = swarm_builder.build();
 
         swarm
             .listen_on(listen_addr.clone())
