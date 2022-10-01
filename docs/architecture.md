@@ -105,12 +105,15 @@ trait Relayer {
 trait Database {
     // get the current fuel chain height
     fn get_current_height() -> Result<BlockHeight>;
-    // insert consensus information associated with a sealed block
+    // insert consensus information associated with a sealed block that was locally produced
     fn insert_consensus_data(sealed_block: &SealedFuelBlock) -> Result<()>;
 }
 
 trait PeerToPeer {
+    // broadcast a newly produced block to the network
     async fn broadcast_new_block(block: SealedFuelBlock) -> Result<()>;
+    // receive a newly produced block from the network
+    async fn on_new_block(block: SealedFuelBlock) -> Result<()>;
 }
 ```
 #### Adapters: fuel_core::service::adapters::poa_consensus
