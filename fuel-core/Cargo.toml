@@ -64,7 +64,7 @@ strum = "0.24"
 strum_macros = "0.24"
 tempfile = "3.3"
 thiserror = "1.0"
-tokio = { version = "1.8", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 tower-http = { version = "0.3", features = ["set-header", "trace"] }
 tower-layer = "0.3"
 tracing = "0.1"
