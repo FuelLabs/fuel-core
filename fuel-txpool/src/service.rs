@@ -5,7 +5,10 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    p2p::TransactionBroadcast,
+    p2p::{
+        P2pRequestEvent,
+        TransactionBroadcast,
+    },
     txpool::{
         self,
         TxPoolDb,
@@ -24,7 +27,6 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::error;
-use fuel_core_interfaces::p2p::P2pRequestEvent;
 
 pub struct ServiceBuilder {
     config: Config,
@@ -384,7 +386,6 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-
         let (network_sender, _) = mpsc::channel(100);
         builder.network_sender(network_sender);
 
@@ -472,7 +473,6 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-
         let (network_sender, _) = mpsc::channel(100);
         builder.network_sender(network_sender);
 
@@ -540,7 +540,6 @@ pub mod tests {
             .tx_status_sender(tx_status_sender)
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
-
 
         let (network_sender, _) = mpsc::channel(100);
         builder.network_sender(network_sender);
