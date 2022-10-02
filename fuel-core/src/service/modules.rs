@@ -127,7 +127,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         let keep_alive = Box::new(block_event_sender);
         Box::leak(keep_alive);
 
-        tokio::spawn(async move { while (p2p_request_event_receiver.recv().await).is_some() {} });
+        tokio::spawn(async move {
+            while (p2p_request_event_receiver.recv().await).is_some() {}
+        });
     }
 
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
