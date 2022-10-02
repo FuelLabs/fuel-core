@@ -24,8 +24,6 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::error;
-
-#[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pRequestEvent;
 
 pub struct ServiceBuilder {
@@ -36,7 +34,6 @@ pub struct ServiceBuilder {
     tx_status_sender: Option<broadcast::Sender<TxStatusBroadcast>>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
     incoming_tx_receiver: Option<broadcast::Receiver<TransactionBroadcast>>,
-    #[cfg(feature = "p2p")]
     network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
 }
 
@@ -56,7 +53,6 @@ impl ServiceBuilder {
             tx_status_sender: None,
             import_block_receiver: None,
             incoming_tx_receiver: None,
-            #[cfg(feature = "p2p")]
             network_sender: None,
         }
     }
@@ -103,7 +99,6 @@ impl ServiceBuilder {
         self
     }
 
-    #[cfg(feature = "p2p")]
     pub fn network_sender(
         &mut self,
         network_sender: mpsc::Sender<P2pRequestEvent>,
@@ -136,7 +131,6 @@ impl ServiceBuilder {
             return Err(anyhow!("One of context items are not set"))
         }
 
-        #[cfg(feature = "p2p")]
         if self.network_sender.is_none() {
             return Err(anyhow!("P2P network sender is not set"))
         }
@@ -151,7 +145,6 @@ impl ServiceBuilder {
                 tx_status_sender: self.tx_status_sender.unwrap(),
                 import_block_receiver: self.import_block_receiver.unwrap(),
                 incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
-                #[cfg(feature = "p2p")]
                 network_sender: self.network_sender.unwrap(),
             },
         )?;
@@ -166,7 +159,6 @@ pub struct Context {
     pub tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
     pub incoming_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
-    #[cfg(feature = "p2p")]
     pub network_sender: mpsc::Sender<P2pRequestEvent>,
 }
 
@@ -205,7 +197,6 @@ impl Context {
                     let db = self.db.clone();
                     let tx_status_sender = self.tx_status_sender.clone();
 
-                    #[cfg(feature = "p2p")]
                     let network_sender = self.network_sender.clone();
 
                     // This is little bit risky but we can always add semaphore to limit number of requests.
@@ -216,10 +207,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            #[cfg(feature = "p2p")]
                             let _ = response.send(TxPool::insert_with_broadcast(txpool, db.as_ref().as_ref(), tx_status_sender, network_sender, txs).await);
-                            #[cfg(not(feature = "p2p"))]
-                            let _ = response.send(TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await);
                         }
 
                         TxPoolMpsc::Find { ids, response } => {
@@ -360,11 +348,8 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-        #[cfg(feature = "p2p")]
-        {
-            let (network_sender, _) = mpsc::channel(100);
-            builder.network_sender(network_sender);
-        }
+        let (network_sender, _) = mpsc::channel(100);
+        builder.network_sender(network_sender);
 
         let service = builder.build().unwrap();
 
@@ -399,11 +384,9 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-        #[cfg(feature = "p2p")]
-        {
-            let (network_sender, _) = mpsc::channel(100);
-            builder.network_sender(network_sender);
-        }
+
+        let (network_sender, _) = mpsc::channel(100);
+        builder.network_sender(network_sender);
 
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -489,11 +472,9 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-        #[cfg(feature = "p2p")]
-        {
-            let (network_sender, _) = mpsc::channel(100);
-            builder.network_sender(network_sender);
-        }
+
+        let (network_sender, _) = mpsc::channel(100);
+        builder.network_sender(network_sender);
 
         let service = builder.build().unwrap();
         service.start().await.ok();
@@ -560,11 +541,9 @@ pub mod tests {
             .txpool_sender(txpool_sender)
             .txpool_receiver(txpool_receiver);
 
-        #[cfg(feature = "p2p")]
-        {
-            let (network_sender, _) = mpsc::channel(100);
-            builder.network_sender(network_sender);
-        }
+
+        let (network_sender, _) = mpsc::channel(100);
+        builder.network_sender(network_sender);
 
         let service = builder.build().unwrap();
         service.start().await.ok();

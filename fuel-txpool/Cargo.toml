@@ -22,5 +22,4 @@ tokio = { version = "1.21", default-features = false, features = ["sync"] }
 tracing = "0.1"
 
 [features]
-p2p = []
 test-helpers = ["fuel-core-interfaces/test-helpers"]

@@ -145,7 +145,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
-    #[cfg(feature = "p2p")]
     txpool_builder.network_sender(p2p_request_event_sender.clone());
 
     let txpool = txpool_builder.build()?;
