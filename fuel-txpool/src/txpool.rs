@@ -29,9 +29,7 @@ use tokio::sync::{
     RwLock,
 };
 
-#[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pRequestEvent;
-#[cfg(feature = "p2p")]
 use tokio::sync::mpsc;
 
 #[derive(Debug, Clone)]
@@ -150,7 +148,6 @@ impl TxPool {
         Ok(())
     }
 
-    #[cfg(feature = "p2p")]
     pub async fn insert_with_broadcast(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,

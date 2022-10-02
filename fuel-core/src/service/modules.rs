@@ -103,7 +103,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
     #[cfg(not(feature = "p2p"))]
-    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+    let (p2p_request_event_sender, mut p2p_request_event_receiver) = mpsc::channel(100);
 
     #[cfg(feature = "p2p")]
     let network_service = {
@@ -126,6 +126,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
         let keep_alive = Box::new(block_event_sender);
         Box::leak(keep_alive);
+
+        tokio::spawn(async move {
+            while (p2p_request_event_receiver.recv().await).is_some() {}
+        });
     }
 
     let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
@@ -145,7 +149,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
-    #[cfg(feature = "p2p")]
     txpool_builder.network_sender(p2p_request_event_sender.clone());
 
     let txpool = txpool_builder.build()?;

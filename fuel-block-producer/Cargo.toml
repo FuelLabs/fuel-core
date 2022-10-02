@@ -26,5 +26,4 @@ rand = "0.8"
 rstest = "0.15"
 
 [features]
-p2p = ["fuel-txpool/p2p"]
 test-helpers = ["fuel-core-interfaces/test-helpers"]
