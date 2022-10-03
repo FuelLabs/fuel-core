@@ -102,9 +102,8 @@ impl DiscoveryConfig {
         let memory_store = MemoryStore::new(local_peer_id.to_owned());
         let mut kademlia_config = KademliaConfig::default();
         let network = format!("/fuel/kad/{}/kad/1.0.0", network_name);
-        let network_names = network.as_bytes().to_vec();
-        kademlia_config
-            .set_protocol_names(std::iter::once(network_names.into()).collect());
+        let network_name = network.as_bytes().to_vec();
+        kademlia_config.set_protocol_names(vec![network_name.into()]);
         kademlia_config.set_connection_idle_timeout(connection_idle_timeout);
 
         let mut kademlia =
