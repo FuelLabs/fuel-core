@@ -76,6 +76,16 @@ flowchart TB
         TXD --> P2PS
         POAD --> P2PS & RS & BPS & BIS
         
+        %% Red color - Block Importer
+        linkStyle 0,1,2 fill:none,stroke-width:4px,stroke:red
+        %% Pink color - Block Producer
+        linkStyle 3,4,5 fill:none,stroke-width:4px,stroke:pink
+        %% Green color - Synchronizer
+        linkStyle 6,7,8 fill:none,stroke-width:4px,stroke:green
+        %% Blue color - Transaction pool
+        linkStyle 9 fill:none,stroke-width:4px,stroke:blue
+        %% Orange color - PoA
+        linkStyle 10,11,12,13 fill:none,stroke-width:4px,stroke:orange
     end
 ```
 
