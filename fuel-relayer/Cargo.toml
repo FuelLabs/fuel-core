@@ -35,7 +35,7 @@ serde = "1.0"
 serde_json = "1.0"
 sha3 = "0.10"
 thiserror = "1.0"
-tokio = { version = "1.20", features = ["macros"] }
+tokio = { version = "1.21", features = ["macros"] }
 tracing = "0.1"
 tracing-subscriber = "0.3.9"
 url = "2.2"
@@ -48,7 +48,7 @@ fuel-relayer = { path = ".", features = ["test-helpers"] }
 mockall = "0.11"
 rand = "0.8"
 test-case = "2.2"
-tokio = { version = "1.20", features = ["macros", "test-util"] }
+tokio = { version = "1.21", features = ["macros", "test-util"] }
 tracing-test = "0.2"
 
 [features]
