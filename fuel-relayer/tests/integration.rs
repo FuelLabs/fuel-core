@@ -41,7 +41,7 @@ async fn can_get_messages() {
     let eth_node = MockMiddleware::default();
 
     let config = Config::default();
-    let contract_address = config.eth_v2_listening_contracts[0].into();
+    let contract_address = config.eth_v2_listening_contracts[0];
     let message = |nonce, block_number: u64| {
         let message = SentMessageFilter {
             nonce,

@@ -39,11 +39,12 @@ pub struct MockMiddleware {
 }
 
 pub type EventFn = Box<dyn for<'a> FnMut(&mut MockData, TriggerType<'a>) + Send + Sync>;
+pub type OverrideFn = Box<dyn FnMut(&mut MockData) + Send + Sync>;
 
 #[derive(Default)]
 struct InnerState {
     data: MockData,
-    override_fn: Option<Box<dyn FnMut(&mut MockData) + Send + Sync>>,
+    override_fn: Option<OverrideFn>,
 }
 
 #[derive(Debug)]
@@ -55,14 +56,14 @@ pub struct MockData {
 }
 
 impl MockMiddleware {
-    fn before_event<'a>(&self, trigger: TriggerType<'a>) {
+    fn before_event(&self, trigger: TriggerType<'_>) {
         let mut be = self.before_event.lock();
         if let Some(be) = be.as_mut() {
             self.update_data(|data| be(data, trigger))
         }
     }
 
-    fn after_event<'a>(&self, trigger: TriggerType<'a>) {
+    fn after_event(&self, trigger: TriggerType<'_>) {
         let mut ae = self.after_event.lock();
         if let Some(ae) = ae.as_mut() {
             self.update_data(|data| ae(data, trigger))
@@ -195,19 +196,24 @@ impl JsonRpcClient for MockMiddleware {
     {
         match method {
             "eth_getTransactionByHash" => {
-                let mut txn = Transaction::default();
-                txn.block_number = self.update_data(|data| data.best_block.number);
+                let txn = Transaction {
+                    block_number: self.update_data(|data| data.best_block.number),
+                    ..Default::default()
+                };
                 let res = serde_json::to_value(Some(txn))?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;
                 Ok(res)
             }
             "eth_getTransactionReceipt" => {
-                let mut txn = TransactionReceipt::default();
-                txn.block_number = self.update_data(|data| {
-                    data.best_block.number = Some(data.best_block.number.unwrap() + 1u64);
-                    data.best_block.number
-                });
+                let txn = TransactionReceipt {
+                    block_number: self.update_data(|data| {
+                        data.best_block.number =
+                            Some(data.best_block.number.unwrap() + 1u64);
+                        data.best_block.number
+                    }),
+                    ..Default::default()
+                };
                 let res = serde_json::to_value(Some(txn))?;
                 let res: R =
                     serde_json::from_value(res).map_err(Self::Error::SerdeJson)?;

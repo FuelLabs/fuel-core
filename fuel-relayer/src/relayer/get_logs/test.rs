@@ -46,7 +46,7 @@ fn message(nonce: u64, block_number: u64, contract_address: u32) -> Log {
 }
 
 fn contracts(c: &[u32]) -> Vec<H160> {
-    c.into_iter().copied().map(u32_to_contract).collect()
+    c.iter().copied().map(u32_to_contract).collect()
 }
 
 fn u32_to_contract(n: u32) -> H160 {

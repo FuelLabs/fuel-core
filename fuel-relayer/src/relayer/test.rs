@@ -23,7 +23,6 @@ async fn can_download_logs() {
         eth_remote_current: 20,
         eth_remote_finalization_period: 15,
         eth_local_finalized: 2,
-        ..Default::default()
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 

@@ -45,7 +45,6 @@ async fn logs_are_downloaded_and_written() {
             eth_remote_current: 300,
             eth_remote_finalization_period: 100,
             eth_local_finalized: 0,
-            ..Default::default()
         },
     );
     run(&mut relayer).await.unwrap();
