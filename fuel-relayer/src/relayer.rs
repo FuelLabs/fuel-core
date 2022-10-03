@@ -47,6 +47,7 @@ mod get_logs;
 mod run;
 mod state;
 mod synced;
+mod syncing;
 
 #[cfg(test)]
 mod test;
@@ -140,20 +141,7 @@ where
     }
 
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
-        let mut count = 0;
-        while matches!(
-            self.eth_node.syncing().await?,
-            SyncingStatus::IsSyncing { .. }
-        ) {
-            count += 1;
-            if count > 12 {
-                tracing::warn!(
-                    "relayer has been waiting longer then a minute for the eth node to sync"
-                )
-            }
-            tokio::time::sleep(Duration::from_secs(5)).await;
-        }
-        Ok(())
+        syncing::wait_if_eth_syncing(&self.eth_node).await
     }
 }
 
@@ -260,7 +248,11 @@ where
         async move {
             while !shutdown.load(core::sync::atomic::Ordering::Relaxed) {
                 let now = std::time::Instant::now();
-                run::run(&mut relayer).await?;
+
+                if let Err(e) = run::run(&mut relayer).await {
+                    let e: &dyn std::error::Error = &*e;
+                    tracing::error!(e);
+                }
 
                 // Sleep the loop so the da node is not spammed.
                 tokio::time::sleep(
