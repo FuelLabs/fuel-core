@@ -415,13 +415,9 @@ mod relayer {
                 });
         }
 
-        async fn get_finalized_da_height(&self) -> DaBlockHeight {
+        async fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
             match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata) {
-                Ok(res) => {
-                    return res.expect(
-                        "get_finalized_da_height value should be always present and set",
-                    )
-                }
+                Ok(res) => res,
                 Err(err) => {
                     panic!("get_finalized_da_height database corruption, err:{:?}", err);
                 }

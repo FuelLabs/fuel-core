@@ -1,24 +1,23 @@
 use super::*;
+use futures::TryStreamExt;
 
 #[cfg(test)]
 mod test;
 
 /// Download the logs from the DA layer.
-pub(crate) async fn download_logs<P>(
+pub(crate) fn download_logs<P>(
     eth_sync_gap: &state::EthSyncGap,
     contracts: Vec<H160>,
     eth_node: Arc<P>,
     page_size: u64,
-) -> Result<Vec<Log>, ProviderError>
+) -> impl futures::Stream<Item = Result<Vec<Log>, ProviderError>>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    use futures::TryStreamExt;
-
     // Create a stream of paginated logs.
     futures::stream::try_unfold(
         eth_sync_gap.page(page_size),
-        |mut page: state::EthSyncPage| {
+        move |mut page: state::EthSyncPage| {
             let contracts = contracts.clone();
             let eth_node = eth_node.clone();
             async move {
@@ -43,32 +42,30 @@ where
             }
         },
     )
-    // Concatenate the logs into one vec.
-    .try_concat()
-    .await
 }
 
 /// Write the logs to the database.
-pub(crate) async fn write_logs(
+pub(crate) async fn write_logs<S>(
     database: &mut dyn RelayerDb,
-    logs: Vec<Log>,
-) -> anyhow::Result<()> {
-    let events: Vec<EthEventLog> = logs
-        .iter()
-        .map(|l| l.try_into())
-        // TODO: Does this result crash the relayer?
-        .collect::<Result<_, _>>()?;
-    for event in events {
-        match event {
-            EthEventLog::Message(m) => {
-                use fuel_core_interfaces::common::fuel_storage::StorageMutate;
-                let m: Message = (&m).into();
-                // Add messages to database
-                // TODO: Does this result crash the relayer?
-                StorageMutate::<Messages>::insert(database, &m.id(), &m)?;
+    logs: S,
+) -> anyhow::Result<()>
+where
+    S: futures::Stream<Item = Result<Vec<Log>, ProviderError>>,
+{
+    tokio::pin!(logs);
+    while let Some(events) = logs.try_next().await? {
+        for event in events {
+            let event: EthEventLog = (&event).try_into()?;
+            match event {
+                EthEventLog::Message(m) => {
+                    use fuel_core_interfaces::common::fuel_storage::StorageMutate;
+                    let m: Message = (&m).into();
+                    // Add messages to database
+                    StorageMutate::<Messages>::insert(database, &m.id(), &m)?;
+                }
+                // TODO: Log out ignored messages.
+                EthEventLog::Ignored => (),
             }
-            // TODO: Log out ignored messages.
-            EthEventLog::Ignored => (),
         }
     }
     Ok(())

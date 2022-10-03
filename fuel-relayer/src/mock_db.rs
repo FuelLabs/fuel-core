@@ -37,7 +37,7 @@ pub struct Data {
     pub messages: HashMap<MessageId, Message>,
     pub chain_height: BlockHeight,
     pub sealed_blocks: HashMap<BlockHeight, Arc<SealedFuelBlock>>,
-    pub finalized_da_height: DaBlockHeight,
+    pub finalized_da_height: Option<DaBlockHeight>,
     pub last_committed_finalized_fuel_height: BlockHeight,
     pub pending_committed_fuel_height: Option<BlockHeight>,
 }
@@ -102,10 +102,10 @@ impl RelayerDb for MockDb {
     }
 
     async fn set_finalized_da_height(&self, height: DaBlockHeight) {
-        self.data.lock().unwrap().finalized_da_height = height;
+        self.data.lock().unwrap().finalized_da_height = Some(height);
     }
 
-    async fn get_finalized_da_height(&self) -> DaBlockHeight {
+    async fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
         self.data.lock().unwrap().finalized_da_height
     }
 

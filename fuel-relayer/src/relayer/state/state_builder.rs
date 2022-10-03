@@ -15,7 +15,7 @@ pub trait EthRemote {
 #[async_trait]
 pub trait EthLocal {
     /// The current finalized eth block that the relayer has seen.
-    async fn finalized(&self) -> u64;
+    async fn finalized(&self) -> Option<u64>;
 }
 
 /// Build the Ethereum state.
@@ -36,7 +36,7 @@ pub mod test_builder {
     pub struct TestDataSource {
         pub eth_remote_current: u64,
         pub eth_remote_finalization_period: u64,
-        pub eth_local_finalized: u64,
+        pub eth_local_finalized: Option<u64>,
     }
 
     #[async_trait]
@@ -51,7 +51,7 @@ pub mod test_builder {
 
     #[async_trait]
     impl EthLocal for TestDataSource {
-        async fn finalized(&self) -> u64 {
+        async fn finalized(&self) -> Option<u64> {
             self.eth_local_finalized
         }
     }

@@ -277,7 +277,7 @@ impl Middleware for MockMiddleware {
                                 >= filter.block_option.get_from_block()?.as_number()?
                             && log_block_num
                                 <= filter.block_option.get_to_block()?.as_number()?;
-                        r.then(|| log)
+                        r.then_some(log)
                     })
                 })
                 .cloned()

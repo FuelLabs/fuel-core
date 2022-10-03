@@ -89,7 +89,7 @@ pub trait RelayerDb: StorageMutate<Messages, Error = KvStoreError> + Send + Sync
     async fn set_finalized_da_height(&self, block: DaBlockHeight);
 
     /// Assume it is always set as initialization of database.
-    async fn get_finalized_da_height(&self) -> DaBlockHeight;
+    async fn get_finalized_da_height(&self) -> Option<DaBlockHeight>;
 
     /// Get the last fuel block height that was published to the da layer.
     async fn get_last_published_fuel_height(&self) -> Option<BlockHeight>;

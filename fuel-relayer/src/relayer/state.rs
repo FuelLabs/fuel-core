@@ -16,7 +16,7 @@ pub struct EthState {
     /// The state that the relayer thinks the remote Ethereum node is in.
     remote: EthHeights,
     /// State related to the Ethereum node that is tracked by the relayer.
-    local: EthHeight,
+    local: Option<EthHeight>,
 }
 
 type EthHeight = u64;
@@ -49,13 +49,19 @@ pub struct EthSyncPage {
 impl EthState {
     /// Is the relayer in sync with the Ethereum node?
     pub fn is_synced(&self) -> bool {
-        self.local >= self.remote.finalized()
+        self.local
+            .map_or(false, |local| local >= self.remote.finalized())
     }
 
     /// Get the gap between the relayer and the Ethereum node if
     /// a sync is required.
     pub fn needs_to_sync_eth(&self) -> Option<EthSyncGap> {
-        (!self.is_synced()).then(|| EthSyncGap::new(self.local, self.remote.finalized()))
+        (!self.is_synced()).then(|| {
+            EthSyncGap::new(
+                self.local.map(|l| l.saturating_add(1)).unwrap_or(0),
+                self.remote.finalized(),
+            )
+        })
     }
 }
 

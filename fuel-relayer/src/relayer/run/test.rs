@@ -8,8 +8,7 @@ async fn can_set_da_height() {
     let mut relayer = MockRelayerData::default();
     relayer.expect_wait_if_eth_syncing().returning(|| Ok(()));
     relayer.expect_update_synced().return_const(());
-    relayer.expect_download_logs().returning(|_| Ok(vec![]));
-    relayer.expect_write_logs().returning(|_| Ok(()));
+    relayer.expect_download_logs().returning(|_| Ok(()));
     relayer
         .expect_set_finalized_da_height()
         .once()
@@ -20,7 +19,7 @@ async fn can_set_da_height() {
         TestDataSource {
             eth_remote_current: 300,
             eth_remote_finalization_period: 100,
-            eth_local_finalized: 0,
+            eth_local_finalized: None,
         },
     );
     run(&mut relayer).await.unwrap();
@@ -34,17 +33,14 @@ async fn logs_are_downloaded_and_written() {
     relayer.expect_set_finalized_da_height().return_const(());
     relayer
         .expect_download_logs()
-        .returning(|_| Ok(vec![Log::default()]));
-    relayer
-        .expect_write_logs()
-        .withf(|logs| *logs == vec![Log::default()])
+        .withf(|gap| gap.oldest() == 0 && gap.latest() == 200)
         .returning(|_| Ok(()));
     test_data_source(
         &mut relayer,
         TestDataSource {
             eth_remote_current: 300,
             eth_remote_finalization_period: 100,
-            eth_local_finalized: 0,
+            eth_local_finalized: None,
         },
     );
     run(&mut relayer).await.unwrap();
@@ -61,7 +57,7 @@ mockall::mock! {
 
     #[async_trait]
     impl EthLocal for RelayerData {
-        async fn finalized(&self) -> u64;
+        async fn finalized(&self) -> Option<u64>;
     }
 
     #[async_trait]
@@ -69,11 +65,9 @@ mockall::mock! {
         async fn wait_if_eth_syncing(&self) -> anyhow::Result<()>;
 
         async fn download_logs(
-            &self,
+            &mut self,
             eth_sync_gap: &state::EthSyncGap,
-        ) -> Result<Vec<Log>, ProviderError>;
-
-        async fn write_logs(&mut self, logs: Vec<Log>) -> anyhow::Result<()>;
+        ) -> anyhow::Result<()>;
 
         async fn set_finalized_da_height(&self, height: DaBlockHeight);
 

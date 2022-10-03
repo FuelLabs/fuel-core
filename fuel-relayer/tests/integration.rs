@@ -32,7 +32,7 @@ async fn can_set_da_height() {
 
     relayer.await_synced().await.unwrap();
 
-    assert_eq!(*mock_db.get_finalized_da_height().await, 100);
+    assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 100);
 }
 
 #[tokio::test(start_paused = true)]

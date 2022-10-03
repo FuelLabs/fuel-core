@@ -9,29 +9,36 @@ use test_case::test_case;
     TestDataSource {
         eth_remote_current: 300,
         eth_remote_finalization_period: 100,
-        eth_local_finalized: 0,
-    } => Some(0..=200); "behind so needs to sync"
+        eth_local_finalized: None,
+    } => Some(0..=200); "empty so needs to sync"
 )]
 #[test_case(
     TestDataSource {
         eth_remote_current: 300,
         eth_remote_finalization_period: 100,
-        eth_local_finalized: 200,
+        eth_local_finalized: Some(0),
+    } => Some(1..=200); "behind so needs to sync"
+)]
+#[test_case(
+    TestDataSource {
+        eth_remote_current: 300,
+        eth_remote_finalization_period: 100,
+        eth_local_finalized: Some(200),
     } => None; "same so doesn't need to sync"
 )]
 #[test_case(
     TestDataSource {
         eth_remote_current: 300,
         eth_remote_finalization_period: 100,
-        eth_local_finalized: 201,
+        eth_local_finalized: Some(201),
     } => None; "ahead so doesn't need to sync"
 )]
 #[test_case(
     TestDataSource {
         eth_remote_current: 300,
         eth_remote_finalization_period: 100,
-        eth_local_finalized: 50,
-    } => Some(50..=200); "behind by less so needs to sync"
+        eth_local_finalized: Some(50),
+    } => Some(51..=200); "behind by less so needs to sync"
 )]
 #[tokio::test]
 async fn test_eth_state_needs_to_sync_eth(

@@ -1,4 +1,5 @@
 use crate::test_helpers::middleware::MockMiddleware;
+use futures::TryStreamExt;
 
 use super::*;
 
@@ -22,7 +23,7 @@ async fn can_download_logs() {
     let eth_state = super::state::test_builder::TestDataSource {
         eth_remote_current: 20,
         eth_remote_finalization_period: 15,
-        eth_local_finalized: 2,
+        eth_local_finalized: Some(1),
     };
     let eth_state = state::build_eth(&eth_state).await.unwrap();
 
@@ -33,6 +34,7 @@ async fn can_download_logs() {
         Arc::new(eth_node),
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
+    .try_concat()
     .await
     .unwrap();
     assert_eq!(result, logs);

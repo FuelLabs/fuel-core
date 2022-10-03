@@ -75,11 +75,11 @@ struct Expected {
 
 #[test_case(
     Input {
-        eth_gap: 0..=0,
+        eth_gap: 0..=1,
         c: contracts(&[0]),
-        m: messages(0..=0, 0..=0, 0..=0),
+        m: messages(0..=0, 1..=1, 0..=0),
     }
-    => Expected{ num_get_logs_calls: 1, m: messages(0..=0, 0..=0, 0..=0) }
+    => Expected{ num_get_logs_calls: 1, m: messages(0..=0, 1..=1, 0..=0) }
     ; "Can get single log"
 )]
 #[test_case(
@@ -128,6 +128,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         Arc::new(eth_node),
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
+    .try_concat()
     .await
     .unwrap();
     Expected {

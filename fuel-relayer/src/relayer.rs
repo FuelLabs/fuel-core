@@ -113,19 +113,15 @@ where
     P: Middleware<Error = ProviderError> + 'static,
 {
     async fn download_logs(
-        &self,
+        &mut self,
         eth_sync_gap: &state::EthSyncGap,
-    ) -> Result<Vec<Log>, ProviderError> {
-        download_logs(
+    ) -> anyhow::Result<()> {
+        let logs = download_logs(
             eth_sync_gap,
             self.config.eth_v2_listening_contracts.clone(),
             self.eth_node.clone(),
             self.config.log_page_size,
-        )
-        .await
-    }
-
-    async fn write_logs(&mut self, logs: Vec<Log>) -> anyhow::Result<()> {
+        );
         write_logs(self.database.as_mut(), logs).await
     }
 
@@ -232,8 +228,8 @@ impl<P> state::EthLocal for Relayer<P>
 where
     P: Middleware<Error = ProviderError>,
 {
-    async fn finalized(&self) -> u64 {
-        *self.database.get_finalized_da_height().await
+    async fn finalized(&self) -> Option<u64> {
+        self.database.get_finalized_da_height().await.map(|h| *h)
     }
 }
 
