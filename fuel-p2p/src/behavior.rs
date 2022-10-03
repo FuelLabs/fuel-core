@@ -48,21 +48,21 @@ use std::{
 };
 
 #[derive(Debug)]
-pub struct FuelBehaviourEvent<Codec: NetworkCodec> {
-    event: InnerBehaviourEvent,
+pub struct BehaviourEventWrapper<Codec: NetworkCodec> {
+    event: FuelBehaviourEvent,
     codec: PhantomData<Codec>,
 }
 
 #[derive(Debug)]
-pub enum InnerBehaviourEvent {
+pub enum FuelBehaviourEvent {
     Discovery(DiscoveryEvent),
     PeerInfo(PeerInfoEvent),
     Gossipsub(GossipsubEvent),
     RequestResponse(RequestResponseEvent<RequestMessage, IntermediateResponse>),
 }
 
-impl<Codec: NetworkCodec> FuelBehaviourEvent<Codec> {
-    fn new(event: InnerBehaviourEvent) -> Self {
+impl<Codec: NetworkCodec> BehaviourEventWrapper<Codec> {
+    fn new(event: FuelBehaviourEvent) -> Self {
         Self {
             event,
             codec: PhantomData,
@@ -70,15 +70,15 @@ impl<Codec: NetworkCodec> FuelBehaviourEvent<Codec> {
     }
 }
 
-impl<Codec: NetworkCodec> From<FuelBehaviourEvent<Codec>> for InnerBehaviourEvent {
-    fn from(fuel_event: FuelBehaviourEvent<Codec>) -> Self {
+impl<Codec: NetworkCodec> From<BehaviourEventWrapper<Codec>> for FuelBehaviourEvent {
+    fn from(fuel_event: BehaviourEventWrapper<Codec>) -> Self {
         fuel_event.event
     }
 }
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "FuelBehaviourEvent")]
+#[behaviour(out_event = "BehaviourEventWrapper")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
@@ -197,28 +197,28 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 }
 
-impl<Codec: NetworkCodec> From<DiscoveryEvent> for FuelBehaviourEvent<Codec> {
+impl<Codec: NetworkCodec> From<DiscoveryEvent> for BehaviourEventWrapper<Codec> {
     fn from(event: DiscoveryEvent) -> Self {
-        FuelBehaviourEvent::new(InnerBehaviourEvent::Discovery(event))
+        BehaviourEventWrapper::new(FuelBehaviourEvent::Discovery(event))
     }
 }
 
-impl<Codec: NetworkCodec> From<PeerInfoEvent> for FuelBehaviourEvent<Codec> {
+impl<Codec: NetworkCodec> From<PeerInfoEvent> for BehaviourEventWrapper<Codec> {
     fn from(event: PeerInfoEvent) -> Self {
-        FuelBehaviourEvent::new(InnerBehaviourEvent::PeerInfo(event))
+        BehaviourEventWrapper::new(FuelBehaviourEvent::PeerInfo(event))
     }
 }
 
-impl<Codec: NetworkCodec> From<GossipsubEvent> for FuelBehaviourEvent<Codec> {
+impl<Codec: NetworkCodec> From<GossipsubEvent> for BehaviourEventWrapper<Codec> {
     fn from(event: GossipsubEvent) -> Self {
-        FuelBehaviourEvent::new(InnerBehaviourEvent::Gossipsub(event))
+        BehaviourEventWrapper::new(FuelBehaviourEvent::Gossipsub(event))
     }
 }
 
 impl<Codec: NetworkCodec> From<RequestResponseEvent<RequestMessage, IntermediateResponse>>
-    for FuelBehaviourEvent<Codec>
+    for BehaviourEventWrapper<Codec>
 {
     fn from(event: RequestResponseEvent<RequestMessage, IntermediateResponse>) -> Self {
-        FuelBehaviourEvent::new(InnerBehaviourEvent::RequestResponse(event))
+        BehaviourEventWrapper::new(FuelBehaviourEvent::RequestResponse(event))
     }
 }

@@ -1,8 +1,8 @@
 use crate::{
     behavior::{
+        BehaviourEventWrapper,
         FuelBehaviour,
         FuelBehaviourEvent,
-        InnerBehaviourEvent,
     },
     codecs::NetworkCodec,
     config::{
@@ -247,10 +247,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     fn handle_behaviour_event(
         &mut self,
-        event: FuelBehaviourEvent<Codec>,
+        event: BehaviourEventWrapper<Codec>,
     ) -> Option<FuelP2PEvent> {
         match event.into() {
-            InnerBehaviourEvent::Discovery(discovery_event) => match discovery_event {
+            FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
                 DiscoveryEvent::Connected(peer_id, addresses) => {
                     self.swarm
                         .behaviour_mut()
@@ -263,7 +263,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
                 _ => {}
             },
-            InnerBehaviourEvent::Gossipsub(gossipsub_event) => {
+            FuelBehaviourEvent::Gossipsub(gossipsub_event) => {
                 if let GossipsubEvent::Message {
                     propagation_source,
                     message,
@@ -293,7 +293,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 }
             }
 
-            InnerBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
+            FuelBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
                 PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
                     self.swarm
                         .behaviour_mut()
@@ -303,7 +303,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                     return Some(FuelP2PEvent::PeerInfoUpdated(peer_id))
                 }
             },
-            InnerBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
+            FuelBehaviourEvent::RequestResponse(req_res_event) => match req_res_event {
                 RequestResponseEvent::Message { message, .. } => match message {
                     RequestResponseMessage::Request {
                         request,
