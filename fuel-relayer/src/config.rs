@@ -41,7 +41,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             da_finalization: DaBlockHeight::from(Self::DEFAULT_DA_FINALIZATION),
-            // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_v2_listening_contracts: vec![H160::from_str(
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",

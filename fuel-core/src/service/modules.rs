@@ -29,7 +29,7 @@ pub struct Modules {
     pub bft: Arc<fuel_core_bft::Service>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
-    pub relayer: fuel_relayer::RelayerHandle,
+    pub relayer: Option<fuel_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
     pub network_service: Arc<fuel_p2p::orchestrator::Service>,
 }
@@ -63,10 +63,15 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     // create builders
     #[cfg(feature = "relayer")]
-    let relayer = fuel_relayer::RelayerHandle::start(
-        Box::new(database.clone()),
-        config.relayer.clone(),
-    )?;
+    let relayer = if config.relayer.eth_client.is_some() {
+        Some(fuel_relayer::RelayerHandle::start(
+            Box::new(database.clone()),
+            config.relayer.clone(),
+        )?)
+    } else {
+        None
+    };
+
     let mut txpool_builder = fuel_txpool::ServiceBuilder::new();
 
     txpool_builder
