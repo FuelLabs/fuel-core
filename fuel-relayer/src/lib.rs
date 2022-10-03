@@ -1,7 +1,7 @@
 //! # Fuel Relayer
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
 pub(crate) mod abi;
 pub(crate) mod config;

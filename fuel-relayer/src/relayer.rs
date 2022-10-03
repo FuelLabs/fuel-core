@@ -83,7 +83,7 @@ where
 /// Shutdown handle for gracefully ending
 /// the background relayer task.
 struct RelayerShutdown {
-    join_handle: tokio::task::JoinHandle<anyhow::Result<()>>,
+    join_handle: tokio::task::JoinHandle<()>,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -209,7 +209,7 @@ impl RelayerHandle {
         self.shutdown
             .shutdown
             .store(true, core::sync::atomic::Ordering::Relaxed);
-        self.shutdown.join_handle.await?
+        Ok(self.shutdown.join_handle.await?)
     }
 }
 
@@ -247,7 +247,7 @@ where
         let shutdown = shutdown.clone();
         async move {
             while !shutdown.load(core::sync::atomic::Ordering::Relaxed) {
-                let now = std::time::Instant::now();
+                let now = tokio::time::Instant::now();
 
                 if let Err(e) = run::run(&mut relayer).await {
                     let e: &dyn std::error::Error = &*e;
@@ -263,7 +263,6 @@ where
                 )
                 .await;
             }
-            Ok(())
         }
     });
     RelayerShutdown {

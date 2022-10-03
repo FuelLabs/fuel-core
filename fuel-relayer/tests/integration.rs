@@ -17,7 +17,7 @@ use fuel_relayer::{
     RelayerHandle,
 };
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn can_set_da_height() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
@@ -35,7 +35,7 @@ async fn can_set_da_height() {
     assert_eq!(*mock_db.get_finalized_da_height().await, 100);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn can_get_messages() {
     let mock_db = MockDb::default();
     let eth_node = MockMiddleware::default();
