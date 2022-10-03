@@ -1,14 +1,13 @@
 
 # Relayer
 
-Functionalities expected from Relayer:
-
-* Bridge:
-  * Receive message
+The Relayer connects Fuel to the DA (data availability) layer contract.
+The primary functionality is to track the finality of blocks in the DA layer and download all log messages for blocks that are considered final.
+Messages are then made available to fuel via the database.
 
 ## Validity, finality and synchronization
 
-With Ethereum's The Merge coming in few months we are gaining finality of blocks in ethereum after two epochs, epoch contains 32 slots, slot takes 12s so epoch is around 6,4min and two epochs are 12.8min, so after 13min we are sure that our deposits will not be reverted by some big reorganization. So we are okay to say that everything older then ~100blocks are finalized.
+Ethereum blocks are considered final after two epochs. Each epoch contains 32 slots. A slot takes 12s so epoch is around 6.4min and two epochs will take 12.8min. After 13min we are sure that our deposits will not be reverted by some big reorganization. So we are okay to say that everything older then ~100blocks is finalized.
 
 Second finality that we have is related to fuel block attestation time limit, how long are we going to wait until challenge comes. It should be at least longer than ethereum finality. Not relevant for first version.
 
@@ -19,18 +18,23 @@ Example of sliding window:
 ![Sliding Window](../docs/diagrams/fuel_v2_relayer_sliding_window.jpg)
 
 * Problem: How to choose when bridge message event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
-* Solution: introduce `da_height` variable inside fuel block header that will tell at what block we are including validator delegation/withdrawal and token deposits.
+* Solution: introduce `da_height` variable inside fuel block header that will tell at what block we are including token deposits.
 
-There are few rules that `da_height` (da as data availability) need to follow and can be enforced with v2 contract:
+There are few rules that `da_height` need to follow and can be enforced with v2 contract:
 
 * Last block `da_height` needs to be smaller number then current one.
 * `da_height` shouldn't be greater then `best_da_block`-`finalization_slider`
 
 In most cases for fuel block `da_height` can be calculated as `current_da_height-1`
 
-### Bridge
+## Implementation
+The `RelayerHandle` type is used to start / stop a background task that runs the actual `Relayer`.
 
-Bridging is currently WIP and it is moving as generalizes messages between smart contract gateway.
+The relayer background task is a simple loop that polls the fuel database and DA node to build a picture of the current state.
+If the state determines that the relayer is out of sync with the DA layer then log messages from the DA contract are downloaded and written to the database.
+The range of blocks is `(last_downloaded_height + 1)..=current_finalized_height`.
+
+Logs are paginated into sets of blocks to avoid overloading a single rpc call.
 
 ## Contract Flake
 The `flake.nix` in this repo has a tool to fetch, compile and generate the abi for the fuel contracts.
