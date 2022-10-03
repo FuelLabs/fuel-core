@@ -1,12 +1,10 @@
 use crate::{
     database::{
+        storage::FuelBlocks,
         Database,
         KvStoreError,
     },
-    executor::{
-        ExecutionMode,
-        Executor,
-    },
+    executor::Executor,
     model::{
         BlockHeight,
         FuelBlock,
@@ -38,10 +36,13 @@ use chrono::{
     DateTime,
     Utc,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx,
-    fuel_types,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsRef,
+        fuel_types,
+    },
+    db::Transactions,
+    executor::ExecutionMode,
 };
 use itertools::Itertools;
 use std::{
@@ -60,7 +61,7 @@ impl Block {
     }
 
     async fn height(&self) -> U64 {
-        self.0.headers.height.into()
+        self.0.header.height.into()
     }
 
     async fn transactions(
@@ -73,7 +74,8 @@ impl Block {
             .iter()
             .map(|tx_id| {
                 Ok(Transaction(
-                    Storage::<fuel_types::Bytes32, fuel_tx::Transaction>::get(&db, tx_id)
+                    db.storage::<Transactions>()
+                        .get(tx_id)
                         .and_then(|v| v.ok_or(KvStoreError::NotFound))?
                         .into_owned(),
                 ))
@@ -82,11 +84,11 @@ impl Block {
     }
 
     async fn time(&self) -> DateTime<Utc> {
-        self.0.headers.time
+        self.0.header.time
     }
 
     async fn producer(&self) -> Address {
-        self.0.headers.producer.into()
+        self.0.header.producer.into()
     }
 }
 
@@ -125,7 +127,9 @@ impl BlockQuery {
             }
         };
 
-        let block = Storage::<fuel_types::Bytes32, FuelBlockDb>::get(db, &id)?
+        let block = db
+            .storage::<FuelBlocks>()
+            .get(&id)?
             .map(|b| Block(b.into_owned()));
         Ok(block)
     }
@@ -202,7 +206,8 @@ impl BlockQuery {
                     let blocks: Vec<Cow<FuelBlockDb>> = blocks
                         .iter()
                         .map(|(_, id)| {
-                            Storage::<fuel_types::Bytes32, FuelBlockDb>::get(&db, id)
+                            db.storage::<FuelBlocks>()
+                                .get(id)
                                 .transpose()
                                 .ok_or(KvStoreError::NotFound)?
                         })
@@ -214,10 +219,7 @@ impl BlockQuery {
                     );
 
                     connection.edges.extend(blocks.into_iter().map(|item| {
-                        Edge::new(
-                            item.headers.height.to_usize(),
-                            Block(item.into_owned()),
-                        )
+                        Edge::new(item.header.height.to_usize(), Block(item.into_owned()))
                     }));
 
                     Ok::<Connection<usize, Block>, anyhow::Error>(connection)

@@ -3,7 +3,7 @@ use crate::client::schema::{
     schema,
     U64,
 };
-use fuel_tx::ConsensusParameters as TxConsensusParameters;
+use fuel_vm::fuel_tx::ConsensusParameters as TxConsensusParameters;
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]

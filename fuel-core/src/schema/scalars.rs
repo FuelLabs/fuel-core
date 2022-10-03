@@ -22,6 +22,7 @@ use std::{
 pub use tx_pointer::TxPointer;
 pub use utxo_id::UtxoId;
 
+pub mod message_id;
 pub mod tx_pointer;
 pub mod utxo_id;
 

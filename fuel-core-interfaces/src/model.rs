@@ -1,10 +1,15 @@
 mod block;
 mod block_height;
 mod coin;
+mod da_block_height;
 mod messages;
 mod txpool;
 mod vote;
 
+use crate::common::fuel_types::{
+    Address,
+    Bytes32,
+};
 pub use block::{
     FuelBlock,
     FuelBlockConsensus,
@@ -17,10 +22,7 @@ pub use coin::{
     Coin,
     CoinStatus,
 };
-use fuel_types::{
-    Address,
-    Bytes32,
-};
+pub use da_block_height::DaBlockHeight;
 pub use messages::*;
 pub use txpool::{
     ArcTx,
@@ -28,7 +30,6 @@ pub use txpool::{
 };
 pub use vote::ConsensusVote;
 
-pub type DaBlockHeight = u64;
 pub type ValidatorStake = u64;
 
 /// Validator address used for registration of validator on DA layer

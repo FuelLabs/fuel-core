@@ -13,7 +13,8 @@ use std::{
     time::Duration,
 };
 
-pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight = 1000;
+pub(crate) const REPORT_INIT_SYNC_PROGRESS_EVERY_N_BLOCKS: DaBlockHeight =
+    DaBlockHeight(1000u64);
 pub(crate) const NUMBER_OF_TRIES_FOR_INITIAL_SYNC: u64 = 10;
 
 pub fn keccak256(data: &'static str) -> H256 {
@@ -60,7 +61,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            da_finalization: 64,
+            da_finalization: DaBlockHeight::from(64u64),
             // Some(String::from("http://localhost:8545"))
             eth_client: None,
             eth_chain_id: 1, // ethereum mainnet
@@ -69,7 +70,7 @@ impl Default for Config {
                 "0x03E4538018285e1c03CCce2F92C9538c87606911",
             )
             .unwrap()],
-            eth_v2_contracts_deployment: 0,
+            eth_v2_contracts_deployment: DaBlockHeight::from(0u64),
             initial_sync_step: 1000,
             initial_sync_refresh: Duration::from_secs(5),
         }

@@ -115,56 +115,6 @@ pub struct CoinEdge {
     pub node: Coin,
 }
 
-#[derive(cynic::InputObject, Clone, Debug)]
-#[cynic(schema_path = "./assets/schema.sdl")]
-pub struct SpendQueryElementInput {
-    /// asset ID of the coins
-    pub asset_id: AssetId,
-    /// address of the owner
-    pub amount: U64,
-}
-
-#[derive(cynic::FragmentArguments, Debug)]
-pub struct CoinsToSpendArgs {
-    /// The Address of the utxo owner
-    owner: Address,
-    /// The total amount of each asset type to spend
-    spend_query: Vec<SpendQueryElementInput>,
-    /// The max number of utxos that can be used
-    max_inputs: Option<i32>,
-    /// A list of UtxoIds to exclude from the selection
-    excluded_ids: Option<Vec<UtxoId>>,
-}
-
-pub(crate) type CoinsToSpendArgsTuple = (
-    Address,
-    Vec<SpendQueryElementInput>,
-    Option<i32>,
-    Option<Vec<UtxoId>>,
-);
-
-impl From<CoinsToSpendArgsTuple> for CoinsToSpendArgs {
-    fn from(r: CoinsToSpendArgsTuple) -> Self {
-        CoinsToSpendArgs {
-            owner: r.0,
-            spend_query: r.1,
-            max_inputs: r.2,
-            excluded_ids: r.3,
-        }
-    }
-}
-
-#[derive(cynic::QueryFragment, Debug)]
-#[cynic(
-    schema_path = "./assets/schema.sdl",
-    graphql_type = "Query",
-    argument_struct = "CoinsToSpendArgs"
-)]
-pub struct CoinsToSpendQuery {
-    #[arguments(owner = &args.owner, spend_query = &args.spend_query, max_inputs = &args.max_inputs, excluded_ids = &args.excluded_ids)]
-    pub coins_to_spend: Vec<Coin>,
-}
-
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Coin {

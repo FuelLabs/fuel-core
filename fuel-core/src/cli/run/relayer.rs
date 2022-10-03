@@ -18,7 +18,7 @@ pub struct RelayerArgs {
 
     /// Block number after we can start filtering events related to fuel.
     /// It does not need to be accurate and can be set in past before contracts are deployed.
-    #[clap(long = "relayer-v2-deployment", default_value = "0")]
+    #[clap(long = "relayer-v2-deployment", parse(try_from_str = parse_da_block_height), default_value = "0")]
     pub eth_v2_contracts_deployment: DaBlockHeight,
 
     /// Ethereum contract address. Create EthAddress into fuel_types
@@ -50,10 +50,14 @@ pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
     H160::from_str(input)
 }
 
+pub fn parse_da_block_height(input: &str) -> Result<DaBlockHeight, anyhow::Error> {
+    Ok(DaBlockHeight(u64::from_str(input)?))
+}
+
 impl From<RelayerArgs> for Config {
     fn from(args: RelayerArgs) -> Self {
         Config {
-            da_finalization: args.da_finalization,
+            da_finalization: DaBlockHeight(args.da_finalization),
             eth_client: args.eth_client,
             eth_chain_id: args.eth_chain_id,
             eth_v2_commit_contract: args.eth_v2_commit_contract,

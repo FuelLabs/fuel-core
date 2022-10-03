@@ -5,7 +5,6 @@ use std::{
     net::SocketAddr,
     panic,
 };
-use thiserror::Error;
 use tokio::task::JoinHandle;
 use tracing::log::warn;
 
@@ -45,7 +44,6 @@ impl FuelService {
         Self::init_service(database, config).await
     }
 
-    #[cfg(any(test, feature = "test-helpers"))]
     /// Used to initialize a service with a pre-existing database
     pub async fn from_database(
         database: Database,
@@ -107,10 +105,4 @@ impl FuelService {
         }
         self.modules.stop().await;
     }
-}
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("An api server error occurred {0}")]
-    ApiServer(#[from] hyper::Error),
 }
