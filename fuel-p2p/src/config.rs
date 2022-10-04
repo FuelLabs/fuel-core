@@ -1,3 +1,8 @@
+use crate::gossipsub::topics::{
+    CON_VOTE_GOSSIP_TOPIC,
+    NEW_BLOCK_GOSSIP_TOPIC,
+    NEW_TX_GOSSIP_TOPIC,
+};
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
@@ -102,7 +107,11 @@ impl P2PConfig {
             allow_private_addresses: true,
             enable_random_walk: true,
             connection_idle_timeout: Some(Duration::from_secs(120)),
-            topics: vec![],
+            topics: vec![
+                NEW_TX_GOSSIP_TOPIC.into(),
+                NEW_BLOCK_GOSSIP_TOPIC.into(),
+                CON_VOTE_GOSSIP_TOPIC.into(),
+            ],
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,

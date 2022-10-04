@@ -37,8 +37,10 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
+    txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
+    Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
 };
@@ -48,7 +50,10 @@ use rand::{
     SeedableRng,
 };
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{
+    broadcast,
+    mpsc,
+};
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
@@ -108,8 +113,30 @@ async fn block_producer() -> Result<()> {
     let (import_block_events_tx, import_block_events_rx) = broadcast::channel(16);
 
     let mut txpool_builder = TxPoolServiceBuilder::new();
-    txpool_builder.db(Box::new(txpool_db));
-    txpool_builder.import_block_event(import_block_events_rx);
+
+    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
+
+    // Remove once tx_status events are used
+    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+
+    let keep_alive = Box::new(incoming_tx_sender);
+    Box::leak(keep_alive);
+
+    txpool_builder
+        .config(TxPoolConfig::default())
+        .db(Box::new(txpool_db))
+        .incoming_tx_receiver(incoming_tx_receiver)
+        .import_block_event(import_block_events_rx)
+        .tx_status_sender(tx_status_sender)
+        .txpool_sender(TxPoolSender::new(txpool_sender))
+        .txpool_receiver(txpool_receiver);
+
+    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+    txpool_builder.network_sender(p2p_request_event_sender);
+
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
 
