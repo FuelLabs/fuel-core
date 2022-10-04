@@ -215,7 +215,6 @@ impl From<StateError> for ResourceQueryError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        chain_config::ChainConfig,
         database::Database,
         model::{
             Coin,
@@ -243,7 +242,6 @@ mod tests {
             Messages,
         },
         model::{
-            BlockHeight,
             DaBlockHeight,
             Message,
         },
@@ -266,7 +264,7 @@ mod tests {
 
     fn setup_messages() -> (Address, AssetId, TestDatabase) {
         let owner = Address::default();
-        let asset_id = ChainConfig::BASE_ASSET;
+        let asset_id = AssetId::BASE;
         let mut db = TestDatabase::default();
         (0..5usize).for_each(|i| {
             db.make_message(owner, (i + 1) as Word);
@@ -277,7 +275,7 @@ mod tests {
 
     fn setup_coins_and_messages() -> (Address, [AssetId; 2], TestDatabase) {
         let owner = Address::default();
-        let asset_ids = [ChainConfig::BASE_ASSET, AssetId::new([1u8; 32])];
+        let asset_ids = [AssetId::BASE, AssetId::new([1u8; 32])];
         let mut db = TestDatabase::default();
         // 2 coins and 3 messages
         (0..2usize).for_each(|i| {
@@ -783,7 +781,7 @@ mod tests {
                 nonce,
                 amount,
                 data: vec![],
-                da_height: DaBlockHeight::from(BlockHeight::from(1u64)),
+                da_height: DaBlockHeight::from(1u64),
                 fuel_block_spend: None,
             };
 

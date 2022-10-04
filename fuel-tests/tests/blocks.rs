@@ -151,7 +151,7 @@ async fn block_connection_5(
     // blocks
     let blocks = (0..10u32)
         .map(|i| FuelBlockDb {
-            headers: FuelBlockHeader {
+            header: FuelBlockHeader {
                 height: i.into(),
                 time: Utc.timestamp(i.into(), 0),
                 ..Default::default()
