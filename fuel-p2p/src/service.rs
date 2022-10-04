@@ -47,7 +47,10 @@ use libp2p::{
         RequestResponseMessage,
         ResponseChannel,
     },
-    swarm::SwarmEvent,
+    swarm::{
+        SwarmBuilder,
+        SwarmEvent,
+    },
     Multiaddr,
     PeerId,
     Swarm,
@@ -114,7 +117,11 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // configure and build P2P Service
         let transport = build_transport(config.local_keypair.clone()).await;
         let behaviour = FuelBehaviour::new(&config, codec.clone());
-        let mut swarm = Swarm::new(transport, behaviour, local_peer_id);
+        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
+            .executor(Box::new(|fut| {
+                tokio::spawn(fut);
+            }))
+            .build();
 
         // set up node's address to listen on
         let listen_multiaddr = {

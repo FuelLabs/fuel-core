@@ -11,7 +11,7 @@ use libp2p::{
     noise,
     tcp::{
         GenTcpConfig,
-        TcpTransport,
+        TokioTcpTransport,
     },
     yamux,
     Multiaddr,
@@ -126,15 +126,15 @@ pub(crate) async fn build_transport(
     local_keypair: Keypair,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let generate_tcp_transpot =
-            || TcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+        let generate_tcp_transport =
+            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
 
-        let tcp = generate_tcp_transpot();
+        let tcp = generate_tcp_transport();
 
         let ws_tcp =
-            libp2p::websocket::WsConfig::new(generate_tcp_transpot()).or_transport(tcp);
+            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
 
-        libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
+        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
     };
 
     let auth_config = {
