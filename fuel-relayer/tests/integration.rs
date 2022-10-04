@@ -72,3 +72,45 @@ async fn can_get_messages() {
         );
     }
 }
+
+#[tokio::test(start_paused = true)]
+async fn deploy_height_is_set() {
+    let mock_db = MockDb::default();
+    let config = Config {
+        da_deploy_height: 50u64.into(),
+        da_finalization: 1u64.into(),
+        ..Default::default()
+    };
+    let eth_node = MockMiddleware::default();
+    eth_node.update_data(|data| data.best_block.number = Some(54.into()));
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut tx = Some(tx);
+    eth_node.set_before_event(move |_, evt| {
+        if let fuel_relayer::test_helpers::middleware::TriggerType::GetLogs(evt) = evt {
+            assert!(
+                matches!(
+                    evt,
+                        ethers_core::types::Filter {
+                            block_option: ethers_core::types::FilterBlockOption::Range {
+                                from_block: Some(ethers_core::types::BlockNumber::Number(f)),
+                                to_block: Some(ethers_core::types::BlockNumber::Number(t))
+                            },
+                            ..
+                        }
+                    if f.as_u64() == 51 && t.as_u64() == 53
+                ),
+                "{:?}",
+                evt
+            );
+            if let Some(tx) = tx.take() {
+                tx.send(()).unwrap();
+            }
+        }
+    });
+    let relayer = RelayerHandle::start_test(eth_node, Box::new(mock_db.clone()), config);
+
+    relayer.await_synced().await.unwrap();
+    rx.await.unwrap();
+
+    assert_eq!(*mock_db.get_finalized_da_height().await.unwrap(), 53);
+}

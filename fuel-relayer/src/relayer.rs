@@ -41,6 +41,7 @@ use tokio::sync::watch;
 use self::{
     get_logs::*,
     run::RelayerData,
+    state::EthLocal,
 };
 
 mod get_logs;
@@ -103,6 +104,14 @@ where
             eth_node: Arc::new(eth_node),
             database,
             config,
+        }
+    }
+
+    async fn set_deploy_height(&self) {
+        if self.finalized().await.unwrap_or_default() < *self.config.da_deploy_height {
+            self.database
+                .set_finalized_da_height(self.config.da_deploy_height)
+                .await;
         }
     }
 }
@@ -242,6 +251,8 @@ where
     let join_handle = tokio::task::spawn({
         let shutdown = shutdown.clone();
         async move {
+            // Set deploy height
+            relayer.set_deploy_height().await;
             while !shutdown.load(core::sync::atomic::Ordering::Relaxed) {
                 let now = tokio::time::Instant::now();
 

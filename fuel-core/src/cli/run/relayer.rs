@@ -22,6 +22,10 @@ pub struct RelayerArgs {
     #[clap(long = "relayer-da-finalization", default_value = "64")]
     pub da_finalization: u64,
 
+    /// Number of da block that the contract is deployed at.
+    #[clap(long = "relayer-da-deploy-height", default_value = "0")]
+    pub da_deploy_height: u64,
+
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
     #[clap(long = "relayer-log-page-size", default_value = "5")]
@@ -41,6 +45,7 @@ pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
 impl From<RelayerArgs> for Config {
     fn from(args: RelayerArgs) -> Self {
         Config {
+            da_deploy_height: DaBlockHeight(args.da_deploy_height),
             da_finalization: DaBlockHeight(args.da_finalization),
             eth_client: args.eth_client,
             eth_v2_listening_contracts: args.eth_v2_listening_contracts,
