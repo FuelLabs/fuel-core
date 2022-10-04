@@ -14,3 +14,5 @@ mod node_info;
 mod resource;
 mod snapshot;
 mod tx;
+#[cfg(feature = "p2p")]
+mod tx_gossip;
