@@ -122,9 +122,7 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) async fn build_transport(
-    local_keypair: Keypair,
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));

@@ -111,11 +111,11 @@ pub enum FuelP2PEvent {
 }
 
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
-    pub async fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
+    pub fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
         let local_peer_id = PeerId::from(config.local_keypair.public());
 
         // configure and build P2P Service
-        let transport = build_transport(config.local_keypair.clone()).await;
+        let transport = build_transport(config.local_keypair.clone());
         let behaviour = FuelBehaviour::new(&config, codec.clone());
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .executor(Box::new(|fut| {
@@ -465,9 +465,7 @@ mod tests {
         p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
-        FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size))
-            .await
-            .unwrap()
+        FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
     }
 
     /// attaches PeerId to the Multiaddr

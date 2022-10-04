@@ -86,8 +86,7 @@ impl NetworkOrchestrator {
         let mut p2p_service = FuelP2PService::new(
             self.p2p_config.clone(),
             BincodeCodec::new(self.p2p_config.max_block_size),
-        )
-        .await?;
+        )?;
 
         loop {
             tokio::select! {
