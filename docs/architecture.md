@@ -200,10 +200,14 @@ impl fuel_sync::ports::BlockImporter for Service<BlockImporter> {
 
 #### Ports: fuel_sync::ports
 ```rust
+pub struct Entity<Data> {
+    pub data: Data,
+    pub sender: PeerId,
+};
+
 trait PeerToPeer {
-    async fn fetch_best_peer_height() -> Result<(PeerId, BlockHeight)>;
-    async fn fetch_block_headers(query: Range<BlockHeight>) -> Result<Vec<(PeerId, SealedFuelBlockHeader)>>;
-    async fn fetch_block_data(id: block_id) -> Result<Vec<(PeerId, FuelBlockBody)>>;
+    async fn fetch_best_network_block_header() -> Result<Entity<SealedFuelBlockHeader>>;
+    async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Entity<Vec<SealedFuelBlock>>>;
     async fn report_invalid_height(peer: PeerId) -> Result<()>;
     async fn report_invalid_block(peer: PeerId) -> Result<()>;
 }
