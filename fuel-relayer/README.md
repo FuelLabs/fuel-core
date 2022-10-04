@@ -14,18 +14,8 @@ Second finality that we have is related to fuel block attestation time limit, ho
 * Problem: Validator deposit to ethereum gets reverted by block reorg. (Eth clients usually have priority for reverted txs but this does not mean it cant happen). It can potentially rearrange order of transactions
 * Solution: Introduce sliding window, only deposits that are at least eth finality long can be finalized and included in validators leader selection. We will need to have pending events before they are merged and handle reorgs.
 
-Example of sliding window:
-![Sliding Window](../docs/diagrams/fuel_v2_relayer_sliding_window.jpg)
-
 * Problem: How to choose when bridge message event gets enabled for use in fuel, at what exact fuel block does this happen? (Note that we have sliding window)
 * Solution: introduce `da_height` variable inside fuel block header that will tell at what block we are including token deposits.
-
-There are few rules that `da_height` need to follow and can be enforced with v2 contract:
-
-* Last block `da_height` needs to be smaller number then current one.
-* `da_height` shouldn't be greater then `best_da_block`-`finalization_slider`
-
-In most cases for fuel block `da_height` can be calculated as `current_da_height-1`
 
 ## Implementation
 The `RelayerHandle` type is used to start / stop a background task that runs the actual `Relayer`.

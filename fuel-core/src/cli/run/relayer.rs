@@ -27,6 +27,9 @@ pub struct RelayerArgs {
     #[clap(long = "relayer-log-page-size", default_value = "5")]
     pub log_page_size: u64,
 
+    /// The minimum number of seconds that the relayer polling loop
+    /// will take before running again. If this is too low the DA layer
+    /// risks being spammed.
     #[clap(long = "relayer-min-duration-s", default_value = "5")]
     pub sync_minimum_duration_secs: u64,
 }

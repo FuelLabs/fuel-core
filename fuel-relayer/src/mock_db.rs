@@ -43,6 +43,9 @@ pub struct Data {
 }
 
 #[derive(Default, Clone)]
+/// Type for mocking the database when testing the relayer.
+/// Note that this type is clone but internally it is wrapped
+/// in an [`Arc`] [`Mutex`] so only the pointer is cloned.
 pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
