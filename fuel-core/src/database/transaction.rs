@@ -1,10 +1,6 @@
 use crate::{
     database::{
-        columns::{
-            TRANSACTIONS,
-            TRANSACTIONS_BY_OWNER_BLOCK_IDX,
-            TRANSACTION_STATUS,
-        },
+        Column,
         Database,
         KvStoreError,
     },
@@ -15,43 +11,49 @@ use crate::{
     },
     tx_pool::TransactionStatus,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::Storage,
-    fuel_tx::{
-        Bytes32,
-        Transaction,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_tx::{
+            Bytes32,
+            Transaction,
+        },
+        fuel_types::Address,
     },
-    fuel_types::Address,
+    db::Transactions,
 };
 use std::{
     borrow::Cow,
     ops::Deref,
 };
 
-pub type TransactionIndex = u32;
-
-impl Storage<Bytes32, Transaction> for Database {
+impl StorageInspect<Transactions> for Database {
     type Error = KvStoreError;
 
+    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, KvStoreError> {
+        Database::get(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
+        Database::exists(self, key.as_ref(), Column::Transactions).map_err(Into::into)
+    }
+}
+
+impl StorageMutate<Transactions> for Database {
     fn insert(
         &mut self,
         key: &Bytes32,
         value: &Transaction,
     ) -> Result<Option<Transaction>, KvStoreError> {
-        Database::insert(self, key.as_ref(), TRANSACTIONS, value.clone())
+        Database::insert(self, key.as_ref(), Column::Transactions, value.clone())
             .map_err(Into::into)
     }
 
     fn remove(&mut self, key: &Bytes32) -> Result<Option<Transaction>, KvStoreError> {
-        Database::remove(self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
-    }
-
-    fn get(&self, key: &Bytes32) -> Result<Option<Cow<Transaction>>, KvStoreError> {
-        Database::get(self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
-    }
-
-    fn contains_key(&self, key: &Bytes32) -> Result<bool, KvStoreError> {
-        Database::exists(self, key.as_ref(), TRANSACTIONS).map_err(Into::into)
+        Database::remove(self, key.as_ref(), Column::Transactions).map_err(Into::into)
     }
 }
 
@@ -62,8 +64,13 @@ impl Database {
         direction: Option<IterDirection>,
     ) -> impl Iterator<Item = Result<Transaction, Error>> + '_ {
         let start = start.map(|b| b.as_ref().to_vec());
-        self.iter_all::<Vec<u8>, Transaction>(TRANSACTIONS, None, start, direction)
-            .map(|res| res.map(|(_, tx)| tx))
+        self.iter_all::<Vec<u8>, Transaction>(
+            Column::Transactions,
+            None,
+            start,
+            direction,
+        )
+        .map(|res| res.map(|(_, tx)| tx))
     }
 
     /// Iterates over a KV mapping of `[address + block height + tx idx] => transaction id`. This
@@ -80,7 +87,7 @@ impl Database {
         let start = start
             .map(|cursor| owned_tx_index_key(owner, cursor.block_height, cursor.tx_idx));
         self.iter_all::<OwnedTransactionIndexKey, Bytes32>(
-            TRANSACTIONS_BY_OWNER_BLOCK_IDX,
+            Column::TransactionsByOwnerBlockIdx,
             Some(owner.to_vec()),
             start,
             direction,
@@ -97,7 +104,7 @@ impl Database {
     ) -> Result<Option<Bytes32>, Error> {
         self.insert(
             owned_tx_index_key(owner, block_height, tx_idx),
-            TRANSACTIONS_BY_OWNER_BLOCK_IDX,
+            Column::TransactionsByOwnerBlockIdx,
             *tx_id,
         )
     }
@@ -107,18 +114,36 @@ impl Database {
         tx_id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.insert(tx_id.to_vec(), TRANSACTION_STATUS, status)
+        self.insert(tx_id, Column::TransactionStatus, status)
     }
 
     pub fn get_tx_status(
         &self,
         tx_id: &Bytes32,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.get(&tx_id.deref()[..], TRANSACTION_STATUS)
+        self.get(&tx_id.deref()[..], Column::TransactionStatus)
     }
 }
 
-struct OwnedTransactionIndexKey {
+fn owned_tx_index_key(
+    owner: &Address,
+    height: BlockHeight,
+    tx_idx: TransactionIndex,
+) -> Vec<u8> {
+    // generate prefix to enable sorted indexing of transactions by owner
+    // owner + block_height + tx_idx
+    let mut key = Vec::with_capacity(40);
+    key.extend(owner.as_ref());
+    key.extend(height.to_bytes());
+    key.extend(tx_idx.to_be_bytes());
+    key
+}
+
+////////////////////////////////////// Not storage part //////////////////////////////////////
+
+pub type TransactionIndex = u32;
+
+pub struct OwnedTransactionIndexKey {
     block_height: BlockHeight,
     tx_idx: TransactionIndex,
 }
@@ -175,18 +200,4 @@ impl From<OwnedTransactionIndexCursor> for Vec<u8> {
         bytes.extend(cursor.tx_idx.to_be_bytes());
         bytes
     }
-}
-
-fn owned_tx_index_key(
-    owner: &Address,
-    height: BlockHeight,
-    tx_idx: TransactionIndex,
-) -> Vec<u8> {
-    // generate prefix to enable sorted indexing of transactions by owner
-    // owner + block_height + tx_idx
-    let mut key = Vec::with_capacity(40);
-    key.extend(owner.as_ref());
-    key.extend(height.to_bytes());
-    key.extend(tx_idx.to_be_bytes());
-    key
 }

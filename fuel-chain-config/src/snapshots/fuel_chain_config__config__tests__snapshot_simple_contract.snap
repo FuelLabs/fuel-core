@@ -1,6 +1,5 @@
 ---
-source: fuel-core/src/genesis.rs
-assertion_line: 260
+source: fuel-chain-config/src/config.rs
 expression: json
 ---
 {
@@ -10,13 +9,7 @@ expression: json
     "contracts": [
       {
         "code": "0x24400000",
-        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000",
-        "state": [
-          [
-            "0x61644a25da5ad31754e23bc1eca8c766a61ceaa8c60ddc65f158a30209256e35",
-            "0xc9fba417a2d8d9ed086c0f3f03f94ec89a67bfdc6a1e22b69d667e5ac8055d00"
-          ]
-        ]
+        "salt": "0x0000000000000000000000000000000000000000000000000000000000000000"
       }
     ]
   },

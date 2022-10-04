@@ -25,13 +25,13 @@ libp2p = { version = "0.44", default-features = false, features = [
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.10"
-tokio = { version = "1.17", features = ["sync"] }
+tokio = { version = "1.21", features = ["sync"] }
 tracing = "0.1"
 
 [dev-dependencies]
 ctor = "0.1"
 rand = "0.8"
-tokio = { version = "1.17", features = ["full"] }
+tokio = { version = "1.21", features = ["full"] }
 tracing-appender = "0.2"
 tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

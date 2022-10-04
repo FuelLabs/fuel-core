@@ -48,7 +48,7 @@ jobs:
       - name: Run Cargo.toml linter
         run: git ls-files | grep Cargo.toml$ | xargs --verbose -n 1 cargo-toml-lint
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -69,7 +69,7 @@ jobs:
         run: ./.github/workflows/scripts/verify_openssl.sh
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@master
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -93,19 +93,13 @@ jobs:
           - command: clippy
             args: --all-targets --all-features
           - command: make
-            args: build
-          - command: check
-            args: --locked --workspace
+            args: check --locked
           - command: test
-            args: --all-targets --all-features --workspace --exclude fuel-p2p
+            args: --all-targets --all-features --workspace
           - command: test
-            args: --all-targets --no-default-features --workspace --exclude fuel-p2p
-          # Split p2p into its own job so that it can use a single threaded runner
-          - command: test
-            args: --all-targets --all-features -p fuel-p2p -- --test-threads=1
-            skip-error: true
-    # disallow any job that takes longer than 30 minutes
-    timeout-minutes: 30
+            args: --all-targets --no-default-features --workspace
+    # disallow any job that takes longer than 45 minutes
+    timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
       - uses: actions/checkout@v3
@@ -113,11 +107,10 @@ jobs:
         with:
           toolchain: stable
       - name: Install Cargo Make
-        uses: baptiste0928/cargo-install@v1
+        uses: davidB/rust-cargo-make@v1
         with:
-          crate: cargo-make
-          version: "0.35.16"
-      - uses: Swatinem/rust-cache@v1
+          version: "0.36.0"
+      - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
       - name: ${{ matrix.command }} ${{ matrix.args }}
@@ -126,7 +119,7 @@ jobs:
           command: ${{ matrix.command }}
           args: ${{ matrix.args }}
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
         with:
           status: ${{ job.status }}
@@ -163,6 +156,7 @@ jobs:
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
+          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-chain-config/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
           ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
@@ -183,7 +177,7 @@ jobs:
           registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always()
         with:
           status: ${{ job.status }}
@@ -218,7 +212,7 @@ jobs:
           GITHUB_CONTAINER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag')
         with:
           status: ${{ job.status }}
@@ -367,7 +361,7 @@ jobs:
           asset_content_type: application/gzip
 
       - name: Notify if Job Fails
-        uses: ravsamhq/notify-slack-action@v1
+        uses: ravsamhq/notify-slack-action@v2
         # need to find a work-around to be able to run this action on mac
         if: always() && (github.ref == 'refs/heads/master' || github.ref_type == 'tag') && matrix.job.os != 'macos-latest'
         with:
@@ -379,7 +373,35 @@ jobs:
           notify_when: 'failure'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+    
+  # Deploy Fuel Core Ephemeral Developer Environment
+  deploy-eph-env:
+    if:  startsWith(github.head_ref, 'preview/')
+    needs:
+      - publish-docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Environment Variables
+        run: |
+          tag=(`echo $GITHUB_SHA | cut -c1-7`)
+          echo "IMAGE_TAG=`echo sha-$tag`" >> $GITHUB_ENV
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF} | cut -c 9-)"  >> $GITHUB_ENV
 
+      - name: Deploy Fuel Core Ephemeral Developer Environment
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Deploy Fuel-Core on k8s
+          repo: FuelLabs/fuel-deployment
+          ref: refs/heads/master
+          token: ${{ secrets.REPO_TOKEN }}
+          inputs: '{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}", "delete-infra": "${{ env.DELETE_INFRA }}" }'
+        env:
+          K8S: 'eks'
+          CONFIG: 'fuel-dev1'
+          ENV: 'fueldevsway.env'
+          DELETE_INFRA: true
+  
   # Deploy Latest Fuel-Core Release
   deploy:
     if: github.ref == 'refs/heads/master'

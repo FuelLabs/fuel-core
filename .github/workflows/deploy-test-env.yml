@@ -1,0 +1,38 @@
+name: Deploy Ephemeral Test Environment
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # Deploy Fuel-Core Ephemeral Developer Environment
+  deploy-eph-enviromment:
+    if:  startsWith(github.head_ref, 'preview/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set Environment Variables
+        id: set_env_var
+        run: |
+          echo "DEPLOYMENT_VERSION=$(echo $GITHUB_SHA)" >> $GITHUB_ENV
+          echo "NAMESPACE=$(echo ${GITHUB_HEAD_REF} | cut -c 9-)"  >> $GITHUB_ENV
+         
+      - name: Deploy Ephemeral Test Environment
+        id: deploy_eph_env
+        run: |
+          curl \
+            -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: token ${{ secrets.REPO_TOKEN }}" \
+            https://api.github.com/repos/FuelLabs/fuel-deployment/actions/workflows/deploy-test-env.yml/dispatches \
+            -d '{"ref":"master","inputs":{ "k8s-type": "${{ env.K8S }}", "config-directory": "${{ env.CONFIG }}", "config-env": "${{ env.ENV }}", "deployment-version": "${{ env.DEPLOYMENT_VERSION }}", "image-tag": "${{ env.IMAGE_TAG }}", "namespace": "${{ env.NAMESPACE }}" }}'
+        env:
+          K8S: 'eks'
+          CONFIG: 'fuel-dev1'
+          ENV: 'fueldevsway.env'
+          IMAGE_TAG: 'latest'

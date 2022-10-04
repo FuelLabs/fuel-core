@@ -1,6 +1,7 @@
 use fuel_core::{
     chain_config::{
         CoinConfig,
+        MessageConfig,
         StateConfig,
     },
     service::{
@@ -8,16 +9,20 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::{
-        AssetId,
-        Input,
-        Output,
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx::{
+            AssetId,
+            Input,
+            Output,
+        },
+        fuel_vm::prelude::Address,
     },
-    fuel_vm::prelude::Address,
+    model::DaBlockHeight,
 };
 use fuel_gql_client::{
     client::{
+        schema::resource::Resource,
         FuelClient,
         PageDirection,
         PaginationRequest,
@@ -28,7 +33,7 @@ use fuel_gql_client::{
 #[tokio::test]
 async fn balance() {
     let owner = Address::default();
-    let asset_id = AssetId::new([1u8; 32]);
+    let asset_id = AssetId::BASE;
 
     // setup config
     let mut config = Config::local_node();
@@ -53,7 +58,20 @@ async fn balance() {
             })
             .collect(),
         ),
-        messages: None,
+        messages: Some(
+            vec![(owner, 60), (owner, 90)]
+                .into_iter()
+                .enumerate()
+                .map(|(nonce, (owner, amount))| MessageConfig {
+                    sender: owner,
+                    recipient: owner,
+                    nonce: nonce as u64,
+                    amount,
+                    data: vec![],
+                    da_height: DaBlockHeight::from(1usize),
+                })
+                .collect(),
+        ),
     });
 
     // setup server & client
@@ -68,14 +86,13 @@ async fn balance() {
         )
         .await
         .unwrap();
-    assert_eq!(balance, 300);
+    assert_eq!(balance, 450);
 
-    // spend some coins and check again
-    let coins = client
-        .coins_to_spend(
+    // spend some resources and check again
+    let resources_per_asset = client
+        .resources_to_spend(
             format!("{:#x}", owner).as_str(),
-            vec![(format!("{:#x}", asset_id).as_str(), 1)],
-            None,
+            vec![(format!("{:#x}", asset_id).as_str(), 1, None)],
             None,
         )
         .await
@@ -84,16 +101,29 @@ async fn balance() {
     let mut tx = TransactionBuilder::script(vec![], vec![])
         .gas_limit(1_000_000)
         .to_owned();
-    for coin in coins {
-        tx.add_input(Input::CoinSigned {
-            utxo_id: coin.utxo_id.into(),
-            owner: coin.owner.into(),
-            amount: coin.amount.into(),
-            asset_id: coin.asset_id.into(),
-            maturity: coin.maturity.into(),
-            witness_index: 0,
-            tx_pointer: Default::default(),
-        });
+    for resources in resources_per_asset {
+        for resource in resources {
+            match resource {
+                Resource::Coin(coin) => tx.add_input(Input::CoinSigned {
+                    utxo_id: coin.utxo_id.into(),
+                    owner: coin.owner.into(),
+                    amount: coin.amount.into(),
+                    asset_id: coin.asset_id.into(),
+                    maturity: coin.maturity.into(),
+                    witness_index: 0,
+                    tx_pointer: Default::default(),
+                }),
+                Resource::Message(message) => tx.add_input(Input::MessageSigned {
+                    message_id: message.message_id.into(),
+                    sender: message.sender.into(),
+                    amount: message.amount.into(),
+                    witness_index: 0,
+                    recipient: message.recipient.into(),
+                    nonce: message.nonce.into(),
+                    data: Default::default(),
+                }),
+            };
+        }
     }
     let tx = tx
         .add_output(Output::Coin {
@@ -118,13 +148,13 @@ async fn balance() {
         )
         .await
         .unwrap();
-    assert_eq!(balance, 299);
+    assert_eq!(balance, 449);
 }
 
 #[tokio::test]
 async fn first_5_balances() {
     let owner = Address::default();
-    let asset_ids = (1..=6u8)
+    let asset_ids = (0..=5u8)
         .map(|i| AssetId::new([i; 32]))
         .collect::<Vec<AssetId>>();
 
@@ -155,7 +185,20 @@ async fn first_5_balances() {
                 })
                 .collect(),
         ),
-        messages: None,
+        messages: Some(
+            vec![(owner, 60), (owner, 90)]
+                .into_iter()
+                .enumerate()
+                .map(|(nonce, (owner, amount))| MessageConfig {
+                    sender: owner,
+                    recipient: owner,
+                    nonce: nonce as u64,
+                    amount,
+                    data: vec![],
+                    da_height: DaBlockHeight::from(1usize),
+                })
+                .collect(),
+        ),
     });
 
     // setup server & client
@@ -174,8 +217,17 @@ async fn first_5_balances() {
         )
         .await
         .unwrap();
-    assert!(!balances.results.is_empty());
-    assert_eq!(balances.results.len(), 5);
-    assert_eq!(balances.results[0].asset_id.0 .0, asset_ids[0]);
-    assert_eq!(balances.results[0].amount.0, 300);
+    let balances = balances.results;
+    assert!(!balances.is_empty());
+    assert_eq!(balances.len(), 5);
+
+    // Base asset is 3 coins and 2 messages = 50 + 100 + 150 + 60 + 90
+    assert_eq!(balances[0].asset_id.0 .0, asset_ids[0]);
+    assert_eq!(balances[0].amount.0, 450);
+
+    // Other assets are 3 coins = 50 + 100 + 150
+    for i in 1..5 {
+        assert_eq!(balances[i].asset_id.0 .0, asset_ids[i]);
+        assert_eq!(balances[i].amount.0, 300);
+    }
 }
