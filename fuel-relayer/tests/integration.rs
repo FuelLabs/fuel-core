@@ -1,7 +1,7 @@
 #![cfg(feature = "test-helpers")]
 
 use fuel_core_interfaces::{
-    common::fuel_storage::StorageInspect,
+    common::fuel_storage::StorageAsRef,
     db::Messages,
     relayer::RelayerDb,
 };
@@ -65,7 +65,9 @@ async fn can_get_messages() {
 
     for msg in expected_messages {
         assert_eq!(
-            &*StorageInspect::<Messages>::get(&mock_db, msg.id())
+            &*mock_db
+                .storage::<Messages>()
+                .get(msg.id())
                 .unwrap()
                 .unwrap(),
             &*msg

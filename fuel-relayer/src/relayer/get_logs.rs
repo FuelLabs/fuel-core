@@ -10,7 +10,7 @@ pub(crate) fn download_logs<P>(
     contracts: Vec<H160>,
     eth_node: Arc<P>,
     page_size: u64,
-) -> impl futures::Stream<Item = Result<Vec<Log>, ProviderError>>
+) -> impl futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
@@ -37,7 +37,7 @@ where
                     eth_node
                         .get_logs(&filter)
                         .await
-                        .map(|logs| Some((logs, page)))
+                        .map(|logs| Some(((page.latest(), logs), page)))
                 }
             }
         },
@@ -50,10 +50,10 @@ pub(crate) async fn write_logs<S>(
     logs: S,
 ) -> anyhow::Result<()>
 where
-    S: futures::Stream<Item = Result<Vec<Log>, ProviderError>>,
+    S: futures::Stream<Item = Result<(u64, Vec<Log>), ProviderError>>,
 {
     tokio::pin!(logs);
-    while let Some(events) = logs.try_next().await? {
+    while let Some((to_block, events)) = logs.try_next().await? {
         for event in events {
             let event: EthEventLog = (&event).try_into()?;
             match event {
@@ -67,6 +67,7 @@ where
                 EthEventLog::Ignored => (),
             }
         }
+        database.set_finalized_da_height(to_block.into()).await;
     }
     Ok(())
 }

@@ -40,6 +40,13 @@ use test_case::test_case;
         eth_local_finalized: Some(50),
     } => Some(51..=200); "behind by less so needs to sync"
 )]
+#[test_case(
+    TestDataSource {
+        eth_remote_current: 75,
+        eth_remote_finalization_period: 100,
+        eth_local_finalized: Some(50),
+    } => None; "behind by less then finalization period so doesn't needs to sync"
+)]
 #[tokio::test]
 async fn test_eth_state_needs_to_sync_eth(
     state: TestDataSource,

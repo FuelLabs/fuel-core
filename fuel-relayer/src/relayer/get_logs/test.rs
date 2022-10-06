@@ -21,6 +21,10 @@ use test_case::test_case;
 
 use super::*;
 
+fn messages_n(n: u64) -> Vec<Log> {
+    messages(0..=n, 0..=n, 0..=0)
+}
+
 fn messages(
     nonce: RangeInclusive<u64>,
     block_number: RangeInclusive<u64>,
@@ -128,6 +132,7 @@ async fn can_paginate_logs(input: Input) -> Expected {
         Arc::new(eth_node),
         Config::DEFAULT_LOG_PAGE_SIZE,
     )
+    .map_ok(|(_, l)| l)
     .try_concat()
     .await
     .unwrap();
@@ -135,4 +140,38 @@ async fn can_paginate_logs(input: Input) -> Expected {
         num_get_logs_calls: num_calls.load(atomic::Ordering::SeqCst),
         m: result,
     }
+}
+
+#[test_case(vec![
+    Ok((1, messages_n(1)))
+    ] => 1 ; "Can add single"
+)]
+#[test_case(vec![
+    Ok((1, messages_n(3))),
+    Ok((2, messages_n(1)))
+    ] => 2 ; "Can add two"
+)]
+#[test_case(vec![
+    Ok((1, messages_n(3))),
+    Ok((2, vec![]))
+    ] => 2 ; "Can add empty"
+)]
+#[test_case(vec![
+    Ok((7, messages_n(3))),
+    Ok((19, messages_n(1))),
+    Err(ProviderError::CustomError("".to_string()))
+    ] => 19 ; "Still adds height when error"
+)]
+#[tokio::test]
+async fn test_da_height_updates(
+    stream: Vec<Result<(u64, Vec<Log>), ProviderError>>,
+) -> u64 {
+    let mut mock_db = crate::mock_db::MockDb::default();
+    mock_db.set_finalized_da_height(0u64.into()).await;
+
+    let logs = futures::stream::iter(stream);
+
+    let _ = write_logs(&mut mock_db, logs).await;
+
+    *mock_db.get_finalized_da_height().await.unwrap()
 }
