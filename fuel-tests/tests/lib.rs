@@ -11,6 +11,7 @@ mod messages;
 #[cfg(feature = "metrics")]
 mod metrics;
 mod node_info;
+mod relayer;
 mod resource;
 mod snapshot;
 mod tx;
