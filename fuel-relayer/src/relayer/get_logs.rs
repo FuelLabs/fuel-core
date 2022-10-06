@@ -17,27 +17,36 @@ where
     // Create a stream of paginated logs.
     futures::stream::try_unfold(
         eth_sync_gap.page(page_size),
-        move |mut page: state::EthSyncPage| {
+        move |page: Option<state::EthSyncPage>| {
             let contracts = contracts.clone();
             let eth_node = eth_node.clone();
             async move {
-                if page.is_empty() {
-                    Ok(None)
-                } else {
-                    // Create the log filter from the page.
-                    let filter = Filter::new()
-                        .from_block(page.oldest())
-                        .to_block(page.latest())
-                        .address(ValueOrArray::Array(contracts));
+                match page {
+                    None => Ok(None),
+                    Some(page) => {
+                        // Create the log filter from the page.
+                        let filter = Filter::new()
+                            .from_block(page.oldest())
+                            .to_block(page.latest())
+                            .address(ValueOrArray::Array(contracts));
 
-                    // Reduce the page.
-                    page.reduce();
+                        tracing::debug!(
+                            "Downloading logs for block range: {}..={}",
+                            page.oldest(),
+                            page.latest()
+                        );
 
-                    // Get the logs and return the reduced page.
-                    eth_node
-                        .get_logs(&filter)
-                        .await
-                        .map(|logs| Some(((page.latest(), logs), page)))
+                        let latest_block = page.latest();
+
+                        // Reduce the page.
+                        let page = page.reduce();
+
+                        // Get the logs and return the reduced page.
+                        eth_node
+                            .get_logs(&filter)
+                            .await
+                            .map(|logs| Some(((latest_block, logs), page)))
+                    }
                 }
             }
         },

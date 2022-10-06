@@ -99,8 +99,8 @@ impl EthSyncGap {
     /// Create a pagination that will run from the oldest
     /// block to the latest. This will only request logs from
     /// up to the `page_size` number of blocks.
-    pub fn page(&self, page_size: u64) -> EthSyncPage {
-        EthSyncPage {
+    pub fn page(&self, page_size: u64) -> Option<EthSyncPage> {
+        let page = EthSyncPage {
             current: self.oldest()
                 ..=self
                     .oldest()
@@ -108,15 +108,17 @@ impl EthSyncGap {
                     .min(self.latest()),
             size: page_size,
             end: self.latest(),
-        }
+        };
+        (!page.is_empty()).then_some(page)
     }
 }
 
 impl EthSyncPage {
     /// Reduce the pagination to the next page window or end.
-    pub fn reduce(&mut self) {
+    pub fn reduce(mut self) -> Option<Self> {
         self.current = self.current.start().saturating_add(self.size)
             ..=self.current.end().saturating_add(self.size).min(self.end);
+        (!self.is_empty()).then_some(self)
     }
 
     /// Check if the pagination is empty (because the page size is zero
