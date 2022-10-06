@@ -222,7 +222,6 @@ impl Context {
                             }
                             let _ = response.send(insert);
                         }
-
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
                         }
