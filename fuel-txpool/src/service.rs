@@ -129,12 +129,9 @@ impl ServiceBuilder {
             || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
+            || self.network_sender.is_none()
         {
             return Err(anyhow!("One of context items are not set"))
-        }
-
-        if self.network_sender.is_none() {
-            return Err(anyhow!("P2P network sender is not set"))
         }
 
         let service = Service::new(
