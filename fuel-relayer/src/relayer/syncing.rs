@@ -1,70 +1,88 @@
+use ethers_core::types::U256;
+
 use super::*;
 
-pub async fn wait_if_eth_syncing<P>(eth_node: &P) -> anyhow::Result<()>
+#[cfg(test)]
+mod tests;
+
+struct Status {
+    starting_block: U256,
+    current_block: U256,
+    highest_block: U256,
+}
+
+pub async fn wait_if_eth_syncing<P>(
+    eth_node: &P,
+    sync_call_freq: Duration,
+    sync_log_freq: Duration,
+) -> anyhow::Result<()>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    let mut count = 0;
-    while get_status(eth_node).await? {
-        count += 1;
-        if count > 12 {
-            tracing::warn!(
-                "relayer has been waiting longer then a minute for the eth node to sync"
-            )
+    tracing::info!("Waiting for the Ethereum endpoint to finish syncing");
+    let mut start = tokio::time::Instant::now();
+    let mut loop_time = tokio::time::Instant::now();
+    while let SyncingStatus::IsSyncing {
+        starting_block,
+        current_block,
+        highest_block,
+    } = get_status(eth_node).await?
+    {
+        if start.elapsed() > sync_log_freq {
+            let status = Status {
+                starting_block,
+                current_block,
+                highest_block,
+            };
+            start = tokio::time::Instant::now();
+            tracing::info!(
+                "Waiting for the Ethereum endpoint to finish syncing. \nStatus {}",
+                status
+            );
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        tokio::time::sleep(sync_call_freq.saturating_sub(loop_time.elapsed())).await;
+        loop_time = tokio::time::Instant::now();
     }
     Ok(())
 }
 
-async fn get_status<P>(eth_node: &P) -> anyhow::Result<bool>
+async fn get_status<P>(eth_node: &P) -> anyhow::Result<SyncingStatus>
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    let status = match eth_node.syncing().await {
-        Ok(s) => s,
-        Err(err) => anyhow::bail!("Failed to check if DA layer is syncing {}", err),
-    };
-    Ok(matches!(status, SyncingStatus::IsSyncing { .. }))
+    match eth_node.syncing().await {
+        Ok(s) => Ok(s),
+        Err(err) => Err(anyhow::anyhow!(
+            "Failed to check if DA layer is syncing {}",
+            err
+        )),
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::test_helpers::middleware::{
-        MockMiddleware,
-        TriggerType,
-    };
+impl core::fmt::Display for Status {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let size: u32 = self
+            .highest_block
+            .saturating_sub(self.starting_block)
+            .try_into()
+            .unwrap_or_default();
+        let progress: u32 = self
+            .current_block
+            .saturating_sub(self.starting_block)
+            .try_into()
+            .unwrap_or_default();
+        let complete = if progress == size || size == 0 {
+            100.0
+        } else if progress == 0 {
+            0.0
+        } else {
+            (f64::from(progress) / f64::from(size)) * 100.0
+        };
 
-    use super::*;
-
-    #[tokio::test(start_paused = true)]
-    async fn handles_syncing() {
-        let eth_node = MockMiddleware::default();
-        eth_node.update_data(|data| {
-            data.is_syncing = SyncingStatus::IsSyncing {
-                starting_block: 0.into(),
-                current_block: 0.into(),
-                highest_block: 0.into(),
-            }
-        });
-
-        let mut count = 0;
-        eth_node.set_before_event(move |data, evt| {
-            if let TriggerType::Syncing = evt {
-                count += 1;
-                if count == 2 {
-                    data.is_syncing = SyncingStatus::IsFalse;
-                }
-            }
-        });
-
-        let before = tokio::time::Instant::now();
-        wait_if_eth_syncing(&eth_node).await.unwrap();
-        let after = tokio::time::Instant::now();
-
-        assert_eq!(
-            before.elapsed().checked_sub(after.elapsed()),
-            Some(Duration::from_secs(5))
-        );
+        write!(
+            f,
+            "from {} to {} currently at {}. {:.0}% Done.",
+            self.starting_block, self.highest_block, self.current_block, complete
+        )
     }
 }

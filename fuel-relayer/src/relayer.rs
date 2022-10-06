@@ -146,7 +146,12 @@ where
     }
 
     async fn wait_if_eth_syncing(&self) -> anyhow::Result<()> {
-        syncing::wait_if_eth_syncing(&self.eth_node).await
+        syncing::wait_if_eth_syncing(
+            &self.eth_node,
+            self.config.syncing_call_frequency,
+            self.config.syncing_log_frequency,
+        )
+        .await
     }
 }
 
