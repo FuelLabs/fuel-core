@@ -129,12 +129,9 @@ impl ServiceBuilder {
             || self.txpool_sender.is_none()
             || self.tx_status_sender.is_none()
             || self.txpool_receiver.is_none()
+            || self.network_sender.is_none()
         {
             return Err(anyhow!("One of context items are not set"))
-        }
-
-        if self.network_sender.is_none() {
-            return Err(anyhow!("P2P network sender is not set"))
         }
 
         let service = Service::new(
@@ -209,9 +206,19 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert_with_broadcast(txpool, db.as_ref().as_ref(), tx_status_sender, network_sender, txs).await);
+                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender,txs.clone()).await;
+                            for (ret, tx) in insert.iter().zip(txs.into_iter()) {
+                                match ret {
+                                    Ok(_) => {
+                                        let _ = network_sender.send(P2pRequestEvent::BroadcastNewTransaction {
+                                            transaction: tx.clone(),
+                                        }).await;
+                                    }
+                                    Err(_) => {}
+                                }
+                            }
+                            let _ = response.send(insert);
                         }
-
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
                         }

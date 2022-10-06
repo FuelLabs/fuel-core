@@ -29,9 +29,6 @@ use tokio::sync::{
     RwLock,
 };
 
-use fuel_core_interfaces::p2p::P2pRequestEvent;
-use tokio::sync::mpsc;
-
 #[derive(Debug, Clone)]
 pub struct TxPool {
     by_hash: HashMap<TxId, TxInfo>,
@@ -146,47 +143,6 @@ impl TxPool {
             return Err(Error::NotInsertedGasPriceTooLow)
         }
         Ok(())
-    }
-
-    pub async fn insert_with_broadcast(
-        txpool: &RwLock<Self>,
-        db: &dyn TxPoolDb,
-        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
-        network_sender: mpsc::Sender<P2pRequestEvent>,
-        txs: Vec<ArcTx>,
-    ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
-        let mut res = Vec::new();
-        for tx in txs.iter() {
-            let mut pool = txpool.write().await;
-            res.push(pool.insert_inner(tx.clone(), db).await)
-        }
-        for (ret, tx) in res.iter().zip(txs.into_iter()) {
-            match ret {
-                Ok(removed) => {
-                    for removed in removed {
-                        let _ = tx_status_sender.send(TxStatusBroadcast {
-                            tx: removed.clone(),
-                            status: TxStatus::SqueezedOut {
-                                reason: Error::Removed,
-                            },
-                        });
-                    }
-                    let _ = tx_status_sender.send(TxStatusBroadcast {
-                        tx: tx.clone(),
-                        status: TxStatus::Submitted,
-                    });
-                    let _ = network_sender
-                        .send(P2pRequestEvent::BroadcastNewTransaction {
-                            transaction: tx.clone(),
-                        })
-                        .await;
-                }
-                Err(_) => {
-                    // @dev should not broadcast tx if error occurred
-                }
-            }
-        }
-        res
     }
 
     /// Import a set of transactions from network gossip or GraphQL endpoints.
