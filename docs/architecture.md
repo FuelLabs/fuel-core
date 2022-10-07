@@ -27,6 +27,17 @@ glue logic between systems.
 Special care was also taken in this design approach to keep implementation details regarding synchronization primitives
 or proprietary async runtime requirements out of any public interfaces (No channels!).
 
+Summary:
+
+ - Business logic with many external dependencies should be segmented where possible into separate domain crates
+ - Domain crates define "Ports" (traits) for external dependencies that aren't strictly of concern to the business logic.
+ - Domain crates should aim to be as pure as possible and have minimal dependencies, and not depend on each other.
+ - Adapters implement Ports. They are for integrating with the "real-world" dependencies like using other domain modules,
+   implementing serialization logic, or calling a database.
+ - Adapters should either reside in the top-level crate ("fuel-core") or in their own crates. This prevents the domains
+   from being polluted by dependencies with large compile times or unstable interfaces. This allows for libraries like 
+   networking, third-party SDKs, or database drivers to be swapped out without breaking our core domain specific logic.
+
 ## Domains:
 
 ```mermaid
