@@ -8,8 +8,8 @@ use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
-    common::prelude::Word,
     block_producer::BlockProducer,
+    common::prelude::Word,
     model::{
         BlockHeight,
         FuelBlock,
