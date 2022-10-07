@@ -109,7 +109,11 @@ jobs:
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"
+          version: "0.36.0"      
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:          
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
