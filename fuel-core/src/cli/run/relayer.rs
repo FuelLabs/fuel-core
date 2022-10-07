@@ -19,23 +19,29 @@ pub struct RelayerArgs {
     pub eth_v2_listening_contracts: Vec<H160>,
 
     /// Number of da block after which messages/stakes/validators become finalized.
-    #[clap(long = "relayer-da-finalization", default_value = "64")]
+    #[clap(long = "relayer-da-finalization", default_value_t = Config::DEFAULT_DA_FINALIZATION)]
     pub da_finalization: u64,
 
     /// Number of da block that the contract is deployed at.
-    #[clap(long = "relayer-da-deploy-height", default_value = "0")]
+    #[clap(long = "relayer-da-deploy-height", default_value_t = Config::DEFAULT_DA_DEPLOY_HEIGHT)]
     pub da_deploy_height: u64,
 
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer
-    #[clap(long = "relayer-log-page-size", default_value = "5")]
+    #[clap(long = "relayer-log-page-size", default_value_t = Config::DEFAULT_LOG_PAGE_SIZE)]
     pub log_page_size: u64,
 
     /// The minimum number of seconds that the relayer polling loop
     /// will take before running again. If this is too low the DA layer
     /// risks being spammed.
-    #[clap(long = "relayer-min-duration-s", default_value = "5")]
+    #[clap(long = "relayer-min-duration-s", default_value_t = Config::DEFAULT_SYNC_MINIMUM_DURATION.as_secs())]
     pub sync_minimum_duration_secs: u64,
+
+    #[clap(long = "relayer-eth-sync-call-freq-s", default_value_t = Config::DEFAULT_SYNCING_CALL_FREQ.as_secs())]
+    pub syncing_call_frequency_secs: u64,
+
+    #[clap(long = "relayer-eth-sync-log-freq-s", default_value_t = Config::DEFAULT_SYNCING_LOG_FREQ.as_secs())]
+    pub syncing_log_frequency_secs: u64,
 }
 
 pub fn parse_h160(input: &str) -> Result<H160, <H160 as FromStr>::Err> {
@@ -51,6 +57,8 @@ impl From<RelayerArgs> for Config {
             eth_v2_listening_contracts: args.eth_v2_listening_contracts,
             log_page_size: args.log_page_size,
             sync_minimum_duration: Duration::from_secs(args.sync_minimum_duration_secs),
+            syncing_call_frequency: Duration::from_secs(args.syncing_call_frequency_secs),
+            syncing_log_frequency: Duration::from_secs(args.syncing_log_frequency_secs),
         }
     }
 }
