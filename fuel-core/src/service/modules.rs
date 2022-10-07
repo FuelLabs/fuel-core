@@ -6,8 +6,6 @@ use crate::{
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
-#[cfg(feature = "relayer")]
-use fuel_core_interfaces::relayer::RelayerDb;
 use fuel_core_interfaces::{
     block_producer::BlockProducer,
     model::{
@@ -37,7 +35,7 @@ pub struct Modules {
     pub bft: Arc<fuel_core_bft::Service>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
-    pub relayer: Arc<fuel_relayer::Service>,
+    pub relayer: Option<fuel_relayer::RelayerHandle>,
     #[cfg(feature = "p2p")]
     pub network_service: Arc<fuel_p2p::orchestrator::Service>,
 }
@@ -70,31 +68,13 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
     #[cfg(feature = "relayer")]
-    let relayer = {
-        let mut relayer_builder = fuel_relayer::ServiceBuilder::new();
-        relayer_builder
-            .config(config.relayer.clone())
-            .db(Box::new(database.clone()) as Box<dyn RelayerDb>)
-            .import_block_event(block_importer.subscribe())
-            .private_key(
-                hex::decode(
-                    "c6bd905dcac2a0b1c43f574ab6933df14d7ceee0194902bce523ed054e8e798b",
-                )
-                .unwrap(),
-            );
-
-        relayer_builder.build()?
-    };
-
-    let relayer_sender = {
-        #[cfg(feature = "relayer")]
-        {
-            relayer.sender().clone()
-        }
-        #[cfg(not(feature = "relayer"))]
-        {
-            fuel_core_interfaces::relayer::Sender::noop()
-        }
+    let relayer = if config.relayer.eth_client.is_some() {
+        Some(fuel_relayer::RelayerHandle::start(
+            Box::new(database.clone()),
+            config.relayer.clone(),
+        )?)
+    } else {
+        None
     };
 
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
@@ -158,7 +138,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     block_importer.start().await;
 
     bft.start(
-        relayer_sender.clone(),
         p2p_request_event_sender.clone(),
         block_producer.clone(),
         block_importer.sender().clone(),
@@ -169,16 +148,10 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     sync.start(
         block_event_receiver,
         p2p_request_event_sender.clone(),
-        relayer_sender,
         bft.sender().clone(),
         block_importer.sender().clone(),
     )
     .await;
-
-    #[cfg(feature = "relayer")]
-    if config.relayer.eth_client.is_some() {
-        relayer.start().await?;
-    }
 
     #[cfg(feature = "p2p")]
     if !config.p2p.network_name.is_empty() {
@@ -194,7 +167,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         bft: Arc::new(bft),
         sync: Arc::new(sync),
         #[cfg(feature = "relayer")]
-        relayer: Arc::new(relayer),
+        relayer,
         #[cfg(feature = "p2p")]
         network_service: Arc::new(network_service),
     })

@@ -1,25 +1,25 @@
+//! # Fuel Relayer
+
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
+
 pub(crate) mod abi;
 pub(crate) mod config;
-pub(crate) mod finalization_queue;
 pub(crate) mod log;
-pub(crate) mod pending_blocks;
-pub(crate) mod validators;
 
-#[cfg(test)]
-mod mock_db;
 mod relayer;
-mod service;
-#[cfg(test)]
+
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod mock_db;
+#[cfg(any(test, feature = "test-helpers"))]
 pub mod test_helpers;
 
-pub use config::Config;
-pub use relayer::Relayer;
-pub use service::{
-    Service,
-    ServiceBuilder,
-};
+#[cfg(any(test, feature = "test-helpers"))]
+pub use abi::*;
 
+pub use config::Config;
 pub use ethers_core::types::{
     H160,
     H256,
 };
+pub use relayer::RelayerHandle;
