@@ -103,9 +103,6 @@ jobs:
     continue-on-error: ${{ matrix.skip-error || false }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
