@@ -51,6 +51,7 @@ flowchart TB
         subgraph BPS[Block Producer Service]
             BPD{{Domain}}
             POABP[PoA Adapter]
+            APIBP[API Adapter]
         end
         subgraph BIS[Block Importer Service]
             BID{{Domain}}
@@ -82,10 +83,14 @@ flowchart TB
             BPEXE[Block Producer Adapter]
             BIEXE[Block Importer Adapter]
         end
+        subgraph APIS[API Service]
+            APID{{Domain}}
+        end
         BID & BPD --> ES & RS & TXS
         SSD --> POAS & P2PS & BIS
         TXD --> P2PS
         POAD --> P2PS & RS & BPS & BIS
+        APID --> BPS
         
         %% Red color - Block Importer
         linkStyle 0,1,2 fill:none,stroke-width:4px,stroke:red
@@ -97,6 +102,8 @@ flowchart TB
         linkStyle 9 fill:none,stroke-width:4px,stroke:blue
         %% Orange color - PoA
         linkStyle 10,11,12,13 fill:none,stroke-width:4px,stroke:orange
+        %% Purple color - API
+        linkStyle 14 fill:none,stroke-width:4px,stroke:purple
     end
 ```
 
