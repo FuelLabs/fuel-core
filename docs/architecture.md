@@ -199,17 +199,40 @@ impl fuel_sync::ports::BlockImporter for Service<BlockImporter> {
 ### Synchronizer
 
 #### Ports: fuel_sync::ports
-```rust
-pub struct Entity<Data> {
-    pub data: Data,
-    pub sender: PeerId,
-};
 
+```rust
 trait PeerToPeer {
-    async fn fetch_best_network_block_header() -> Result<Entity<SealedFuelBlockHeader>>;
-    async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Entity<Vec<SealedFuelBlock>>>;
-    async fn report_invalid_height(peer: PeerId) -> Result<()>;
-    async fn report_invalid_block(peer: PeerId) -> Result<()>;
+    type SealedHeaderResponse: NetworkData<SealedFuelBlockHeader>;
+    type BlockResponse: NetworkData<Vec<SealedFuelBlock>>;
+    type GossipedBlock: NetworkData<SealedFuelBlock>;
+    
+    async fn fetch_best_network_block_header() -> Result<Self::SealedHeaderResponse>;
+    async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
+    // punish the sender for providing an invalid block header
+    fn report_invalid_block_header(invalid_header: &Self::SealedHeaderResponse) -> Result<()>;
+    // punish the sender for providing a set of blocks that aren't valid
+    fn report_invalid_blocks(invalid_blocks: &Self::BlockResponse) -> Result<()>;
+    // await a newly produced block from the network (similar to stream.next())
+    async fn next_gossiped_block() -> Result<Self::GossipedBlock>;
+    // notify the p2p network whether to continue gossiping this message to others or
+    // punish the peer that sent it
+    fn notify_gossip_block_validity(message: &Self::GossipedBlock, validity: GossipValidity);
+}
+
+// Generic wrapper for data received from the network
+pub trait NetworkData<D> {
+    // Transfer ownership of the provided data without consuming other message metadata
+    fn take_data(&mut self) -> Option<D>;
+}
+
+pub enum GossipValidity {
+    // Report whether the gossiped message is valid and safe to rebroadcast
+    Accept,
+    // Ignore the received message and prevent further gossiping
+    Ignore,
+    // Punish the gossip sender for providing invalid 
+    // (or malicious) data and prevent further gossiping
+    Invalid,
 }
 
 trait BlockImporter {
@@ -261,11 +284,38 @@ impl fuel_txpool::ports::PeerToPeer for Service<P2pService> {
 #### Ports: fuel_txpool::ports
 ```rust
 trait PeerToPeer {
-    async fn broadcast_transaction(transaction: Transaction) -> Result<()>;
-    fn report_invalid_tx(peer_id: PeerId) -> Result<()>;
-    // handler for gossipped transactions
-    fn on_new_tx(tx: Transaction, peer: PeerId);
+    type GossipedTransaction: NetworkData<Transaction>;
+    // Gossip broadcast a transaction inserted via API.
+    async fn broadcast_transaction(transaction: Transaction);
+    // Await the next transaction from network gossip (similar to stream.next()).
+    async fn next_gossiped_transaction(&self) -> Self::GossipedTransaction;
+    // Report the validity of a transaction received from the network.
+    fn notify_gossip_transaction_validity(message: &Self::GossipedTransaction, validity: GossipValidity);
 }
+
+// Generic wrapper for data received from the network
+pub trait NetworkData<D> {
+    // Transfer ownership of the provided data without consuming any message metadata
+    fn take_data(&mut self) -> Option<D>;
+}
+
+pub enum GossipValidity {
+    // Report whether the gossiped message is valid and safe to rebroadcast
+    Accept,
+    // Ignore the received message and prevent further gossiping
+    Ignore,
+    // Punish the gossip sender for providing invalid 
+    // (or malicious) data and prevent further gossiping
+    Invalid,
+}
+
+pub trait Database:
+    StorageInspect<Coins, Error = KvStoreError>
+    + StorageInspect<ContractsRawCode, Error = KvStoreError>
+    + StorageInspect<Messages, Error = KvStoreError>
+    + Send
+    + Sync
+{}
 ```
 
 #### Adapters: fuel_core::service::adapters::transaction_pool
@@ -287,11 +337,19 @@ trait Database: IntepreterStorage {
     fn get_coin(id: UtxoId) -> Result<Coin>;
     fn upsert_coin(coin: Coin) -> Result<()>;
     fn get_message(message_id: MessageId) -> Result<Message>;
-    fn mark_message_spent(messageId: MessageId) -> Result<()>;
+    fn mark_message_spent(message_id: MessageId) -> Result<()>;
     fn get_contract_utxo_id(contract_id: ContractId) -> Result<UtxoId>;
     fn set_contract_utxo_id(contract_id: ContractId, utxo_id: UtxoId) -> Result<()>;
     fn get_block(height: BlockHeight) -> Result<FuelBlock>;
     fn insert_block(block: FuelBlock) -> Result<()>;
+    // start a nested transaction to allow changes to be rolled-back
+    fn transaction(&self) -> Box<dyn DatabaseTransaction>;
+}
+
+// Database overlay that accumulates changes until committed at the end.
+trait DatabaseTransaction: AsRef<Box<dyn Database>> {
+    // consume the transaction and commit the changes
+    fn commit(self) -> Result<()>;
 }
 ```
 #### Adapters: fuel_core::service::adapters::executor
@@ -309,13 +367,19 @@ impl fuel_block_importer::ports::Executor for Service<Executor> {
 
 #### Ports: fuel_relayer::ports
 ```rust
-trait Database {
-    fn get_current_sealed_block() -> Result<SealedFuelBlock>;
-    fn get_pending_relay_commitment() -> Option<PendingRelayCommit>;
-    fn set_pending_block_commitment(pending_commit: PendingRelayCommit) -> Result<()>;
-    fn clear_pending_block_commitment(pending_commit: PendingRelayCommit) -> Result<()>;
-    fn set_last_committed_fuel_height(height: BlockHeight) -> Result<()>;
+trait Database: StorageMutate<Messages, Error = KvStoreError> {
+    fn get_current_sealed_block(&self) -> Result<SealedFuelBlock>;
+    fn get_da_synced_height(&self) -> Result<DaBlockHeight>;
+    fn set_da_synced_height(&self, height: DaBlockHeight) -> Result<Option<DaBlockHeight>>;
 }
+
+trait DataAvailabilityLayer {
+    async fn is_syncing(&self) -> SyncState;
+    async fn best_finalized_block(&self) -> Result<DaBlockHeight>;
+    async fn download_messages(&self, blocks: Range<DaBlockHeight>) -> Result<Vec<Message>>;
+}
+
+pub struct DaBlockHeight(u64);
 ```
 
 #### Adapters: fuel_core::service::adapters::relayer
@@ -330,6 +394,46 @@ impl fuel_block_producer::ports::Relayer for Service<Relayer> {
 
 impl fuel_poa_consensus::ports::Relayer for Service<Relayer> {
     // insert impl here
+}
+```
+
+### API (GraphQL)
+Too extensive to fully detail...
+
+#### Ports: fuel_core_api::ports
+
+```rust
+trait BlockProducer {
+    // produce a single-tx block at a given height and return the receipts
+    async fn dry_run_transaction(transaction: Transaction, height: Option<BlockHeight>) -> Result<Vec<Receipt>>;
+    // start a debug session at a given height.
+    async fn start_debug_session<S>(transaction: Transaction, height: Option<BlockHeight>) -> Result<Box<dyn DebugSession<S>>>;
+}
+
+trait DebugSession<S>: AsRef<Interpreter<S>> {
+    fn memory(&self, start: usize, len: usize) -> Option<&[u8]>;
+    fn register(&self, register: RegisterId) -> Option<Word>;
+    fn reset(&mut self) -> Result<()>;
+    fn execute(&mut self) -> Result<()>;
+}
+```
+
+#### Adapters: fuel_core::service::adapters::api
+
+```rust
+impl fuel_core_api::ports::BlockProducer for Service<BlockProducer> {
+    // insert impl here
+}
+
+impl<S> fuel_core_api::ports::DebugSession<S> for DebugSessionAdapter<S> {
+    // insert impl here
+}
+
+// example of adapter fulfilled implementation
+pub struct DebugSessionAdapter<S> {
+    vm: Interpreter<S>,
+    db: Database,
+    tx: Transaction,
 }
 ```
 
