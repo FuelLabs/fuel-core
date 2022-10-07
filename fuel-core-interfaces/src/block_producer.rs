@@ -4,6 +4,7 @@ use crate::model::{
     FuelBlock,
 };
 use anyhow::Result;
+use fuel_vm::prelude::Word;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -25,7 +26,11 @@ pub enum BlockProducerBroadcast {
 
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock>;
+    async fn produce_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> Result<FuelBlock>;
 }
 
 #[derive(Error, Debug)]
