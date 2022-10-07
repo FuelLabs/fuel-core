@@ -97,7 +97,7 @@ impl NetworkOrchestrator {
                 },
                 p2p_event = p2p_service.next_event() => {
                     match p2p_event {
-                        FuelP2PEvent::GossipsubMessage { message, .. } => {
+                        Some(FuelP2PEvent::GossipsubMessage { message, .. }) => {
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
                                     let _ = self.tx_transaction.send(TransactionBroadcast::NewTransaction(tx));
@@ -110,7 +110,7 @@ impl NetworkOrchestrator {
                                 },
                             }
                         },
-                        FuelP2PEvent::RequestMessage { request_message, request_id } => {
+                        Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
                             match request_message {
                                 RequestMessage::RequestBlock(block_height) => {
                                     let db = self.db.clone();
