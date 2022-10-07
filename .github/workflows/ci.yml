@@ -117,6 +117,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
+      - uses: cachix/install-nix-action@v16
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - uses: cachix/cachix-action@v10
+      - run: nix develop
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
