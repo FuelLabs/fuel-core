@@ -37,3 +37,5 @@ tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 metrics = ["fuel-core/rocksdb", "fuel-core/metrics"]
 default = ["fuel-core/default", "metrics"]
 debug = ["fuel-core-interfaces/debug"]
+p2p = ["fuel-core/p2p"]
+relayer = ["fuel-core/relayer"]

@@ -1,11 +1,9 @@
 use crate::config::P2PConfig;
 use libp2p::{
     core::{
-        connection::{
-            ConnectionId,
-            ListenerId,
-        },
+        connection::ConnectionId,
         either::EitherOutput,
+        transport::ListenerId,
         ConnectedPoint,
         PublicKey,
     },
