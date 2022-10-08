@@ -4,9 +4,9 @@ use futures::{
 };
 use libp2p::{
     mdns::{
-        Mdns,
         MdnsConfig,
         MdnsEvent,
+        TokioMdns,
     },
     swarm::{
         NetworkBehaviour,
@@ -25,14 +25,14 @@ use tracing::warn;
 #[allow(clippy::large_enum_variant)]
 // Wrapper around mDNS so that `DiscoveryConfig::finish` does not have to be an `async` function
 pub enum MdnsWrapper {
-    Instantiating(BoxFuture<'static, std::io::Result<Mdns>>),
-    Ready(Mdns),
+    Instantiating(BoxFuture<'static, std::io::Result<TokioMdns>>),
+    Ready(TokioMdns),
     Disabled,
 }
 
 impl Default for MdnsWrapper {
     fn default() -> Self {
-        MdnsWrapper::Instantiating(Mdns::new(MdnsConfig::default()).boxed())
+        MdnsWrapper::Instantiating(TokioMdns::new(MdnsConfig::default()).boxed())
     }
 }
 
@@ -53,7 +53,10 @@ impl MdnsWrapper {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<
-        NetworkBehaviourAction<MdnsEvent, <Mdns as NetworkBehaviour>::ConnectionHandler>,
+        NetworkBehaviourAction<
+            MdnsEvent,
+            <TokioMdns as NetworkBehaviour>::ConnectionHandler,
+        >,
     > {
         loop {
             match self {

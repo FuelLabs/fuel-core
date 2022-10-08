@@ -159,7 +159,7 @@ impl TxPool {
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
         txs: Vec<ArcTx>,
     ) -> Vec<anyhow::Result<Vec<ArcTx>>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -176,19 +176,21 @@ impl TxPool {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        let _ = broadcast.send(TxStatusBroadcast {
+                        let _ = tx_status_sender.send(TxStatusBroadcast {
                             tx: removed.clone(),
                             status: TxStatus::SqueezedOut {
                                 reason: Error::Removed,
                             },
                         });
                     }
-                    let _ = broadcast.send(TxStatusBroadcast {
+                    let _ = tx_status_sender.send(TxStatusBroadcast {
                         tx,
                         status: TxStatus::Submitted,
                     });
                 }
-                Err(_) => {}
+                Err(_) => {
+                    // @dev should not broadcast tx if error occurred
+                }
             }
         }
         res

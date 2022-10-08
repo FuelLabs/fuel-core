@@ -8,10 +8,10 @@ use fuel_core_interfaces::p2p::{
     P2pRequestEvent,
     TransactionBroadcast,
 };
-
 use libp2p::request_response::RequestId;
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             Receiver,
             Sender,
@@ -23,7 +23,7 @@ use tokio::{
 use tracing::warn;
 
 use crate::{
-    behavior::FuelBehaviourEvent,
+    codecs::bincode::BincodeCodec,
     config::P2PConfig,
     gossipsub::messages::{
         GossipsubBroadcastRequest,
@@ -49,7 +49,7 @@ pub struct NetworkOrchestrator {
 
     // senders
     tx_consensus: Sender<ConsensusBroadcast>,
-    tx_transaction: Sender<TransactionBroadcast>,
+    tx_transaction: broadcast::Sender<TransactionBroadcast>,
     tx_block: Sender<BlockBroadcast>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
 
@@ -62,7 +62,7 @@ impl NetworkOrchestrator {
         rx_request_event: Receiver<P2pRequestEvent>,
 
         tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
+        tx_transaction: broadcast::Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
 
         db: Arc<dyn P2pDb>,
@@ -83,7 +83,10 @@ impl NetworkOrchestrator {
     }
 
     pub async fn run(mut self) -> anyhow::Result<Self> {
-        let mut p2p_service = FuelP2PService::new(self.p2p_config.clone()).await?;
+        let mut p2p_service = FuelP2PService::new(
+            self.p2p_config.clone(),
+            BincodeCodec::new(self.p2p_config.max_block_size),
+        )?;
 
         loop {
             tokio::select! {
@@ -93,36 +96,34 @@ impl NetworkOrchestrator {
                     }
                 },
                 p2p_event = p2p_service.next_event() => {
-                    if let FuelP2PEvent::Behaviour(behaviour_event) = p2p_event {
-                        match behaviour_event {
-                            FuelBehaviourEvent::GossipsubMessage { message, .. } => {
-                                match message {
-                                    GossipsubMessage::NewTx(tx) => {
-                                        let _ = self.tx_transaction.send(TransactionBroadcast::NewTransaction(tx));
-                                    },
-                                    GossipsubMessage::NewBlock(block) => {
-                                        let _ = self.tx_block.send(BlockBroadcast::NewBlock(block));
-                                    },
-                                    GossipsubMessage::ConsensusVote(vote) => {
-                                        let _ = self.tx_consensus.send(ConsensusBroadcast::NewVote(vote));
-                                    },
-                                }
-                            },
-                            FuelBehaviourEvent::RequestMessage { request_message, request_id } => {
-                                match request_message {
-                                    RequestMessage::RequestBlock(block_height) => {
-                                        let db = self.db.clone();
-                                        let tx_outbound_response = self.tx_outbound_responses.clone();
+                    match p2p_event {
+                        FuelP2PEvent::GossipsubMessage { message, .. } => {
+                            match message {
+                                GossipsubMessage::NewTx(tx) => {
+                                    let _ = self.tx_transaction.send(TransactionBroadcast::NewTransaction(tx));
+                                },
+                                GossipsubMessage::NewBlock(block) => {
+                                    let _ = self.tx_block.send(BlockBroadcast::NewBlock(block));
+                                },
+                                GossipsubMessage::ConsensusVote(vote) => {
+                                    let _ = self.tx_consensus.send(ConsensusBroadcast::NewVote(vote));
+                                },
+                            }
+                        },
+                        FuelP2PEvent::RequestMessage { request_message, request_id } => {
+                            match request_message {
+                                RequestMessage::RequestBlock(block_height) => {
+                                    let db = self.db.clone();
+                                    let tx_outbound_response = self.tx_outbound_responses.clone();
 
-                                        tokio::spawn(async move {
-                                            let res = db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id));
-                                            let _ = tx_outbound_response.send(res);
-                                        });
-                                    }
+                                    tokio::spawn(async move {
+                                        let res = db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id));
+                                        let _ = tx_outbound_response.send(res);
+                                    });
                                 }
-                            },
-                            _ => {}
-                        }
+                            }
+                        },
+                        _ => {}
                     }
                 },
                 module_request_msg = self.rx_request_event.recv() => {
@@ -174,7 +175,7 @@ impl Service {
         tx_request_event: Sender<P2pRequestEvent>,
         rx_request_event: Receiver<P2pRequestEvent>,
         tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
+        tx_transaction: broadcast::Sender<TransactionBroadcast>,
         tx_block: Sender<BlockBroadcast>,
     ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
@@ -274,7 +275,7 @@ pub mod tests {
 
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
-        let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
+        let (tx_transaction, _) = tokio::sync::broadcast::channel(100);
         let (tx_block, _) = tokio::sync::mpsc::channel(100);
 
         let service = Service::new(
