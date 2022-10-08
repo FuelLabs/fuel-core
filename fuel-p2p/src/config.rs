@@ -1,3 +1,8 @@
+use crate::gossipsub::topics::{
+    CON_VOTE_GOSSIP_TOPIC,
+    NEW_BLOCK_GOSSIP_TOPIC,
+    NEW_TX_GOSSIP_TOPIC,
+};
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
@@ -9,6 +14,10 @@ use libp2p::{
     },
     mplex,
     noise,
+    tcp::{
+        GenTcpConfig,
+        TokioTcpTransport,
+    },
     yamux,
     Multiaddr,
     PeerId,
@@ -102,7 +111,11 @@ impl P2PConfig {
             allow_private_addresses: true,
             enable_random_walk: true,
             connection_idle_timeout: Some(Duration::from_secs(120)),
-            topics: vec![],
+            topics: vec![
+                NEW_TX_GOSSIP_TOPIC.into(),
+                NEW_BLOCK_GOSSIP_TOPIC.into(),
+                CON_VOTE_GOSSIP_TOPIC.into(),
+            ],
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,
@@ -118,13 +131,17 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) async fn build_transport(
-    local_keypair: Keypair,
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
-        let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
-        libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
+        let generate_tcp_transport =
+            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+
+        let tcp = generate_tcp_transport();
+
+        let ws_tcp =
+            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
+
+        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
     };
 
     let auth_config = {

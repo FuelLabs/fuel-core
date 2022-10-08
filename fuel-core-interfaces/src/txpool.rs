@@ -119,6 +119,11 @@ impl Sender {
         self.send(TxPoolMpsc::Remove { ids, response }).await?;
         receiver.await.map_err(Into::into)
     }
+
+    pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
+        let (sender, reciever) = mpsc::channel(buffer);
+        (Sender(sender), reciever)
+    }
 }
 
 /// RPC commands that can be sent to the TxPool through an MPSC channel.
