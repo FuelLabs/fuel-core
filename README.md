@@ -22,19 +22,20 @@ There are several system requirements including clang.
 ```bash
 brew update
 brew install cmake
+brew install protobuf
 ```
 
 ###### Debian
 
 ```bash
 apt update
-apt install -y cmake pkg-config build-essential git clang libclang-dev
+apt install -y cmake pkg-config build-essential git clang libclang-dev protobuf-compiler
 ```
 
 ###### Arch
 
 ```bash
-pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang
+pacman -Syu --needed --noconfirm cmake gcc pkgconf git clang protobuf-compiler
 ```
 
 ## Building
@@ -64,7 +65,6 @@ OPTIONS:
         ...
 ```
 
-
 For many development puposes it is useful to have a state that won't persist and the `db-type` option can be set to `in-memory` as in the following example.
 
 #### Example
@@ -93,7 +93,6 @@ On some macOS versions the default file descriptor limit is quite low, which can
 ```bash
 ulimit -n 10240
 ```
-
 
 #### Log level
 
@@ -125,8 +124,8 @@ The client functionality is available through a service endpoint that expect Gra
 
 The transaction executor currently performs instant block production. Changes are persisted to RocksDB by default.
 
-* Service endpoint: `/graphql`
-* Schema (available after building): `fuel-client/assets/schema.sdl`
+-   Service endpoint: `/graphql`
+-   Schema (available after building): `fuel-client/assets/schema.sdl`
 
 The service expects a mutation defined as `submit` that receives a [Transaction](https://github.com/FuelLabs/fuel-tx) in hex encoded binary format, as [specified here](https://github.com/FuelLabs/fuel-specs/blob/master/specs/protocol/tx_format.md).
 
