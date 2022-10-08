@@ -11,7 +11,7 @@ repository = "https://github.com/FuelLabs/fuel-core"
 description = "Fuel metrics"
 
 [dependencies]
-axum = "0.4"
+axum = "0.5"
 lazy_static = "1.4"
 prometheus = "0.13"
 

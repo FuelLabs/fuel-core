@@ -6,7 +6,6 @@ use fuel_core_interfaces::{
         BlockBroadcast,
         P2pRequestEvent,
     },
-    relayer,
     sync::SyncMpsc,
 };
 use parking_lot::Mutex;
@@ -33,7 +32,6 @@ impl Service {
         &self,
         _p2p_block: mpsc::Receiver<BlockBroadcast>,
         _p2p_request: mpsc::Sender<P2pRequestEvent>,
-        _relayer: relayer::Sender,
         _bft: mpsc::Sender<BftMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,
     ) {
