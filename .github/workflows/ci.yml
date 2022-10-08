@@ -34,7 +34,7 @@ jobs:
         run: cargo +nightly fmt --all -- --check
 
   lint-toml-files:
-    uses: FuelLabs/github-actions/.github/workflows/cargo-toml-lint.yml@elliot/notify-slack-action
+    uses: FuelLabs/github-actions/.github/workflows/cargo-toml-lint.yml@master
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
