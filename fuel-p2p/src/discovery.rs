@@ -4,10 +4,8 @@ use futures_timer::Delay;
 use ip_network::IpNetwork;
 use libp2p::{
     core::{
-        connection::{
-            ConnectionId,
-            ListenerId,
-        },
+        connection::ConnectionId,
+        transport::ListenerId,
         ConnectedPoint,
     },
     kad::{
@@ -119,6 +117,17 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
     ) {
         self.kademlia.inject_event(peer_id, connection, event);
+    }
+
+    fn inject_address_change(
+        &mut self,
+        peer_id: &PeerId,
+        connection_id: &ConnectionId,
+        old: &ConnectedPoint,
+        new: &ConnectedPoint,
+    ) {
+        self.kademlia
+            .inject_address_change(peer_id, connection_id, old, new)
     }
 
     // gets polled by the swarm
@@ -279,15 +288,8 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         failed_addresses: Option<&Vec<Multiaddr>>,
         other_established: usize,
     ) {
-        if self.connected_peers.insert(*peer_id) {
-            self.kademlia.inject_connection_established(
-                peer_id,
-                connection_id,
-                endpoint,
-                failed_addresses,
-                other_established,
-            );
-
+        if other_established == 0 {
+            self.connected_peers.insert(*peer_id);
             let addresses = self.addresses_of_peer(peer_id);
 
             self.events
@@ -295,6 +297,14 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
             trace!("Connected to a peer {:?}", peer_id);
         }
+
+        self.kademlia.inject_connection_established(
+            peer_id,
+            connection_id,
+            endpoint,
+            failed_addresses,
+            other_established,
+        );
     }
 
     fn inject_connection_closed(
@@ -303,22 +313,23 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         connection_id: &ConnectionId,
         connection_point: &ConnectedPoint,
         handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-        other_established: usize,
+        remaining_established: usize,
     ) {
-        if self.connected_peers.remove(peer_id) {
-            self.kademlia.inject_connection_closed(
-                peer_id,
-                connection_id,
-                connection_point,
-                handler,
-                other_established,
-            );
-
+        if remaining_established == 0 {
+            self.connected_peers.remove(peer_id);
             self.events
                 .push_back(DiscoveryEvent::Disconnected(*peer_id));
 
             trace!("Disconnected from {:?}", peer_id);
         }
+
+        self.kademlia.inject_connection_closed(
+            peer_id,
+            connection_id,
+            connection_point,
+            handler,
+            remaining_established,
+        );
     }
 
     fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
@@ -371,7 +382,10 @@ mod tests {
         identity::Keypair,
         multiaddr::Protocol,
         noise,
-        swarm::SwarmEvent,
+        swarm::{
+            SwarmBuilder,
+            SwarmEvent,
+        },
         yamux,
         Multiaddr,
         PeerId,
@@ -383,6 +397,7 @@ mod tests {
             HashSet,
             VecDeque,
         },
+        num::NonZeroU8,
         task::Poll,
         time::Duration,
     };
@@ -398,7 +413,7 @@ mod tests {
             .into_authentic(&keypair)
             .unwrap();
 
-        let transport = core::transport::MemoryTransport
+        let transport = core::transport::MemoryTransport::new()
             .upgrade(core::upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(yamux::YamuxConfig::default())
@@ -419,7 +434,11 @@ mod tests {
         };
 
         let listen_addr: Multiaddr = Protocol::Memory(rand::random::<u64>()).into();
-        let mut swarm = Swarm::new(transport, behaviour, keypair.public().to_peer_id());
+        let swarm_builder =
+            SwarmBuilder::new(transport, behaviour, keypair.public().to_peer_id())
+                .dial_concurrency_factor(NonZeroU8::new(1).expect("1 > 0"));
+
+        let mut swarm = swarm_builder.build();
 
         swarm
             .listen_on(listen_addr.clone())

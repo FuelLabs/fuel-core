@@ -7,15 +7,8 @@ use crate::{
         DiscoveryEvent,
     },
     gossipsub::{
-        self,
-        messages::{
-            GossipsubBroadcastRequest,
-            GossipsubMessage as FuelGossipsubMessage,
-        },
-        topics::{
-            GossipTopic,
-            GossipsubTopics,
-        },
+        build_gossipsub,
+        topics::GossipTopic,
     },
     peer_info::{
         PeerInfo,
@@ -24,11 +17,7 @@ use crate::{
     },
     request_response::messages::{
         IntermediateResponse,
-        OutboundResponse,
         RequestMessage,
-        ResponseChannelItem,
-        ResponseError,
-        ResponseMessage,
     },
 };
 use libp2p::{
@@ -40,7 +29,6 @@ use libp2p::{
         Gossipsub,
         GossipsubEvent,
         MessageId,
-        TopicHash,
     },
     request_response::{
         ProtocolSupport,
@@ -48,64 +36,49 @@ use libp2p::{
         RequestResponse,
         RequestResponseConfig,
         RequestResponseEvent,
-        RequestResponseMessage,
         ResponseChannel,
     },
-    swarm::{
-        NetworkBehaviour,
-        NetworkBehaviourAction,
-        NetworkBehaviourEventProcess,
-        PollParameters,
-    },
+    Multiaddr,
     NetworkBehaviour,
     PeerId,
 };
 use std::{
-    collections::{
-        HashMap,
-        VecDeque,
-    },
-    task::{
-        Context,
-        Poll,
-    },
-};
-use tracing::{
-    debug,
-    warn,
+    collections::HashMap,
+    marker::PhantomData,
 };
 
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
-pub enum FuelBehaviourEvent {
-    PeerConnected(PeerId),
-    PeerDisconnected(PeerId),
-    PeerIdentified(PeerId),
-    PeerInfoUpdated(PeerId),
-    GossipsubMessage {
-        peer_id: PeerId,
-        topic_hash: TopicHash,
-        message: FuelGossipsubMessage,
-    },
-    RequestMessage {
-        request_id: RequestId,
-        request_message: RequestMessage,
-    },
+#[derive(Debug)]
+pub struct BehaviourEventWrapper<Codec: NetworkCodec> {
+    event: FuelBehaviourEvent,
+    codec: PhantomData<Codec>,
 }
 
-/// Holds additional Network data for FuelBehavior
 #[derive(Debug)]
-struct NetworkMetadata {
-    gossipsub_topics: GossipsubTopics,
+pub enum FuelBehaviourEvent {
+    Discovery(DiscoveryEvent),
+    PeerInfo(PeerInfoEvent),
+    Gossipsub(GossipsubEvent),
+    RequestResponse(RequestResponseEvent<RequestMessage, IntermediateResponse>),
+}
+
+impl<Codec: NetworkCodec> BehaviourEventWrapper<Codec> {
+    fn new(event: FuelBehaviourEvent) -> Self {
+        Self {
+            event,
+            codec: PhantomData,
+        }
+    }
+}
+
+impl<Codec: NetworkCodec> From<BehaviourEventWrapper<Codec>> for FuelBehaviourEvent {
+    fn from(fuel_event: BehaviourEventWrapper<Codec>) -> Self {
+        fuel_event.event
+    }
 }
 
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(
-    out_event = "FuelBehaviourEvent",
-    poll_method = "poll",
-    event_process = true
-)]
+#[behaviour(out_event = "BehaviourEventWrapper")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
@@ -118,30 +91,6 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 
     /// RequestResponse protocol
     request_response: RequestResponse<Codec>,
-
-    /// Holds the Sender(s) part of the Oneshot Channel from the NetworkOrchestrator
-    /// Once the ResponseMessage is received from the p2p Network
-    /// It will send it to the NetworkOrchestrator via its unique Sender
-    #[behaviour(ignore)]
-    outbound_requests_table: HashMap<RequestId, ResponseChannelItem>,
-
-    /// Holds the ResponseChannel(s) for the inbound requests from the p2p Network
-    /// Once the Response is prepared by the NetworkOrchestrator
-    /// It will send it to the specified Peer via its unique ResponseChannel
-    #[behaviour(ignore)]
-    inbound_requests_table: HashMap<RequestId, ResponseChannel<IntermediateResponse>>,
-
-    /// Double-ended queue of FuelBehaviour Events
-    #[behaviour(ignore)]
-    events: VecDeque<FuelBehaviourEvent>,
-
-    /// NetworkCodec used as <GossipsubCodec> for encoding and decoding of Gossipsub messages
-    #[behaviour(ignore)]
-    codec: Codec,
-
-    /// Stores additional p2p network info
-    #[behaviour(ignore)]
-    network_metadata: NetworkMetadata,
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
@@ -177,29 +126,32 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         req_res_config.set_connection_keep_alive(p2p_config.set_connection_keep_alive);
 
         let request_response =
-            RequestResponse::new(codec.clone(), req_res_protocol, req_res_config);
-
-        let gossipsub_topics = GossipsubTopics::new(&p2p_config.network_name);
-        let network_metadata = NetworkMetadata { gossipsub_topics };
+            RequestResponse::new(codec, req_res_protocol, req_res_config);
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: gossipsub::build_gossipsub(&p2p_config.local_keypair, p2p_config),
+            gossipsub: build_gossipsub(&p2p_config.local_keypair, p2p_config),
             peer_info,
             request_response,
-
-            outbound_requests_table: HashMap::default(),
-            inbound_requests_table: HashMap::default(),
-            events: VecDeque::default(),
-            codec,
-            network_metadata,
         }
     }
 
-    // Currently only used in testing hence `allow`
-    #[allow(dead_code)]
-    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
-        self.peer_info.get_peer_info(peer_id)
+    pub fn add_addresses_to_peer_info(
+        &mut self,
+        peer_id: &PeerId,
+        addresses: Vec<Multiaddr>,
+    ) {
+        self.peer_info.insert_peer_addresses(peer_id, addresses);
+    }
+
+    pub fn add_addresses_to_discovery(
+        &mut self,
+        peer_id: &PeerId,
+        addresses: Vec<Multiaddr>,
+    ) {
+        for address in addresses {
+            self.discovery.add_address(peer_id, address.clone());
+        }
     }
 
     pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
@@ -208,16 +160,10 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
     pub fn publish_message(
         &mut self,
-        message: GossipsubBroadcastRequest,
+        topic: GossipTopic,
+        encoded_data: Vec<u8>,
     ) -> Result<MessageId, PublishError> {
-        let topic = self
-            .network_metadata
-            .gossipsub_topics
-            .get_gossipsub_topic(&message);
-        match self.codec.encode(message) {
-            Ok(encoded_data) => self.gossipsub.publish(topic, encoded_data),
-            Err(e) => Err(PublishError::TransformFailed(e)),
-        }
+        self.gossipsub.publish(topic, encoded_data)
     }
 
     pub fn subscribe_to_topic(
@@ -231,227 +177,48 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         &mut self,
         message_request: RequestMessage,
         peer_id: PeerId,
-        channel_item: ResponseChannelItem,
     ) -> RequestId {
-        let request_id = self
-            .request_response
-            .send_request(&peer_id, message_request);
-
-        self.outbound_requests_table
-            .insert(request_id, channel_item);
-
-        request_id
+        self.request_response
+            .send_request(&peer_id, message_request)
     }
 
     pub fn send_response_msg(
         &mut self,
-        request_id: RequestId,
-        message: OutboundResponse,
-    ) -> Result<(), ResponseError> {
-        match (
-            self.codec.convert_to_intermediate(&message),
-            self.inbound_requests_table.remove(&request_id),
-        ) {
-            (Ok(message), Some(channel)) => {
-                if self
-                    .request_response
-                    .send_response(channel, message)
-                    .is_err()
-                {
-                    debug!("Failed to send ResponseMessage for {:?}", request_id);
-                    return Err(ResponseError::SendingResponseFailed)
-                }
-            }
-            (Ok(_), None) => {
-                debug!("ResponseChannel for {:?} does not exist!", request_id);
-                return Err(ResponseError::ResponseChannelDoesNotExist)
-            }
-            (Err(e), _) => {
-                debug!("Failed to convert to IntermediateResponse with {:?}", e);
-                return Err(ResponseError::ConversionToIntermediateFailed)
-            }
-        }
-
-        Ok(())
+        channel: ResponseChannel<IntermediateResponse>,
+        message: IntermediateResponse,
+    ) -> Result<(), IntermediateResponse> {
+        self.request_response.send_response(channel, message)
     }
 
-    // report events to the swarm
-    fn poll(
-        &mut self,
-        _cx: &mut Context,
-        _: &mut impl PollParameters,
-    ) -> Poll<
-        NetworkBehaviourAction<
-            <Self as NetworkBehaviour>::OutEvent,
-            <Self as NetworkBehaviour>::ConnectionHandler,
-        >,
-    > {
-        match self.events.pop_front() {
-            Some(event) => Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)),
-            _ => Poll::Pending,
-        }
-    }
-
-    /// Getter for outbound_requests_table
-    /// Used only in testing in `service.rs`
+    // Currently only used in testing, but should be useful for the NetworkOrchestrator API
     #[allow(dead_code)]
-    pub(super) fn get_outbound_requests_table(
-        &self,
-    ) -> &HashMap<RequestId, ResponseChannelItem> {
-        &self.outbound_requests_table
+    pub fn get_peer_info(&self, peer_id: &PeerId) -> Option<&PeerInfo> {
+        self.peer_info.get_peer_info(peer_id)
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<DiscoveryEvent>
-    for FuelBehaviour<Codec>
-{
-    fn inject_event(&mut self, event: DiscoveryEvent) {
-        match event {
-            DiscoveryEvent::Connected(peer_id, addresses) => {
-                self.peer_info.insert_peer_addresses(&peer_id, addresses);
-
-                self.events
-                    .push_back(FuelBehaviourEvent::PeerConnected(peer_id));
-            }
-            DiscoveryEvent::Disconnected(peer_id) => self
-                .events
-                .push_back(FuelBehaviourEvent::PeerDisconnected(peer_id)),
-
-            _ => {}
-        }
+impl<Codec: NetworkCodec> From<DiscoveryEvent> for BehaviourEventWrapper<Codec> {
+    fn from(event: DiscoveryEvent) -> Self {
+        BehaviourEventWrapper::new(FuelBehaviourEvent::Discovery(event))
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<PeerInfoEvent>
-    for FuelBehaviour<Codec>
-{
-    fn inject_event(&mut self, event: PeerInfoEvent) {
-        match event {
-            PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
-                for address in addresses {
-                    self.discovery.add_address(&peer_id, address.clone());
-                }
-
-                self.events
-                    .push_back(FuelBehaviourEvent::PeerIdentified(peer_id));
-            }
-
-            PeerInfoEvent::PeerInfoUpdated { peer_id } => self
-                .events
-                .push_back(FuelBehaviourEvent::PeerInfoUpdated(peer_id)),
-        }
+impl<Codec: NetworkCodec> From<PeerInfoEvent> for BehaviourEventWrapper<Codec> {
+    fn from(event: PeerInfoEvent) -> Self {
+        BehaviourEventWrapper::new(FuelBehaviourEvent::PeerInfo(event))
     }
 }
 
-impl<Codec: NetworkCodec> NetworkBehaviourEventProcess<GossipsubEvent>
-    for FuelBehaviour<Codec>
-{
-    fn inject_event(&mut self, message: GossipsubEvent) {
-        if let GossipsubEvent::Message {
-            propagation_source,
-            message,
-            message_id: _,
-        } = message
-        {
-            if let Some(correct_topic) = self
-                .network_metadata
-                .gossipsub_topics
-                .get_gossipsub_tag(&message.topic)
-            {
-                match self.codec.decode(&message.data, correct_topic) {
-                    Ok(decoded_message) => {
-                        self.events.push_back(FuelBehaviourEvent::GossipsubMessage {
-                            peer_id: propagation_source,
-                            topic_hash: message.topic,
-                            message: decoded_message,
-                        })
-                    }
-                    Err(err) => {
-                        warn!(target: "fuel-libp2p", "Failed to decode a message: {:?} with error: {:?}", &message.data, err);
-                    }
-                }
-            } else {
-                warn!(target: "fuel-libp2p", "GossipTopicTag does not exist for {:?}", &message.topic);
-            }
-        }
+impl<Codec: NetworkCodec> From<GossipsubEvent> for BehaviourEventWrapper<Codec> {
+    fn from(event: GossipsubEvent) -> Self {
+        BehaviourEventWrapper::new(FuelBehaviourEvent::Gossipsub(event))
     }
 }
 
-impl<Codec: NetworkCodec>
-    NetworkBehaviourEventProcess<
-        RequestResponseEvent<RequestMessage, IntermediateResponse>,
-    > for FuelBehaviour<Codec>
+impl<Codec: NetworkCodec> From<RequestResponseEvent<RequestMessage, IntermediateResponse>>
+    for BehaviourEventWrapper<Codec>
 {
-    fn inject_event(
-        &mut self,
-        event: RequestResponseEvent<RequestMessage, IntermediateResponse>,
-    ) {
-        match event {
-            RequestResponseEvent::Message { message, .. } => match message {
-                RequestResponseMessage::Request {
-                    request,
-                    channel,
-                    request_id,
-                } => {
-                    self.inbound_requests_table.insert(request_id, channel);
-                    self.events.push_back(FuelBehaviourEvent::RequestMessage {
-                        request_id,
-                        request_message: request,
-                    })
-                }
-                RequestResponseMessage::Response {
-                    request_id,
-                    response,
-                } => {
-                    match (
-                        self.outbound_requests_table.remove(&request_id),
-                        self.codec.convert_to_response(&response),
-                    ) {
-                        (
-                            Some(ResponseChannelItem::ResponseBlock(channel)),
-                            Ok(ResponseMessage::ResponseBlock(block)),
-                        ) => {
-                            if channel.send(block).is_err() {
-                                debug!(
-                                    "Failed to send through the channel for {:?}",
-                                    request_id
-                                );
-                            }
-                        }
-
-                        (Some(_), Err(e)) => {
-                            debug!("Failed to convert IntermediateResponse into a ResponseMessage {:?} with {:?}", response, e);
-                        }
-                        (None, Ok(_)) => {
-                            debug!("Send channel not found for {:?}", request_id);
-                        }
-                        _ => {}
-                    }
-                }
-            },
-            RequestResponseEvent::InboundFailure {
-                peer,
-                error,
-                request_id,
-            } => {
-                debug!(
-                    "RequestResponse inbound error for peer: {:?} with id: {:?} and error: {:?}",
-                    peer, request_id, error
-                );
-            }
-            RequestResponseEvent::OutboundFailure {
-                peer,
-                error,
-                request_id,
-            } => {
-                debug!(
-                    "RequestResponse outbound error for peer: {:?} with id: {:?} and error: {:?}",
-                    peer, request_id, error
-                );
-
-                let _ = self.outbound_requests_table.remove(&request_id);
-            }
-            _ => {}
-        }
+    fn from(event: RequestResponseEvent<RequestMessage, IntermediateResponse>) -> Self {
+        BehaviourEventWrapper::new(FuelBehaviourEvent::RequestResponse(event))
     }
 }

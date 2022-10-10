@@ -14,6 +14,10 @@ use libp2p::{
     },
     mplex,
     noise,
+    tcp::{
+        GenTcpConfig,
+        TokioTcpTransport,
+    },
     yamux,
     Multiaddr,
     PeerId,
@@ -127,13 +131,17 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) async fn build_transport(
-    local_keypair: Keypair,
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
-        let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
-        libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
+        let generate_tcp_transport =
+            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+
+        let tcp = generate_tcp_transport();
+
+        let ws_tcp =
+            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
+
+        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
     };
 
     let auth_config = {
