@@ -72,10 +72,11 @@ sequenceDiagram
 
 ## PoA Gossip-Sync Flow
 
-When a non-producer is synced to the PoA node, bypass Synchronizer and react to block broadcasts.
+When a non-producer is synced to the PoA node, the synchronizer can switch to using gossip to capture newly finalized blocks.
 
 ```mermaid
 sequenceDiagram
+    participant S as Synchronizer
     participant POA as PoA Service
     participant P2P as P2P
     participant BI as Block Importer
@@ -84,16 +85,18 @@ sequenceDiagram
     participant D as Database
     participant TX as Transaction Pool
     
-    POA->>P2P: subscribe to block broadcasts
-    P2P-->>POA: new block event
+    S->>P2P: subscribe to block broadcasts
+    P2P-->>S: new block event
     opt new block height != current height + 1
     note right of POA: drop gossiped block
     end
+    S->>+POA: verify signed block header
     POA->>+R: await new block da height
     R-->>-POA: 
-    POA-->>POA: verify signature & seal block
-    POA->>+BI: commit sealed block
-    BI->>+R: check_da_height
+        note right of POA: verify signature against current authority key
+    POA->>-S: 
+    S->>+BI: commit sealed block
+    BI->>+R: check_da_height for message inclusion
     R-->>-BI: 
     BI->>+E: validate_and_store 
     E->>+D: save diff
@@ -103,5 +106,5 @@ sequenceDiagram
     D-->>BI: 
     BI->>+TX: drop_committed_txs
     TX-->>-BI: 
-    BI-->>-POA: 
+    BI-->>-S: 
 ```

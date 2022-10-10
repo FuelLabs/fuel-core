@@ -140,8 +140,6 @@ trait Database {
 trait PeerToPeer {
     // broadcast a newly produced block to the network
     async fn broadcast_new_block(block: SealedFuelBlock) -> Result<()>;
-    // receive a newly produced block from the network
-    async fn on_new_block(block: SealedFuelBlock) -> Result<()>;
 }
 ```
 #### Adapters: fuel_core::service::adapters::poa_consensus
