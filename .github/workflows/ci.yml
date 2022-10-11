@@ -107,10 +107,11 @@ jobs:
         uses: davidB/rust-cargo-make@v1
         with:
           version: "0.36.0"      
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v1
-        with:          
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Restore nix binary cache
+        uses: actions/cache@v3
+        with:
+          path: /nix/store
+          key: ${{ runner.os }}-${{ hashFiles('flake.lock') }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'nix ${{ matrix.command }} ${{ matrix.args }}'
