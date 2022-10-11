@@ -34,17 +34,48 @@ const fn receipt(i: Option<u8>) -> Receipt {
     }
 }
 
+fn message_out() -> Output {
+    Output::Message {
+        recipient: Default::default(),
+        amount: Default::default(),
+    }
+}
+
+fn other_out() -> Output {
+    Output::Coin {
+        to: Default::default(),
+        amount: Default::default(),
+        asset_id: Default::default(),
+    }
+}
+
 #[tokio::test]
 async fn can_build_output_proof() {
     use mockall::predicate::*;
     static RECEIPTS: [Receipt; 3] = [receipt(Some(10)), receipt(None), receipt(Some(3))];
     static TXNS: [Bytes32; 4] = [txn_id(20), txn_id(24), txn_id(1), txn_id(33)];
+    static OTHER_RECEIPTS: [Receipt; 4] = [
+        receipt(Some(4)),
+        receipt(Some(5)),
+        receipt(Some(6)),
+        receipt(Some(7)),
+    ];
+
+    let mut out = (0..1)
+        .flat_map(|_| vec![message_out(), other_out()])
+        .cycle();
     let mut data = MockDataSource::new();
     let transaction_id = Default::default();
-    data.expect_receipts()
-        .once()
-        .with(eq(transaction_id))
-        .return_const(RECEIPTS.iter());
+    let mut count = 0;
+    data.expect_receipts().returning(move |txn_id| {
+        if *txn_id == transaction_id {
+            Some(RECEIPTS.iter())
+        } else {
+            let r = OTHER_RECEIPTS[count..=count].iter();
+            count += 1;
+            Some(r)
+        }
+    });
     data.expect_transaction_status()
         .with(eq(transaction_id))
         .returning(|_| {
@@ -58,13 +89,15 @@ async fn can_build_output_proof() {
         .once()
         .with(eq(Bytes32::default()))
         .return_const(TXNS.iter());
-    data.expect_transaction().returning(|txn_id| {
+    data.expect_transaction().returning(move |txn_id| {
         TXNS.iter().find(|t| *t == txn_id).map(|id| {
             let mut txn = Transaction::default();
             match &mut txn {
                 Transaction::Script { outputs, .. }
-                | Transaction::Create { outputs, .. } => todo!(),
-                _ => todo!(),
+                | Transaction::Create { outputs, .. } => {
+                    outputs.push(out.next().unwrap());
+                    outputs.push(out.next().unwrap());
+                }
             }
             txn
         })
