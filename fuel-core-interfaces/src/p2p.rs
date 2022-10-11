@@ -66,7 +66,7 @@ pub enum P2pRequestEvent {
         vote: Arc<ConsensusVote>,
     },
     GossipsubMessageReport {
-        message: Box<dyn NetworkData<dyn Debug>>,
+        message: Box<dyn NetworkData<Box<dyn Debug>>>,
         acceptance: GossipsubMessageAcceptance,
     },
     Stop,
