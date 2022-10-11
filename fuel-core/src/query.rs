@@ -1,5 +1,6 @@
 use fuel_core_interfaces::{
     common::{
+        fuel_merkle,
         fuel_types::MessageId,
         prelude::*,
     },
@@ -41,7 +42,7 @@ pub async fn output_proof(
             TransactionStatus::Submitted { .. } => None,
         })?;
     let mut message_found = false;
-    let leaves: Vec<&MessageId> = data
+    let leaves = data
         .transactions_on_block(&block_id)?
         .filter(|transaction_id| {
             // TODO: get this from the block header when it is available.
@@ -59,7 +60,16 @@ pub async fn output_proof(
             let message_not_found = !message_found;
             message_found = **id == message_id;
             message_not_found
-        })
-        .collect();
-    todo!("generate BMT proof")
+        }).enumerate();
+    if message_found {
+        let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
+        let mut proof_index = 0;
+        for (index, message_id) in leaves {
+            tree.push(message_id.as_ref());
+            proof_index = index;
+        }
+        let proof = tree.prove(proof_index)?;
+    } else {
+        None
+    }
 }
