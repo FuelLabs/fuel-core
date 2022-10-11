@@ -3,6 +3,7 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
+    schema::scalars::TransactionId,
     service::{
         Config,
         FuelService,
@@ -23,6 +24,7 @@ use fuel_gql_client::{
         PaginationRequest,
     },
     fuel_tx::Input,
+    prelude::Bytes32,
 };
 use rand::{
     rngs::StdRng,
@@ -206,4 +208,29 @@ async fn messages_empty_results_for_owner_with_no_messages(
         .unwrap();
 
     assert_eq!(result.results.len(), 0);
+}
+
+#[tokio::test]
+async fn can_get_output_proof() {
+    let mut config = Config::local_node();
+    config.chain_conf.initial_state = Some(StateConfig {
+        ..Default::default()
+    });
+
+    // setup server & client
+    let srv = FuelService::new_node(config).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let transaction_id: TransactionId = Bytes32::default().into();
+    let message_id: fuel_core::schema::scalars::MessageId =
+        fuel_gql_client::fuel_types::MessageId::default().into();
+
+    let result = client
+        .output_proof(
+            transaction_id.to_string().as_str(),
+            message_id.to_string().as_str(),
+        )
+        .await
+        .unwrap()
+        .unwrap();
 }

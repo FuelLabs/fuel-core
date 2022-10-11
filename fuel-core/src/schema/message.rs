@@ -1,7 +1,12 @@
-use super::scalars::{
-    Address,
-    MessageId,
-    U64,
+use super::{
+    block::Block,
+    scalars::{
+        Address,
+        Bytes32,
+        MessageId,
+        TransactionId,
+        U64,
+    },
 };
 use crate::{
     database::Database,
@@ -178,5 +183,43 @@ impl MessageQuery {
             },
         )
         .await
+    }
+    async fn output_proof(
+        &self,
+        ctx: &Context<'_>,
+        transaction_id: TransactionId,
+        message_id: MessageId,
+    ) -> async_graphql::Result<Option<OutputProof>> {
+        todo!()
+        // Ok(
+        //     crate::query::output_proof(transaction_id.into(), message_id.into())
+        //         .await
+        //         .map(OutputProof),
+        // )
+    }
+}
+
+pub struct OutputProof(pub(crate) model::OutputProof);
+
+#[Object]
+impl OutputProof {
+    async fn proof_root(&self) -> Bytes32 {
+        todo!()
+    }
+    async fn proof_set(&self) -> &Vec<Bytes32> {
+        todo!()
+    }
+
+    async fn message(&self) -> Message {
+        todo!()
+    }
+
+    // FIXME: signature is not an address
+    async fn signature(&self) -> Address {
+        todo!()
+    }
+
+    async fn block(&self) -> Block {
+        todo!()
     }
 }

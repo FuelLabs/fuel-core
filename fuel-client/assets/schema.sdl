@@ -395,6 +395,14 @@ type OutputBreakpoint {
 	pc: U64!
 }
 
+type OutputProof {
+	proofRoot: Bytes32!
+	proofSet: [Bytes32!]!
+	message: Message!
+	signature: Address!
+	block: Block!
+}
+
 """
 Information about pagination in a connection
 """
@@ -444,6 +452,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
+	outputProof(transactionId: TransactionId!, messageId: MessageId!): OutputProof
 	"""
 	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned resources are actual resources

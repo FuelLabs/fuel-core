@@ -1,8 +1,11 @@
 use super::{
+    block::Block,
+    Bytes32,
     PageDirection,
     PageInfo,
     PaginatedResult,
     PaginationRequest,
+    TransactionId,
 };
 use crate::client::schema::{
     schema,
@@ -62,6 +65,33 @@ pub struct OwnedMessagesConnectionArgs {
     /// Retrieve the last n coins in order (backward pagination).
     /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "OutputProofArgs"
+)]
+pub struct OutputProofQuery {
+    #[arguments(transaction_id = &args.transaction_id, message_id = &args.message_id)]
+    pub output_proof: Option<OutputProof>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct OutputProof {
+    pub proof_root: Bytes32,
+    pub proof_set: Vec<Bytes32>,
+    pub message: Message,
+    pub signature: Address,
+    pub block: Block,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct OutputProofArgs {
+    pub transaction_id: TransactionId,
+    pub message_id: MessageId,
 }
 
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {

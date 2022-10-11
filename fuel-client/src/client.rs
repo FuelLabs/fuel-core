@@ -70,7 +70,10 @@ pub use schema::{
     PaginationRequest,
 };
 
-use self::schema::block::ProduceBlockArgs;
+use self::schema::{
+    block::ProduceBlockArgs,
+    message::OutputProofArgs,
+};
 
 pub mod schema;
 pub mod types;
@@ -533,6 +536,23 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    pub async fn output_proof(
+        &self,
+        transaction_id: &str,
+        message_id: &str,
+    ) -> io::Result<Option<schema::message::OutputProof>> {
+        let transaction_id: schema::TransactionId = transaction_id.parse()?;
+        let message_id: schema::MessageId = message_id.parse()?;
+        let query = schema::message::OutputProofQuery::build(&OutputProofArgs {
+            transaction_id,
+            message_id,
+        });
+
+        let proof = self.query(query).await?.output_proof;
+
+        Ok(proof)
     }
 }
 

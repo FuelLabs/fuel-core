@@ -49,6 +49,8 @@ pub struct CheckedMessage {
     id: MessageId,
 }
 
+pub struct OutputProof {}
+
 impl CheckedMessage {
     pub fn id(&self) -> &MessageId {
         &self.id
