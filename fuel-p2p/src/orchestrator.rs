@@ -70,7 +70,7 @@ pub struct NetworkOrchestrator {
     rx_outbound_responses: Receiver<Option<(OutboundResponse, RequestId)>>,
 
     // senders
-    tx_consensus: Sender<ConsensusWithMsgId>,
+    tx_consensus: Sender<GossipData<ConsensusBroadcast>>,
     tx_transaction: broadcast::Sender<TransactionWithMsgId>,
     tx_block: Sender<BlockWithMsgId>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
@@ -81,7 +81,7 @@ pub struct NetworkOrchestrator {
 }
 
 #[derive(Debug, Clone)]
-pub struct GossipData<T> {
+pub struct GossipData<T: Clone> {
     pub data: T,
     pub peer_id: PeerId,
     pub message_id: MessageId,

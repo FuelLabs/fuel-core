@@ -20,10 +20,12 @@ pub enum TransactionBroadcast {
     NewTransaction(Transaction),
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusBroadcast {
     NewVote(ConsensusVote),
 }
 
+#[derive(Debug, Clone)]
 pub enum BlockBroadcast {
     /// fuel block without consensus data
     NewBlock(FuelBlock),
