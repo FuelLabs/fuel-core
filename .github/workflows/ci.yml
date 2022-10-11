@@ -114,6 +114,7 @@ jobs:
         with:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: nix develop
+      - run: which protoc
       - name: ${{ matrix.command }} ${{ matrix.args }}
         uses: actions-rs/cargo@v1
         with:
