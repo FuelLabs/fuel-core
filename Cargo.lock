@@ -2427,7 +2427,6 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "async-trait",
- "fuel-block-producer",
  "fuel-core-interfaces",
  "humantime-serde",
  "parking_lot 0.12.1",

@@ -1,4 +1,3 @@
-use fuel_block_producer::adapters::transaction_selector::select_transactions;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
@@ -30,7 +29,10 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::sync::Arc;
+use std::{
+    cmp::Reverse,
+    sync::Arc,
+};
 use tokio::{
     sync::{
         broadcast,
@@ -91,6 +93,35 @@ impl BlockProducer for MockBlockProducer {
             transactions,
         })
     }
+}
+
+/// Select all txs that fit into the block, preferring ones with higher gas price.
+fn select_transactions(
+    mut includable_txs: Vec<Arc<CheckedTransaction>>,
+    max_gas: u64,
+) -> Vec<Arc<CheckedTransaction>> {
+    let mut used_block_space: Word = 0;
+
+    // Sort transactions by gas price, highest first
+    includable_txs.sort_by_key(|a| Reverse(a.transaction().gas_price()));
+
+    // Pick as many transactions as we can fit into the block (greedy)
+    includable_txs
+        .into_iter()
+        .filter(|tx| {
+            let tx_block_space = tx.max_gas();
+            if let Some(new_used_space) = used_block_space.checked_add(tx_block_space) {
+                if new_used_space <= max_gas {
+                    used_block_space = new_used_space;
+                    true
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+        .collect()
 }
 
 #[derive(Clone)]
