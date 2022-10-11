@@ -60,7 +60,8 @@ pub async fn output_proof(
             let message_not_found = !message_found;
             message_found = **id == message_id;
             message_not_found
-        }).enumerate();
+        })
+        .enumerate();
     if message_found {
         let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
         let mut proof_index = 0;
@@ -68,7 +69,11 @@ pub async fn output_proof(
             tree.push(message_id.as_ref());
             proof_index = index;
         }
-        let proof = tree.prove(proof_index)?;
+        let proof = tree.prove(proof_index as u64)?;
+        Some(OutputProof {
+            root: proof.0.into(),
+            proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
+        })
     } else {
         None
     }

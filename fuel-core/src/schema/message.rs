@@ -204,10 +204,15 @@ pub struct OutputProof(pub(crate) model::OutputProof);
 #[Object]
 impl OutputProof {
     async fn proof_root(&self) -> Bytes32 {
-        todo!()
+        self.0.root.into()
     }
-    async fn proof_set(&self) -> &Vec<Bytes32> {
-        todo!()
+    async fn proof_set(&self) -> Vec<Bytes32> {
+        self.0
+            .proof_set
+            .iter()
+            .cloned()
+            .map(Bytes32::from)
+            .collect()
     }
 
     async fn message(&self) -> Message {
