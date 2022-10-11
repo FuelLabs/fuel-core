@@ -1,3 +1,5 @@
 # Fuel Core PoA Manager
 
-Coordinates block production in a PoA network. This is a stopgap implementation until `fuel-bft` can be used, i.e. when PoS network is usable.
+Coordinates block production in a PoA network. This is used as a stopgap until a PoS network is implemented, but also useful for testing.
+
+For the PoS implementation, see [`fuel-core-bft`](../fuel-core-bft/),
