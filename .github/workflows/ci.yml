@@ -106,12 +106,7 @@ jobs:
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"      
-      - name: Restore nix binary cache
-        uses: actions/cache@v3
-        with:
-          path: /nix/store
-          key: ${{ runner.os }}-${{ hashFiles('flake.lock') }}
+          version: "0.36.0"
       - uses: Swatinem/rust-cache@v2
         with:
           key: 'nix ${{ matrix.command }} ${{ matrix.args }}'
