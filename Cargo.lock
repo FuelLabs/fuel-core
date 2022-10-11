@@ -2488,6 +2488,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "fuel-core-interfaces",
+ "fuel-txpool",
  "futures",
  "parking_lot 0.11.2",
  "thiserror",
