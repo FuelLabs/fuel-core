@@ -66,14 +66,14 @@ pub enum P2pRequestEvent {
         vote: Arc<ConsensusVote>,
     },
     GossipsubMessageReport {
-        message: Box<dyn NetworkData>,
+        message: Box<dyn NetworkData<dyn Debug>>,
         acceptance: GossipsubMessageAcceptance,
     },
     Stop,
 }
 
-pub trait NetworkData: Debug + Send {
-    fn take_data(&mut self) -> Option<Box<dyn Debug>>;
+pub trait NetworkData<T>: Debug + Send {
+    fn take_data(&mut self) -> Option<T>;
     fn message_id(&self) -> Vec<u8>;
     fn peer_id(&self) -> Vec<u8>;
 }

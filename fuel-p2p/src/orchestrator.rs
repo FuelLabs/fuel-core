@@ -83,14 +83,24 @@ pub struct NetworkOrchestrator {
 }
 
 #[derive(Debug, Clone)]
-pub struct GossipData<T: Debug + Send> {
-    pub data: Option<Box<T>>,
+pub struct GossipData<T> {
+    pub data: Option<T>,
     pub peer_id: PeerId,
     pub message_id: MessageId,
 }
 
-impl<T: Debug + Send> NetworkData for GossipData<T> {
-    fn take_data(&mut self) -> Option<Box<dyn Debug>> {
+impl<T> GossipData<T> {
+    pub fn new(value: T, peer_id: PeerId, message_id: MessageId) -> Self {
+        Self {
+            data: Some(value),
+            peer_id,
+            message_id,
+        }
+    }
+}
+
+impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
+    fn take_data(&mut self) -> Option<T> {
         self.data.take()
     }
 
@@ -148,13 +158,13 @@ impl NetworkOrchestrator {
 
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
-                                    let _ = self.tx_transaction.send(GossipData { data: Some(TransactionBroadcast::NewTransaction(tx)), message_id, peer_id});
+                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id) );
                                 },
                                 GossipsubMessage::NewBlock(block) => {
-                                    let _ = self.tx_block.send(GossipData { data: Some(BlockBroadcast::NewBlock(block)), message_id, peer_id });
+                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
                                 },
                                 GossipsubMessage::ConsensusVote(vote) => {
-                                    let _ = self.tx_consensus.send(GossipData {data: Some(ConsensusBroadcast::NewVote(vote)), message_id, peer_id } );
+                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
                                 },
                             }
                         },
