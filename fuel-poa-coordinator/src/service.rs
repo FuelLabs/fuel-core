@@ -10,14 +10,12 @@ use anyhow::Context;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
-    common::{
-        fuel_vm::prelude::InterpreterStorage,
-        prelude::Word,
-    },
+    common::prelude::Word,
     model::{
         BlockHeight,
         FuelBlock,
     },
+    poa_coordinator::BlockHeightDb,
     txpool::{
         Sender as TxPoolSender,
         TxStatus,
@@ -65,8 +63,7 @@ impl Service {
         block_producer: Arc<dyn BlockProducer>,
         db: S,
     ) where
-        S: InterpreterStorage + Send + Clone + 'static,
-        <S as InterpreterStorage>::DataError: Send,
+        S: BlockHeightDb + Send + Clone + 'static,
     {
         let mut running = self.running.lock();
 
@@ -111,8 +108,7 @@ impl Service {
 
 pub struct Task<S>
 where
-    S: InterpreterStorage + Send,
-    <S as InterpreterStorage>::DataError: Send,
+    S: BlockHeightDb + Send,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
@@ -131,8 +127,7 @@ where
 }
 impl<S> Task<S>
 where
-    S: InterpreterStorage + Send,
-    <S as InterpreterStorage>::DataError: Send,
+    S: BlockHeightDb + Send,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(&mut self) -> anyhow::Result<FuelBlock> {
@@ -140,7 +135,7 @@ where
             .db
             .block_height()
             .map_err(|err| anyhow::format_err!("db error {err:?}"))?;
-        let height = BlockHeight::from(current_height + 1);
+        let height = BlockHeight::from(current_height.as_usize() + 1);
 
         self.block_producer
             .produce_block(height, self.block_gas_limit)

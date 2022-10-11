@@ -1,8 +1,4 @@
 use fuel_block_producer::adapters::transaction_selector::select_transactions;
-use fuel_core::{
-    database::Database,
-    model::FuelBlockHeader,
-};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
@@ -14,7 +10,9 @@ use fuel_core_interfaces::{
     model::{
         BlockHeight,
         FuelBlock,
+        FuelBlockHeader,
     },
+    poa_coordinator::BlockHeightDb,
     txpool::{
         Sender as TxPoolSender,
         TxPoolMpsc,
@@ -92,6 +90,22 @@ impl BlockProducer for MockBlockProducer {
             },
             transactions,
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct MockDatabase {
+    height: u32,
+}
+impl MockDatabase {
+    pub fn new() -> Self {
+        Self { height: 0 }
+    }
+}
+
+impl BlockHeightDb for MockDatabase {
+    fn block_height(&self) -> anyhow::Result<BlockHeight> {
+        Ok(BlockHeight::from(self.height))
     }
 }
 
@@ -202,7 +216,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             max_block_time: Duration::new(1, 0),
         },
     ] {
-        let db = Database::in_memory();
+        let db = MockDatabase::new();
 
         let service = Service::new(&Config {
             trigger,
@@ -276,7 +290,7 @@ fn make_tx() -> Transaction {
 
 #[tokio::test(start_paused = true)]
 async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Never,
@@ -320,7 +334,7 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
 
 #[tokio::test(start_paused = true)]
 async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Instant,
@@ -357,7 +371,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 
 #[tokio::test(start_paused = true)]
 async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Interval {
@@ -449,7 +463,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 
 #[tokio::test(start_paused = true)]
 async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Interval {
@@ -504,7 +518,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
 
 #[tokio::test(start_paused = true)]
 async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Hybrid {
@@ -609,7 +623,7 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
 
 #[tokio::test(start_paused = true)]
 async fn hybrid_trigger_reacts_correcly_to_full_txpool() -> anyhow::Result<()> {
-    let db = Database::in_memory();
+    let db = MockDatabase::new();
 
     let service = Service::new(&Config {
         trigger: Trigger::Hybrid {
