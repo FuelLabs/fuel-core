@@ -12,7 +12,10 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    sync::Arc,
+};
 use tokio::sync::oneshot;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -63,10 +66,16 @@ pub enum P2pRequestEvent {
         vote: Arc<ConsensusVote>,
     },
     GossipsubMessageReport {
-        gossip_id: GossipsubMessageId,
+        message: Box<dyn NetworkData>,
         acceptance: GossipsubMessageAcceptance,
     },
     Stop,
+}
+
+pub trait NetworkData: Debug + Send {
+    fn take_data(&mut self) -> Option<Box<dyn Debug>>;
+    fn message_id(&self) -> Vec<u8>;
+    fn peer_id(&self) -> Vec<u8>;
 }
 
 #[async_trait]
