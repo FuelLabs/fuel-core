@@ -31,11 +31,13 @@ use crate::{
         ResponseMessage,
     },
 };
+
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
         error::PublishError,
         GossipsubEvent,
+        MessageAcceptance,
         MessageId,
         Topic,
         TopicHash,
@@ -59,6 +61,7 @@ use rand::Rng;
 use std::collections::HashMap;
 use tracing::{
     debug,
+    info,
     warn,
 };
 
@@ -98,6 +101,7 @@ struct NetworkMetadata {
 pub enum FuelP2PEvent {
     GossipsubMessage {
         peer_id: PeerId,
+        message_id: MessageId,
         topic_hash: TopicHash,
         message: FuelGossipsubMessage,
     },
@@ -239,6 +243,19 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         Ok(())
     }
 
+    pub fn report_message_validation_result(
+        &mut self,
+        msg_id: &MessageId,
+        propagation_source: &PeerId,
+        acceptance: MessageAcceptance,
+    ) -> Result<bool, PublishError> {
+        self.swarm.behaviour_mut().report_message_validation_result(
+            msg_id,
+            propagation_source,
+            acceptance,
+        )
+    }
+
     /// Handles P2P Events.
     /// Returns only events that are of interest to the Network Orchestrator.
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
@@ -272,7 +289,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                 if let GossipsubEvent::Message {
                     propagation_source,
                     message,
-                    ..
+                    message_id,
                 } = gossipsub_event
                 {
                     if let Some(correct_topic) = self
@@ -284,12 +301,29 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
                             Ok(decoded_message) => {
                                 return Some(FuelP2PEvent::GossipsubMessage {
                                     peer_id: propagation_source,
+                                    message_id,
                                     topic_hash: message.topic,
                                     message: decoded_message,
                                 })
                             }
                             Err(err) => {
-                                warn!(target: "fuel-libp2p", "Failed to decode a message: {:?} with error: {:?}", &message.data, err);
+                                warn!(target: "fuel-libp2p", "Failed to decode a message. ID: {}, Message: {:?} with error: {:?}", message_id, &message.data, err);
+
+                                match self.report_message_validation_result(
+                                    &message_id,
+                                    &propagation_source,
+                                    MessageAcceptance::Reject,
+                                ) {
+                                    Ok(false) => {
+                                        warn!(target: "fuel-libp2p", "Message was not found in the cache, peer with PeerId: {} has been reported.", propagation_source);
+                                    }
+                                    Ok(true) => {
+                                        info!(target: "fuel-libp2p", "Message found in the cache, peer with PeerId: {} has been reported.", propagation_source);
+                                    }
+                                    Err(e) => {
+                                        warn!(target: "fuel-libp2p", "Failed to publish the message with following error: {:?}.", e);
+                                    }
+                                }
                             }
                         }
                     } else {

@@ -19,9 +19,13 @@ use sha2::{
 
 use crate::config::P2PConfig;
 
-pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
+pub fn build_gossipsub(local_key: &Keypair, p2p_config: P2PConfig) -> Gossipsub {
     let gossip_message_id = move |message: &GossipsubMessage| {
-        MessageId::from(&Sha256::digest(&message.data)[..20])
+        p2p_config
+            .message_id_fn
+            .clone()
+            .map(|f| f(message))
+            .unwrap_or(MessageId::from(&Sha256::digest(&message.data)[..20]))
     };
 
     let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
@@ -35,6 +39,7 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub
         .mesh_n_high(p2p_config.max_mesh_size)
         .message_id_fn(gossip_message_id)
         .fast_message_id_fn(fast_gossip_message_id)
+        .validate_messages()
         .build()
         .expect("valid gossipsub configuration");
 

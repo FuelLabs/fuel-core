@@ -8,6 +8,10 @@ use crate::{
     model::ConsensusVote,
 };
 use async_trait::async_trait;
+use serde::{
+    Deserialize,
+    Serialize,
+};
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -26,6 +30,22 @@ pub enum BlockBroadcast {
 }
 
 #[derive(Debug)]
+pub enum GossipsubMessageAcceptance {
+    Accept,
+    Reject,
+    Ignore,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+pub struct GossipsubMessageId(pub Vec<u8>);
+
+impl From<Vec<u8>> for GossipsubMessageId {
+    fn from(message_id: Vec<u8>) -> Self {
+        GossipsubMessageId(message_id)
+    }
+}
+
+#[derive(Debug)]
 pub enum P2pRequestEvent {
     RequestBlock {
         height: BlockHeight,
@@ -39,6 +59,10 @@ pub enum P2pRequestEvent {
     },
     BroadcastConsensusVote {
         vote: Arc<ConsensusVote>,
+    },
+    GossipsubMessageReport {
+        gossip_id: GossipsubMessageId,
+        acceptance: GossipsubMessageAcceptance,
     },
     Stop,
 }

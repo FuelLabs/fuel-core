@@ -28,6 +28,7 @@ use libp2p::{
         },
         Gossipsub,
         GossipsubEvent,
+        MessageAcceptance,
         MessageId,
     },
     request_response::{
@@ -130,7 +131,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub(&p2p_config.local_keypair, p2p_config),
+            gossipsub: build_gossipsub(&p2p_config.local_keypair, p2p_config.clone()),
             peer_info,
             request_response,
         }
@@ -188,6 +189,19 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         message: IntermediateResponse,
     ) -> Result<(), IntermediateResponse> {
         self.request_response.send_response(channel, message)
+    }
+
+    pub fn report_message_validation_result(
+        &mut self,
+        msg_id: &MessageId,
+        propagation_source: &PeerId,
+        acceptance: MessageAcceptance,
+    ) -> Result<bool, PublishError> {
+        self.gossipsub.report_message_validation_result(
+            msg_id,
+            propagation_source,
+            acceptance,
+        )
     }
 
     // Currently only used in testing, but should be useful for the NetworkOrchestrator API
