@@ -31,11 +31,6 @@ use std::{
     time::Duration,
 };
 
-pub use libp2p::gossipsub::{
-    GossipsubMessage,
-    MessageId,
-};
-
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Maximum number of frames buffered per substream.
