@@ -64,7 +64,7 @@ pub struct NetworkOrchestrator {
     rx_outbound_responses: Receiver<Option<(OutboundResponse, RequestId)>>,
 
     // senders
-    tx_consensus: Sender<GossipData<ConsensusBroadcast>>,
+    tx_consensus: Sender<ConsensusGossipData>,
     tx_transaction: broadcast::Sender<TransactionGossipData>,
     tx_block: Sender<BlockGossipData>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
