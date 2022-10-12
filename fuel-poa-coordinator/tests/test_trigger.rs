@@ -648,22 +648,15 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     );
 
     // Pass time until a single block is produced after idle time
-    time::sleep(Duration::new(5, 0)).await;
+    time::sleep(Duration::new(4, 0)).await;
     assert_eq!(txpool.check_block_produced(), Ok(1));
     assert_eq!(
         txpool.check_block_produced(),
         Err(mpsc::error::TryRecvError::Empty)
     );
 
-    // Pass time to just until an empty block is produced due to max_block_time
-    time::sleep(Duration::new(5, 0)).await;
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
     // Make sure the empty block is produced after max_block_time
-    time::sleep(Duration::new(2, 0)).await;
+    time::sleep(Duration::new(10, 0)).await;
     assert_eq!(txpool.check_block_produced(), Ok(0));
 
     // Submit two tx
@@ -671,27 +664,9 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         txpool.add_tx(Arc::new(make_tx())).await;
     }
 
-    // Make sure blocks are not produced too early
-    time::sleep(Duration::new(1, 0)).await;
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Wait for both max_tx_idle_time and min_block_time to pass
+    // Wait for both max_tx_idle_time and min_block_time to pass, and see that the block is produced
     time::sleep(Duration::new(4, 0)).await;
     assert_eq!(txpool.check_block_produced(), Ok(2));
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
-
-    // Make sure that no new blocks will be produced before max_block_time
-    time::sleep(Duration::new(8, 0)).await;
-    assert_eq!(
-        txpool.check_block_produced(),
-        Err(mpsc::error::TryRecvError::Empty)
-    );
 
     // Stop
     let handle = service.stop().await.expect("Get join handle");
