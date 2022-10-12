@@ -11,6 +11,7 @@ use libp2p::gossipsub::{
 };
 use sha2::{
     Digest,
+    Sha224,
     Sha256,
 };
 
@@ -22,8 +23,7 @@ pub fn build_gossipsub(p2p_config: &P2PConfig) -> Gossipsub {
     };
 
     let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
-        // todo: cheaper hash func?
-        FastMessageId::from(&Sha256::digest(&message.data)[..8])
+        FastMessageId::from(&Sha224::digest(&message.data)[..16])
     };
 
     let gossipsub_config = GossipsubConfigBuilder::default()
