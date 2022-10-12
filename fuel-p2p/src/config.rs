@@ -28,7 +28,6 @@ use std::{
         IpAddr,
         Ipv4Addr,
     },
-    sync::Arc,
     time::Duration,
 };
 
@@ -46,7 +45,7 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct P2PConfig {
     pub local_keypair: Keypair,
 
@@ -83,8 +82,6 @@ pub struct P2PConfig {
     pub ideal_mesh_size: usize,
     pub min_mesh_size: usize,
     pub max_mesh_size: usize,
-    pub message_id_fn:
-        Option<Arc<dyn Fn(&GossipsubMessage) -> MessageId + Send + Sync + 'static>>,
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
@@ -127,8 +124,6 @@ impl P2PConfig {
             max_mesh_size: 12,
             min_mesh_size: 4,
             ideal_mesh_size: 6,
-            // default value set in gossipsub builder
-            message_id_fn: None,
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),

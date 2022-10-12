@@ -131,7 +131,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub(&p2p_config.local_keypair, p2p_config.clone()),
+            gossipsub: build_gossipsub(p2p_config),
             peer_info,
             request_response,
         }

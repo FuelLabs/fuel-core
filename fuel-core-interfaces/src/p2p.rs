@@ -42,11 +42,17 @@ pub enum GossipsubMessageAcceptance {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
-pub struct GossipsubMessageId(pub Vec<u8>);
+pub struct GossipsubMessageInfo {
+    pub message_id: Vec<u8>,
+    pub peer_id: Vec<u8>,
+}
 
-impl From<Vec<u8>> for GossipsubMessageId {
-    fn from(message_id: Vec<u8>) -> Self {
-        GossipsubMessageId(message_id)
+impl<T> From<&GossipData<T>> for GossipsubMessageInfo {
+    fn from(gossip_data: &GossipData<T>) -> Self {
+        Self {
+            message_id: gossip_data.message_id.clone(),
+            peer_id: gossip_data.peer_id.clone(),
+        }
     }
 }
 
@@ -66,16 +72,41 @@ pub enum P2pRequestEvent {
         vote: Arc<ConsensusVote>,
     },
     GossipsubMessageReport {
-        message: Box<dyn NetworkData<Box<dyn Debug>>>,
+        message: GossipsubMessageInfo,
         acceptance: GossipsubMessageAcceptance,
     },
     Stop,
 }
 
+#[derive(Debug, Clone)]
+pub struct GossipData<T> {
+    pub data: Option<T>,
+    pub peer_id: Vec<u8>,
+    pub message_id: Vec<u8>,
+}
+
+impl<T> GossipData<T> {
+    pub fn new(
+        data: T,
+        peer_id: impl Into<Vec<u8>>,
+        message_id: impl Into<Vec<u8>>,
+    ) -> Self {
+        Self {
+            data: Some(data),
+            peer_id: peer_id.into(),
+            message_id: message_id.into(),
+        }
+    }
+}
+
 pub trait NetworkData<T>: Debug + Send {
     fn take_data(&mut self) -> Option<T>;
-    fn message_id(&self) -> Vec<u8>;
-    fn peer_id(&self) -> Vec<u8>;
+}
+
+impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
+    fn take_data(&mut self) -> Option<T> {
+        self.data.take()
+    }
 }
 
 #[async_trait]

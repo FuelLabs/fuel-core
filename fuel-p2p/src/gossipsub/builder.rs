@@ -1,16 +1,13 @@
-use libp2p::{
-    gossipsub::{
-        FastMessageId,
-        Gossipsub,
-        GossipsubConfigBuilder,
-        GossipsubMessage,
-        MessageAuthenticity,
-        MessageId,
-        PeerScoreParams,
-        PeerScoreThresholds,
-        RawGossipsubMessage,
-    },
-    identity::Keypair,
+use libp2p::gossipsub::{
+    FastMessageId,
+    Gossipsub,
+    GossipsubConfigBuilder,
+    GossipsubMessage,
+    MessageAuthenticity,
+    MessageId,
+    PeerScoreParams,
+    PeerScoreThresholds,
+    RawGossipsubMessage,
 };
 use sha2::{
     Digest,
@@ -19,16 +16,13 @@ use sha2::{
 
 use crate::config::P2PConfig;
 
-pub fn build_gossipsub(local_key: &Keypair, p2p_config: P2PConfig) -> Gossipsub {
+pub fn build_gossipsub(p2p_config: &P2PConfig) -> Gossipsub {
     let gossip_message_id = move |message: &GossipsubMessage| {
-        p2p_config
-            .message_id_fn
-            .clone()
-            .map(|f| f(message))
-            .unwrap_or(MessageId::from(&Sha256::digest(&message.data)[..20]))
+        MessageId::from(&Sha256::digest(&message.data)[..20])
     };
 
     let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
+        // todo: cheaper hash func?
         FastMessageId::from(&Sha256::digest(&message.data)[..8])
     };
 
@@ -44,7 +38,7 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: P2PConfig) -> Gossipsub 
         .expect("valid gossipsub configuration");
 
     let mut gossipsub = Gossipsub::new(
-        MessageAuthenticity::Signed(local_key.clone()),
+        MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
         gossipsub_config,
     )
     .expect("gossipsub initialized");

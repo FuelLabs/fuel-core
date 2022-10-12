@@ -1,31 +1,20 @@
-use std::{
-    collections::HashMap,
-    fmt::{
-        Debug,
-        Formatter,
-    },
-    sync::Arc,
-};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 
 use fuel_core_interfaces::p2p::{
     BlockBroadcast,
     ConsensusBroadcast,
+    GossipData,
     GossipsubMessageAcceptance,
-    GossipsubMessageId,
-    NetworkData,
+    GossipsubMessageInfo,
     P2pDb,
     P2pRequestEvent,
     TransactionBroadcast,
 };
 use libp2p::{
-    gossipsub::{
-        MessageAcceptance,
-        MessageId,
-    },
+    gossipsub::MessageAcceptance,
     request_response::RequestId,
-    PeerId,
 };
 use tokio::{
     sync::{
@@ -44,7 +33,10 @@ use tracing::{
 };
 
 use crate::{
-    codecs::bincode::BincodeCodec,
+    codecs::{
+        bincode::BincodeCodec,
+        NetworkCodec,
+    },
     config::P2PConfig,
     gossipsub::messages::{
         GossipsubBroadcastRequest,
@@ -61,11 +53,9 @@ use crate::{
     },
 };
 
-type ConsensusWithMsgId = GossipData<ConsensusBroadcast>;
-type TransactionWithMsgId = GossipData<TransactionBroadcast>;
-type BlockWithMsgId = GossipData<BlockBroadcast>;
-
-type MessageIdWithPeer = (MessageId, PeerId);
+type ConsensusGossipData = GossipData<ConsensusBroadcast>;
+type TransactionGossipData = GossipData<TransactionBroadcast>;
+type BlockGossipData = GossipData<BlockBroadcast>;
 
 pub struct NetworkOrchestrator {
     p2p_config: P2PConfig,
@@ -76,41 +66,10 @@ pub struct NetworkOrchestrator {
 
     // senders
     tx_consensus: Sender<GossipData<ConsensusBroadcast>>,
-    tx_transaction: broadcast::Sender<TransactionWithMsgId>,
-    tx_block: Sender<BlockWithMsgId>,
+    tx_transaction: broadcast::Sender<TransactionGossipData>,
+    tx_block: Sender<BlockGossipData>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
     db: Arc<dyn P2pDb>,
-}
-
-#[derive(Debug, Clone)]
-pub struct GossipData<T> {
-    pub data: Option<T>,
-    pub peer_id: PeerId,
-    pub message_id: MessageId,
-}
-
-impl<T> GossipData<T> {
-    pub fn new(value: T, peer_id: PeerId, message_id: MessageId) -> Self {
-        Self {
-            data: Some(value),
-            peer_id,
-            message_id,
-        }
-    }
-}
-
-impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
-    fn take_data(&mut self) -> Option<T> {
-        self.data.take()
-    }
-
-    fn message_id(&self) -> Vec<u8> {
-        self.message_id.0.clone()
-    }
-
-    fn peer_id(&self) -> Vec<u8> {
-        self.peer_id.to_bytes()
-    }
 }
 
 impl NetworkOrchestrator {
@@ -118,9 +77,9 @@ impl NetworkOrchestrator {
         p2p_config: P2PConfig,
         rx_request_event: Receiver<P2pRequestEvent>,
 
-        tx_consensus: Sender<ConsensusWithMsgId>,
-        tx_transaction: broadcast::Sender<TransactionWithMsgId>,
-        tx_block: Sender<BlockWithMsgId>,
+        tx_consensus: Sender<ConsensusGossipData>,
+        tx_transaction: broadcast::Sender<TransactionGossipData>,
+        tx_block: Sender<BlockGossipData>,
 
         db: Arc<dyn P2pDb>,
     ) -> Self {
@@ -155,16 +114,15 @@ impl NetworkOrchestrator {
                 p2p_event = p2p_service.next_event() => {
                     match p2p_event {
                         Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
-
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
-                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id) );
+                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id.0) );
                                 },
                                 GossipsubMessage::NewBlock(block) => {
-                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
+                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id.0));
                                 },
                                 GossipsubMessage::ConsensusVote(vote) => {
-                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
+                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id.0));
                                 },
                             }
                         },
@@ -205,27 +163,7 @@ impl NetworkOrchestrator {
                                 let _ = p2p_service.publish_message(broadcast);
                             },
                             P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
-                                let msg_id = message.message_id().into();
-                                let peer_id = message.peer_id().try_into().unwrap();
-
-                                let acceptance = match acceptance {
-                                    GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
-                                    GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
-                                    GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore
-                                };
-
-                                match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance) {
-                                    Ok(true) => {
-                                        info!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
-                                    }
-                                    Ok(false) => {
-                                        warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
-                                    }
-                                    Err(e) => {
-                                        warn!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
-                                    }
-                                }
-
+                                report_message_validation_result(message, acceptance, &mut p2p_service);
                             }
                             P2pRequestEvent::Stop => break,
                         }
@@ -237,6 +175,42 @@ impl NetworkOrchestrator {
         }
 
         Ok(self)
+    }
+}
+
+fn report_message_validation_result<T: NetworkCodec>(
+    message: GossipsubMessageInfo,
+    acceptance: GossipsubMessageAcceptance,
+    p2p_service: &mut FuelP2PService<T>,
+) {
+    let GossipsubMessageInfo {
+        peer_id,
+        message_id,
+    } = message;
+
+    let msg_id = message_id.into();
+
+    if let Ok(peer_id) = peer_id.try_into() {
+        let acceptance = match acceptance {
+            GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
+            GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
+            GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
+        };
+
+        match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
+        {
+            Ok(true) => {
+                info!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
+            }
+            Ok(false) => {
+                warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+            }
+            Err(e) => {
+                warn!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
+            }
+        }
+    } else {
+        warn!(target: "fuel-libp2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
 }
 
@@ -255,9 +229,9 @@ impl Service {
         db: Arc<dyn P2pDb>,
         tx_request_event: Sender<P2pRequestEvent>,
         rx_request_event: Receiver<P2pRequestEvent>,
-        tx_consensus: Sender<ConsensusWithMsgId>,
-        tx_transaction: broadcast::Sender<TransactionWithMsgId>,
-        tx_block: Sender<BlockWithMsgId>,
+        tx_consensus: Sender<ConsensusGossipData>,
+        tx_transaction: broadcast::Sender<TransactionGossipData>,
+        tx_block: Sender<BlockGossipData>,
     ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
             p2p_config,
