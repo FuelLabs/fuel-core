@@ -115,7 +115,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
       - run: nix develop --command which protoc
       - name: ${{ matrix.command }} ${{ matrix.args }}
-        run: nix develop --command ${{ matrix.command }} ${{ matrix.args }}
+        run: nix develop --command cargo ${{ matrix.command }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
