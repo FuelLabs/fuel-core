@@ -1,10 +1,14 @@
 use fuel_core_interfaces::{
     common::{
+        fuel_crypto,
         fuel_merkle,
         fuel_types::MessageId,
         prelude::*,
     },
-    model::OutputProof,
+    model::{
+        FuelBlockDb,
+        OutputProof,
+    },
 };
 
 use crate::tx_pool::TransactionStatus;
@@ -24,6 +28,12 @@ pub trait DataSource {
         &'a self,
         block_id: &Bytes32,
     ) -> Option<core::slice::Iter<'a, Bytes32>>;
+    fn message(
+        &self,
+        message_id: &MessageId,
+    ) -> Option<fuel_core_interfaces::model::Message>;
+    fn signature(&self, block_id: &Bytes32) -> Option<fuel_crypto::Signature>;
+    fn block(&self, block_id: &Bytes32) -> Option<FuelBlockDb>;
 }
 
 pub async fn output_proof(
@@ -70,10 +80,15 @@ pub async fn output_proof(
     }
     if message_found {
         let proof = tree.prove(proof_index as u64)?;
+        let message = data.message(&message_id)?;
+        let signature = data.signature(&block_id)?;
+        let block = data.block(&block_id)?;
         Some(OutputProof {
             root: proof.0.into(),
             proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
-            message: todo!(),
+            message,
+            signature,
+            block,
         })
     } else {
         None

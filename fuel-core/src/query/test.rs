@@ -1,5 +1,4 @@
 use super::*;
-use std::str::FromStr;
 
 const fn message_id(i: u8) -> MessageId {
     MessageId::new([i; 32])
@@ -112,8 +111,9 @@ async fn can_build_output_proof() {
         .once()
         .with(eq(Bytes32::default()))
         .return_const(TXNS.iter());
+
     data.expect_transaction().returning(move |txn_id| {
-        TXNS.iter().find(|t| *t == txn_id).map(|id| {
+        TXNS.iter().find(|t| *t == txn_id).map(|_| {
             let mut txn = Transaction::default();
             match &mut txn {
                 Transaction::Script { outputs, .. }
@@ -126,8 +126,25 @@ async fn can_build_output_proof() {
         })
     });
 
+    data.expect_message()
+        .once()
+        .with(eq(MESSAGE_ID))
+        .return_const(fuel_core_interfaces::model::Message::default());
+
+    data.expect_signature()
+        .once()
+        .with(eq(Bytes32::default()))
+        .return_const(fuel_crypto::Signature::default());
+
+    data.expect_block()
+        .once()
+        .with(eq(Bytes32::default()))
+        .return_const(FuelBlockDb::default());
+
     let p = output_proof(&data, transaction_id, MESSAGE_ID)
         .await
         .unwrap();
     assert_eq!(p.message.id(), MESSAGE_ID);
+    assert_eq!(p.signature, fuel_crypto::Signature::default());
+    assert_eq!(p.block.id(), FuelBlockDb::default().id());
 }

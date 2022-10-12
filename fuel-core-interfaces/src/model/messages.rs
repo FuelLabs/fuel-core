@@ -1,4 +1,7 @@
-use super::BlockHeight;
+use super::{
+    BlockHeight,
+    FuelBlockDb,
+};
 use crate::{
     common::{
         fuel_types::{
@@ -11,8 +14,10 @@ use crate::{
     model::DaBlockHeight,
 };
 use core::ops::Deref;
-use fuel_vm::fuel_tx::Bytes32;
-use std::io::Bytes;
+use fuel_vm::{
+    fuel_crypto,
+    fuel_tx::Bytes32,
+};
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -55,6 +60,8 @@ pub struct OutputProof {
     pub root: Bytes32,
     pub proof_set: Vec<Bytes32>,
     pub message: Message,
+    pub signature: fuel_crypto::Signature,
+    pub block: FuelBlockDb,
 }
 
 impl CheckedMessage {
