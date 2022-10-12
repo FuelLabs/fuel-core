@@ -1,4 +1,5 @@
 use super::*;
+use std::str::FromStr;
 
 const fn message_id(i: u8) -> MessageId {
     MessageId::new([i; 32])
@@ -34,6 +35,19 @@ const fn receipt(i: Option<u8>) -> Receipt {
     }
 }
 
+const fn receipt_from_id(message_id: MessageId) -> Receipt {
+    Receipt::MessageOut {
+        message_id,
+        sender: Address::new([0; 32]),
+        recipient: Address::new([0; 32]),
+        amount: 0,
+        nonce: Bytes32::new([0; 32]),
+        len: 0,
+        digest: Bytes32::new([0; 32]),
+        data: Vec::new(),
+    }
+}
+
 fn message_out() -> Output {
     Output::Message {
         recipient: Default::default(),
@@ -52,7 +66,16 @@ fn other_out() -> Output {
 #[tokio::test]
 async fn can_build_output_proof() {
     use mockall::predicate::*;
-    static RECEIPTS: [Receipt; 3] = [receipt(Some(10)), receipt(None), receipt(Some(3))];
+    static MESSAGE_ID: MessageId = MessageId::new([
+        91, 111, 181, 142, 97, 250, 71, 89, 57, 118, 125, 104, 164, 70, 249, 127, 27,
+        255, 2, 192, 229, 147, 90, 62, 168, 187, 81, 230, 81, 87, 131, 216,
+    ]);
+    static RECEIPTS: [Receipt; 4] = [
+        receipt(Some(10)),
+        receipt(None),
+        receipt(Some(3)),
+        receipt_from_id(MESSAGE_ID),
+    ];
     static TXNS: [Bytes32; 4] = [txn_id(20), txn_id(24), txn_id(1), txn_id(33)];
     static OTHER_RECEIPTS: [Receipt; 4] = [
         receipt(Some(4)),
@@ -65,7 +88,7 @@ async fn can_build_output_proof() {
         .flat_map(|_| vec![message_out(), other_out()])
         .cycle();
     let mut data = MockDataSource::new();
-    let transaction_id = Default::default();
+    let transaction_id = txn_id(33);
     let mut count = 0;
     data.expect_receipts().returning(move |txn_id| {
         if *txn_id == transaction_id {
@@ -103,8 +126,8 @@ async fn can_build_output_proof() {
         })
     });
 
-    let message_id = message_id(3);
-    let p = output_proof(&data, transaction_id, message_id)
+    let p = output_proof(&data, transaction_id, MESSAGE_ID)
         .await
         .unwrap();
+    assert_eq!(p.message.id(), MESSAGE_ID);
 }

@@ -54,6 +54,7 @@ pub struct CheckedMessage {
 pub struct OutputProof {
     pub root: Bytes32,
     pub proof_set: Vec<Bytes32>,
+    pub message: Message,
 }
 
 impl CheckedMessage {

@@ -31,7 +31,7 @@ pub async fn output_proof(
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> Option<OutputProof> {
-    let receipt = data.receipts(&transaction_id)?.find(
+    data.receipts(&transaction_id)?.find(
         |r| matches!(r, Receipt::MessageOut { message_id: id, .. } if *id == message_id),
     )?;
     let block_id = data
@@ -73,6 +73,7 @@ pub async fn output_proof(
         Some(OutputProof {
             root: proof.0.into(),
             proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
+            message: todo!(),
         })
     } else {
         None
