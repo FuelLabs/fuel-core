@@ -63,12 +63,9 @@ mod block;
 mod code_root;
 mod coin;
 mod contracts;
-mod delegates_index;
 mod message;
 mod receipts;
-mod staking_diffs;
 mod state;
-mod validator_set;
 
 pub mod metadata;
 pub mod resource;
@@ -112,17 +109,8 @@ pub enum Column {
     FuelBlockIds = 13,
     /// See [`Messages`](fuel_core_interfaces::db::Messages)
     Messages = 14,
-    /// Contain current validator stake and it consensus_key if set.
-    /// See [`ValidatorsSet`](fuel_core_interfaces::db::ValidatorsSet)
-    ValidatorsSet = 15,
-    /// Contain diff between da blocks it contains new registers consensus key and new delegate sets.
-    /// See [`StakingDiffs`](fuel_core_interfaces::db::StakingDiffs)
-    StakingDiffs = 16,
-    /// Maps delegate address with validator_set_diff index where last delegate change happened.
-    /// See [`DelegatesIndexes`](fuel_core_interfaces::db::DelegatesIndexes)
-    DelegatesIndexes = 17,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 18,
+    OwnedMessageIds = 15,
 }
 
 #[derive(Clone, Debug)]
