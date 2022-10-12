@@ -113,13 +113,9 @@ jobs:
       - uses: cachix/install-nix-action@v16
         with:
           nix_path: nixpkgs=channel:nixos-unstable
-      - run: nix develop
-      - run: which protoc
+      - run: nix develop --command which protoc
       - name: ${{ matrix.command }} ${{ matrix.args }}
-        uses: actions-rs/cargo@v1
-        with:
-          command: ${{ matrix.command }}
-          args: ${{ matrix.args }}
+        run: nix develop --command ${{ matrix.command }} ${{ matrix.args }}
       - name: Notify if Job Fails
         uses: ravsamhq/notify-slack-action@v2
         if: always() && github.ref == 'refs/heads/master'
