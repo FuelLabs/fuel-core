@@ -1,3 +1,5 @@
+#![deny(unused_must_use)]
+
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
@@ -11,10 +13,11 @@ use fuel_core_interfaces::{
         FuelBlock,
         FuelBlockHeader,
     },
-    poa_coordinator::BlockHeightDb,
+    poa_coordinator::{
+        BlockHeightDb,
+        TransactionPool,
+    },
     txpool::{
-        Sender as TxPoolSender,
-        TxPoolMpsc,
         TxStatus,
         TxStatusBroadcast,
     },
@@ -37,6 +40,7 @@ use tokio::{
     sync::{
         broadcast,
         mpsc,
+        oneshot,
         Mutex,
     },
     task::JoinHandle,
@@ -47,11 +51,11 @@ use tokio::{
 };
 
 pub struct MockBlockProducer {
-    txpool_sender: TxPoolSender,
+    txpool_sender: MockTxPoolSender,
 }
 
 impl MockBlockProducer {
-    pub fn new(txpool_sender: TxPoolSender) -> Self {
+    pub fn new(txpool_sender: MockTxPoolSender) -> Self {
         Self { txpool_sender }
     }
 }
@@ -66,7 +70,7 @@ impl BlockProducer for MockBlockProducer {
         let includable_txs: Vec<_> = self
             .txpool_sender
             .includable()
-            .await?
+            .await
             .into_iter()
             .map(|tx| {
                 Arc::new(
@@ -124,7 +128,7 @@ fn select_transactions(
         .collect()
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MockDatabase {
     height: u32,
 }
@@ -145,7 +149,8 @@ pub struct MockTxPool {
     transactions: Arc<Mutex<Vec<Arc<Transaction>>>>,
     broadcast_tx: broadcast::Sender<TxStatusBroadcast>,
     import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
-    stopper: mpsc::Sender<TxPoolMpsc>,
+    sender: MockTxPoolSender,
+    stopper: oneshot::Sender<()>,
     join: JoinHandle<()>,
     /// New blocks will be broadcast here.
     /// Messages contain the amount of transactions in the block
@@ -154,11 +159,12 @@ pub struct MockTxPool {
 
 impl MockTxPool {
     /// Spawn a background task for handling the messages
-    fn spawn() -> (Self, TxPoolSender, broadcast::Receiver<TxStatusBroadcast>) {
-        let transactions = Arc::new(Mutex::new(Vec::new()));
+    fn spawn() -> (Self, broadcast::Receiver<TxStatusBroadcast>) {
+        let transactions = Arc::new(Mutex::new(Vec::<Arc<Transaction>>::new()));
 
         let (block_event_tx, block_event_rx) = mpsc::channel(16);
 
+        let (stopper_tx, mut stopper_rx) = oneshot::channel();
         let (txpool_tx, mut txpool_rx) = mpsc::channel(16);
         let (broadcast_tx, broadcast_rx) = broadcast::channel(16);
         let (import_block_tx, mut import_block_rx) = broadcast::channel(16);
@@ -167,14 +173,20 @@ impl MockTxPool {
         let join = tokio::spawn(async move {
             loop {
                 tokio::select! {
+                    _ = &mut stopper_rx => {
+                        break;
+                    },
                     msg = txpool_rx.recv() => {
                         match msg.expect("Closed unexpectedly") {
-                            TxPoolMpsc::Includable { response } => {
+                            MockTxPoolMsg::Includable(response) => {
                                 let resp = txs.lock().await.clone();
                                 response.send(resp).unwrap();
+                            },
+                            MockTxPoolMsg::ConsumableGas(response) => {
+                                let t = txs.lock().await.clone();
+                                let resp = t.into_iter().map(|t| t.gas_limit()).sum();
+                                response.send(resp).unwrap();
                             }
-                            TxPoolMpsc::Stop => break,
-                            _ => todo!(),
                         }
                     },
                     msg = import_block_rx.recv() => {
@@ -199,13 +211,17 @@ impl MockTxPool {
                 transactions,
                 broadcast_tx,
                 import_block_tx,
-                stopper: txpool_tx.clone(),
+                sender: MockTxPoolSender(txpool_tx),
+                stopper: stopper_tx,
                 join,
                 block_event_rx,
             },
-            TxPoolSender::new(txpool_tx),
             broadcast_rx,
         )
+    }
+
+    fn sender(&self) -> MockTxPoolSender {
+        self.sender.clone()
     }
 
     async fn add_tx(&mut self, tx: Arc<Transaction>) {
@@ -227,9 +243,43 @@ impl MockTxPool {
     }
 
     async fn stop(self) -> anyhow::Result<()> {
-        self.stopper.send(TxPoolMpsc::Stop).await?;
+        self.stopper.send(()).expect("Stopping failed");
         self.join.await?;
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum MockTxPoolMsg {
+    ConsumableGas(oneshot::Sender<u64>),
+    Includable(oneshot::Sender<Vec<Arc<Transaction>>>),
+}
+
+#[derive(Clone)]
+pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>);
+
+impl MockTxPoolSender {
+    async fn includable(&self) -> Vec<Arc<Transaction>> {
+        let (tx, rx) = oneshot::channel();
+        self.0
+            .send(MockTxPoolMsg::Includable(tx))
+            .await
+            .expect("Send error");
+        rx.await.expect("MockTxPool panicked in includable query")
+    }
+}
+
+#[async_trait::async_trait]
+impl TransactionPool for MockTxPoolSender {
+    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
+        let (tx, rx) = oneshot::channel();
+        self.0
+            .send(MockTxPoolMsg::ConsumableGas(tx))
+            .await
+            .expect("Send error");
+        Ok(rx
+            .await
+            .expect("MockTxPool panicked in total_consumable_gas query"))
     }
 }
 
@@ -254,14 +304,14 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             block_gas_limit: 100_000,
         });
 
-        let (txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
+        let (txpool, broadcast_rx) = MockTxPool::spawn();
 
         service
             .start(
                 broadcast_rx,
-                txpool_sender.clone(),
+                txpool.sender(),
                 txpool.import_block_tx.clone(),
-                Arc::new(MockBlockProducer::new(txpool_sender.clone())),
+                Arc::new(MockBlockProducer::new(txpool.sender())),
                 db,
             )
             .await;
@@ -328,13 +378,13 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,
@@ -372,14 +422,14 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
 
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,
@@ -411,13 +461,13 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,
@@ -503,13 +553,13 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,
@@ -560,13 +610,13 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,
@@ -597,8 +647,7 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         Err(mpsc::error::TryRecvError::Empty)
     );
 
-    // Pass time until a single block is produced after idle time,
-    // but no empty block is created yet
+    // Pass time until a single block is produced after idle time
     time::sleep(Duration::new(5, 0)).await;
     assert_eq!(txpool.check_block_produced(), Ok(1));
     assert_eq!(
@@ -665,13 +714,13 @@ async fn hybrid_trigger_reacts_correcly_to_full_txpool() -> anyhow::Result<()> {
         block_gas_limit: 100_000,
     });
 
-    let (mut txpool, txpool_sender, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool_sender.clone());
+    let (mut txpool, broadcast_rx) = MockTxPool::spawn();
+    let producer = MockBlockProducer::new(txpool.sender());
     let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
-            txpool_sender,
+            txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
             db,

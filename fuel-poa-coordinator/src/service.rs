@@ -15,9 +15,11 @@ use fuel_core_interfaces::{
         BlockHeight,
         FuelBlock,
     },
-    poa_coordinator::BlockHeightDb,
+    poa_coordinator::{
+        BlockHeightDb,
+        TransactionPool,
+    },
     txpool::{
-        Sender as TxPoolSender,
         TxStatus,
         TxStatusBroadcast,
     },
@@ -55,15 +57,16 @@ impl Service {
         }
     }
 
-    pub async fn start<S>(
+    pub async fn start<S, T>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatusBroadcast>,
-        txpool_sender: TxPoolSender,
+        txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
         block_producer: Arc<dyn BlockProducer>,
         db: S,
     ) where
         S: BlockHeightDb + Send + Clone + 'static,
+        T: TransactionPool + Send + Sync + 'static,
     {
         let mut running = self.running.lock();
 
@@ -80,7 +83,7 @@ impl Service {
             db,
             block_producer,
             txpool_broadcast,
-            txpool_sender,
+            txpool,
             last_block_created: Instant::now(),
             import_block_events_tx,
             trigger: self.config.trigger,
@@ -106,15 +109,16 @@ impl Service {
     }
 }
 
-pub struct Task<S>
+pub struct Task<S, T>
 where
     S: BlockHeightDb + Send,
+    T: TransactionPool,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
     db: S,
     block_producer: Arc<dyn BlockProducer>,
-    txpool_sender: TxPoolSender,
+    txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatusBroadcast>,
     import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
     /// Last block creation time. When starting up, this is initialized
@@ -125,9 +129,10 @@ where
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
 }
-impl<S> Task<S>
+impl<S, T> Task<S, T>
 where
     S: BlockHeightDb + Send,
+    T: TransactionPool,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(&mut self) -> anyhow::Result<FuelBlock> {
@@ -176,19 +181,15 @@ where
                     .set_timeout(max_block_time, OnConflict::Min)
                     .await;
 
-                // TODO: Maybe there could be a way to get the length without having
-                //       to perform full block production computation?
-                let block_tx_count =
-                    self.signal_produce_block().await?.transactions.len();
-                let includable_tx_count = self.txpool_sender.includable().await?.len();
+                let consumable_gas = self.txpool.total_consumable_gas().await?;
 
                 // If txpool still has more than a full block of transactions available,
                 // produce new block in min_block_time.
-                if includable_tx_count > block_tx_count {
+                if consumable_gas > self.block_gas_limit {
                     self.timer
                         .set_timeout(min_block_time, OnConflict::Min)
                         .await;
-                } else if includable_tx_count > 0 {
+                } else if consumable_gas > 0 {
                     // If we still have available txs, reduce the timeout to max idle time
                     self.timer
                         .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -216,13 +217,7 @@ where
                     min_block_time,
                     ..
                 } => {
-                    // Create a new block just to see if we can fit them all in
-                    // TODO: Maybe there could be a way to get the length without having
-                    //       to perform full block production computation?
-                    let block_tx_count =
-                        self.signal_produce_block().await?.transactions.len();
-                    let includable_tx_count =
-                        self.txpool_sender.includable().await?.len();
+                    let consumable_gas = self.txpool.total_consumable_gas().await?;
 
                     // We have at least one transaction, so tx_max_idle_time is the limit
                     self.timer
@@ -231,7 +226,7 @@ where
 
                     // If we have over one full block of transactions and min_block_time
                     // has expired, start block production immediately
-                    if includable_tx_count > block_tx_count
+                    if consumable_gas > self.block_gas_limit
                         && self.last_block_created + min_block_time < Instant::now()
                     {
                         self.produce_block().await?;
