@@ -85,6 +85,10 @@ pub struct GossipData<T> {
     pub message_id: Vec<u8>,
 }
 
+pub type ConsensusGossipData = GossipData<ConsensusBroadcast>;
+pub type TransactionGossipData = GossipData<TransactionBroadcast>;
+pub type BlockGossipData = GossipData<BlockBroadcast>;
+
 impl<T> GossipData<T> {
     pub fn new(
         data: T,

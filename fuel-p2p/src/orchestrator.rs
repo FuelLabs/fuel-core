@@ -4,13 +4,16 @@ use anyhow::anyhow;
 
 use fuel_core_interfaces::p2p::{
     BlockBroadcast,
+    BlockGossipData,
     ConsensusBroadcast,
+    ConsensusGossipData,
     GossipData,
     GossipsubMessageAcceptance,
     GossipsubMessageInfo,
     P2pDb,
     P2pRequestEvent,
     TransactionBroadcast,
+    TransactionGossipData,
 };
 use libp2p::{
     gossipsub::MessageAcceptance,
@@ -52,10 +55,6 @@ use crate::{
         FuelP2PService,
     },
 };
-
-type ConsensusGossipData = GossipData<ConsensusBroadcast>;
-type TransactionGossipData = GossipData<TransactionBroadcast>;
-type BlockGossipData = GossipData<BlockBroadcast>;
 
 pub struct NetworkOrchestrator {
     p2p_config: P2PConfig,

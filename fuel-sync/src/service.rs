@@ -3,7 +3,7 @@ use fuel_core_interfaces::{
     bft::BftMpsc,
     block_importer::ImportBlockMpsc,
     p2p::{
-        BlockBroadcast,
+        BlockGossipData,
         P2pRequestEvent,
     },
     sync::SyncMpsc,
@@ -30,7 +30,7 @@ impl Service {
 
     pub async fn start(
         &self,
-        _p2p_block: mpsc::Receiver<BlockBroadcast>,
+        _p2p_block: mpsc::Receiver<BlockGossipData>,
         _p2p_request: mpsc::Sender<P2pRequestEvent>,
         _bft: mpsc::Sender<BftMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,
