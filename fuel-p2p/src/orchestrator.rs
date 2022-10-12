@@ -114,15 +114,17 @@ impl NetworkOrchestrator {
                 p2p_event = p2p_service.next_event() => {
                     match p2p_event {
                         Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
+                            let message_id = message_id.0;
+
                             match message {
                                 GossipsubMessage::NewTx(tx) => {
-                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id.0) );
+                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
                                 },
                                 GossipsubMessage::NewBlock(block) => {
-                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id.0));
+                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
                                 },
                                 GossipsubMessage::ConsensusVote(vote) => {
-                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id.0));
+                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
                                 },
                             }
                         },
@@ -163,7 +165,7 @@ impl NetworkOrchestrator {
                                 let _ = p2p_service.publish_message(broadcast);
                             },
                             P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
-                                report_message_validation_result(message, acceptance, &mut p2p_service);
+                                report_message(message, acceptance, &mut p2p_service);
                             }
                             P2pRequestEvent::Stop => break,
                         }
@@ -178,7 +180,7 @@ impl NetworkOrchestrator {
     }
 }
 
-fn report_message_validation_result<T: NetworkCodec>(
+fn report_message<T: NetworkCodec>(
     message: GossipsubMessageInfo,
     acceptance: GossipsubMessageAcceptance,
     p2p_service: &mut FuelP2PService<T>,
