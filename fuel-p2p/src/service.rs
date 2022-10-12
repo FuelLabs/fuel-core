@@ -446,7 +446,10 @@ mod tests {
     };
     use futures::StreamExt;
     use libp2p::{
-        gossipsub::Topic,
+        gossipsub::{
+            error::PublishError,
+            Topic,
+        },
         identity::Keypair,
         swarm::SwarmEvent,
         Multiaddr,
@@ -757,6 +760,12 @@ mod tests {
                                 }
                             }
                         }
+
+                        // Node B received the correct message
+                        // If we try to publish it again we will get `PublishError::Duplicate`
+                        // This asserts that our MessageId calculation is consistant irrespective of which Peer sends it
+                        let broadcast_request = broadcast_request.clone();
+                        matches!(node_b.publish_message(broadcast_request), Err(PublishError::Duplicate));
 
                         break
                     }
