@@ -118,7 +118,7 @@ impl DeadlineClock {
             .expect("Deadline clock task has panicked")
     }
 
-    /// Sets the tiemout, optionally overwriting the existing value
+    /// Sets the timeout, optionally overwriting the existing value
     pub async fn set_deadline(&self, deadline: Instant, on_conflict: OnConflict) {
         self.control
             .send(ControlMessage::Set {
