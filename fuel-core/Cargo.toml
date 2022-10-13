@@ -45,6 +45,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", f
 ] }
 fuel-metrics = { path = "../fuel-metrics", version = "0.10.1", optional = true }
 fuel-p2p = { path = "../fuel-p2p", version = "0.10.1", optional = true }
+fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.10.1" }
 fuel-relayer = { path = "../fuel-relayer", version = "0.10.1", optional = true }
 fuel-sync = { path = "../fuel-sync", version = "0.10.1" }
 fuel-txpool = { path = "../fuel-txpool", version = "0.10.1" }

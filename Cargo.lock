@@ -2235,10 +2235,12 @@ version = "0.10.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
+ "fuel-poa-coordinator",
  "hex",
  "insta",
  "itertools",
  "rand 0.8.5",
+ "ron",
  "serde",
  "serde_json",
  "serde_with",
@@ -2271,6 +2273,7 @@ dependencies = [
  "fuel-core-interfaces",
  "fuel-metrics",
  "fuel-p2p",
+ "fuel-poa-coordinator",
  "fuel-relayer",
  "fuel-sync",
  "fuel-txpool",
@@ -2416,6 +2419,21 @@ dependencies = [
  "tracing-appender",
  "tracing-attributes",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "fuel-poa-coordinator"
+version = "0.10.1"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "fuel-core-interfaces",
+ "humantime-serde",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "serde",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3031,6 +3049,16 @@ name = "humantime"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
+
+[[package]]
+name = "humantime-serde"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57a3db5ea5923d99402c94e9feb261dc5ee9b4efa158b0315f788cf549cc200c"
+dependencies = [
+ "humantime",
+ "serde",
+]
 
 [[package]]
 name = "hyper"
@@ -5060,6 +5088,17 @@ checksum = "7e9562ea1d70c0cc63a34a22d977753b50cca91cc6b6527750463bd5dd8697bc"
 dependencies = [
  "libc",
  "librocksdb-sys",
+]
+
+[[package]]
+name = "ron"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300a51053b1cb55c80b7a9fde4120726ddf25ca241a1cbb926626f62fb136bff"
+dependencies = [
+ "base64 0.13.0",
+ "bitflags",
+ "serde",
 ]
 
 [[package]]
