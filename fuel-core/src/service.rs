@@ -106,6 +106,7 @@ impl FuelService {
         self.modules.stop().await;
     }
 
+    #[cfg(feature = "relayer")]
     /// Wait for the [`Relayer`] to be in sync with
     /// the data availability layer.
     ///
