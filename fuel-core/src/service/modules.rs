@@ -88,7 +88,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
                 block_gas_limit: config.chain_conf.block_gas_limit,
             }),
         ),
-        // TODO: enable when btf config is ready to use
+        // TODO: enable when bft config is ready to use
         // CoordinatorConfig::Bft { config } => {
         //     CoordinatorService::Bft(fuel_core_bft::Service::new(config, db).await?)
         // }
