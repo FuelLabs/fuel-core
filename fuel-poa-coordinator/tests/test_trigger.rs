@@ -677,7 +677,7 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
 }
 
 #[tokio::test(start_paused = true)]
-async fn hybrid_trigger_reacts_correcly_to_full_txpool() -> anyhow::Result<()> {
+async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> {
     let db = MockDatabase::new();
 
     let service = Service::new(&Config {
