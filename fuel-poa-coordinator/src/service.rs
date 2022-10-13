@@ -219,18 +219,19 @@ where
                 } => {
                     let consumable_gas = self.txpool.total_consumable_gas().await?;
 
-                    // We have at least one transaction, so tx_max_idle_time is the limit
-                    self.timer
-                        .set_timeout(max_tx_idle_time, OnConflict::Min)
-                        .await;
-
                     // If we have over one full block of transactions and min_block_time
                     // has expired, start block production immediately
                     if consumable_gas > self.block_gas_limit
                         && self.last_block_created + min_block_time < Instant::now()
                     {
                         self.produce_block().await?;
+                    } else {
+                        // We have at least one transaction, so tx_max_idle_time is the limit
+                        self.timer
+                            .set_timeout(max_tx_idle_time, OnConflict::Min)
+                            .await;
                     }
+
                     Ok(())
                 }
             },
