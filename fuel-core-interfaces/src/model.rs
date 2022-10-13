@@ -30,8 +30,6 @@ pub use txpool::{
 };
 pub use vote::ConsensusVote;
 
-pub type ValidatorStake = u64;
-
 /// Validator address used for registration of validator on DA layer
 pub type ValidatorId = Address;
 /// Consensus public key used for Fuel network consensus protocol to

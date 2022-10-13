@@ -260,10 +260,7 @@ pub mod tests {
 
             Some(Arc::new(SealedFuelBlock {
                 block,
-                consensus: FuelBlockConsensus {
-                    required_stake: 100_000,
-                    validators: Default::default(),
-                },
+                consensus: FuelBlockConsensus {},
             }))
         }
     }

@@ -1,0 +1,25 @@
+[package]
+name = "fuel-poa-coordinator"
+version = "0.10.1"
+authors = ["Fuel Labs <contact@fuel.sh>"]
+edition = "2021"
+homepage = "https://fuel.network/"
+keywords = ["blockchain", "fuel", "consensus", "bft"]
+license = "BUSL-1.1"
+repository = "https://github.com/FuelLabs/fuel-core"
+description = "Fuel Core PoA Coordinator"
+
+[dependencies]
+anyhow = "1.0"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1" }
+humantime-serde = "1.1.1"
+parking_lot = "0.12"
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1"
+
+[dev-dependencies]
+async-trait = "0.1"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+rand = "0.8"
+tokio = { version = "1.21", features = ["full", "test-util"] }

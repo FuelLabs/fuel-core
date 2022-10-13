@@ -44,10 +44,8 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     let state_conf = StateConfig::generate_state_config(db)?;
 
     let chain_conf = ChainConfig {
-        chain_name: config.chain_name,
-        block_production: config.block_production,
         initial_state: Some(state_conf),
-        transaction_parameters: config.transaction_parameters,
+        ..config
     };
 
     let stdout = std::io::stdout().lock();

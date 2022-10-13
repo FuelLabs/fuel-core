@@ -15,9 +15,11 @@ anyhow = "1.0"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.10.1", features = [
     "serde",
 ] }
+fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.10.1" }
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
 rand = "0.8"
+ron = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"

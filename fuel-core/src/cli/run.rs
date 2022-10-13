@@ -3,6 +3,7 @@ use crate::{
     FuelService,
 };
 use clap::Parser;
+use fuel_chain_config::ChainConfig;
 use fuel_core::service::{
     Config,
     DbType,
@@ -108,11 +109,14 @@ impl Command {
             }
         };
 
+        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        let consensus_params = chain_conf.transaction_parameters;
+
         Ok(Config {
             addr,
             database_path,
             database_type,
-            chain_conf: chain_config.as_str().parse()?,
+            chain_conf,
             utxo_validation,
             manual_blocks_enabled,
             vm: VMConfig {
@@ -124,11 +128,10 @@ impl Command {
             },
             predicates,
             block_importer: Default::default(),
-            block_producer: Default::default(),
+            block_producer: fuel_block_producer::Config { consensus_params },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
-            bft: Default::default(),
             sync: Default::default(),
             #[cfg(feature = "p2p")]
             p2p,
