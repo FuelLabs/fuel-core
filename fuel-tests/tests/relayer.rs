@@ -141,8 +141,8 @@ async fn messages_are_spendable_after_relayer_is_synced() {
         nonce,
         5,
         contract_address,
-        Some(sender.clone().into()),
-        Some(recipient.clone().into()),
+        Some(sender.into()),
+        Some(recipient.into()),
         Some(amount),
         None,
     )];
@@ -210,11 +210,10 @@ async fn messages_are_spendable_after_relayer_is_synced() {
     // verify that the message id matches what we spent
     let message_id = tx.inputs()[0]
         .message_id()
-        .expect("first input should be a message")
-        .clone();
+        .expect("first input should be a message");
     assert_eq!(
         MessageId::from(query.results[0].message_id.clone()),
-        message_id
+        *message_id
     );
 
     // verify the spent status of the message
