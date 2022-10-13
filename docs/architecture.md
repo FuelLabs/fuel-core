@@ -38,6 +38,13 @@ Summary:
    from being polluted by dependencies with large compile times or unstable interfaces. This allows for libraries like 
    networking, third-party SDKs, or database drivers to be swapped out without breaking our core domain specific logic.
 
+The following is intended to be a living document to convey how P&A can and should be applied to the client. However, given
+many of these components remain in flux as our needs change, these ports and flows should be considered as a foundation 
+and structure for future design RFC refinements to build upon, rather than reflect a finalized view dictating how the 
+system should forever be. When applying this design, it's encouraged to take practical and experimental steps to evolve our 
+codebase using the Ports and Adapters (P&A) principals previously summarized to help guide our decision-making based on 
+evidence discovered in the process of implementation and testing.
+
 ## Domains:
 
 ```mermaid
@@ -112,12 +119,13 @@ flowchart TB
 #### Ports: fuel_poa_consensus::ports
 ```rust
 trait BlockProducer {
-    // used by the PoA node to produce a new block and immediately save the resultant block state
-    async fn produce_and_store_block(height: BlockHeight) -> Result<FuelBlock>;
+    // used by the PoA node to produce a new block and obtain fully computed block headers
+    async fn produce_block(height: BlockHeight) -> Result<FuelBlock>;
 }
 
 trait BlockImporter {
-    // used by non-poa nodes in response to blocks proposed via p2p
+    // After the PoA node has signed over the block, send it to the block importer for inclusion
+    // into the finalized state of the node.
     async fn commit(sealed_block: SealedFuelBlock) -> Result<()>;
 }
 
@@ -220,7 +228,7 @@ impl fuel_sync::ports::BlockImporter for Service<BlockImporter> {
 trait PeerToPeer {
     type SealedHeaderResponse: NetworkData<SealedFuelBlockHeader>;
     type BlockResponse: NetworkData<Vec<SealedFuelBlock>>;
-    type GossipedBlock: NetworkData<SealedFuelBlock>;
+    type GossipedBlockHeader: NetworkData<SealedFuelBlockHeader>;
     
     async fn fetch_best_network_block_header() -> Result<Self::SealedHeaderResponse>;
     async fn fetch_blocks(query: Range<BlockHeight>) -> Result<Self::BlockResponse>;
@@ -229,10 +237,10 @@ trait PeerToPeer {
     // punish the sender for providing a set of blocks that aren't valid
     fn report_invalid_blocks(invalid_blocks: &Self::BlockResponse) -> Result<()>;
     // await a newly produced block from the network (similar to stream.next())
-    async fn next_gossiped_block() -> Result<Self::GossipedBlock>;
+    async fn next_gossiped_block_header() -> Result<Self::SealedFuelBlockHeader>;
     // notify the p2p network whether to continue gossiping this message to others or
     // punish the peer that sent it
-    fn notify_gossip_block_validity(message: &Self::GossipedBlock, validity: GossipValidity);
+    fn notify_gossip_block_validity(message: &Self::GossipedBlockHeader, validity: GossipValidity);
 }
 
 // Generic wrapper for data received from the network

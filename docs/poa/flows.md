@@ -7,8 +7,9 @@ When the node is configured with a POA key, produce blocks and notify network.
 sequenceDiagram
     participant POA as PoA Service
     participant BP as Block Producer
-    participant TX as Transaction Pool
     participant R as Relayer
+    participant TX as Transaction Pool
+    participant BI as Block Importer
     participant E as Executor
     participant D as Database
     participant P2P as P2P
@@ -18,15 +19,20 @@ sequenceDiagram
     TX-->>BP: 
     BP->>R: get_da_height
     R-->>BP: 
-    BP->>E: execute and store
-    E->>D: save diff
+    BP->>E: produce and obtain final headers
     E-->>BP: 
     BP-->>POA: Malleated block
     POA->>R: get_poa_key
     R-->>POA: 
     POA->>POA: sign block
-    POA->>D: insert_consensus_data
-    POA->>P2P: broadcast_new_block
+    POA->>BI: commit_sealed_block
+    note right of BI: verify block height & da height
+    note right of BI: store block state
+    BI->>+D: insert_consensus_data
+    D-->>BI: 
+    BI->>+TX: drop_committed_txs
+    TX-->>-BI: 
+    BI->>P2P: broadcast_new_signed_block_header
 ```
 
 ## PoA Synchronization Flow
@@ -72,7 +78,7 @@ sequenceDiagram
 
 ## PoA Gossip-Sync Flow
 
-When a non-producer is synced to the PoA node, the synchronizer can switch to using gossip to capture newly finalized blocks.
+When a full-node is synced to the network, the synchronizer module can switch to using gossip to capture newly finalized blocks.
 
 ```mermaid
 sequenceDiagram
@@ -85,10 +91,10 @@ sequenceDiagram
     participant D as Database
     participant TX as Transaction Pool
     
-    S->>P2P: subscribe to block broadcasts
+    S->>P2P: subscribe to signed & finalized block header broadcasts
     P2P-->>S: new block event
     opt new block height != current height + 1
-    note right of POA: drop gossiped block
+    note right of S: drop gossiped block
     end
     S->>+POA: verify signed block header
     POA->>+R: await new block da height
