@@ -41,7 +41,8 @@ pub enum GossipsubMessageAcceptance {
     Ignore,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GossipsubMessageInfo {
     pub message_id: Vec<u8>,
     pub peer_id: Vec<u8>,
