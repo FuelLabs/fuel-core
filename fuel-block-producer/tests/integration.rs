@@ -143,10 +143,7 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config {
-            max_gas_per_block,
-            consensus_params,
-        },
+        config: fuel_block_producer::config::Config { consensus_params },
         db: &mock_db,
         txpool: &TxPoolAdapter {
             sender: txpool.sender().clone(),
@@ -193,7 +190,7 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production
     let generated_block = block_producer
-        .produce_block(1u32.into())
+        .produce_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -212,7 +209,7 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production again
     let generated_block = block_producer
-        .produce_block(2u32.into())
+        .produce_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -229,7 +226,7 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production once more, now the block should be empty
     let generated_block = block_producer
-        .produce_block(3u32.into())
+        .produce_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
