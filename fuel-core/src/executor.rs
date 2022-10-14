@@ -60,6 +60,7 @@ use fuel_core_interfaces::{
         FuelBlockHeader,
         Message,
     },
+    relayer::RelayerDb,
 };
 use fuel_storage::{
     StorageAsMut,
@@ -103,6 +104,7 @@ impl Executor {
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
         let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+        let da_height = db.get_finalized_da_height().await.unwrap_or_default();
         let new_block_height = current_height + 1u32.into();
 
         let mut block = FuelBlock {
@@ -110,6 +112,7 @@ impl Executor {
                 height: new_block_height,
                 parent_hash: current_hash,
                 time: Utc::now(),
+                da_height,
                 ..Default::default()
             },
             transactions: txs.into_iter().map(|t| t.as_ref().clone()).collect(),
