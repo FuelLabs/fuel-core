@@ -11,7 +11,14 @@
 
 # Disable built-in flows
 [config]
+# Skip loading of all core tasks which saves up a bit on toml parsing and task creation
 skip_core_tasks = true
+# Skips loading Git related environment variables
+skip_git_env_info = true
+# Skips loading rust related environment variables
+skip_rust_env_info = true
+# Skips loading the current crate related environment variables
+skip_crate_env_info = true
 
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
