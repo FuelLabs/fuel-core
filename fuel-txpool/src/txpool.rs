@@ -234,6 +234,12 @@ impl TxPool {
         res
     }
 
+    /// The amount of gas in all includable transactions combined
+    pub async fn consumable_gas(txpool: &RwLock<Self>) -> u64 {
+        let pool = txpool.read().await;
+        pool.by_hash.values().map(|tx| tx.gas_limit()).sum()
+    }
+
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     pub async fn includable(txpool: &RwLock<Self>) -> Vec<ArcTx> {

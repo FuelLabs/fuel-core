@@ -23,6 +23,7 @@ use fuel_core_interfaces::{
     common::{
         crypto::ephemeral_merkle_root,
         fuel_types::Bytes32,
+        prelude::Word,
     },
     executor::{
         Error,
@@ -60,7 +61,11 @@ pub struct Producer<'a> {
 #[async_trait::async_trait]
 impl<'a> Trait for Producer<'a> {
     /// Produces a block for the specified height
-    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
+    async fn produce_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> Result<FuelBlock> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -75,10 +80,7 @@ impl<'a> Trait for Producer<'a> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
 
-        let best_transactions = self
-            .txpool
-            .get_includable_txs(height, self.config.max_gas_per_block)
-            .await?;
+        let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
 
         let header = FuelBlockHeader {
             height,
