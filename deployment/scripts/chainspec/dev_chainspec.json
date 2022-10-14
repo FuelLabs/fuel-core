@@ -1,8 +1,9 @@
 {
   "chain_name": "Testnet",
-  "block_production": "Instant",
-  "parent_network": {
-    "type": "LocalTest"
+  "block_production": {
+    "ProofOfAuthority": {
+      "trigger": "instant"
+    }
   },
   "initial_state": {
     "coins": [

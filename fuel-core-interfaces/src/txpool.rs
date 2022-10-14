@@ -126,10 +126,21 @@ impl Sender {
     }
 }
 
+#[async_trait::async_trait]
+impl super::poa_coordinator::TransactionPool for Sender {
+    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::ConsumableGas { response }).await?;
+        receiver.await.map_err(Into::into)
+    }
+}
+
 /// RPC commands that can be sent to the TxPool through an MPSC channel.
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
+    /// The amount of gas in all includable transactions combined
+    ConsumableGas { response: oneshot::Sender<u64> },
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     Includable {

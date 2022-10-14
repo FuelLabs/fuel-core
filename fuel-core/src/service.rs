@@ -105,4 +105,23 @@ impl FuelService {
         }
         self.modules.stop().await;
     }
+
+    #[cfg(feature = "relayer")]
+    /// Wait for the [`Relayer`] to be in sync with
+    /// the data availability layer.
+    ///
+    /// Yields until the relayer reaches a point where it
+    /// considered up to date. Note that there's no guarantee
+    /// the relayer will ever catch up to the da layer and
+    /// may fall behind immediately after this future completes.
+    ///
+    /// The only guarantee is that if this future completes then
+    /// the relayer did reach consistency with the da layer for
+    /// some period of time.
+    pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
+        if let Some(relayer_handle) = &self.modules.relayer {
+            relayer_handle.await_synced().await?;
+        }
+        Ok(())
+    }
 }
