@@ -10,6 +10,7 @@ members = [
   "fuel-client",
   "fuel-core",
   "fuel-core-bft",
+  "fuel-poa-coordinator",
   "fuel-core-interfaces",
   "fuel-metrics",
   "fuel-p2p",
