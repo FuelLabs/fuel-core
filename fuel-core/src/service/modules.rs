@@ -10,7 +10,11 @@ use fuel_core_interfaces::{
     block_producer::BlockProducer,
     model::{
         BlockHeight,
+        FuelApplicationHeader,
         FuelBlock,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
     txpool::{
         Sender,
@@ -180,6 +184,23 @@ struct DummyBlockProducer;
 impl BlockProducer for DummyBlockProducer {
     async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
         info!("block production called for height {:?}", height);
-        Ok(Default::default())
+        let r = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                application: FuelApplicationHeader {
+                    da_height: Default::default(),
+                    generated: Default::default(),
+                },
+                consensus: FuelConsensusHeader {
+                    prev_root: Default::default(),
+                    height,
+                    time: Default::default(),
+                    generated: Default::default(),
+                },
+                metadata: Default::default(),
+            },
+            transactions: Default::default(),
+        }
+        .generate(&[]);
+        Ok(r)
     }
 }

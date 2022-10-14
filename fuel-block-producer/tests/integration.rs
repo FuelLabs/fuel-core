@@ -198,10 +198,10 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 2);
+    assert_eq!(generated_block.transactions().len(), 2);
 
-    assert_eq!(generated_block.transactions[0].gas_price(), 20);
-    assert_eq!(generated_block.transactions[1].gas_price(), 10);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 20);
+    assert_eq!(generated_block.transactions()[1].gas_price(), 10);
 
     // Import the block to txpool
     import_block_events_tx
@@ -217,8 +217,8 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 1);
-    assert_eq!(generated_block.transactions[0].gas_price(), 15);
+    assert_eq!(generated_block.transactions().len(), 1);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 15);
 
     // Import the block to txpool
     import_block_events_tx
@@ -234,7 +234,7 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 0);
+    assert_eq!(generated_block.transactions().len(), 0);
 
     Ok(())
 }

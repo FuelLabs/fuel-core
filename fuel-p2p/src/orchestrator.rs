@@ -253,14 +253,11 @@ pub mod tests {
             &self,
             _height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            let block = FuelBlock {
-                header: Default::default(),
-                transactions: vec![],
-            };
+            let block = FuelBlock::new(Default::default(), vec![], &[]);
 
             Some(Arc::new(SealedFuelBlock {
                 block,
-                consensus: FuelBlockConsensus {},
+                consensus: FuelBlockConsensus::new(Default::default()),
             }))
         }
     }

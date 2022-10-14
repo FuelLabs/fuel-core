@@ -26,9 +26,11 @@ use fuel_core_interfaces::{
             Bytes32,
             InterpreterStorage,
         },
+        prelude::Signature,
     },
     model::{
         BlockHeight,
+        FuelBlockDb,
         SealedFuelBlock,
     },
     p2p::P2pDb,
@@ -301,10 +303,13 @@ impl InterpreterStorage for Database {
 
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
         let id = self.block_hash(height)?;
-        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or_else(|| Error::ChainUninitialized)?;
         block
             .header
-            .time
+            .time()
             .timestamp()
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
@@ -316,10 +321,19 @@ impl InterpreterStorage for Database {
     }
 
     fn coinbase(&self) -> Result<Address, Error> {
-        let height = self.get_block_height()?.unwrap_or_default();
-        let id = self.block_hash(height.into())?;
-        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
-        Ok(block.header.producer)
+        let block = self.get_current_block()?.unwrap_or_else(|| {
+            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block().into())
+        });
+        // FIXME: Get producer address from block signature.
+        // block_id -> Signature
+        let signature = Signature::default();
+        let message = unsafe {
+            fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
+                block.header.hash().into(),
+            )
+        };
+        let address = signature.recover(&message).unwrap_or_default();
+        Ok((*address.hash()).into())
     }
 }
 
@@ -391,8 +405,7 @@ mod relayer {
             &self,
             _height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            // TODO
-            Some(Arc::new(SealedFuelBlock::default()))
+            Some(Arc::new(SealedFuelBlock::fix_me_default_block()))
         }
 
         async fn set_finalized_da_height(&self, block: DaBlockHeight) {
