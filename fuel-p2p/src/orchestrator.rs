@@ -31,6 +31,8 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::{
+    debug,
+    error,
     info,
     warn,
 };
@@ -201,13 +203,13 @@ fn report_message<T: NetworkCodec>(
         match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
         {
             Ok(true) => {
-                info!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
+                debug!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
             }
             Ok(false) => {
                 warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
             }
             Err(e) => {
-                warn!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
+                error!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
             }
         }
     } else {

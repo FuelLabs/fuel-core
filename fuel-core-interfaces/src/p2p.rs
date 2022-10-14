@@ -34,7 +34,7 @@ pub enum BlockBroadcast {
     NewBlock(FuelBlock),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum GossipsubMessageAcceptance {
     Accept,
     Reject,

@@ -261,10 +261,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub async fn next_event(&mut self) -> Option<FuelP2PEvent> {
         if let SwarmEvent::Behaviour(fuel_behaviour) = self.swarm.select_next_some().await
         {
-            return self.handle_behaviour_event(fuel_behaviour)
+            self.handle_behaviour_event(fuel_behaviour)
+        } else {
+            None
         }
-
-        None
     }
 
     fn handle_behaviour_event(
