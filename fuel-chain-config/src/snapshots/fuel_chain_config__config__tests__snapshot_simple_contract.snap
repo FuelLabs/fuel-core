@@ -4,7 +4,12 @@ expression: json
 ---
 {
   "chain_name": "local_testnet",
-  "block_production": "Instant",
+  "block_production": {
+    "ProofOfAuthority": {
+      "trigger": "instant"
+    }
+  },
+  "block_gas_limit": 1000000,
   "initial_state": {
     "contracts": [
       {

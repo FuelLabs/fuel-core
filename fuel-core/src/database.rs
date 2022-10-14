@@ -32,6 +32,7 @@ use fuel_core_interfaces::{
         SealedFuelBlock,
     },
     p2p::P2pDb,
+    poa_coordinator::BlockHeightDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
@@ -288,6 +289,12 @@ impl Default for Database {
                 ),
             }
         }
+    }
+}
+
+impl BlockHeightDb for Database {
+    fn block_height(&self) -> anyhow::Result<BlockHeight> {
+        Ok(self.get_block_height()?.unwrap_or_default())
     }
 }
 
