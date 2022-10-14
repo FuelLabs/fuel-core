@@ -20,6 +20,10 @@ members = [
   "xtask",
 ]
 
+[patch.crates-io]
+fuel-vm = { path = "../fuel-vm" }
+fuel-tx = { path = "../fuel-tx" }
+
 [profile.release]
 codegen-units = 1
 lto = "fat"

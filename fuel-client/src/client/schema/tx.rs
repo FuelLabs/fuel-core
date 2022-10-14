@@ -1,18 +1,20 @@
 use super::block::BlockIdFragment;
-use crate::client::{
-    schema::{
-        schema,
-        Address,
-        ConnectionArgs,
-        ConversionError,
-        HexString,
-        PageInfo,
-        TransactionId,
+use crate::{
+    client::{
+        schema::{
+            schema,
+            Address,
+            ConnectionArgs,
+            ConversionError,
+            HexString,
+            PageInfo,
+            TransactionId,
+        },
+        types::TransactionResponse,
+        PageDirection,
+        PaginatedResult,
+        PaginationRequest,
     },
-    types::TransactionResponse,
-    PageDirection,
-    PaginatedResult,
-    PaginationRequest,
 };
 use fuel_vm::fuel_types::{
     bytes::Deserializable,
@@ -22,6 +24,8 @@ use std::convert::{
     TryFrom,
     TryInto,
 };
+
+pub mod transparent_receipt;
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -260,7 +264,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
-    pub dry_run: Vec<OpaqueReceipt>,
+    pub dry_run: Vec<transparent_receipt::Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -280,13 +284,10 @@ pub mod tests {
     use crate::client::schema::Bytes;
     use fuel_vm::fuel_types::bytes::SerializableVec;
 
-    pub mod transparent_receipt;
-    pub mod transparent_tx;
-
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = transparent_tx::TransactionQuery::build(TxIdArgs {
+        let operation = TransactionQuery::build(TxIdArgs {
             id: TransactionId::default(),
         });
         insta::assert_snapshot!(operation.query)
