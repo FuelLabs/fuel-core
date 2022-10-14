@@ -12,7 +12,6 @@ use libp2p::gossipsub::{
 };
 use sha2::{
     Digest,
-    Sha224,
     Sha256,
 };
 
@@ -20,11 +19,11 @@ use crate::config::P2PConfig;
 
 pub fn default_gossipsub_config() -> GossipsubConfig {
     let gossip_message_id = move |message: &GossipsubMessage| {
-        MessageId::from(&Sha256::digest(&message.data)[..20])
+        MessageId::from(&Sha256::digest(&message.data)[..])
     };
 
     let fast_gossip_message_id = move |message: &RawGossipsubMessage| {
-        FastMessageId::from(&Sha224::digest(&message.data)[..16])
+        FastMessageId::from(&Sha256::digest(&message.data)[..])
     };
 
     let gossipsub_config = GossipsubConfigBuilder::default()
