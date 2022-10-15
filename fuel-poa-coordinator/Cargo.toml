@@ -1,6 +1,6 @@
 [package]
 name = "fuel-poa-coordinator"
-version = "0.11.1"
+version = "0.11.2"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 edition = "2021"
 homepage = "https://fuel.network/"
@@ -11,7 +11,7 @@ description = "Fuel Core PoA Coordinator"
 
 [dependencies]
 anyhow = "1.0"
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.11.1" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.11.2" }
 humantime-serde = "1.1.1"
 parking_lot = "0.12"
 serde = { version = "1.0", features = ["derive"] }
