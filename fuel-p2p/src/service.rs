@@ -1,6 +1,5 @@
 use crate::{
     behavior::{
-        BehaviourEventWrapper,
         FuelBehaviour,
         FuelBehaviourEvent,
     },
@@ -253,9 +252,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     fn handle_behaviour_event(
         &mut self,
-        event: BehaviourEventWrapper<Codec>,
+        event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
-        match event.into() {
+        match event {
             FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
                 DiscoveryEvent::Connected(peer_id, addresses) => {
                     self.swarm
