@@ -5,6 +5,7 @@
       "trigger": "instant"
     }
   },
+  "block_gas_limit": 100000000,
   "initial_state": {
     "coins": [
       {
