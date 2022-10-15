@@ -180,7 +180,7 @@ impl Executor {
 
         debug!(
             "Block {:#x} fees: {}",
-            pre_exec_block_id.unwrap_or_default(),
+            pre_exec_block_id.unwrap_or(finalized_block_id),
             coinbase
         );
 
