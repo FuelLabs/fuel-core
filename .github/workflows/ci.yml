@@ -155,7 +155,7 @@ jobs:
       - cargo-verifications
       - verify-helm-version-and-install-protoc
     if: github.event_name == 'release' && github.event.action == 'published'
-    uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@master
+    uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@elliot/verify-tag-version
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
