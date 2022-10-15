@@ -153,6 +153,11 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Verify tag version
         run: |
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel

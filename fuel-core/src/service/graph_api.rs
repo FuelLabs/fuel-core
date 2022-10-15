@@ -72,7 +72,7 @@ pub async fn start_server(
         .data(modules.block_importer.clone())
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())
-        .data(modules.bft.clone());
+        .data(modules.coordinator.clone());
     let schema = dap::init(schema, params).extension(Tracing).finish();
 
     let router = Router::new()

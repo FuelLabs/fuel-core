@@ -65,6 +65,7 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    relayer::RelayerDb,
 };
 use fuel_storage::{
     StorageAsMut,
@@ -114,13 +115,14 @@ impl Executor {
 
         // setup and execute block
         let current_height = db.get_block_height()?.unwrap_or_default();
+        let da_height = db.get_finalized_da_height().await.unwrap_or_default();
         let new_block_height = current_height + 1u32.into();
 
         let block = PartialFuelBlock::new(
             PartialFuelBlockHeader {
                 application: FuelApplicationHeader {
                     // TODO: This should not be default
-                    da_height: Default::default(),
+                    da_height,
                     generated: Default::default(),
                 },
                 consensus: FuelConsensusHeader {
