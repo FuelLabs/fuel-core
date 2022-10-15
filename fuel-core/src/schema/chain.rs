@@ -97,7 +97,7 @@ impl ChainInfo {
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
         let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_else(|| {
-            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block().into())
+            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
         });
         Ok(Block(block.into_owned()))
     }

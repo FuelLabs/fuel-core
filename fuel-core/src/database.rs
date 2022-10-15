@@ -313,7 +313,7 @@ impl InterpreterStorage for Database {
         let block = self
             .storage::<FuelBlocks>()
             .get(&id)?
-            .ok_or_else(|| Error::ChainUninitialized)?;
+            .ok_or(Error::ChainUninitialized)?;
         block
             .header
             .time()
@@ -329,7 +329,7 @@ impl InterpreterStorage for Database {
 
     fn coinbase(&self) -> Result<Address, Error> {
         let block = self.get_current_block()?.unwrap_or_else(|| {
-            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block().into())
+            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
         });
         // FIXME: Get producer address from block signature.
         // block_id -> Signature

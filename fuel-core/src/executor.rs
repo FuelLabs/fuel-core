@@ -275,11 +275,11 @@ impl Executor {
 
             if self.config.utxo_validation {
                 // validate transaction has at least one coin
-                self.verify_tx_has_at_least_one_coin_or_message(&tx)?;
+                self.verify_tx_has_at_least_one_coin_or_message(tx)?;
                 // validate utxos exist and maturity is properly set
                 self.verify_input_state(
                     block_db_transaction.deref(),
-                    &tx,
+                    tx,
                     *block.header.height(),
                     block.header.da_height,
                 )?;
@@ -291,7 +291,7 @@ impl Executor {
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
             self.persist_owners_index(
                 *block.header.height(),
-                &tx,
+                tx,
                 &tx_id,
                 idx,
                 block_db_transaction.deref_mut(),
@@ -1013,9 +1013,7 @@ mod tests {
             .await
             .unwrap();
 
-        let validation_result = verifier
-            .execute(ExecutionTypes::Validation(block.into()))
-            .await;
+        let validation_result = verifier.execute(ExecutionTypes::Validation(block)).await;
         assert!(validation_result.is_ok());
     }
 
@@ -1914,7 +1912,7 @@ mod tests {
 
         let block = make_executor(&[&message])
             .await
-            .execute(ExecutionBlock::Production(block.into()))
+            .execute(ExecutionBlock::Production(block))
             .await
             .expect("block execution failed unexpectedly");
 
