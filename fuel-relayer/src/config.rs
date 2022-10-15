@@ -18,7 +18,7 @@ pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
 pub struct Config {
     /// The da block to which the contract was deployed.
     pub da_deploy_height: DaBlockHeight,
-    /// Number of da block after which messages/stakes/validators become finalized.
+    /// Number of da blocks after which messages/stakes/validators become finalized.
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
     pub eth_client: Option<url::Url>,

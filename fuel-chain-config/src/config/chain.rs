@@ -34,25 +34,21 @@ pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
     pub chain_name: String,
-    pub block_production: ProductionStrategy,
+    pub block_production: BlockProduction,
+    pub block_gas_limit: u64,
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
-pub enum ProductionStrategy {
-    Instant,
-    Manual,
-    RoundRobin,
-    ProofOfStake,
 }
 
 impl Default for ChainConfig {
     fn default() -> Self {
         Self {
             chain_name: "local".into(),
-            block_production: ProductionStrategy::Instant,
+            block_production: BlockProduction::ProofOfAuthority {
+                trigger: fuel_poa_coordinator::Trigger::Instant,
+            },
+            block_gas_limit: 1_000_000, // TODO: Pick a sensible default
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
         }
@@ -92,12 +88,11 @@ impl ChainConfig {
 
         Self {
             chain_name: LOCAL_TESTNET.to_string(),
-            block_production: ProductionStrategy::Instant,
             initial_state: Some(StateConfig {
                 coins: Some(initial_coins),
                 ..StateConfig::default()
             }),
-            transaction_parameters: ConsensusParameters::DEFAULT,
+            ..Default::default()
         }
     }
 }
@@ -124,4 +119,17 @@ impl FromStr for ChainConfig {
             }
         }
     }
+}
+
+/// Block production mode and settings
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BlockProduction {
+    /// Proof-of-authority modes
+    ProofOfAuthority {
+        #[serde(flatten)]
+        trigger: fuel_poa_coordinator::Trigger,
+    },
+    // TODO:
+    // RoundRobin,
+    // ProofOfStake,
 }

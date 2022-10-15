@@ -202,6 +202,9 @@ impl Context {
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
+                        TxPoolMpsc::ConsumableGas { response } => {
+                            let _ = response.send(TxPool::consumable_gas(txpool).await);
+                        }
                         TxPoolMpsc::Includable { response } => {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
