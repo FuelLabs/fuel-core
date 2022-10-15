@@ -1,6 +1,5 @@
 use crate::{
     behavior::{
-        BehaviourEventWrapper,
         FuelBehaviour,
         FuelBehaviourEvent,
     },
@@ -253,9 +252,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     fn handle_behaviour_event(
         &mut self,
-        event: BehaviourEventWrapper<Codec>,
+        event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
-        match event.into() {
+        match event {
             FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
                 DiscoveryEvent::Connected(peer_id, addresses) => {
                     self.swarm
@@ -420,7 +419,6 @@ mod tests {
         PeerId,
     };
     use std::{
-        collections::HashMap,
         sync::Arc,
         time::Duration,
     };
@@ -817,10 +815,7 @@ mod tests {
 
                         let sealed_block = SealedFuelBlock {
                             block,
-                            consensus: FuelBlockConsensus {
-                                required_stake: 100_000,
-                                validators: HashMap::default()
-                            }
+                            consensus: FuelBlockConsensus { }
                         };
 
                         let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));

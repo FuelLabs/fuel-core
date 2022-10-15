@@ -1,19 +1,14 @@
 pub use super::BlockHeight;
-use super::ValidatorStake;
 use crate::{
     common::{
         fuel_crypto::Hasher,
         fuel_merkle::binary::in_memory::MerkleTree,
         fuel_tx::{
             Address,
-            AssetId,
             Bytes32,
             Transaction,
         },
-        fuel_types::{
-            bytes::SerializableVec,
-            Word,
-        },
+        fuel_types::bytes::SerializableVec,
     },
     model::DaBlockHeight,
 };
@@ -23,7 +18,6 @@ use chrono::{
     Utc,
 };
 use core::ops::Deref;
-use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -141,45 +135,12 @@ impl FuelBlock {
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
         }
     }
-
-    // TODO for functions bellow, they are mostly going to be removed
-    // https://github.com/FuelLabs/fuel-core/issues/364
-
-    pub fn transaction_data_length(&self) -> usize {
-        self.transactions.len() * 100
-    }
-
-    pub fn transaction_data_hash(&self) -> Bytes32 {
-        Bytes32::zeroed()
-    }
-
-    pub fn validator_set_hash(&self) -> Bytes32 {
-        Bytes32::zeroed()
-    }
-
-    pub fn transaction_sum(&self) -> usize {
-        0
-    }
-
-    pub fn withdrawals(&self) -> Vec<(Address, Word, AssetId)> {
-        vec![]
-    }
-
-    pub fn withdrawals_root(&self) -> Bytes32 {
-        Bytes32::zeroed()
-    }
 }
 
 /// This structure is created as placeholder for future usage.
-/// It represent commitment for next child block
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FuelBlockConsensus {
-    /// required stake for next block
-    pub required_stake: u64,
-    /// Map of Validator consensus key and pair of stake and signature
-    pub validators: HashMap<Address, (ValidatorStake, Address)>,
-}
+pub struct FuelBlockConsensus {}
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

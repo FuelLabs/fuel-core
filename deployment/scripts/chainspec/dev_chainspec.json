@@ -1,9 +1,11 @@
 {
   "chain_name": "Testnet",
-  "block_production": "Instant",
-  "parent_network": {
-    "type": "LocalTest"
+  "block_production": {
+    "ProofOfAuthority": {
+      "trigger": "instant"
+    }
   },
+  "block_gas_limit": 100000000,
   "initial_state": {
     "coins": [
       {

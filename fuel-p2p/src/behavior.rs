@@ -42,16 +42,7 @@ use libp2p::{
     NetworkBehaviour,
     PeerId,
 };
-use std::{
-    collections::HashMap,
-    marker::PhantomData,
-};
-
-#[derive(Debug)]
-pub struct BehaviourEventWrapper<Codec: NetworkCodec> {
-    event: FuelBehaviourEvent,
-    codec: PhantomData<Codec>,
-}
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub enum FuelBehaviourEvent {
@@ -61,24 +52,9 @@ pub enum FuelBehaviourEvent {
     RequestResponse(RequestResponseEvent<RequestMessage, IntermediateResponse>),
 }
 
-impl<Codec: NetworkCodec> BehaviourEventWrapper<Codec> {
-    fn new(event: FuelBehaviourEvent) -> Self {
-        Self {
-            event,
-            codec: PhantomData,
-        }
-    }
-}
-
-impl<Codec: NetworkCodec> From<BehaviourEventWrapper<Codec>> for FuelBehaviourEvent {
-    fn from(fuel_event: BehaviourEventWrapper<Codec>) -> Self {
-        fuel_event.event
-    }
-}
-
 /// Handles all p2p protocols needed for Fuel.
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "BehaviourEventWrapper")]
+#[behaviour(out_event = "FuelBehaviourEvent")]
 pub struct FuelBehaviour<Codec: NetworkCodec> {
     /// Node discovery
     discovery: DiscoveryBehaviour,
@@ -197,28 +173,28 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
     }
 }
 
-impl<Codec: NetworkCodec> From<DiscoveryEvent> for BehaviourEventWrapper<Codec> {
+impl From<DiscoveryEvent> for FuelBehaviourEvent {
     fn from(event: DiscoveryEvent) -> Self {
-        BehaviourEventWrapper::new(FuelBehaviourEvent::Discovery(event))
+        FuelBehaviourEvent::Discovery(event)
     }
 }
 
-impl<Codec: NetworkCodec> From<PeerInfoEvent> for BehaviourEventWrapper<Codec> {
+impl From<PeerInfoEvent> for FuelBehaviourEvent {
     fn from(event: PeerInfoEvent) -> Self {
-        BehaviourEventWrapper::new(FuelBehaviourEvent::PeerInfo(event))
+        FuelBehaviourEvent::PeerInfo(event)
     }
 }
 
-impl<Codec: NetworkCodec> From<GossipsubEvent> for BehaviourEventWrapper<Codec> {
+impl From<GossipsubEvent> for FuelBehaviourEvent {
     fn from(event: GossipsubEvent) -> Self {
-        BehaviourEventWrapper::new(FuelBehaviourEvent::Gossipsub(event))
+        FuelBehaviourEvent::Gossipsub(event)
     }
 }
 
-impl<Codec: NetworkCodec> From<RequestResponseEvent<RequestMessage, IntermediateResponse>>
-    for BehaviourEventWrapper<Codec>
+impl From<RequestResponseEvent<RequestMessage, IntermediateResponse>>
+    for FuelBehaviourEvent
 {
     fn from(event: RequestResponseEvent<RequestMessage, IntermediateResponse>) -> Self {
-        BehaviourEventWrapper::new(FuelBehaviourEvent::RequestResponse(event))
+        FuelBehaviourEvent::RequestResponse(event)
     }
 }
