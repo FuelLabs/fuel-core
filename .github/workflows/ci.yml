@@ -136,55 +136,30 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
           RUSTFLAGS: -D warnings
 
-  publish-crates:
+  verify-helm-version-and-install-protoc:
     # Only do this job if publishing a release
-    needs:
-      - cargo-verifications
     if: github.event_name == 'release' && github.event.action == 'published'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
       - name: Install Protoc
         uses: arduino/setup-protoc@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Verify Helm Chart Version
+        run: ./.github/workflows/scripts/verify_helm_chart_version.sh
 
-      - name: Verify tag version
-        run: |
-          curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
-          mv ./dasel /usr/local/bin/dasel
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-executor/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-importer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-block-producer/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-chain-config/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-client/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-bft/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-core-interfaces/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-p2p/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-sync/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-txpool/Cargo.toml
-          ./.github/workflows/scripts/verify_tag.sh ${{ github.ref_name }} fuel-relayer/Cargo.toml
-
-      - name: Verify helm chart version
-        run: |
-          ./.github/workflows/scripts/verify_chart_version.sh
-
-      - name: Publish crate
-        uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@master
-        secrets:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
+  publish-crates:
+    # Only do this job if publishing a release
+    needs:
+      - cargo-verifications
+      - verify-helm-version
+    if: github.event_name == 'release' && github.event.action == 'published'
+    uses: FuelLabs/github-actions/.github/workflows/publish-crate.yml@master
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
     needs:
