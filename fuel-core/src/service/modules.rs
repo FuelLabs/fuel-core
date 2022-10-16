@@ -1,5 +1,6 @@
 #![allow(clippy::let_unit_value)]
 use crate::{
+    chain_config::BlockProduction,
     database::Database,
     service::Config,
 };
@@ -8,6 +9,7 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     block_producer::BlockProducer,
+    common::prelude::Word,
     model::{
         BlockHeight,
         FuelBlock,
@@ -32,7 +34,7 @@ pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
     pub block_importer: Arc<fuel_block_importer::Service>,
     pub block_producer: Arc<dyn BlockProducer>,
-    pub bft: Arc<fuel_core_bft::Service>,
+    pub coordinator: Arc<CoordinatorService>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
     pub relayer: Option<fuel_relayer::RelayerHandle>,
@@ -45,7 +47,7 @@ impl Modules {
         let stops: Vec<JoinHandle<()>> = vec![
             self.txpool.stop().await,
             self.block_importer.stop().await,
-            self.bft.stop().await,
+            self.coordinator.stop().await,
             self.sync.stop().await,
             #[cfg(feature = "p2p")]
             self.network_service.stop().await,
@@ -58,14 +60,39 @@ impl Modules {
     }
 }
 
+pub enum CoordinatorService {
+    Poa(fuel_poa_coordinator::Service),
+    Bft(fuel_core_bft::Service),
+}
+impl CoordinatorService {
+    pub async fn stop(&self) -> Option<tokio::task::JoinHandle<()>> {
+        match self {
+            CoordinatorService::Poa(s) => s.stop().await,
+            CoordinatorService::Bft(s) => s.stop().await,
+        }
+    }
+}
+
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
     // Initialize and bind all components
     let block_importer =
         fuel_block_importer::Service::new(&config.block_importer, db).await?;
     let block_producer = Arc::new(DummyBlockProducer);
-    let bft = fuel_core_bft::Service::new(&config.bft, db).await?;
     let sync = fuel_sync::Service::new(&config.sync).await?;
+
+    let coordinator = match &config.chain_conf.block_production {
+        BlockProduction::ProofOfAuthority { trigger } => CoordinatorService::Poa(
+            fuel_poa_coordinator::Service::new(&fuel_poa_coordinator::Config {
+                trigger: *trigger,
+                block_gas_limit: config.chain_conf.block_gas_limit,
+            }),
+        ),
+        // TODO: enable when bft config is ready to use
+        // CoordinatorConfig::Bft { config } => {
+        //     CoordinatorService::Bft(fuel_core_bft::Service::new(config, db).await?)
+        // }
+    };
 
     #[cfg(feature = "relayer")]
     let relayer = if config.relayer.eth_client.is_some() {
@@ -131,24 +158,43 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     txpool_builder.network_sender(p2p_request_event_sender.clone());
 
-    let txpool = txpool_builder.build()?;
-
     // start services
 
     block_importer.start().await;
 
-    bft.start(
-        p2p_request_event_sender.clone(),
-        block_producer.clone(),
-        block_importer.sender().clone(),
-        block_importer.subscribe(),
-    )
-    .await;
+    match &coordinator {
+        CoordinatorService::Poa(poa) => {
+            // TODO: this must be connected to the block import mechanism
+            let (block_import_tx, mut block_import_rx) = broadcast::channel(16);
+            tokio::spawn(async move {
+                // Discard messages for now
+                while block_import_rx.recv().await.is_ok() {}
+            });
+            poa.start(
+                txpool_builder.subscribe(),
+                txpool_builder.sender().clone(),
+                block_import_tx,
+                block_producer.clone(),
+                database.clone(),
+            )
+            .await;
+        }
+        CoordinatorService::Bft(bft) => {
+            bft.start(
+                p2p_request_event_sender.clone(),
+                block_producer.clone(),
+                block_importer.sender().clone(),
+                block_importer.subscribe(),
+            )
+            .await;
+        }
+    }
 
     sync.start(
         block_event_receiver,
         p2p_request_event_sender.clone(),
-        bft.sender().clone(),
+        // TODO: re-introduce this when sync actually depends on the coordinator
+        // bft.sender().clone(),
         block_importer.sender().clone(),
     )
     .await;
@@ -158,13 +204,14 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         network_service.start().await?;
     }
 
+    let txpool = txpool_builder.build()?;
     txpool.start().await?;
 
     Ok(Modules {
         txpool: Arc::new(txpool),
         block_importer: Arc::new(block_importer),
         block_producer,
-        bft: Arc::new(bft),
+        coordinator: Arc::new(coordinator),
         sync: Arc::new(sync),
         #[cfg(feature = "relayer")]
         relayer,
@@ -178,7 +225,11 @@ struct DummyBlockProducer;
 
 #[async_trait::async_trait]
 impl BlockProducer for DummyBlockProducer {
-    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
+    async fn produce_block(
+        &self,
+        height: BlockHeight,
+        _max_gas: Word,
+    ) -> Result<FuelBlock> {
         info!("block production called for height {:?}", height);
         Ok(Default::default())
     }
