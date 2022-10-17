@@ -1,9 +1,6 @@
 use crate::{
     db::BlockProducerDatabase,
-    ports::{
-        Relayer,
-        TxPool,
-    },
+    ports::TxPool,
     Config,
 };
 use anyhow::{
@@ -19,6 +16,7 @@ use fuel_core_interfaces::{
             InvalidDaFinalizationState,
             MissingBlock,
         },
+        Relayer,
     },
     common::{
         crypto::ephemeral_merkle_root,
@@ -47,19 +45,19 @@ use tracing::{
 #[cfg(test)]
 mod tests;
 
-pub struct Producer<'a> {
+pub struct Producer {
     pub config: Config,
-    pub db: &'a dyn BlockProducerDatabase,
-    pub txpool: &'a dyn TxPool,
-    pub executor: &'a dyn Executor,
-    pub relayer: &'a dyn Relayer,
-    // use a tokio lock since we want callers to yeild until the previous block
+    pub db: Box<dyn BlockProducerDatabase>,
+    pub txpool: Box<dyn TxPool>,
+    pub executor: Box<dyn Executor>,
+    pub relayer: Box<dyn Relayer>,
+    // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
 }
 
 #[async_trait::async_trait]
-impl<'a> Trait for Producer<'a> {
+impl Trait for Producer {
     /// Produces a block for the specified height
     async fn produce_block(
         &self,
@@ -78,7 +76,9 @@ impl<'a> Trait for Producer<'a> {
         let _production_guard = self.lock.lock().await;
 
         let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
+        let new_da_height = self
+            .select_new_da_height(previous_block_info.da_height)
+            .await?;
 
         let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
 
@@ -133,12 +133,12 @@ impl<'a> Trait for Producer<'a> {
     }
 }
 
-impl<'a> Producer<'a> {
-    fn select_new_da_height(
+impl Producer {
+    async fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {
-        let best_height = self.relayer.get_best_finalized_da_height()?;
+        let best_height = self.relayer.get_best_finalized_da_height().await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
             // without waiting for our relayer's da_height to catch up to imported da_height.

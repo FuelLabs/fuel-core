@@ -249,32 +249,34 @@ impl BlockMutation {
             )
         }
 
-        let executor = Executor {
-            database: db.clone(),
-            config: cfg.clone(),
-        };
+        todo!("trigger block production manually");
 
-        let iterate: u64 = blocks_to_produce.into();
+        // let executor = Executor {
+        //     database: db.clone(),
+        //     config: cfg.clone(),
+        // };
 
-        for _ in 0..iterate {
-            let current_height = db.get_block_height()?.unwrap_or_default();
-            let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
-            let new_block_height = current_height + 1u32.into();
+        // let iterate: u64 = blocks_to_produce.into();
 
-            let mut block = FuelBlock {
-                header: FuelBlockHeader {
-                    height: new_block_height,
-                    parent_hash: current_hash,
-                    time: Utc::now(),
-                    ..Default::default()
-                },
-                transactions: vec![],
-            };
+        // for _ in 0..iterate {
+        //     let current_height = db.get_block_height()?.unwrap_or_default();
+        //     let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
+        //     let new_block_height = current_height + 1u32.into();
 
-            executor
-                .execute(&mut block, ExecutionMode::Production)
-                .await?;
-        }
+        //     let mut block = FuelBlock {
+        //         header: FuelBlockHeader {
+        //             height: new_block_height,
+        //             parent_hash: current_hash,
+        //             time: Utc::now(),
+        //             ..Default::default()
+        //         },
+        //         transactions: vec![],
+        //     };
+
+        //     executor
+        //         .execute(&mut block, ExecutionMode::Production)
+        //         .await?;
+        // }
 
         db.get_block_height()?
             .map(|new_height| Ok(new_height.into()))

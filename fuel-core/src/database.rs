@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_block_producer::db::BlockProducerDatabase;
 use fuel_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -29,6 +30,7 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        FuelBlockDb,
         SealedFuelBlock,
     },
     p2p::P2pDb,
@@ -41,6 +43,7 @@ use serde::{
     Serialize,
 };
 use std::{
+    borrow::Cow,
     fmt::{
         self,
         Debug,
@@ -331,6 +334,20 @@ impl InterpreterStorage for Database {
 }
 
 impl TxPoolDb for Database {}
+
+impl BlockProducerDatabase for Database {
+    fn get_block(
+        &self,
+        fuel_height: BlockHeight,
+    ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
+        // let v = self.get(fuel_height.into(), Column::FuelBlocks);
+        // let v = v?;
+
+        let id = self.block_hash(fuel_height.into())?;
+        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
+        Ok(Some(block))
+    }
+}
 
 #[async_trait]
 impl P2pDb for Database {

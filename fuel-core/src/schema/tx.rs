@@ -324,6 +324,8 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
+        todo!("Migrate dry-run to the new trigger architecture");
+
         let transaction = ctx.data_unchecked::<Database>().transaction();
         let mut cfg = ctx.data_unchecked::<Config>().clone();
         // override utxo_validation if set

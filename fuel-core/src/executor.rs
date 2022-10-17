@@ -53,6 +53,7 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionMode,
+        Executor as ExecutorTrait,
         TransactionValidityError,
     },
     model::{
@@ -834,6 +835,18 @@ impl Executor {
             db.update_tx_status(tx_id, status.clone())?;
         }
         Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl ExecutorTrait for Executor {
+    async fn execute(
+        &self,
+        block: &mut FuelBlock,
+        mode: ExecutionMode,
+    ) -> Result<(), Error> {
+        println!("LOLEXEC!");
+        Executor::execute(self, block, mode).await
     }
 }
 
