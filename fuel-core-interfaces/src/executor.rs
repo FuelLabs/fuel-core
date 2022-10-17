@@ -243,17 +243,6 @@ impl ExecutionKind {
             ExecutionKind::Validation => ExecutionTypes::Validation(t),
         }
     }
-
-    /// Check or set this type depending on the execution kind.
-    ///
-    /// Production sets the type.
-    /// Validation checks the type.
-    pub fn check_or_set<T>(self, t: &mut T) -> ExecutionCheckOrSet<'_, T> {
-        match self {
-            ExecutionKind::Production => ExecutionTypes::Production(t),
-            ExecutionKind::Validation => ExecutionTypes::Validation(t),
-        }
-    }
 }
 
 impl From<Backtrace> for Error {

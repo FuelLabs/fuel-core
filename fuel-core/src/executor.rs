@@ -53,8 +53,8 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionBlock,
+        ExecutionKind,
         ExecutionType,
-        ExecutionTypes,
         TransactionValidityError,
     },
     model::{
@@ -332,8 +332,8 @@ impl Executor {
                 .ok_or(Error::FeeOverflow)?;
 
             // Check or set the executed transaction.
-            match execution_kind.check_or_set(tx) {
-                ExecutionTypes::Validation(tx) => {
+            match execution_kind {
+                ExecutionKind::Validation => {
                     // ensure tx matches vm output exactly
                     if vm_result.tx() != tx {
                         return Err(Error::InvalidTransactionOutcome {
@@ -341,7 +341,7 @@ impl Executor {
                         })
                     }
                 }
-                ExecutionTypes::Production(tx) => {
+                ExecutionKind::Production => {
                     // malleate the block with the resultant tx from the vm
                     *tx = vm_result.tx().clone()
                 }
@@ -672,11 +672,9 @@ impl Executor {
                     };
 
                     // Check or set the utxo id.
-                    match execution_kind.check_or_set(utxo_id) {
-                        ExecutionTypes::Production(utxo_id) => {
-                            *utxo_id = expected_utxo_id
-                        }
-                        ExecutionTypes::Validation(utxo_id) => {
+                    match execution_kind {
+                        ExecutionKind::Production => *utxo_id = expected_utxo_id,
+                        ExecutionKind::Validation => {
                             if *utxo_id != expected_utxo_id {
                                 return Err(Error::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
@@ -934,6 +932,7 @@ mod tests {
                 util::test_helpers::TestBuilder as TxBuilder,
             },
         },
+        executor::ExecutionTypes,
         model::{
             CheckedMessage,
             DaBlockHeight,
