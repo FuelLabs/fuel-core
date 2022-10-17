@@ -8,10 +8,6 @@ use crate::{
     model::ConsensusVote,
 };
 use async_trait::async_trait;
-use serde::{
-    Deserialize,
-    Serialize,
-};
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -42,7 +38,7 @@ pub enum GossipsubMessageAcceptance {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GossipsubMessageInfo {
     pub message_id: Vec<u8>,
     pub peer_id: Vec<u8>,
