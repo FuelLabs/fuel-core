@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use super::{
     block::Block,
     scalars::{
@@ -9,7 +11,14 @@ use super::{
     },
 };
 use crate::{
-    database::Database,
+    database::{
+        storage::{
+            FuelBlocks,
+            Receipts,
+        },
+        Database,
+    },
+    query::OutputProofData,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -27,10 +36,12 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
+        prelude::Signature,
     },
     db::{
         KvStoreError,
         Messages,
+        Transactions,
     },
     model,
 };
@@ -184,18 +195,19 @@ impl MessageQuery {
         )
         .await
     }
+
     async fn output_proof(
         &self,
         ctx: &Context<'_>,
         transaction_id: TransactionId,
         message_id: MessageId,
     ) -> async_graphql::Result<Option<OutputProof>> {
-        todo!()
-        // Ok(
-        //     crate::query::output_proof(transaction_id.into(), message_id.into())
-        //         .await
-        //         .map(OutputProof),
-        // )
+        let data = OutputProofContext(ctx.data_unchecked());
+        Ok(
+            crate::query::output_proof(&data, transaction_id.into(), message_id.into())
+                .await
+                .map(OutputProof),
+        )
     }
 }
 
@@ -216,15 +228,89 @@ impl OutputProof {
     }
 
     async fn message(&self) -> Message {
-        todo!()
+        Message(self.0.message.clone())
     }
 
-    // FIXME: signature is not an address
-    async fn signature(&self) -> Address {
-        todo!()
+    async fn signature(&self) -> super::scalars::Signature {
+        self.0.signature.into()
     }
 
     async fn block(&self) -> Block {
-        todo!()
+        Block(self.0.block.clone())
+    }
+}
+
+struct OutputProofContext<'a>(&'a Database);
+
+impl OutputProofData for OutputProofContext<'_> {
+    fn receipts(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Vec<fuel_core_interfaces::common::prelude::Receipt> {
+        self.0
+            .storage::<Receipts>()
+            .get(transaction_id)
+            .unwrap()
+            .map(Cow::into_owned)
+            .unwrap_or_else(|| Vec::with_capacity(0))
+    }
+
+    fn transaction(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Option<fuel_txpool::types::Transaction> {
+        self.0
+            .storage::<Transactions>()
+            .get(transaction_id)
+            .unwrap()
+            .map(Cow::into_owned)
+    }
+
+    fn transaction_status(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Option<crate::tx_pool::TransactionStatus> {
+        self.0.get_tx_status(transaction_id).unwrap()
+    }
+
+    fn transactions_on_block(
+        &self,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Vec<fuel_core_interfaces::common::prelude::Bytes32> {
+        self.0
+            .storage::<FuelBlocks>()
+            .get(block_id)
+            .unwrap()
+            .map(|block| block.into_owned().transactions)
+            .unwrap_or_else(|| Vec::with_capacity(0))
+    }
+
+    fn message(
+        &self,
+        message_id: &fuel_types::MessageId,
+    ) -> Option<fuel_core_interfaces::model::Message> {
+        self.0
+            .storage::<Messages>()
+            .get(message_id)
+            .unwrap()
+            .map(Cow::into_owned)
+    }
+
+    fn signature(
+        &self,
+        _block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Option<fuel_core_interfaces::common::fuel_crypto::Signature> {
+        Some(Signature::default())
+    }
+
+    fn block(
+        &self,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Option<model::FuelBlockDb> {
+        self.0
+            .storage::<FuelBlocks>()
+            .get(block_id)
+            .unwrap()
+            .map(Cow::into_owned)
     }
 }

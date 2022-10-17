@@ -17,17 +17,11 @@ use crate::tx_pool::TransactionStatus;
 mod test;
 
 #[cfg_attr(test, mockall::automock)]
-pub trait DataSource {
-    fn receipts<'a>(
-        &'a self,
-        transaction_id: &Bytes32,
-    ) -> Option<core::slice::Iter<'a, Receipt>>;
+pub trait OutputProofData {
+    fn receipts(&self, transaction_id: &Bytes32) -> Vec<Receipt>;
     fn transaction(&self, transaction_id: &Bytes32) -> Option<Transaction>;
     fn transaction_status(&self, transaction_id: &Bytes32) -> Option<TransactionStatus>;
-    fn transactions_on_block<'a>(
-        &'a self,
-        block_id: &Bytes32,
-    ) -> Option<core::slice::Iter<'a, Bytes32>>;
+    fn transactions_on_block(&self, block_id: &Bytes32) -> Vec<Bytes32>;
     fn message(
         &self,
         message_id: &MessageId,
@@ -37,11 +31,11 @@ pub trait DataSource {
 }
 
 pub async fn output_proof(
-    data: &dyn DataSource,
+    data: &(dyn OutputProofData + Send + Sync),
     transaction_id: Bytes32,
     message_id: MessageId,
 ) -> Option<OutputProof> {
-    data.receipts(&transaction_id)?.find(
+    data.receipts(&transaction_id).into_iter().find(
         |r| matches!(r, Receipt::MessageOut { message_id: id, .. } if *id == message_id),
     )?;
     let block_id = data
@@ -53,22 +47,23 @@ pub async fn output_proof(
         })?;
     let mut message_found = false;
     let leaves = data
-        .transactions_on_block(&block_id)?
+        .transactions_on_block(&block_id)
+        .into_iter()
         .filter(|transaction_id| {
             // TODO: get this from the block header when it is available.
             data.transaction(transaction_id)
                 .map_or(false, |txn| txn.outputs().iter().any(|o| o.is_message()))
         })
-        .filter_map(|transaction_id| data.receipts(transaction_id))
+        .map(|transaction_id| data.receipts(&transaction_id))
         .flat_map(|receipts| {
-            receipts.filter_map(|r| match r {
+            receipts.into_iter().filter_map(|r| match r {
                 Receipt::MessageOut { message_id, .. } => Some(message_id),
                 _ => None,
             })
         })
         .take_while(|id| {
             let message_not_found = !message_found;
-            message_found = **id == message_id;
+            message_found = *id == message_id;
             message_not_found
         })
         .enumerate();

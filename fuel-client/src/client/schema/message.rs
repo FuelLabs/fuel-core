@@ -5,6 +5,7 @@ use super::{
     PageInfo,
     PaginatedResult,
     PaginationRequest,
+    Signature,
     TransactionId,
 };
 use crate::client::schema::{
@@ -84,7 +85,7 @@ pub struct OutputProof {
     pub proof_root: Bytes32,
     pub proof_set: Vec<Bytes32>,
     pub message: Message,
-    pub signature: Address,
+    pub signature: Signature,
     pub block: Block,
 }
 

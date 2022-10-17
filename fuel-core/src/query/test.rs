@@ -86,16 +86,16 @@ async fn can_build_output_proof() {
     let mut out = (0..1)
         .flat_map(|_| vec![message_out(), other_out()])
         .cycle();
-    let mut data = MockDataSource::new();
+    let mut data = MockOutputProofData::new();
     let transaction_id = txn_id(33);
     let mut count = 0;
     data.expect_receipts().returning(move |txn_id| {
         if *txn_id == transaction_id {
-            Some(RECEIPTS.iter())
+            RECEIPTS.to_vec()
         } else {
-            let r = OTHER_RECEIPTS[count..=count].iter();
+            let r = OTHER_RECEIPTS[count..=count].to_vec();
             count += 1;
-            Some(r)
+            r
         }
     });
     data.expect_transaction_status()
@@ -110,7 +110,7 @@ async fn can_build_output_proof() {
     data.expect_transactions_on_block()
         .once()
         .with(eq(Bytes32::default()))
-        .return_const(TXNS.iter());
+        .return_const(TXNS.to_vec());
 
     data.expect_transaction().returning(move |txn_id| {
         TXNS.iter().find(|t| *t == txn_id).map(|_| {

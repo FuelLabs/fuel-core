@@ -110,6 +110,7 @@ fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
 fuel_type_scalar!(MessageId, MessageId);
+fuel_type_scalar!(Signature, Bytes64);
 
 impl LowerHex for MessageId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

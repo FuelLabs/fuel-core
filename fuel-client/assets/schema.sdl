@@ -399,7 +399,7 @@ type OutputProof {
 	proofRoot: Bytes32!
 	proofSet: [Bytes32!]!
 	message: Message!
-	signature: Address!
+	signature: Signature!
 	block: Block!
 }
 
@@ -535,6 +535,8 @@ enum RunState {
 }
 
 scalar Salt
+
+scalar Signature
 
 input SpendQueryElementInput {
 	"""
