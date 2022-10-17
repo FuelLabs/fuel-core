@@ -17,7 +17,8 @@ use sha2::{
 
 use crate::config::P2PConfig;
 
-pub fn default_gossipsub_config() -> GossipsubConfig {
+/// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
+pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
     let gossip_message_id = move |message: &GossipsubMessage| {
         MessageId::from(&Sha256::digest(&message.data)[..])
     };
@@ -26,21 +27,30 @@ pub fn default_gossipsub_config() -> GossipsubConfig {
         FastMessageId::from(&Sha256::digest(&message.data)[..])
     };
 
-    let gossipsub_config = GossipsubConfigBuilder::default()
+    let mut builder = GossipsubConfigBuilder::default();
+
+    builder
         .protocol_id_prefix("/meshsub/1.0.0")
+        .message_id_fn(gossip_message_id)
+        .fast_message_id_fn(fast_gossip_message_id)
+        .validate_messages();
+
+    builder
+}
+
+/// Builds a default `GossipsubConfig`.
+/// Used in testing.
+pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
+    default_gossipsub_builder()
         .mesh_n(6)
         .mesh_n_low(4)
         .mesh_n_high(12)
-        .message_id_fn(gossip_message_id)
-        .fast_message_id_fn(fast_gossip_message_id)
-        .validate_messages()
         .build()
-        .expect("valid gossipsub configuration");
-
-    gossipsub_config
+        .expect("valid gossipsub configuration")
 }
 
-pub fn build_gossipsub(p2p_config: &P2PConfig) -> Gossipsub {
+/// Given a `P2pConfig` creates a Gossipsub Behaviour
+pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
     let mut gossipsub = Gossipsub::new(
         MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
         p2p_config.gossipsub_config.clone(),

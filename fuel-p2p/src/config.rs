@@ -1,5 +1,5 @@
 use crate::gossipsub::{
-    default_gossipsub_config,
+    config::default_gossipsub_config,
     topics::{
         CON_VOTE_GOSSIP_TOPIC,
         NEW_BLOCK_GOSSIP_TOPIC,
@@ -36,10 +36,7 @@ use std::{
     time::Duration,
 };
 
-pub use libp2p::gossipsub::{
-    GossipsubConfig,
-    GossipsubConfigBuilder,
-};
+use libp2p::gossipsub::GossipsubConfig;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 

@@ -1,8 +1,3 @@
-mod builder;
+pub mod config;
 pub mod messages;
 pub mod topics;
-
-pub use builder::{
-    build_gossipsub,
-    default_gossipsub_config,
-};

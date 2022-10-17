@@ -7,7 +7,7 @@ use crate::{
         DiscoveryEvent,
     },
     gossipsub::{
-        build_gossipsub,
+        config::build_gossipsub_behaviour,
         topics::GossipTopic,
     },
     peer_info::{
@@ -131,7 +131,7 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
 
         Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub(p2p_config),
+            gossipsub: build_gossipsub_behaviour(p2p_config),
             peer_info,
             request_response,
         }
