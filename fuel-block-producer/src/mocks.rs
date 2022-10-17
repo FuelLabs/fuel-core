@@ -1,11 +1,9 @@
-use super::{
-    db::BlockProducerDatabase,
-    ports::Relayer,
-};
+use super::db::BlockProducerDatabase;
 use crate::ports::TxPool;
 use anyhow::Result;
 use async_trait::async_trait;
 use fuel_core_interfaces::{
+    block_producer::Relayer,
     common::{
         fuel_storage::StorageInspect,
         fuel_tx::{
@@ -46,9 +44,10 @@ pub struct MockRelayer {
     pub best_finalized_height: DaBlockHeight,
 }
 
+#[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
     }
 }

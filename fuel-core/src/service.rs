@@ -120,7 +120,7 @@ impl FuelService {
     /// some period of time.
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
         if let Some(relayer_handle) = &self.modules.relayer {
-            relayer_handle.await_synced().await?;
+            relayer_handle.listen_synced().await_synced().await?;
         }
         Ok(())
     }
