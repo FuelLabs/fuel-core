@@ -54,6 +54,7 @@ use libp2p::{
     PeerId,
     Swarm,
 };
+use prometheus_client::registry::Registry;
 use rand::Rng;
 use std::collections::HashMap;
 use tracing::{
@@ -84,6 +85,9 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
+
+    /// Tracks Metrics for fuel-p2p
+    metrics: Registry
 }
 
 /// Holds additional Network data for FuelBehavior

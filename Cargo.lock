@@ -2438,9 +2438,11 @@ dependencies = [
 name = "fuel-metrics"
 version = "0.11.2"
 dependencies = [
+ "anyhow",
  "axum",
  "lazy_static",
  "prometheus",
+ "prometheus-client",
 ]
 
 [[package]]
@@ -2456,6 +2458,7 @@ dependencies = [
  "futures-timer",
  "ip_network",
  "libp2p",
+ "prometheus-client",
  "rand 0.8.5",
  "serde",
  "sha2 0.10.6",

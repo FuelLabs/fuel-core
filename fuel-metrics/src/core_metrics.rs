@@ -76,6 +76,10 @@ lazy_static! {
     };
 }
 
+pub trait Metrics {
+    fn test() -> u64;
+}
+
 pub fn encode_metrics_response() -> impl IntoResponse {
     let mut buffer = vec![];
     let encoder = TextEncoder::new();

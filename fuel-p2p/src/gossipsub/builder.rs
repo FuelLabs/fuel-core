@@ -9,6 +9,7 @@ use libp2p::{
         PeerScoreParams,
         PeerScoreThresholds,
         RawGossipsubMessage,
+        metrics::{Config as MetricsConfig},
     },
     identity::Keypair,
 };
@@ -16,8 +17,10 @@ use sha2::{
     Digest,
     Sha256,
 };
+use prometheus_client::registry::Registry;
 
 use crate::config::P2PConfig;
+
 
 pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
     let gossip_message_id = move |message: &GossipsubMessage| {
@@ -38,9 +41,15 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub
         .build()
         .expect("valid gossipsub configuration");
 
-    let mut gossipsub = Gossipsub::new(
+    /* Move to Metrics related feature flag */
+    let mut p2p_registry = Registry::default();
+    let metrics_config = MetricsConfig::default();
+
+    let mut gossipsub = Gossipsub::new_with_metrics(
         MessageAuthenticity::Signed(local_key.clone()),
         gossipsub_config,
+        &mut p2p_registry,
+        metrics_config
     )
     .expect("gossipsub initialized");
 
