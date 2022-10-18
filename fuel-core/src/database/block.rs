@@ -74,15 +74,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
 impl Database {
     pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        let block_entry: Option<(Vec<u8>, Bytes32)> = self
-            .iter_all(
-                Column::FuelBlockIds,
-                None,
-                None,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?;
+        let block_entry = self.latest_block()?;
         // get block height from most recently indexed block
         let mut id = block_entry.map(|(height, _)| {
             // safety: we know that all block heights are stored with the correct amount of bytes
@@ -98,16 +90,7 @@ impl Database {
 
     /// Get the current block at the head of the chain.
     pub fn get_current_block(&self) -> Result<Option<Cow<FuelBlockDb>>, Error> {
-        let block_entry: Option<(Vec<u8>, Bytes32)> = self
-            .iter_all(
-                Column::FuelBlockIds,
-                None,
-                None,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?;
-
+        let block_entry = self.latest_block()?;
         match block_entry {
             Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
                 .get(&id)
@@ -136,5 +119,16 @@ impl Database {
                     id,
                 ))
             })
+    }
+
+    fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, Error> {
+        self.iter_all(
+            Column::FuelBlockIds,
+            None,
+            None,
+            Some(IterDirection::Reverse),
+        )
+        .next()
+        .transpose()
     }
 }

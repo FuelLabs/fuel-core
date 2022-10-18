@@ -339,11 +339,15 @@ impl InterpreterStorage for Database {
                 let signature = Signature::default();
                 let message = unsafe {
                     fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
-                block.header.hash().into(),
-            )
+                    block.header.id().into(),
+                )
                 };
-                let address = signature.recover(&message).unwrap_or_default();
-                Ok((*address.hash()).into())
+                // TODO: throw an error if public key isn't recoverable
+                //  when implementing signing (https://github.com/FuelLabs/fuel-core/issues/668)
+                let public_key = signature.recover(&message).unwrap_or_default();
+                Ok(fuel_core_interfaces::common::prelude::Input::owner(
+                    &public_key,
+                ))
             }
         }
     }
