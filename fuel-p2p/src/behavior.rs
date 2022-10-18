@@ -8,7 +8,7 @@ use crate::{
     },
     gossipsub::{
         build_gossipsub,
-        topics::GossipTopic,
+        topics::GossipTopic, self,
     },
     peer_info::{
         PeerInfo,
@@ -42,6 +42,7 @@ use libp2p::{
     NetworkBehaviour,
     PeerId,
 };
+use prometheus_client::registry::Registry;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -70,7 +71,7 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> Self {
+    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> (Self, Registry) {
         let local_public_key = p2p_config.local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -104,12 +105,14 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         let request_response =
             RequestResponse::new(codec, req_res_protocol, req_res_config);
 
-        Self {
+        let (gossipsub, gossipsub_metrics) = build_gossipsub(&p2p_config.local_keypair, p2p_config);
+
+        (Self {
             discovery: discovery_config.finish(),
-            gossipsub: build_gossipsub(&p2p_config.local_keypair, p2p_config),
+            gossipsub,
             peer_info,
             request_response,
-        }
+        }, gossipsub_metrics)
     }
 
     pub fn add_addresses_to_peer_info(

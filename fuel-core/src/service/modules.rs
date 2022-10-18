@@ -7,6 +7,7 @@ use crate::{
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
+use fuel_metrics::service::{ServiceBuilder as MetricsServiceBuilder, Service as MetricsService};
 use fuel_core_interfaces::{
     block_producer::BlockProducer,
     common::prelude::Word,
@@ -126,6 +127,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             block_event_sender,
         )
     };
+
     #[cfg(not(feature = "p2p"))]
     {
         let keep_alive = Box::new(incoming_tx_sender);
@@ -201,7 +203,14 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     #[cfg(feature = "p2p")]
     if !config.p2p.network_name.is_empty() {
-        network_service.start().await?;
+        let ting = network_service.start().await?;
+    }
+
+    let metrics_service_builder = MetricsServiceBuilder::new();
+
+    #[cfg(feature = "p2p")]
+    {
+        metrics_service_builder.set_p2p_registry(p2p_registry);
     }
 
     let txpool = txpool_builder.build()?;

@@ -22,7 +22,7 @@ use prometheus_client::registry::Registry;
 use crate::config::P2PConfig;
 
 
-pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
+pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> (Gossipsub, Registry) {
     let gossip_message_id = move |message: &GossipsubMessage| {
         MessageId::from(&Sha256::digest(&message.data)[..20])
     };
@@ -57,5 +57,5 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub
         .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
         .expect("gossipsub initialized with peer score");
 
-    gossipsub
+    (gossipsub, p2p_registry)
 }
