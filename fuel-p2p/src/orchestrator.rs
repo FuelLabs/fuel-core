@@ -237,6 +237,7 @@ pub mod tests {
         BlockHeight,
         FuelBlock,
         FuelBlockConsensus,
+        FuelBlockPoAConsensus,
         SealedFuelBlock,
     };
     use tokio::time::{
@@ -257,7 +258,9 @@ pub mod tests {
 
             Some(Arc::new(SealedFuelBlock {
                 block,
-                consensus: FuelBlockConsensus::new(Default::default()),
+                consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(
+                    Default::default(),
+                )),
             }))
         }
     }

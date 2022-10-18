@@ -408,6 +408,7 @@ mod tests {
         model::{
             ConsensusVote,
             FuelBlock,
+            FuelBlockConsensus,
             PartialFuelBlockHeader,
         },
     };
@@ -740,7 +741,7 @@ mod tests {
             common::fuel_tx::Transaction,
             model::{
                 FuelBlock,
-                FuelBlockConsensus,
+                FuelBlockPoAConsensus,
                 SealedFuelBlock,
             },
         };
@@ -816,7 +817,7 @@ mod tests {
 
                         let sealed_block = SealedFuelBlock {
                             block,
-                            consensus: FuelBlockConsensus::new(Default::default()),
+                            consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(Default::default())),
                         };
 
                         let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));

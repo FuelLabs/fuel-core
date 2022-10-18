@@ -123,6 +123,11 @@ pub struct HeaderMetadata {
     id: Bytes32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsensusType {
+    PoA,
+}
+
 // Accessors for the consensus header.
 impl FuelBlockHeader {
     /// Merkle root of all previous block header hashes.
@@ -142,6 +147,11 @@ impl FuelBlockHeader {
     pub fn application_hash(&self) -> &Bytes32 {
         &self.as_ref().application_hash
     }
+
+    /// The type of consensus this header is using.
+    pub fn consensus_type(&self) -> ConsensusType {
+        ConsensusType::PoA
+    }
 }
 
 // Accessors for the consensus header.
@@ -157,6 +167,11 @@ impl PartialFuelBlockHeader {
     /// The block producer time.
     pub fn time(&self) -> &DateTime<Utc> {
         &self.as_ref().time
+    }
+
+    /// The type of consensus this header is using.
+    pub fn consensus_type(&self) -> ConsensusType {
+        ConsensusType::PoA
     }
 }
 
@@ -356,6 +371,11 @@ impl FuelBlockDb {
         self.header.id()
     }
 
+    /// The type of consensus this header is using.
+    pub fn consensus_type(&self) -> ConsensusType {
+        self.header.consensus_type()
+    }
+
     /// Hack until we completely remove the need for meaningless
     /// default headers.
     pub fn fix_me_default_block() -> Self {
@@ -502,12 +522,19 @@ impl PartialFuelBlock {
         FuelBlock::new(self.header, self.transactions, message_ids)
     }
 }
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The consensus related data that doesn't live on the
+/// header.
+pub enum FuelBlockConsensus {
+    PoA(FuelBlockPoAConsensus),
+}
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
 /// header.
-pub struct FuelBlockConsensus {
+pub struct FuelBlockPoAConsensus {
     /// The signature of the [`FuelBlockHeader`].
     pub signature: Signature,
 }
@@ -529,7 +556,7 @@ impl Deref for SealedFuelBlock {
     }
 }
 
-impl FuelBlockConsensus {
+impl FuelBlockPoAConsensus {
     /// Create a new block consensus.
     pub fn new(signature: Signature) -> Self {
         Self { signature }
@@ -564,9 +591,9 @@ impl SealedFuelBlock {
                 },
                 transactions: Default::default(),
             },
-            consensus: FuelBlockConsensus {
+            consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus {
                 signature: Default::default(),
-            },
+            }),
         }
     }
 }
@@ -619,5 +646,12 @@ where
             prev_root: Bytes32::default(),
             generated: Default::default(),
         }
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for FuelBlockConsensus {
+    fn default() -> Self {
+        FuelBlockConsensus::PoA(Default::default())
     }
 }

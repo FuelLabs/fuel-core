@@ -30,6 +30,7 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        ConsensusType,
         FuelBlockDb,
         SealedFuelBlock,
     },
@@ -331,16 +332,20 @@ impl InterpreterStorage for Database {
         let block = self.get_current_block()?.unwrap_or_else(|| {
             std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
         });
-        // FIXME: Get producer address from block signature.
-        // block_id -> Signature
-        let signature = Signature::default();
-        let message = unsafe {
-            fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
+        match block.consensus_type() {
+            ConsensusType::PoA => {
+                // FIXME: Get producer address from block signature.
+                // block_id -> Signature
+                let signature = Signature::default();
+                let message = unsafe {
+                    fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
                 block.header.hash().into(),
             )
-        };
-        let address = signature.recover(&message).unwrap_or_default();
-        Ok((*address.hash()).into())
+                };
+                let address = signature.recover(&message).unwrap_or_default();
+                Ok((*address.hash()).into())
+            }
+        }
     }
 }
 

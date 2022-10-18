@@ -30,11 +30,6 @@ pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, FuelBlock>;
 /// Execution wrapper with only a single type.
 pub type ExecutionType<T> = ExecutionTypes<T, T>;
 
-/// Execution wrapper for setting or checking a type.
-/// Production sets the mutable reference.
-/// Validation checks the reference.
-pub type ExecutionCheckOrSet<'a, T> = ExecutionTypes<&'a mut T, &'a T>;
-
 #[derive(Debug, Clone, Copy)]
 /// Execution wrapper where the types
 /// depend on the type of execution.
