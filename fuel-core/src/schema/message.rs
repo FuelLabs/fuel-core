@@ -205,7 +205,7 @@ impl MessageQuery {
         let data = OutputProofContext(ctx.data_unchecked());
         Ok(
             crate::query::output_proof(&data, transaction_id.into(), message_id.into())
-                .await
+                .await?
                 .map(OutputProof),
         )
     }
@@ -246,71 +246,72 @@ impl OutputProofData for OutputProofContext<'_> {
     fn receipts(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Vec<fuel_core_interfaces::common::prelude::Receipt> {
-        self.0
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Receipt>, KvStoreError> {
+        Ok(self
+            .0
             .storage::<Receipts>()
-            .get(transaction_id)
-            .unwrap()
+            .get(transaction_id)?
             .map(Cow::into_owned)
-            .unwrap_or_else(|| Vec::with_capacity(0))
+            .unwrap_or_else(|| Vec::with_capacity(0)))
     }
 
     fn transaction(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Option<fuel_txpool::types::Transaction> {
-        self.0
+    ) -> Result<Option<fuel_txpool::types::Transaction>, KvStoreError> {
+        Ok(self
+            .0
             .storage::<Transactions>()
-            .get(transaction_id)
-            .unwrap()
-            .map(Cow::into_owned)
+            .get(transaction_id)?
+            .map(Cow::into_owned))
     }
 
     fn transaction_status(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Option<crate::tx_pool::TransactionStatus> {
-        self.0.get_tx_status(transaction_id).unwrap()
+    ) -> Result<Option<crate::tx_pool::TransactionStatus>, KvStoreError> {
+        Ok(self.0.get_tx_status(transaction_id)?)
     }
 
     fn transactions_on_block(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Vec<fuel_core_interfaces::common::prelude::Bytes32> {
-        self.0
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Bytes32>, KvStoreError> {
+        Ok(self
+            .0
             .storage::<FuelBlocks>()
-            .get(block_id)
-            .unwrap()
+            .get(block_id)?
             .map(|block| block.into_owned().transactions)
-            .unwrap_or_else(|| Vec::with_capacity(0))
+            .unwrap_or_else(|| Vec::with_capacity(0)))
     }
 
     fn message(
         &self,
         message_id: &fuel_types::MessageId,
-    ) -> Option<fuel_core_interfaces::model::Message> {
-        self.0
+    ) -> Result<Option<fuel_core_interfaces::model::Message>, KvStoreError> {
+        Ok(self
+            .0
             .storage::<Messages>()
-            .get(message_id)
-            .unwrap()
-            .map(Cow::into_owned)
+            .get(message_id)?
+            .map(Cow::into_owned))
     }
 
     fn signature(
         &self,
         _block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Option<fuel_core_interfaces::common::fuel_crypto::Signature> {
-        Some(Signature::default())
+    ) -> Result<Option<fuel_core_interfaces::common::fuel_crypto::Signature>, KvStoreError>
+    {
+        Ok(Some(Signature::default()))
     }
 
     fn block(
         &self,
         block_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Option<model::FuelBlockDb> {
-        self.0
+    ) -> Result<Option<model::FuelBlockDb>, KvStoreError> {
+        Ok(self
+            .0
             .storage::<FuelBlocks>()
-            .get(block_id)
-            .unwrap()
-            .map(Cow::into_owned)
+            .get(block_id)?
+            .map(Cow::into_owned))
     }
 }

@@ -91,29 +91,29 @@ async fn can_build_output_proof() {
     let mut count = 0;
     data.expect_receipts().returning(move |txn_id| {
         if *txn_id == transaction_id {
-            RECEIPTS.to_vec()
+            Ok(RECEIPTS.to_vec())
         } else {
             let r = OTHER_RECEIPTS[count..=count].to_vec();
             count += 1;
-            r
+            Ok(r)
         }
     });
     data.expect_transaction_status()
         .with(eq(transaction_id))
         .returning(|_| {
-            Some(TransactionStatus::Success {
+            Ok(Some(TransactionStatus::Success {
                 block_id: Default::default(),
                 time: Default::default(),
                 result: ProgramState::Return(Default::default()),
-            })
+            }))
         });
     data.expect_transactions_on_block()
         .once()
         .with(eq(Bytes32::default()))
-        .return_const(TXNS.to_vec());
+        .returning(|_| Ok(TXNS.to_vec()));
 
     data.expect_transaction().returning(move |txn_id| {
-        TXNS.iter().find(|t| *t == txn_id).map(|_| {
+        Ok(TXNS.iter().find(|t| *t == txn_id).map(|_| {
             let mut txn = Transaction::default();
             match &mut txn {
                 Transaction::Script { outputs, .. }
@@ -123,26 +123,27 @@ async fn can_build_output_proof() {
                 }
             }
             txn
-        })
+        }))
     });
 
     data.expect_message()
         .once()
         .with(eq(MESSAGE_ID))
-        .return_const(fuel_core_interfaces::model::Message::default());
+        .returning(|_| Ok(Some(fuel_core_interfaces::model::Message::default())));
 
     data.expect_signature()
         .once()
         .with(eq(Bytes32::default()))
-        .return_const(fuel_crypto::Signature::default());
+        .returning(|_| Ok(Some(fuel_crypto::Signature::default())));
 
     data.expect_block()
         .once()
         .with(eq(Bytes32::default()))
-        .return_const(FuelBlockDb::default());
+        .returning(|_| Ok(Some(FuelBlockDb::default())));
 
     let p = output_proof(&data, transaction_id, MESSAGE_ID)
         .await
+        .unwrap()
         .unwrap();
     assert_eq!(p.message.id(), MESSAGE_ID);
     assert_eq!(p.signature, fuel_crypto::Signature::default());
