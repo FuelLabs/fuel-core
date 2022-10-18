@@ -1,0 +1,41 @@
+---
+source: fuel-client/src/client/schema/tx.rs
+assertion_line: 314
+expression: operation.query
+---
+query Query($_0: TransactionId!) {
+  transaction(id: $_0) {
+    rawPayload
+    receipts {
+      rawPayload
+    }
+    status {
+      __typename
+      ... on SubmittedStatus {
+        time
+      }
+      ... on SuccessStatus {
+        block {
+          id
+        }
+        time
+        programState {
+          returnType
+          data
+        }
+      }
+      ... on FailureStatus {
+        block {
+          id
+        }
+        time
+        reason
+        programState {
+          returnType
+          data
+        }
+      }
+    }
+  }
+}
+

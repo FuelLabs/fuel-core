@@ -1586,6 +1586,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2561,9 +2572,9 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e6e4b2fb996102f086dd40f2d3f4f173aac03f2998a865d8b2248e76bb04c7f"
+source = "git+https://github.com/FuelLabs/fuel-tx#a7b5496b0cf04cecfbe2f4a20240dc8bb3d57e86"
 dependencies = [
+ "derivative",
  "fuel-asm",
  "fuel-crypto",
  "fuel-merkle",
@@ -2604,8 +2615,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.18.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bc62660875a8942476f7bf934d97825e0c57b98eacd9e9194570224c609d47"
+source = "git+https://github.com/FuelLabs/fuel-vm.git?branch=Salka1988/pass_contract_id_value_to_panic#2ac0a593dae5328aa454c7b1a9ea59639422f72e"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -2616,7 +2626,6 @@ dependencies = [
  "fuel-types",
  "itertools",
  "rand 0.8.5",
- "secp256k1",
  "serde",
  "sha3",
  "tai64",

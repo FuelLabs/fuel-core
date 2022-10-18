@@ -22,8 +22,8 @@ members = [
 ]
 
 [patch.crates-io]
-fuel-vm = { path = "../fuel-vm" }
-fuel-tx = { path = "../fuel-tx" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git", branch = "Salka1988/pass_contract_id_value_to_panic"}
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx" }
 
 [profile.release]
 codegen-units = 1

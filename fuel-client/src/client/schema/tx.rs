@@ -1,20 +1,18 @@
 use super::block::BlockIdFragment;
-use crate::{
-    client::{
-        schema::{
-            schema,
-            Address,
-            ConnectionArgs,
-            ConversionError,
-            HexString,
-            PageInfo,
-            TransactionId,
-        },
-        types::TransactionResponse,
-        PageDirection,
-        PaginatedResult,
-        PaginationRequest,
+use crate::client::{
+    schema::{
+        schema,
+        Address,
+        ConnectionArgs,
+        ConversionError,
+        HexString,
+        PageInfo,
+        TransactionId,
     },
+    types::TransactionResponse,
+    PageDirection,
+    PaginatedResult,
+    PaginationRequest,
 };
 use fuel_vm::fuel_types::{
     bytes::Deserializable,
