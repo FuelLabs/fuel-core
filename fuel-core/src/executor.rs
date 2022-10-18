@@ -55,6 +55,7 @@ use fuel_core_interfaces::{
         ExecutionBlock,
         ExecutionKind,
         ExecutionType,
+        ExecutionTypes,
         TransactionValidityError,
     },
     model::{
@@ -257,9 +258,14 @@ impl Executor {
                 return Err(Error::TransactionIdCollision(tx_id))
             }
 
+            // Wrap the transaction in the execution kind.
+            let mut wrapped_tx: ExecutionTypes<&mut Transaction, &Transaction> =
+                match execution_kind {
+                    ExecutionKind::Production => ExecutionTypes::Production(tx),
+                    ExecutionKind::Validation => ExecutionTypes::Validation(&*tx),
+                };
             self.compute_contract_input_utxo_ids(
-                // Wrap the transaction in the execution kind.
-                &mut execution_kind.wrap(tx),
+                &mut wrapped_tx,
                 block_db_transaction.deref(),
             )?;
 
@@ -647,43 +653,54 @@ impl Executor {
     /// In validation mode, verify the proposed utxo ids on contract inputs match the expected values.
     fn compute_contract_input_utxo_ids(
         &self,
-        tx: &mut ExecutionType<&mut Transaction>,
+        tx: &mut ExecutionTypes<&mut Transaction, &Transaction>,
         db: &Database,
     ) -> Result<(), Error> {
-        // Get the kind of execution.
-        let execution_kind = tx.to_kind();
-
-        if let Transaction::Script { inputs, .. } = tx.deref_mut() {
-            for input in inputs {
-                if let Input::Contract {
-                    utxo_id,
-                    contract_id,
-                    ..
-                } = input
-                {
-                    let maybe_utxo_id =
-                        db.storage::<ContractsLatestUtxo>().get(contract_id)?;
-                    let expected_utxo_id = if self.config.utxo_validation {
-                        maybe_utxo_id
-                            .ok_or(Error::ContractUtxoMissing(*contract_id))?
-                            .into_owned()
-                    } else {
-                        maybe_utxo_id.unwrap_or_default().into_owned()
-                    };
-
-                    // Check or set the utxo id.
-                    match execution_kind {
-                        ExecutionKind::Production => *utxo_id = expected_utxo_id,
-                        ExecutionKind::Validation => {
-                            if *utxo_id != expected_utxo_id {
-                                return Err(Error::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
-                        }
+        let expected_utxo_id = |contract_id| {
+            let maybe_utxo_id = db.storage::<ContractsLatestUtxo>().get(contract_id)?;
+            let expected_utxo_id = if self.config.utxo_validation {
+                maybe_utxo_id
+                    .ok_or(Error::ContractUtxoMissing(*contract_id))?
+                    .into_owned()
+            } else {
+                maybe_utxo_id.unwrap_or_default().into_owned()
+            };
+            Result::<_, Error>::Ok(expected_utxo_id)
+        };
+        match tx {
+            ExecutionTypes::Production(Transaction::Script { inputs, .. }) => {
+                let iter = inputs.iter_mut().filter_map(|input| match input {
+                    Input::Contract {
+                        ref mut utxo_id,
+                        ref contract_id,
+                        ..
+                    } => Some((utxo_id, contract_id)),
+                    _ => None,
+                });
+                for (utxo_id, contract_id) in iter {
+                    *utxo_id = expected_utxo_id(contract_id)?;
+                }
+            }
+            // Needed to convince the compiler that tx is taken by ref here
+            #[allow(clippy::needless_borrow)]
+            ExecutionTypes::Validation(ref tx @ Transaction::Script { inputs, .. }) => {
+                let iter = inputs.iter().filter_map(|input| match input {
+                    Input::Contract {
+                        utxo_id,
+                        contract_id,
+                        ..
+                    } => Some((utxo_id, contract_id)),
+                    _ => None,
+                });
+                for (utxo_id, contract_id) in iter {
+                    if *utxo_id != expected_utxo_id(contract_id)? {
+                        return Err(Error::InvalidTransactionOutcome {
+                            transaction_id: tx.id(),
+                        })
                     }
                 }
             }
+            _ => (),
         }
         Ok(())
     }
