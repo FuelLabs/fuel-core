@@ -249,7 +249,7 @@ impl VmBench {
 }
 
 impl VmBenchPrepared {
-    pub fn run(self) -> io::Result<()> {
+    pub fn run(self) -> io::Result<Interpreter<Database>> {
         let Self {
             mut vm,
             instruction,
@@ -258,11 +258,12 @@ impl VmBenchPrepared {
         let (op, ra, rb, rc, rd, _imm) = instruction.into_inner();
 
         match op {
-            OpcodeRepr::CALL => Ok(vm
+            OpcodeRepr::CALL => vm
                 .prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?),
-            _ => Ok(vm.instruction(instruction).map(|_| ())?),
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
+            _ => vm.instruction(instruction).map(|_| ())?,
         }
+        Ok(vm)
     }
 }
 
