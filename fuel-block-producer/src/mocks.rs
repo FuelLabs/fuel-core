@@ -82,14 +82,6 @@ impl Executor for MockExecutor {
         block_db.insert(*block.header().height(), block.to_db_block());
         Ok(block)
     }
-
-    async fn dry_run(
-        &self,
-        _block: ExecutionBlock,
-        _utxo_validation: Option<bool>,
-    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
-        Ok(Default::default())
-    }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
@@ -102,23 +94,7 @@ impl Executor for FailingMockExecutor {
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            match block {
-                ExecutionBlock::Production(b) => Ok(b.generate(&[])),
-                ExecutionBlock::Validation(b) => Ok(b),
-            }
-        }
-    }
-
-    async fn dry_run(
-        &self,
-        _block: ExecutionBlock,
-        _utxo_validation: Option<bool>,
-    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
-        let mut err = self.0.lock().unwrap();
-        if let Some(err) = err.take() {
-            Err(err)
-        } else {
-            Ok(Default::default())
+            Ok(())
         }
     }
 }

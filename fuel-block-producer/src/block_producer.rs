@@ -86,7 +86,20 @@ impl Trait for Producer {
 
         let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
 
-        let header = self.new_header(height).await?;
+        let header = PartialFuelBlockHeader {
+            application: FuelApplicationHeader {
+                da_height: new_da_height,
+                generated: Default::default(),
+            },
+            consensus: FuelConsensusHeader {
+                // TODO: this needs to be updated using a proper BMT MMR
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: Utc::now(),
+                generated: Default::default(),
+            },
+            metadata: None,
+        };
         let block = PartialFuelBlock::new(
             header,
             best_transactions
@@ -125,79 +138,10 @@ impl Trait for Producer {
         debug!("Produced block: {:?}", &block);
         Ok(block)
     }
-
-    // simulate a transaction without altering any state. Does not aquire the production lock
-    // since it is basically a "read only" operation and shouldn't get in the way of normal
-    // production.
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> Result<Vec<Receipt>> {
-        // setup the block with the provided tx and optional height
-        // dry_run execute tx on the executor
-        // return the receipts
-
-        let height = match height {
-            None => self.db.current_block_height()?,
-            Some(height) => height,
-        } + 1u64.into();
-        let checked = if self.config.utxo_validation {
-            CheckedTransaction::check(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
-        } else {
-            CheckedTransaction::check_unsigned(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
-        };
-
-        let header = self.new_header(height).await?;
-        let block = PartialFuelBlock::new(
-            header,
-            vec![Transaction::from(checked)].into_iter().collect(),
-        );
-
-        let res = self
-            .executor
-            .dry_run(ExecutionBlock::Production(block), utxo_validation)
-            .await?;
-        res.into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("Expected at least one set of receipts"))
-    }
 }
 
-impl Producer {
-    /// Create the header for a new block at the provided height
-    async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
-        let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self
-            .select_new_da_height(previous_block_info.da_height)
-            .await?;
-
-        Ok(PartialFuelBlockHeader {
-            application: FuelApplicationHeader {
-                da_height: new_da_height,
-                generated: Default::default(),
-            },
-            consensus: FuelConsensusHeader {
-                // TODO: this needs to be updated using a proper BMT MMR
-                prev_root: previous_block_info.prev_root,
-                height,
-                time: Utc::now(),
-                generated: Default::default(),
-            },
-            metadata: None,
-        })
-    }
-
-    async fn select_new_da_height(
+impl<'a> Producer<'a> {
+    fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {

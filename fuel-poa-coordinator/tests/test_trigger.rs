@@ -102,6 +102,7 @@ impl BlockProducer for MockBlockProducer {
             transactions,
         }
         .generate(&[]))
+<<<<<<< HEAD
     }
 
     async fn dry_run(
@@ -111,6 +112,8 @@ impl BlockProducer for MockBlockProducer {
         _utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>> {
         Ok(vec![])
+=======
+>>>>>>> 007bc87 (Reconcile Fuel Block Header (#692))
     }
 }
 
