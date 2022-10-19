@@ -49,7 +49,6 @@ type Block {
 	height: U64!
 	transactions: [Transaction!]!
 	time: DateTime!
-	producer: Address!
 }
 
 type BlockConnection {

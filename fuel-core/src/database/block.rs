@@ -20,6 +20,7 @@ use fuel_core_interfaces::common::{
         StorageMutate,
     },
     fuel_tx::Bytes32,
+    prelude::StorageAsRef,
 };
 use std::{
     borrow::Cow,
@@ -49,7 +50,7 @@ impl StorageMutate<FuelBlocks> for Database {
     ) -> Result<Option<FuelBlockDb>, KvStoreError> {
         let _: Option<BlockHeight> = Database::insert(
             self,
-            value.header.height.to_be_bytes(),
+            value.header.height().to_be_bytes(),
             Column::FuelBlockIds,
             *key,
         )?;
@@ -63,7 +64,7 @@ impl StorageMutate<FuelBlocks> for Database {
         if let Some(block) = &block {
             let _: Option<Bytes32> = Database::remove(
                 self,
-                &block.header.height.to_be_bytes(),
+                &block.header.height().to_be_bytes(),
                 Column::FuelBlockIds,
             )?;
         }
@@ -73,15 +74,7 @@ impl StorageMutate<FuelBlocks> for Database {
 
 impl Database {
     pub fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        let block_entry: Option<(Vec<u8>, Bytes32)> = self
-            .iter_all(
-                Column::FuelBlockIds,
-                None,
-                None,
-                Some(IterDirection::Reverse),
-            )
-            .next()
-            .transpose()?;
+        let block_entry = self.latest_block()?;
         // get block height from most recently indexed block
         let mut id = block_entry.map(|(height, _)| {
             // safety: we know that all block heights are stored with the correct amount of bytes
@@ -93,6 +86,17 @@ impl Database {
             id = self.get_starting_chain_height()?;
         }
         Ok(id)
+    }
+
+    /// Get the current block at the head of the chain.
+    pub fn get_current_block(&self) -> Result<Option<Cow<FuelBlockDb>>, Error> {
+        let block_entry = self.latest_block()?;
+        match block_entry {
+            Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
+                .get(&id)
+                .map_err(Error::from),
+            None => Ok(None),
+        }
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
@@ -115,5 +119,16 @@ impl Database {
                     id,
                 ))
             })
+    }
+
+    fn latest_block(&self) -> Result<Option<(Vec<u8>, Bytes32)>, Error> {
+        self.iter_all(
+            Column::FuelBlockIds,
+            None,
+            None,
+            Some(IterDirection::Reverse),
+        )
+        .next()
+        .transpose()
     }
 }

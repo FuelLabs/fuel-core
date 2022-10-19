@@ -16,8 +16,10 @@ use fuel_core_interfaces::{
     },
     executor::Executor,
     model::{
+        FuelApplicationHeader,
         FuelBlockDb,
         FuelBlockHeader,
+        FuelConsensusHeader,
     },
 };
 use rand::{
@@ -66,8 +68,11 @@ async fn can_produce_next_block() {
     let prev_height = 1u32.into();
     let previous_block = FuelBlockDb {
         header: FuelBlockHeader {
-            height: prev_height,
-            prev_root: rng.gen(),
+            consensus: FuelConsensusHeader {
+                height: prev_height,
+                prev_root: rng.gen(),
+                ..Default::default()
+            },
             ..Default::default()
         },
         transactions: vec![],
@@ -117,8 +122,14 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let prev_height = 1u32.into();
     let previous_block = FuelBlockDb {
         header: FuelBlockHeader {
-            height: prev_height,
-            da_height: prev_da_height,
+            application: FuelApplicationHeader {
+                da_height: prev_da_height,
+                ..Default::default()
+            },
+            consensus: FuelConsensusHeader {
+                height: prev_height,
+                ..Default::default()
+            },
             ..Default::default()
         },
         transactions: vec![],

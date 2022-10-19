@@ -256,7 +256,7 @@ impl TxPool {
         let mut guard = txpool.write().await;
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
 
-        for tx in &block.transactions {
+        for tx in block.transactions() {
             let _removed = guard.remove_by_tx_id(&tx.id());
         }
     }

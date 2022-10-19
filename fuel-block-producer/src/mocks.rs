@@ -20,7 +20,7 @@ use fuel_core_interfaces::{
     },
     executor::{
         Error as ExecutorError,
-        ExecutionMode,
+        ExecutionBlock,
         Executor,
     },
     model::{
@@ -72,15 +72,15 @@ pub struct MockExecutor(pub MockDb);
 
 #[async_trait]
 impl Executor for MockExecutor {
-    async fn execute(
-        &self,
-        block: &mut FuelBlock,
-        _mode: ExecutionMode,
-    ) -> Result<(), ExecutorError> {
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
+        let block = match block {
+            ExecutionBlock::Production(block) => block.generate(&[]),
+            ExecutionBlock::Validation(block) => block,
+        };
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
-        block_db.insert(block.header.height, block.to_db_block());
-        Ok(())
+        block_db.insert(*block.header().height(), block.to_db_block());
+        Ok(block)
     }
 }
 
@@ -88,17 +88,16 @@ pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
 #[async_trait]
 impl Executor for FailingMockExecutor {
-    async fn execute(
-        &self,
-        _block: &mut FuelBlock,
-        _mode: ExecutionMode,
-    ) -> Result<(), ExecutorError> {
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            Ok(())
+            match block {
+                ExecutionBlock::Production(b) => Ok(b.generate(&[])),
+                ExecutionBlock::Validation(b) => Ok(b),
+            }
         }
     }
 }
