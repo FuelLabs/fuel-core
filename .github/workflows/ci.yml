@@ -153,6 +153,11 @@ jobs:
           toolchain: stable
           override: true
 
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Verify tag version
         run: |
           curl -sSLf "https://github.com/TomWright/dasel/releases/download/v1.24.3/dasel_linux_amd64" -L -o dasel && chmod +x dasel
@@ -292,6 +297,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
+        if: matrix.job.cross_image
         uses: docker/setup-buildx-action@v1
 
       - name: Setup custom cross env ${{ matrix.job.cross_image }}

@@ -23,17 +23,21 @@ use fuel_core_interfaces::{
     common::{
         crypto::ephemeral_merkle_root,
         fuel_types::Bytes32,
+        prelude::Word,
     },
     executor::{
         Error,
-        ExecutionMode,
+        ExecutionBlock,
         Executor,
     },
     model::{
         BlockHeight,
         DaBlockHeight,
+        FuelApplicationHeader,
         FuelBlock,
-        FuelBlockHeader,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
 };
 use std::ops::Deref;
@@ -60,7 +64,11 @@ pub struct Producer<'a> {
 #[async_trait::async_trait]
 impl<'a> Trait for Producer<'a> {
     /// Produces a block for the specified height
-    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock> {
+    async fn produce_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> Result<FuelBlock> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -75,35 +83,38 @@ impl<'a> Trait for Producer<'a> {
         let previous_block_info = self.previous_block_info(height)?;
         let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
 
-        let best_transactions = self
-            .txpool
-            .get_includable_txs(height, self.config.max_gas_per_block)
-            .await?;
+        let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
 
-        let header = FuelBlockHeader {
-            height,
-            da_height: new_da_height,
-            parent_hash: previous_block_info.hash,
-            // TODO: this needs to be updated using a proper BMT MMR
-            prev_root: previous_block_info.prev_root,
-            // This will be set by the executor
-            transactions_root: Default::default(),
-            time: Utc::now(),
-            // TODO: producer identity will be removed from the header eventually
-            //       and stored in the sealed block consensus info instead.
-            producer: Default::default(),
+        let header = PartialFuelBlockHeader {
+            application: FuelApplicationHeader {
+                da_height: new_da_height,
+                generated: Default::default(),
+            },
+            consensus: FuelConsensusHeader {
+                // TODO: this needs to be updated using a proper BMT MMR
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: Utc::now(),
+                generated: Default::default(),
+            },
             metadata: None,
         };
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock::new(
             header,
-            transactions: best_transactions
+            best_transactions
                 .into_iter()
                 .map(|tx| tx.deref().clone().into())
                 .collect(),
-        };
+        );
+
+        // Store the context string incase we error.
+        let context_string = format!(
+            "Failed to produce block {:?} due to execution failure",
+            block
+        );
         let result = self
             .executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await;
 
         if let Err(
@@ -121,10 +132,7 @@ impl<'a> Trait for Producer<'a> {
             );
         }
 
-        let _ = result.context(format!(
-            "Failed to produce block {:?} due to execution failure",
-            block
-        ))?;
+        let block = result.context(context_string)?;
 
         debug!("Produced block: {:?}", &block);
         Ok(block)
@@ -158,7 +166,6 @@ impl<'a> Producer<'a> {
         else if height == 1u32.into() {
             // TODO: what should initial genesis data be here?
             Ok(PreviousBlockInfo {
-                hash: Default::default(),
                 prev_root: Default::default(),
                 da_height: Default::default(),
             })
@@ -171,11 +178,11 @@ impl<'a> Producer<'a> {
                 .ok_or(MissingBlock(prev_height))?;
             // TODO: this should use a proper BMT MMR
             let hash = previous_block.id();
-            let prev_root =
-                ephemeral_merkle_root(vec![previous_block.header.prev_root, hash].iter());
+            let prev_root = ephemeral_merkle_root(
+                vec![*previous_block.header.prev_root(), hash].iter(),
+            );
 
             Ok(PreviousBlockInfo {
-                hash,
                 prev_root,
                 da_height: previous_block.header.da_height,
             })
@@ -184,7 +191,6 @@ impl<'a> Producer<'a> {
 }
 
 struct PreviousBlockInfo {
-    hash: Bytes32,
     prev_root: Bytes32,
     da_height: DaBlockHeight,
 }

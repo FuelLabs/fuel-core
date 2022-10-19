@@ -1,9 +1,6 @@
 use crate::client::{
     schema::{
-        primitives::{
-            Address,
-            DateTime,
-        },
+        primitives::DateTime,
         schema,
         BlockId,
         ConnectionArgs,
@@ -73,7 +70,6 @@ pub struct Block {
     pub height: U64,
     pub id: BlockId,
     pub time: DateTime,
-    pub producer: Address,
     pub transactions: Vec<TransactionIdFragment>,
 }
 

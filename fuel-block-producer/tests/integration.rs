@@ -143,10 +143,7 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config {
-            max_gas_per_block,
-            consensus_params,
-        },
+        config: fuel_block_producer::config::Config { consensus_params },
         db: &mock_db,
         txpool: &TxPoolAdapter {
             sender: txpool.sender().clone(),
@@ -193,15 +190,15 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production
     let generated_block = block_producer
-        .produce_block(1u32.into())
+        .produce_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 2);
+    assert_eq!(generated_block.transactions().len(), 2);
 
-    assert_eq!(generated_block.transactions[0].gas_price(), 20);
-    assert_eq!(generated_block.transactions[1].gas_price(), 10);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 20);
+    assert_eq!(generated_block.transactions()[1].gas_price(), 10);
 
     // Import the block to txpool
     import_block_events_tx
@@ -212,13 +209,13 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production again
     let generated_block = block_producer
-        .produce_block(2u32.into())
+        .produce_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 1);
-    assert_eq!(generated_block.transactions[0].gas_price(), 15);
+    assert_eq!(generated_block.transactions().len(), 1);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 15);
 
     // Import the block to txpool
     import_block_events_tx
@@ -229,12 +226,12 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production once more, now the block should be empty
     let generated_block = block_producer
-        .produce_block(3u32.into())
+        .produce_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 0);
+    assert_eq!(generated_block.transactions().len(), 0);
 
     Ok(())
 }

@@ -11,10 +11,16 @@ use crate::common::fuel_types::{
     Bytes32,
 };
 pub use block::{
+    ConsensusType,
+    FuelApplicationHeader,
     FuelBlock,
     FuelBlockConsensus,
     FuelBlockDb,
     FuelBlockHeader,
+    FuelBlockPoAConsensus,
+    FuelConsensusHeader,
+    PartialFuelBlock,
+    PartialFuelBlockHeader,
     SealedFuelBlock,
 };
 pub use block_height::BlockHeight;

@@ -1,6 +1,5 @@
 use crate::{
     behavior::{
-        BehaviourEventWrapper,
         FuelBehaviour,
         FuelBehaviourEvent,
     },
@@ -253,9 +252,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
     fn handle_behaviour_event(
         &mut self,
-        event: BehaviourEventWrapper<Codec>,
+        event: FuelBehaviourEvent,
     ) -> Option<FuelP2PEvent> {
-        match event.into() {
+        match event {
             FuelBehaviourEvent::Discovery(discovery_event) => match discovery_event {
                 DiscoveryEvent::Connected(peer_id, addresses) => {
                     self.swarm
@@ -409,6 +408,8 @@ mod tests {
         model::{
             ConsensusVote,
             FuelBlock,
+            FuelBlockConsensus,
+            PartialFuelBlockHeader,
         },
     };
     use futures::StreamExt;
@@ -711,7 +712,7 @@ mod tests {
                                 }
                             }
                             GossipsubMessage::NewBlock(block) => {
-                                if block.header.height != FuelBlock::default().header.height {
+                                    if block.header().height() != FuelBlock::default().header().height() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }
@@ -740,8 +741,7 @@ mod tests {
             common::fuel_tx::Transaction,
             model::{
                 FuelBlock,
-                FuelBlockConsensus,
-                FuelBlockHeader,
+                FuelBlockPoAConsensus,
                 SealedFuelBlock,
             },
         };
@@ -793,7 +793,7 @@ mod tests {
                                     let response_message = rx_orchestrator.await;
 
                                     if let Ok(sealed_block) = response_message {
-                                        let _ = tx_test_end.send(sealed_block.header.height == 0_u64.into()).await;
+                                        let _ = tx_test_end.send(*sealed_block.header().height() == 0_u64.into()).await;
                                     } else {
                                         tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                         panic!("Message not received successfully!")
@@ -809,14 +809,15 @@ mod tests {
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
                     if let FuelP2PEvent::RequestMessage{ request_id, .. } = node_b_event {
-                        let block = FuelBlock {
-                            header: FuelBlockHeader::default(),
-                            transactions: vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()],
-                        };
+                        let block = FuelBlock::new(
+                            PartialFuelBlockHeader::default(),
+                            vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()],
+                            &[]
+                        );
 
                         let sealed_block = SealedFuelBlock {
                             block,
-                            consensus: FuelBlockConsensus { }
+                            consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(Default::default())),
                         };
 
                         let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));
