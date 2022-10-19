@@ -11,7 +11,9 @@ use fuel_core_interfaces::{
     model::{
         BlockHeight,
         FuelBlock,
-        FuelBlockHeader,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
     poa_coordinator::{
         BlockHeightDb,
@@ -89,13 +91,17 @@ impl BlockProducer for MockBlockProducer {
             .map(|c| c.transaction().clone())
             .collect();
 
-        Ok(FuelBlock {
-            header: FuelBlockHeader {
-                height,
+        Ok(PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions,
-        })
+        }
+        .generate(&[]))
     }
 }
 
@@ -193,11 +199,11 @@ impl MockTxPool {
                         match msg.expect("Closed unexpectedly") {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let mut g = txs.lock().await;
-                                for tx in &block.transactions {
+                                for tx in block.transactions() {
                                     let i = g.iter().position(|t| t.id() == tx.id()).unwrap();
                                     g.swap_remove(i);
                                 }
-                                block_event_tx.send(block.transactions.len()).await.unwrap();
+                                block_event_tx.send(block.transactions().len()).await.unwrap();
                             },
                             _ => todo!("This block import type is not mocked yet"),
                         }

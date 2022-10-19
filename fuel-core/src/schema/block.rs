@@ -7,9 +7,7 @@ use crate::{
     executor::Executor,
     model::{
         BlockHeight,
-        FuelBlock,
         FuelBlockDb,
-        FuelBlockHeader,
     },
     schema::{
         scalars::{
@@ -42,7 +40,13 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::Transactions,
-    executor::ExecutionMode,
+    executor::ExecutionBlock,
+    model::{
+        FuelApplicationHeader,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
+    },
 };
 use itertools::Itertools;
 use std::{
@@ -50,7 +54,7 @@ use std::{
     convert::TryInto,
 };
 
-use super::{scalars::Address, chain::ChainInfo};
+use super::{chain::ChainInfo};
 
 pub struct Block(pub(crate) FuelBlockDb);
 
@@ -61,7 +65,7 @@ impl Block {
     }
 
     async fn height(&self) -> U64 {
-        self.0.header.height.into()
+        (*self.0.header.height()).into()
     }
 
     async fn transactions(
@@ -84,11 +88,7 @@ impl Block {
     }
 
     async fn time(&self) -> DateTime<Utc> {
-        self.0.header.time
-    }
-
-    async fn producer(&self) -> Address {
-        self.0.header.producer.into()
+        *self.0.header.time()
     }
 }
 
@@ -219,7 +219,10 @@ impl BlockQuery {
                     );
 
                     connection.edges.extend(blocks.into_iter().map(|item| {
-                        Edge::new(item.header.height.to_usize(), Block(item.into_owned()))
+                        Edge::new(
+                            item.header.height().to_usize(),
+                            Block(item.into_owned()),
+                        )
                     }));
 
                     Ok::<Connection<usize, Block>, anyhow::Error>(connection)
@@ -266,22 +269,26 @@ impl BlockMutation {
 
         for idx in 0..iterate {
             let current_height = db.get_block_height()?.unwrap_or_default();
-            let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 
-            let mut block = FuelBlock {
-                header: FuelBlockHeader {
-                    height: new_block_height,
-                    parent_hash: current_hash,
-                    time: block_time(idx),
-                    ..Default::default()
+            let block = PartialFuelBlock::new(
+                PartialFuelBlockHeader {
+                    consensus: FuelConsensusHeader {
+                        height: new_block_height,
+                        time: block_time(idx),
+                        prev_root: Default::default(),
+                        generated: Default::default(),
+                    },
+                    application: FuelApplicationHeader {
+                        da_height: Default::default(),
+                        generated: Default::default(),
+                    },
+                    metadata: Default::default(),
                 },
-                transactions: vec![],
-            };
+                vec![],
+            );
 
-            executor
-                .execute(&mut block, ExecutionMode::Production)
-                .await?;
+            executor.execute(ExecutionBlock::Production(block)).await?;
         }
 
         db.get_block_height()?

@@ -1,15 +1,13 @@
 ---
 source: fuel-client/src/client/schema/block.rs
-assertion_line: 90
+assertion_line: 108
 expression: operation.query
-
 ---
 query Query($_0: BlockId) {
   block(id: $_0) {
     height
     id
     time
-    producer
     transactions {
       id
     }
