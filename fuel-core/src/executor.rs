@@ -44,6 +44,7 @@ use fuel_core_interfaces::{
                 PredicateStorage,
             },
         },
+        prelude::StorageInspect,
     },
     db::{
         Coins,
@@ -56,6 +57,7 @@ use fuel_core_interfaces::{
         ExecutionKind,
         ExecutionType,
         ExecutionTypes,
+        Executor as Trait,
         TransactionValidityError,
     },
     model::{
@@ -101,6 +103,42 @@ struct ExecutionData {
     tx_status: Vec<(Bytes32, TransactionStatus)>,
 }
 
+#[async_trait::async_trait]
+impl Trait for Executor {
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+        self.execute_inner(block, &self.database, self.config.utxo_validation)
+            .await
+    }
+
+    async fn dry_run(
+        &self,
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Vec<Receipt>>, Error> {
+        // run the block in a temporary transaction without persisting any state
+        let db_tx = self.database.transaction();
+        let db = db_tx.as_ref();
+
+        // fallback to service config value if no utxo_validation override is provided
+        let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
+
+        let block = self.execute_inner(block, db, utxo_validation).await?;
+        block
+            .transactions()
+            .iter()
+            .map(|tx| {
+                let id = tx.id();
+                StorageInspect::<Receipts>::get(db, &id)
+                    .transpose()
+                    .unwrap_or(Ok(Default::default()))
+                    .map(|v| v.into_owned())
+            })
+            .collect::<Result<Vec<Vec<Receipt>>, _>>()
+            .map_err(Into::into)
+        // drop db_tx without committing
+    }
+}
+
 impl Executor {
     #[tracing::instrument(skip(self))]
     pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
@@ -143,7 +181,12 @@ impl Executor {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+    async fn execute_inner(
+        &self,
+        block: ExecutionBlock,
+        database: &Database,
+        utxo_validation: Option<bool>,
+    ) -> Result<FuelBlock, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.
@@ -154,11 +197,15 @@ impl Executor {
         let mut block = block.map_v(PartialFuelBlock::from);
 
         // Create a new database transaction.
-        let mut block_db_transaction = self.database.transaction();
+        let mut block_db_transaction = database.transaction();
 
         // Execute all transactions.
         let execution_data = self
-            .execute_transactions(&mut block_db_transaction, block.as_mut())
+            .execute_transactions(
+                &mut block_db_transaction,
+                block.as_mut(),
+                utxo_validation,
+            )
             .await?;
 
         let ExecutionData {
@@ -226,6 +273,7 @@ impl Executor {
         &self,
         block_db_transaction: &mut DatabaseTransaction,
         block: ExecutionType<&mut PartialFuelBlock>,
+        utxo_validation: bool,
     ) -> Result<ExecutionData, Error> {
         let mut execution_data = ExecutionData {
             coinbase: 0,
@@ -267,6 +315,7 @@ impl Executor {
             self.compute_contract_input_utxo_ids(
                 &mut wrapped_tx,
                 block_db_transaction.deref(),
+                utxo_validation,
             )?;
 
             let checked_tx = CheckedTransaction::check_unsigned(
@@ -279,7 +328,7 @@ impl Executor {
 
             self.verify_tx_predicates(&checked_tx)?;
 
-            if self.config.utxo_validation {
+            if utxo_validation {
                 // validate transaction has at least one coin
                 self.verify_tx_has_at_least_one_coin_or_message(tx)?;
                 // validate utxos exist and maturity is properly set
@@ -364,6 +413,7 @@ impl Executor {
                 vm_result.tx(),
                 block_db_transaction.deref_mut(),
                 *block.header.height(),
+                utxo_validation,
             )?;
 
             // persist any outputs
@@ -533,6 +583,7 @@ impl Executor {
         tx: &Transaction,
         db: &mut Database,
         block_height: BlockHeight,
+        utxo_validation: bool,
     ) -> Result<(), Error> {
         for input in tx.inputs() {
             match input {
@@ -552,7 +603,7 @@ impl Executor {
                     maturity,
                     ..
                 } => {
-                    let block_created = if self.config.utxo_validation {
+                    let block_created = if utxo_validation {
                         db.storage::<Coins>()
                             .get(utxo_id)?
                             .ok_or(Error::TransactionValidity(
@@ -594,7 +645,7 @@ impl Executor {
                     data,
                     ..
                 } => {
-                    let da_height = if self.config.utxo_validation {
+                    let da_height = if utxo_validation {
                         db.storage::<Messages>()
                             .get(message_id)?
                             .ok_or(Error::TransactionValidity(
@@ -655,10 +706,11 @@ impl Executor {
         &self,
         tx: &mut ExecutionTypes<&mut Transaction, &Transaction>,
         db: &Database,
+        utxo_validation: bool,
     ) -> Result<(), Error> {
         let expected_utxo_id = |contract_id| {
             let maybe_utxo_id = db.storage::<ContractsLatestUtxo>().get(contract_id)?;
-            let expected_utxo_id = if self.config.utxo_validation {
+            let expected_utxo_id = if utxo_validation {
                 maybe_utxo_id
                     .ok_or(Error::ContractUtxoMissing(*contract_id))?
                     .into_owned()
@@ -1088,6 +1140,7 @@ mod tests {
             .execute_transactions(
                 &mut block_db_transaction,
                 ExecutionType::Production(&mut block),
+                None,
             )
             .await;
         assert!(matches!(

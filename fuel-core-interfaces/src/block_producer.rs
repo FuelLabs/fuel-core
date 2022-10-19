@@ -1,7 +1,13 @@
-use crate::model::{
-    BlockHeight,
-    DaBlockHeight,
-    FuelBlock,
+use crate::{
+    common::fuel_tx::{
+        Receipt,
+        Transaction,
+    },
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+        FuelBlock,
+    },
 };
 use anyhow::Result;
 use fuel_vm::prelude::Word;
@@ -31,6 +37,13 @@ pub trait BlockProducer: Send + Sync {
         height: BlockHeight,
         max_gas: Word,
     ) -> Result<FuelBlock>;
+
+    async fn dry_run(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Receipt>>;
 }
 
 #[derive(Error, Debug)]

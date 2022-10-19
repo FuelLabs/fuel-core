@@ -143,7 +143,10 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config { consensus_params },
+        config: fuel_block_producer::config::Config {
+            consensus_params,
+            utxo_validation: true,
+        },
         db: &mock_db,
         txpool: &TxPoolAdapter {
             sender: txpool.sender().clone(),

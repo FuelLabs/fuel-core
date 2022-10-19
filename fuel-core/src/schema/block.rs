@@ -40,7 +40,10 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::Transactions,
-    executor::ExecutionBlock,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
     model::{
         FuelApplicationHeader,
         FuelConsensusHeader,

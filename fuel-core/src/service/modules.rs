@@ -9,7 +9,13 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     block_producer::BlockProducer,
-    common::prelude::Word,
+    common::{
+        fuel_tx::Receipt,
+        prelude::{
+            Transaction,
+            Word,
+        },
+    },
     model::{
         BlockHeight,
         FuelApplicationHeader,
@@ -253,5 +259,14 @@ impl BlockProducer for DummyBlockProducer {
         }
         .generate(&[]);
         Ok(r)
+    }
+
+    async fn dry_run(
+        &self,
+        _transaction: Transaction,
+        _height: Option<BlockHeight>,
+        _utxo_validation: Option<bool>,
+    ) -> Result<Vec<Receipt>> {
+        Ok(vec![])
     }
 }

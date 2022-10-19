@@ -16,7 +16,10 @@ use fuel_core_interfaces::{
             prelude::*,
         },
     },
-    executor::ExecutionBlock,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
     model::{
         FuelConsensusHeader,
         PartialFuelBlock,
