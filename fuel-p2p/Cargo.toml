@@ -35,6 +35,7 @@ tokio = { version = "1.21", features = ["full"] }
 tracing-appender = "0.2"
 tracing-attributes = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["serde", "test-helpers"], version = "0.11.2" }
 
 [features]
 test-helpers = [
