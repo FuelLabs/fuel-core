@@ -1,7 +1,3 @@
-use futures::{
-    future::BoxFuture,
-    FutureExt,
-};
 use libp2p::{
     mdns::{
         MdnsConfig,
@@ -23,16 +19,20 @@ use std::task::{
 use tracing::warn;
 
 #[allow(clippy::large_enum_variant)]
-// Wrapper around mDNS so that `DiscoveryConfig::finish` does not have to be an `async` function
 pub enum MdnsWrapper {
-    Instantiating(BoxFuture<'static, std::io::Result<TokioMdns>>),
     Ready(TokioMdns),
     Disabled,
 }
 
 impl Default for MdnsWrapper {
     fn default() -> Self {
-        MdnsWrapper::Instantiating(TokioMdns::new(MdnsConfig::default()).boxed())
+        match TokioMdns::new(MdnsConfig::default()) {
+            Ok(mdns) => Self::Ready(mdns),
+            Err(err) => {
+                warn!("Failed to initialize mDNS: {:?}", err);
+                Self::Disabled
+            }
+        }
     }
 }
 
@@ -58,20 +58,9 @@ impl MdnsWrapper {
             <TokioMdns as NetworkBehaviour>::ConnectionHandler,
         >,
     > {
-        loop {
-            match self {
-                Self::Instantiating(fut) => {
-                    *self = match futures::ready!(fut.as_mut().poll(cx)) {
-                        Ok(mdns) => Self::Ready(mdns),
-                        Err(err) => {
-                            warn!("Failed to initialize mDNS: {:?}", err);
-                            Self::Disabled
-                        }
-                    }
-                }
-                Self::Ready(mdns) => return mdns.poll(cx, params),
-                Self::Disabled => return Poll::Pending,
-            }
+        match self {
+            Self::Ready(mdns) => mdns.poll(cx, params),
+            Self::Disabled => Poll::Pending,
         }
     }
 }
