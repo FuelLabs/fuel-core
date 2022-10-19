@@ -1,6 +1,6 @@
 ---
 source: fuel-client/src/client/schema/chain.rs
-assertion_line: 66
+assertion_line: 70
 expression: operation.query
 ---
 query Query {
@@ -12,7 +12,6 @@ query Query {
       height
       id
       time
-      producer
       transactions {
         id
       }

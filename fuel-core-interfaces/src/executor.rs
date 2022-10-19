@@ -13,26 +13,45 @@ use crate::{
         fuel_vm::backtrace::Backtrace,
     },
     db::KvStoreError,
-    model::FuelBlock,
+    model::{
+        FuelBlock,
+        PartialFuelBlock,
+    },
 };
 use async_trait::async_trait;
 use std::error::Error as StdError;
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ExecutionMode {
+/// Starting point for executing a block.
+/// Production starts with a [`PartialFuelBlock`].
+/// Validation starts with a full [`FuelBlock`].
+pub type ExecutionBlock = ExecutionTypes<PartialFuelBlock, FuelBlock>;
+
+/// Execution wrapper with only a single type.
+pub type ExecutionType<T> = ExecutionTypes<T, T>;
+
+#[derive(Debug, Clone, Copy)]
+/// Execution wrapper where the types
+/// depend on the type of execution.
+pub enum ExecutionTypes<P, V> {
+    /// Production mode where P is being produced.
+    Production(P),
+    /// Validation mode where V is being checked.
+    Validation(V),
+}
+
+#[derive(Debug, Clone, Copy)]
+/// The kind of execution.
+pub enum ExecutionKind {
+    /// Producing a block.
     Production,
-    #[allow(dead_code)]
+    /// Validating a block.
     Validation,
 }
 
 #[async_trait]
 pub trait Executor: Sync + Send {
-    async fn execute(
-        &self,
-        block: &mut FuelBlock,
-        mode: ExecutionMode,
-    ) -> Result<(), Error>;
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error>;
 }
 
 #[derive(Debug, Error)]
@@ -108,6 +127,119 @@ pub enum Error {
     ContractUtxoMissing(ContractId),
 }
 
+impl ExecutionBlock {
+    /// Get the hash of the full [`FuelBlock`] if validating.
+    pub fn id(&self) -> Option<Bytes32> {
+        match self {
+            ExecutionTypes::Production(_) => None,
+            ExecutionTypes::Validation(v) => Some(v.id()),
+        }
+    }
+
+    /// Get the transaction root from the full [`FuelBlock`] if validating.
+    pub fn txs_root(&self) -> Option<Bytes32> {
+        match self {
+            ExecutionTypes::Production(_) => None,
+            ExecutionTypes::Validation(v) => Some(v.header().transactions_root),
+        }
+    }
+}
+
+impl<P, V> ExecutionTypes<P, V> {
+    /// Map the production type if producing.
+    pub fn map_p<Q, F>(self, f: F) -> ExecutionTypes<Q, V>
+    where
+        F: FnOnce(P) -> Q,
+    {
+        match self {
+            ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
+            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(v),
+        }
+    }
+
+    /// Map the validation type if validating.
+    pub fn map_v<W, F>(self, f: F) -> ExecutionTypes<P, W>
+    where
+        F: FnOnce(V) -> W,
+    {
+        match self {
+            ExecutionTypes::Production(p) => ExecutionTypes::Production(p),
+            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
+        }
+    }
+
+    /// Get a reference version of the inner type.
+    pub fn as_ref(&self) -> ExecutionTypes<&P, &V> {
+        match *self {
+            ExecutionTypes::Production(ref p) => ExecutionTypes::Production(p),
+            ExecutionTypes::Validation(ref v) => ExecutionTypes::Validation(v),
+        }
+    }
+
+    /// Get a mutable reference version of the inner type.
+    pub fn as_mut(&mut self) -> ExecutionTypes<&mut P, &mut V> {
+        match *self {
+            ExecutionTypes::Production(ref mut p) => ExecutionTypes::Production(p),
+            ExecutionTypes::Validation(ref mut v) => ExecutionTypes::Validation(v),
+        }
+    }
+
+    /// Get the kind of execution.
+    pub fn to_kind(&self) -> ExecutionKind {
+        match self {
+            ExecutionTypes::Production(_) => ExecutionKind::Production,
+            ExecutionTypes::Validation(_) => ExecutionKind::Validation,
+        }
+    }
+}
+
+impl<T> ExecutionType<T> {
+    /// Map the wrapped type.
+    pub fn map<U, F>(self, f: F) -> ExecutionType<U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        match self {
+            ExecutionTypes::Production(p) => ExecutionTypes::Production(f(p)),
+            ExecutionTypes::Validation(v) => ExecutionTypes::Validation(f(v)),
+        }
+    }
+
+    /// Filter and map the inner type.
+    pub fn filter_map<U, F>(self, f: F) -> Option<ExecutionType<U>>
+    where
+        F: FnOnce(T) -> Option<U>,
+    {
+        match self {
+            ExecutionTypes::Production(p) => f(p).map(ExecutionTypes::Production),
+            ExecutionTypes::Validation(v) => f(v).map(ExecutionTypes::Validation),
+        }
+    }
+
+    /// Get the inner type.
+    pub fn into_inner(self) -> T {
+        match self {
+            ExecutionTypes::Production(t) | ExecutionTypes::Validation(t) => t,
+        }
+    }
+
+    /// Split into the execution kind and the inner type.
+    pub fn split(self) -> (ExecutionKind, T) {
+        let kind = self.to_kind();
+        (kind, self.into_inner())
+    }
+}
+
+impl ExecutionKind {
+    /// Wrap a type in this execution kind.
+    pub fn wrap<T>(self, t: T) -> ExecutionType<T> {
+        match self {
+            ExecutionKind::Production => ExecutionTypes::Production(t),
+            ExecutionKind::Validation => ExecutionTypes::Validation(t),
+        }
+    }
+}
+
 impl From<Backtrace> for Error {
     fn from(e: Backtrace) -> Self {
         Error::Backtrace(Box::new(e))
@@ -123,5 +255,25 @@ impl From<KvStoreError> for Error {
 impl From<crate::db::Error> for Error {
     fn from(e: crate::db::Error) -> Self {
         Error::CorruptedBlockState(Box::new(e))
+    }
+}
+
+impl<T> core::ops::Deref for ExecutionType<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            ExecutionTypes::Production(p) => p,
+            ExecutionTypes::Validation(v) => v,
+        }
+    }
+}
+
+impl<T> core::ops::DerefMut for ExecutionType<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            ExecutionTypes::Production(p) => p,
+            ExecutionTypes::Validation(v) => v,
+        }
     }
 }

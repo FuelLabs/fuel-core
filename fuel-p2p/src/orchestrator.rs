@@ -294,6 +294,7 @@ pub mod tests {
         BlockHeight,
         FuelBlock,
         FuelBlockConsensus,
+        FuelBlockPoAConsensus,
         SealedFuelBlock,
     };
     use tokio::time::{
@@ -310,14 +311,13 @@ pub mod tests {
             &self,
             _height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            let block = FuelBlock {
-                header: Default::default(),
-                transactions: vec![],
-            };
+            let block = FuelBlock::new(Default::default(), vec![], &[]);
 
             Some(Arc::new(SealedFuelBlock {
                 block,
-                consensus: FuelBlockConsensus {},
+                consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(
+                    Default::default(),
+                )),
             }))
         }
     }

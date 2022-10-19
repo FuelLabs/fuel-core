@@ -17,9 +17,12 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsMut,
-    fuel_tx,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsMut,
+        fuel_tx,
+    },
+    model::FuelConsensusHeader,
 };
 use fuel_gql_client::client::{
     types::TransactionStatus,
@@ -152,8 +155,11 @@ async fn block_connection_5(
     let blocks = (0..10u32)
         .map(|i| FuelBlockDb {
             header: FuelBlockHeader {
-                height: i.into(),
-                time: Utc.timestamp(i.into(), 0),
+                consensus: FuelConsensusHeader {
+                    height: i.into(),
+                    time: Utc.timestamp(i.into(), 0),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![],
