@@ -48,6 +48,10 @@ type Block {
 	id: BlockId!
 	header: Header!
 	transactions: [Transaction!]!
+<<<<<<< HEAD
+=======
+	time: DateTime!
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 }
 
 input TimeParameters {

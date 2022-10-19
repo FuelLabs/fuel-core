@@ -1,5 +1,9 @@
 ---
 source: fuel-client/src/client/schema/block.rs
+<<<<<<< HEAD
+=======
+assertion_line: 129
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 expression: operation.query
 ---
 query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
@@ -8,6 +12,7 @@ query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
       cursor
       node {
         id
+<<<<<<< HEAD
         header {
           id
           daHeight
@@ -20,6 +25,9 @@ query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
           time
           applicationHash
         }
+=======
+        time
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         transactions {
           id
         }

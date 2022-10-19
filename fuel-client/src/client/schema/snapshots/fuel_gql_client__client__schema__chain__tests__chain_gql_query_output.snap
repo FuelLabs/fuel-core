@@ -1,5 +1,9 @@
 ---
 source: fuel-client/src/client/schema/chain.rs
+<<<<<<< HEAD
+=======
+assertion_line: 70
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 expression: operation.query
 ---
 query Query {
@@ -9,6 +13,7 @@ query Query {
     peerCount
     latestBlock {
       id
+<<<<<<< HEAD
       header {
         id
         daHeight
@@ -21,6 +26,9 @@ query Query {
         time
         applicationHash
       }
+=======
+      time
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
       transactions {
         id
       }

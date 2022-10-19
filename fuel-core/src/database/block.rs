@@ -167,29 +167,4 @@ impl Database {
         .next()
         .transpose()
     }
-
-    /// Retrieve the full block and all associated transactions
-    pub(crate) fn get_full_block(
-        &self,
-        block_id: &Bytes32,
-    ) -> Result<Option<FuelBlock>, Error> {
-        let db_block = self.storage::<FuelBlocks>().get(block_id)?;
-        if let Some(block) = db_block {
-            // fetch all the transactions
-            // TODO: optimize with multi-key get
-            let txs = block
-                .transactions
-                .iter()
-                .map(|tx_id| {
-                    self.storage::<Transactions>()
-                        .get(tx_id)
-                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound))
-                        .map(Cow::into_owned)
-                })
-                .try_collect()?;
-            Ok(Some(FuelBlock::from_db_block(block.into_owned(), txs)))
-        } else {
-            Ok(None)
-        }
-    }
 }

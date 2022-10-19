@@ -1,10 +1,15 @@
 ---
 source: fuel-client/src/client/schema/block.rs
+<<<<<<< HEAD
+=======
+assertion_line: 108
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 expression: operation.query
 ---
 query Query($_0: BlockId) {
   block(id: $_0) {
     id
+<<<<<<< HEAD
     header {
       id
       daHeight
@@ -17,6 +22,9 @@ query Query($_0: BlockId) {
       time
       applicationHash
     }
+=======
+    time
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
     transactions {
       id
     }

@@ -60,7 +60,7 @@ use std::{
     convert::TryInto,
 };
 
-use super::{scalars::Bytes32, chain::ChainInfo};
+use super::{chain::ChainInfo};
 
 pub struct Block {
     pub(crate) header: Header,
@@ -77,8 +77,8 @@ impl Block {
         bytes.into()
     }
 
-    async fn header(&self) -> &Header {
-        &self.header
+    async fn height(&self) -> U64 {
+        (*self.0.header.height()).into()
     }
 
     async fn transactions(
@@ -144,12 +144,7 @@ impl Header {
 
     /// The block producer time.
     async fn time(&self) -> DateTime<Utc> {
-        *self.0.time()
-    }
-
-    /// Hash of the application header.
-    async fn application_hash(&self) -> Bytes32 {
-        (*self.0.application_hash()).into()
+        *self.0.header.time()
     }
 }
 
@@ -332,9 +327,12 @@ where
     let mut connection =
         Connection::new(started.is_some(), records_to_fetch <= blocks.len());
 
-    connection.edges.extend(blocks.into_iter().map(|item| {
-        Edge::new(item.header.height().to_usize(), T::from(item.into_owned()))
-    }));
+                    connection.edges.extend(blocks.into_iter().map(|item| {
+                        Edge::new(
+                            item.header.height().to_usize(),
+                            Block(item.into_owned()),
+                        )
+                    }));
 
     Ok::<Connection<usize, T>, anyhow::Error>(connection)
 }

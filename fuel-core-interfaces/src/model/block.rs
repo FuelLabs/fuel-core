@@ -14,13 +14,19 @@ use chrono::{
     DateTime,
     Utc,
 };
+<<<<<<< HEAD
 use fuel_vm::{
     fuel_crypto,
+=======
+use core::ops::Deref;
+use fuel_vm::{
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
     fuel_merkle,
     fuel_types::MessageId,
     prelude::Signature,
 };
 
+<<<<<<< HEAD
 use crate::common::{
     fuel_tx::Input,
     fuel_types::Address,
@@ -77,6 +83,10 @@ impl BlockId {
         // difficult to verify.
     }
 }
+=======
+#[cfg(any(test, feature = "test-helpers"))]
+use chrono::TimeZone;
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -174,6 +184,7 @@ pub struct GeneratedConsensusFields {
 /// Extra data that is not actually part of the header.
 pub struct HeaderMetadata {
     /// Hash of the header.
+<<<<<<< HEAD
     id: BlockId,
 }
 
@@ -227,22 +238,88 @@ impl PartialFuelBlockHeader {
     pub fn consensus_type(&self) -> ConsensusType {
         ConsensusType::PoA
     }
+=======
+    id: Bytes32,
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConsensusType {
+    PoA,
+}
+
+// Accessors for the consensus header.
+impl FuelBlockHeader {
+<<<<<<< HEAD
+=======
+    /// Merkle root of all previous block header hashes.
+    pub fn prev_root(&self) -> &Bytes32 {
+        &self.as_ref().prev_root
+    }
+    /// Fuel block height.
+    pub fn height(&self) -> &BlockHeight {
+        &self.as_ref().height
+    }
+    /// The block producer time.
+    pub fn time(&self) -> &DateTime<Utc> {
+        &self.as_ref().time
+    }
+
+    /// The hash of the application header.
+    pub fn application_hash(&self) -> &Bytes32 {
+        &self.as_ref().application_hash
+    }
+
+    /// The type of consensus this header is using.
+    pub fn consensus_type(&self) -> ConsensusType {
+        ConsensusType::PoA
+    }
+}
+
+// Accessors for the consensus header.
+impl PartialFuelBlockHeader {
+    /// Merkle root of all previous block header hashes.
+    pub fn prev_root(&self) -> &Bytes32 {
+        &self.as_ref().prev_root
+    }
+    /// Fuel block height.
+    pub fn height(&self) -> &BlockHeight {
+        &self.as_ref().height
+    }
+    /// The block producer time.
+    pub fn time(&self) -> &DateTime<Utc> {
+        &self.as_ref().time
+    }
+
+    /// The type of consensus this header is using.
+    pub fn consensus_type(&self) -> ConsensusType {
+        ConsensusType::PoA
+    }
 }
 
 impl FuelBlockHeader {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
     /// Re-generate the header metadata.
     pub fn recalculate_metadata(&mut self) {
         self.metadata = Some(HeaderMetadata { id: self.hash() });
     }
 
     /// Get the hash of the fuel header.
+<<<<<<< HEAD
     pub fn hash(&self) -> BlockId {
+=======
+    pub fn hash(&self) -> Bytes32 {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         // This internally hashes the hash of the application header.
         self.consensus.hash()
     }
 
     /// Get the cached fuel header hash.
+<<<<<<< HEAD
     pub fn id(&self) -> BlockId {
+=======
+    pub fn id(&self) -> Bytes32 {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         if let Some(ref metadata) = self.metadata {
             metadata.id
         } else {
@@ -353,14 +430,22 @@ impl FuelApplicationHeader<GeneratedApplicationFields> {
 
 impl FuelConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
+<<<<<<< HEAD
     fn hash(&self) -> BlockId {
+=======
+    fn hash(&self) -> Bytes32 {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         // Order matters and is the same as the spec.
         let mut hasher = Hasher::default();
         hasher.input(self.prev_root.as_ref());
         hasher.input(&self.height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.application_hash.as_ref());
+<<<<<<< HEAD
         BlockId(hasher.digest())
+=======
+        hasher.digest()
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
     }
 }
 
@@ -421,7 +506,11 @@ pub struct FuelBlockDb {
 
 impl FuelBlockDb {
     /// Hash of the header.
+<<<<<<< HEAD
     pub fn id(&self) -> BlockId {
+=======
+    pub fn id(&self) -> Bytes32 {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         self.header.id()
     }
 
@@ -512,7 +601,11 @@ impl FuelBlock {
     }
 
     /// Get the hash of the header.
+<<<<<<< HEAD
     pub fn id(&self) -> BlockId {
+=======
+    pub fn id(&self) -> Bytes32 {
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
         self.header.id()
     }
 
@@ -524,6 +617,7 @@ impl FuelBlock {
         }
     }
 
+<<<<<<< HEAD
     /// Convert from a previously stored block back to a full block
     pub fn from_db_block(db_block: FuelBlockDb, transactions: Vec<Transaction>) -> Self {
         // TODO: should we perform an extra validation step to ensure the provided
@@ -534,6 +628,8 @@ impl FuelBlock {
         }
     }
 
+=======
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
     /// Get the executed transactions.
     pub fn transactions(&self) -> &[Transaction] {
         &self.transactions[..]
@@ -586,6 +682,7 @@ impl PartialFuelBlock {
         FuelBlock::new(self.header, self.transactions, message_ids)
     }
 }
+<<<<<<< HEAD
 
 impl From<FuelBlock> for PartialFuelBlock {
     fn from(block: FuelBlock) -> Self {
@@ -623,6 +720,8 @@ impl From<FuelBlock> for PartialFuelBlock {
     }
 }
 
+=======
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
@@ -630,6 +729,7 @@ impl From<FuelBlock> for PartialFuelBlock {
 pub enum FuelBlockConsensus {
     PoA(FuelBlockPoAConsensus),
 }
+<<<<<<< HEAD
 
 impl FuelBlockConsensus {
     /// Retrieve the block producer address from the consensus data
@@ -643,6 +743,8 @@ impl FuelBlockConsensus {
         }
     }
 }
+=======
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -653,6 +755,7 @@ pub struct FuelBlockPoAConsensus {
     pub signature: Signature,
 }
 
+<<<<<<< HEAD
 #[cfg(any(test, feature = "test-helpers"))]
 impl<T> Default for FuelConsensusHeader<T>
 where
@@ -675,6 +778,8 @@ impl Default for FuelBlockConsensus {
     }
 }
 
+=======
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
@@ -691,6 +796,16 @@ impl FuelBlockPoAConsensus {
     }
 }
 
+<<<<<<< HEAD
+=======
+impl FuelBlockPoAConsensus {
+    /// Create a new block consensus.
+    pub fn new(signature: Signature) -> Self {
+        Self { signature }
+    }
+}
+
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 impl SealedFuelBlock {
     //// Hack until we can completely remove meaningless
     //// default headers.
@@ -726,6 +841,7 @@ impl SealedFuelBlock {
     }
 }
 
+<<<<<<< HEAD
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
@@ -733,4 +849,62 @@ impl SealedFuelBlock {
 pub struct SealedFuelBlockHeader {
     pub header: FuelBlockHeader,
     pub consensus: FuelBlockConsensus,
+=======
+impl From<FuelBlock> for PartialFuelBlock {
+    fn from(block: FuelBlock) -> Self {
+        let FuelBlock {
+            header:
+                FuelBlockHeader {
+                    application: FuelApplicationHeader { da_height, .. },
+                    consensus:
+                        FuelConsensusHeader {
+                            prev_root,
+                            height,
+                            time,
+                            ..
+                        },
+                    ..
+                },
+            transactions,
+        } = block;
+        Self {
+            header: PartialFuelBlockHeader {
+                application: FuelApplicationHeader {
+                    da_height,
+                    generated: Empty {},
+                },
+                consensus: FuelConsensusHeader {
+                    prev_root,
+                    height,
+                    time,
+                    generated: Empty {},
+                },
+                metadata: None,
+            },
+            transactions,
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<T> Default for FuelConsensusHeader<T>
+where
+    T: Default,
+{
+    fn default() -> Self {
+        Self {
+            time: Utc.timestamp(0, 0),
+            height: BlockHeight::default(),
+            prev_root: Bytes32::default(),
+            generated: Default::default(),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for FuelBlockConsensus {
+    fn default() -> Self {
+        FuelBlockConsensus::PoA(Default::default())
+    }
+>>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 }

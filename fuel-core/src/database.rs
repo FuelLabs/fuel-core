@@ -30,6 +30,7 @@ use fuel_core_interfaces::{
             Bytes32,
             InterpreterStorage,
         },
+        prelude::Signature,
     },
     model::{
         BlockHeight,
