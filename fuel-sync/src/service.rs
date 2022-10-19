@@ -2,7 +2,7 @@ use crate::Config;
 use fuel_core_interfaces::{
     block_importer::ImportBlockMpsc,
     p2p::{
-        BlockBroadcast,
+        BlockGossipData,
         P2pRequestEvent,
     },
     sync::SyncMpsc,
@@ -29,7 +29,7 @@ impl Service {
 
     pub async fn start(
         &self,
-        _p2p_block: mpsc::Receiver<BlockBroadcast>,
+        _p2p_block: mpsc::Receiver<BlockGossipData>,
         _p2p_request: mpsc::Sender<P2pRequestEvent>,
         // TODO: re-introduce this when sync actually depends on the coordinator
         // _bft: mpsc::Sender<BftMpsc>,
