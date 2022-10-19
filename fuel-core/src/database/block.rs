@@ -119,6 +119,17 @@ impl Database {
         }
     }
 
+    /// Get the current block at the head of the chain.
+    pub fn get_current_block(&self) -> Result<Option<Cow<FuelBlockDb>>, Error> {
+        let block_entry = self.latest_block()?;
+        match block_entry {
+            Some((_, id)) => StorageAsRef::storage::<FuelBlocks>(self)
+                .get(&id)
+                .map_err(Error::from),
+            None => Ok(None),
+        }
+    }
+
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
     }

@@ -312,7 +312,15 @@ impl InterpreterStorage for Database {
     }
 
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
-        self.timestamp(height)?
+        let id = self.block_hash(height)?;
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
+        block
+            .header
+            .time()
+            .timestamp()
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
@@ -346,23 +354,6 @@ impl InterpreterStorage for Database {
         }
     }
 }
-
-impl TxPoolDb for Database {
-    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
-        self.get_block_height()
-            .map(|h| h.unwrap_or_default())
-            .map_err(Into::into)
-    }
-}
-
-impl BlockProducerDatabase for Database {
-    fn get_block(
-        &self,
-        fuel_height: BlockHeight,
-    ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
-        let id = self.block_hash(fuel_height.into())?;
-        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
-    }
 
     fn current_block_height(&self) -> anyhow::Result<BlockHeight> {
         self.get_block_height()
