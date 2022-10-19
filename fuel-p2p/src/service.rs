@@ -850,12 +850,8 @@ mod tests {
                 },
                 node_b_event = node_b.next_event() => {
                     // 2. Node B receives the RequestMessage from Node A initiated by the NetworkOrchestrator
-                    if let FuelP2PEvent::RequestMessage{ request_id, .. } = node_b_event {
-                        let block = FuelBlock::new(
-                            PartialFuelBlockHeader::default(),
-                            vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()],
-                            &[]
-                        );
+                    if let Some(FuelP2PEvent::RequestMessage{ request_id, .. }) = node_b_event {
+                        let block = FuelBlock::new(PartialFuelBlockHeader::default(), vec![Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default(), Transaction::default()], &[]);
 
                         let sealed_block = SealedFuelBlock {
                             block,
