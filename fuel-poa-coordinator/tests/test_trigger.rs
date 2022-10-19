@@ -119,7 +119,6 @@ impl BlockProducer for MockBlockProducer {
         }
         .generate(&[]))
 <<<<<<< HEAD
-<<<<<<< HEAD
     }
 
     async fn dry_run(
@@ -131,26 +130,6 @@ impl BlockProducer for MockBlockProducer {
         Ok(vec![])
 =======
 >>>>>>> 007bc87 (Reconcile Fuel Block Header (#692))
-    }
-
-    async fn dry_run(
-        &self,
-        _transaction: Transaction,
-        _height: Option<BlockHeight>,
-        _utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        Ok(vec![])
-=======
->>>>>>> 007bc87 (Reconcile Fuel Block Header (#692))
-    }
-
-    async fn dry_run(
-        &self,
-        _transaction: Transaction,
-        _height: Option<BlockHeight>,
-        _utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        Ok(vec![])
     }
 }
 
