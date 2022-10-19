@@ -43,7 +43,7 @@ impl TxPool {
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
-            by_dependency: Dependency::new(max_depth),
+            by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
         }
     }

@@ -505,7 +505,12 @@ impl TestContext {
             witnesses: vec![vec![].into()],
             metadata: None,
         };
-        self.client.submit(&tx).await.map(Into::into)
+        let tx_id = self.client.submit(&tx).await?;
+        self.client
+            .await_transaction_commit(&tx_id.to_string())
+            .await
+            .unwrap();
+        Ok(tx_id.into())
     }
 }
 

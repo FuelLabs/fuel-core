@@ -124,11 +124,15 @@ impl Command {
             },
             txpool: fuel_txpool::Config {
                 min_gas_price,
+                utxo_validation,
                 ..Default::default()
             },
             predicates,
             block_importer: Default::default(),
-            block_producer: fuel_block_producer::Config { consensus_params },
+            block_producer: fuel_block_producer::Config {
+                consensus_params,
+                utxo_validation,
+            },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),

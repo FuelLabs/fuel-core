@@ -2410,6 +2410,7 @@ dependencies = [
  "derive_more",
  "fuel-vm",
  "futures",
+ "futures-timer",
  "hex",
  "insta",
  "itertools",

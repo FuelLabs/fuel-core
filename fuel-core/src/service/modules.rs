@@ -116,6 +116,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
     let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+    let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
@@ -161,7 +162,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
-        .import_block_event(block_importer.subscribe())
+        .import_block_event(block_import_rx)
         .tx_status_sender(tx_status_sender)
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
@@ -193,12 +194,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     match &coordinator {
         CoordinatorService::Poa(poa) => {
-            // TODO: this must be connected to the block import mechanism
-            let (block_import_tx, mut block_import_rx) = broadcast::channel(16);
-            tokio::spawn(async move {
-                // Discard messages for now
-                while block_import_rx.recv().await.is_ok() {}
-            });
             poa.start(
                 txpool_builder.subscribe(),
                 txpool_builder.sender().clone(),
