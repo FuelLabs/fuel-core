@@ -60,3 +60,9 @@ pub enum Error {
         previous_block: DaBlockHeight,
     },
 }
+
+#[async_trait::async_trait]
+pub trait Relayer: Sync + Send {
+    /// Get the best finalized height from the DA layer
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
+}

@@ -57,7 +57,7 @@ use fuel_core_interfaces::{
         ExecutionKind,
         ExecutionType,
         ExecutionTypes,
-        Executor as Trait,
+        Executor as ExecutorTrait,
         TransactionValidityError,
     },
     model::{
@@ -104,7 +104,7 @@ struct ExecutionData {
 }
 
 #[async_trait::async_trait]
-impl Trait for Executor {
+impl ExecutorTrait for Executor {
     async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
         self.execute_inner(block, &self.database).await
     }

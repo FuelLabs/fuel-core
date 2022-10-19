@@ -147,13 +147,13 @@ async fn block_producer() -> Result<()> {
             consensus_params,
             utxo_validation: true,
         },
-        db: &mock_db,
-        txpool: &TxPoolAdapter {
+        db: Box::new(mock_db.clone()),
+        txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
             consensus_params,
-        },
-        executor: &MockExecutor(mock_db.clone()),
-        relayer: &MockRelayer::default(),
+        }),
+        executor: Box::new(MockExecutor(mock_db.clone())),
+        relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
     };
 
