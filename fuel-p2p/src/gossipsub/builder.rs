@@ -18,11 +18,12 @@ use sha2::{
     Sha256,
 };
 use prometheus_client::registry::Registry;
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 
 use crate::config::P2PConfig;
 
 
-pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> (Gossipsub, Registry) {
+pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
     let gossip_message_id = move |message: &GossipsubMessage| {
         MessageId::from(&Sha256::digest(&message.data)[..20])
     };
@@ -42,13 +43,13 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> (Gossipsu
         .expect("valid gossipsub configuration");
 
     /* Move to Metrics related feature flag */
-    let mut p2p_registry = Registry::default();
+    let p2p_registry = &mut P2P_METRICS.write().expect("Something already captured p2p metrics").gossip_sub_registry;
     let metrics_config = MetricsConfig::default();
 
     let mut gossipsub = Gossipsub::new_with_metrics(
         MessageAuthenticity::Signed(local_key.clone()),
         gossipsub_config,
-        &mut p2p_registry,
+        p2p_registry,
         metrics_config
     )
     .expect("gossipsub initialized");
@@ -57,5 +58,5 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> (Gossipsu
         .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
         .expect("gossipsub initialized with peer score");
 
-    (gossipsub, p2p_registry)
+    gossipsub
 }

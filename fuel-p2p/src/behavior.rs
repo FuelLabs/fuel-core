@@ -71,7 +71,7 @@ pub struct FuelBehaviour<Codec: NetworkCodec> {
 }
 
 impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
-    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> (Self, Registry) {
+    pub fn new(p2p_config: &P2PConfig, codec: Codec) -> Self {
         let local_public_key = p2p_config.local_keypair.public();
         let local_peer_id = PeerId::from_public_key(&local_public_key);
 
@@ -105,14 +105,14 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
         let request_response =
             RequestResponse::new(codec, req_res_protocol, req_res_config);
 
-        let (gossipsub, gossipsub_metrics) = build_gossipsub(&p2p_config.local_keypair, p2p_config);
+        let gossipsub = build_gossipsub(&p2p_config.local_keypair, p2p_config);
 
-        (Self {
+        Self {
             discovery: discovery_config.finish(),
             gossipsub,
             peer_info,
             request_response,
-        }, gossipsub_metrics)
+        }
     }
 
     pub fn add_addresses_to_peer_info(

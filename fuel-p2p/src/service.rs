@@ -85,9 +85,6 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
-
-    /// Stores GossipSub Metrics
-    pub gossip_sub_metrics: Registry
 }
 
 /// Holds additional Network data for FuelBehavior
@@ -120,7 +117,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
         // configure and build P2P Service
         let transport = build_transport(config.local_keypair.clone());
-        let (behaviour,gossip_sub_metrics) = FuelBehaviour::new(&config, codec.clone());
+        let behaviour = FuelBehaviour::new(&config, codec.clone());
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .executor(Box::new(|fut| {
                 tokio::spawn(fut);
@@ -153,7 +150,6 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             network_metadata,
-            gossip_sub_metrics,
         })
     }
 

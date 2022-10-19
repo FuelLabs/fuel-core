@@ -2454,6 +2454,7 @@ dependencies = [
  "bincode",
  "ctor",
  "fuel-core-interfaces",
+ "fuel-metrics",
  "futures",
  "futures-timer",
  "ip_network",
