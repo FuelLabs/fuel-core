@@ -1,8 +1,12 @@
-use crate::gossipsub::topics::{
-    CON_VOTE_GOSSIP_TOPIC,
-    NEW_BLOCK_GOSSIP_TOPIC,
-    NEW_TX_GOSSIP_TOPIC,
+use crate::gossipsub::{
+    config::default_gossipsub_config,
+    topics::{
+        CON_VOTE_GOSSIP_TOPIC,
+        NEW_BLOCK_GOSSIP_TOPIC,
+        NEW_TX_GOSSIP_TOPIC,
+    },
 };
+
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
@@ -23,6 +27,7 @@ use libp2p::{
     PeerId,
     Transport,
 };
+
 use std::{
     net::{
         IpAddr,
@@ -30,6 +35,8 @@ use std::{
     },
     time::Duration,
 };
+
+use libp2p::gossipsub::GossipsubConfig;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -72,11 +79,9 @@ pub struct P2PConfig {
     /// and the next outbound ping
     pub info_interval: Option<Duration>,
 
-    // `Gossipsub` related fields
+    // `Gossipsub` config and topics
+    pub gossipsub_config: GossipsubConfig,
     pub topics: Vec<String>,
-    pub ideal_mesh_size: usize,
-    pub min_mesh_size: usize,
-    pub max_mesh_size: usize,
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
@@ -116,9 +121,7 @@ impl P2PConfig {
                 NEW_BLOCK_GOSSIP_TOPIC.into(),
                 CON_VOTE_GOSSIP_TOPIC.into(),
             ],
-            max_mesh_size: 12,
-            min_mesh_size: 4,
-            ideal_mesh_size: 6,
+            gossipsub_config: default_gossipsub_config(),
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),

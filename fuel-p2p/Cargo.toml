@@ -30,6 +30,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 ctor = "0.1"
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["serde", "test-helpers"], version = "0.11.2" }
 rand = "0.8"
 tokio = { version = "1.21", features = ["full"] }
 tracing-appender = "0.2"
