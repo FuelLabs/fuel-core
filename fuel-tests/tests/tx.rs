@@ -3,10 +3,6 @@ use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::Executor,
-    model::{
-        FuelBlock,
-        FuelBlockHeader,
-    },
     service::{
         Config,
         FuelService,
@@ -20,7 +16,12 @@ use fuel_core_interfaces::{
             prelude::*,
         },
     },
-    executor::ExecutionMode,
+    executor::ExecutionBlock,
+    model::{
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
+    },
 };
 use fuel_gql_client::client::{
     types::TransactionStatus,
@@ -322,10 +323,13 @@ async fn get_transactions_from_manual_blocks() {
     let txs: Vec<Transaction> = (0..10).map(create_mock_tx).collect();
 
     // make 1st test block
-    let mut first_test_block = FuelBlock {
-        header: FuelBlockHeader {
-            height: 1u32.into(),
-            time: Utc::now(),
+    let first_test_block = PartialFuelBlock {
+        header: PartialFuelBlockHeader {
+            consensus: FuelConsensusHeader {
+                height: 1u32.into(),
+                time: Utc::now(),
+                ..Default::default()
+            },
             ..Default::default()
         },
 
@@ -334,10 +338,13 @@ async fn get_transactions_from_manual_blocks() {
     };
 
     // make 2nd test block
-    let mut second_test_block = FuelBlock {
-        header: FuelBlockHeader {
-            height: 2u32.into(),
-            time: Utc::now(),
+    let second_test_block = PartialFuelBlock {
+        header: PartialFuelBlockHeader {
+            consensus: FuelConsensusHeader {
+                height: 2u32.into(),
+                time: Utc::now(),
+                ..Default::default()
+            },
             ..Default::default()
         },
         // set the last 5 ids of the manually saved txs
@@ -346,11 +353,11 @@ async fn get_transactions_from_manual_blocks() {
 
     // process blocks and save block height
     executor
-        .execute(&mut first_test_block, ExecutionMode::Production)
+        .execute(ExecutionBlock::Production(first_test_block))
         .await
         .unwrap();
     executor
-        .execute(&mut second_test_block, ExecutionMode::Production)
+        .execute(ExecutionBlock::Production(second_test_block))
         .await
         .unwrap();
 
