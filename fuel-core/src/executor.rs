@@ -106,8 +106,7 @@ struct ExecutionData {
 #[async_trait::async_trait]
 impl Trait for Executor {
     async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
-        self.execute_inner(block, &self.database, self.config.utxo_validation)
-            .await
+        self.execute_inner(block, &self.database).await
     }
 
     async fn dry_run(
@@ -122,7 +121,16 @@ impl Trait for Executor {
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
 
-        let block = self.execute_inner(block, db, utxo_validation).await?;
+        // spawn a nested executor instance to override utxo_validation config
+        let executor = Self {
+            config: Config {
+                utxo_validation,
+                ..self.config.clone()
+            },
+            database: db.clone(),
+        };
+
+        let block = executor.execute_inner(block, db).await?;
         block
             .transactions()
             .iter()
@@ -135,7 +143,7 @@ impl Trait for Executor {
             })
             .collect::<Result<Vec<Vec<Receipt>>, _>>()
             .map_err(Into::into)
-        // drop db_tx without committing
+        // drop db_tx without committing to avoid altering state
     }
 }
 
@@ -185,7 +193,6 @@ impl Executor {
         &self,
         block: ExecutionBlock,
         database: &Database,
-        utxo_validation: Option<bool>,
     ) -> Result<FuelBlock, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
@@ -201,11 +208,7 @@ impl Executor {
 
         // Execute all transactions.
         let execution_data = self
-            .execute_transactions(
-                &mut block_db_transaction,
-                block.as_mut(),
-                utxo_validation,
-            )
+            .execute_transactions(&mut block_db_transaction, block.as_mut())
             .await?;
 
         let ExecutionData {
@@ -273,7 +276,6 @@ impl Executor {
         &self,
         block_db_transaction: &mut DatabaseTransaction,
         block: ExecutionType<&mut PartialFuelBlock>,
-        utxo_validation: bool,
     ) -> Result<ExecutionData, Error> {
         let mut execution_data = ExecutionData {
             coinbase: 0,
@@ -315,7 +317,6 @@ impl Executor {
             self.compute_contract_input_utxo_ids(
                 &mut wrapped_tx,
                 block_db_transaction.deref(),
-                utxo_validation,
             )?;
 
             let checked_tx = CheckedTransaction::check_unsigned(
@@ -328,7 +329,7 @@ impl Executor {
 
             self.verify_tx_predicates(&checked_tx)?;
 
-            if utxo_validation {
+            if self.config.utxo_validation {
                 // validate transaction has at least one coin
                 self.verify_tx_has_at_least_one_coin_or_message(tx)?;
                 // validate utxos exist and maturity is properly set
@@ -413,7 +414,7 @@ impl Executor {
                 vm_result.tx(),
                 block_db_transaction.deref_mut(),
                 *block.header.height(),
-                utxo_validation,
+                self.config.utxo_validation,
             )?;
 
             // persist any outputs
@@ -706,11 +707,10 @@ impl Executor {
         &self,
         tx: &mut ExecutionTypes<&mut Transaction, &Transaction>,
         db: &Database,
-        utxo_validation: bool,
     ) -> Result<(), Error> {
         let expected_utxo_id = |contract_id| {
             let maybe_utxo_id = db.storage::<ContractsLatestUtxo>().get(contract_id)?;
-            let expected_utxo_id = if utxo_validation {
+            let expected_utxo_id = if self.config.utxo_validation {
                 maybe_utxo_id
                     .ok_or(Error::ContractUtxoMissing(*contract_id))?
                     .into_owned()
@@ -1140,7 +1140,6 @@ mod tests {
             .execute_transactions(
                 &mut block_db_transaction,
                 ExecutionType::Production(&mut block),
-                None,
             )
             .await;
         assert!(matches!(
