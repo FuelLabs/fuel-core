@@ -82,16 +82,23 @@ pub struct OutputProofQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct OutputProof {
+    /// The merkle root of the message proof.
     pub proof_root: Bytes32,
+    /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
+    /// The out put message.
     pub message: Message,
+    /// The signature of the fuel block.
     pub signature: Signature,
+    /// The fuel block that contains the message.
     pub block: Block,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct OutputProofArgs {
+    /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,
+    /// Message id of the output message that requires a proof.
     pub message_id: MessageId,
 }
 

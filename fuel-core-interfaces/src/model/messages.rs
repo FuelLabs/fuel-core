@@ -57,10 +57,15 @@ pub struct CheckedMessage {
 }
 
 pub struct OutputProof {
+    /// The merkle root of the message proof.
     pub root: Bytes32,
+    /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
+    /// The out put message.
     pub message: Message,
+    /// The signature of the fuel block.
     pub signature: fuel_crypto::Signature,
+    /// The fuel block that contains the message.
     pub block: FuelBlockDb,
 }
 
