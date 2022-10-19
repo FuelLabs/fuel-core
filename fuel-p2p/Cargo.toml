@@ -18,7 +18,7 @@ fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["serde"],
 futures = "0.3"
 futures-timer = "3.0"
 ip_network = "0.4"
-libp2p = { version = "0.48", default-features = false, features = [
+libp2p = { version = "0.49", default-features = false, features = [
     "dns-tokio", "gossipsub", "identify", "kad", "mdns-tokio", "mplex", "noise",
     "ping", "request-response", "secp256k1", "tcp-tokio", "yamux", "websocket"
 ] }
