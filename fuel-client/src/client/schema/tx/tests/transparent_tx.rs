@@ -1,24 +1,27 @@
-use crate::client::schema::{
-    contract::ContractIdFragment,
-    schema,
-    tx::{
-        tests::transparent_receipt::Receipt,
-        TransactionStatus,
-        TxIdArgs,
+use crate::{
+    client::schema::{
+        contract::ContractIdFragment,
+        schema,
+        tx::{
+            tests::transparent_receipt::Receipt,
+            TransactionStatus,
+            TxIdArgs,
+        },
+        Address,
+        AssetId,
+        Bytes32,
+        ConnectionArgs,
+        ConversionError,
+        HexString,
+        MessageId,
+        PageInfo,
+        Salt,
+        TransactionId,
+        TxPointer,
+        UtxoId,
+        U64,
     },
-    Address,
-    AssetId,
-    Bytes32,
-    ConnectionArgs,
-    ConversionError,
-    HexString,
-    MessageId,
-    PageInfo,
-    Salt,
-    TransactionId,
-    TxPointer,
-    UtxoId,
-    U64,
+    fuel_tx::field::ReceiptsRoot,
 };
 use core::convert::{
     TryFrom,
@@ -74,6 +77,7 @@ pub struct Transaction {
     pub input_contracts: Vec<ContractIdFragment>,
     pub inputs: Vec<Input>,
     pub is_script: bool,
+    pub is_create: bool,
     pub outputs: Vec<Output>,
     pub maturity: U64,
     pub receipts_root: Option<Bytes32>,
@@ -92,101 +96,89 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
     type Error = ConversionError;
 
     fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
-        Ok(match tx.is_script {
-            true => Self::Script {
-                gas_price: tx.gas_price.into(),
-                gas_limit: tx.gas_limit.into(),
-                maturity: tx.maturity.into(),
-                receipts_root: tx
-                    .receipts_root
-                    .ok_or_else(|| {
-                        ConversionError::MissingField("receipts_root".to_string())
-                    })?
-                    .into(),
-                script: tx
-                    .script
+        let tx = if tx.is_script {
+            let mut script = fuel_vm::prelude::Transaction::script(
+                tx.gas_price.into(),
+                tx.gas_limit.into(),
+                tx.maturity.into(),
+                tx.script
                     .ok_or_else(|| ConversionError::MissingField("script".to_string()))?
                     .into(),
-                script_data: tx
-                    .script_data
+                tx.script_data
                     .ok_or_else(|| {
                         ConversionError::MissingField("script_data".to_string())
                     })?
                     .into(),
-                inputs: tx
-                    .inputs
+                tx.inputs
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>(
                     )?,
-                outputs: tx
-                    .outputs
+                tx.outputs
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
                     )?,
-                witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
-                metadata: None,
-            },
-            false => {
-                Self::Create {
-                    gas_price: tx.gas_price.into(),
-                    gas_limit: tx.gas_limit.into(),
-                    maturity: tx.maturity.into(),
-                    bytecode_length: tx
-                        .bytecode_length
-                        .ok_or_else(|| {
-                            ConversionError::MissingField("bytecode_length".to_string())
-                        })?
-                        .into(),
-                    bytecode_witness_index: tx
-                        .bytecode_witness_index
-                        .ok_or_else(|| {
-                            ConversionError::MissingField(
-                                "bytecode_witness_index".to_string(),
-                            )
-                        })?
-                        .try_into()?,
-                    salt: tx
-                        .salt
-                        .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
-                        .into(),
-                    storage_slots: tx
-                        .storage_slots
-                        .ok_or_else(|| {
-                            ConversionError::MissingField("storage_slots".to_string())
-                        })?
-                        .into_iter()
-                        .map(|slot| {
-                            if slot.0 .0.len() != 64 {
-                                return Err(ConversionError::BytesLength)
-                            }
-                            let key = &slot.0 .0[0..32];
-                            let value = &slot.0 .0[32..];
-                            Ok(StorageSlot::new(
-                                // unwrap is safe because length is checked
-                                ::fuel_vm::fuel_types::Bytes32::try_from(key)
-                                    .map_err(|_| ConversionError::BytesLength)?,
-                                ::fuel_vm::fuel_types::Bytes32::try_from(value)
-                                    .map_err(|_| ConversionError::BytesLength)?,
-                            ))
-                        })
-                        .try_collect()?,
-                    inputs: tx
-                        .inputs
-                        .into_iter()
-                        .map(TryInto::try_into)
-                        .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>()?,
-                    outputs: tx
-                        .outputs
-                        .into_iter()
-                        .map(TryInto::try_into)
-                        .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>()?,
-                    witnesses: tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
-                    metadata: None,
-                }
-            }
-        })
+                tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+            );
+            *script.receipts_root_mut() = tx
+                .receipts_root
+                .ok_or_else(|| {
+                    ConversionError::MissingField("receipts_root".to_string())
+                })?
+                .into();
+            script.into()
+        } else {
+            let create = fuel_vm::prelude::Transaction::create(
+                tx.gas_price.into(),
+                tx.gas_limit.into(),
+                tx.maturity.into(),
+                tx.bytecode_witness_index
+                    .ok_or_else(|| {
+                        ConversionError::MissingField(
+                            "bytecode_witness_index".to_string(),
+                        )
+                    })?
+                    .try_into()?,
+                tx.salt
+                    .ok_or_else(|| ConversionError::MissingField("salt".to_string()))?
+                    .into(),
+                tx.storage_slots
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("storage_slots".to_string())
+                    })?
+                    .into_iter()
+                    .map(|slot| {
+                        if slot.0 .0.len() != 64 {
+                            return Err(ConversionError::BytesLength)
+                        }
+                        let key = &slot.0 .0[0..32];
+                        let value = &slot.0 .0[32..];
+                        Ok(StorageSlot::new(
+                            // unwrap is safe because length is checked
+                            ::fuel_vm::fuel_types::Bytes32::try_from(key)
+                                .map_err(|_| ConversionError::BytesLength)?,
+                            ::fuel_vm::fuel_types::Bytes32::try_from(value)
+                                .map_err(|_| ConversionError::BytesLength)?,
+                        ))
+                    })
+                    .try_collect()?,
+                tx.inputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>(
+                    )?,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
+                    )?,
+                tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+            );
+            create.into()
+        };
+
+        Ok(tx)
     }
 }
 

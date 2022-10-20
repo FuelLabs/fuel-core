@@ -10,12 +10,9 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::fuel_tx::{
-        prelude::{
-            Interpreter,
-            PredicateStorage,
-        },
         Chargeable,
         CheckedTransaction,
+        Fully,
         IntoChecked,
         Partially,
         Transaction,
@@ -77,21 +74,45 @@ impl TxPool {
         tx: Arc<Transaction>,
         db: &dyn TxPoolDb,
     ) -> anyhow::Result<InsertionResult> {
-        // TODO: Use correct height and params
-        let tx: CheckedTransaction<Partially> = tx
-            .deref()
-            .clone()
-            .into_checked_partially(Default::default(), &Default::default())?
-            .into();
+        let current_height = db.current_block_height()?;
 
-        let tx = Arc::new(match tx {
-            CheckedTransaction::Script(script) => {
-                PoolTransaction::Script(Either::Partially(script))
-            }
-            CheckedTransaction::Create(create) => {
-                PoolTransaction::Create(Either::Partially(create))
-            }
-        });
+        let tx = if self.config.utxo_validation {
+            let tx: CheckedTransaction<Fully> = tx
+                .deref()
+                .clone()
+                .into_checked(
+                    current_height.into(),
+                    &self.config.chain_config.transaction_parameters,
+                )?
+                .into();
+
+            Arc::new(match tx {
+                CheckedTransaction::Script(script) => {
+                    PoolTransaction::Script(Either::Fully(script))
+                }
+                CheckedTransaction::Create(create) => {
+                    PoolTransaction::Create(Either::Fully(create))
+                }
+            })
+        } else {
+            let tx: CheckedTransaction<Partially> = tx
+                .deref()
+                .clone()
+                .into_checked_partially(
+                    current_height.into(),
+                    &self.config.chain_config.transaction_parameters,
+                )?
+                .into();
+
+            Arc::new(match tx {
+                CheckedTransaction::Script(script) => {
+                    PoolTransaction::Script(Either::Partially(script))
+                }
+                CheckedTransaction::Create(create) => {
+                    PoolTransaction::Create(Either::Partially(create))
+                }
+            })
+        };
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata.into())
@@ -100,36 +121,17 @@ impl TxPool {
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
-        let current_height = db.current_block_height()?;
-
-        let checked = if self.config.utxo_validation {
-            CheckedTransaction::check(
-                (*tx).clone(),
-                current_height.into(),
-                &self.config.chain_config.transaction_parameters,
-            )?
-        } else {
-            CheckedTransaction::check_unsigned(
-                (*tx).clone(),
-                current_height.into(),
-                &self.config.chain_config.transaction_parameters,
-            )?
-        };
-
         // verify max gas is less than block limit
-        if checked.max_gas() > self.config.chain_config.block_gas_limit {
+        if tx.max_gas() > self.config.chain_config.block_gas_limit {
             return Err(Error::NotInsertedMaxGasLimit {
-                tx_gas: checked.max_gas(),
+                tx_gas: tx.max_gas(),
                 block_limit: self.config.chain_config.block_gas_limit,
             }
             .into())
         }
 
         // verify predicates
-        if !Interpreter::<PredicateStorage>::check_predicates(
-            checked,
-            self.config.chain_config.transaction_parameters,
-        ) {
+        if !tx.check_predicates(self.config.chain_config.transaction_parameters) {
             return Err(anyhow!("transaction predicate verification failed"))
         }
 

@@ -70,7 +70,7 @@ async fn can_submit_genesis_message() {
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let tx_id = client.submit(&tx1).await.unwrap();
+    let tx_id = client.submit(&tx1.into()).await.unwrap();
 
     // verify tx is successful
     let status = client

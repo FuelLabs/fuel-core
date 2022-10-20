@@ -78,7 +78,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
 
     // submit transactions and verify their status
     for tx in transactions {
-        let id = client.submit(&tx).await.unwrap();
+        let id = client.submit(&tx.into()).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
             .transaction(&id.0.to_string())
@@ -123,7 +123,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     test_builder.min_gas_price = 10;
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let result = client.submit(&tx).await;
+    let result = client.submit(&tx.into()).await;
 
     assert!(result.is_err());
     assert!(result
@@ -169,7 +169,7 @@ async fn dry_run_override_utxo_validation() {
 
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
-    let log = client.dry_run_opt(&tx, Some(false)).await.unwrap();
+    let log = client.dry_run_opt(&tx.into(), Some(false)).await.unwrap();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
@@ -215,7 +215,7 @@ async fn dry_run_no_utxo_validation_override() {
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
     // verify that the client validated the inputs and failed the tx
-    let res = client.dry_run_opt(&tx, None).await;
+    let res = client.dry_run_opt(&tx.into(), None).await;
     assert!(res.is_err());
 }
 
@@ -261,7 +261,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .into_iter()
         .map(|tx| {
             let client = client.clone();
-            async move { client.submit(&tx).await }
+            async move { client.submit(&tx.into()).await }
         })
         .collect_vec();
 

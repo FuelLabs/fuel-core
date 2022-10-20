@@ -21,13 +21,13 @@ use fuel_core_interfaces::{
     },
     common::{
         crypto::ephemeral_merkle_root,
-        fuel_tx::Transaction,
-        fuel_types::Bytes32,
-        prelude::{
-            CheckedTransaction,
+        fuel_tx::{
+            IntoChecked,
             Receipt,
+            Transaction,
             Word,
         },
+        fuel_types::Bytes32,
     },
     executor::{
         Error,
@@ -143,24 +143,19 @@ impl Trait for Producer {
             Some(height) => height,
         } + 1u64.into();
         let checked = if self.config.utxo_validation {
-            CheckedTransaction::check(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
+            let (transaction, _) = transaction
+                .into_checked(height.into(), &self.config.consensus_params)?
+                .into();
+            transaction
         } else {
-            CheckedTransaction::check_unsigned(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
+            let (transaction, _) = transaction
+                .into_checked_partially(height.into(), &self.config.consensus_params)?
+                .into();
+            transaction
         };
 
         let header = self.new_header(height).await?;
-        let block = PartialFuelBlock::new(
-            header,
-            vec![Transaction::from(checked)].into_iter().collect(),
-        );
+        let block = PartialFuelBlock::new(header, vec![checked].into_iter().collect());
 
         let res = self
             .executor

@@ -137,7 +137,8 @@ async fn balance() {
             asset_id,
         })
         .add_witness(Default::default())
-        .finalize();
+        .finalize()
+        .into();
 
     client.submit(&tx).await.unwrap();
 

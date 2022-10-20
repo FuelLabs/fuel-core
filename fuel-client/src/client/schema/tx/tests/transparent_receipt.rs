@@ -173,6 +173,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .is
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
+                contract_id: None,
             },
             ReceiptType::Revert => fuel_vm::prelude::Receipt::Revert {
                 id: schema

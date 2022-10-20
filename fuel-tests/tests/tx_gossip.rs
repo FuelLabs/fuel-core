@@ -9,7 +9,10 @@ use fuel_core::{
     },
 };
 use fuel_core_interfaces::common::{
-    fuel_tx::TransactionBuilder,
+    fuel_tx::{
+        field::Inputs,
+        TransactionBuilder,
+    },
     fuel_vm::prelude::*,
 };
 use fuel_gql_client::client::FuelClient;
@@ -93,7 +96,7 @@ async fn test_tx_gossiping() {
 
     tokio::time::sleep(Duration::new(3, 0)).await;
 
-    let result = client_one.submit(&tx).await.unwrap();
+    let result = client_one.submit(&tx.into()).await.unwrap();
 
     let tx = client_one.transaction(&result.0.to_string()).await.unwrap();
     assert!(tx.is_some());

@@ -90,7 +90,7 @@ async fn dry_run() {
         vec![],
     );
 
-    let log = client.dry_run(&tx).await.unwrap();
+    let log = client.dry_run(&tx.clone().into()).await.unwrap();
     assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
@@ -142,7 +142,7 @@ async fn submit() {
         vec![],
     );
 
-    let id = client.submit(&tx).await.unwrap();
+    let id = client.submit(&tx.clone().into()).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
         .transaction(&id.0.to_string())
@@ -497,14 +497,13 @@ impl TestContext {
         amount: u64,
     ) -> io::Result<Bytes32> {
         let script = Opcode::RET(0x10).to_bytes().to_vec();
-        let tx = Transaction::Script {
-            gas_price: 0,
-            gas_limit: 1_000_000,
-            maturity: 0,
-            receipts_root: Default::default(),
+        let tx = Transaction::script(
+            0,
+            1_000_000,
+            0,
             script,
-            script_data: vec![],
-            inputs: vec![Input::CoinSigned {
+            vec![],
+            vec![Input::CoinSigned {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
@@ -513,14 +512,14 @@ impl TestContext {
                 witness_index: 0,
                 maturity: 0,
             }],
-            outputs: vec![Output::Coin {
+            vec![Output::Coin {
                 amount,
                 to,
                 asset_id: Default::default(),
             }],
-            witnesses: vec![vec![].into()],
-            metadata: None,
-        };
+            vec![vec![].into()],
+        )
+        .into();
         let tx_id = self.client.submit(&tx).await?;
         self.client
             .await_transaction_commit(&tx_id.to_string())
@@ -558,4 +557,5 @@ fn create_mock_tx(val: u64) -> Transaction {
         Default::default(),
         Default::default(),
     )
+    .into()
 }

@@ -75,7 +75,7 @@ pub struct VmBench {
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<Database>,
+    pub vm: Interpreter<Database, Script>,
     pub instruction: Instruction,
 }
 

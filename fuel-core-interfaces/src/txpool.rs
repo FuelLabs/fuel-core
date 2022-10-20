@@ -14,6 +14,7 @@ use crate::{
             Cacheable,
             Chargeable,
             Checked,
+            ConsensusParameters,
             ContractId,
             Create,
             Fully,
@@ -27,10 +28,7 @@ use crate::{
             UniqueIdentifier,
             UtxoId,
         },
-        fuel_types::{
-            MessageId,
-            Word,
-        },
+        fuel_types::MessageId,
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
@@ -50,6 +48,10 @@ use crate::{
 use derive_more::{
     Deref,
     DerefMut,
+};
+use fuel_vm::prelude::{
+    Interpreter,
+    PredicateStorage,
 };
 use std::{
     fmt::Debug,
@@ -212,6 +214,23 @@ impl PoolTransaction {
             }
             PoolTransaction::Create(Either::Fully(create)) => {
                 create.metadata().fee.max_gas()
+            }
+        }
+    }
+
+    pub fn check_predicates(&self, params: ConsensusParameters) -> bool {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                Interpreter::<PredicateStorage>::check_predicates(script.clone(), params)
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                Interpreter::<PredicateStorage>::check_predicates(script.clone(), params)
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                Interpreter::<PredicateStorage>::check_predicates(create.clone(), params)
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                Interpreter::<PredicateStorage>::check_predicates(create.clone(), params)
             }
         }
     }

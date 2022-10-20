@@ -19,12 +19,10 @@ use fuel_core_interfaces::{
         },
         fuel_merkle::common::Bytes32,
         fuel_tx::{
-            field::GasPrice,
             Chargeable,
             ConsensusParameters,
             Output,
             Script,
-            Transaction,
             TransactionBuilder,
             UtxoId,
         },
@@ -40,11 +38,7 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
-    txpool::{
-        InsertionResult,
-        PoolTransaction,
-        Sender as TxPoolSender,
-    },
+    txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
     Config as TxPoolConfig,
