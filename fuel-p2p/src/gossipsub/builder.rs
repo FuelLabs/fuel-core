@@ -17,7 +17,6 @@ use sha2::{
     Digest,
     Sha256,
 };
-use prometheus_client::registry::Registry;
 use fuel_metrics::p2p_metrics::P2P_METRICS;
 
 use crate::config::P2PConfig;

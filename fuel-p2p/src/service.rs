@@ -54,7 +54,6 @@ use libp2p::{
     PeerId,
     Swarm,
 };
-use prometheus_client::registry::Registry;
 use rand::Rng;
 use std::collections::HashMap;
 use tracing::{

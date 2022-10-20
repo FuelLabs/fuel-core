@@ -83,6 +83,9 @@ pub struct P2PConfig {
     pub set_request_timeout: Duration,
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Duration,
+
+    /// Enables metrics collection in fuel-p2p
+    pub metrics: bool,
 }
 
 /// Takes secret key bytes generated outside of libp2p.
@@ -123,6 +126,7 @@ impl P2PConfig {
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
+            metrics: true,
         }
     }
 }

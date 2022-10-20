@@ -8,7 +8,7 @@ use crate::{
     },
     gossipsub::{
         build_gossipsub,
-        topics::GossipTopic, self,
+        topics::GossipTopic,
     },
     peer_info::{
         PeerInfo,
@@ -42,7 +42,6 @@ use libp2p::{
     NetworkBehaviour,
     PeerId,
 };
-use prometheus_client::registry::Registry;
 use std::collections::HashMap;
 
 #[derive(Debug)]

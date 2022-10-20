@@ -28,7 +28,6 @@ use tokio::sync::{
     broadcast,
     RwLock,
 };
-#[cfg(feature = "metrics")]
 use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 
 #[derive(Debug, Clone)]
@@ -42,6 +41,13 @@ pub struct TxPool {
 impl TxPool {
     pub fn new(config: Config) -> Self {
         let max_depth = config.max_depth;
+        if config.metrics {
+            let mut metrics = TXPOOL_METRICS.write().unwrap();
+
+            // Register counters and gauges
+            metrics.init();
+        }
+
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),

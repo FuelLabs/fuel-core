@@ -96,6 +96,10 @@ pub struct P2pArgs {
     /// Choose how long RequestResponse protocol connections will live if idle
     #[clap(long = "connection_keep_alive", default_value = "20")]
     pub connection_keep_alive: u64,
+
+    /// Enable p2p metrics or not
+    #[clap(long = "metrics", default_value = "false")]
+    pub metrics: bool,
 }
 
 impl From<P2pArgs> for anyhow::Result<P2PConfig> {
@@ -146,6 +150,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             set_connection_keep_alive: Duration::from_secs(args.connection_keep_alive),
             info_interval: Some(Duration::from_secs(args.info_interval)),
             identify_interval: Some(Duration::from_secs(args.identify_interval)),
+            metrics: args.metrics
         })
     }
 }
