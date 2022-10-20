@@ -23,8 +23,6 @@ pub struct Config {
     pub chain_conf: ChainConfig,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
-    // default to false until predicates have fully stabilized
-    pub predicates: bool,
     pub manual_blocks_enabled: bool,
     pub vm: VMConfig,
     pub txpool: fuel_txpool::Config,
@@ -49,7 +47,6 @@ impl Config {
             manual_blocks_enabled: false,
             vm: Default::default(),
             utxo_validation: false,
-            predicates: false,
             txpool: fuel_txpool::Config {
                 utxo_validation: false,
                 chain_config: chain_conf,

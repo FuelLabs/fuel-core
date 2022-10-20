@@ -369,8 +369,7 @@ impl BlockProducerDatabase for Database {
         fuel_height: BlockHeight,
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
         let id = self.block_hash(fuel_height.into())?;
-        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
-        Ok(Some(block))
+        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
     fn current_height(&self) -> anyhow::Result<BlockHeight> {

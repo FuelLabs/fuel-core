@@ -7,8 +7,15 @@ use crate::{
     Config,
     Error,
 };
+use anyhow::anyhow;
 use fuel_core_interfaces::{
-    common::fuel_tx::CheckedTransaction,
+    common::{
+        fuel_tx::CheckedTransaction,
+        prelude::{
+            Interpreter,
+            PredicateStorage,
+        },
+    },
     model::{
         ArcTx,
         FuelBlock,
@@ -92,6 +99,14 @@ impl TxPool {
                 block_limit: self.config.chain_config.block_gas_limit,
             }
             .into())
+        }
+
+        // verify predicates
+        if !Interpreter::<PredicateStorage>::check_predicates(
+            checked,
+            self.config.chain_config.transaction_parameters,
+        ) {
+            return Err(anyhow!("transaction predicate verification failed"))
         }
 
         if self.by_hash.contains_key(&tx.id()) {

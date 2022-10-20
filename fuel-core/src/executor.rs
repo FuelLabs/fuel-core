@@ -531,31 +531,15 @@ impl Executor {
 
     /// Verify all the predicates of a tx.
     pub fn verify_tx_predicates(&self, tx: &CheckedTransaction) -> Result<(), Error> {
-        // fail if tx contains any predicates when predicates are disabled
-        if !self.config.predicates {
-            let has_predicate = tx
-                .as_ref()
-                .inputs()
-                .iter()
-                .any(|input| input.is_coin_predicate());
-            if has_predicate {
-                return Err(Error::TransactionValidity(
-                    TransactionValidityError::PredicateExecutionDisabled(
-                        tx.transaction().id(),
-                    ),
-                ))
-            }
-        } else {
-            // otherwise attempt to validate any predicates if the feature flag is enabled
-            if !Interpreter::<PredicateStorage>::check_predicates(
-                tx.clone(),
-                self.config.chain_conf.transaction_parameters,
-            ) {
-                return Err(Error::TransactionValidity(
-                    TransactionValidityError::InvalidPredicate(tx.transaction().id()),
-                ))
-            }
+        if !Interpreter::<PredicateStorage>::check_predicates(
+            tx.clone(),
+            self.config.chain_conf.transaction_parameters,
+        ) {
+            return Err(Error::TransactionValidity(
+                TransactionValidityError::InvalidPredicate(tx.transaction().id()),
+            ))
         }
+
         Ok(())
     }
 
