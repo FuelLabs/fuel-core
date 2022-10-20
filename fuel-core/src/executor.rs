@@ -138,7 +138,7 @@ impl ExecutorTrait for Executor {
                 let id = tx.id();
                 StorageInspect::<Receipts>::get(db, &id)
                     .transpose()
-                    .unwrap_or(Ok(Default::default()))
+                    .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
             })
             .collect::<Result<Vec<Vec<Receipt>>, _>>()

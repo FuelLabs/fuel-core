@@ -160,10 +160,7 @@ impl Trait for Producer {
         let header = self.new_header(height).await?;
         let block = PartialFuelBlock::new(
             header,
-            vec![Transaction::from(checked)]
-                .into_iter()
-                .map(|tx| tx.into())
-                .collect(),
+            vec![Transaction::from(checked)].into_iter().collect(),
         );
 
         let res = self
@@ -172,7 +169,7 @@ impl Trait for Producer {
             .await?;
         res.into_iter()
             .next()
-            .ok_or(anyhow!("Expected at least one set of receipts"))
+            .ok_or_else(|| anyhow!("Expected at least one set of receipts"))
     }
 }
 

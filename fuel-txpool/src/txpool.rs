@@ -80,13 +80,13 @@ impl TxPool {
 
         let checked = if self.config.utxo_validation {
             CheckedTransaction::check(
-                (&*tx).clone(),
+                (*tx).clone(),
                 current_height.into(),
                 &self.config.chain_config.transaction_parameters,
             )?
         } else {
             CheckedTransaction::check_unsigned(
-                (&*tx).clone(),
+                (*tx).clone(),
                 current_height.into(),
                 &self.config.chain_config.transaction_parameters,
             )?
