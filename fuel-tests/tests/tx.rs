@@ -34,7 +34,10 @@ use fuel_gql_client::client::{
 };
 use itertools::Itertools;
 use rand::Rng;
-use std::io;
+use std::{
+    io,
+    io::ErrorKind::NotFound,
+};
 
 mod predicates;
 mod utxo_validation;
@@ -99,6 +102,13 @@ async fn dry_run() {
         Receipt::Return {
             val, ..
         } if val == 1));
+
+    // ensure the tx isn't available in the blockchain history
+    let err = client
+        .transaction_status(&format!("{:#x}", tx.id()))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), NotFound);
 }
 
 #[tokio::test]
