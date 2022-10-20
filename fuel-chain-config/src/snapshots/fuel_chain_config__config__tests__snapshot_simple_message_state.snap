@@ -1,5 +1,6 @@
 ---
 source: fuel-chain-config/src/config.rs
+assertion_line: 174
 expression: json
 ---
 {
@@ -9,7 +10,7 @@ expression: json
       "trigger": "instant"
     }
   },
-  "block_gas_limit": 1000000,
+  "block_gas_limit": 1000000000,
   "initial_state": {
     "messages": [
       {

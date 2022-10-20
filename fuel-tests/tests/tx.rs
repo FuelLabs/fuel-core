@@ -162,9 +162,15 @@ async fn receipts() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx
-    let result = client.submit(&transaction).await;
-    assert!(result.is_ok());
-
+    let tx_id = client
+        .submit(&transaction)
+        .await
+        .expect("transaction should insert");
+    // await block inclusion
+    client
+        .await_transaction_commit(&tx_id.to_string())
+        .await
+        .unwrap();
     // run test
     let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
     assert!(!receipts.is_empty());

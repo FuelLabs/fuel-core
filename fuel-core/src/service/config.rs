@@ -40,17 +40,19 @@ pub struct Config {
 
 impl Config {
     pub fn local_node() -> Self {
+        let chain_conf = ChainConfig::local_testnet();
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
             database_type: DbType::InMemory,
-            chain_conf: ChainConfig::local_testnet(),
+            chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
             vm: Default::default(),
             utxo_validation: false,
             predicates: false,
             txpool: fuel_txpool::Config {
                 utxo_validation: false,
+                chain_config: chain_conf,
                 ..Default::default()
             },
             block_importer: Default::default(),

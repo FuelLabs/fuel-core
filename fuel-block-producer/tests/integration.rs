@@ -57,6 +57,7 @@ use tokio::sync::{
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
+#[ignore = "probably irrelevant now that standard fuel-tests integ tests use the block producer"]
 #[tokio::test]
 async fn block_producer() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(1234u64);

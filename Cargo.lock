@@ -2583,6 +2583,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "fuel-chain-config",
  "fuel-core-interfaces",
  "fuel-txpool",
  "futures",

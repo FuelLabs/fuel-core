@@ -10,7 +10,10 @@ use crate::{
             TxId,
             UtxoId,
         },
-        fuel_types::MessageId,
+        fuel_types::{
+            MessageId,
+            Word,
+        },
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
@@ -268,6 +271,8 @@ pub enum Error {
     NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
+    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
+    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,

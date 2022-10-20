@@ -71,18 +71,27 @@ impl TxPool {
 
         let current_height = db.current_block_height()?;
 
-        if self.config.utxo_validation {
+        let checked = if self.config.utxo_validation {
             CheckedTransaction::check(
                 (&*tx).clone(),
                 current_height.into(),
-                &self.config.consensus_params,
-            )?;
+                &self.config.chain_config.transaction_parameters,
+            )?
         } else {
             CheckedTransaction::check_unsigned(
                 (&*tx).clone(),
                 current_height.into(),
-                &self.config.consensus_params,
-            )?;
+                &self.config.chain_config.transaction_parameters,
+            )?
+        };
+
+        // verify max gas is less than block limit
+        if checked.max_gas() > self.config.chain_config.block_gas_limit {
+            return Err(Error::NotInsertedMaxGasLimit {
+                tx_gas: checked.max_gas(),
+                block_limit: self.config.chain_config.block_gas_limit,
+            }
+            .into())
         }
 
         if self.by_hash.contains_key(&tx.id()) {
