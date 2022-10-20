@@ -125,6 +125,7 @@ impl Command {
             txpool: fuel_txpool::Config {
                 min_gas_price,
                 utxo_validation,
+                consensus_params,
                 ..Default::default()
             },
             predicates,

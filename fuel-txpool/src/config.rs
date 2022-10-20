@@ -11,7 +11,7 @@ pub struct Config {
     /// Flag to disable utxo existence and signature checks
     pub utxo_validation: bool,
     /// Transaction consensus rule config
-    pub consensus_config: ConsensusParameters,
+    pub consensus_params: ConsensusParameters,
 }
 
 impl Default for Config {
@@ -21,7 +21,7 @@ impl Default for Config {
             max_depth: 10,
             min_gas_price: 0,
             utxo_validation: true,
-            consensus_config: ConsensusParameters::DEFAULT,
+            consensus_params: ConsensusParameters::DEFAULT,
         }
     }
 }

@@ -65,24 +65,25 @@ impl TxPool {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into())
         }
+
+        // verify gas price is at least the minimum
+        self.verify_tx_min_gas_price(&tx)?;
+
         let current_height = db.current_block_height()?;
 
         if self.config.utxo_validation {
             CheckedTransaction::check(
                 (&*tx).clone(),
                 current_height.into(),
-                &self.config.consensus_config,
+                &self.config.consensus_params,
             )?;
         } else {
             CheckedTransaction::check_unsigned(
                 (&*tx).clone(),
                 current_height.into(),
-                &self.config.consensus_config,
+                &self.config.consensus_params,
             )?;
         }
-
-        // verify gas price is at least the minimum
-        self.verify_tx_min_gas_price(&tx)?;
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into())

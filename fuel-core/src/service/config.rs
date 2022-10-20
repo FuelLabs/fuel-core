@@ -49,7 +49,10 @@ impl Config {
             vm: Default::default(),
             utxo_validation: false,
             predicates: false,
-            txpool: Default::default(),
+            txpool: fuel_txpool::Config {
+                utxo_validation: false,
+                ..Default::default()
+            },
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),

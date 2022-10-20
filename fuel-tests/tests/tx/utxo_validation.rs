@@ -123,14 +123,14 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     test_builder.min_gas_price = 10;
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let tx_id = client.submit(&tx).await.unwrap();
-    let status = client
-        .await_transaction_commit(&tx_id.to_string())
-        .await
-        .unwrap();
-    assert!(
-        matches!(status, TransactionStatus::Failure { reason, .. } if reason.contains("The gas price is too low"))
-    );
+    let result = client.submit(&tx).await;
+
+    assert!(result.is_err());
+    assert!(result
+        .err()
+        .unwrap()
+        .to_string()
+        .contains("The gas price is too low"));
 }
 
 // verify that dry run can disable utxo_validation by simulating a transaction with unsigned
