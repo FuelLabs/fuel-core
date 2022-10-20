@@ -8,6 +8,7 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_vm::prelude::*;
+use futures_timer::Delay;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
@@ -54,6 +55,7 @@ use std::{
         self,
         FromStr,
     },
+    time::Duration,
 };
 use types::{
     TransactionResponse,
@@ -74,6 +76,11 @@ use self::schema::block::ProduceBlockArgs;
 
 pub mod schema;
 pub mod types;
+
+pub const STATUS_POLLING_INTERVAL_MS: u64 = 250u64;
+// depending on the configured block production trigger mode, this could take a while
+pub const MAX_POLL_ATTEMPTS: usize = 2usize;
+// 3 * 60 * 1000 / (STATUS_POLLING_INTERVAL_MS as usize);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -323,6 +330,39 @@ impl FuelClient {
             })?
             .try_into()?;
         Ok(status)
+    }
+
+    /// awaits for the transaction to be committed into a block
+    pub async fn await_transaction_commit(
+        &self,
+        id: &str,
+    ) -> io::Result<TransactionStatus> {
+        // use polling until subscriptions are available
+        let mut poll_attempts = 0;
+        let mut status = self.transaction_status(id).await?;
+        loop {
+            match status {
+                TransactionStatus::Submitted { .. } => {
+                    // exit loop if too many polling attempts
+                    poll_attempts += 1;
+                    if poll_attempts > MAX_POLL_ATTEMPTS {
+                        return Err(io::Error::new(
+                            ErrorKind::ConnectionAborted,
+                            format!(
+                                "Transaction wasn't committed after {} polling attempts",
+                                poll_attempts
+                            ),
+                        ))
+                    }
+                    // sleep for polling interval
+                    Delay::new(Duration::from_millis(STATUS_POLLING_INTERVAL_MS)).await;
+                    // check status again
+                    status = self.transaction_status(id).await?;
+                }
+                status @ TransactionStatus::Success { .. } => return Ok(status),
+                status @ TransactionStatus::Failure { .. } => return Ok(status),
+            }
+        }
     }
 
     /// returns a paginated set of transactions sorted by block height

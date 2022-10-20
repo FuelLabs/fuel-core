@@ -7,7 +7,15 @@ use crate::{
     Config,
     Error,
 };
+use anyhow::anyhow;
 use fuel_core_interfaces::{
+    common::{
+        fuel_tx::CheckedTransaction,
+        prelude::{
+            Interpreter,
+            PredicateStorage,
+        },
+    },
     model::{
         ArcTx,
         FuelBlock,
@@ -43,7 +51,7 @@ impl TxPool {
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
-            by_dependency: Dependency::new(max_depth),
+            by_dependency: Dependency::new(max_depth, config.utxo_validation),
             config,
         }
     }
@@ -67,6 +75,39 @@ impl TxPool {
 
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
+
+        let current_height = db.current_block_height()?;
+
+        let checked = if self.config.utxo_validation {
+            CheckedTransaction::check(
+                (*tx).clone(),
+                current_height.into(),
+                &self.config.chain_config.transaction_parameters,
+            )?
+        } else {
+            CheckedTransaction::check_unsigned(
+                (*tx).clone(),
+                current_height.into(),
+                &self.config.chain_config.transaction_parameters,
+            )?
+        };
+
+        // verify max gas is less than block limit
+        if checked.max_gas() > self.config.chain_config.block_gas_limit {
+            return Err(Error::NotInsertedMaxGasLimit {
+                tx_gas: checked.max_gas(),
+                block_limit: self.config.chain_config.block_gas_limit,
+            }
+            .into())
+        }
+
+        // verify predicates
+        if !Interpreter::<PredicateStorage>::check_predicates(
+            checked,
+            self.config.chain_config.transaction_parameters,
+        ) {
+            return Err(anyhow!("transaction predicate verification failed"))
+        }
 
         if self.by_hash.contains_key(&tx.id()) {
             return Err(Error::NotInsertedTxKnown.into())

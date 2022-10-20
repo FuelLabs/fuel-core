@@ -22,6 +22,7 @@ cynic = { version = "1.0", features = ["surf"] }
 derive_more = { version = "0.99" }
 fuel-vm = { version = "0.18", features = ["serde"] }
 futures = "0.3"
+futures-timer = "3.0"
 hex = "0.4"
 itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }

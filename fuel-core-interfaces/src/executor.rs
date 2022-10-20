@@ -1,6 +1,7 @@
 use crate::{
     common::{
         fuel_tx::{
+            Receipt,
             TxId,
             UtxoId,
             ValidationError,
@@ -52,6 +53,12 @@ pub enum ExecutionKind {
 #[async_trait]
 pub trait Executor: Sync + Send {
     async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error>;
+
+    async fn dry_run(
+        &self,
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Vec<Receipt>>, Error>;
 }
 
 #[derive(Debug, Error)]

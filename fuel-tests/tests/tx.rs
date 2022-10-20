@@ -16,7 +16,10 @@ use fuel_core_interfaces::{
             prelude::*,
         },
     },
-    executor::ExecutionBlock,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
     model::{
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -31,7 +34,10 @@ use fuel_gql_client::client::{
 };
 use itertools::Itertools;
 use rand::Rng;
-use std::io;
+use std::{
+    io,
+    io::ErrorKind::NotFound,
+};
 
 mod predicates;
 mod utxo_validation;
@@ -96,6 +102,13 @@ async fn dry_run() {
         Receipt::Return {
             val, ..
         } if val == 1));
+
+    // ensure the tx isn't available in the blockchain history
+    let err = client
+        .transaction_status(&format!("{:#x}", tx.id()))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), NotFound);
 }
 
 #[tokio::test]
@@ -159,9 +172,15 @@ async fn receipts() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx
-    let result = client.submit(&transaction).await;
-    assert!(result.is_ok());
-
+    let tx_id = client
+        .submit(&transaction)
+        .await
+        .expect("transaction should insert");
+    // await block inclusion
+    client
+        .await_transaction_commit(&tx_id.to_string())
+        .await
+        .unwrap();
     // run test
     let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
     assert!(!receipts.is_empty());
@@ -502,7 +521,12 @@ impl TestContext {
             witnesses: vec![vec![].into()],
             metadata: None,
         };
-        self.client.submit(&tx).await.map(Into::into)
+        let tx_id = self.client.submit(&tx).await?;
+        self.client
+            .await_transaction_commit(&tx_id.to_string())
+            .await
+            .unwrap();
+        Ok(tx_id.into())
     }
 }
 

@@ -9,6 +9,7 @@ use fuel_core_interfaces::{
         fuel_tx::{
             CheckedTransaction,
             MessageId,
+            Receipt,
         },
         fuel_types::Address,
     },
@@ -81,6 +82,14 @@ impl Executor for MockExecutor {
         block_db.insert(*block.header().height(), block.to_db_block());
         Ok(block)
     }
+
+    async fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        Ok(Default::default())
+    }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
@@ -97,6 +106,19 @@ impl Executor for FailingMockExecutor {
                 ExecutionBlock::Production(b) => Ok(b.generate(&[])),
                 ExecutionBlock::Validation(b) => Ok(b),
             }
+        }
+    }
+
+    async fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        let mut err = self.0.lock().unwrap();
+        if let Some(err) = err.take() {
+            Err(err)
+        } else {
+            Ok(Default::default())
         }
     }
 }
@@ -130,5 +152,11 @@ impl BlockProducerDatabase for MockDb {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
+    }
+
+    fn current_height(&self) -> Result<BlockHeight> {
+        let blocks = self.blocks.lock().unwrap();
+
+        Ok(blocks.keys().max().cloned().unwrap_or_default())
     }
 }

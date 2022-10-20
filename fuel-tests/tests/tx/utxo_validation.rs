@@ -124,6 +124,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     let TestContext { client, .. } = test_builder.finalize().await;
 
     let result = client.submit(&tx).await;
+
     assert!(result.is_err());
     assert!(result
         .err()

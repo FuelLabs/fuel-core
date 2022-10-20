@@ -28,6 +28,7 @@ use fuel_core_interfaces::{
         Messages,
     },
     model::{
+        BlockHeight,
         Coin,
         Message,
     },
@@ -154,4 +155,8 @@ impl StorageMutate<Messages> for MockDb {
     }
 }
 
-impl TxPoolDb for MockDb {}
+impl TxPoolDb for MockDb {
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
+        Ok(Default::default())
+    }
+}

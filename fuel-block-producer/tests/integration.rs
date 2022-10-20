@@ -57,6 +57,7 @@ use tokio::sync::{
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
+#[ignore = "probably irrelevant now that standard fuel-tests integ tests use the block producer"]
 #[tokio::test]
 async fn block_producer() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -143,7 +144,10 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config { consensus_params },
+        config: fuel_block_producer::config::Config {
+            consensus_params,
+            utxo_validation: true,
+        },
         db: Box::new(mock_db.clone()),
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
