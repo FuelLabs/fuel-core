@@ -19,7 +19,7 @@ use fuel_core_interfaces::{
         UniqueIdentifier,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
         FuelBlock,
         TxInfo,
     },
@@ -183,7 +183,7 @@ impl TxPool {
     }
 
     /// Return all sorted transactions that are includable in next block.
-    pub fn sorted_includable(&self) -> Vec<ArcTx> {
+    pub fn sorted_includable(&self) -> Vec<ArcPoolTx> {
         self.by_gas_price
             .sort
             .iter()
@@ -192,12 +192,12 @@ impl TxPool {
             .collect()
     }
 
-    pub fn remove_inner(&mut self, tx: &ArcTx) -> Vec<ArcTx> {
+    pub fn remove_inner(&mut self, tx: &ArcPoolTx) -> Vec<ArcPoolTx> {
         self.remove_by_tx_id(&tx.id())
     }
 
     /// remove transaction from pool needed on user demand. Low priority
-    pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcTx> {
+    pub fn remove_by_tx_id(&mut self, tx_id: &TxId) -> Vec<ArcPoolTx> {
         if let Some(tx) = self.by_hash.remove(tx_id) {
             let removed = self
                 .by_dependency
@@ -274,7 +274,10 @@ impl TxPool {
     }
 
     /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
-    pub async fn find_dependent(txpool: &RwLock<Self>, hashes: &[TxId]) -> Vec<ArcTx> {
+    pub async fn find_dependent(
+        txpool: &RwLock<Self>,
+        hashes: &[TxId],
+    ) -> Vec<ArcPoolTx> {
         let mut seen = HashMap::new();
         {
             let pool = txpool.read().await;
@@ -288,7 +291,7 @@ impl TxPool {
                 }
             }
         }
-        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+        let mut list: Vec<ArcPoolTx> = seen.into_iter().map(|(_, tx)| tx).collect();
         // sort from high to low price
         list.sort_by_key(|tx| Reverse(tx.price()));
 
@@ -315,7 +318,7 @@ impl TxPool {
 
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
-    pub async fn includable(txpool: &RwLock<Self>) -> Vec<ArcTx> {
+    pub async fn includable(txpool: &RwLock<Self>) -> Vec<ArcPoolTx> {
         let pool = txpool.read().await;
         pool.sorted_includable()
     }
@@ -339,7 +342,7 @@ impl TxPool {
         txpool: &RwLock<Self>,
         broadcast: broadcast::Sender<TxStatusBroadcast>,
         tx_ids: &[TxId],
-    ) -> Vec<ArcTx> {
+    ) -> Vec<ArcPoolTx> {
         let mut removed = Vec::new();
         for tx_id in tx_ids {
             let rem = { txpool.write().await.remove_by_tx_id(tx_id) };
@@ -1122,7 +1125,7 @@ pub mod tests {
             .dependency()
             .find_dependent(tx3_result.inserted, &mut seen, txpool.txs());
 
-        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+        let mut list: Vec<ArcPoolTx> = seen.into_iter().map(|(_, tx)| tx).collect();
         // sort from high to low price
         list.sort_by_key(|tx| Reverse(tx.price()));
         assert_eq!(list.len(), 2, "We should have two items");

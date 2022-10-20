@@ -31,7 +31,7 @@ pub use coin::{
 pub use da_block_height::DaBlockHeight;
 pub use messages::*;
 pub use txpool::{
-    ArcTx,
+    ArcPoolTx,
     TxInfo,
 };
 pub use vote::ConsensusVote;

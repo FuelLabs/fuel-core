@@ -3,7 +3,7 @@ use fuel_core_interfaces::{
         fuel_types::Word,
         prelude::Chargeable,
     },
-    model::ArcTx,
+    model::ArcPoolTx,
 };
 use std::cmp::Reverse;
 
@@ -13,7 +13,10 @@ use std::cmp::Reverse;
 // transaction selection could use a plugin based approach in the
 // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
 
-pub fn select_transactions(mut includable_txs: Vec<ArcTx>, max_gas: u64) -> Vec<ArcTx> {
+pub fn select_transactions(
+    mut includable_txs: Vec<ArcPoolTx>,
+    max_gas: u64,
+) -> Vec<ArcPoolTx> {
     // Select all txs that fit into the block, preferring ones with higher gas price.
     //
     // Future improvements to this algorithm may take into account the parallel nature of

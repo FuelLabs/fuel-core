@@ -22,7 +22,7 @@ use fuel_core_interfaces::{
         Executor,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
         BlockHeight,
         DaBlockHeight,
         FuelBlock,
@@ -54,7 +54,7 @@ impl Relayer for MockRelayer {
 }
 
 #[derive(Default)]
-pub struct MockTxPool(pub Vec<ArcTx>);
+pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
 #[async_trait::async_trait]
 impl TxPool for MockTxPool {
@@ -62,7 +62,7 @@ impl TxPool for MockTxPool {
         &self,
         _block_height: BlockHeight,
         _max_gas: u64,
-    ) -> Result<Vec<ArcTx>> {
+    ) -> Result<Vec<ArcPoolTx>> {
         Ok(self.0.clone().into_iter().collect())
     }
 }

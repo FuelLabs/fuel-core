@@ -28,10 +28,7 @@ use crate::{
             UniqueIdentifier,
             UtxoId,
         },
-        fuel_types::{
-            MessageId,
-            Word,
-        },
+        fuel_types::MessageId,
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
@@ -41,7 +38,7 @@ use crate::{
         Messages,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
         BlockHeight,
         Coin,
         Message,
@@ -268,8 +265,8 @@ impl From<Checked<Script, Partially>> for PoolTransaction {
 /// of the `inserted` transaction.
 #[derive(Debug)]
 pub struct InsertionResult {
-    pub inserted: ArcTx,
-    pub removed: Vec<ArcTx>,
+    pub inserted: ArcPoolTx,
+    pub removed: Vec<ArcPoolTx>,
 }
 
 pub trait TxPoolDb:
@@ -328,7 +325,7 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::FindDependent { ids, response })
             .await?;
@@ -342,13 +339,13 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn includable(&self) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn includable(&self) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Includable { response }).await?;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Remove { ids, response }).await?;
         receiver.await.map_err(Into::into)
@@ -378,7 +375,7 @@ pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     Includable {
-        response: oneshot::Sender<Vec<ArcTx>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// import list of transaction into txpool. All needed parents need to be known
     /// and parent->child order should be enforced in Vec, we will not do that check inside
@@ -403,12 +400,12 @@ pub enum TxPoolMpsc {
     /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
     FindDependent {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<ArcTx>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
     Remove {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<ArcTx>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// Iterate over `hashes` and return all hashes that we don't have.
     /// Needed when we receive list of new hashed from peer with
@@ -434,7 +431,7 @@ pub enum TxStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxStatusBroadcast {
-    pub tx: ArcTx,
+    pub tx: ArcPoolTx,
     pub status: TxStatus,
 }
 

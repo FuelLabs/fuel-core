@@ -9,7 +9,7 @@ use fuel_core_interfaces::{
         prelude::*,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
         BlockHeight,
         FuelBlock,
         FuelConsensusHeader,
@@ -103,7 +103,10 @@ impl BlockProducer for MockBlockProducer {
 
 // TODO: The same code is in the `adapters::transaction_selector::select_transactions`
 /// Select all txs that fit into the block, preferring ones with higher gas price.
-fn select_transactions(mut includable_txs: Vec<ArcTx>, max_gas: u64) -> Vec<ArcTx> {
+fn select_transactions(
+    mut includable_txs: Vec<ArcPoolTx>,
+    max_gas: u64,
+) -> Vec<ArcPoolTx> {
     let mut used_block_space: Word = 0;
 
     // Sort transactions by gas price, highest first
@@ -146,7 +149,7 @@ impl BlockHeightDb for MockDatabase {
 
 /// Txpool with manually controllable contents
 pub struct MockTxPool {
-    transactions: Arc<Mutex<Vec<ArcTx>>>,
+    transactions: Arc<Mutex<Vec<ArcPoolTx>>>,
     broadcast_tx: broadcast::Sender<TxStatusBroadcast>,
     import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
     sender: MockTxPoolSender,
@@ -160,7 +163,7 @@ pub struct MockTxPool {
 impl MockTxPool {
     /// Spawn a background task for handling the messages
     fn spawn() -> (Self, broadcast::Receiver<TxStatusBroadcast>) {
-        let transactions = Arc::new(Mutex::new(Vec::<ArcTx>::new()));
+        let transactions = Arc::new(Mutex::new(Vec::<ArcPoolTx>::new()));
 
         let (block_event_tx, block_event_rx) = mpsc::channel(16);
 
@@ -224,7 +227,7 @@ impl MockTxPool {
         self.sender.clone()
     }
 
-    async fn add_tx(&mut self, tx: ArcTx) {
+    async fn add_tx(&mut self, tx: ArcPoolTx) {
         self.transactions.lock().await.push(tx.clone());
         self.broadcast_tx
             .send(TxStatusBroadcast {
@@ -252,14 +255,14 @@ impl MockTxPool {
 #[derive(Debug)]
 pub enum MockTxPoolMsg {
     ConsumableGas(oneshot::Sender<u64>),
-    Includable(oneshot::Sender<Vec<ArcTx>>),
+    Includable(oneshot::Sender<Vec<ArcPoolTx>>),
 }
 
 #[derive(Clone)]
 pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>);
 
 impl MockTxPoolSender {
-    async fn includable(&self) -> Vec<ArcTx> {
+    async fn includable(&self) -> Vec<ArcPoolTx> {
         let (tx, rx) = oneshot::channel();
         self.0
             .send(MockTxPoolMsg::Includable(tx))

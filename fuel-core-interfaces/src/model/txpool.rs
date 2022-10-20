@@ -8,24 +8,23 @@ use std::{
     sync::Arc,
 };
 
-// TODO: The transaction pool should return transactions that are already checked
-pub type ArcTx = Arc<PoolTransaction>;
+pub type ArcPoolTx = Arc<PoolTransaction>;
 
 #[derive(Debug, Clone)]
 pub struct TxInfo {
-    tx: ArcTx,
+    tx: ArcPoolTx,
     submitted_time: DateTime<Utc>,
 }
 
 impl TxInfo {
-    pub fn new(tx: ArcTx) -> Self {
+    pub fn new(tx: ArcPoolTx) -> Self {
         Self {
             tx,
             submitted_time: Utc::now(),
         }
     }
 
-    pub fn tx(&self) -> &ArcTx {
+    pub fn tx(&self) -> &ArcPoolTx {
         &self.tx
     }
 
@@ -35,7 +34,7 @@ impl TxInfo {
 }
 
 impl Deref for TxInfo {
-    type Target = ArcTx;
+    type Target = ArcPoolTx;
     fn deref(&self) -> &Self::Target {
         &self.tx
     }

@@ -5,7 +5,7 @@ use crate::{
 use fuel_core_interfaces::{
     common::fuel_tx::ConsensusParameters,
     model::{
-        ArcTx,
+        ArcPoolTx,
         BlockHeight,
     },
     txpool::Sender,
@@ -24,7 +24,7 @@ impl TxPool for TxPoolAdapter {
         &self,
         _block_height: BlockHeight,
         max_gas: u64,
-    ) -> anyhow::Result<Vec<ArcTx>> {
+    ) -> anyhow::Result<Vec<ArcPoolTx>> {
         let includable_txs =
             select_transactions(self.sender.includable().await?, max_gas);
 
