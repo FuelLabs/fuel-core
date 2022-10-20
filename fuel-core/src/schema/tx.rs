@@ -1,14 +1,10 @@
 use crate::{
     database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-        },
+        storage::FuelBlocks,
         transaction::OwnedTransactionIndexCursor,
         Database,
         KvStoreError,
     },
-    executor::Executor,
     model::BlockHeight,
     schema::scalars::{
         Address,
@@ -17,7 +13,6 @@ use crate::{
         SortedTxCursor,
         TransactionId,
     },
-    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -32,6 +27,7 @@ use async_graphql::{
     Object,
 };
 use fuel_core_interfaces::{
+    block_producer::BlockProducer,
     common::{
         fuel_storage::StorageAsRef,
         fuel_tx::Transaction as FuelTx,
@@ -319,28 +315,12 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let transaction = ctx.data_unchecked::<Database>().transaction();
-        let mut cfg = ctx.data_unchecked::<Config>().clone();
-        // override utxo_validation if set
-        if let Some(utxo_validation) = utxo_validation {
-            cfg.utxo_validation = utxo_validation;
-        }
+        let block_producer = ctx.data_unchecked::<Arc<dyn BlockProducer>>();
+
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();
-        let id = tx.id();
 
-        // make executor from transaction database view.
-        let executor = Executor {
-            database: transaction.deref().clone(),
-            config: cfg.clone(),
-        };
-        executor.submit_txs(vec![Arc::new(tx)]).await?;
-        // get receipts from db transaction
-        let receipts = transaction
-            .deref()
-            .storage::<Receipts>()
-            .get(&id)?
-            .unwrap_or_default();
+        let receipts = block_producer.dry_run(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 

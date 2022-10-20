@@ -142,7 +142,7 @@ impl Trait for Producer {
         let height = match height {
             None => self.db.current_height()?,
             Some(height) => height,
-        };
+        } + 1u64.into();
         let checked = if self.config.utxo_validation {
             CheckedTransaction::check(
                 transaction,
