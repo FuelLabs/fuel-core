@@ -31,8 +31,10 @@ use fuel_core_interfaces::{
             Input,
             Output,
             Receipt,
+            Script,
             Transaction,
             TransactionFee,
+            UniqueIdentifier,
             UtxoId,
         },
         fuel_types::MessageId,
@@ -706,7 +708,7 @@ impl Executor {
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace(&self, vm: &Interpreter<Database>, receipts: &[Receipt]) {
+    fn log_backtrace(&self, vm: &Interpreter<Database, Script>, receipts: &[Receipt]) {
         if self.config.vm.backtrace {
             if let Some(backtrace) = receipts
                 .iter()
@@ -922,10 +924,10 @@ mod tests {
             fuel_crypto::SecretKey,
             fuel_tx::{
                 self,
+                CheckError,
                 ConsensusParameters,
                 Transaction,
                 TransactionBuilder,
-                ValidationError,
             },
             fuel_types::{
                 bytes::SerializableVec,
@@ -1092,7 +1094,7 @@ mod tests {
             .await;
         assert!(matches!(
             produce_result,
-            Err(Error::InvalidTransaction(ValidationError::InsufficientFeeAmount { expected, .. })) if expected == (gas_limit as f64 / factor).ceil() as u64
+            Err(Error::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, .. })) if expected == (gas_limit as f64 / factor).ceil() as u64
         ));
 
         let mut block_db_transaction = verifier.database.transaction();
@@ -1104,7 +1106,7 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
-            Err(Error::InvalidTransaction(ValidationError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
+            Err(Error::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
         ))
     }
 

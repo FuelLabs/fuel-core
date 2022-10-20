@@ -9,6 +9,7 @@ use fuel_core_interfaces::{
         prelude::*,
     },
     model::{
+        ArcTx,
         BlockHeight,
         FuelBlock,
         FuelConsensusHeader,
@@ -20,6 +21,7 @@ use fuel_core_interfaces::{
         TransactionPool,
     },
     txpool::{
+        PoolTransaction,
         TxStatus,
         TxStatusBroadcast,
     },
@@ -69,26 +71,11 @@ impl BlockProducer for MockBlockProducer {
         height: BlockHeight,
         max_gas: Word,
     ) -> anyhow::Result<FuelBlock> {
-        let includable_txs: Vec<_> = self
-            .txpool_sender
-            .includable()
-            .await
-            .into_iter()
-            .map(|tx| {
-                Arc::new(
-                    CheckedTransaction::check_unsigned(
-                        (*tx).clone(),
-                        height.into(),
-                        &ConsensusParameters::default(),
-                    )
-                    .unwrap(),
-                )
-            })
-            .collect();
+        let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<_> = select_transactions(includable_txs, max_gas)
             .into_iter()
-            .map(|c| c.transaction().clone())
+            .map(|c| c.as_ref().into())
             .collect();
 
         Ok(PartialFuelBlock {
@@ -105,15 +92,13 @@ impl BlockProducer for MockBlockProducer {
     }
 }
 
+// TODO: The same code is in the `adapters::transaction_selector::select_transactions`
 /// Select all txs that fit into the block, preferring ones with higher gas price.
-fn select_transactions(
-    mut includable_txs: Vec<Arc<CheckedTransaction>>,
-    max_gas: u64,
-) -> Vec<Arc<CheckedTransaction>> {
+fn select_transactions(mut includable_txs: Vec<ArcTx>, max_gas: u64) -> Vec<ArcTx> {
     let mut used_block_space: Word = 0;
 
     // Sort transactions by gas price, highest first
-    includable_txs.sort_by_key(|a| Reverse(a.transaction().gas_price()));
+    includable_txs.sort_by_key(|a| Reverse(a.price()));
 
     // Pick as many transactions as we can fit into the block (greedy)
     includable_txs
@@ -152,7 +137,7 @@ impl BlockHeightDb for MockDatabase {
 
 /// Txpool with manually controllable contents
 pub struct MockTxPool {
-    transactions: Arc<Mutex<Vec<Arc<Transaction>>>>,
+    transactions: Arc<Mutex<Vec<ArcTx>>>,
     broadcast_tx: broadcast::Sender<TxStatusBroadcast>,
     import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
     sender: MockTxPoolSender,
@@ -166,7 +151,7 @@ pub struct MockTxPool {
 impl MockTxPool {
     /// Spawn a background task for handling the messages
     fn spawn() -> (Self, broadcast::Receiver<TxStatusBroadcast>) {
-        let transactions = Arc::new(Mutex::new(Vec::<Arc<Transaction>>::new()));
+        let transactions = Arc::new(Mutex::new(Vec::<ArcTx>::new()));
 
         let (block_event_tx, block_event_rx) = mpsc::channel(16);
 
@@ -190,7 +175,7 @@ impl MockTxPool {
                             },
                             MockTxPoolMsg::ConsumableGas(response) => {
                                 let t = txs.lock().await.clone();
-                                let resp = t.into_iter().map(|t| t.gas_limit()).sum();
+                                let resp = t.into_iter().map(|t| t.limit()).sum();
                                 response.send(resp).unwrap();
                             }
                         }
@@ -230,7 +215,7 @@ impl MockTxPool {
         self.sender.clone()
     }
 
-    async fn add_tx(&mut self, tx: Arc<Transaction>) {
+    async fn add_tx(&mut self, tx: ArcTx) {
         self.transactions.lock().await.push(tx.clone());
         self.broadcast_tx
             .send(TxStatusBroadcast {
@@ -258,14 +243,14 @@ impl MockTxPool {
 #[derive(Debug)]
 pub enum MockTxPoolMsg {
     ConsumableGas(oneshot::Sender<u64>),
-    Includable(oneshot::Sender<Vec<Arc<Transaction>>>),
+    Includable(oneshot::Sender<Vec<ArcTx>>),
 }
 
 #[derive(Clone)]
 pub struct MockTxPoolSender(mpsc::Sender<MockTxPoolMsg>);
 
 impl MockTxPoolSender {
-    async fn includable(&self) -> Vec<Arc<Transaction>> {
+    async fn includable(&self) -> Vec<ArcTx> {
         let (tx, rx) = oneshot::channel();
         self.0
             .send(MockTxPoolMsg::Includable(tx))
@@ -342,7 +327,7 @@ impl CoinInfo {
     }
 }
 
-fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
+fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction {
     TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
         .gas_price(gas_price)
         .gas_limit(gas_limit)
@@ -359,10 +344,11 @@ fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
             amount: 0,
             asset_id: AssetId::zeroed(),
         })
-        .finalize_without_signature()
+        .finalize_checked_partially(Default::default(), &Default::default())
+        .into()
 }
 
-fn make_tx() -> Transaction {
+fn make_tx() -> PoolTransaction {
     let mut rng = StdRng::seed_from_u64(1234u64);
     _make_tx(
         &CoinInfo {

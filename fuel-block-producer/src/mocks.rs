@@ -8,10 +8,7 @@ use async_trait::async_trait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageInspect,
-        fuel_tx::{
-            CheckedTransaction,
-            MessageId,
-        },
+        fuel_tx::MessageId,
         fuel_types::Address,
     },
     db::{
@@ -24,6 +21,7 @@ use fuel_core_interfaces::{
         Executor,
     },
     model::{
+        ArcTx,
         BlockHeight,
         DaBlockHeight,
         FuelBlock,
@@ -54,7 +52,7 @@ impl Relayer for MockRelayer {
 }
 
 #[derive(Default)]
-pub struct MockTxPool(pub Vec<CheckedTransaction>);
+pub struct MockTxPool(pub Vec<ArcTx>);
 
 #[async_trait::async_trait]
 impl TxPool for MockTxPool {
@@ -62,8 +60,8 @@ impl TxPool for MockTxPool {
         &self,
         _block_height: BlockHeight,
         _max_gas: u64,
-    ) -> Result<Vec<Arc<CheckedTransaction>>> {
-        Ok(self.0.iter().cloned().map(Arc::new).collect())
+    ) -> Result<Vec<ArcTx>> {
+        Ok(self.0.clone().into_iter().collect())
     }
 }
 

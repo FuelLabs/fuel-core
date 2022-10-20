@@ -40,7 +40,6 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
 };
-use std::ops::Deref;
 use tokio::sync::Mutex;
 use tracing::{
     debug,
@@ -103,7 +102,7 @@ impl<'a> Trait for Producer<'a> {
             header,
             best_transactions
                 .into_iter()
-                .map(|tx| tx.deref().clone().into())
+                .map(|tx| tx.as_ref().into())
                 .collect(),
         );
 

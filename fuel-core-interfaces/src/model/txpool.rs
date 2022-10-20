@@ -1,4 +1,4 @@
-use crate::common::fuel_tx::Transaction;
+use crate::txpool::PoolTransaction;
 use chrono::{
     DateTime,
     Utc,
@@ -8,7 +8,8 @@ use std::{
     sync::Arc,
 };
 
-pub type ArcTx = Arc<Transaction>;
+// TODO: The transaction pool should return transactions that are already checked
+pub type ArcTx = Arc<PoolTransaction>;
 
 #[derive(Debug, Clone)]
 pub struct TxInfo {

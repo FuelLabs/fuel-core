@@ -1,13 +1,10 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use fuel_core_interfaces::{
-    common::fuel_tx::CheckedTransaction,
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-    },
+use fuel_core_interfaces::model::{
+    ArcTx,
+    BlockHeight,
+    DaBlockHeight,
 };
-use std::sync::Arc;
 
 pub trait Relayer: Sync + Send {
     /// Get the best finalized height from the DA layer
@@ -22,5 +19,5 @@ pub trait TxPool: Sync + Send {
         block_height: BlockHeight,
         // The upper limit for the total amount of gas of these txs
         max_gas: u64,
-    ) -> Result<Vec<Arc<CheckedTransaction>>>;
+    ) -> Result<Vec<ArcTx>>;
 }

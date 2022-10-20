@@ -1,9 +1,9 @@
 use crate::{
     common::{
         fuel_tx::{
+            CheckError,
             TxId,
             UtxoId,
-            ValidationError,
         },
         fuel_types::{
             Bytes32,
@@ -82,7 +82,7 @@ pub enum TransactionValidityError {
     )]
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
-    Validation(#[from] ValidationError),
+    Validation(#[from] CheckError),
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn StdError + Send + Sync>),
 }
@@ -112,7 +112,7 @@ pub enum Error {
         transaction_id: Bytes32,
     },
     #[error(transparent)]
-    InvalidTransaction(#[from] ValidationError),
+    InvalidTransaction(#[from] CheckError),
     #[error("Execution error with backtrace")]
     Backtrace(Box<Backtrace>),
     #[error("Transaction doesn't match expected result: {transaction_id:#x}")]

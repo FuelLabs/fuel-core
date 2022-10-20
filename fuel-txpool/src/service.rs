@@ -182,7 +182,7 @@ impl Context {
                         match new_transaction.unwrap() {
                             TransactionBroadcast::NewTransaction ( tx ) => {
                                 let txs = vec!(Arc::new(tx));
-                                TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await
+                                TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await
                             }
                         }
                     });
@@ -209,7 +209,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender,txs.clone()).await;
+                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await;
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {
@@ -330,7 +330,11 @@ pub mod tests {
     use super::*;
     use crate::MockDb;
     use fuel_core_interfaces::{
-        common::fuel_tx::TransactionBuilder,
+        common::fuel_tx::{
+            Transaction,
+            TransactionBuilder,
+            UniqueIdentifier,
+        },
         txpool::{
             Error as TxpoolError,
             Sender,
@@ -402,15 +406,17 @@ pub mod tests {
         let service = builder.build().unwrap();
         service.start().await.ok();
 
-        let tx1 = Arc::new(
+        let tx1: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx2 = Arc::new(
+        let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .finalize(),
+                .finalize()
+                .into(),
         );
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -456,15 +462,17 @@ pub mod tests {
         let (tx_status_sender, _) = broadcast::channel(100);
         let (txpool_sender, txpool_receiver) = Sender::channel(100);
 
-        let tx1 = Arc::new(
+        let tx1: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx2 = Arc::new(
+        let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .finalize(),
+                .finalize()
+                .into(),
         );
         let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
@@ -529,15 +537,17 @@ pub mod tests {
 
         let db = Box::new(MockDb::default());
 
-        let tx1 = Arc::new(
+        let tx1: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx2 = Arc::new(
+        let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         let mut builder = ServiceBuilder::new();
@@ -569,26 +579,31 @@ pub mod tests {
             .await;
         let out = receiver.await.unwrap();
 
-        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
+        if let Ok(result) = &out[0] {
+            assert_eq!(
+                subscribe.try_recv(),
+                Ok(TxStatusBroadcast {
+                    tx: result.inserted.clone(),
+                    status: TxStatus::Submitted,
+                }),
+                "First added should be tx1"
+            );
+        } else {
+            panic!("Tx1 should be OK, got err")
+        }
 
-        // we are sure that included tx are already broadcasted.
-        assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx1.clone(),
-                status: TxStatus::Submitted,
-            }),
-            "First added should be tx1"
-        );
-        assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx2.clone(),
-                status: TxStatus::Submitted,
-            }),
-            "Second added should be tx2"
-        );
+        if let Ok(result) = &out[1] {
+            assert_eq!(
+                subscribe.try_recv(),
+                Ok(TxStatusBroadcast {
+                    tx: result.inserted.clone(),
+                    status: TxStatus::Submitted,
+                }),
+                "Second added should be tx2"
+            );
+        } else {
+            panic!("Tx2 should be OK, got err")
+        }
 
         // remove them
         let (response, receiver) = oneshot::channel();
@@ -599,13 +614,13 @@ pub mod tests {
                 response,
             })
             .await;
-        let _rem = receiver.await.unwrap();
+        let rem = receiver.await.unwrap();
 
         assert_eq!(
             tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
                 .await,
             Ok(Ok(TxStatusBroadcast {
-                tx: tx1,
+                tx: rem[0].clone(),
                 status: TxStatus::SqueezedOut {
                     reason: TxpoolError::Removed
                 }
@@ -617,7 +632,7 @@ pub mod tests {
             tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
                 .await,
             Ok(Ok(TxStatusBroadcast {
-                tx: tx2,
+                tx: rem[1].clone(),
                 status: TxStatus::SqueezedOut {
                     reason: TxpoolError::Removed
                 }

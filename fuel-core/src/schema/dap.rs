@@ -32,7 +32,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<Database>>,
+    vm: HashMap<ID, Interpreter<Database, Script>>,
     tx: HashMap<ID, Vec<Transaction>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,

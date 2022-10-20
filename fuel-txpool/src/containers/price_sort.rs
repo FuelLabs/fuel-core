@@ -1,5 +1,11 @@
 use crate::types::*;
-use fuel_core_interfaces::model::ArcTx;
+use fuel_core_interfaces::{
+    common::fuel_tx::{
+        Chargeable,
+        UniqueIdentifier,
+    },
+    model::ArcTx,
+};
 use std::{
     cmp,
     collections::BTreeMap,
@@ -43,7 +49,7 @@ pub struct PriceSortKey {
 impl PriceSortKey {
     pub fn new(tx: &ArcTx) -> Self {
         Self {
-            price: tx.gas_price(),
+            price: tx.price(),
             tx_id: tx.id(),
         }
     }

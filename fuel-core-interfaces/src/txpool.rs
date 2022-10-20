@@ -1,13 +1,30 @@
 use crate::{
     common::{
+        fuel_asm::Word,
         fuel_storage::{
             StorageAsRef,
             StorageInspect,
         },
         fuel_tx::{
+            field::{
+                Inputs,
+                Outputs,
+            },
+            Bytes32,
+            Cacheable,
+            Chargeable,
+            Checked,
             ContractId,
+            Create,
+            Fully,
+            Input,
+            IntoChecked,
+            Output,
+            Partially,
+            Script,
             Transaction,
             TxId,
+            UniqueIdentifier,
             UtxoId,
         },
         fuel_types::MessageId,
@@ -30,12 +47,204 @@ use derive_more::{
     Deref,
     DerefMut,
 };
-use std::sync::Arc;
+use std::{
+    fmt::Debug,
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::{
     mpsc,
     oneshot,
 };
+
+// TODO: After removing of `utxo_validation` from TxPool, use either `Fully` or `Partially`
+//  and remove usage of `Either` type.
+#[derive(Debug, Eq, PartialEq)]
+pub enum Either<Tx: IntoChecked>
+where
+    Tx::Metadata: Debug + Eq,
+{
+    Partially(Checked<Tx, Partially>),
+    Fully(Checked<Tx, Fully>),
+}
+
+/// Transaction used by the transaction pool.
+#[derive(Debug, Eq, PartialEq)]
+pub enum PoolTransaction {
+    Script(Either<Script>),
+    Create(Either<Create>),
+}
+
+impl Chargeable for PoolTransaction {
+    fn price(&self) -> Word {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().price()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().price()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().price()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().price()
+            }
+        }
+    }
+
+    fn limit(&self) -> Word {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().limit()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().limit()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().limit()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().limit()
+            }
+        }
+    }
+
+    fn metered_bytes_size(&self) -> usize {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().metered_bytes_size()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().metered_bytes_size()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().metered_bytes_size()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().metered_bytes_size()
+            }
+        }
+    }
+}
+
+impl UniqueIdentifier for PoolTransaction {
+    fn id(&self) -> Bytes32 {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().id()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => script.transaction().id(),
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().id()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => create.transaction().id(),
+        }
+    }
+}
+
+impl PoolTransaction {
+    pub fn is_computed(&self) -> bool {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().is_computed()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().is_computed()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().is_computed()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().is_computed()
+            }
+        }
+    }
+
+    pub fn inputs(&self) -> &Vec<Input> {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().inputs()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().inputs()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().inputs()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().inputs()
+            }
+        }
+    }
+
+    pub fn outputs(&self) -> &Vec<Output> {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.transaction().outputs()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.transaction().outputs()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.transaction().outputs()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.transaction().outputs()
+            }
+        }
+    }
+
+    pub fn max_gas(&self) -> Word {
+        match self {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                script.metadata().fee.max_gas()
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                script.metadata().fee.max_gas()
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                create.metadata().fee.max_gas()
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                create.metadata().fee.max_gas()
+            }
+        }
+    }
+}
+
+impl From<&PoolTransaction> for Transaction {
+    fn from(tx: &PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(Either::Partially(script)) => {
+                Transaction::Script(script.transaction().clone())
+            }
+            PoolTransaction::Script(Either::Fully(script)) => {
+                Transaction::Script(script.transaction().clone())
+            }
+            PoolTransaction::Create(Either::Partially(create)) => {
+                Transaction::Create(create.transaction().clone())
+            }
+            PoolTransaction::Create(Either::Fully(create)) => {
+                Transaction::Create(create.transaction().clone())
+            }
+        }
+    }
+}
+
+impl From<Checked<Script, Partially>> for PoolTransaction {
+    fn from(checked: Checked<Script, Partially>) -> Self {
+        Self::Script(Either::Partially(checked))
+    }
+}
+
+/// The `removed` field contains the list of removed transactions during the insertion
+/// of the `inserted` transaction.
+#[derive(Debug)]
+pub struct InsertionResult {
+    pub inserted: ArcTx,
+    pub removed: Vec<ArcTx>,
+}
 
 pub trait TxPoolDb:
     StorageInspect<Coins, Error = KvStoreError>
@@ -73,7 +282,7 @@ impl Sender {
     pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
-    ) -> anyhow::Result<Vec<anyhow::Result<Vec<Arc<Transaction>>>>> {
+    ) -> anyhow::Result<Vec<anyhow::Result<InsertionResult>>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Insert { txs, response }).await?;
         receiver.await.map_err(Into::into)
@@ -91,10 +300,7 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(
-        &self,
-        ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::FindDependent { ids, response })
             .await?;
@@ -108,7 +314,7 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn includable(&self) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn includable(&self) -> anyhow::Result<Vec<ArcTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Includable { response }).await?;
         receiver.await.map_err(Into::into)
@@ -144,7 +350,7 @@ pub enum TxPoolMpsc {
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     Includable {
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcTx>>,
     },
     /// import list of transaction into txpool. All needed parents need to be known
     /// and parent->child order should be enforced in Vec, we will not do that check inside
@@ -154,7 +360,7 @@ pub enum TxPoolMpsc {
     /// error for every insert for better user experience.
     Insert {
         txs: Vec<Arc<Transaction>>,
-        response: oneshot::Sender<Vec<anyhow::Result<Vec<Arc<Transaction>>>>>,
+        response: oneshot::Sender<Vec<anyhow::Result<InsertionResult>>>,
     },
     /// find all tx by their hash
     Find {
@@ -169,12 +375,12 @@ pub enum TxPoolMpsc {
     /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
     FindDependent {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcTx>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
     Remove {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcTx>>,
     },
     /// Iterate over `hashes` and return all hashes that we don't have.
     /// Needed when we receive list of new hashed from peer with
@@ -200,7 +406,7 @@ pub enum TxStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxStatusBroadcast {
-    pub tx: Arc<Transaction>,
+    pub tx: ArcTx,
     pub status: TxStatus,
 }
 
