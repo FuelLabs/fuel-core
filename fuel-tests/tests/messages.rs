@@ -301,7 +301,7 @@ async fn can_get_output_proof() {
     let client = FuelClient::from(srv.bound_address);
 
     let result = client
-        .output_proof(
+        .message_output_proof(
             transaction_id.to_string().as_str(),
             message_id.to_string().as_str(),
         )

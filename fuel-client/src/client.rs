@@ -539,7 +539,7 @@ impl FuelClient {
     }
 
     /// Request a merkle proof of an output message.
-    pub async fn output_proof(
+    pub async fn message_output_proof(
         &self,
         transaction_id: &str,
         message_id: &str,
