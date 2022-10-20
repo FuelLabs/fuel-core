@@ -28,7 +28,10 @@ use crate::{
             UniqueIdentifier,
             UtxoId,
         },
-        fuel_types::MessageId,
+        fuel_types::{
+            MessageId,
+            Word,
+        },
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
