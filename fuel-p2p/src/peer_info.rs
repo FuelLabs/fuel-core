@@ -8,16 +8,16 @@ use libp2p::{
         PublicKey,
     },
     identify::{
-        Identify,
-        IdentifyConfig,
-        IdentifyEvent,
-        IdentifyInfo,
+        Behaviour as Identify,
+        Config as IdentifyConfig,
+        Event as IdentifyEvent,
+        Info as IdentifyInfo,
     },
     ping::{
+        Behaviour as Ping,
+        Config as PingConfig,
         Event as PingEvent,
-        Ping,
-        PingConfig,
-        PingSuccess,
+        Success as PingSuccess,
     },
     swarm::{
         ConnectionHandler,

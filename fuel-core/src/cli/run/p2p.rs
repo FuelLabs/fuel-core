@@ -12,6 +12,7 @@ use clap::Args;
 use fuel_core_interfaces::common::fuel_crypto::SecretKey;
 use fuel_p2p::{
     config::P2PConfig,
+    gossipsub_config::default_gossipsub_builder,
     Multiaddr,
 };
 
@@ -89,6 +90,22 @@ pub struct P2pArgs {
     #[clap(long = "ideal_mesh_size", default_value = "6")]
     pub ideal_mesh_size: usize,
 
+    /// Number of heartbeats to keep in the gossipsub `memcache`
+    #[clap(long = "history_length", default_value = "5")]
+    pub history_length: usize,
+
+    /// Number of past heartbeats to gossip about
+    #[clap(long = "history_gossip", default_value = "3")]
+    pub history_gossip: usize,
+
+    /// Time between each heartbeat
+    #[clap(long = "heartbeat_interval", default_value = "1")]
+    pub heartbeat_interval: u64,
+
+    /// The maximum byte size for each gossip
+    #[clap(long = "max_transmit_size", default_value = "2048")]
+    pub max_transmit_size: usize,
+
     /// Choose timeout for sent requests in RequestResponse protocol
     #[clap(long = "request_timeout", default_value = "20")]
     pub request_timeout: u64,
@@ -122,6 +139,17 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             }
         };
 
+        let gossipsub_config = default_gossipsub_builder()
+            .mesh_n(args.ideal_mesh_size)
+            .mesh_n_low(args.min_mesh_size)
+            .mesh_n_high(args.max_mesh_size)
+            .history_length(args.history_length)
+            .history_gossip(args.history_gossip)
+            .heartbeat_interval(Duration::from_secs(args.heartbeat_interval))
+            .max_transmit_size(args.max_transmit_size)
+            .build()
+            .expect("valid gossipsub configuration");
+
         Ok(P2PConfig {
             local_keypair,
             network_name: args.network,
@@ -139,9 +167,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
                 args.connection_idle_timeout,
             )),
             topics: args.topics,
-            max_mesh_size: args.max_mesh_size,
-            min_mesh_size: args.min_mesh_size,
-            ideal_mesh_size: args.ideal_mesh_size,
+            gossipsub_config,
             set_request_timeout: Duration::from_secs(args.request_timeout),
             set_connection_keep_alive: Duration::from_secs(args.connection_keep_alive),
             info_interval: Some(Duration::from_secs(args.info_interval)),
