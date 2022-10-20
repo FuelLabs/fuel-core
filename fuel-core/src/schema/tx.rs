@@ -353,7 +353,12 @@ impl TxMutation {
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute_metadata();
-        txpool.sender().insert(vec![Arc::new(tx.clone())]).await?;
+        let _: Vec<Vec<Arc<fuel_core_interfaces::common::prelude::Transaction>>> = txpool
+            .sender()
+            .insert(vec![Arc::new(tx.clone())])
+            .await?
+            .into_iter()
+            .try_collect()?;
 
         let tx = Transaction(tx);
         Ok(tx)

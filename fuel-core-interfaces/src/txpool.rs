@@ -21,6 +21,7 @@ use crate::{
     },
     model::{
         ArcTx,
+        BlockHeight,
         Coin,
         Message,
         TxInfo,
@@ -59,6 +60,8 @@ pub trait TxPoolDb:
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
+
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.

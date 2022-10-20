@@ -8,6 +8,7 @@ use crate::{
     Error,
 };
 use fuel_core_interfaces::{
+    common::fuel_tx::CheckedTransaction,
     model::{
         ArcTx,
         FuelBlock,
@@ -63,6 +64,21 @@ impl TxPool {
     ) -> anyhow::Result<Vec<ArcTx>> {
         if tx.metadata().is_none() {
             return Err(Error::NoMetadata.into())
+        }
+        let current_height = db.current_block_height()?;
+
+        if self.config.utxo_validation {
+            CheckedTransaction::check(
+                (&*tx).clone(),
+                current_height.into(),
+                &self.config.consensus_config,
+            )?;
+        } else {
+            CheckedTransaction::check_unsigned(
+                (&*tx).clone(),
+                current_height.into(),
+                &self.config.consensus_config,
+            )?;
         }
 
         // verify gas price is at least the minimum

@@ -1,3 +1,5 @@
+use fuel_core_interfaces::common::prelude::ConsensusParameters;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Maximum number of transactions inside the pool
@@ -8,6 +10,8 @@ pub struct Config {
     pub min_gas_price: u64,
     /// Flag to disable utxo existence and signature checks
     pub utxo_validation: bool,
+    /// Transaction consensus rule config
+    pub consensus_config: ConsensusParameters,
 }
 
 impl Default for Config {
@@ -17,6 +21,7 @@ impl Default for Config {
             max_depth: 10,
             min_gas_price: 0,
             utxo_validation: true,
+            consensus_config: ConsensusParameters::DEFAULT,
         }
     }
 }
