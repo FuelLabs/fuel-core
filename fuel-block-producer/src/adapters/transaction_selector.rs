@@ -1,11 +1,11 @@
-use fuel_core_interfaces::common::{
-    fuel_tx::CheckedTransaction,
-    fuel_types::Word,
+use fuel_core_interfaces::{
+    common::{
+        fuel_types::Word,
+        prelude::Chargeable,
+    },
+    model::ArcTx,
 };
-use std::{
-    cmp::Reverse,
-    sync::Arc,
-};
+use std::cmp::Reverse;
 
 // TODO: This logic should be housed in the txpool,
 //  as it will have the most efficient way to select txs.
@@ -13,10 +13,7 @@ use std::{
 // transaction selection could use a plugin based approach in the
 // future for block producers to customize block building (e.g. alternative priorities besides gas fees)
 
-pub fn select_transactions(
-    mut includable_txs: Vec<Arc<CheckedTransaction>>,
-    max_gas: u64,
-) -> Vec<Arc<CheckedTransaction>> {
+pub fn select_transactions(mut includable_txs: Vec<ArcTx>, max_gas: u64) -> Vec<ArcTx> {
     // Select all txs that fit into the block, preferring ones with higher gas price.
     //
     // Future improvements to this algorithm may take into account the parallel nature of
@@ -24,7 +21,7 @@ pub fn select_transactions(
     let mut used_block_space: Word = 0;
 
     // Sort transactions by gas price, highest first
-    includable_txs.sort_by_key(|a| Reverse(a.transaction().gas_price()));
+    includable_txs.sort_by_key(|a| Reverse(a.price()));
 
     // Pick as many transactions as we can fit into the block (greedy)
     includable_txs
@@ -61,6 +58,7 @@ mod tests {
         fuel_vm::consts::REG_ONE,
     };
     use itertools::Itertools;
+    use std::sync::Arc;
 
     use super::*;
 
@@ -99,7 +97,7 @@ mod tests {
                 })
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_without_signature(
+                .finalize_checked_partially(
                     0,
                     &ConsensusParameters {
                         gas_price_factor: 1,
@@ -107,17 +105,15 @@ mod tests {
                     },
                 )
             })
+            .map(Into::into)
             .map(Arc::new)
             .collect();
 
         select_transactions(txs, block_gas_limit)
             .into_iter()
-            .map(|tx| {
-                let tx = tx.transaction();
-                TxGas {
-                    limit: tx.gas_limit(),
-                    price: tx.gas_price(),
-                }
+            .map(|tx| TxGas {
+                limit: tx.limit(),
+                price: tx.price(),
             })
             .collect()
     }
