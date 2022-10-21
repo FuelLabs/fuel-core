@@ -1,3 +1,4 @@
+use criterion::black_box;
 pub use fuel_core::database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
@@ -12,6 +13,8 @@ use std::{
     io,
     iter,
 };
+
+const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
 fn new_db() -> Database {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
@@ -85,9 +88,12 @@ impl VmBench {
 
     pub fn new(instruction: Opcode) -> Self {
         Self {
-            params: ConsensusParameters::default(),
+            params: ConsensusParameters{
+                max_gas_per_tx: u64::MAX - 1000,
+                ..Default::default()
+            },
             gas_price: 0,
-            gas_limit: 1_000_000,
+            gas_limit: LARGE_GAS_LIMIT,
             maturity: 0,
             height: 0,
             prepare_script: vec![],
@@ -255,13 +261,15 @@ impl VmBenchPrepared {
             instruction,
         } = self;
 
-        let (op, ra, rb, rc, rd, _imm) = instruction.into_inner();
-
-        match op {
-            OpcodeRepr::CALL => vm
-                .prepare_call(ra, rb, rc, rd)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
-            _ => vm.instruction(instruction).map(|_| ())?,
+        match OpcodeRepr::from_u8(instruction.op()) {
+            OpcodeRepr::CALL => {
+                let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
+                vm.prepare_call(ra, rb, rc, rd)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            }
+            _ => {
+                black_box(vm.instruction(black_box(instruction))?);
+            }
         }
         Ok(vm)
     }

@@ -56,6 +56,18 @@ pub fn run(c: &mut Criterion) {
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
-
+    crate::run_group_ref(
+        &mut group,
+        "blaaah",
+        VmBench::new(Opcode::K256(0x10, 0x00, 0x11))
+            .with_prepare_script(vec![
+                Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
+                Opcode::ALOC(0x10),
+                Opcode::ADDI(0x10, REG_HP, 1),
+                Opcode::MOVI(0x11, 32),
+            ])
+            .with_data(signature.iter().chain(message.iter()).copied().collect())
+            .with_gas_limit(u64::MAX - 1001),
+    );
     group.finish();
 }

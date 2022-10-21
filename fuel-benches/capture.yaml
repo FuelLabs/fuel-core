@@ -1,0 +1,10 @@
+bin: target/release/deps/vm-388a641f80dfd835
+time: 10
+baseline: "alu/noop"
+benches:
+  - bench: "alu/add"
+    func: "alu_capture_overflow"
+  - bench: "alu/noop"
+    func: "alu_clear"
+  - bench: "alu/exp"
+    func: "alu_boolean_overflow"
