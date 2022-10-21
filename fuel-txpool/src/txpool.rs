@@ -497,7 +497,8 @@ pub mod tests {
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
@@ -519,26 +520,28 @@ pub mod tests {
                 .gas_price(1)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let input = unset_input.into_input(UtxoId::new(tx1: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(1)
                 .add_input(input)
                 .add_input(gas_coin)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>, &db)
+            .insert_inner(tx1, &db)
             .await
             .expect("Tx1 should be OK, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect("Tx2 dependent should be OK, got Err");
     }
@@ -557,7 +560,7 @@ pub mod tests {
         // contract creation tx
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 10);
-        let tx = Arc::new(
+        let tx: Arc<Transaction> = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -567,7 +570,8 @@ pub mod tests {
             .add_input(gas_coin)
             .add_output(create_contract_output(contract_id))
             .add_output(output)
-            .finalize(),
+            .finalize()
+            .into(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
@@ -575,7 +579,7 @@ pub mod tests {
 
         // attempt to insert a different creation tx with a valid dependency on the first tx,
         // but with a conflicting output contract id
-        let tx_faulty = Arc::new(
+        let tx_faulty: Arc<Transaction> = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -586,7 +590,8 @@ pub mod tests {
             .add_input(input)
             .add_output(create_contract_output(contract_id))
             .add_output(output)
-            .finalize(),
+            .finalize()
+            .into(),
         );
 
         txpool
@@ -615,7 +620,7 @@ pub mod tests {
         )
         .unwrap();
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx_faulty = Arc::new(
+        let tx_faulty: Arc<Transaction> = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -623,12 +628,13 @@ pub mod tests {
             )
             .add_input(gas_coin)
             .add_output(create_contract_output(contract_id))
-            .finalize(),
+            .finalize()
+            .into(),
         );
 
         // create a second transaction with utxo id referring to
         // the wrong type of utxo (contract instead of coin)
-        let tx = Arc::new(
+        let tx: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(0)
                 .add_input(random_predicate(
@@ -637,7 +643,8 @@ pub mod tests {
                     TEST_COIN_AMOUNT,
                     Some(UtxoId::new(tx_faulty.id(), 0)),
                 ))
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
@@ -685,11 +692,12 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, input) = setup_coin(&mut rng, None);
-        let tx = Arc::new(
+        let tx: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         let err = txpool
@@ -718,7 +726,8 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         // attempt to insert the tx with an already spent coin
@@ -740,29 +749,31 @@ pub mod tests {
 
         let (_, coin_input) = setup_coin(&mut rng, Some(&db));
 
-        let tx1: Arc<Transaction>: Arc<Transaction> = Arc::new(
+        let tx1: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(coin_input.clone())
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx2: Arc<Transaction>: Arc<Transaction> = Arc::new(
+        let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(coin_input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx1.clone(), &db)
             .await
             .expect("Tx1 should be Ok, got Err");
 
         let vec = txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect("Tx2 should be Ok, got Err");
-        assert_eq!(vec.removed[0].id(), tx1: Arc<Transaction>.id(), "Tx1 id should be removed");
+        assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
     }
 
     #[tokio::test]
@@ -778,39 +789,42 @@ pub mod tests {
                 .gas_price(20)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let input = unset_input.into_input(UtxoId::new(tx1: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(input.clone())
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx3: Arc<Transaction>: Arc<Transaction> = Arc::new(
+        let tx3: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx1.clone(), &db)
             .await
             .expect("Tx1 should be Ok, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx2.clone(), &db)
             .await
             .expect("Tx2 should be Ok, got Err");
 
         let err = txpool
-            .insert_inner(tx3: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx3.clone(), &db)
             .await
             .expect_err("Tx3 should be Err, got Ok");
         assert!(matches!(
             err.downcast_ref::<Error>(),
-            Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2: Arc<Transaction>.id() && utxo_id == &UtxoId::new(tx1: Arc<Transaction>.id(), 0)
+            Some(Error::NotInsertedCollision(id, utxo_id)) if id == &tx2.id() && utxo_id == &UtxoId::new(tx1.id(), 0)
         ));
     }
 
@@ -831,7 +845,8 @@ pub mod tests {
             .gas_price(10)
             .add_input(gas_funds)
             .add_output(create_contract_output(contract_id))
-            .finalize(),
+            .finalize()
+            .into(),
         );
 
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
@@ -844,16 +859,17 @@ pub mod tests {
                     Default::default(),
                 ))
                 .add_output(Output::contract(1, Default::default(), Default::default()))
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>, &db)
+            .insert_inner(tx1, &db)
             .await
             .expect("Tx1 should be Ok, got err");
 
         let err = txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect_err("Tx2 should be Err, got Ok");
         assert!(
@@ -883,7 +899,8 @@ pub mod tests {
             .gas_price(10)
             .add_input(gas_funds)
             .add_output(create_contract_output(contract_id))
-            .finalize(),
+            .finalize()
+            .into(),
         );
 
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
@@ -896,15 +913,16 @@ pub mod tests {
                     Default::default(),
                 ))
                 .add_output(Output::contract(1, Default::default(), Default::default()))
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>, &db)
+            .insert_inner(tx1, &db)
             .await
             .expect("Tx1 should be Ok, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect("Tx2 should be Ok, got Err");
     }
@@ -923,33 +941,36 @@ pub mod tests {
                 .gas_price(10)
                 .add_input(gas_coin.clone())
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let input = unset_input.into_input(UtxoId::new(tx1: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
                 .add_input(input.clone())
-                .finalize(),
+                .finalize()
+                .into(),
         );
-        let tx3: Arc<Transaction>: Arc<Transaction> = Arc::new(
+        let tx3: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(gas_coin)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx1.clone(), &db)
             .await
             .expect("Tx1 should be OK, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx2.clone(), &db)
             .await
             .expect("Tx2 should be OK, got Err");
         let vec = txpool
-            .insert_inner(tx3: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx3.clone(), &db)
             .await
             .expect("Tx3 should be OK, got Err");
         assert_eq!(
@@ -958,8 +979,8 @@ pub mod tests {
             "Tx1 and Tx2 should be removed:{:?}",
             vec
         );
-        assert_eq!(vec.removed[0].id(), tx1: Arc<Transaction>.id(), "Tx1 id should be removed");
-        assert_eq!(vec.removed[1].id(), tx2: Arc<Transaction>.id(), "Tx2 id should be removed");
+        assert_eq!(vec.removed[0].id(), tx1.id(), "Tx1 id should be removed");
+        assert_eq!(vec.removed[1].id(), tx2.id(), "Tx2 id should be removed");
     }
 
     #[tokio::test]
@@ -983,16 +1004,17 @@ pub mod tests {
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>, &db)
+            .insert_inner(tx1, &db)
             .await
             .expect("Tx1 should be Ok, got Err");
 
         let err = txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect_err("Tx2 should be Err, got Ok");
         assert!(matches!(
@@ -1016,36 +1038,39 @@ pub mod tests {
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
-        let input = unset_input.into_input(UtxoId::new(tx1: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
         let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
-        let input = unset_input.into_input(UtxoId::new(tx2: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
         let tx3: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>, &db)
+            .insert_inner(tx1, &db)
             .await
             .expect("Tx1 should be OK, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>, &db)
+            .insert_inner(tx2, &db)
             .await
             .expect("Tx2 should be OK, got Err");
 
         let err = txpool
-            .insert_inner(tx3: Arc<Transaction>, &db)
+            .insert_inner(tx3, &db)
             .await
             .expect_err("Tx3 should be Err, got Ok");
         assert!(matches!(
@@ -1066,7 +1091,7 @@ pub mod tests {
                 .gas_price(10)
                 .add_input(gas_coin)
                 .finalize()
-            .into(),
+                .into(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
@@ -1075,7 +1100,7 @@ pub mod tests {
                 .gas_price(9)
                 .add_input(gas_coin)
                 .finalize()
-            .into(),
+                .into(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
@@ -1084,28 +1109,28 @@ pub mod tests {
                 .gas_price(20)
                 .add_input(gas_coin)
                 .finalize()
-            .into(),
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx1.clone(), &db)
             .await
             .expect("Tx1 should be Ok, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx2.clone(), &db)
             .await
             .expect("Tx2 should be Ok, got Err");
         txpool
-            .insert_inner(tx3: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx3.clone(), &db)
             .await
             .expect("Tx4 should be Ok, got Err");
 
         let txs = txpool.sorted_includable();
 
         assert_eq!(txs.len(), 3, "Should have 3 txs");
-        assert_eq!(txs[0].id(), tx3: Arc<Transaction>.id(), "First should be tx3: Arc<Transaction>");
-        assert_eq!(txs[1].id(), tx1: Arc<Transaction>.id(), "Second should be tx1: Arc<Transaction>");
-        assert_eq!(txs[2].id(), tx2: Arc<Transaction>.id(), "Third should be tx2: Arc<Transaction>");
+        assert_eq!(txs[0].id(), tx3.id(), "First should be tx3");
+        assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
+        assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
     }
 
     #[tokio::test]
@@ -1121,37 +1146,40 @@ pub mod tests {
                 .gas_price(11)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
-        let input = unset_input.into_input(UtxoId::new(tx1: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
         let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
         let tx2: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
                 .add_output(output)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
-        let input = unset_input.into_input(UtxoId::new(tx2: Arc<Transaction>.id(), 0));
+        let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
         let tx3: Arc<Transaction> = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
                 .add_input(input)
-                .finalize(),
+                .finalize()
+                .into(),
         );
 
         txpool
-            .insert_inner(tx1: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx1.clone(), &db)
             .await
             .expect("Tx0 should be Ok, got Err");
         txpool
-            .insert_inner(tx2: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx2.clone(), &db)
             .await
             .expect("Tx1 should be Ok, got Err");
         let tx3_result = txpool
-            .insert_inner(tx3: Arc<Transaction>.clone(), &db)
+            .insert_inner(tx3.clone(), &db)
             .await
             .expect("Tx2 should be Ok, got Err");
 
@@ -1162,11 +1190,11 @@ pub mod tests {
 
         let mut list: Vec<ArcPoolTx> = seen.into_iter().map(|(_, tx)| tx).collect();
         // sort from high to low price
-        list.sort_by_key(|tx| Reverse(tx.gas_price()));
+        list.sort_by_key(|tx| Reverse(tx.price()));
         assert_eq!(list.len(), 3, "We should have three items");
-        assert_eq!(list[0].id(), tx1: Arc<Transaction>.id(), "Tx1 should be first.");
-        assert_eq!(list[1].id(), tx2: Arc<Transaction>.id(), "Tx2 should be second.");
-        assert_eq!(list[2].id(), tx3: Arc<Transaction>.id(), "Tx3 should be third.");
+        assert_eq!(list[0].id(), tx1.id(), "Tx1 should be first.");
+        assert_eq!(list[1].id(), tx2.id(), "Tx2 should be second.");
+        assert_eq!(list[2].id(), tx3.id(), "Tx3 should be third.");
     }
 
     #[tokio::test]
@@ -1179,10 +1207,13 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(10)
-            .add_input(gas_coin)
-            .finalize();
+        let tx: Arc<Transaction> = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(gas_coin)
+                .finalize()
+                .into(),
+        );
 
         txpool
             .insert_inner(tx, &db)
@@ -1200,10 +1231,13 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .gas_price(10)
-            .add_input(gas_coin)
-            .finalize();
+        let tx: Arc<Transaction> = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(gas_coin)
+                .finalize()
+                .into(),
+        );
 
         let err = txpool
             .insert_inner(tx, &db)
@@ -1219,9 +1253,12 @@ pub mod tests {
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         let (message, input) = helpers::create_message_predicate_from_message(5000, None);
 
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(input)
-            .finalize();
+        let tx: Arc<Transaction> = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(input)
+                .finalize()
+                .into(),
+        );
 
         let mut db = MockDb::default();
         db.storage::<Messages>()
@@ -1245,9 +1282,12 @@ pub mod tests {
         let (message, input) =
             helpers::create_message_predicate_from_message(5_000, Some(1u64.into()));
 
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(input)
-            .finalize();
+        let tx: Arc<Transaction> = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(input)
+                .finalize()
+                .into(),
+        );
 
         let mut db = MockDb::default();
         db.storage::<Messages>()
@@ -1270,9 +1310,12 @@ pub mod tests {
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
         let (message, input) = helpers::create_message_predicate_from_message(5000, None);
-        let tx = TransactionBuilder::script(vec![], vec![])
-            .add_input(input)
-            .finalize();
+        let tx: Arc<Transaction> = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(input)
+                .finalize()
+                .into(),
+        );
 
         let db = MockDb::default();
         // Do not insert any messages into the DB to ensure there is no matching message for the
@@ -1398,11 +1441,11 @@ pub mod tests {
 
     #[tokio::test]
     async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
-        // tx1: Arc<Transaction> (message 1, message 2) gas_price 2
-        // tx2: Arc<Transaction> (message 1) gas_price 3
-        //   squeezes tx1: Arc<Transaction> with higher gas price
-        // tx3: Arc<Transaction> (message 2) gas_price 1
-        //   works since tx1: Arc<Transaction> is no longer part of txpool state even though gas price is less
+        // tx1 (message 1, message 2) gas_price 2
+        // tx2 (message 1) gas_price 3
+        //   squeezes tx1 with higher gas price
+        // tx3 (message 2) gas_price 1
+        //   works since tx1 is no longer part of txpool state even though gas price is less
 
         let (message_1, message_input_1) =
             helpers::create_message_predicate_from_message(10_000, None);

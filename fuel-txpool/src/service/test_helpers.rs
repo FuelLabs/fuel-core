@@ -80,6 +80,7 @@ impl TestContext {
             .gas_price(gas_price)
             .add_input(gas_coin)
             .finalize()
+            .into()
     }
 
     pub fn setup_coin(&self) -> (Coin, Input) {
