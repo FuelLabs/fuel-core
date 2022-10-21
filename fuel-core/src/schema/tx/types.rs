@@ -320,7 +320,7 @@ impl Transaction {
     async fn receipts_root(&self) -> Option<Bytes32> {
         match &self.0 {
             fuel_tx::Transaction::Script(script) => {
-                Some(script.receipts_root().clone().into())
+                Some((*script.receipts_root()).into())
             }
             fuel_tx::Transaction::Create(_) => None,
         }
@@ -397,7 +397,7 @@ impl Transaction {
     async fn salt(&self) -> Option<Salt> {
         match &self.0 {
             fuel_tx::Transaction::Script(_) => None,
-            fuel_tx::Transaction::Create(create) => Some(create.salt().clone().into()),
+            fuel_tx::Transaction::Create(create) => Some((*create.salt()).into()),
         }
     }
 

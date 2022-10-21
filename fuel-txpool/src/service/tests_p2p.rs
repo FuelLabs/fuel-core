@@ -11,6 +11,7 @@ use fuel_core_interfaces::{
         TxStatusBroadcast,
     },
 };
+use std::ops::Deref;
 use tokio::sync::{
     mpsc::error::TryRecvError,
     oneshot,
@@ -42,7 +43,7 @@ async fn can_insert_from_p2p() {
         .await;
     let out = receiver.await.unwrap();
 
-    let got_tx: Transaction = out[0].as_ref().unwrap().tx().as_ref().clone().into();
+    let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
     assert_eq!(tx1, got_tx);
 }
 

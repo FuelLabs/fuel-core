@@ -78,7 +78,7 @@ impl TxQuery {
             .await;
 
         if let Ok(Some(transaction)) = receiver.await {
-            Ok(Some(Transaction((transaction.tx().deref()).clone().into())))
+            Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             Ok(db
                 .storage::<Transactions>()

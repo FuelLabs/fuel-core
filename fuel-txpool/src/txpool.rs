@@ -227,7 +227,7 @@ impl TxPool {
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
         tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
-        txs: &Vec<Arc<Transaction>>,
+        txs: &[Arc<Transaction>],
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
         // should be done before transaction comes to txpool, or before it enters RwLocked region.

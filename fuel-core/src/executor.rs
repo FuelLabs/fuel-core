@@ -949,7 +949,7 @@ impl Executor {
         receipts: &[Receipt],
         db: &mut Database,
     ) -> Result<(), Error> {
-        if db.storage::<Receipts>().insert(tx_id, &receipts)?.is_some() {
+        if db.storage::<Receipts>().insert(tx_id, receipts)?.is_some() {
             return Err(Error::OutputAlreadyExists)
         }
         Ok(())

@@ -2573,6 +2573,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.21.0"
+source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/methods-refactoring#498cbd44ff5b30e17ee6f9a838adef757dd0df1f"
 dependencies = [
  "derivative",
  "fuel-asm",
@@ -2616,6 +2617,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.18.2"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#9e57b551276056f405fd963b1c1426b0643f83da"
 dependencies = [
  "anyhow",
  "fuel-asm",

@@ -27,5 +27,5 @@ lto = "fat"
 panic = "abort"
 
 [patch.crates-io]
-fuel-vm = { path = "../fuel-vm" }
-fuel-tx = { path = "../fuel-tx" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/methods-refactoring" }
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx/", branch = "feature/methods-refactoring" }
