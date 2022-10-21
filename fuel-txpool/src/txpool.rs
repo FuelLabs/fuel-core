@@ -415,7 +415,7 @@ pub mod tests {
                     Input::predicate_owner(&predicate),
                     message.amount,
                     message.nonce,
-                    message.data.clone(),
+                    message.data,
                     predicate,
                     Default::default(),
                 ),
@@ -670,7 +670,7 @@ pub mod tests {
 
         // put a spent coin into the database
         let (mut coin, input) = setup_coin(&mut rng, None);
-        let utxo_id = input.utxo_id().unwrap().clone();
+        let utxo_id = *input.utxo_id().unwrap();
         coin.status = CoinStatus::Spent;
         db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
 

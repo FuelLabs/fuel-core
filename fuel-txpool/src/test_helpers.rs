@@ -32,9 +32,9 @@ pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
     let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
     let coin = Coin {
-        owner: input.input_owner().unwrap().clone(),
+        owner: *input.input_owner().unwrap(),
         amount: TEST_COIN_AMOUNT,
-        asset_id: input.asset_id().unwrap().clone(),
+        asset_id: *input.asset_id().unwrap(),
         maturity: Default::default(),
         status: CoinStatus::Unspent,
         block_created: Default::default(),
@@ -45,7 +45,7 @@ pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, I
             .lock()
             .unwrap()
             .coins
-            .insert(input.utxo_id().unwrap().clone(), coin.clone());
+            .insert(*input.utxo_id().unwrap(), coin.clone());
     }
     (coin, input)
 }
@@ -55,8 +55,7 @@ pub(crate) fn create_output_and_input(
     amount: Word,
 ) -> (Output, UnsetInput) {
     let input = random_predicate(rng, AssetId::BASE, amount, None);
-    let output =
-        Output::coin(input.input_owner().unwrap().clone(), amount, AssetId::BASE);
+    let output = Output::coin(*input.input_owner().unwrap(), amount, AssetId::BASE);
     (output, UnsetInput(input))
 }
 
@@ -90,7 +89,7 @@ pub(crate) fn random_predicate(
     predicate_code.push(rng.gen());
     let owner = Input::predicate_owner(&predicate_code);
     Input::coin_predicate(
-        utxo_id.unwrap_or(rng.gen()),
+        utxo_id.unwrap_or_else(|| rng.gen()),
         owner,
         amount,
         asset_id,

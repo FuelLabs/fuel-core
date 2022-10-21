@@ -27,7 +27,7 @@ pub struct TestContext {
     mock_db: Box<MockDb>,
     _drop_resources: Vec<Box<dyn Any>>,
     rng: RefCell<StdRng>,
-    pub(crate) p2p_request_rx: RefCell<Receiver<P2pRequestEvent>>,
+    pub(crate) p2p_request_rx: Mutex<Receiver<P2pRequestEvent>>,
     pub(crate) gossip_tx: broadcast::Sender<TransactionGossipData>,
 }
 
@@ -65,7 +65,7 @@ impl TestContext {
             mock_db,
             _drop_resources: drop_resources,
             rng,
-            p2p_request_rx: RefCell::new(p2p_request_rx),
+            p2p_request_rx: Mutex::new(p2p_request_rx),
             gossip_tx,
         }
     }

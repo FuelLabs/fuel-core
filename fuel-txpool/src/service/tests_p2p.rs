@@ -70,7 +70,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         "First added should be tx1"
     );
 
-    let ret = ctx.p2p_request_rx.borrow_mut().recv().await.unwrap();
+    let ret = ctx.p2p_request_rx.lock().await.recv().await.unwrap();
 
     if let P2pRequestEvent::BroadcastNewTransaction { transaction } = ret {
         assert_eq!(tx1, transaction);
@@ -95,7 +95,7 @@ async fn test_insert_from_p2p_does_not_broadcast_to_p2p() {
     let _ = receiver.recv().await;
     assert_eq!(1, res);
 
-    let ret = ctx.p2p_request_rx.borrow_mut().try_recv();
+    let ret = ctx.p2p_request_rx.lock().await.try_recv();
     assert!(ret.is_err());
     assert_eq!(Some(TryRecvError::Empty), ret.err());
 }
