@@ -76,6 +76,9 @@ impl TxPool {
     ) -> anyhow::Result<InsertionResult> {
         let current_height = db.current_block_height()?;
 
+        // verify gas price is at least the minimum
+        self.verify_tx_min_gas_price(&tx)?;
+
         let tx = if self.config.utxo_validation {
             let tx: CheckedTransaction<Fully> = tx
                 .deref()
@@ -117,9 +120,6 @@ impl TxPool {
         if !tx.is_computed() {
             return Err(Error::NoMetadata.into())
         }
-
-        // verify gas price is at least the minimum
-        self.verify_tx_min_gas_price(&tx)?;
 
         // verify max gas is less than block limit
         if tx.max_gas() > self.config.chain_config.block_gas_limit {
@@ -211,8 +211,12 @@ impl TxPool {
         Vec::new()
     }
 
-    fn verify_tx_min_gas_price(&mut self, tx: &PoolTransaction) -> Result<(), Error> {
-        if tx.price() < self.config.min_gas_price {
+    fn verify_tx_min_gas_price(&mut self, tx: &Transaction) -> Result<(), Error> {
+        let price = match tx {
+            Transaction::Script(script) => script.price(),
+            Transaction::Create(create) => create.price(),
+        };
+        if price < self.config.min_gas_price {
             return Err(Error::NotInsertedGasPriceTooLow)
         }
         Ok(())

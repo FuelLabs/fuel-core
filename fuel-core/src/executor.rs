@@ -340,22 +340,26 @@ impl Executor {
                 .into();
 
             match checked_tx {
-                CheckedTransaction::Script(script) => self.execute_create_or_script(
-                    idx,
-                    script,
-                    &block.header,
-                    &mut execution_data,
-                    block_db_transaction,
-                    execution_kind,
-                )?,
-                CheckedTransaction::Create(create) => self.execute_create_or_script(
-                    idx,
-                    create,
-                    &block.header,
-                    &mut execution_data,
-                    block_db_transaction,
-                    execution_kind,
-                )?,
+                CheckedTransaction::Script(script) => {
+                    *tx = self.execute_create_or_script(
+                        idx,
+                        script,
+                        &block.header,
+                        &mut execution_data,
+                        block_db_transaction,
+                        execution_kind,
+                    )?
+                }
+                CheckedTransaction::Create(create) => {
+                    *tx = self.execute_create_or_script(
+                        idx,
+                        create,
+                        &block.header,
+                        &mut execution_data,
+                        block_db_transaction,
+                        execution_kind,
+                    )?
+                }
             }
         }
 
@@ -370,7 +374,7 @@ impl Executor {
         execution_data: &mut ExecutionData,
         block_db_transaction: &mut DatabaseTransaction,
         execution_kind: ExecutionKind,
-    ) -> Result<(), Error>
+    ) -> Result<Transaction, Error>
     where
         Tx: ExecutableTransaction + PartialEq,
         <Tx as IntoChecked>::Metadata: Fee + CheckedMetadata + Clone,
@@ -525,7 +529,7 @@ impl Executor {
                 _ => None,
             }));
 
-        Ok(())
+        Ok(tx)
     }
 
     fn verify_input_state<Tx: ExecutableTransaction>(

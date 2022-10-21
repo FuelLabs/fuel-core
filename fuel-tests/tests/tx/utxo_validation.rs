@@ -261,7 +261,13 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .into_iter()
         .map(|tx| {
             let client = client.clone();
-            async move { client.submit(&tx.into()).await }
+            async move {
+                let tx_id = client
+                    .submit(&tx.into())
+                    .await
+                    .expect("Should submit transaction");
+                client.await_transaction_commit(&tx_id.to_string()).await
+            }
         })
         .collect_vec();
 
