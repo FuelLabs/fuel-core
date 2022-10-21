@@ -70,13 +70,8 @@ async fn can_submit_genesis_message() {
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    let tx_id = client.submit(&tx1).await.unwrap();
-
     // verify tx is successful
-    let status = client
-        .await_transaction_commit(&tx_id.to_string())
-        .await
-        .unwrap();
+    let status = client.submit_and_await_commit(&tx1).await.unwrap();
     assert!(
         matches!(status, TransactionStatus::Success { .. }),
         "expected success, received {:?}",

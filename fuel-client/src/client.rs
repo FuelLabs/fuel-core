@@ -195,6 +195,14 @@ impl FuelClient {
         Ok(id)
     }
 
+    pub async fn submit_and_await_commit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<TransactionStatus> {
+        let tx_id = self.submit(tx).await?;
+        self.await_transaction_commit(&tx_id.to_string()).await
+    }
+
     pub async fn start_session(&self) -> io::Result<String> {
         let query = schema::StartSession::build(&());
 

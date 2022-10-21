@@ -47,8 +47,8 @@ async fn test_database_metrics() {
         .flat_map(|op| u32::from(*op).to_be_bytes())
         .collect();
 
-    _ = client
-        .submit(&fuel_tx::Transaction::script(
+    client
+        .submit_and_await_commit(&fuel_tx::Transaction::script(
             0,
             1000000,
             0,
