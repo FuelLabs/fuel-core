@@ -110,61 +110,61 @@ pub async fn output_proof(
                 let iter: Box<dyn Iterator<Item = _>> = Box::new(std::iter::once(Err(e)));
                 iter
             }
-        });
+        }).enumerate();
 
     // Build the merkle proof from the above iterator.
     let mut tree = fuel_merkle::binary::in_memory::MerkleTree::new();
 
-    let mut proof_index = 0;
-    // Track if we have found the message we are looking for.
-    let mut message_found = false;
+    let mut proof_index = None;
 
-    for id in leaves {
+    for (index, id) in leaves {
         let id = id?;
-        // If we haven't found the message yet then check this id.
-        if !message_found {
-            message_found = message_id == id;
-            // Bump the index until we find the id.
-            proof_index += 1;
+
+        // Check id this is the message.
+        if message_id == id {
+            // Save the index of this message to use as the proof index.
+            proof_index = Some(index);
         }
+
         // Build the merkle tree.
         tree.push(id.as_ref());
     }
 
     // If we found the proof then return the proof.
-    if message_found {
-        // Generate the actual merkle proof.
-        let proof = match tree.prove(proof_index as u64) {
-            Some(t) => t,
-            None => return Ok(None),
-        };
+    match proof_index {
+        Some(proof_index) => {
+            // Generate the actual merkle proof.
+            let proof = match tree.prove(proof_index as u64) {
+                Some(t) => t,
+                None => return Ok(None),
+            };
 
-        // Get the message.
-        let message = match data.message(&message_id)? {
-            Some(t) => t,
-            None => return Ok(None),
-        };
+            // Get the message.
+            let message = match data.message(&message_id)? {
+                Some(t) => t,
+                None => return Ok(None),
+            };
 
-        // Get the signature.
-        let signature = match data.signature(&block_id)? {
-            Some(t) => t,
-            None => return Ok(None),
-        };
+            // Get the signature.
+            let signature = match data.signature(&block_id)? {
+                Some(t) => t,
+                None => return Ok(None),
+            };
 
-        // Get the fuel block.
-        let block = match data.block(&block_id)? {
-            Some(t) => t,
-            None => return Ok(None),
-        };
+            // Get the fuel block.
+            let block = match data.block(&block_id)? {
+                Some(t) => t,
+                None => return Ok(None),
+            };
 
-        Ok(Some(OutputProof {
-            root: proof.0.into(),
-            proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
-            message,
-            signature,
-            block,
-        }))
-    } else {
-        Ok(None)
+            Ok(Some(OutputProof {
+                root: proof.0.into(),
+                proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
+                message,
+                signature,
+                block,
+            }))
+        }
+        None => Ok(None),
     }
 }
