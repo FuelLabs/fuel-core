@@ -524,6 +524,7 @@ pub mod tests {
                 Default::default(),
                 Default::default(),
             )
+            .gas_price(10)
             .add_input(gas_coin)
             .add_output(create_contract_output(contract_id))
             .add_output(output)
@@ -541,6 +542,7 @@ pub mod tests {
                 Default::default(),
                 Default::default(),
             )
+            .gas_price(9)
             .add_input(gas_coin)
             .add_input(input)
             .add_output(create_contract_output(contract_id))
