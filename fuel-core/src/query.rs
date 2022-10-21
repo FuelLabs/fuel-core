@@ -1,3 +1,3 @@
-mod output_proof;
+mod message_proof;
 
-pub use output_proof::*;
+pub use message_proof::*;

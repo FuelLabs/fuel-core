@@ -8,7 +8,7 @@ use fuel_core_interfaces::{
     db::KvStoreError,
     model::{
         FuelBlockDb,
-        OutputProof,
+        MessageProof,
     },
 };
 
@@ -19,7 +19,7 @@ mod test;
 
 #[cfg_attr(test, mockall::automock)]
 /// Trait that specifies all the data required by the output message query.
-pub trait OutputProofData {
+pub trait MessageProofData {
     /// Return all receipts in the given transaction.
     fn receipts(&self, transaction_id: &Bytes32) -> Result<Vec<Receipt>, KvStoreError>;
     /// Get the transaction.
@@ -52,11 +52,11 @@ pub trait OutputProofData {
 }
 
 /// Generate an output proof.
-pub async fn output_proof(
-    data: &(dyn OutputProofData + Send + Sync),
+pub async fn message_proof(
+    data: &(dyn MessageProofData + Send + Sync),
     transaction_id: Bytes32,
     message_id: MessageId,
-) -> Result<Option<OutputProof>, KvStoreError> {
+) -> Result<Option<MessageProof>, KvStoreError> {
     // Check if the receipts for this transaction actually contain this message id or exit.
     if !data.receipts(&transaction_id)?.into_iter().any(
         |r| matches!(r, Receipt::MessageOut { message_id: id, .. } if id == message_id),
@@ -157,7 +157,7 @@ pub async fn output_proof(
                 None => return Ok(None),
             };
 
-            Ok(Some(OutputProof {
+            Ok(Some(MessageProof {
                 root: proof.0.into(),
                 proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
                 message,

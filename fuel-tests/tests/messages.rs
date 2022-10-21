@@ -234,7 +234,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
 }
 
 #[tokio::test]
-async fn can_get_output_proof() {
+async fn can_get_message_proof() {
     let transaction_id: TransactionId = Bytes32::default().into();
     let message_id: fuel_core::schema::scalars::MessageId =
         fuel_gql_client::fuel_types::MessageId::default().into();
@@ -301,7 +301,7 @@ async fn can_get_output_proof() {
     let client = FuelClient::from(srv.bound_address);
 
     let result = client
-        .message_output_proof(
+        .message_proof(
             transaction_id.to_string().as_str(),
             message_id.to_string().as_str(),
         )

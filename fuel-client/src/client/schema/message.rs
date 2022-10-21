@@ -72,16 +72,16 @@ pub struct OwnedMessagesConnectionArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "OutputProofArgs"
+    argument_struct = "MessageProofArgs"
 )]
-pub struct OutputProofQuery {
+pub struct MessageProofQuery {
     #[arguments(transaction_id = &args.transaction_id, message_id = &args.message_id)]
-    pub output_proof: Option<OutputProof>,
+    pub message_proof: Option<MessageProof>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
-pub struct OutputProof {
+pub struct MessageProof {
     /// The merkle root of the message proof.
     pub proof_root: Bytes32,
     /// The proof set of the message proof.
@@ -95,7 +95,7 @@ pub struct OutputProof {
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
-pub struct OutputProofArgs {
+pub struct MessageProofArgs {
     /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,
     /// Message id of the output message that requires a proof.

@@ -63,7 +63,7 @@ fn other_out() -> Output {
 }
 
 #[tokio::test]
-async fn can_build_output_proof() {
+async fn can_build_message_proof() {
     use mockall::predicate::*;
     static MESSAGE_ID: MessageId = MessageId::new([
         91, 111, 181, 142, 97, 250, 71, 89, 57, 118, 125, 104, 164, 70, 249, 127, 27,
@@ -86,7 +86,7 @@ async fn can_build_output_proof() {
     let mut out = (0..1)
         .flat_map(|_| vec![message_out(), other_out()])
         .cycle();
-    let mut data = MockOutputProofData::new();
+    let mut data = MockMessageProofData::new();
     let transaction_id = txn_id(33);
     let mut count = 0;
     data.expect_receipts().returning(move |txn_id| {
@@ -141,7 +141,7 @@ async fn can_build_output_proof() {
         .with(eq(Bytes32::default()))
         .returning(|_| Ok(Some(FuelBlockDb::default())));
 
-    let p = output_proof(&data, transaction_id, MESSAGE_ID)
+    let p = message_proof(&data, transaction_id, MESSAGE_ID)
         .await
         .unwrap()
         .unwrap();

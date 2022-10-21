@@ -18,7 +18,7 @@ use crate::{
         },
         Database,
     },
-    query::OutputProofData,
+    query::MessageProofData,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -196,25 +196,25 @@ impl MessageQuery {
         .await
     }
 
-    async fn output_proof(
+    async fn message_proof(
         &self,
         ctx: &Context<'_>,
         transaction_id: TransactionId,
         message_id: MessageId,
-    ) -> async_graphql::Result<Option<OutputProof>> {
-        let data = OutputProofContext(ctx.data_unchecked());
+    ) -> async_graphql::Result<Option<MessageProof>> {
+        let data = MessageProofContext(ctx.data_unchecked());
         Ok(
-            crate::query::output_proof(&data, transaction_id.into(), message_id.into())
+            crate::query::message_proof(&data, transaction_id.into(), message_id.into())
                 .await?
-                .map(OutputProof),
+                .map(MessageProof),
         )
     }
 }
 
-pub struct OutputProof(pub(crate) model::OutputProof);
+pub struct MessageProof(pub(crate) model::MessageProof);
 
 #[Object]
-impl OutputProof {
+impl MessageProof {
     async fn proof_root(&self) -> Bytes32 {
         self.0.root.into()
     }
@@ -240,9 +240,9 @@ impl OutputProof {
     }
 }
 
-struct OutputProofContext<'a>(&'a Database);
+struct MessageProofContext<'a>(&'a Database);
 
-impl OutputProofData for OutputProofContext<'_> {
+impl MessageProofData for MessageProofContext<'_> {
     fn receipts(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,

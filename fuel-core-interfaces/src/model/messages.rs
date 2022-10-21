@@ -56,7 +56,7 @@ pub struct CheckedMessage {
     id: MessageId,
 }
 
-pub struct OutputProof {
+pub struct MessageProof {
     /// The merkle root of the message proof.
     pub root: Bytes32,
     /// The proof set of the message proof.

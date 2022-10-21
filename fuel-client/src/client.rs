@@ -72,7 +72,7 @@ pub use schema::{
 
 use self::schema::{
     block::ProduceBlockArgs,
-    message::OutputProofArgs,
+    message::MessageProofArgs,
 };
 
 pub mod schema;
@@ -539,19 +539,19 @@ impl FuelClient {
     }
 
     /// Request a merkle proof of an output message.
-    pub async fn message_output_proof(
+    pub async fn message_proof(
         &self,
         transaction_id: &str,
         message_id: &str,
-    ) -> io::Result<Option<schema::message::OutputProof>> {
+    ) -> io::Result<Option<schema::message::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
-        let query = schema::message::OutputProofQuery::build(&OutputProofArgs {
+        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
             transaction_id,
             message_id,
         });
 
-        let proof = self.query(query).await?.output_proof;
+        let proof = self.query(query).await?.message_proof;
 
         Ok(proof)
     }

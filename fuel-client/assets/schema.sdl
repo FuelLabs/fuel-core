@@ -353,6 +353,14 @@ type MessageOutput {
 	amount: U64!
 }
 
+type MessageProof {
+	proofRoot: Bytes32!
+	proofSet: [Bytes32!]!
+	message: Message!
+	signature: Signature!
+	block: Block!
+}
+
 type Mutation {
 	startSession: ID!
 	endSession(id: ID!): Boolean!
@@ -392,14 +400,6 @@ type cannot act as both input and output type in async-graphql
 type OutputBreakpoint {
 	contract: ContractId!
 	pc: U64!
-}
-
-type OutputProof {
-	proofRoot: Bytes32!
-	proofSet: [Bytes32!]!
-	message: Message!
-	signature: Signature!
-	block: Block!
 }
 
 """
@@ -451,7 +451,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
-	outputProof(transactionId: TransactionId!, messageId: MessageId!): OutputProof
+	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
 	"""
 	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned resources are actual resources
