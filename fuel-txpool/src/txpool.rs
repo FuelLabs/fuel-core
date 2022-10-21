@@ -1069,7 +1069,7 @@ pub mod tests {
         let (output, unset_input) = create_output_and_input(&mut rng, 10_000);
         let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
+                .gas_price(11)
                 .add_input(gas_coin)
                 .add_output(output)
                 .finalize(),
@@ -1115,7 +1115,7 @@ pub mod tests {
         // sort from high to low price
         list.sort_by_key(|tx| Reverse(tx.gas_price()));
         assert_eq!(list.len(), 3, "We should have three items");
-        assert_eq!(list[0].id(), tx1.id(), "Tx2 should be first.");
+        assert_eq!(list[0].id(), tx1.id(), "Tx1 should be first.");
         assert_eq!(list[1].id(), tx2.id(), "Tx2 should be second.");
         assert_eq!(list[2].id(), tx3.id(), "Tx3 should be third.");
     }
