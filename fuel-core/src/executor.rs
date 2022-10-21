@@ -18,7 +18,6 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use chrono::Utc;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -62,24 +61,17 @@ use fuel_core_interfaces::{
     },
     model::{
         DaBlockHeight,
-        FuelApplicationHeader,
-        FuelConsensusHeader,
         Message,
         PartialFuelBlock,
-        PartialFuelBlockHeader,
     },
-    relayer::RelayerDb,
 };
 use fuel_storage::{
     StorageAsMut,
     StorageAsRef,
 };
-use std::{
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    sync::Arc,
+use std::ops::{
+    Deref,
+    DerefMut,
 };
 use tracing::{
     debug,
@@ -911,7 +903,10 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::{
+        TimeZone,
+        Utc,
+    };
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -949,7 +944,9 @@ mod tests {
         model::{
             CheckedMessage,
             DaBlockHeight,
+            FuelConsensusHeader,
             Message,
+            PartialFuelBlockHeader,
         },
         relayer::RelayerDb,
     };
