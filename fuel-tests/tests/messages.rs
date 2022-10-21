@@ -237,7 +237,7 @@ async fn messages_empty_results_for_owner_with_no_messages(
 async fn can_get_message_proof() {
     let transaction_id: TransactionId = Bytes32::default().into();
     let message_id: fuel_core::schema::scalars::MessageId =
-        fuel_gql_client::fuel_types::MessageId::default().into();
+        fuel_gql_client::fuel_types::MessageId::new([10; 32]).into();
     let block_id = Bytes32::default();
 
     let config = Config::local_node();

@@ -130,7 +130,7 @@ pub async fn message_proof(
         tree.push(id.as_ref());
     }
 
-    // If we found the proof then return the proof.
+    // If we found the leaf proof index then return the proof.
     match proof_index {
         Some(proof_index) => {
             // Generate the actual merkle proof.
