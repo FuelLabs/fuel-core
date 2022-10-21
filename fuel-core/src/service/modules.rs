@@ -55,12 +55,12 @@ pub struct Modules {
 impl Modules {
     pub async fn stop(&self) {
         let stops: Vec<JoinHandle<()>> = vec![
-            self.txpool.stop().await,
-            self.block_importer.stop().await,
             self.coordinator.stop().await,
-            self.sync.stop().await,
             #[cfg(feature = "p2p")]
             self.network_service.stop().await,
+            self.txpool.stop().await,
+            self.block_importer.stop().await,
+            self.sync.stop().await,
         ]
         .into_iter()
         .flatten()

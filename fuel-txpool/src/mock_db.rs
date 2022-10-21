@@ -42,7 +42,7 @@ pub struct Data {
     pub messages: HashMap<MessageId, Message>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
