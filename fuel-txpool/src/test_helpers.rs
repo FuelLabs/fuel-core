@@ -26,7 +26,7 @@ use fuel_core_interfaces::{
 
 // use some arbitrary large amount, this shouldn't affect the txpool logic except for covering
 // the byte and gas price fees.
-pub const TEST_COIN_AMOUNT: u64 = 1 << 10u64;
+pub const TEST_COIN_AMOUNT: u64 = 100_000_000u64;
 
 #[allow(dead_code)]
 // create a randomly generated unique transaction that sets up the mockdb for validity
@@ -38,7 +38,7 @@ pub(crate) fn setup_tx(
     utxo_id: Option<UtxoId>,
     outputs: Option<Vec<Output>>,
 ) -> Transaction {
-    let (_, input) = setup_coin(rng, utxo_id, mock_db);
+    let (_, input) = setup_coin(rng, mock_db);
     tx_from_input(gas_price, input, script, outputs)
 }
 
@@ -68,31 +68,12 @@ pub(crate) fn tx_from_input(
     builder.finalize()
 }
 
-pub(crate) fn setup_coin(
-    rng: &mut StdRng,
-    utxo_id: Option<UtxoId>,
-    mock_db: Option<&MockDb>,
-) -> (Coin, Input) {
-    // use predicate inputs to avoid expensive cryptography for signatures
-    let mut predicate_code: Vec<u8> = vec![Opcode::RET(1)].into_iter().collect();
-    // append some randomizing bytes after the predicate has already returned.
-    predicate_code.push(rng.gen());
-    let owner = Input::predicate_owner(&predicate_code);
-    let utxo_id = utxo_id.unwrap_or_else(|| rng.gen());
-    let input = Input::coin_predicate(
-        utxo_id,
-        owner,
-        TEST_COIN_AMOUNT,
-        AssetId::BASE,
-        Default::default(),
-        0,
-        predicate_code,
-        vec![],
-    );
+pub(crate) fn setup_coin(rng: &mut StdRng, mock_db: Option<&MockDb>) -> (Coin, Input) {
+    let input = random_predicate(rng, AssetId::BASE, TEST_COIN_AMOUNT, None);
     let coin = Coin {
-        owner,
+        owner: input.input_owner().unwrap().clone(),
         amount: TEST_COIN_AMOUNT,
-        asset_id: Default::default(),
+        asset_id: input.asset_id().unwrap().clone(),
         maturity: Default::default(),
         status: CoinStatus::Unspent,
         block_created: Default::default(),
@@ -103,7 +84,58 @@ pub(crate) fn setup_coin(
             .lock()
             .unwrap()
             .coins
-            .insert(utxo_id, coin.clone());
+            .insert(input.utxo_id().unwrap().clone(), coin.clone());
     }
     (coin, input)
+}
+
+pub(crate) fn create_output_and_input(
+    rng: &mut StdRng,
+    amount: Word,
+) -> (Output, UnsetInput) {
+    let input = random_predicate(rng, AssetId::BASE, amount, None);
+    let output =
+        Output::coin(input.input_owner().unwrap().clone(), amount, AssetId::BASE);
+    (output, UnsetInput(input))
+}
+
+pub struct UnsetInput(Input);
+
+impl UnsetInput {
+    pub fn into_input(self, new_utxo_id: UtxoId) -> Input {
+        let mut input = self.0;
+        match &mut input {
+            Input::CoinSigned { utxo_id, .. }
+            | Input::CoinPredicate { utxo_id, .. }
+            | Input::Contract { utxo_id, .. } => {
+                *utxo_id = new_utxo_id;
+            }
+            Input::MessageSigned { .. } => {}
+            Input::MessagePredicate { .. } => {}
+        }
+        input
+    }
+}
+
+pub(crate) fn random_predicate(
+    rng: &mut StdRng,
+    asset_id: AssetId,
+    amount: Word,
+    utxo_id: Option<UtxoId>,
+) -> Input {
+    // use predicate inputs to avoid expensive cryptography for signatures
+    let mut predicate_code: Vec<u8> = vec![Opcode::RET(1)].into_iter().collect();
+    // append some randomizing bytes after the predicate has already returned.
+    predicate_code.push(rng.gen());
+    let owner = Input::predicate_owner(&predicate_code);
+    Input::coin_predicate(
+        utxo_id.unwrap_or(rng.gen()),
+        owner,
+        amount,
+        asset_id,
+        Default::default(),
+        0,
+        predicate_code,
+        vec![],
+    )
 }
