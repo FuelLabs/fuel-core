@@ -142,10 +142,10 @@ async fn submit() {
         vec![],
     );
 
-    let id = client.submit(&tx.clone().into()).await.unwrap();
+    client.submit_and_await_commit(&tx.into()).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&id.0.to_string())
+        .transaction(&tx.id().to_string())
         .await
         .unwrap()
         .unwrap()
@@ -172,15 +172,10 @@ async fn receipts() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx
-    let tx_id = client
-        .submit(&transaction)
+    client
+        .submit_and_await_commit(&transaction)
         .await
         .expect("transaction should insert");
-    // await block inclusion
-    client
-        .await_transaction_commit(&tx_id.to_string())
-        .await
-        .unwrap();
     // run test
     let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
     assert!(!receipts.is_empty());
@@ -196,7 +191,7 @@ async fn get_transaction_by_id() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx to api
-    client.submit(&transaction).await.unwrap();
+    client.submit_and_await_commit(&transaction).await.unwrap();
 
     // run test
     let transaction_response = client.transaction(&format!("{:#x}", id)).await.unwrap();
@@ -219,7 +214,7 @@ async fn get_transparent_transaction_by_id() {
     let client = FuelClient::from(srv.bound_address);
 
     // submit tx
-    let result = client.submit(&transaction).await;
+    let result = client.submit_and_await_commit(&transaction).await;
     assert!(result.is_ok());
 
     let opaque_tx = client
@@ -517,15 +512,10 @@ impl TestContext {
                 to,
                 asset_id: Default::default(),
             }],
-            vec![vec![].into()],
-        )
-        .into();
-        let tx_id = self.client.submit(&tx).await?;
-        self.client
-            .await_transaction_commit(&tx_id.to_string())
-            .await
-            .unwrap();
-        Ok(tx_id.into())
+            witnesses: vec![vec![].into()],
+        );
+        self.client.submit_and_await_commit(&tx.into()).await?;
+        Ok(tx.id())
     }
 }
 

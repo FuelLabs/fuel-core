@@ -140,7 +140,7 @@ async fn balance() {
         .finalize()
         .into();
 
-    client.submit(&tx).await.unwrap();
+    client.submit_and_await_commit(&tx).await.unwrap();
 
     let balance = client
         .balance(

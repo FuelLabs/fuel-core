@@ -96,13 +96,16 @@ async fn test_tx_gossiping() {
 
     tokio::time::sleep(Duration::new(3, 0)).await;
 
-    let result = client_one.submit(&tx.into()).await.unwrap();
+    client_one
+        .submit_and_await_commit(&tx.into())
+        .await
+        .unwrap();
 
-    let tx = client_one.transaction(&result.0.to_string()).await.unwrap();
-    assert!(tx.is_some());
+    let response = client_one.transaction(&tx.id().to_string()).await.unwrap();
+    assert!(response.is_some());
 
     tokio::time::sleep(Duration::new(3, 0)).await;
 
-    let tx = client_two.transaction(&result.0.to_string()).await.unwrap();
-    assert!(tx.is_some());
+    let response = client_two.transaction(&tx.id().to_string()).await.unwrap();
+    assert!(response.is_some());
 }

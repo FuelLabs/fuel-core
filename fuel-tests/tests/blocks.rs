@@ -76,8 +76,7 @@ async fn produce_block() {
     assert_eq!(5, new_height);
 
     let tx = fuel_tx::Transaction::default();
-
-    client.submit(&tx).await.unwrap();
+    client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
         .transaction(&format!("{:#x}", tx.id()))
@@ -120,8 +119,7 @@ async fn produce_block_negative() {
     );
 
     let tx = fuel_tx::Transaction::default();
-
-    client.submit(&tx).await.unwrap();
+    client.submit_and_await_commit(&tx).await.unwrap();
 
     let transaction_response = client
         .transaction(&format!("{:#x}", tx.id()))
