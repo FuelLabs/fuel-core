@@ -956,7 +956,7 @@ pub mod tests {
     async fn tx_depth_hit() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut txpool = TxPool::new(Config {
-            max_depth: 1,
+            max_depth: 2,
             ..Default::default()
         });
         let db = MockDb::default();
@@ -1005,99 +1005,117 @@ pub mod tests {
         ));
     }
 
-    // #[tokio::test]
-    // async fn sorted_out_tx1_2_4() {
-    //     let mut txpool = TxPool::new(Default::default());
-    //     let db = MockDb::default();
-    //
-    //     let tx1 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(10)
-    //             .finalize(),
-    //     );
-    //     let tx2 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(9)
-    //             .finalize(),
-    //     );
-    //     let tx3 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(20)
-    //             .finalize(),
-    //     );
-    //
-    //     txpool
-    //         .insert_inner(tx1.clone(), &db)
-    //         .await
-    //         .expect("Tx1 should be Ok, got Err");
-    //     txpool
-    //         .insert_inner(tx2.clone(), &db)
-    //         .await
-    //         .expect("Tx2 should be Ok, got Err");
-    //     txpool
-    //         .insert_inner(tx3.clone(), &db)
-    //         .await
-    //         .expect("Tx4 should be Ok, got Err");
-    //
-    //     let txs = txpool.sorted_includable();
-    //
-    //     assert_eq!(txs.len(), 3, "Should have 3 txs");
-    //     assert_eq!(txs[0].id(), tx3.id(), "First should be tx3");
-    //     assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
-    //     assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
-    // }
-    //
-    // #[tokio::test]
-    // async fn find_dependent_tx1_tx2() {
-    //     let mut txpool = TxPool::new(Default::default());
-    //     let db = MockDb::default();
-    //
-    //     let tx1 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(10)
-    //             .add_output(create_coin_output())
-    //             .finalize(),
-    //     );
-    //     let tx2 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(10)
-    //             .add_input(create_coin_input(tx1.id(), 0))
-    //             .add_output(create_coin_output())
-    //             .finalize(),
-    //     );
-    //     let tx3 = Arc::new(
-    //         TransactionBuilder::script(vec![], vec![])
-    //             .gas_price(9)
-    //             .add_input(create_coin_input(tx2.id(), 0))
-    //             .finalize(),
-    //     );
-    //
-    //     txpool
-    //         .insert_inner(tx1.clone(), &db)
-    //         .await
-    //         .expect("Tx0 should be Ok, got Err");
-    //     txpool
-    //         .insert_inner(tx2.clone(), &db)
-    //         .await
-    //         .expect("Tx1 should be Ok, got Err");
-    //     txpool
-    //         .insert_inner(tx3.clone(), &db)
-    //         .await
-    //         .expect("Tx2 should be Ok, got Err");
-    //
-    //     let mut seen = HashMap::new();
-    //     txpool
-    //         .dependency()
-    //         .find_dependent(tx3.clone(), &mut seen, txpool.txs());
-    //
-    //     let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
-    //     // sort from high to low price
-    //     list.sort_by_key(|tx| Reverse(tx.gas_price()));
-    //     assert_eq!(list.len(), 2, "We should have two items");
-    //     assert_eq!(list[0].id(), tx2.id(), "Tx2 should be first.");
-    //     assert_eq!(list[1].id(), tx3.id(), "Tx3 should be second.");
-    // }
-    //
+    #[tokio::test]
+    async fn sorted_out_tx1_2_4() {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut txpool = TxPool::new(Default::default());
+        let db = MockDb::default();
+
+        let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(gas_coin)
+                .finalize(),
+        );
+
+        let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(9)
+                .add_input(gas_coin)
+                .finalize(),
+        );
+
+        let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+        let tx3 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(20)
+                .add_input(gas_coin)
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx1.clone(), &db)
+            .await
+            .expect("Tx1 should be Ok, got Err");
+        txpool
+            .insert_inner(tx2.clone(), &db)
+            .await
+            .expect("Tx2 should be Ok, got Err");
+        txpool
+            .insert_inner(tx3.clone(), &db)
+            .await
+            .expect("Tx4 should be Ok, got Err");
+
+        let txs = txpool.sorted_includable();
+
+        assert_eq!(txs.len(), 3, "Should have 3 txs");
+        assert_eq!(txs[0].id(), tx3.id(), "First should be tx3");
+        assert_eq!(txs[1].id(), tx1.id(), "Second should be tx1");
+        assert_eq!(txs[2].id(), tx2.id(), "Third should be tx2");
+    }
+
+    #[tokio::test]
+    async fn find_dependent_tx1_tx2() {
+        let mut rng = StdRng::seed_from_u64(0);
+        let mut txpool = TxPool::new(Default::default());
+        let db = MockDb::default();
+
+        let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+        let (output, unset_input) = create_output_and_input(&mut rng, 10_000);
+        let tx1 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(gas_coin)
+                .add_output(output)
+                .finalize(),
+        );
+
+        let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
+        let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
+        let tx2 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(10)
+                .add_input(input)
+                .add_output(output)
+                .finalize(),
+        );
+
+        let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
+        let tx3 = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .gas_price(9)
+                .add_input(input)
+                .finalize(),
+        );
+
+        txpool
+            .insert_inner(tx1.clone(), &db)
+            .await
+            .expect("Tx0 should be Ok, got Err");
+        txpool
+            .insert_inner(tx2.clone(), &db)
+            .await
+            .expect("Tx1 should be Ok, got Err");
+        txpool
+            .insert_inner(tx3.clone(), &db)
+            .await
+            .expect("Tx2 should be Ok, got Err");
+
+        let mut seen = HashMap::new();
+        txpool
+            .dependency()
+            .find_dependent(tx3.clone(), &mut seen, txpool.txs());
+
+        let mut list: Vec<ArcTx> = seen.into_iter().map(|(_, tx)| tx).collect();
+        // sort from high to low price
+        list.sort_by_key(|tx| Reverse(tx.gas_price()));
+        assert_eq!(list.len(), 2, "We should have two items");
+        assert_eq!(list[0].id(), tx2.id(), "Tx2 should be first.");
+        assert_eq!(list[1].id(), tx3.id(), "Tx3 should be second.");
+    }
+
     // #[tokio::test]
     // async fn tx_at_least_min_gas_price_is_insertable() {
     //     let mut txpool = TxPool::new(Config {
