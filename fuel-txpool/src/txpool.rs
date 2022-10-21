@@ -333,8 +333,6 @@ pub mod tests {
             create_output_and_input,
             random_predicate,
             setup_coin,
-            setup_tx,
-            tx_from_input,
             TEST_COIN_AMOUNT,
         },
         txpool::tests::helpers::{
@@ -363,12 +361,7 @@ pub mod tests {
             Coins,
             Messages,
         },
-        model::{
-            BlockHeight,
-            Coin,
-            CoinStatus,
-            Message,
-        },
+        model::CoinStatus,
     };
     use std::{
         cmp::Reverse,
@@ -429,18 +422,6 @@ pub mod tests {
             )
         }
 
-        pub(crate) fn create_coin_input(tx_id: TxId, output_index: u8) -> Input {
-            Input::CoinSigned {
-                utxo_id: UtxoId::new(tx_id, output_index),
-                owner: Default::default(),
-                amount: Default::default(),
-                asset_id: Default::default(),
-                tx_pointer: Default::default(),
-                witness_index: Default::default(),
-                maturity: Default::default(),
-            }
-        }
-
         pub(crate) fn create_coin_output() -> Output {
             Output::Coin {
                 amount: Default::default(),
@@ -473,7 +454,12 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let db = MockDb::default();
 
-        let tx = Arc::new(setup_tx(0, &mut rng, true, Some(&db), None, None));
+        let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+        let tx = Arc::new(
+            TransactionBuilder::script(vec![], vec![])
+                .add_input(gas_coin)
+                .finalize(),
+        );
 
         txpool
             .insert_inner(tx, &db)
@@ -522,7 +508,7 @@ pub mod tests {
     async fn faulty_t2_collided_on_contract_id_from_tx1() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut txpool = TxPool::new(Default::default());
-        let mut db = MockDb::default();
+        let db = MockDb::default();
 
         let contract_id = ContractId::from_str(
             "0x0000000000000000000000000000000000000000000000000000000000000100",
@@ -655,11 +641,6 @@ pub mod tests {
         let mut rng = StdRng::seed_from_u64(0);
         let mut txpool = TxPool::new(Default::default());
         let db = MockDb::default();
-
-        let nonexistent_id = TxId::from_str(
-            "0x0000000000000000000000000000000000000000000000000000000000000011",
-        )
-        .unwrap();
 
         let (_, input) = setup_coin(&mut rng, None);
         let tx = Arc::new(
@@ -890,7 +871,7 @@ pub mod tests {
     async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
         let mut rng = StdRng::seed_from_u64(0);
         let mut txpool = TxPool::new(Default::default());
-        let mut db = MockDb::default();
+        let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
 

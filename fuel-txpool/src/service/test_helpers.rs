@@ -7,10 +7,13 @@ use fuel_core_interfaces::{
             SeedableRng,
         },
         fuel_tx::{
+            Input,
             Transaction,
+            TransactionBuilder,
             Word,
         },
     },
+    model::Coin,
     txpool::Sender,
 };
 use std::{
@@ -72,14 +75,15 @@ impl TestContext {
     }
 
     pub fn setup_script_tx(&self, gas_price: Word) -> Transaction {
-        crate::test_helpers::setup_tx(
-            gas_price,
-            &mut self.rng.borrow_mut(),
-            true,
-            Some(&self.mock_db),
-            None,
-            None,
-        )
+        let (_, gas_coin) = self.setup_coin();
+        TransactionBuilder::script(vec![], vec![])
+            .gas_price(gas_price)
+            .add_input(gas_coin)
+            .finalize()
+    }
+
+    pub fn setup_coin(&self) -> (Coin, Input) {
+        crate::test_helpers::setup_coin(&mut self.rng.borrow_mut(), Some(&self.mock_db))
     }
 
     pub async fn stop(&self) {
