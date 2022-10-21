@@ -39,7 +39,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(100)
+            .gas_limit(10000000)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
@@ -78,7 +78,8 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
 
     // submit transactions and verify their status
     for tx in transactions {
-        client.submit_and_await_commit(&tx.into()).await.unwrap();
+        let tx = tx.into();
+        client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
             .transaction(&tx.id().to_string())
@@ -144,7 +145,7 @@ async fn dry_run_override_utxo_validation() {
         Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(1000)
+    .gas_limit(10000000)
     .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
@@ -165,11 +166,12 @@ async fn dry_run_override_utxo_validation() {
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
     .add_witness(Default::default())
-    .finalize();
+    .finalize()
+    .into();
 
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
-    let log = client.dry_run_opt(&tx.into(), Some(false)).await.unwrap();
+    let log = client.dry_run_opt(&tx, Some(false)).await.unwrap();
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],

@@ -184,7 +184,10 @@ async fn messages_are_spendable_after_relayer_is_synced() {
             .add_output(Output::change(rng.gen(), 0, AssetId::BASE))
             .finalize();
 
-    let status = client.submit_and_await_commit(&tx.into()).await.unwrap();
+    let status = client
+        .submit_and_await_commit(&tx.clone().into())
+        .await
+        .unwrap();
 
     // verify transaction executed successfully
     assert!(

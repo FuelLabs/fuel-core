@@ -7,6 +7,7 @@ use fuel_core_interfaces::common::{
         Input,
         Output,
         TransactionBuilder,
+        UniqueIdentifier,
     },
     fuel_vm::{
         consts::{
@@ -88,9 +89,10 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
     .finalize()
     .await;
 
+    let predicate_tx = predicate_tx.into();
     context
         .client
-        .submit_and_await_commit(&predicate_tx.into())
+        .submit_and_await_commit(&predicate_tx)
         .await
         .unwrap();
 

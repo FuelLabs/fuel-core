@@ -140,9 +140,10 @@ async fn submit() {
         vec![],
         vec![],
         vec![],
-    );
+    )
+    .into();
 
-    client.submit_and_await_commit(&tx.into()).await.unwrap();
+    client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
         .transaction(&tx.id().to_string())
@@ -512,9 +513,10 @@ impl TestContext {
                 to,
                 asset_id: Default::default(),
             }],
-            witnesses: vec![vec![].into()],
-        );
-        self.client.submit_and_await_commit(&tx.into()).await?;
+            vec![vec![].into()],
+        )
+        .into();
+        self.client.submit_and_await_commit(&tx).await?;
         Ok(tx.id())
     }
 }
