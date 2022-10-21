@@ -149,46 +149,6 @@ impl ExecutorTrait for Executor {
 
 impl Executor {
     #[tracing::instrument(skip(self))]
-    pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
-        let db = self.database.clone();
-
-        for tx in txs.iter() {
-            // set status to submitted
-            db.update_tx_status(
-                &tx.id(),
-                TransactionStatus::Submitted { time: Utc::now() },
-            )?;
-        }
-
-        // setup and execute block
-        let current_height = db.get_block_height()?.unwrap_or_default();
-        let da_height = db.get_finalized_da_height().await.unwrap_or_default();
-        let new_block_height = current_height + 1u32.into();
-
-        let block = PartialFuelBlock::new(
-            PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    // TODO: This should not be default
-                    da_height,
-                    generated: Default::default(),
-                },
-                consensus: FuelConsensusHeader {
-                    // TODO: This should not be default
-                    prev_root: Default::default(),
-                    height: new_block_height,
-                    time: Utc::now(),
-                    generated: Default::default(),
-                },
-                metadata: Default::default(),
-            },
-            txs.into_iter().map(|t| t.as_ref().clone()).collect(),
-        );
-        // immediately execute block
-        self.execute(ExecutionBlock::Production(block)).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
     async fn execute_inner(
         &self,
         block: ExecutionBlock,
