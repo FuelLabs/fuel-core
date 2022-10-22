@@ -108,7 +108,7 @@ impl ExecutorTrait for Executor {
     ) -> Result<Vec<Vec<Receipt>>, Error> {
         // run the block in a temporary transaction without persisting any state
         let db_tx = self.database.transaction();
-        let db = db_tx.as_ref();
+        let temporary_db = db_tx.as_ref();
 
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
@@ -119,23 +119,23 @@ impl ExecutorTrait for Executor {
                 utxo_validation,
                 ..self.config.clone()
             },
-            database: db.clone(),
+            database: temporary_db.clone(),
         };
 
-        let block = executor.execute_inner(block, db).await?;
+        let block = executor.execute_inner(block, temporary_db).await?;
         block
             .transactions()
             .iter()
             .map(|tx| {
                 let id = tx.id();
-                StorageInspect::<Receipts>::get(db, &id)
+                StorageInspect::<Receipts>::get(temporary_db, &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
             })
             .collect::<Result<Vec<Vec<Receipt>>, _>>()
             .map_err(Into::into)
-        // drop db_tx without committing to avoid altering state
+        // drop `temporary_db` without committing to avoid altering state.
     }
 }
 

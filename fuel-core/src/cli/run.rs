@@ -124,8 +124,8 @@ impl Command {
             },
             block_importer: Default::default(),
             block_producer: fuel_block_producer::Config {
-                consensus_params,
                 utxo_validation,
+                consensus_params,
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]

@@ -372,7 +372,7 @@ impl BlockProducerDatabase for Database {
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
-    fn current_height(&self) -> anyhow::Result<BlockHeight> {
+    fn current_block_height(&self) -> anyhow::Result<BlockHeight> {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
