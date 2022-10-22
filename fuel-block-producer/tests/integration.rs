@@ -126,8 +126,11 @@ async fn block_producer() -> Result<()> {
     let keep_alive = Box::new(incoming_tx_sender);
     Box::leak(keep_alive);
 
+    let mut tx_pool_config = TxPoolConfig::default();
+    tx_pool_config.chain_config.transaction_parameters = consensus_params;
+
     txpool_builder
-        .config(TxPoolConfig::default())
+        .config(tx_pool_config)
         .db(Box::new(txpool_db))
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(import_block_events_rx)
