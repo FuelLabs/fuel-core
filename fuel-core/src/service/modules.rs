@@ -12,7 +12,11 @@ use fuel_core_interfaces::{
     common::prelude::Word,
     model::{
         BlockHeight,
+        FuelApplicationHeader,
         FuelBlock,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
     txpool::{
         Sender,
@@ -232,6 +236,23 @@ impl BlockProducer for DummyBlockProducer {
         _max_gas: Word,
     ) -> Result<FuelBlock> {
         info!("block production called for height {:?}", height);
-        Ok(Default::default())
+        let r = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                application: FuelApplicationHeader {
+                    da_height: Default::default(),
+                    generated: Default::default(),
+                },
+                consensus: FuelConsensusHeader {
+                    prev_root: Default::default(),
+                    height,
+                    time: Default::default(),
+                    generated: Default::default(),
+                },
+                metadata: Default::default(),
+            },
+            transactions: Default::default(),
+        }
+        .generate(&[]);
+        Ok(r)
     }
 }

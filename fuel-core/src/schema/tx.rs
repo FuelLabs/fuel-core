@@ -171,7 +171,7 @@ impl TxQuery {
                             false
                         }
                     })
-                    .skip(if tx_id.is_some() { 1 } else { 0 })
+                    .skip(usize::from(tx_id.is_some()))
                     .take(records_to_fetch + 1);
 
                 let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
