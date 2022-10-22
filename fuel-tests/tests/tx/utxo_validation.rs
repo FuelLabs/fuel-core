@@ -39,7 +39,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(100)
+            .gas_limit(10000)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
@@ -100,10 +100,9 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
         }
 
         // Once https://github.com/FuelLabs/fuel-core/issues/50 is resolved this should rely on the Submitted Status rather than Success
-
         assert!(matches!(
             transaction_result,
-            TransactionStatus::Failure { .. }
+            TransactionStatus::Success { .. }
         ));
     }
 }
@@ -144,7 +143,7 @@ async fn dry_run_override_utxo_validation() {
         Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(1000)
+    .gas_limit(10000)
     .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
@@ -173,9 +172,9 @@ async fn dry_run_override_utxo_validation() {
     assert_eq!(2, log.len());
 
     assert!(matches!(log[0],
-        Receipt::Panic {
-            reason, ..
-        } if *reason.reason() == PanicReason::OutOfGas));
+        Receipt::Return {
+            val, ..
+        } if val == 1));
 }
 
 // verify that dry run without utxo-validation override respects the node setting
