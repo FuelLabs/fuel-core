@@ -18,7 +18,6 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use chrono::Utc;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -74,24 +73,17 @@ use fuel_core_interfaces::{
     },
     model::{
         DaBlockHeight,
-        FuelApplicationHeader,
-        FuelConsensusHeader,
         Message,
         PartialFuelBlock,
-        PartialFuelBlockHeader,
     },
-    relayer::RelayerDb,
 };
 use fuel_storage::{
     StorageAsMut,
     StorageAsRef,
 };
-use std::{
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    sync::Arc,
+use std::ops::{
+    Deref,
+    DerefMut,
 };
 use tracing::{
     debug,
@@ -128,7 +120,7 @@ impl ExecutorTrait for Executor {
     ) -> Result<Vec<Vec<Receipt>>, Error> {
         // run the block in a temporary transaction without persisting any state
         let db_tx = self.database.transaction();
-        let db = db_tx.as_ref();
+        let temporary_db = db_tx.as_ref();
 
         // fallback to service config value if no utxo_validation override is provided
         let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
@@ -139,67 +131,27 @@ impl ExecutorTrait for Executor {
                 utxo_validation,
                 ..self.config.clone()
             },
-            database: db.clone(),
+            database: temporary_db.clone(),
         };
 
-        let block = executor.execute_inner(block, db).await?;
+        let block = executor.execute_inner(block, temporary_db).await?;
         block
             .transactions()
             .iter()
             .map(|tx| {
                 let id = tx.id();
-                StorageInspect::<Receipts>::get(db, &id)
+                StorageInspect::<Receipts>::get(temporary_db, &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
             })
             .collect::<Result<Vec<Vec<Receipt>>, _>>()
             .map_err(Into::into)
-        // drop db_tx without committing to avoid altering state
+        // drop `temporary_db` without committing to avoid altering state.
     }
 }
 
 impl Executor {
-    #[tracing::instrument(skip(self))]
-    pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
-        let db = self.database.clone();
-
-        for tx in txs.iter() {
-            // set status to submitted
-            db.update_tx_status(
-                &tx.id(),
-                TransactionStatus::Submitted { time: Utc::now() },
-            )?;
-        }
-
-        // setup and execute block
-        let current_height = db.get_block_height()?.unwrap_or_default();
-        let da_height = db.get_finalized_da_height().await.unwrap_or_default();
-        let new_block_height = current_height + 1u32.into();
-
-        let block = PartialFuelBlock::new(
-            PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    // TODO: This should not be default
-                    da_height,
-                    generated: Default::default(),
-                },
-                consensus: FuelConsensusHeader {
-                    // TODO: This should not be default
-                    prev_root: Default::default(),
-                    height: new_block_height,
-                    time: Utc::now(),
-                    generated: Default::default(),
-                },
-                metadata: Default::default(),
-            },
-            txs.into_iter().map(|t| t.as_ref().clone()).collect(),
-        );
-        // immediately execute block
-        self.execute(ExecutionBlock::Production(block)).await?;
-        Ok(())
-    }
-
     #[tracing::instrument(skip(self))]
     async fn execute_inner(
         &self,
@@ -1055,7 +1007,10 @@ impl Fee for CreateCheckedMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::{
+        TimeZone,
+        Utc,
+    };
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -1096,7 +1051,9 @@ mod tests {
         model::{
             CheckedMessage,
             DaBlockHeight,
+            FuelConsensusHeader,
             Message,
+            PartialFuelBlockHeader,
         },
         relayer::RelayerDb,
     };

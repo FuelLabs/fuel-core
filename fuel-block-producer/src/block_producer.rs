@@ -139,7 +139,7 @@ impl Trait for Producer {
         // return the receipts
 
         let height = match height {
-            None => self.db.current_height()?,
+            None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1u64.into();
         let checked = if self.config.utxo_validation {

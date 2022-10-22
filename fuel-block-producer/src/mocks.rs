@@ -154,7 +154,7 @@ impl BlockProducerDatabase for MockDb {
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
     }
 
-    fn current_height(&self) -> Result<BlockHeight> {
+    fn current_block_height(&self) -> Result<BlockHeight> {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.keys().max().cloned().unwrap_or_default())
