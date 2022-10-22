@@ -23,6 +23,7 @@ use fuel_core_interfaces::{
             ConsensusParameters,
             Output,
             Script,
+            Signable,
             TransactionBuilder,
             UtxoId,
         },
@@ -62,11 +63,12 @@ const COIN_AMOUNT: u64 = 1_000_000_000;
 async fn block_producer() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(1234u64);
 
+    let max_gas_per_block = 1_000_000;
     let consensus_params = ConsensusParameters {
         contract_max_size: 10000,
         gas_per_byte: 1,
         gas_price_factor: 1,
-        max_gas_per_tx: 1_000_000,
+        max_gas_per_tx: max_gas_per_block,
         max_inputs: 16,
         max_message_data_length: 16,
         max_outputs: 16,
@@ -77,8 +79,6 @@ async fn block_producer() -> Result<()> {
         max_storage_slots: 10000,
         max_witnesses: 16,
     };
-
-    let max_gas_per_block = 1_000_000;
 
     let mut txpool_db = TxPoolDb::default();
 

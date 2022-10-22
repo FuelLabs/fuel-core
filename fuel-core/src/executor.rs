@@ -75,6 +75,7 @@ use fuel_core_interfaces::{
         DaBlockHeight,
         Message,
         PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
 };
 use fuel_storage::{
