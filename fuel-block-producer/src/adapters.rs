@@ -3,7 +3,6 @@ use crate::{
     ports::TxPool,
 };
 use fuel_core_interfaces::{
-    common::fuel_tx::ConsensusParameters,
     model::{
         ArcPoolTx,
         BlockHeight,
@@ -15,7 +14,6 @@ pub mod transaction_selector;
 
 pub struct TxPoolAdapter {
     pub sender: Sender,
-    pub consensus_params: ConsensusParameters,
 }
 
 #[async_trait::async_trait]

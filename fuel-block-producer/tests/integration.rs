@@ -154,7 +154,6 @@ async fn block_producer() -> Result<()> {
         db: Box::new(mock_db.clone()),
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
-            consensus_params,
         }),
         executor: Box::new(MockExecutor(mock_db.clone())),
         relayer: Box::new(MockRelayer::default()),
