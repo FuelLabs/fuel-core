@@ -1,39 +1,59 @@
-use prometheus_client::{
-    registry::Registry,
-};
 use lazy_static::lazy_static;
-use std::sync::RwLock;
-use std::boxed::Box;
-use std::default::Default;
-
 pub use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::registry::Registry;
+use std::{
+    boxed::Box,
+    default::Default,
+    sync::RwLock,
+};
 
 pub struct TxPoolMetrics {
-    pub tx_statistics: RwLock<Registry<Box<Histogram>>>,
-    pub gas_price_histogram: Box<Histogram>,
+    pub registry: Registry,
+    pub gas_price_histogram: Histogram,
+    pub tx_size_histogram: Histogram,
 }
 
 impl Default for TxPoolMetrics {
     fn default() -> Self {
+        let registry = Registry::default();
+
         let gas_prices = Vec::new();
-        let gas_price_histogram = Box::new(Histogram::new(gas_prices.into_iter()));
 
-        let tx_statistics = RwLock::new(Registry::default());
+        let gas_price_histogram = Histogram::new(gas_prices.into_iter());
 
-        tx_statistics.write().unwrap().register("Tx_Gas_Price_Histogram", "A Histogram keeping track of all gas prices for each tx in the mempool", gas_price_histogram.clone());
+        let tx_sizes = Vec::new();
+
+        let tx_size_histogram = Histogram::new(tx_sizes.into_iter());
 
         Self {
-            tx_statistics,
+            registry,
             gas_price_histogram,
+            tx_size_histogram,
         }
     }
 }
 
-impl TxPoolMetrics {
-    pub fn init(&mut self) {                
-    }
+pub fn init(mut metrics: TxPoolMetrics) -> TxPoolMetrics {
+    metrics.registry.register(
+        "Tx_Gas_Price_Histogram",
+        "A Histogram keeping track of all gas prices for each tx in the mempool",
+        Box::new(metrics.gas_price_histogram.clone()),
+    );
+
+    metrics.registry.register(
+        "Tx_Size_Histogram",
+        "A Histogram keeping track of the size of txs",
+        Box::new(metrics.tx_size_histogram.clone()),
+    );
+
+    metrics
 }
 
 lazy_static! {
-    pub static ref TXPOOL_METRICS: RwLock<TxPoolMetrics> = Default::default();
+    pub static ref TXPOOL_METRICS: RwLock<TxPoolMetrics> = {
+        let registry = TxPoolMetrics::default();
+        let metrics = init(registry);
+
+        RwLock::new(metrics)
+    };
 }

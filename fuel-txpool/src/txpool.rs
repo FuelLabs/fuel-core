@@ -19,6 +19,7 @@ use fuel_core_interfaces::{
         TxStatusBroadcast,
     },
 };
+use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -28,7 +29,6 @@ use tokio::sync::{
     broadcast,
     RwLock,
 };
-use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -41,12 +41,6 @@ pub struct TxPool {
 impl TxPool {
     pub fn new(config: Config) -> Self {
         let max_depth = config.max_depth;
-        if config.metrics {
-            let mut metrics = TXPOOL_METRICS.write().unwrap();
-
-            // Register counters and gauges
-            metrics.init();
-        }
 
         Self {
             by_hash: HashMap::new(),
@@ -77,7 +71,16 @@ impl TxPool {
         self.verify_tx_min_gas_price(&tx)?;
 
         if self.config.metrics {
-            TXPOOL_METRICS.write().unwrap().gas_price_histogram.observe(tx.gas_price() as f64);
+            TXPOOL_METRICS
+                .write()
+                .unwrap()
+                .gas_price_histogram
+                .observe(tx.gas_price() as f64);
+            TXPOOL_METRICS
+                .write()
+                .unwrap()
+                .tx_size_histogram
+                .observe(tx.bytecode_length().unwrap_or(0) as f64);
         }
 
         if self.by_hash.contains_key(&tx.id()) {

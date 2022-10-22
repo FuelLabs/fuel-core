@@ -109,7 +109,6 @@ pub enum FuelP2PEvent {
     PeerInfoUpdated(PeerId),
 }
 
-
 impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn new(config: P2PConfig, codec: Codec) -> anyhow::Result<Self> {
         let local_peer_id = PeerId::from(config.local_keypair.public());

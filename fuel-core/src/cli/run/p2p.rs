@@ -150,7 +150,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             set_connection_keep_alive: Duration::from_secs(args.connection_keep_alive),
             info_interval: Some(Duration::from_secs(args.info_interval)),
             identify_interval: Some(Duration::from_secs(args.identify_interval)),
-            metrics: args.metrics
+            metrics: args.metrics,
         })
     }
 }

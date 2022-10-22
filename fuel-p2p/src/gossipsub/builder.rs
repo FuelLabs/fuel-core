@@ -1,5 +1,7 @@
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::{
     gossipsub::{
+        metrics::Config as MetricsConfig,
         FastMessageId,
         Gossipsub,
         GossipsubConfigBuilder,
@@ -9,7 +11,6 @@ use libp2p::{
         PeerScoreParams,
         PeerScoreThresholds,
         RawGossipsubMessage,
-        metrics::{Config as MetricsConfig},
     },
     identity::Keypair,
 };
@@ -17,10 +18,8 @@ use sha2::{
     Digest,
     Sha256,
 };
-use fuel_metrics::p2p_metrics::P2P_METRICS;
 
 use crate::config::P2PConfig;
-
 
 pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub {
     let gossip_message_id = move |message: &GossipsubMessage| {
@@ -41,15 +40,18 @@ pub fn build_gossipsub(local_key: &Keypair, p2p_config: &P2PConfig) -> Gossipsub
         .build()
         .expect("valid gossipsub configuration");
 
-    /* Move to Metrics related feature flag */
-    let p2p_registry = &mut P2P_METRICS.write().expect("Something already captured p2p metrics").gossip_sub_registry;
+    // Move to Metrics related feature flag
+    let p2p_registry = &mut P2P_METRICS
+        .write()
+        .expect("Something already captured p2p metrics")
+        .gossip_sub_registry;
     let metrics_config = MetricsConfig::default();
 
     let mut gossipsub = Gossipsub::new_with_metrics(
         MessageAuthenticity::Signed(local_key.clone()),
         gossipsub_config,
         p2p_registry,
-        metrics_config
+        metrics_config,
     )
     .expect("gossipsub initialized");
 
