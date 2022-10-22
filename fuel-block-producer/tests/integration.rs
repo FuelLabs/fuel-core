@@ -57,7 +57,6 @@ use tokio::sync::{
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
-#[ignore = "probably irrelevant now that standard fuel-tests integ tests use the block producer"]
 #[tokio::test]
 async fn block_producer() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(1234u64);
@@ -261,21 +260,27 @@ impl CoinInfo {
 }
 
 fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
-    TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-        .gas_price(gas_price)
-        .gas_limit(gas_limit)
-        .add_unsigned_coin_input(
-            coin.secret_key,
-            coin.utxo_id(),
-            COIN_AMOUNT,
-            AssetId::zeroed(),
-            Default::default(),
-            0,
-        )
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id: AssetId::zeroed(),
-        })
-        .finalize_without_signature()
+    let mut tx = TransactionBuilder::script(
+        vec![Opcode::RET(REG_ZERO)].into_iter().collect(),
+        vec![],
+    )
+    .gas_price(gas_price)
+    .gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        coin.secret_key,
+        coin.utxo_id(),
+        COIN_AMOUNT,
+        AssetId::zeroed(),
+        Default::default(),
+        0,
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: AssetId::zeroed(),
+    })
+    .finalize_without_signature();
+
+    tx.sign_inputs(&coin.secret_key);
+    tx
 }
