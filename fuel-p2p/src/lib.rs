@@ -8,6 +8,8 @@ mod peer_info;
 mod request_response;
 mod service;
 
+pub use gossipsub::config as gossipsub_config;
+
 pub use libp2p::{
     Multiaddr,
     PeerId,

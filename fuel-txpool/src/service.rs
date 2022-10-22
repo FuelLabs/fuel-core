@@ -6,8 +6,10 @@ use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     p2p::{
+        GossipData,
         P2pRequestEvent,
         TransactionBroadcast,
+        TransactionGossipData,
     },
     txpool::{
         self,
@@ -35,7 +37,7 @@ pub struct ServiceBuilder {
     txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
     tx_status_sender: Option<broadcast::Sender<TxStatusBroadcast>>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
-    incoming_tx_receiver: Option<broadcast::Receiver<TransactionBroadcast>>,
+    incoming_tx_receiver: Option<broadcast::Receiver<TransactionGossipData>>,
     network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
 }
 
@@ -95,7 +97,7 @@ impl ServiceBuilder {
 
     pub fn incoming_tx_receiver(
         &mut self,
-        incoming_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
+        incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
     ) -> &mut Self {
         self.incoming_tx_receiver = Some(incoming_tx_receiver);
         self
@@ -157,7 +159,7 @@ pub struct Context {
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
     pub tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
-    pub incoming_tx_receiver: broadcast::Receiver<TransactionBroadcast>,
+    pub incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
     pub network_sender: mpsc::Sender<P2pRequestEvent>,
 }
 
@@ -179,11 +181,9 @@ impl Context {
 
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
-                        match new_transaction.unwrap() {
-                            TransactionBroadcast::NewTransaction ( tx ) => {
-                                let txs = vec!(Arc::new(tx));
-                                TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await
-                            }
+                        if let GossipData { data: Some(TransactionBroadcast::NewTransaction ( tx )), .. } =  new_transaction.unwrap() {
+                            let txs = vec!(Arc::new(tx));
+                            TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await;
                         }
                     });
                 }
