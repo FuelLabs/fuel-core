@@ -1884,7 +1884,7 @@ mod tests {
                 Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
                 Opcode::RET(REG_ONE),
             ],
-            ConsensusParameters::DEFAULT.tx_offset(true)
+            ConsensusParameters::DEFAULT.tx_offset()
         );
 
         let script_data: Vec<u8> = [
