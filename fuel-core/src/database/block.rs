@@ -83,16 +83,16 @@ impl Database {
             .next()
             .transpose()?;
         // get block height from most recently indexed block
-        let mut id = block_entry.map(|(height, _)| {
+        let mut height = block_entry.map(|(height, _)| {
             // safety: we know that all block heights are stored with the correct amount of bytes
             let bytes = <[u8; 4]>::try_from(height.as_slice()).unwrap();
             u32::from_be_bytes(bytes).into()
         });
         // if no blocks, check if chain was configured with a base height
-        if id.is_none() {
-            id = self.get_starting_chain_height()?;
+        if height.is_none() {
+            height = self.get_starting_chain_height()?;
         }
-        Ok(id)
+        Ok(height)
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {

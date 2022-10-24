@@ -52,6 +52,17 @@ type Block {
 	producer: Address!
 }
 
+input TimeParameters {
+	"""
+	The time to set on the first block
+	"""
+	startTime: U64!
+	"""
+	The time interval between subsequent blocks
+	"""
+	blockTimeInterval: U64!
+}
+
 type BlockConnection {
 	"""
 	Information to aid in pagination.
@@ -371,7 +382,7 @@ type Mutation {
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
-	produceBlocks(blocksToProduce: U64!): U64!
+	produceBlocks(blocksToProduce: U64!, time: TimeParameters): U64!
 }
 
 type NodeInfo {
