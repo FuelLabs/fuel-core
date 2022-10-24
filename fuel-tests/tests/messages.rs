@@ -18,11 +18,13 @@ use fuel_core_interfaces::{
 };
 use fuel_gql_client::{
     client::{
+        types::TransactionStatus,
         FuelClient,
         PageDirection,
         PaginationRequest,
     },
     fuel_tx::Input,
+    prelude::Opcode,
 };
 use rand::{
     rngs::StdRng,
@@ -46,15 +48,17 @@ async fn can_submit_genesis_message() {
         data: vec![rng.gen()],
         da_height: DaBlockHeight(0),
     };
-    let tx1 = TransactionBuilder::script(vec![], vec![])
-        .add_unsigned_message_input(
-            secret_key,
-            msg1.sender,
-            msg1.nonce,
-            msg1.amount,
-            msg1.data.clone(),
-        )
-        .finalize();
+    let tx1 =
+        TransactionBuilder::script(vec![Opcode::RET(0)].into_iter().collect(), vec![])
+            .gas_limit(100000)
+            .add_unsigned_message_input(
+                secret_key,
+                msg1.sender,
+                msg1.nonce,
+                msg1.amount,
+                msg1.data.clone(),
+            )
+            .finalize();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {
@@ -66,7 +70,13 @@ async fn can_submit_genesis_message() {
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    client.submit(&tx1).await.unwrap();
+    // verify tx is successful
+    let status = client.submit_and_await_commit(&tx1).await.unwrap();
+    assert!(
+        matches!(status, TransactionStatus::Success { .. }),
+        "expected success, received {:?}",
+        status
+    )
 }
 
 #[tokio::test]

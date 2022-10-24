@@ -307,9 +307,7 @@ where
                     }
                 }
                 Err(err) => {
-                    // TODO: is this the right way to handle an error here?
-                    error!("Stopping PoA block production due to an error: {err:?}");
-                    break
+                    error!("PoA module encountered an error: {err:?}");
                 }
             }
         }

@@ -40,7 +40,10 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::Transactions,
-    executor::ExecutionBlock,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
     model::{
         FuelApplicationHeader,
         FuelConsensusHeader,
@@ -258,16 +261,16 @@ impl BlockMutation {
                 anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
             )
         }
+        // todo!("trigger block production manually");
 
         let executor = Executor {
             database: db.clone(),
             config: cfg.clone(),
         };
 
-        let block_time = get_time_closure(ctx, time, blocks_to_produce.0).await?;
         let iterate: u64 = blocks_to_produce.into();
 
-        for idx in 0..iterate {
+        for _ in 0..blocks_to_produce.0 {
             let current_height = db.get_block_height()?.unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 

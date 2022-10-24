@@ -1,12 +1,11 @@
 ---
 source: fuel-client/src/client/schema/node_info.rs
-assertion_line: 29
+assertion_line: 31
 expression: operation.query
 ---
 query Query {
   nodeInfo {
     utxoValidation
-    predicates
     vmBacktrace
     minGasPrice
     maxTx

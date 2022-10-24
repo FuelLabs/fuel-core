@@ -22,4 +22,7 @@ pub use ethers_core::types::{
     H160,
     H256,
 };
-pub use relayer::RelayerHandle;
+pub use relayer::{
+    RelayerHandle,
+    RelayerSynced,
+};

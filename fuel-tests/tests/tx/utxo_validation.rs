@@ -78,10 +78,10 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
 
     // submit transactions and verify their status
     for tx in transactions {
-        let id = client.submit(&tx).await.unwrap();
+        client.submit_and_await_commit(&tx).await.unwrap();
         // verify that the tx returned from the api matches the submitted tx
         let ret_tx = client
-            .transaction(&id.0.to_string())
+            .transaction(&tx.id().to_string())
             .await
             .unwrap()
             .unwrap()
@@ -124,6 +124,7 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     let TestContext { client, .. } = test_builder.finalize().await;
 
     let result = client.submit(&tx).await;
+
     assert!(result.is_err());
     assert!(result
         .err()
@@ -260,7 +261,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .into_iter()
         .map(|tx| {
             let client = client.clone();
-            async move { client.submit(&tx).await }
+            async move { client.submit_and_await_commit(&tx).await }
         })
         .collect_vec();
 
