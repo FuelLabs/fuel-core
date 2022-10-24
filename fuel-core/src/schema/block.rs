@@ -60,7 +60,7 @@ use std::{
     convert::TryInto,
 };
 
-use super::scalars::Bytes32;
+use super::{scalars::Bytes32, chain::ChainInfo};
 
 pub struct Block {
     pub(crate) header: Header,
@@ -98,7 +98,6 @@ impl Block {
             })
             .collect()
     }
-}
 
 #[Object]
 impl Header {
@@ -409,21 +408,72 @@ impl BlockMutation {
     }
 }
 
-impl From<FuelBlockDb> for Block {
-    fn from(block: FuelBlockDb) -> Self {
-        let FuelBlockDb {
-            header,
-            transactions,
-        } = block;
-        Block {
-            header: Header(header),
-            transactions,
-        }
-    }
+async fn get_time_closure(ctx: &Context<'_>, time_parameters: Option<TimeParameters>, blocks_to_produce: u64) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>>{
+    if let Some(params) = time_parameters {
+        check_start_after_latest_block(ctx, params.start_time.0).await?;
+        check_block_time_overflow(&params, blocks_to_produce).await?;
+
+        return Ok(Box::new(move |idx: u64| {
+            let (timestamp, _) = params.start_time.0.overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
+            let naive = NaiveDateTime::from_timestamp(timestamp as i64, 0);
+
+            DateTime::from_utc(naive, Utc)
+        }));
+    };
+
+    Ok(Box::new(|_| Utc::now()))
 }
 
-impl From<FuelBlockDb> for Header {
-    fn from(block: FuelBlockDb) -> Self {
-        Header(block.header)
+async fn check_start_after_latest_block(ctx: &Context<'_>, start_time: u64) -> anyhow::Result<()> {
+    let retrieval_err = "Failed to retrieve latest block time";
+
+    let latest_block = ChainInfo{}.latest_block(ctx).await.expect(retrieval_err);
+    let latest_time = latest_block.time(ctx).await.expect(retrieval_err);
+
+    if latest_time.timestamp() as u64 > start_time {
+        return Err(
+            anyhow!("The start time must be set after the latest block time: {}", latest_time.timestamp()).into(),
+        )
     }
+
+    Ok(())
+}
+
+async fn check_block_time_overflow(params: &TimeParameters, blocks_to_produce: u64) -> anyhow::Result<()> {
+    let (final_offset, overflow_mul) = params.block_time_interval.0.overflowing_mul(blocks_to_produce);
+    let (_, overflow_add) = params.start_time.0.overflowing_add(final_offset);
+
+    if overflow_mul || overflow_add {
+        return Err(
+            anyhow!("The provided time parameters lead to an overflow").into(),
+        )
+    };
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+
+
+    #[tokio::test]
+    async fn get_time_closure_returns_custom_time() {
+        
+    }
+
+    #[tokio::test]
+    async fn get_time_closure_returns_utc_now() {
+
+    }
+
+    #[tokio::test]
+    async fn get_time_closure_bad_start_time_error() {
+
+    }
+
+    #[tokio::test]
+    async fn get_time_closure_overflow_error() {
+
+    }
+
 }

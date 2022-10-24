@@ -24,14 +24,11 @@ use fuel_core_interfaces::{
     },
     model::FuelConsensusHeader,
 };
-use fuel_gql_client::{
-    client::{
-        types::TransactionStatus,
-        FuelClient,
-        PageDirection,
-        PaginationRequest,
-    },
-    prelude::Bytes32,
+use fuel_gql_client::client::{
+    types::TransactionStatus,
+    FuelClient,
+    PageDirection,
+    PaginationRequest, schema::{block::TimeParameters, U64},
 };
 use itertools::{
     rev,
@@ -125,7 +122,8 @@ async fn produce_block_negative() {
     );
 
     let tx = fuel_tx::Transaction::default();
-    client.submit_and_await_commit(&tx).await.unwrap();
+
+    client.submit(&tx).await.unwrap();
 
     let transaction_response = client
         .transaction(&format!("{:#x}", tx.id()))
@@ -140,12 +138,55 @@ async fn produce_block_negative() {
             .await
             .unwrap()
             .unwrap()
-            .header
             .height
             .into();
 
         // Block height is now 6 after being advance 5
-        assert!(1 == block_height);
+        assert!(6 == block_height);
+    } else {
+        panic!("Wrong tx status");
+    };
+}
+
+#[tokio::test]
+async fn produce_block_custom_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db, config).await.unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let time = TimeParameters{ start_time: U64::from(100u64), block_time_interval: U64::from(10u64)};
+    let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
+
+    assert_eq!(5, new_height);
+
+    let tx = fuel_tx::Transaction::default();
+
+    client.submit(&tx).await.unwrap();
+
+    let transaction_response = client
+        .transaction(&format!("{:#x}", tx.id()))
+        .await
+        .unwrap();
+
+    if let TransactionStatus::Success { block_id, .. } =
+        transaction_response.unwrap().status
+    {
+        let block_height: u64 = client
+            .block(block_id.to_string().as_str())
+            .await
+            .unwrap()
+            .unwrap()
+            .height
+            .into();
+
+        // Block height is now 6 after being advance 5
+        assert!(6 == block_height);
     } else {
         panic!("Wrong tx status");
     };
