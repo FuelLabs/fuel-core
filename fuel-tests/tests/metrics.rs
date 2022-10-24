@@ -86,7 +86,7 @@ async fn test_database_metrics() {
         );
     }
 
-    for index in vec![15, 19, 20, 21, 24, 24, 25] {
+    for index in &[15, 19, 20, 21, 24, 24, 25] {
         println!("{:?} {}", categories[index], index);
         assert!(
             categories[index].split(' ').collect::<Vec<&str>>()[1]
