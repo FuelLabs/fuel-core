@@ -2573,7 +2573,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.21.0"
-source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/methods-refactoring#666d8c6671d671c0310c10efe74a4b5690645fa1"
+source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/methods-refactoring#0acfd75d960bdb331b73796c36632dd7af5e5c42"
 dependencies = [
  "derivative",
  "fuel-asm",

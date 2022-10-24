@@ -71,6 +71,7 @@ impl TxPool {
     // this is atomic operation. Return removed(pushed out/replaced) transactions
     pub async fn insert_inner(
         &mut self,
+        // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
         db: &dyn TxPoolDb,
     ) -> anyhow::Result<InsertionResult> {
@@ -497,8 +498,7 @@ pub mod tests {
         let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -515,25 +515,23 @@ pub mod tests {
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 1);
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(1)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(1)
                 .add_input(input)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -560,7 +558,7 @@ pub mod tests {
         // contract creation tx
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 10);
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -570,8 +568,7 @@ pub mod tests {
             .add_input(gas_coin)
             .add_output(create_contract_output(contract_id))
             .add_output(output)
-            .finalize()
-            .into(),
+            .finalize_as_transaction(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
@@ -579,7 +576,7 @@ pub mod tests {
 
         // attempt to insert a different creation tx with a valid dependency on the first tx,
         // but with a conflicting output contract id
-        let tx_faulty: Arc<Transaction> = Arc::new(
+        let tx_faulty = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -590,8 +587,7 @@ pub mod tests {
             .add_input(input)
             .add_output(create_contract_output(contract_id))
             .add_output(output)
-            .finalize()
-            .into(),
+            .finalize_as_transaction(),
         );
 
         txpool
@@ -620,7 +616,7 @@ pub mod tests {
         )
         .unwrap();
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx_faulty: Arc<Transaction> = Arc::new(
+        let tx_faulty = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -628,13 +624,12 @@ pub mod tests {
             )
             .add_input(gas_coin)
             .add_output(create_contract_output(contract_id))
-            .finalize()
-            .into(),
+            .finalize_as_transaction(),
         );
 
         // create a second transaction with utxo id referring to
         // the wrong type of utxo (contract instead of coin)
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(0)
                 .add_input(random_predicate(
@@ -643,8 +638,7 @@ pub mod tests {
                     TEST_COIN_AMOUNT,
                     Some(UtxoId::new(tx_faulty.id(), 0)),
                 ))
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -667,8 +661,9 @@ pub mod tests {
         let mut txpool = TxPool::new(Default::default());
         let db = MockDb::default();
 
-        let tx: Arc<Transaction> =
-            Arc::new(TransactionBuilder::script(vec![], vec![]).finalize().into());
+        let tx = Arc::new(
+            TransactionBuilder::script(vec![], vec![]).finalize_as_transaction(),
+        );
 
         txpool
             .insert_inner(tx.clone(), &db)
@@ -692,12 +687,11 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, input) = setup_coin(&mut rng, None);
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let err = txpool
@@ -722,12 +716,11 @@ pub mod tests {
         coin.status = CoinStatus::Spent;
         db.storage::<Coins>().insert(&utxo_id, &coin).unwrap();
 
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         // attempt to insert the tx with an already spent coin
@@ -749,19 +742,17 @@ pub mod tests {
 
         let (_, coin_input) = setup_coin(&mut rng, Some(&db));
 
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(coin_input.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(coin_input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -784,29 +775,26 @@ pub mod tests {
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 10);
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
         let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(input.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
-        let tx3: Arc<Transaction> = Arc::new(
+        let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -836,7 +824,7 @@ pub mod tests {
 
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
         let contract_id = ContractId::default();
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -845,12 +833,11 @@ pub mod tests {
             .gas_price(10)
             .add_input(gas_funds)
             .add_output(create_contract_output(contract_id))
-            .finalize()
-            .into(),
+            .finalize_as_transaction(),
         );
 
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(11)
                 .add_input(gas_funds)
@@ -859,8 +846,7 @@ pub mod tests {
                     Default::default(),
                 ))
                 .add_output(Output::contract(1, Default::default(), Default::default()))
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -890,7 +876,7 @@ pub mod tests {
 
         let contract_id = ContractId::default();
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::create(
                 Default::default(),
                 Default::default(),
@@ -899,12 +885,11 @@ pub mod tests {
             .gas_price(10)
             .add_input(gas_funds)
             .add_output(create_contract_output(contract_id))
-            .finalize()
-            .into(),
+            .finalize_as_transaction(),
         );
 
         let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(gas_funds)
@@ -913,8 +898,7 @@ pub mod tests {
                     Default::default(),
                 ))
                 .add_output(Output::contract(1, Default::default(), Default::default()))
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -936,29 +920,26 @@ pub mod tests {
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
 
         let (output, unset_input) = create_output_and_input(&mut rng, 10);
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(gas_coin.clone())
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
         let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
 
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
                 .add_input(input.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
-        let tx3: Arc<Transaction> = Arc::new(
+        let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -993,19 +974,17 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
                 .add_output(create_coin_output())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -1034,30 +1013,27 @@ pub mod tests {
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 10_000);
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
         let (output, unset_input) = create_output_and_input(&mut rng, 5_000);
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
-        let tx3: Arc<Transaction> = Arc::new(
+        let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -1086,30 +1062,27 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx3: Arc<Transaction> = Arc::new(
+        let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(20)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -1141,33 +1114,30 @@ pub mod tests {
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
         let (output, unset_input) = create_output_and_input(&mut rng, 10_000);
-        let tx1: Arc<Transaction> = Arc::new(
+        let tx1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(11)
                 .add_input(gas_coin)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
         let (output, unset_input) = create_output_and_input(&mut rng, 7_500);
-        let tx2: Arc<Transaction> = Arc::new(
+        let tx2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(input)
                 .add_output(output)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let input = unset_input.into_input(UtxoId::new(tx2.id(), 0));
-        let tx3: Arc<Transaction> = Arc::new(
+        let tx3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(9)
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -1207,12 +1177,11 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         txpool
@@ -1231,12 +1200,11 @@ pub mod tests {
         let db = MockDb::default();
 
         let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(10)
                 .add_input(gas_coin)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let err = txpool
@@ -1253,11 +1221,10 @@ pub mod tests {
     async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
         let (message, input) = helpers::create_message_predicate_from_message(5000, None);
 
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let mut db = MockDb::default();
@@ -1282,11 +1249,10 @@ pub mod tests {
         let (message, input) =
             helpers::create_message_predicate_from_message(5_000, Some(1u64.into()));
 
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let mut db = MockDb::default();
@@ -1310,11 +1276,10 @@ pub mod tests {
     #[tokio::test]
     async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
         let (message, input) = helpers::create_message_predicate_from_message(5000, None);
-        let tx: Arc<Transaction> = Arc::new(
+        let tx = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .add_input(input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let db = MockDb::default();
@@ -1344,20 +1309,18 @@ pub mod tests {
         let (message, conflicting_message_input) =
             helpers::create_message_predicate_from_message(message_amount, None);
 
-        let tx_high: Arc<Transaction> = Arc::new(
+        let tx_high = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(gas_price_high)
                 .add_input(conflicting_message_input.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
-        let tx_low: Arc<Transaction> = Arc::new(
+        let tx_low = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(gas_price_low)
                 .add_input(conflicting_message_input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let mut db = MockDb::default();
@@ -1398,12 +1361,11 @@ pub mod tests {
             helpers::create_message_predicate_from_message(message_amount, None);
 
         // Insert a tx for the message id with a low gas amount
-        let tx_low: Arc<Transaction> = Arc::new(
+        let tx_low = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(gas_price_low)
                 .add_input(conflicting_message_input.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let mut db = MockDb::default();
@@ -1422,12 +1384,11 @@ pub mod tests {
         // Because the new transaction's id matches an existing transaction, we compare the gas
         // prices of both the new and existing transactions. Since the existing transaction's gas
         // price is lower, we accept the new transaction and squeeze out the old transaction.
-        let tx_high: Arc<Transaction> = Arc::new(
+        let tx_high = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(gas_price_high)
                 .add_input(conflicting_message_input)
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let squeezed_out_txs = txpool
@@ -1453,29 +1414,26 @@ pub mod tests {
             helpers::create_message_predicate_from_message(20_000, None);
 
         // Insert a tx for the message id with a low gas amount
-        let tx_1: Arc<Transaction> = Arc::new(
+        let tx_1 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(2)
                 .add_input(message_input_1.clone())
                 .add_input(message_input_2.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
-        let tx_2: Arc<Transaction> = Arc::new(
+        let tx_2 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(3)
                 .add_input(message_input_1.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
-        let tx_3: Arc<Transaction> = Arc::new(
+        let tx_3 = Arc::new(
             TransactionBuilder::script(vec![], vec![])
                 .gas_price(1)
                 .add_input(message_input_2.clone())
-                .finalize()
-                .into(),
+                .finalize_as_transaction(),
         );
 
         let mut db = MockDb::default();

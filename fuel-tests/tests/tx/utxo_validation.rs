@@ -117,14 +117,14 @@ async fn submit_utxo_verified_tx_below_min_gas_price_fails() {
     )
     .gas_limit(100)
     .gas_price(1)
-    .finalize();
+    .finalize_as_transaction();
 
     // initialize node with higher minimum gas price
     let mut test_builder = TestSetupBuilder::new(2322u64);
     test_builder.min_gas_price = 10;
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let result = client.submit(&tx.into()).await;
+    let result = client.submit(&tx).await;
 
     assert!(result.is_err());
     assert!(result
@@ -166,8 +166,7 @@ async fn dry_run_override_utxo_validation() {
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
     .add_witness(Default::default())
-    .finalize()
-    .into();
+    .finalize_as_transaction();
 
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
