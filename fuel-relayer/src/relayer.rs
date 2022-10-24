@@ -60,9 +60,15 @@ type Database = Box<dyn RelayerDb>;
 /// Handle for interacting with the [`Relayer`].
 pub struct RelayerHandle {
     /// Receives signals when the relayer reaches consistency with the DA layer.
-    synced: Synced,
+    synced: RelayerSynced,
     /// Gracefully shuts down the relayer.
     shutdown: RelayerShutdown,
+}
+
+/// Receives signals when the relayer reaches consistency with the DA layer.
+#[derive(Clone)]
+pub struct RelayerSynced {
+    synced: Synced,
 }
 
 /// The actual relayer that runs on a background task
@@ -185,11 +191,31 @@ impl RelayerHandle {
         P: Middleware<Error = ProviderError> + 'static,
     {
         let (tx, rx) = watch::channel(false);
-        let synced = rx;
+        let synced = RelayerSynced { synced: rx };
         let shutdown = run(Relayer::new(tx, eth_node, database, config));
         Self { synced, shutdown }
     }
 
+    /// Gets a handle to the synced notification
+    pub fn listen_synced(&self) -> RelayerSynced {
+        self.synced.clone()
+    }
+
+    /// Check if the [`Relayer`] is still running.
+    pub fn is_running(&self) -> bool {
+        !self.shutdown.join_handle.is_finished()
+    }
+
+    /// Gracefully shutdown the [`Relayer`].
+    pub async fn shutdown(self) -> anyhow::Result<()> {
+        self.shutdown
+            .shutdown
+            .store(true, core::sync::atomic::Ordering::Relaxed);
+        Ok(self.shutdown.join_handle.await?)
+    }
+}
+
+impl RelayerSynced {
     /// Wait for the [`Relayer`] to be in sync with
     /// the data availability layer.
     ///
@@ -207,19 +233,6 @@ impl RelayerHandle {
             rx.changed().await?;
         }
         Ok(())
-    }
-
-    /// Check if the [`Relayer`] is still running.
-    pub fn is_running(&self) -> bool {
-        !self.shutdown.join_handle.is_finished()
-    }
-
-    /// Gracefully shutdown the [`Relayer`].
-    pub async fn shutdown(self) -> anyhow::Result<()> {
-        self.shutdown
-            .shutdown
-            .store(true, core::sync::atomic::Ordering::Relaxed);
-        Ok(self.shutdown.join_handle.await?)
     }
 }
 

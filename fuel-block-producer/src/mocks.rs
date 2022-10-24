@@ -1,16 +1,15 @@
-use super::{
-    db::BlockProducerDatabase,
-    ports::Relayer,
-};
+use super::db::BlockProducerDatabase;
 use crate::ports::TxPool;
 use anyhow::Result;
 use async_trait::async_trait;
 use fuel_core_interfaces::{
+    block_producer::Relayer,
     common::{
         fuel_storage::StorageInspect,
         fuel_tx::{
             CheckedTransaction,
             MessageId,
+            Receipt,
         },
         fuel_types::Address,
     },
@@ -46,9 +45,10 @@ pub struct MockRelayer {
     pub best_finalized_height: DaBlockHeight,
 }
 
+#[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
     }
 }
@@ -82,6 +82,14 @@ impl Executor for MockExecutor {
         block_db.insert(*block.header().height(), block.to_db_block());
         Ok(block)
     }
+
+    async fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        Ok(Default::default())
+    }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
@@ -98,6 +106,19 @@ impl Executor for FailingMockExecutor {
                 ExecutionBlock::Production(b) => Ok(b.generate(&[])),
                 ExecutionBlock::Validation(b) => Ok(b),
             }
+        }
+    }
+
+    async fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        let mut err = self.0.lock().unwrap();
+        if let Some(err) = err.take() {
+            Err(err)
+        } else {
+            Ok(Default::default())
         }
     }
 }
@@ -131,5 +152,11 @@ impl BlockProducerDatabase for MockDb {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
+    }
+
+    fn current_block_height(&self) -> Result<BlockHeight> {
+        let blocks = self.blocks.lock().unwrap();
+
+        Ok(blocks.keys().max().cloned().unwrap_or_default())
     }
 }

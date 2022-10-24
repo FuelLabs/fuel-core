@@ -38,6 +38,8 @@ pub struct Dependency {
     messages: HashMap<MessageId, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
+    /// utxo-validation feature flag
+    utxo_validation: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -83,12 +85,13 @@ pub struct MessageState {
 }
 
 impl Dependency {
-    pub fn new(max_depth: usize) -> Self {
+    pub fn new(max_depth: usize, utxo_validation: bool) -> Self {
         Self {
             coins: HashMap::new(),
             contracts: HashMap::new(),
             messages: HashMap::new(),
             max_depth,
+            utxo_validation,
         }
     }
 
@@ -354,14 +357,16 @@ impl Dependency {
                             } else {
                                 if state.is_in_database() {
                                     // this means it is loaded from db. Get tx to compare output.
-                                    let coin = db.utxo(utxo_id)?.ok_or(
-                                        Error::NotInsertedInputUtxoIdNotExisting(
-                                            *utxo_id,
-                                        ),
-                                    )?;
-                                    Self::check_if_coin_input_can_spend_db_coin(
-                                        &coin, input,
-                                    )?;
+                                    if self.utxo_validation {
+                                        let coin = db.utxo(utxo_id)?.ok_or(
+                                            Error::NotInsertedInputUtxoIdNotExisting(
+                                                *utxo_id,
+                                            ),
+                                        )?;
+                                        Self::check_if_coin_input_can_spend_db_coin(
+                                            &coin, input,
+                                        )?;
+                                    }
                                 } else {
                                     // tx output is in pool
                                     let output_tx = txs.get(utxo_id.tx_id()).unwrap();
@@ -377,12 +382,15 @@ impl Dependency {
                         }
                         // if coin is not spend, it will be spend later down the line
                     } else {
-                        // fetch from db and check if tx exist.
-                        let coin = db
-                            .utxo(utxo_id)?
-                            .ok_or(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id))?;
+                        if self.utxo_validation {
+                            // fetch from db and check if tx exist.
+                            let coin = db.utxo(utxo_id)?.ok_or(
+                                Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
+                            )?;
 
-                        Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                            Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                        }
+
                         max_depth = core::cmp::max(1, max_depth);
                         db_coins.insert(
                             *utxo_id,
@@ -400,17 +408,20 @@ impl Dependency {
                     // verify message id integrity
                     Self::check_if_message_input_matches_id(input)?;
                     // since message id is derived, we don't need to double check all the fields
-                    if let Some(msg) = db.message(message_id)? {
-                        // return an error if spent block is set
-                        if msg.fuel_block_spend.is_some() {
+                    if self.utxo_validation {
+                        if let Some(msg) = db.message(message_id)? {
+                            // return an error if spent block is set
+                            if msg.fuel_block_spend.is_some() {
+                                return Err(Error::NotInsertedInputMessageIdSpent(
+                                    *message_id,
+                                )
+                                .into())
+                            }
+                        } else {
                             return Err(
-                                Error::NotInsertedInputMessageIdSpent(*message_id).into()
+                                Error::NotInsertedInputMessageUnknown(*message_id).into()
                             )
                         }
-                    } else {
-                        return Err(
-                            Error::NotInsertedInputMessageUnknown(*message_id).into()
-                        )
                     }
 
                     if let Some(state) = self.messages.get(message_id) {
