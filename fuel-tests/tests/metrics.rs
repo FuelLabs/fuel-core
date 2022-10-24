@@ -72,5 +72,28 @@ async fn test_database_metrics() {
 
     srv.stop().await;
 
+    assert_eq!(categories.len(), 40);
+
     println!("{:?}", categories);
+
+    for index in (2..12).step_by(3) {
+        assert!(
+            categories[index].split(' ').collect::<Vec<&str>>()[1]
+                .to_string()
+                .parse::<i64>()
+                .unwrap()
+                >= 1
+        );
+    }
+
+    for index in vec![15, 19, 20, 21, 24, 24, 25] {
+        println!("{:?} {}", categories[index], index);
+        assert!(
+            categories[index].split(' ').collect::<Vec<&str>>()[1]
+                .to_string()
+                .parse::<f64>()
+                .unwrap()
+                >= 0.0
+        );
+    }
 }
