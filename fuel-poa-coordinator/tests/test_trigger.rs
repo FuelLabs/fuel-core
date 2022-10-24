@@ -131,6 +131,15 @@ impl BlockProducer for MockBlockProducer {
 =======
 >>>>>>> 007bc87 (Reconcile Fuel Block Header (#692))
     }
+
+    async fn dry_run(
+        &self,
+        _transaction: Transaction,
+        _height: Option<BlockHeight>,
+        _utxo_validation: Option<bool>,
+    ) -> anyhow::Result<Vec<Receipt>> {
+        Ok(vec![])
+    }
 }
 
 /// Select all txs that fit into the block, preferring ones with higher gas price.

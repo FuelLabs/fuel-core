@@ -9,15 +9,10 @@ use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
-    block_producer::BlockProducer,
-    common::prelude::Word,
-    model::{
-        BlockHeight,
-        FuelApplicationHeader,
-        FuelBlock,
-        FuelConsensusHeader,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
+    self,
+    block_producer::{
+        BlockProducer,
+        Relayer as BlockProducerRelayer,
     },
     common::fuel_tx::Receipt,
     executor::{
@@ -288,27 +283,18 @@ struct MaybeRelayerAdapter {
 impl BlockProducerRelayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
-        height: BlockHeight,
-        _max_gas: Word,
-    ) -> Result<FuelBlock> {
-        info!("block production called for height {:?}", height);
-        let r = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    da_height: Default::default(),
-                    generated: Default::default(),
-                },
-                consensus: FuelConsensusHeader {
-                    prev_root: Default::default(),
-                    height,
-                    time: Default::default(),
-                    generated: Default::default(),
-                },
-                metadata: Default::default(),
-            },
-            transactions: Default::default(),
+    ) -> Result<fuel_core_interfaces::model::DaBlockHeight> {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                sync.await_synced().await?;
+            }
         }
-        .generate(&[]);
-        Ok(r)
+
+        Ok(self
+            .database
+            .get_finalized_da_height()
+            .await
+            .unwrap_or_default())
     }
 }
