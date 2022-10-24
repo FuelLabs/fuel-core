@@ -79,6 +79,7 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
+<<<<<<< HEAD
     /// The signing key used when producing blocks.
     /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
     #[clap(long = "consensus-key")]
@@ -89,6 +90,8 @@ pub struct Command {
     #[clap(long = "dev-keys", default_value = "true")]
     pub consensus_dev_key: bool,
 
+=======
+>>>>>>> a83268d (Integrate block production and the new trigger system (#712))
     #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
@@ -110,8 +113,11 @@ impl Command {
             manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
+<<<<<<< HEAD
             consensus_key,
             consensus_dev_key,
+=======
+>>>>>>> a83268d (Integrate block production and the new trigger system (#712))
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
