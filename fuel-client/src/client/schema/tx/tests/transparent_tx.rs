@@ -178,6 +178,15 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
             create.into()
         };
 
+        // This `match` block is added here to enforce compilation error if a new variant
+        // is added into the `fuel_tx::Transaction` enum.
+        //
+        // If you face a compilation error, please update the code above and add a new variant below.
+        match tx {
+            fuel_vm::prelude::Transaction::Script(_) => {}
+            fuel_vm::prelude::Transaction::Create(_) => {}
+        };
+
         Ok(tx)
     }
 }
