@@ -56,15 +56,13 @@ use fuel_core_interfaces::{
         ExecutionKind,
         ExecutionType,
         ExecutionTypes,
+        Executor as ExecutorTrait,
         TransactionValidityError,
     },
     model::{
         DaBlockHeight,
-        FuelApplicationHeader,
-        FuelConsensusHeader,
         Message,
         PartialFuelBlock,
-        PartialFuelBlockHeader,
     },
 };
 use fuel_storage::{
@@ -97,48 +95,57 @@ struct ExecutionData {
     tx_status: Vec<(Bytes32, TransactionStatus)>,
 }
 
-impl Executor {
-    #[tracing::instrument(skip(self))]
-    pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
-        let db = self.database.clone();
-
 #[async_trait::async_trait]
 impl ExecutorTrait for Executor {
     async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
         self.execute_inner(block, &self.database).await
     }
 
-        // setup and execute block
-        let current_height = db.get_block_height()?.unwrap_or_default();
-        let da_height = db.get_finalized_da_height().await.unwrap_or_default();
-        let new_block_height = current_height + 1u32.into();
+    async fn dry_run(
+        &self,
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Vec<Receipt>>, Error> {
+        // run the block in a temporary transaction without persisting any state
+        let db_tx = self.database.transaction();
+        let temporary_db = db_tx.as_ref();
 
-        let block = PartialFuelBlock::new(
-            PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    // TODO: This should not be default
-                    da_height,
-                    generated: Default::default(),
-                },
-                consensus: FuelConsensusHeader {
-                    // TODO: This should not be default
-                    prev_root: Default::default(),
-                    height: new_block_height,
-                    time: Utc::now(),
-                    generated: Default::default(),
-                },
-                metadata: Default::default(),
+        // fallback to service config value if no utxo_validation override is provided
+        let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
+
+        // spawn a nested executor instance to override utxo_validation config
+        let executor = Self {
+            config: Config {
+                utxo_validation,
+                ..self.config.clone()
             },
-            txs.into_iter().map(|t| t.as_ref().clone()).collect(),
-        );
-        // immediately execute block
-        self.execute(ExecutionBlock::Production(block)).await?;
-        Ok(())
+            database: temporary_db.clone(),
+        };
+
+        let block = executor.execute_inner(block, temporary_db).await?;
+        block
+            .transactions()
+            .iter()
+            .map(|tx| {
+                let id = tx.id();
+                StorageInspect::<Receipts>::get(temporary_db, &id)
+                    .transpose()
+                    .unwrap_or_else(|| Ok(Default::default()))
+                    .map(|v| v.into_owned())
+            })
+            .collect::<Result<Vec<Vec<Receipt>>, _>>()
+            .map_err(Into::into)
+        // drop `temporary_db` without committing to avoid altering state.
     }
+}
 
 impl Executor {
     #[tracing::instrument(skip(self))]
-    pub async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+    async fn execute_inner(
+        &self,
+        block: ExecutionBlock,
+        database: &Database,
+    ) -> Result<FuelBlock, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.
@@ -149,7 +156,7 @@ impl Executor {
         let mut block = block.map_v(PartialFuelBlock::from);
 
         // Create a new database transaction.
-        let mut block_db_transaction = self.database.transaction();
+        let mut block_db_transaction = database.transaction();
 
         // Execute all transactions.
         let execution_data = self
@@ -359,6 +366,7 @@ impl Executor {
                 vm_result.tx(),
                 block_db_transaction.deref_mut(),
                 *block.header.height(),
+                self.config.utxo_validation,
             )?;
 
             // persist any outputs
@@ -895,7 +903,10 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
+    use chrono::{
+        TimeZone,
+        Utc,
+    };
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
