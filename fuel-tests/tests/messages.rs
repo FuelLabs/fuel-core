@@ -58,7 +58,7 @@ async fn can_submit_genesis_message() {
                 msg1.amount,
                 msg1.data.clone(),
             )
-            .finalize();
+            .finalize_as_transaction();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {
@@ -71,7 +71,7 @@ async fn can_submit_genesis_message() {
     let client = FuelClient::from(srv.bound_address);
 
     // verify tx is successful
-    let status = client.submit_and_await_commit(&tx1.into()).await.unwrap();
+    let status = client.submit_and_await_commit(&tx1).await.unwrap();
     assert!(
         matches!(status, TransactionStatus::Success { .. }),
         "expected success, received {:?}",

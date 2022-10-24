@@ -211,12 +211,12 @@ async fn dry_run_no_utxo_validation_override() {
     ))
     .add_output(Output::change(rng.gen(), 0, asset_id))
     .add_witness(Default::default())
-    .finalize();
+    .finalize_as_transaction();
 
     let client = TestSetupBuilder::new(2322).finalize().await.client;
 
     // verify that the client validated the inputs and failed the tx
-    let res = client.dry_run_opt(&tx.into(), None).await;
+    let res = client.dry_run_opt(&tx, None).await;
     assert!(res.is_err());
 }
 

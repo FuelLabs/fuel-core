@@ -88,9 +88,10 @@ async fn dry_run() {
         vec![],
         vec![],
         vec![],
-    );
+    )
+    .into();
 
-    let log = client.dry_run(&tx.clone().into()).await.unwrap();
+    let log = client.dry_run(&tx).await.unwrap();
     assert_eq!(3, log.len());
 
     assert!(matches!(log[0],
