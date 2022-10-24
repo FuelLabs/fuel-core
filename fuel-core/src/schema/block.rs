@@ -57,7 +57,7 @@ use std::{
     convert::TryInto,
 };
 
-use super::{chain::ChainInfo};
+use super::{scalars::Address, chain::ChainInfo};
 
 pub struct Block(pub(crate) FuelBlockDb);
 
