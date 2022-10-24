@@ -4,10 +4,83 @@ expression: operation.query
 ---
 query Query($_0: TransactionId!) {
   transaction(id: $_0) {
-    rawPayload
-    receipts {
-      rawPayload
+    gasLimit
+    gasPrice
+    id
+    inputAssetIds
+    inputContracts {
+      id
     }
+    inputs {
+      __typename
+      ... on InputCoin {
+        utxoId
+        owner
+        amount
+        assetId
+        txPointer
+        witnessIndex
+        maturity
+        predicate
+        predicateData
+      }
+      ... on InputContract {
+        utxoId
+        balanceRoot
+        stateRoot
+        txPointer
+        contract {
+          id
+        }
+      }
+      ... on InputMessage {
+        messageId
+        sender
+        recipient
+        amount
+        nonce
+        witnessIndex
+        data
+        predicate
+        predicateData
+      }
+    }
+    isScript
+    outputs {
+      __typename
+      ... on CoinOutput {
+        to
+        amount
+        assetId
+      }
+      ... on ContractOutput {
+        inputIndex
+        balanceRoot
+        stateRoot
+      }
+      ... on MessageOutput {
+        recipient
+        amount
+      }
+      ... on ChangeOutput {
+        to
+        amount
+        assetId
+      }
+      ... on VariableOutput {
+        to
+        amount
+        assetId
+      }
+      ... on ContractCreated {
+        contract {
+          id
+        }
+        stateRoot
+      }
+    }
+    maturity
+    receiptsRoot
     status {
       __typename
       ... on SubmittedStatus {
@@ -35,6 +108,47 @@ query Query($_0: TransactionId!) {
         }
       }
     }
+    witnesses
+    receipts {
+      param1
+      param2
+      amount
+      assetId
+      gas
+      digest
+      contract {
+        id
+      }
+      is
+      pc
+      ptr
+      ra
+      rb
+      rc
+      rd
+      reason
+      receiptType
+      to {
+        id
+      }
+      toAddress
+      val
+      len
+      result
+      gasUsed
+      data
+      messageId
+      sender
+      recipient
+      nonce
+      contractId
+    }
+    script
+    scriptData
+    salt
+    storageSlots
+    bytecodeWitnessIndex
+    bytecodeLength
   }
 }
 

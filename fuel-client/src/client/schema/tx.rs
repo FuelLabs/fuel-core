@@ -24,6 +24,7 @@ use std::convert::{
 };
 
 pub mod transparent_receipt;
+pub mod transparent_tx;
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -285,7 +286,7 @@ pub mod tests {
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {
         use cynic::QueryBuilder;
-        let operation = TransactionQuery::build(TxIdArgs {
+        let operation = transparent_tx::TransactionQuery::build(TxIdArgs {
             id: TransactionId::default(),
         });
         insta::assert_snapshot!(operation.query)

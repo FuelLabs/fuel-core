@@ -5,6 +5,7 @@ use crate::client::schema::{
         TransactionStatus,
         TxIdArgs,
     },
+    tx::transparent_receipt::Receipt,
     Address,
     AssetId,
     Bytes32,
@@ -25,7 +26,6 @@ use core::convert::{
 };
 use fuel_vm::{
     fuel_tx::StorageSlot,
-    prelude::Receipt,
 };
 use itertools::Itertools;
 
