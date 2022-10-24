@@ -89,6 +89,7 @@ impl TxPool {
                 .unwrap()
                 .tx_size_histogram
                 .observe(tx.bytecode_length().unwrap_or(0) as f64);
+        }
 
         let current_height = db.current_block_height()?;
 
@@ -150,6 +151,7 @@ impl TxPool {
                 self.remove_inner(&rem_tx);
                 return Ok(vec![rem_tx])
             }
+
             Ok(Vec::new())
         } else {
             // remove ret from by_hash and from by_price
@@ -160,7 +162,7 @@ impl TxPool {
                 self.by_gas_price.remove(rem);
             }
 
-            Ok(rem)
+                Ok(rem)
         }
     }
 
