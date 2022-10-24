@@ -74,8 +74,6 @@ async fn test_database_metrics() {
 
     assert_eq!(categories.len(), 40);
 
-    println!("{:?}", categories);
-
     for index in (2..12).step_by(3) {
         assert!(
             categories[index].split(' ').collect::<Vec<&str>>()[1]
@@ -86,8 +84,7 @@ async fn test_database_metrics() {
         );
     }
 
-    for index in &[15, 19, 20, 21, 24, 24, 25] {
-        println!("{:?} {}", categories[index], index);
+    for index in [15, 19, 20, 21, 24, 24, 25] {
         assert!(
             categories[index].split(' ').collect::<Vec<&str>>()[1]
                 .to_string()
