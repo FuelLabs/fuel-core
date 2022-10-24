@@ -9,7 +9,10 @@ use axum::{
         Response,
     },
 };
-use prometheus::{Encoder, TextEncoder};
+use prometheus::{
+    Encoder,
+    TextEncoder,
+};
 use prometheus_client::encoding::text::encode;
 use std::vec;
 
@@ -29,7 +32,6 @@ pub fn encode_metrics_response() -> impl IntoResponse {
     encode(&mut encoded, &P2P_METRICS.read().unwrap().peer_metrics).unwrap();
     encode(&mut encoded, &TXPOOL_METRICS.read().unwrap().registry).unwrap();
     encode(&mut encoded, &TXPOOL_METRICS.read().unwrap().registry).unwrap();
-
 
     Response::builder()
         .status(200)
