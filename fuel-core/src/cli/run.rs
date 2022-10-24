@@ -66,11 +66,6 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
-    /// Enable predicate execution on transaction inputs.
-    /// Will reject any transactions with predicates if set to false.
-    #[clap(long = "predicates")]
-    pub predicates: bool,
-
     #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
@@ -92,7 +87,6 @@ impl Command {
             manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
-            predicates,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
@@ -124,11 +118,14 @@ impl Command {
             },
             txpool: fuel_txpool::Config {
                 min_gas_price,
+                utxo_validation,
                 ..Default::default()
             },
-            predicates,
             block_importer: Default::default(),
-            block_producer: fuel_block_producer::Config { consensus_params },
+            block_producer: fuel_block_producer::Config {
+                utxo_validation,
+                consensus_params,
+            },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),

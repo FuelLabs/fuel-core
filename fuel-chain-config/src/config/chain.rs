@@ -48,7 +48,7 @@ impl Default for ChainConfig {
             block_production: BlockProduction::ProofOfAuthority {
                 trigger: fuel_poa_coordinator::Trigger::Instant,
             },
-            block_gas_limit: 1_000_000, // TODO: Pick a sensible default
+            block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
         }

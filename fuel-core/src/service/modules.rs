@@ -2,37 +2,43 @@
 use crate::{
     chain_config::BlockProduction,
     database::Database,
+    executor::Executor,
     service::Config,
 };
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
-    block_producer::BlockProducer,
-    common::prelude::Word,
-    model::{
-        BlockHeight,
-        FuelApplicationHeader,
-        FuelBlock,
-        FuelConsensusHeader,
-        PartialFuelBlock,
-        PartialFuelBlockHeader,
+    self,
+    block_producer::{
+        BlockProducer,
+        Relayer as BlockProducerRelayer,
     },
+    common::fuel_tx::Receipt,
+    executor::{
+        Error,
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
+    model::FuelBlock,
+    relayer::RelayerDb,
     txpool::{
         Sender,
         TxPoolDb,
     },
 };
+#[cfg(feature = "relayer")]
+use fuel_relayer::RelayerSynced;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
     sync::{
         broadcast,
         mpsc,
+        Mutex,
     },
     task::JoinHandle,
 };
-use tracing::info;
 
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
@@ -49,12 +55,12 @@ pub struct Modules {
 impl Modules {
     pub async fn stop(&self) {
         let stops: Vec<JoinHandle<()>> = vec![
-            self.txpool.stop().await,
-            self.block_importer.stop().await,
             self.coordinator.stop().await,
-            self.sync.stop().await,
             #[cfg(feature = "p2p")]
             self.network_service.stop().await,
+            self.txpool.stop().await,
+            self.block_importer.stop().await,
+            self.sync.stop().await,
         ]
         .into_iter()
         .flatten()
@@ -79,10 +85,10 @@ impl CoordinatorService {
 
 pub async fn start_modules(config: &Config, database: &Database) -> Result<Modules> {
     let db = ();
+
     // Initialize and bind all components
     let block_importer =
         fuel_block_importer::Service::new(&config.block_importer, db).await?;
-    let block_producer = Arc::new(DummyBlockProducer);
     let sync = fuel_sync::Service::new(&config.sync).await?;
 
     let coordinator = match &config.chain_conf.block_production {
@@ -110,6 +116,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
     let (block_event_sender, block_event_receiver) = mpsc::channel(100);
+    let (block_import_tx, block_import_rx) = broadcast::channel(16);
 
     #[cfg(feature = "p2p")]
     let (p2p_request_event_sender, p2p_request_event_receiver) = mpsc::channel(100);
@@ -155,12 +162,31 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .config(config.txpool.clone())
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
-        .import_block_event(block_importer.subscribe())
+        .import_block_event(block_import_rx)
         .tx_status_sender(tx_status_sender)
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
     txpool_builder.network_sender(p2p_request_event_sender.clone());
+
+    let block_producer = Arc::new(fuel_block_producer::Producer {
+        config: config.block_producer.clone(),
+        db: Box::new(database.clone()),
+        txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
+            sender: txpool_builder.sender().clone(),
+            consensus_params: config.chain_conf.transaction_parameters,
+        }),
+        executor: Box::new(ExecutorAdapter {
+            database: database.clone(),
+            config: config.clone(),
+        }),
+        relayer: Box::new(MaybeRelayerAdapter {
+            database: database.clone(),
+            #[cfg(feature = "relayer")]
+            relayer_synced: relayer.as_ref().map(|r| r.listen_synced()),
+        }),
+        lock: Mutex::new(()),
+    });
 
     // start services
 
@@ -168,12 +194,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     match &coordinator {
         CoordinatorService::Poa(poa) => {
-            // TODO: this must be connected to the block import mechanism
-            let (block_import_tx, mut block_import_rx) = broadcast::channel(16);
-            tokio::spawn(async move {
-                // Discard messages for now
-                while block_import_rx.recv().await.is_ok() {}
-            });
             poa.start(
                 txpool_builder.subscribe(),
                 txpool_builder.sender().clone(),
@@ -224,34 +244,56 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     })
 }
 
-// TODO: replace this with the real block producer
-struct DummyBlockProducer;
+struct ExecutorAdapter {
+    database: Database,
+    config: Config,
+}
 
 #[async_trait::async_trait]
-impl BlockProducer for DummyBlockProducer {
-    async fn produce_block(
+impl ExecutorTrait for ExecutorAdapter {
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+        let executor = Executor {
+            database: self.database.clone(),
+            config: self.config.clone(),
+        };
+        executor.execute(block).await
+    }
+
+    async fn dry_run(
         &self,
-        height: BlockHeight,
-        _max_gas: Word,
-    ) -> Result<FuelBlock> {
-        info!("block production called for height {:?}", height);
-        let r = PartialFuelBlock {
-            header: PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    da_height: Default::default(),
-                    generated: Default::default(),
-                },
-                consensus: FuelConsensusHeader {
-                    prev_root: Default::default(),
-                    height,
-                    time: Default::default(),
-                    generated: Default::default(),
-                },
-                metadata: Default::default(),
-            },
-            transactions: Default::default(),
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, Error> {
+        let executor = Executor {
+            database: self.database.clone(),
+            config: self.config.clone(),
+        };
+        executor.dry_run(block, utxo_validation).await
+    }
+}
+
+struct MaybeRelayerAdapter {
+    database: Database,
+    #[cfg(feature = "relayer")]
+    relayer_synced: Option<RelayerSynced>,
+}
+
+#[async_trait::async_trait]
+impl BlockProducerRelayer for MaybeRelayerAdapter {
+    async fn get_best_finalized_da_height(
+        &self,
+    ) -> Result<fuel_core_interfaces::model::DaBlockHeight> {
+        #[cfg(feature = "relayer")]
+        {
+            if let Some(sync) = self.relayer_synced.as_ref() {
+                sync.await_synced().await?;
+            }
         }
-        .generate(&[]);
-        Ok(r)
+
+        Ok(self
+            .database
+            .get_finalized_da_height()
+            .await
+            .unwrap_or_default())
     }
 }

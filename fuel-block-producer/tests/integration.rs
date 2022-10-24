@@ -125,8 +125,11 @@ async fn block_producer() -> Result<()> {
     let keep_alive = Box::new(incoming_tx_sender);
     Box::leak(keep_alive);
 
+    let mut tx_pool_config = TxPoolConfig::default();
+    tx_pool_config.chain_config.transaction_parameters = consensus_params;
+
     txpool_builder
-        .config(TxPoolConfig::default())
+        .config(tx_pool_config)
         .db(Box::new(txpool_db))
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(import_block_events_rx)
@@ -143,14 +146,17 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config { consensus_params },
-        db: &mock_db,
-        txpool: &TxPoolAdapter {
+        config: fuel_block_producer::config::Config {
+            consensus_params,
+            utxo_validation: true,
+        },
+        db: Box::new(mock_db.clone()),
+        txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
             consensus_params,
-        },
-        executor: &MockExecutor(mock_db.clone()),
-        relayer: &MockRelayer::default(),
+        }),
+        executor: Box::new(MockExecutor(mock_db.clone())),
+        relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
     };
 
@@ -257,21 +263,27 @@ impl CoinInfo {
 }
 
 fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
-    TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-        .gas_price(gas_price)
-        .gas_limit(gas_limit)
-        .add_unsigned_coin_input(
-            coin.secret_key,
-            coin.utxo_id(),
-            COIN_AMOUNT,
-            AssetId::zeroed(),
-            Default::default(),
-            0,
-        )
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id: AssetId::zeroed(),
-        })
-        .finalize_without_signature()
+    let mut tx = TransactionBuilder::script(
+        vec![Opcode::RET(REG_ZERO)].into_iter().collect(),
+        vec![],
+    )
+    .gas_price(gas_price)
+    .gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        coin.secret_key,
+        coin.utxo_id(),
+        COIN_AMOUNT,
+        AssetId::zeroed(),
+        Default::default(),
+        0,
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: AssetId::zeroed(),
+    })
+    .finalize_without_signature();
+
+    tx.sign_inputs(&coin.secret_key);
+    tx
 }
