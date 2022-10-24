@@ -270,9 +270,13 @@ impl BlockMutation {
             config: cfg.clone(),
         };
 
+<<<<<<< HEAD
         let block_time = get_time_closure(db, time, blocks_to_produce.0).await?;
 
         for idx in 0..blocks_to_produce.0 {
+=======
+        for _ in 0..blocks_to_produce.0 {
+>>>>>>> 5c0e26a (Integrate block production and the new trigger system (#712))
             let current_height = db.get_block_height()?.unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 

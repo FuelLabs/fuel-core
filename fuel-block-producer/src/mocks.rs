@@ -118,6 +118,19 @@ impl Executor for FailingMockExecutor {
             Ok(Default::default())
         }
     }
+
+    async fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        let mut err = self.0.lock().unwrap();
+        if let Some(err) = err.take() {
+            Err(err)
+        } else {
+            Ok(Default::default())
+        }
+    }
 }
 
 #[derive(Clone, Default)]
