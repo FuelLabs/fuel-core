@@ -1,6 +1,5 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 339
 expression: query.query
 ---
 mutation Mutation($_0: HexString!, $_1: Boolean) {

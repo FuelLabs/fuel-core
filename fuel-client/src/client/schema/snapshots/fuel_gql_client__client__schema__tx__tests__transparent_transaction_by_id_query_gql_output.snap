@@ -1,6 +1,5 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 314
 expression: operation.query
 ---
 query Query($_0: TransactionId!) {
