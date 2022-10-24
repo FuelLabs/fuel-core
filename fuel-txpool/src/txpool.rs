@@ -162,7 +162,7 @@ impl TxPool {
                 self.by_gas_price.remove(rem);
             }
 
-                Ok(rem)
+            Ok(rem)
         }
     }
 
