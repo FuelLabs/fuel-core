@@ -354,9 +354,12 @@ type MessageOutput {
 }
 
 type MessageProof {
-	proofRoot: Bytes32!
 	proofSet: [Bytes32!]!
-	message: Message!
+	sender: Address!
+	recipient: Address!
+	nonce: Bytes32!
+	amount: U64!
+	data: [Int!]!
 	signature: Signature!
 	block: Block!
 }

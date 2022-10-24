@@ -82,16 +82,22 @@ pub struct MessageProofQuery {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct MessageProof {
-    /// The merkle root of the message proof.
-    pub proof_root: Bytes32,
     /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
-    /// The out put message.
-    pub message: Message,
     /// The signature of the fuel block.
     pub signature: Signature,
     /// The fuel block that contains the message.
     pub block: Block,
+    /// The messages sender address.
+    pub sender: Address,
+    /// The messages recipient address.
+    pub recipient: Address,
+    /// The nonce from the message.
+    pub nonce: Bytes32,
+    /// The amount from the message.
+    pub amount: U64,
+    /// The data from the message.
+    pub data: Vec<i32>,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]

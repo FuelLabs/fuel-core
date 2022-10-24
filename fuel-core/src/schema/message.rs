@@ -215,9 +215,6 @@ pub struct MessageProof(pub(crate) model::MessageProof);
 
 #[Object]
 impl MessageProof {
-    async fn proof_root(&self) -> Bytes32 {
-        self.0.root.into()
-    }
     async fn proof_set(&self) -> Vec<Bytes32> {
         self.0
             .proof_set
@@ -227,8 +224,24 @@ impl MessageProof {
             .collect()
     }
 
-    async fn message(&self) -> Message {
-        Message(self.0.message.clone())
+    async fn sender(&self) -> Address {
+        self.0.sender.clone().into()
+    }
+
+    async fn recipient(&self) -> Address {
+        self.0.recipient.clone().into()
+    }
+
+    async fn nonce(&self) -> Bytes32 {
+        self.0.nonce.clone().into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.0.amount.clone().into()
+    }
+
+    async fn data(&self) -> &Vec<u8> {
+        &self.0.data
     }
 
     async fn signature(&self) -> super::scalars::Signature {
@@ -283,17 +296,6 @@ impl MessageProofData for MessageProofContext<'_> {
             .get(block_id)?
             .map(|block| block.into_owned().transactions)
             .unwrap_or_else(|| Vec::with_capacity(0)))
-    }
-
-    fn message(
-        &self,
-        message_id: &fuel_types::MessageId,
-    ) -> Result<Option<fuel_core_interfaces::model::Message>, KvStoreError> {
-        Ok(self
-            .0
-            .storage::<Messages>()
-            .get(message_id)?
-            .map(Cow::into_owned))
     }
 
     fn signature(

@@ -37,11 +37,6 @@ pub trait MessageProofData {
         &self,
         block_id: &Bytes32,
     ) -> Result<Vec<Bytes32>, KvStoreError>;
-    /// Get the message associated with the given message id.
-    fn message(
-        &self,
-        message_id: &MessageId,
-    ) -> Result<Option<fuel_core_interfaces::model::Message>, KvStoreError>;
     /// Get the signature of a fuel block.
     fn signature(
         &self,
@@ -58,11 +53,28 @@ pub async fn message_proof(
     message_id: MessageId,
 ) -> Result<Option<MessageProof>, KvStoreError> {
     // Check if the receipts for this transaction actually contain this message id or exit.
-    if !data.receipts(&transaction_id)?.into_iter().any(
-        |r| matches!(r, Receipt::MessageOut { message_id: id, .. } if id == message_id),
-    ) {
-        return Ok(None)
-    }
+    let receipt = data
+        .receipts(&transaction_id)?
+        .into_iter()
+        .find_map(|r| match r {
+            Receipt::MessageOut {
+                message_id: id,
+                sender,
+                recipient,
+                nonce,
+                amount,
+                data: message_data,
+                ..
+            } if id == message_id => {
+                Some((sender, recipient, nonce, amount, message_data))
+            }
+            _ => None,
+        });
+
+    let (sender, recipient, nonce, amount, message_data) = match receipt {
+        Some(r) => r,
+        None => return Ok(None),
+    };
 
     // Get the block id from the transaction status if it's ready.
     let block_id = data
@@ -139,12 +151,6 @@ pub async fn message_proof(
                 None => return Ok(None),
             };
 
-            // Get the message.
-            let message = match data.message(&message_id)? {
-                Some(t) => t,
-                None => return Ok(None),
-            };
-
             // Get the signature.
             let signature = match data.signature(&block_id)? {
                 Some(t) => t,
@@ -157,12 +163,25 @@ pub async fn message_proof(
                 None => return Ok(None),
             };
 
+            if *block.header.output_messages_root != proof.0 {
+                // This is bad as it means there's a bug in our prove code.
+                tracing::error!(
+                    "block header {:?} root doesn't match generated proof root {:?}",
+                    block.header,
+                    proof
+                );
+                return Ok(None)
+            }
+
             Ok(Some(MessageProof {
-                root: proof.0.into(),
                 proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
-                message,
                 signature,
                 block,
+                sender,
+                recipient,
+                nonce,
+                amount,
+                data: message_data,
             }))
         }
         None => Ok(None),

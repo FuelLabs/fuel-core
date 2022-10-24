@@ -17,6 +17,7 @@ use core::ops::Deref;
 use fuel_vm::{
     fuel_crypto,
     fuel_tx::Bytes32,
+    prelude::Output,
 };
 
 /// Message send from Da layer to fuel by bridge
@@ -57,16 +58,34 @@ pub struct CheckedMessage {
 }
 
 pub struct MessageProof {
-    /// The merkle root of the message proof.
-    pub root: Bytes32,
     /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
-    /// The out put message.
-    pub message: Message,
     /// The signature of the fuel block.
     pub signature: fuel_crypto::Signature,
     /// The fuel block that contains the message.
     pub block: FuelBlockDb,
+    /// The messages sender address.
+    pub sender: Address,
+    /// The messages recipient address.
+    pub recipient: Address,
+    /// The nonce from the message.
+    pub nonce: Bytes32,
+    /// The amount from the message.
+    pub amount: Word,
+    /// The data from the message.
+    pub data: Vec<u8>,
+}
+
+impl MessageProof {
+    pub fn message_id(&self) -> MessageId {
+        Output::message_id(
+            &self.sender,
+            &self.recipient,
+            &self.nonce,
+            self.amount,
+            &self.data,
+        )
+    }
 }
 
 impl CheckedMessage {
