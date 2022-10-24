@@ -6,7 +6,6 @@ use std::{
     panic,
 };
 use tokio::task::JoinHandle;
-use tracing::log::warn;
 
 pub use config::{
     Config,
@@ -54,11 +53,6 @@ impl FuelService {
 
     /// Private inner method for initializing the fuel service
     async fn init_service(database: Database, config: Config) -> Result<Self, AnyError> {
-        // check predicates flag
-        if config.predicates {
-            warn!("Predicates are currently an unstable feature!");
-        }
-
         // initialize state
         Self::initialize_state(&config, &database)?;
 
@@ -120,7 +114,7 @@ impl FuelService {
     /// some period of time.
     pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
         if let Some(relayer_handle) = &self.modules.relayer {
-            relayer_handle.await_synced().await?;
+            relayer_handle.listen_synced().await_synced().await?;
         }
         Ok(())
     }

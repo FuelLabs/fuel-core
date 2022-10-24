@@ -1,3 +1,5 @@
+use fuel_chain_config::ChainConfig;
+
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Maximum number of transactions inside the pool
@@ -9,6 +11,11 @@ pub struct Config {
 
     /// Whether or not to enable prometheus metrics for the txpool
     pub metrics: bool,
+
+    /// Flag to disable utxo existence and signature checks
+    pub utxo_validation: bool,
+    /// chain config
+    pub chain_config: ChainConfig,
 }
 
 impl Default for Config {
@@ -18,6 +25,8 @@ impl Default for Config {
             max_depth: 10,
             min_gas_price: 0,
             metrics: false,
+            utxo_validation: true,
+            chain_config: ChainConfig::default(),
         }
     }
 }

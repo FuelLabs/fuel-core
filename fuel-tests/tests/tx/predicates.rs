@@ -87,12 +87,16 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
     .finalize()
     .await;
 
-    let transaction_id = context.client.submit(&predicate_tx).await.unwrap();
+    context
+        .client
+        .submit_and_await_commit(&predicate_tx)
+        .await
+        .unwrap();
 
     // check transaction change amount to see if predicate was spent
     let transaction = context
         .client
-        .transaction(&transaction_id.to_string())
+        .transaction(&predicate_tx.id().to_string())
         .await
         .unwrap()
         .unwrap()

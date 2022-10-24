@@ -28,6 +28,7 @@ use fuel_core_interfaces::{
         Messages,
     },
     model::{
+        BlockHeight,
         Coin,
         Message,
     },
@@ -41,7 +42,7 @@ pub struct Data {
     pub messages: HashMap<MessageId, Message>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
@@ -154,4 +155,8 @@ impl StorageMutate<Messages> for MockDb {
     }
 }
 
-impl TxPoolDb for MockDb {}
+impl TxPoolDb for MockDb {
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
+        Ok(Default::default())
+    }
+}
