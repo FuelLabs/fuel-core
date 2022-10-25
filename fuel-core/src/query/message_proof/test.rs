@@ -66,7 +66,7 @@ fn other_out() -> Output {
 async fn can_build_message_proof() {
     use mockall::predicate::*;
     let expected_receipt = receipt(Some(11));
-    let message_id = expected_receipt.message_id().unwrap().clone();
+    let message_id = *expected_receipt.message_id().unwrap();
     let receipts: [Receipt; 4] = [
         receipt(Some(10)),
         receipt(None),
@@ -74,14 +74,14 @@ async fn can_build_message_proof() {
         expected_receipt,
     ];
     static TXNS: [Bytes32; 4] = [txn_id(20), txn_id(24), txn_id(1), txn_id(33)];
-    let transaction_id = TXNS[3].clone();
+    let transaction_id = TXNS[3];
     let other_receipts: [Receipt; 3] =
         [receipt(Some(4)), receipt(Some(5)), receipt(Some(6))];
 
     let message_ids: Vec<MessageId> = other_receipts
         .iter()
         .chain(receipts.iter())
-        .filter_map(|r| Some(r.message_id()?.clone()))
+        .filter_map(|r| Some(*r.message_id()?))
         .collect();
 
     let mut out = HashMap::new();
@@ -173,8 +173,5 @@ async fn can_build_message_proof() {
     assert_eq!(p.message_id(), message_id);
     assert_eq!(p.signature, fuel_crypto::Signature::default());
     let header = header.generate(&[vec![]], &message_ids);
-    assert_eq!(
-        p.block.header.output_messages_root,
-        header.output_messages_root
-    );
+    assert_eq!(p.header.output_messages_root, header.output_messages_root);
 }

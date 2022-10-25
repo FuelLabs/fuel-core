@@ -20,6 +20,7 @@ use std::{
         Formatter,
         LowerHex,
     },
+    ops::Deref,
     str::FromStr,
 };
 
@@ -175,6 +176,14 @@ impl From<HexString> for Vec<u8> {
     }
 }
 
+impl Deref for HexString {
+    type Target = Bytes;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Bytes(pub Vec<u8>);
 
@@ -212,6 +221,14 @@ impl<'de> Deserialize<'de> for Bytes {
 impl Display for Bytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x{}", hex::encode(&self.0))
+    }
+}
+
+impl Deref for Bytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

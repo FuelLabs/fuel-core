@@ -127,7 +127,7 @@ impl SuccessStatus {
             .get(&self.block_id)?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
-        let block = Block(block);
+        let block = Block::from(block);
         Ok(block)
     }
 
@@ -156,7 +156,7 @@ impl FailureStatus {
             .get(&self.block_id)?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
-        let block = Block(block);
+        let block = Block::from(block);
         Ok(block)
     }
 

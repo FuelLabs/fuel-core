@@ -91,6 +91,7 @@ async fn produce_block() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -135,6 +136,7 @@ async fn produce_block_negative() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -195,13 +197,21 @@ async fn block_connection_5(
     match pagination_direction {
         PageDirection::Forward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(0..5).collect_vec()
             );
         }
         PageDirection::Backward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(5..10).collect_vec()
             );
         }

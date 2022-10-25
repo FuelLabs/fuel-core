@@ -10,7 +10,10 @@ use crate::client::{
     PaginatedResult,
 };
 
-use super::tx::TransactionIdFragment;
+use super::{
+    tx::TransactionIdFragment,
+    Bytes32,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
@@ -67,9 +70,8 @@ pub struct BlockEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
-    pub height: U64,
     pub id: BlockId,
-    pub time: DateTime,
+    pub header: Header,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
@@ -93,6 +95,21 @@ pub struct ProduceBlockArgs {
 pub struct BlockMutation {
     #[arguments(blocks_to_produce = &args.blocks_to_produce)]
     pub produce_blocks: U64,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Header {
+    pub id: BlockId,
+    pub da_height: U64,
+    pub transactions_count: U64,
+    pub output_messages_count: U64,
+    pub transactions_root: Bytes32,
+    pub output_messages_root: Bytes32,
+    pub height: U64,
+    pub prev_root: Bytes32,
+    pub time: DateTime,
+    pub application_hash: Bytes32,
 }
 
 #[cfg(test)]

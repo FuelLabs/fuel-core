@@ -1,6 +1,6 @@
 use super::{
     BlockHeight,
-    FuelBlockDb,
+    FuelBlockHeader,
 };
 use crate::{
     common::{
@@ -60,10 +60,12 @@ pub struct CheckedMessage {
 pub struct MessageProof {
     /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
+    /// The index used to generate this proof.
+    pub proof_index: u64,
     /// The signature of the fuel block.
     pub signature: fuel_crypto::Signature,
-    /// The fuel block that contains the message.
-    pub block: FuelBlockDb,
+    /// The fuel block header that contains the message.
+    pub header: FuelBlockHeader,
     /// The messages sender address.
     pub sender: Address,
     /// The messages recipient address.

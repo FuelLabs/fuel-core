@@ -1,6 +1,7 @@
 use super::{
-    block::Block,
+    block::Header,
     Bytes32,
+    HexString,
     PageDirection,
     PageInfo,
     PaginatedResult,
@@ -23,7 +24,7 @@ pub struct Message {
     pub sender: Address,
     pub recipient: Address,
     pub nonce: U64,
-    pub data: Vec<i32>,
+    pub data: HexString,
     pub da_height: U64,
     pub fuel_block_spend: Option<U64>,
 }
@@ -84,10 +85,12 @@ pub struct MessageProofQuery {
 pub struct MessageProof {
     /// The proof set of the message proof.
     pub proof_set: Vec<Bytes32>,
+    /// The index that was used to produce this proof.
+    pub proof_index: U64,
     /// The signature of the fuel block.
     pub signature: Signature,
     /// The fuel block that contains the message.
-    pub block: Block,
+    pub header: Header,
     /// The messages sender address.
     pub sender: Address,
     /// The messages recipient address.
@@ -97,7 +100,7 @@ pub struct MessageProof {
     /// The amount from the message.
     pub amount: U64,
     /// The data from the message.
-    pub data: Vec<i32>,
+    pub data: HexString,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]

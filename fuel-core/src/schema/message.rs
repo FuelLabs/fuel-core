@@ -1,10 +1,11 @@
 use std::borrow::Cow;
 
 use super::{
-    block::Block,
+    block::Header,
     scalars::{
         Address,
         Bytes32,
+        HexString,
         MessageId,
         TransactionId,
         U64,
@@ -71,8 +72,8 @@ impl Message {
         self.0.nonce.into()
     }
 
-    async fn data(&self) -> &Vec<u8> {
-        &self.0.data
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
     }
 
     async fn da_height(&self) -> U64 {
@@ -224,32 +225,36 @@ impl MessageProof {
             .collect()
     }
 
+    async fn proof_index(&self) -> U64 {
+        self.0.proof_index.into()
+    }
+
     async fn sender(&self) -> Address {
-        self.0.sender.clone().into()
+        self.0.sender.into()
     }
 
     async fn recipient(&self) -> Address {
-        self.0.recipient.clone().into()
+        self.0.recipient.into()
     }
 
     async fn nonce(&self) -> Bytes32 {
-        self.0.nonce.clone().into()
+        self.0.nonce.into()
     }
 
     async fn amount(&self) -> U64 {
-        self.0.amount.clone().into()
+        self.0.amount.into()
     }
 
-    async fn data(&self) -> &Vec<u8> {
-        &self.0.data
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
     }
 
     async fn signature(&self) -> super::scalars::Signature {
         self.0.signature.into()
     }
 
-    async fn block(&self) -> Block {
-        Block(self.0.block.clone())
+    async fn header(&self) -> Header {
+        Header(self.0.header.clone())
     }
 }
 

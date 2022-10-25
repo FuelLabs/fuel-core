@@ -158,16 +158,16 @@ pub async fn message_proof(
             };
 
             // Get the fuel block.
-            let block = match data.block(&block_id)? {
-                Some(t) => t,
+            let header = match data.block(&block_id)? {
+                Some(t) => t.header,
                 None => return Ok(None),
             };
 
-            if *block.header.output_messages_root != proof.0 {
+            if *header.output_messages_root != proof.0 {
                 // This is bad as it means there's a bug in our prove code.
                 tracing::error!(
                     "block header {:?} root doesn't match generated proof root {:?}",
-                    block.header,
+                    header,
                     proof
                 );
                 return Ok(None)
@@ -175,8 +175,9 @@ pub async fn message_proof(
 
             Ok(Some(MessageProof {
                 proof_set: proof.1.into_iter().map(Bytes32::from).collect(),
+                proof_index: proof_index as u64,
                 signature,
-                block,
+                header,
                 sender,
                 recipient,
                 nonce,
