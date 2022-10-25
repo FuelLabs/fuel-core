@@ -38,6 +38,7 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
+        prelude::Bytes32,
     },
     db::Transactions,
     executor::{
@@ -62,7 +63,8 @@ pub struct Block(pub(crate) FuelBlockDb);
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        self.0.id().into()
+        let bytes: Bytes32 = self.0.id().into();
+        bytes.into()
     }
 
     async fn height(&self) -> U64 {

@@ -39,7 +39,6 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_tx,
-        fuel_types,
         fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
     },
@@ -113,7 +112,7 @@ impl SubmittedStatus {
 }
 
 pub struct SuccessStatus {
-    block_id: fuel_types::Bytes32,
+    block_id: fuel_core_interfaces::model::BlockId,
     time: DateTime<Utc>,
     result: VmProgramState,
 }
@@ -124,7 +123,7 @@ impl SuccessStatus {
         let db = ctx.data_unchecked::<Database>();
         let block = db
             .storage::<FuelBlocks>()
-            .get(&self.block_id)?
+            .get(&self.block_id.into())?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
         let block = Block(block);
@@ -141,7 +140,7 @@ impl SuccessStatus {
 }
 
 pub struct FailureStatus {
-    block_id: fuel_types::Bytes32,
+    block_id: fuel_core_interfaces::model::BlockId,
     time: DateTime<Utc>,
     reason: String,
     state: Option<VmProgramState>,
@@ -153,7 +152,7 @@ impl FailureStatus {
         let db = ctx.data_unchecked::<Database>();
         let block = db
             .storage::<FuelBlocks>()
-            .get(&self.block_id)?
+            .get(&self.block_id.into())?
             .ok_or(KvStoreError::NotFound)?
             .into_owned();
         let block = Block(block);

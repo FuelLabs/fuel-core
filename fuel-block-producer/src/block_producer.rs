@@ -236,7 +236,7 @@ impl Producer {
             // TODO: this should use a proper BMT MMR
             let hash = previous_block.id();
             let prev_root = ephemeral_merkle_root(
-                vec![*previous_block.header.prev_root(), hash].iter(),
+                vec![*previous_block.header.prev_root(), hash.into()].iter(),
             );
 
             Ok(PreviousBlockInfo {

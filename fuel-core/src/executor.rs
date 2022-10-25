@@ -60,6 +60,7 @@ use fuel_core_interfaces::{
         TransactionValidityError,
     },
     model::{
+        BlockId,
         DaBlockHeight,
         Message,
         PartialFuelBlock,
@@ -213,7 +214,7 @@ impl Executor {
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
-            .insert(&finalized_block_id, &block.to_db_block())?;
+            .insert(&finalized_block_id.into(), &block.to_db_block())?;
 
         // Commit the database transaction.
         block_db_transaction.commit()?;
@@ -880,7 +881,7 @@ impl Executor {
 
     fn persist_transaction_status(
         &self,
-        finalized_block_id: Bytes32,
+        finalized_block_id: BlockId,
         tx_status: &mut [(Bytes32, TransactionStatus)],
         db: &Database,
     ) -> Result<(), Error> {

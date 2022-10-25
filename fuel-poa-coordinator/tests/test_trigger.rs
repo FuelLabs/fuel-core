@@ -15,6 +15,7 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        BlockId,
         FuelBlock,
         FuelBlockConsensus,
         FuelConsensusHeader,
@@ -165,7 +166,7 @@ pub struct MockDatabase {
 #[derive(Default)]
 pub struct MockDatabaseInner {
     height: u32,
-    consensus: HashMap<Bytes32, FuelBlockConsensus>,
+    consensus: HashMap<BlockId, FuelBlockConsensus>,
 }
 
 impl MockDatabase {
@@ -181,7 +182,7 @@ impl BlockDb for MockDatabase {
 
     fn seal_block(
         &mut self,
-        block_id: Bytes32,
+        block_id: BlockId,
         consensus: FuelBlockConsensus,
     ) -> anyhow::Result<()> {
         if self.inner.read().consensus.contains_key(&block_id) {
@@ -516,7 +517,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
                 }
                 .public_key();
 
-                let message = unsafe { Message::from_bytes_unchecked((*id).into()) };
+                let message = id.into_message();
 
                 poa.signature
                     .verify(&pk, &message)

@@ -14,7 +14,6 @@ use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
     common::{
-        fuel_crypto,
         prelude::{
             SecretKey,
             Signature,
@@ -320,11 +319,9 @@ where
     fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
         if let Some(key) = &self.signing_key {
             let block_hash = block.id();
-            // This is safe because block.id() is a cryptographically secure hash.
             // Without this, the signature would be using a hash of the id making it more
             // difficult to verify.
-            let message =
-                unsafe { fuel_crypto::Message::from_bytes_unchecked(*block_hash) };
+            let message = block_hash.into_message();
 
             // The length of the secret is checked
             let signing_key =
