@@ -615,6 +615,9 @@ type SuccessStatus {
 
 input TimeParameters {
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> e4cea65 (fix schema derivation)
 	"""
 	The time to set on the first block
 	"""
@@ -622,9 +625,12 @@ input TimeParameters {
 	"""
 	The time interval between subsequent blocks
 	"""
+<<<<<<< HEAD
 =======
 	startTime: U64!
 >>>>>>> bb60e48 (add helper for latest block time)
+=======
+>>>>>>> e4cea65 (fix schema derivation)
 	blockTimeInterval: U64!
 }
 
