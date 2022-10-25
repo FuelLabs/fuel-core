@@ -6,17 +6,33 @@ use crate::{
     Config,
     Trigger,
 };
-use anyhow::Context;
+use anyhow::{
+    anyhow,
+    Context,
+};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
-    common::prelude::Word,
+    common::{
+        fuel_crypto,
+        prelude::{
+            SecretKey,
+            Signature,
+            Word,
+        },
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
+    },
     model::{
         BlockHeight,
         FuelBlock,
+        FuelBlockConsensus,
+        FuelBlockPoAConsensus,
     },
     poa_coordinator::{
-        BlockHeightDb,
+        BlockDb,
         TransactionPool,
     },
     txpool::{
@@ -65,7 +81,7 @@ impl Service {
         block_producer: Arc<dyn BlockProducer>,
         db: S,
     ) where
-        S: BlockHeightDb + Send + Clone + 'static,
+        S: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
     {
         let mut running = self.running.lock();
@@ -80,6 +96,7 @@ impl Service {
         let task = Task {
             stop: stop_rx,
             block_gas_limit: self.config.block_gas_limit,
+            signing_key: self.config.signing_key.clone(),
             db,
             block_producer,
             txpool_broadcast,
@@ -111,11 +128,12 @@ impl Service {
 
 pub struct Task<S, T>
 where
-    S: BlockHeightDb + Send,
+    S: BlockDb + Send + Sync,
     T: TransactionPool,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
+    signing_key: Option<Secret<[u8; 32]>>,
     db: S,
     block_producer: Arc<dyn BlockProducer>,
     txpool: T,
@@ -131,7 +149,7 @@ where
 }
 impl<S, T> Task<S, T>
 where
-    S: BlockHeightDb + Send,
+    S: BlockDb + Send,
     T: TransactionPool,
 {
     // Request the block producer to make a new block, and return it when ready
@@ -150,6 +168,9 @@ where
     async fn produce_block(&mut self) -> anyhow::Result<()> {
         // Ask the block producer to create the block
         let block = self.signal_produce_block().await?;
+
+        // sign the block and seal it
+        self.seal_block(&block)?;
 
         // Send the block back to the txpool
         // TODO: this probably must be done differently with multi-node configuration
@@ -293,6 +314,32 @@ where
                     .set_timeout(max_block_time, OnConflict::Overwrite)
                     .await;
             }
+        }
+    }
+
+    fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
+        if let Some(key) = &self.signing_key {
+            let block_hash = block.id();
+            // This is safe because block.id() is a cryptographically secure hash.
+            // Without this, the signature would be using a hash of the id making it more
+            // difficult to verify.
+            let message =
+                unsafe { fuel_crypto::Message::from_bytes_unchecked(*block_hash) };
+
+            // The length of the secret is checked
+            let signing_key =
+                unsafe { SecretKey::from_slice_unchecked(key.expose_secret()) };
+
+            // check if secret is in the field
+            if !signing_key.is_in_field() {
+                return Err(anyhow!("invalid poa signing key, not in field"))
+            }
+
+            let poa_signature = Signature::sign(&signing_key, &message);
+            let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+            self.db.seal_block(block_hash, seal)
+        } else {
+            Err(anyhow!("no PoA signing key configured"))
         }
     }
 

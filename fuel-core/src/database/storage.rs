@@ -7,7 +7,10 @@ use fuel_core_interfaces::{
             UtxoId,
         },
     },
-    model::FuelBlockDb,
+    model::{
+        FuelBlockConsensus,
+        FuelBlockDb,
+    },
 };
 use fuel_txpool::types::ContractId;
 
@@ -42,6 +45,15 @@ impl Mappable for Receipts {
     type Key = Bytes32;
     type SetValue = [Receipt];
     type GetValue = Vec<Receipt>;
+}
+
+/// The table of consensus metadata associated with sealed (finalized) blocks
+pub struct SealedBlockConsensus;
+
+impl Mappable for SealedBlockConsensus {
+    type Key = Bytes32;
+    type SetValue = FuelBlockConsensus;
+    type GetValue = Self::SetValue;
 }
 
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.

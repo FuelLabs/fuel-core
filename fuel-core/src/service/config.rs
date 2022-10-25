@@ -1,4 +1,12 @@
 use fuel_chain_config::ChainConfig;
+use fuel_core_interfaces::common::{
+    prelude::SecretKey,
+    secrecy::Secret,
+};
+use rand::{
+    rngs::StdRng,
+    SeedableRng,
+};
 use std::{
     net::{
         Ipv4Addr,
@@ -34,11 +42,21 @@ pub struct Config {
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
     pub p2p: fuel_p2p::config::P2PConfig,
+    // TODO: make fuel_crypto::Secret support zeroize
+    pub consensus_key: Option<Secret<[u8; 32]>>,
 }
 
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+
+        let dev_key = {
+            // TODO: make fuel-crypto re-export deps needed for doing mnemomics instead of
+            //  using random keygen here
+            let mut rng = StdRng::seed_from_u64(50);
+            let secret = SecretKey::random(&mut rng);
+            <[u8; 32]>::from(secret)
+        };
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
@@ -60,6 +78,7 @@ impl Config {
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
             p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
+            consensus_key: Some(Secret::new(dev_key)),
         }
     }
 }

@@ -21,7 +21,10 @@ pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
-        fuel_storage::StorageAsRef,
+        fuel_storage::{
+            StorageAsMut,
+            StorageAsRef,
+        },
         fuel_vm::prelude::{
             Address,
             Bytes32,
@@ -36,7 +39,7 @@ use fuel_core_interfaces::{
         SealedFuelBlock,
     },
     p2p::P2pDb,
-    poa_coordinator::BlockHeightDb,
+    poa_coordinator::BlockDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
@@ -55,8 +58,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::database::storage::SealedBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use anyhow::anyhow;
+use fuel_core_interfaces::model::FuelBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -71,6 +77,7 @@ mod coin;
 mod contracts;
 mod message;
 mod receipts;
+mod sealed_block;
 mod state;
 
 pub mod metadata;
@@ -117,6 +124,8 @@ pub enum Column {
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,
+    /// The column that stores the consensus metadata associated with a finalized fuel block
+    FuelBlockConsensus = 16,
 }
 
 #[derive(Clone, Debug)]
@@ -297,9 +306,27 @@ impl Default for Database {
     }
 }
 
-impl BlockHeightDb for Database {
+impl BlockDb for Database {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
         Ok(self.get_block_height()?.unwrap_or_default())
+    }
+
+    fn seal_block(
+        &mut self,
+        block_id: Bytes32,
+        consensus: FuelBlockConsensus,
+    ) -> anyhow::Result<()> {
+        if self
+            .storage::<SealedBlockConsensus>()
+            .contains_key(&block_id)?
+        {
+            return Err(anyhow!("block {} is already sealed", &block_id))
+        }
+
+        self.storage::<SealedBlockConsensus>()
+            .insert(&block_id, &consensus)
+            .map(|_| ())
+            .map_err(Into::into)
     }
 }
 
@@ -443,9 +470,15 @@ mod relayer {
 
         async fn get_sealed_block(
             &self,
-            _height: BlockHeight,
+            height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            Some(Arc::new(SealedFuelBlock::fix_me_default_block()))
+            let block_id = self
+                .get_block_id(height)
+                .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
+
+            self.get_sealed_block(&block_id)
+                .expect("expected to find sealed block")
+                .map(Arc::new)
         }
 
         async fn set_finalized_da_height(&self, block: DaBlockHeight) {

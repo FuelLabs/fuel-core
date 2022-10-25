@@ -22,6 +22,7 @@ pub use block::{
     PartialFuelBlock,
     PartialFuelBlockHeader,
     SealedFuelBlock,
+    SealedFuelBlockHeader,
 };
 pub use block_height::BlockHeight;
 pub use coin::{
