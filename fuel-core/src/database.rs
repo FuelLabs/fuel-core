@@ -34,6 +34,7 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        BlockId,
         ConsensusType,
         FuelBlockDb,
         SealedFuelBlock,
@@ -313,18 +314,18 @@ impl BlockDb for Database {
 
     fn seal_block(
         &mut self,
-        block_id: Bytes32,
+        block_id: BlockId,
         consensus: FuelBlockConsensus,
     ) -> anyhow::Result<()> {
         if self
             .storage::<SealedBlockConsensus>()
-            .contains_key(&block_id)?
+            .contains_key(&block_id.into())?
         {
-            return Err(anyhow!("block {} is already sealed", &block_id))
+            return Err(anyhow!("block {:x} is already sealed", &block_id))
         }
 
         self.storage::<SealedBlockConsensus>()
-            .insert(&block_id, &consensus)
+            .insert(&block_id.into(), &consensus)
             .map(|_| ())
             .map_err(Into::into)
     }
@@ -366,11 +367,7 @@ impl InterpreterStorage for Database {
                 // FIXME: Get producer address from block signature.
                 // block_id -> Signature
                 let signature = Signature::default();
-                let message = unsafe {
-                    fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
-                    block.header.id().into(),
-                )
-                };
+                let message = block.header.id().into_message();
                 // TODO: throw an error if public key isn't recoverable
                 //  when implementing signing (https://github.com/FuelLabs/fuel-core/issues/668)
                 let public_key = signature.recover(&message).unwrap_or_default();

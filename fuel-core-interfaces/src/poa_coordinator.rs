@@ -1,8 +1,8 @@
 use anyhow::Result;
-use fuel_vm::fuel_tx::Bytes32;
 
 use crate::model::{
     BlockHeight,
+    BlockId,
     FuelBlockConsensus,
 };
 
@@ -12,7 +12,7 @@ pub trait BlockDb: Send + Sync {
     // Returns error if already sealed
     fn seal_block(
         &mut self,
-        block_id: Bytes32,
+        block_id: BlockId,
         consensus: FuelBlockConsensus,
     ) -> Result<()>;
 }

@@ -15,6 +15,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 chrono = { version = "0.4" }
 derive_more = { version = "0.99" }
+fuel-crypto = { version = "0.6", default-features = false }
 fuel-vm = { version = "0.18", default-features = false, features = ["random"] }
 futures = "0.3"
 lazy_static = "1.4"

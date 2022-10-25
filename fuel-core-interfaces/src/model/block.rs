@@ -20,9 +20,45 @@ use fuel_vm::{
     fuel_types::MessageId,
     prelude::Signature,
 };
+use std::fmt;
 
 #[cfg(any(test, feature = "test-helpers"))]
 use chrono::TimeZone;
+
+/// A cryptographically secure hash, identifying a block.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+#[repr(transparent)]
+pub struct BlockId(Bytes32);
+
+impl BlockId {
+    /// Converts the hash into a message having the same bytes.
+    pub fn into_message(self) -> fuel_crypto::Message {
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_crypto::Message::from_bytes_unchecked(*self.0) }
+        // Without this, the signature would be using a hash of the id making it more
+        // difficult to verify.
+    }
+}
+
+impl From<Bytes32> for BlockId {
+    fn from(bytes: Bytes32) -> Self {
+        Self(bytes)
+    }
+}
+
+impl Into<Bytes32> for BlockId {
+    fn into(self) -> Bytes32 {
+        self.0
+    }
+}
+
+impl fmt::LowerHex for BlockId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.0, f)
+    }
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -120,7 +156,7 @@ pub struct GeneratedConsensusFields {
 /// Extra data that is not actually part of the header.
 pub struct HeaderMetadata {
     /// Hash of the header.
-    id: Bytes32,
+    id: BlockId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,13 +218,13 @@ impl FuelBlockHeader {
     }
 
     /// Get the hash of the fuel header.
-    pub fn hash(&self) -> Bytes32 {
+    pub fn hash(&self) -> BlockId {
         // This internally hashes the hash of the application header.
         self.consensus.hash()
     }
 
     /// Get the cached fuel header hash.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         if let Some(ref metadata) = self.metadata {
             metadata.id
         } else {
@@ -299,14 +335,14 @@ impl FuelApplicationHeader<GeneratedApplicationFields> {
 
 impl FuelConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
-    fn hash(&self) -> Bytes32 {
+    fn hash(&self) -> BlockId {
         // Order matters and is the same as the spec.
         let mut hasher = Hasher::default();
         hasher.input(self.prev_root.as_ref());
         hasher.input(&self.height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.application_hash.as_ref());
-        hasher.digest()
+        BlockId(hasher.digest())
     }
 }
 
@@ -367,7 +403,7 @@ pub struct FuelBlockDb {
 
 impl FuelBlockDb {
     /// Hash of the header.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         self.header.id()
     }
 
@@ -458,7 +494,7 @@ impl FuelBlock {
     }
 
     /// Get the hash of the header.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         self.header.id()
     }
 

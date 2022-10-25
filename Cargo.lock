@@ -2373,6 +2373,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_more",
+ "fuel-crypto",
  "fuel-vm",
  "futures",
  "lazy_static",

@@ -64,14 +64,12 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         FuelBlockConsensus::PoA(poa) => poa.signature,
     };
     signature
-        .verify(&poa_public, unsafe {
-            &Message::from_bytes_unchecked(*block_id)
-        })
+        .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
 
     // check sealed block is correct
     let sealed_block = db
-        .get_sealed_block(&block_id)
+        .get_sealed_block(&block_id.into())
         .unwrap()
         .expect("expected sealed header to be available");
 
@@ -81,8 +79,6 @@ async fn can_get_sealed_block_from_poa_produced_block() {
         FuelBlockConsensus::PoA(poa) => poa.signature,
     };
     signature
-        .verify(&poa_public, unsafe {
-            &Message::from_bytes_unchecked(*block_id)
-        })
+        .verify(&poa_public, &block_id.into_message())
         .expect("failed to verify signature");
 }

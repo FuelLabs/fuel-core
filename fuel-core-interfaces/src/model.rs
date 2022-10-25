@@ -11,6 +11,7 @@ use crate::common::fuel_types::{
     Bytes32,
 };
 pub use block::{
+    BlockId,
     ConsensusType,
     FuelApplicationHeader,
     FuelBlock,
