@@ -1,4 +1,6 @@
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::gossipsub::{
+    metrics::Config as MetricsConfig,
     FastMessageId,
     Gossipsub,
     GossipsubConfig,
@@ -51,15 +53,38 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
 
 /// Given a `P2pConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
-    let mut gossipsub = Gossipsub::new(
-        MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
-        p2p_config.gossipsub_config.clone(),
-    )
-    .expect("gossipsub initialized");
+    if p2p_config.metrics {
+        // Move to Metrics related feature flag
+        let p2p_registry = &mut P2P_METRICS
+            .write()
+            .expect("Something already captured p2p metrics")
+            .gossip_sub_registry;
+        let metrics_config = MetricsConfig::default();
 
-    gossipsub
-        .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
-        .expect("gossipsub initialized with peer score");
+        let mut gossipsub = Gossipsub::new_with_metrics(
+            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            p2p_config.gossipsub_config.clone(),
+            p2p_registry,
+            metrics_config,
+        )
+        .expect("gossipsub initialized");
 
-    gossipsub
+        gossipsub
+            .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
+            .expect("gossipsub initialized with peer score");
+
+        gossipsub
+    } else {
+        let mut gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            p2p_config.gossipsub_config.clone(),
+        )
+        .expect("gossipsub initialized");
+
+        gossipsub
+            .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
+            .expect("gossipsub initialized with peer score");
+
+        gossipsub
+    }
 }
