@@ -51,17 +51,6 @@ type Block {
 	time: DateTime!
 }
 
-input TimeParameters {
-	"""
-	The time to set on the first block
-	"""
-	startTime: U64!
-	"""
-	The time interval between subsequent blocks
-	"""
-	blockTimeInterval: U64!
-}
-
 type BlockConnection {
 	"""
 	Information to aid in pagination.
@@ -560,6 +549,11 @@ type SuccessStatus {
 	block: Block!
 	time: DateTime!
 	programState: ProgramState!
+}
+
+input TimeParameters {
+	startTime: U64!
+	blockTimeInterval: U64!
 }
 
 type Transaction {

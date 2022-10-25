@@ -73,7 +73,10 @@ pub use schema::{
     PaginationRequest,
 };
 
-use self::schema::block::{ProduceBlockArgs, TimeParameters};
+use self::schema::block::{
+    ProduceBlockArgs,
+    TimeParameters,
+};
 
 pub mod schema;
 pub mod types;
@@ -416,9 +419,14 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_blocks(&self, blocks_to_produce: u64, time: Option<TimeParameters>) -> io::Result<u64> {
+    pub async fn produce_blocks(
+        &self,
+        blocks_to_produce: u64,
+        time: Option<TimeParameters>,
+    ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
-            blocks_to_produce: blocks_to_produce.into(), time
+            blocks_to_produce: blocks_to_produce.into(),
+            time,
         });
 
         let new_height = self.query(query).await?.produce_blocks;
