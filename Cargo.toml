@@ -21,9 +21,6 @@ members = [
   "xtask",
 ]
 
-[patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm.git"}
-
 [profile.release]
 codegen-units = 1
 lto = "fat"

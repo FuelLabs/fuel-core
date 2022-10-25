@@ -2,10 +2,10 @@ use crate::client::schema::{
     contract::ContractIdFragment,
     schema,
     tx::{
+        transparent_receipt::Receipt,
         TransactionStatus,
         TxIdArgs,
     },
-    tx::transparent_receipt::Receipt,
     Address,
     AssetId,
     Bytes32,
@@ -24,9 +24,7 @@ use core::convert::{
     TryFrom,
     TryInto,
 };
-use fuel_vm::{
-    fuel_tx::StorageSlot,
-};
+use fuel_vm::fuel_tx::StorageSlot;
 use itertools::Itertools;
 
 /// Retrieves the transaction in opaque form
