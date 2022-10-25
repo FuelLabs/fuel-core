@@ -238,7 +238,9 @@ impl BlockQuery {
 
 #[derive(InputObject)]
 struct TimeParameters {
+    /// The time to set on the first block
     start_time: U64,
+    /// The time interval between subsequent blocks
     block_time_interval: U64,
 }
 
