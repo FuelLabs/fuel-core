@@ -48,6 +48,7 @@ query Query($_0: TransactionId!) {
     }
     isScript
     isCreate
+    isMint
     outputs {
       __typename
       ... on CoinOutput {

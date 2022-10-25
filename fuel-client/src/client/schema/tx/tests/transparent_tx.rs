@@ -79,6 +79,7 @@ pub struct Transaction {
     pub inputs: Option<Vec<Input>>,
     pub is_script: bool,
     pub is_create: bool,
+    pub is_mint: bool,
     pub outputs: Vec<Output>,
     pub maturity: Option<U64>,
     pub receipts_root: Option<Bytes32>,
