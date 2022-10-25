@@ -2137,13 +2137,13 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
-        let time = rng.gen_range(1u32..u32::MAX);
+        let time = Utc.timestamp(rng.gen_range(1u32..u32::MAX) as i64, 0);
 
         let block = PartialFuelBlock {
             header: PartialFuelBlockHeader {
                 consensus: FuelConsensusHeader {
                     height: block_height.into(),
-                    time: Utc.timestamp(time as i64, 0),
+                    time,
                     ..Default::default()
                 },
                 ..Default::default()
@@ -2189,6 +2189,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(time as u64, receipts[0].val().unwrap());
+        assert_eq!(time.timestamp_millis() as Word, receipts[0].val().unwrap());
     }
 }
