@@ -25,10 +25,14 @@ use fuel_core_interfaces::{
     model::FuelConsensusHeader,
 };
 use fuel_gql_client::client::{
+    schema::{
+        block::TimeParameters,
+        U64,
+    },
     types::TransactionStatus,
     FuelClient,
     PageDirection,
-    PaginationRequest, schema::{block::TimeParameters, U64},
+    PaginationRequest,
 };
 use itertools::{
     rev,
@@ -155,40 +159,25 @@ async fn produce_block_custom_time() {
 
     config.manual_blocks_enabled = true;
 
-    let srv = FuelService::from_database(db, config).await.unwrap();
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
-    let time = TimeParameters{ start_time: U64::from(100u64), block_time_interval: U64::from(10u64)};
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
     let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
 
     assert_eq!(5, new_height);
 
-    let tx = fuel_tx::Transaction::default();
-
-    client.submit(&tx).await.unwrap();
-
-    let transaction_response = client
-        .transaction(&format!("{:#x}", tx.id()))
-        .await
-        .unwrap();
-
-    if let TransactionStatus::Success { block_id, .. } =
-        transaction_response.unwrap().status
-    {
-        let block_height: u64 = client
-            .block(block_id.to_string().as_str())
-            .await
-            .unwrap()
-            .unwrap()
-            .height
-            .into();
-
-        // Block height is now 6 after being advance 5
-        assert!(6 == block_height);
-    } else {
-        panic!("Wrong tx status");
-    };
+    assert_eq!(db.timestamp(1).unwrap(), 100);
+    assert_eq!(db.timestamp(2).unwrap(), 110);
+    assert_eq!(db.timestamp(3).unwrap(), 120);
+    assert_eq!(db.timestamp(4).unwrap(), 130);
+    assert_eq!(db.timestamp(5).unwrap(), 140);
 }
 
 #[tokio::test]

@@ -54,17 +54,6 @@ type Block {
 >>>>>>> c10a814 (Reconcile Fuel Block Header (#692))
 }
 
-input TimeParameters {
-	"""
-	The time to set on the first block
-	"""
-	startTime: U64!
-	"""
-	The time interval between subsequent blocks
-	"""
-	blockTimeInterval: U64!
-}
-
 type BlockConnection {
 	"""
 	Information to aid in pagination.
@@ -625,6 +614,7 @@ type SuccessStatus {
 }
 
 input TimeParameters {
+<<<<<<< HEAD
 	"""
 	The time to set on the first block
 	"""
@@ -632,6 +622,9 @@ input TimeParameters {
 	"""
 	The time interval between subsequent blocks
 	"""
+=======
+	startTime: U64!
+>>>>>>> bb60e48 (add helper for latest block time)
 	blockTimeInterval: U64!
 }
 
