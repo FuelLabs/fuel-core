@@ -106,9 +106,8 @@ mod tests {
                         gas_price_factor: 1,
                         ..ConsensusParameters::default()
                     },
-                )
+                ).into()
             })
-            .map(Into::into)
             .map(Arc::new)
             .collect();
 
