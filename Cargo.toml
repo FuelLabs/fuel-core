@@ -28,4 +28,4 @@ panic = "abort"
 
 [patch.crates-io]
 fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/methods-refactoring" }
-fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx/", branch = "feature/methods-refactoring" }
+fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx/" }

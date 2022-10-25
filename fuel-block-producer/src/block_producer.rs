@@ -142,7 +142,7 @@ impl Trait for Producer {
             None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1u64.into();
-        let checked = if self.config.utxo_validation {
+        let checked: Transaction = if self.config.utxo_validation {
             let (transaction, _) = transaction
                 .into_checked(height.into(), &self.config.consensus_params)?
                 .into();
