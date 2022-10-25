@@ -16,6 +16,7 @@ use chrono::{
 };
 use core::ops::Deref;
 use fuel_vm::{
+    fuel_crypto,
     fuel_merkle,
     fuel_types::MessageId,
     prelude::Signature,
