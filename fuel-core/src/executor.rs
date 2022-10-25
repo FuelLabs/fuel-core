@@ -31,6 +31,7 @@ use fuel_core_interfaces::{
             CreateCheckedMetadata,
             Input,
             IntoChecked,
+            Mint,
             Output,
             Receipt,
             ScriptCheckedMetadata,
@@ -259,6 +260,7 @@ impl Executor {
         // Split out the execution kind and partial block.
         let (execution_kind, block) = block.split();
 
+        // TODO: Implement coinbase
         // Execute each transaction.
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
             let tx_id = tx.id();
@@ -311,6 +313,12 @@ impl Executor {
                         block_db_transaction,
                         execution_kind,
                     )?
+                }
+                CheckedTransaction::Mint(mint) => {
+                    // Right now, we only support `Mint` transactions for coinbase,
+                    // which are processed separately.
+                    let (mint, _): (Mint, _) = mint.into();
+                    return Err(Error::NotSupportedTransaction(Box::new(mint.into())))
                 }
             }
         }
@@ -724,6 +732,7 @@ impl Executor {
                 let inputs = match tx {
                     Transaction::Script(script) => script.inputs_mut(),
                     Transaction::Create(create) => create.inputs_mut(),
+                    Transaction::Mint(_) => return Ok(()),
                 };
 
                 let iter = inputs.iter_mut().filter_map(|input| match input {
@@ -744,6 +753,7 @@ impl Executor {
                 let inputs = match tx {
                     Transaction::Script(script) => script.inputs(),
                     Transaction::Create(create) => create.inputs(),
+                    Transaction::Mint(_) => return Ok(()),
                 };
 
                 let iter = inputs.iter().filter_map(|input| match input {

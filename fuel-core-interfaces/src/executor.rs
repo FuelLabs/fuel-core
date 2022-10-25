@@ -20,6 +20,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
 use thiserror::Error;
 
@@ -109,6 +110,8 @@ pub enum Error {
     OutputAlreadyExists,
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
+    #[error("Not supported transaction: {0:?}")]
+    NotSupportedTransaction(Box<Transaction>),
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]

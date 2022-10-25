@@ -382,6 +382,9 @@ impl DapMutation {
                     json_receipts: vec![],
                 })
             }
+            CheckedTransaction::Mint(_) => {
+                Err(async_graphql::Error::new("`Mint` is not supported"))
+            }
         }
     }
 

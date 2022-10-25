@@ -70,19 +70,20 @@ pub struct TransactionEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Transaction {
-    pub gas_limit: U64,
-    pub gas_price: U64,
+    pub gas_limit: Option<U64>,
+    pub gas_price: Option<U64>,
     pub id: TransactionId,
-    pub input_asset_ids: Vec<AssetId>,
-    pub input_contracts: Vec<ContractIdFragment>,
-    pub inputs: Vec<Input>,
+    pub tx_pointer: Option<TxPointer>,
+    pub input_asset_ids: Option<Vec<AssetId>>,
+    pub input_contracts: Option<Vec<ContractIdFragment>>,
+    pub inputs: Option<Vec<Input>>,
     pub is_script: bool,
     pub is_create: bool,
     pub outputs: Vec<Output>,
-    pub maturity: U64,
+    pub maturity: Option<U64>,
     pub receipts_root: Option<Bytes32>,
     pub status: Option<TransactionStatus>,
-    pub witnesses: Vec<HexString>,
+    pub witnesses: Option<Vec<HexString>>,
     pub receipts: Option<Vec<Receipt>>,
     pub script: Option<HexString>,
     pub script_data: Option<HexString>,
@@ -98,9 +99,19 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
     fn try_from(tx: Transaction) -> Result<Self, Self::Error> {
         let tx = if tx.is_script {
             let mut script = fuel_vm::prelude::Transaction::script(
-                tx.gas_price.into(),
-                tx.gas_limit.into(),
-                tx.maturity.into(),
+                tx.gas_price
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("gas_price".to_string())
+                    })?
+                    .into(),
+                tx.gas_limit
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("gas_limit".to_string())
+                    })?
+                    .into(),
+                tx.maturity
+                    .ok_or_else(|| ConversionError::MissingField("maturity".to_string()))?
+                    .into(),
                 tx.script
                     .ok_or_else(|| ConversionError::MissingField("script".to_string()))?
                     .into(),
@@ -110,6 +121,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     })?
                     .into(),
                 tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>(
@@ -119,7 +131,13 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
                     )?,
-                tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
             );
             *script.receipts_root_mut() = tx
                 .receipts_root
@@ -128,11 +146,21 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                 })?
                 .into();
             script.into()
-        } else {
+        } else if tx.is_create {
             let create = fuel_vm::prelude::Transaction::create(
-                tx.gas_price.into(),
-                tx.gas_limit.into(),
-                tx.maturity.into(),
+                tx.gas_price
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("gas_price".to_string())
+                    })?
+                    .into(),
+                tx.gas_limit
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("gas_limit".to_string())
+                    })?
+                    .into(),
+                tx.maturity
+                    .ok_or_else(|| ConversionError::MissingField("maturity".to_string()))?
+                    .into(),
                 tx.bytecode_witness_index
                     .ok_or_else(|| {
                         ConversionError::MissingField(
@@ -164,6 +192,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     })
                     .try_collect()?,
                 tx.inputs
+                    .ok_or_else(|| ConversionError::MissingField("inputs".to_string()))?
                     .into_iter()
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Input>, ConversionError>>(
@@ -173,9 +202,29 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
                     .map(TryInto::try_into)
                     .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
                     )?,
-                tx.witnesses.into_iter().map(|w| w.0 .0.into()).collect(),
+                tx.witnesses
+                    .ok_or_else(|| {
+                        ConversionError::MissingField("witnesses".to_string())
+                    })?
+                    .into_iter()
+                    .map(|w| w.0 .0.into())
+                    .collect(),
             );
             create.into()
+        } else {
+            let tx_pointer: fuel_vm::prelude::TxPointer = tx
+                .tx_pointer
+                .ok_or_else(|| ConversionError::MissingField("tx_pointer".to_string()))?
+                .into();
+            let mint = fuel_vm::prelude::Transaction::mint(
+                tx_pointer,
+                tx.outputs
+                    .into_iter()
+                    .map(TryInto::try_into)
+                    .collect::<Result<Vec<::fuel_vm::fuel_tx::Output>, ConversionError>>(
+                    )?,
+            );
+            mint.into()
         };
 
         // This `match` block is added here to enforce compilation error if a new variant
@@ -185,6 +234,7 @@ impl TryFrom<Transaction> for fuel_vm::prelude::Transaction {
         match tx {
             fuel_vm::prelude::Transaction::Script(_) => {}
             fuel_vm::prelude::Transaction::Create(_) => {}
+            fuel_vm::prelude::Transaction::Mint(_) => {}
         };
 
         Ok(tx)

@@ -2573,7 +2573,7 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.21.0"
-source = "git+https://github.com/FuelLabs/fuel-tx/#779338af2044a90e3f6247090c0271ebcd8fec46"
+source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/mint-transaction-2#4eef42cede49574b731a19f78cb6ead770fce818"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2618,7 +2618,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.19.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#09d6a0e66ffb170c9cb1fca7d5c957b0a8fb2df9"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/mint-transaction#43a49d749b2b4b14e2cad482f0da8d0f3995132d"
 dependencies = [
  "anyhow",
  "fuel-asm",

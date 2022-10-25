@@ -342,12 +342,14 @@ pub struct TxStatusBroadcast {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("TxPool required that transaction contains metadata")]
+    NoMetadata,
+    #[error("TxPool doesn't support this type of transaction.")]
+    NotSupportedTransactionType,
     #[error("Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
     NotInsertedLimitHit,
-    #[error("TxPool required that transaction contains metadata")]
-    NoMetadata,
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
     #[error(

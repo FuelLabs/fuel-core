@@ -74,6 +74,10 @@ impl TxPool {
     ) -> anyhow::Result<InsertionResult> {
         let current_height = db.current_block_height()?;
 
+        if tx.is_mint() {
+            return Err(Error::NotSupportedTransactionType.into())
+        }
+
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
@@ -98,6 +102,7 @@ impl TxPool {
         let tx = Arc::new(match tx {
             CheckedTransaction::Script(script) => PoolTransaction::Script(script),
             CheckedTransaction::Create(create) => PoolTransaction::Create(create),
+            CheckedTransaction::Mint(_) => unreachable!(),
         });
 
         if !tx.is_computed() {
@@ -198,6 +203,7 @@ impl TxPool {
         let price = match tx {
             Transaction::Script(script) => script.price(),
             Transaction::Create(create) => create.price(),
+            Transaction::Mint(_) => unreachable!(),
         };
         if price < self.config.min_gas_price {
             return Err(Error::NotInsertedGasPriceTooLow)
