@@ -14,7 +14,6 @@ use fuel_gql_client::{
         types::TransactionStatus,
         FuelClient,
     },
-    fuel_crypto::Message,
     fuel_types::Bytes32,
     prelude::SecretKey,
 };
