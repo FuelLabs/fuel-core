@@ -320,7 +320,7 @@ impl InterpreterStorage for Database {
         block
             .header
             .time()
-            .timestamp()
+            .timestamp_millis()
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
