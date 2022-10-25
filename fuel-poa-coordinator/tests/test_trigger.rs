@@ -15,11 +15,12 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        BlockId,
         FuelBlock,
         FuelBlockConsensus,
         FuelConsensusHeader,
         PartialFuelBlock,
-        PartialFuelBlockHeader, BlockId,
+        PartialFuelBlockHeader,
     },
     poa_coordinator::{
         BlockDb,
