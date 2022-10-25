@@ -49,7 +49,7 @@ impl From<Bytes32> for BlockId {
     }
 }
 
-#[allow(clippy::from-over-into)] // Avoids circular dependency
+#[allow(clippy::from_over_into)] // Avoids circular dependency
 impl Into<Bytes32> for BlockId {
     fn into(self) -> Bytes32 {
         self.0
