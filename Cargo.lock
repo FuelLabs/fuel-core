@@ -2573,8 +2573,9 @@ dependencies = [
 [[package]]
 name = "fuel-tx"
 version = "0.21.0"
-source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/methods-refactoring#0acfd75d960bdb331b73796c36632dd7af5e5c42"
+source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/methods-refactoring#d5aba923dc0aab74063081c44e5d763c5aa5b234"
 dependencies = [
+ "bitflags",
  "derivative",
  "fuel-asm",
  "fuel-crypto",
@@ -2616,8 +2617,8 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.18.2"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#7ef2f7896d241675b42c56581476132d49ae5637"
+version = "0.19.0"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#09d6a0e66ffb170c9cb1fca7d5c957b0a8fb2df9"
 dependencies = [
  "anyhow",
  "fuel-asm",

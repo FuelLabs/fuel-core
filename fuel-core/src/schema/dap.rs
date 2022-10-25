@@ -70,7 +70,7 @@ impl ConcreteStorage {
         let id = ID::from(id);
 
         let tx = Script::default();
-        let checked_tx = tx.into_checked_partially(
+        let checked_tx = tx.into_checked_basic(
             storage.get_block_height()?.unwrap_or_default().into(),
             &self.params,
         )?;
@@ -103,7 +103,7 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let checked_tx = tx.into_checked_partially(
+        let checked_tx = tx.into_checked_basic(
             storage.get_block_height()?.unwrap_or_default().into(),
             &self.params,
         )?;
@@ -317,8 +317,8 @@ impl DapMutation {
 
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
-        let checked_tx: CheckedTransaction<_> = tx
-            .into_checked_partially(
+        let checked_tx = tx
+            .into_checked_basic(
                 db.get_block_height()?.unwrap_or_default().into(),
                 &locked.params,
             )?

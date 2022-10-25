@@ -17,11 +17,8 @@ use crate::{
             ConsensusParameters,
             ContractId,
             Create,
-            Fully,
             Input,
-            IntoChecked,
             Output,
-            Partially,
             Script,
             Transaction,
             TxId,
@@ -63,73 +60,32 @@ use tokio::sync::{
     oneshot,
 };
 
-// TODO: After removing of `utxo_validation` from TxPool, use either `Fully` or `Partially`
-//  and remove usage of `Either` type.
-#[derive(Debug, Eq, PartialEq)]
-pub enum Either<Tx: IntoChecked>
-where
-    Tx::Metadata: Debug + Eq,
-{
-    Partially(Checked<Tx, Partially>),
-    Fully(Checked<Tx, Fully>),
-}
-
 /// Transaction used by the transaction pool.
 #[derive(Debug, Eq, PartialEq)]
 pub enum PoolTransaction {
-    Script(Either<Script>),
-    Create(Either<Create>),
+    Script(Checked<Script>),
+    Create(Checked<Create>),
 }
 
 impl Chargeable for PoolTransaction {
     fn price(&self) -> Word {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().price()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().price()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().price()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().price()
-            }
+            PoolTransaction::Script(script) => script.transaction().price(),
+            PoolTransaction::Create(create) => create.transaction().price(),
         }
     }
 
     fn limit(&self) -> Word {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().limit()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().limit()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().limit()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().limit()
-            }
+            PoolTransaction::Script(script) => script.transaction().limit(),
+            PoolTransaction::Create(create) => create.transaction().limit(),
         }
     }
 
     fn metered_bytes_size(&self) -> usize {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().metered_bytes_size()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().metered_bytes_size()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().metered_bytes_size()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().metered_bytes_size()
-            }
+            PoolTransaction::Script(script) => script.transaction().metered_bytes_size(),
+            PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
         }
     }
 }
@@ -137,14 +93,8 @@ impl Chargeable for PoolTransaction {
 impl UniqueIdentifier for PoolTransaction {
     fn id(&self) -> Bytes32 {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().id()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => script.transaction().id(),
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().id()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => create.transaction().id(),
+            PoolTransaction::Script(script) => script.transaction().id(),
+            PoolTransaction::Create(create) => create.transaction().id(),
         }
     }
 }
@@ -152,84 +102,38 @@ impl UniqueIdentifier for PoolTransaction {
 impl PoolTransaction {
     pub fn is_computed(&self) -> bool {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().is_computed()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().is_computed()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().is_computed()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().is_computed()
-            }
+            PoolTransaction::Script(script) => script.transaction().is_computed(),
+            PoolTransaction::Create(create) => create.transaction().is_computed(),
         }
     }
 
     pub fn inputs(&self) -> &Vec<Input> {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().inputs()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().inputs()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().inputs()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().inputs()
-            }
+            PoolTransaction::Script(script) => script.transaction().inputs(),
+            PoolTransaction::Create(create) => create.transaction().inputs(),
         }
     }
 
     pub fn outputs(&self) -> &Vec<Output> {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.transaction().outputs()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.transaction().outputs()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.transaction().outputs()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.transaction().outputs()
-            }
+            PoolTransaction::Script(script) => script.transaction().outputs(),
+            PoolTransaction::Create(create) => create.transaction().outputs(),
         }
     }
 
     pub fn max_gas(&self) -> Word {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
-                script.metadata().fee.max_gas()
-            }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                script.metadata().fee.max_gas()
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                create.metadata().fee.max_gas()
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
-                create.metadata().fee.max_gas()
-            }
+            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
+            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
         }
     }
 
     pub fn check_predicates(&self, params: ConsensusParameters) -> bool {
         match self {
-            PoolTransaction::Script(Either::Partially(script)) => {
+            PoolTransaction::Script(script) => {
                 Interpreter::<PredicateStorage>::check_predicates(script.clone(), params)
             }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                Interpreter::<PredicateStorage>::check_predicates(script.clone(), params)
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                Interpreter::<PredicateStorage>::check_predicates(create.clone(), params)
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
+            PoolTransaction::Create(create) => {
                 Interpreter::<PredicateStorage>::check_predicates(create.clone(), params)
             }
         }
@@ -239,25 +143,25 @@ impl PoolTransaction {
 impl From<&PoolTransaction> for Transaction {
     fn from(tx: &PoolTransaction) -> Self {
         match tx {
-            PoolTransaction::Script(Either::Partially(script)) => {
+            PoolTransaction::Script(script) => {
                 Transaction::Script(script.transaction().clone())
             }
-            PoolTransaction::Script(Either::Fully(script)) => {
-                Transaction::Script(script.transaction().clone())
-            }
-            PoolTransaction::Create(Either::Partially(create)) => {
-                Transaction::Create(create.transaction().clone())
-            }
-            PoolTransaction::Create(Either::Fully(create)) => {
+            PoolTransaction::Create(create) => {
                 Transaction::Create(create.transaction().clone())
             }
         }
     }
 }
 
-impl From<Checked<Script, Partially>> for PoolTransaction {
-    fn from(checked: Checked<Script, Partially>) -> Self {
-        Self::Script(Either::Partially(checked))
+impl From<Checked<Script>> for PoolTransaction {
+    fn from(checked: Checked<Script>) -> Self {
+        Self::Script(checked)
+    }
+}
+
+impl From<Checked<Create>> for PoolTransaction {
+    fn from(checked: Checked<Create>) -> Self {
+        Self::Create(checked)
     }
 }
 

@@ -32,7 +32,6 @@ use fuel_core_interfaces::{
             Input,
             IntoChecked,
             Output,
-            Partially,
             Receipt,
             ScriptCheckedMetadata,
             Transaction,
@@ -284,9 +283,9 @@ impl Executor {
                 block_db_transaction.deref(),
             )?;
 
-            let checked_tx: CheckedTransaction<_> = tx
+            let checked_tx: CheckedTransaction = tx
                 .clone()
-                .into_checked_partially(
+                .into_checked_basic(
                     (*block.header.height()).into(),
                     &self.config.chain_conf.transaction_parameters,
                 )?
@@ -322,7 +321,7 @@ impl Executor {
     fn execute_create_or_script<Tx>(
         &self,
         idx: usize,
-        checked_tx: Checked<Tx, Partially>,
+        checked_tx: Checked<Tx>,
         header: &PartialFuelBlockHeader,
         execution_data: &mut ExecutionData,
         block_db_transaction: &mut DatabaseTransaction,
@@ -538,10 +537,7 @@ impl Executor {
     }
 
     /// Verify all the predicates of a tx.
-    pub fn verify_tx_predicates<Tx>(
-        &self,
-        tx: Checked<Tx, Partially>,
-    ) -> Result<(), Error>
+    pub fn verify_tx_predicates<Tx>(&self, tx: Checked<Tx>) -> Result<(), Error>
     where
         Tx: ExecutableTransaction,
         <Tx as IntoChecked>::Metadata: CheckedMetadata,

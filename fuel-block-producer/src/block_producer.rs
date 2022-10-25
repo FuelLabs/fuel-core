@@ -149,7 +149,7 @@ impl Trait for Producer {
             transaction
         } else {
             let (transaction, _) = transaction
-                .into_checked_partially(height.into(), &self.config.consensus_params)?
+                .into_checked_basic(height.into(), &self.config.consensus_params)?
                 .into();
             transaction
         };

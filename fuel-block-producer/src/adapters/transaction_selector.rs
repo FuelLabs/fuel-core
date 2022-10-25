@@ -100,7 +100,7 @@ mod tests {
                 })
                 // The block producer assumes transactions are already checked
                 // so it doesn't need to compute valid sigs for tests
-                .finalize_checked_partially(
+                .finalize_checked_basic(
                     0,
                     &ConsensusParameters {
                         gas_price_factor: 1,

@@ -12,9 +12,7 @@ use fuel_core_interfaces::{
     common::fuel_tx::{
         Chargeable,
         CheckedTransaction,
-        Fully,
         IntoChecked,
-        Partially,
         Transaction,
         UniqueIdentifier,
     },
@@ -24,7 +22,6 @@ use fuel_core_interfaces::{
         TxInfo,
     },
     txpool::{
-        Either,
         InsertionResult,
         TxPoolDb,
         TxStatus,
@@ -80,43 +77,28 @@ impl TxPool {
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
-        let tx = if self.config.utxo_validation {
-            let tx: CheckedTransaction<Fully> = tx
-                .deref()
+        let tx: CheckedTransaction = if self.config.utxo_validation {
+            tx.deref()
                 .clone()
                 .into_checked(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
                 )?
-                .into();
-
-            Arc::new(match tx {
-                CheckedTransaction::Script(script) => {
-                    PoolTransaction::Script(Either::Fully(script))
-                }
-                CheckedTransaction::Create(create) => {
-                    PoolTransaction::Create(Either::Fully(create))
-                }
-            })
+                .into()
         } else {
-            let tx: CheckedTransaction<Partially> = tx
-                .deref()
+            tx.deref()
                 .clone()
-                .into_checked_partially(
+                .into_checked_basic(
                     current_height.into(),
                     &self.config.chain_config.transaction_parameters,
                 )?
-                .into();
-
-            Arc::new(match tx {
-                CheckedTransaction::Script(script) => {
-                    PoolTransaction::Script(Either::Partially(script))
-                }
-                CheckedTransaction::Create(create) => {
-                    PoolTransaction::Create(Either::Partially(create))
-                }
-            })
+                .into()
         };
+
+        let tx = Arc::new(match tx {
+            CheckedTransaction::Script(script) => PoolTransaction::Script(script),
+            CheckedTransaction::Create(create) => PoolTransaction::Create(create),
+        });
 
         if !tx.is_computed() {
             return Err(Error::NoMetadata.into())

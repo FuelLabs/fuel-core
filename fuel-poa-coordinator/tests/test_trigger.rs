@@ -356,7 +356,7 @@ fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction 
             amount: 0,
             asset_id: AssetId::zeroed(),
         })
-        .finalize_checked_partially(Default::default(), &Default::default())
+        .finalize_checked_basic(Default::default(), &Default::default())
         .into()
 }
 
