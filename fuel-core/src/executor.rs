@@ -370,7 +370,7 @@ impl Executor {
             *block.header.height(),
             &coinbase_id,
             block_db_transaction,
-            &vec![],
+            &[],
             coinbase_tx.outputs(),
         )?;
         execution_data.tx_status.insert(
