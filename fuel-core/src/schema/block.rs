@@ -28,10 +28,12 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    InputObject,
     Object,
 };
 use chrono::{
     DateTime,
+    NaiveDateTime,
     Utc,
 };
 use fuel_core_interfaces::{
@@ -340,12 +342,21 @@ where
 #[derive(Default)]
 pub struct BlockMutation;
 
+#[derive(InputObject)]
+struct TimeParameters {
+    /// The time to set on the first block
+    start_time: U64,
+    /// The time interval between subsequent blocks
+    block_time_interval: U64,
+}
+
 #[Object]
 impl BlockMutation {
     async fn produce_blocks(
         &self,
         ctx: &Context<'_>,
         blocks_to_produce: U64,
+        time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
         let cfg = ctx.data_unchecked::<Config>().clone();
@@ -362,7 +373,9 @@ impl BlockMutation {
             config: cfg.clone(),
         };
 
-        for _ in 0..blocks_to_produce.0 {
+        let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
+
+        for idx in 0..blocks_to_produce.0 {
             let current_height = db.get_block_height()?.unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 
@@ -370,7 +383,7 @@ impl BlockMutation {
                 PartialFuelBlockHeader {
                     consensus: FuelConsensusHeader {
                         height: new_block_height,
-                        time: Utc::now(),
+                        time: block_time(idx),
                         prev_root: Default::default(),
                         generated: Default::default(),
                     },
@@ -390,6 +403,64 @@ impl BlockMutation {
             .map(|new_height| Ok(new_height.into()))
             .ok_or("Block height not found")?
     }
+}
+
+fn get_time_closure(
+    db: &Database,
+    time_parameters: Option<TimeParameters>,
+    blocks_to_produce: u64,
+) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>> {
+    if let Some(params) = time_parameters {
+        check_start_after_latest_block(db, params.start_time.0)?;
+        check_block_time_overflow(&params, blocks_to_produce)?;
+
+        return Ok(Box::new(move |idx: u64| {
+            let (timestamp, _) = params
+                .start_time
+                .0
+                .overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
+            let naive = NaiveDateTime::from_timestamp(timestamp as i64, 0);
+
+            DateTime::from_utc(naive, Utc)
+        }))
+    };
+
+    Ok(Box::new(|_| Utc::now()))
+}
+
+fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
+    let current_height = db.get_block_height()?.unwrap_or_default();
+
+    if current_height.as_usize() == 0 {
+        return Ok(())
+    }
+
+    let latest_time = db.block_time(current_height.into())?.timestamp();
+    if latest_time as u64 > start_time {
+        return Err(anyhow!(
+            "The start time must be set after the latest block time: {}",
+            latest_time
+        ))
+    }
+
+    Ok(())
+}
+
+fn check_block_time_overflow(
+    params: &TimeParameters,
+    blocks_to_produce: u64,
+) -> anyhow::Result<()> {
+    let (final_offset, overflow_mul) = params
+        .block_time_interval
+        .0
+        .overflowing_mul(blocks_to_produce);
+    let (_, overflow_add) = params.start_time.0.overflowing_add(final_offset);
+
+    if overflow_mul || overflow_add {
+        return Err(anyhow!("The provided time parameters lead to an overflow"))
+    };
+
+    Ok(())
 }
 
 impl From<FuelBlockDb> for Block {

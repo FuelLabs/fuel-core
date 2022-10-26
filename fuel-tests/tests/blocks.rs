@@ -26,6 +26,10 @@ use fuel_core_interfaces::{
 };
 use fuel_gql_client::{
     client::{
+        schema::{
+            block::TimeParameters,
+            U64,
+        },
         types::TransactionStatus,
         FuelClient,
         PageDirection,
@@ -76,7 +80,7 @@ async fn produce_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_blocks(5).await.unwrap();
+    let new_height = client.produce_blocks(5, None).await.unwrap();
 
     assert_eq!(5, new_height);
 
@@ -117,7 +121,7 @@ async fn produce_block_negative() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_blocks(5).await;
+    let new_height = client.produce_blocks(5, None).await;
 
     assert_eq!(
         "Response errors; Manual Blocks must be enabled to use this endpoint",
@@ -149,6 +153,97 @@ async fn produce_block_negative() {
     } else {
         panic!("Wrong tx status");
     };
+}
+
+#[tokio::test]
+async fn produce_block_custom_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
+
+    assert_eq!(5, new_height);
+
+    assert_eq!(db.block_time(1).unwrap().timestamp(), 100);
+    assert_eq!(db.block_time(2).unwrap().timestamp(), 110);
+    assert_eq!(db.block_time(3).unwrap().timestamp(), 120);
+    assert_eq!(db.block_time(4).unwrap().timestamp(), 130);
+    assert_eq!(db.block_time(5).unwrap().timestamp(), 140);
+}
+
+#[tokio::test]
+async fn produce_block_bad_start_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The start time must be set after the latest block time"
+    ));
+}
+
+#[tokio::test]
+async fn produce_block_overflow_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(u64::MAX),
+        block_time_interval: U64::from(1u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The provided time parameters lead to an overflow"
+    ));
 }
 
 #[rstest]

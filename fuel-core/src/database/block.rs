@@ -14,6 +14,10 @@ use crate::{
         IterDirection,
     },
 };
+use chrono::{
+    DateTime,
+    Utc,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
@@ -102,6 +106,15 @@ impl Database {
                 .map_err(Error::from),
             None => Ok(None),
         }
+    }
+
+    pub fn block_time(&self, height: u32) -> Result<DateTime<Utc>, Error> {
+        let id = self.get_block_id(height.into())?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
+        Ok(block.header.time().to_owned())
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
