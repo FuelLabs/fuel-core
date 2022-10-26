@@ -317,13 +317,6 @@ impl BlockDb for Database {
         block_id: BlockId,
         consensus: FuelBlockConsensus,
     ) -> anyhow::Result<()> {
-        if self
-            .storage::<SealedBlockConsensus>()
-            .contains_key(&block_id.into())?
-        {
-            return Err(anyhow!("block {:x} is already sealed", &block_id))
-        }
-
         self.storage::<SealedBlockConsensus>()
             .insert(&block_id.into(), &consensus)
             .map(|_| ())
