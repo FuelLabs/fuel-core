@@ -21,14 +21,19 @@ use fuel_vm::{
     fuel_types::MessageId,
     prelude::Signature,
 };
-use std::fmt;
 
+use crate::common::{
+    fuel_tx::Input,
+    fuel_types::Address,
+};
 #[cfg(any(test, feature = "test-helpers"))]
 use chrono::TimeZone;
 use derive_more::{
+    Deref,
     Display,
     From,
     FromStr,
+    Into,
     LowerHex,
     UpperHex,
 };
@@ -46,9 +51,11 @@ use derive_more::{
     Default,
     FromStr,
     From,
+    Into,
     LowerHex,
     UpperHex,
     Display,
+    Deref,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -60,6 +67,13 @@ impl BlockId {
     pub fn into_message(self) -> fuel_crypto::Message {
         // This is safe because BlockId is a cryptographically secure hash.
         unsafe { fuel_crypto::Message::from_bytes_unchecked(*self.0) }
+        // Without this, the signature would be using a hash of the id making it more
+        // difficult to verify.
+    }
+
+    pub fn as_message(&self) -> &fuel_crypto::Message {
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_crypto::Message::as_ref_unchecked(self.0.as_slice()) }
         // Without this, the signature would be using a hash of the id making it more
         // difficult to verify.
     }
@@ -616,6 +630,19 @@ impl From<FuelBlock> for PartialFuelBlock {
 /// header.
 pub enum FuelBlockConsensus {
     PoA(FuelBlockPoAConsensus),
+}
+
+impl FuelBlockConsensus {
+    /// Retrieve the block producer address from the consensus data
+    pub fn block_producer(&self, block_id: &BlockId) -> anyhow::Result<Address> {
+        match &self {
+            FuelBlockConsensus::PoA(poa_data) => {
+                let public_key = poa_data.signature.recover(block_id.as_message())?;
+                let address = Input::owner(&public_key);
+                Ok(address)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
