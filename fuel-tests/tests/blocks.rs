@@ -148,7 +148,7 @@ async fn produce_block_negative() {
 }
 
 #[tokio::test]
-async fn produce_block_custom_time() {
+async fn produce_block_bad_start_time() {
     let db = Database::default();
 
     let mut config = Config::local_node();
@@ -174,6 +174,68 @@ async fn produce_block_custom_time() {
     assert_eq!(db.timestamp(3).unwrap(), 120);
     assert_eq!(db.timestamp(4).unwrap(), 130);
     assert_eq!(db.timestamp(5).unwrap(), 140);
+}
+
+#[tokio::test]
+async fn produce_block_custom_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The start time must be set after the latest block time"
+    ));
+}
+
+#[tokio::test]
+async fn produce_block_overflow_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(u64::MAX),
+        block_time_interval: U64::from(1u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The provided time parameters lead to an overflow"
+    ));
 }
 
 #[rstest]

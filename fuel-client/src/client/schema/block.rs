@@ -99,7 +99,7 @@ pub struct ProduceBlockArgs {
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(blocks_to_produce = &args.blocks_to_produce)]
+    #[arguments(blocks_to_produce = &args.blocks_to_produce, time = &args.time)]
     pub produce_blocks: U64,
 }
 

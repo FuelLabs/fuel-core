@@ -330,8 +330,12 @@ async fn check_start_after_latest_block(
     start_time: u64,
 ) -> anyhow::Result<()> {
     let current_height = db.get_block_height()?.unwrap_or_default();
-    let latest_time = db.timestamp(current_height.into())?;
 
+    if current_height.as_usize() == 0 {
+        return Ok(())
+    }
+
+    let latest_time = db.timestamp(current_height.into())?;
     if latest_time as u64 > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",
