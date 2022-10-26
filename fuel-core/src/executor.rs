@@ -248,11 +248,12 @@ impl Executor {
         block_db_transaction: &mut DatabaseTransaction,
         block: ExecutionType<&mut PartialFuelBlock>,
     ) -> Result<ExecutionData, Error> {
-        let mut execution_data = ExecutionData {
+        let mut data = ExecutionData {
             coinbase: 0,
             message_ids: Vec::new(),
             tx_status: Vec::new(),
         };
+        let execution_data = &mut data;
 
         // Insert the current headers (including time, block height into the db tx)
         block_db_transaction
@@ -323,7 +324,7 @@ impl Executor {
                         idx,
                         script,
                         &block.header,
-                        &mut execution_data,
+                        execution_data,
                         block_db_transaction,
                         execution_kind,
                     )?
@@ -333,7 +334,7 @@ impl Executor {
                         idx,
                         create,
                         &block.header,
-                        &mut execution_data,
+                        execution_data,
                         block_db_transaction,
                         execution_kind,
                     )?
@@ -364,7 +365,18 @@ impl Executor {
             coinbase_tx,
             Some(execution_data.coinbase),
         )?;
+        self.apply_coinbase(coinbase_tx, block, execution_data, block_db_transaction)?;
 
+        Ok(data)
+    }
+
+    fn apply_coinbase(
+        &self,
+        coinbase_tx: Mint,
+        block: &PartialFuelBlock,
+        execution_data: &mut ExecutionData,
+        block_db_transaction: &mut DatabaseTransaction,
+    ) -> Result<(), Error> {
         let coinbase_id = coinbase_tx.id();
         self.persist_outputs(
             *block.header.height(),
@@ -388,8 +400,7 @@ impl Executor {
             .deref_mut()
             .storage::<Transactions>()
             .insert(&coinbase_id, &coinbase_tx.into())?;
-
-        Ok(execution_data)
+        Ok(())
     }
 
     fn check_coinbase(
