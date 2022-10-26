@@ -102,7 +102,7 @@ impl BlockProducer for MockBlockProducer {
 }
 
 // TODO: The same code is in the `adapters::transaction_selector::select_transactions`. We need
-//  move transaction selection logic into `TxPool` to avoid duplication of the code in tests.
+//  to move transaction selection logic into `TxPool` to avoid duplication of the code in tests.
 /// Select all txs that fit into the block, preferring ones with higher gas price.
 fn select_transactions(
     mut includable_txs: Vec<ArcPoolTx>,

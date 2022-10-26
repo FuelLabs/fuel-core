@@ -22,7 +22,6 @@ use fuel_core_interfaces::{
     common::{
         crypto::ephemeral_merkle_root,
         fuel_tx::{
-            IntoChecked,
             Receipt,
             Transaction,
             Word,
@@ -142,20 +141,10 @@ impl Trait for Producer {
             None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1u64.into();
-        let checked: Transaction = if self.config.utxo_validation {
-            let (transaction, _) = transaction
-                .into_checked(height.into(), &self.config.consensus_params)?
-                .into();
-            transaction
-        } else {
-            let (transaction, _) = transaction
-                .into_checked_basic(height.into(), &self.config.consensus_params)?
-                .into();
-            transaction
-        };
 
         let header = self.new_header(height).await?;
-        let block = PartialFuelBlock::new(header, vec![checked].into_iter().collect());
+        let block =
+            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let res = self
             .executor

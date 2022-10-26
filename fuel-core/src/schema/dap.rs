@@ -370,7 +370,7 @@ impl DapMutation {
                 }
             }
             CheckedTransaction::Create(create) => {
-                vm.deploy(&create).map_err(|err| {
+                vm.deploy(create).map_err(|err| {
                     async_graphql::Error::new(format!(
                         "Transaction deploy failed: {err:?}"
                     ))

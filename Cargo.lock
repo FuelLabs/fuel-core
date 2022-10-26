@@ -2618,8 +2618,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.19.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#32a567dcdbff380de7982600a084b84393d1c205"
+version = "0.20.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd19c13c3b2af4f7bbfa2415d0f9ce668a31f4453eec3fcf6bb4be394df5e70c"
 dependencies = [
  "anyhow",
  "fuel-asm",

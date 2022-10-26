@@ -20,7 +20,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "1.0", features = ["surf"] }
 derive_more = { version = "0.99" }
-fuel-vm = { version = "0.19", features = ["serde"] }
+fuel-vm = { version = "0.20", features = ["serde"] }
 futures = "0.3"
 futures-timer = "3.0"
 hex = "0.4"
