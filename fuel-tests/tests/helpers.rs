@@ -130,7 +130,6 @@ impl TestSetupBuilder {
     pub async fn finalize(&mut self) -> TestContext {
         let config = Config {
             utxo_validation: true,
-            predicates: self.predicates,
             txpool: fuel_txpool::Config {
                 min_gas_price: self.min_gas_price,
                 ..Default::default()

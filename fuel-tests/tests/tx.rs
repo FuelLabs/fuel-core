@@ -16,7 +16,10 @@ use fuel_core_interfaces::{
             prelude::*,
         },
     },
-    executor::ExecutionBlock,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
     model::{
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -31,7 +34,10 @@ use fuel_gql_client::client::{
 };
 use itertools::Itertools;
 use rand::Rng;
-use std::io;
+use std::{
+    io,
+    io::ErrorKind::NotFound,
+};
 
 mod predicates;
 mod utxo_validation;
@@ -96,6 +102,13 @@ async fn dry_run() {
         Receipt::Return {
             val, ..
         } if val == 1));
+
+    // ensure the tx isn't available in the blockchain history
+    let err = client
+        .transaction_status(&format!("{:#x}", tx.id()))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), NotFound);
 }
 
 #[tokio::test]
@@ -129,10 +142,10 @@ async fn submit() {
         vec![],
     );
 
-    let id = client.submit(&tx).await.unwrap();
+    client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
     let ret_tx = client
-        .transaction(&id.0.to_string())
+        .transaction(&tx.id().to_string())
         .await
         .unwrap()
         .unwrap()
@@ -159,9 +172,10 @@ async fn receipts() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx
-    let result = client.submit(&transaction).await;
-    assert!(result.is_ok());
-
+    client
+        .submit_and_await_commit(&transaction)
+        .await
+        .expect("transaction should insert");
     // run test
     let receipts = client.receipts(&format!("{:#x}", id)).await.unwrap();
     assert!(!receipts.is_empty());
@@ -177,7 +191,7 @@ async fn get_transaction_by_id() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
     // submit tx to api
-    client.submit(&transaction).await.unwrap();
+    client.submit_and_await_commit(&transaction).await.unwrap();
 
     // run test
     let transaction_response = client.transaction(&format!("{:#x}", id)).await.unwrap();
@@ -200,7 +214,7 @@ async fn get_transparent_transaction_by_id() {
     let client = FuelClient::from(srv.bound_address);
 
     // submit tx
-    let result = client.submit(&transaction).await;
+    let result = client.submit_and_await_commit(&transaction).await;
     assert!(result.is_ok());
 
     let opaque_tx = client
@@ -502,7 +516,8 @@ impl TestContext {
             witnesses: vec![vec![].into()],
             metadata: None,
         };
-        self.client.submit(&tx).await.map(Into::into)
+        self.client.submit_and_await_commit(&tx).await?;
+        Ok(tx.id())
     }
 }
 

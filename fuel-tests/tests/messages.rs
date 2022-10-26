@@ -18,12 +18,14 @@ use fuel_core_interfaces::{
 };
 use fuel_gql_client::{
     client::{
+        types::TransactionStatus,
         FuelClient,
         PageDirection,
         PaginationRequest,
     },
     fuel_tx::Input,
     fuel_types::MessageId,
+    prelude::Opcode,
 };
 use rand::{
     rngs::StdRng,
@@ -47,15 +49,17 @@ async fn can_submit_genesis_message() {
         data: vec![rng.gen()],
         da_height: DaBlockHeight(0),
     };
-    let tx1 = TransactionBuilder::script(vec![], vec![])
-        .add_unsigned_message_input(
-            secret_key,
-            msg1.sender,
-            msg1.nonce,
-            msg1.amount,
-            msg1.data.clone(),
-        )
-        .finalize();
+    let tx1 =
+        TransactionBuilder::script(vec![Opcode::RET(0)].into_iter().collect(), vec![])
+            .gas_limit(100000)
+            .add_unsigned_message_input(
+                secret_key,
+                msg1.sender,
+                msg1.nonce,
+                msg1.amount,
+                msg1.data.clone(),
+            )
+            .finalize();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {
@@ -67,7 +71,13 @@ async fn can_submit_genesis_message() {
     let srv = FuelService::new_node(node_config.clone()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
-    client.submit(&tx1).await.unwrap();
+    // verify tx is successful
+    let status = client.submit_and_await_commit(&tx1).await.unwrap();
+    assert!(
+        matches!(status, TransactionStatus::Success { .. }),
+        "expected success, received {:?}",
+        status
+    )
 }
 
 #[tokio::test]
@@ -217,8 +227,7 @@ async fn can_get_message_proof() {
     };
 
     for n in [1, 2, 10] {
-        let mut config = Config::local_node();
-        config.predicates = true;
+        let config = Config::local_node();
         let coin = config
             .chain_conf
             .initial_state
@@ -376,10 +385,25 @@ async fn can_get_message_proof() {
         let client = FuelClient::from(srv.bound_address);
 
         // Deploy the contract.
-        client.submit(&contract_deploy).await.unwrap();
+        let deploy_id = client.submit(&contract_deploy).await.unwrap();
 
         // Call the contract.
-        client.submit(&script).await.unwrap();
+        let call_id = client.submit(&script).await.unwrap();
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.await_transaction_commit(&deploy_id.to_string()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            client.await_transaction_commit(&call_id.to_string()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
 
         // Get the receipts from the contract call.
         let receipts = client
@@ -470,7 +494,6 @@ async fn can_get_message_proof() {
 
             // 4. Verify the signature. (block_id, signature)
             assert!(verify_signature(block_id, result.signature));
-            dbg!();
         }
     }
 }

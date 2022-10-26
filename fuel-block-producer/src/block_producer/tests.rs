@@ -225,13 +225,13 @@ impl TestContext {
         }
     }
 
-    pub fn producer(&self) -> Producer {
+    pub fn producer(self) -> Producer {
         Producer {
-            config: self.config.clone(),
-            db: &self.db,
-            txpool: &self.txpool,
-            executor: &*self.executor,
-            relayer: &self.relayer,
+            config: self.config,
+            db: Box::new(self.db),
+            txpool: Box::new(self.txpool),
+            executor: self.executor,
+            relayer: Box::new(self.relayer),
             lock: Default::default(),
         }
     }

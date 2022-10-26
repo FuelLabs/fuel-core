@@ -10,7 +10,10 @@ use crate::{
             TxId,
             UtxoId,
         },
-        fuel_types::MessageId,
+        fuel_types::{
+            MessageId,
+            Word,
+        },
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
@@ -21,6 +24,7 @@ use crate::{
     },
     model::{
         ArcTx,
+        BlockHeight,
         Coin,
         Message,
         TxInfo,
@@ -59,6 +63,8 @@ pub trait TxPoolDb:
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
+
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.
@@ -265,6 +271,8 @@ pub enum Error {
     NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
+    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
+    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
