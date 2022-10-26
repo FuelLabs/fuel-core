@@ -1140,8 +1140,10 @@ mod tests {
                 self,
                 field::Outputs,
                 Buildable,
+                Chargeable,
                 CheckError,
                 ConsensusParameters,
+                Create,
                 Script,
                 Transaction,
                 TransactionBuilder,
@@ -1196,6 +1198,81 @@ mod tests {
         );
     }
 
+    fn setup_executable_script() -> (Create, Script) {
+        let mut rng = StdRng::seed_from_u64(2322);
+        let asset_id: AssetId = rng.gen();
+        let owner: Address = rng.gen();
+        let input_amount = 1000;
+        let variable_transfer_amount = 100;
+        let coin_output_amount = 150;
+
+        let (create, contract_id) = create_contract(
+            vec![
+                // load amount of coins to 0x10
+                Opcode::ADDI(0x10, REG_FP, CallFrame::a_offset() as Immediate12),
+                Opcode::LW(0x10, 0x10, 0),
+                // load asset id to 0x11
+                Opcode::ADDI(0x11, REG_FP, CallFrame::b_offset() as Immediate12),
+                Opcode::LW(0x11, 0x11, 0),
+                // load address to 0x12
+                Opcode::ADDI(0x12, 0x11, 32),
+                // load output index (0) to 0x13
+                Opcode::ADDI(0x13, REG_ZERO, 0),
+                Opcode::TRO(0x12, 0x13, 0x10, 0x11),
+                Opcode::RET(REG_ONE),
+            ]
+            .into_iter()
+            .collect::<Vec<u8>>(),
+            &mut rng,
+        );
+        let (script, data_offset) = script_with_data_offset!(
+            data_offset,
+            vec![
+                // set reg 0x10 to call data
+                Opcode::MOVI(0x10, (data_offset + 64) as Immediate18),
+                // set reg 0x11 to asset id
+                Opcode::MOVI(0x11, data_offset),
+                // set reg 0x12 to call amount
+                Opcode::MOVI(0x12, variable_transfer_amount),
+                // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
+                Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
+                Opcode::RET(REG_ONE),
+            ],
+            ConsensusParameters::DEFAULT.tx_offset()
+        );
+
+        let script_data: Vec<u8> = [
+            asset_id.as_ref(),
+            owner.as_ref(),
+            Call::new(
+                contract_id,
+                variable_transfer_amount as Word,
+                data_offset as Word,
+            )
+            .to_bytes()
+            .as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect();
+
+        let script = TxBuilder::new(2322)
+            .gas_limit(ConsensusParameters::DEFAULT.max_gas_per_tx)
+            .start_script(script, script_data)
+            .contract_input(contract_id)
+            .coin_input(asset_id, input_amount)
+            .variable_output(Default::default())
+            .coin_output(asset_id, coin_output_amount)
+            .change_output(asset_id)
+            .contract_output(&contract_id)
+            .build()
+            .transaction()
+            .clone();
+
+        (create, script)
+    }
+
     fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)
             .into_iter()
@@ -1220,7 +1297,7 @@ mod tests {
     fn create_contract<R: Rng>(
         contract_code: Vec<u8>,
         rng: &mut R,
-    ) -> (Transaction, ContractId) {
+    ) -> (Create, ContractId) {
         let salt: Salt = rng.gen();
         let contract = fuel_tx::Contract::from(contract_code.clone());
         let root = contract.root();
@@ -1240,8 +1317,7 @@ mod tests {
                 state_root,
             }],
             vec![contract_code.into()],
-        )
-        .into();
+        );
         (tx, contract_id)
     }
 
@@ -1285,7 +1361,295 @@ mod tests {
         assert_ne!(
             start_block.header().transactions_root,
             block.header().transactions_root
-        )
+        );
+        assert_eq!(block.transactions().len(), 11);
+        assert!(block.transactions()[0].as_mint().is_some());
+        assert_eq!(
+            block.transactions()[0].as_mint().unwrap().outputs().len(),
+            1
+        );
+        if let Some(Output::Coin {
+            asset_id,
+            amount,
+            to,
+        }) = block.transactions()[0].as_mint().unwrap().outputs().first()
+        {
+            assert_eq!(asset_id, &AssetId::BASE);
+            // Expected fee is zero, because price is zero.
+            assert_eq!(*amount, 0);
+            assert_eq!(to, &Address::zeroed());
+        } else {
+            panic!("Invalid outputs of coinbase");
+        }
+    }
+
+    mod coinbase {
+        use super::*;
+
+        #[tokio::test]
+        async fn executor_commits_transactions_with_non_zero_coinbase_generation() {
+            let price = 1;
+            let limit = 0;
+            let gas_price_factor = 1;
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let mut producer = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let recipient = [1u8; 32].into();
+            producer.config.block_producer.coinbase_recipient = recipient;
+            producer
+                .config
+                .chain_conf
+                .transaction_parameters
+                .gas_price_factor = gas_price_factor;
+
+            let expected_fee_amount = TransactionFee::checked_from_values(
+                &producer.config.chain_conf.transaction_parameters,
+                script.metered_bytes_size() as Word,
+                limit,
+                price,
+            )
+            .unwrap()
+            .total();
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            let block = producer
+                .execute(ExecutionBlock::Production(block.into()))
+                .await
+                .unwrap();
+
+            assert_eq!(block.transactions().len(), 2);
+            assert!(block.transactions()[0].as_mint().is_some());
+            assert_eq!(
+                block.transactions()[0].as_mint().unwrap().outputs().len(),
+                1
+            );
+            if let Some(Output::Coin {
+                asset_id,
+                amount,
+                to,
+            }) = block.transactions()[0].as_mint().unwrap().outputs().first()
+            {
+                assert_eq!(asset_id, &AssetId::BASE);
+                assert_eq!(*amount, expected_fee_amount);
+                assert_eq!(to, &recipient);
+            } else {
+                panic!("Invalid outputs of coinbase");
+            }
+        }
+
+        #[tokio::test]
+        async fn executor_commits_transactions_with_non_zero_coinbase_validation() {
+            let price = 1;
+            let limit = 0;
+            let gas_price_factor = 1;
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(limit)
+                // Set a price for the test
+                .gas_price(price)
+                .coin_input(AssetId::BASE, 10000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let mut producer = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let recipient = [1u8; 32].into();
+            producer.config.block_producer.coinbase_recipient = recipient;
+            producer
+                .config
+                .chain_conf
+                .transaction_parameters
+                .gas_price_factor = gas_price_factor;
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![script.clone().into()];
+
+            let produced_block = producer
+                .execute(ExecutionBlock::Production(block.into()))
+                .await
+                .unwrap();
+            let produced_txs = produced_block.transactions().to_vec();
+
+            let validator = Executor {
+                database: Default::default(),
+                // Use the same config as block producer
+                config: producer.config,
+            };
+            let validated_block = validator
+                .execute(ExecutionBlock::Validation(produced_block))
+                .await
+                .unwrap();
+            assert_eq!(validated_block.transactions(), produced_txs);
+        }
+
+        #[tokio::test]
+        async fn invalidate_is_not_first() {
+            let mint = Transaction::mint(TxPointer::new(0, 1), vec![]);
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(
+                validation_err,
+                Error::CoinbaseIsNotFirstTransaction
+            ));
+        }
+
+        #[tokio::test]
+        async fn invalidate_block_height() {
+            let mint = Transaction::mint(TxPointer::new(1, 0), vec![]);
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(
+                validation_err,
+                Error::InvalidTransaction(
+                    CheckError::TransactionMintIncorrectBlockHeight
+                )
+            ));
+        }
+
+        #[tokio::test]
+        async fn invalidate_zero_outputs() {
+            let mint = Transaction::mint(TxPointer::new(0, 0), vec![]);
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(validation_err, Error::CoinbaseOutputIsInvalid));
+        }
+
+        #[tokio::test]
+        async fn invalidate_more_than_one_outputs() {
+            let mint = Transaction::mint(
+                TxPointer::new(0, 0),
+                vec![
+                    Output::coin(Address::from([1u8; 32]), 0, AssetId::from([3u8; 32])),
+                    Output::coin(Address::from([2u8; 32]), 0, AssetId::from([4u8; 32])),
+                ],
+            );
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(validation_err, Error::CoinbaseSeveralOutputs));
+        }
+
+        #[tokio::test]
+        async fn invalidate_not_base_asset() {
+            let mint = Transaction::mint(
+                TxPointer::new(0, 0),
+                vec![Output::coin(
+                    Address::from([1u8; 32]),
+                    0,
+                    AssetId::from([3u8; 32]),
+                )],
+            );
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(validation_err, Error::CoinbaseOutputIsInvalid));
+        }
+
+        #[tokio::test]
+        async fn invalidate_mismatch_amount() {
+            let mint = Transaction::mint(
+                TxPointer::new(0, 0),
+                vec![Output::coin(Address::from([1u8; 32]), 123, AssetId::BASE)],
+            );
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(validation_err, Error::CoinbaseAmountMismatch));
+        }
+
+        #[tokio::test]
+        async fn invalidate_more_than_one_mint_is_not_allowed() {
+            let mint = Transaction::mint(
+                TxPointer::new(0, 0),
+                vec![Output::coin(Address::zeroed(), 0, AssetId::BASE)],
+            );
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![mint.clone().into(), mint.clone().into()];
+
+            let validator = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+            let validation_err = validator
+                .execute(ExecutionBlock::Validation(block))
+                .await
+                .expect_err("Expected error because coinbase if invalid");
+            assert!(matches!(validation_err, Error::NotSupportedTransaction(_)));
+        }
     }
 
     // Ensure tx has at least one input to cover gas
@@ -1876,7 +2240,7 @@ mod tests {
         let (tx, contract_id) = create_contract(vec![], &mut rng);
         let first_block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx],
+            transactions: vec![tx.into()],
         };
 
         let tx2: Transaction = TxBuilder::new(2322)
@@ -1953,7 +2317,7 @@ mod tests {
 
         let first_block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx, tx2],
+            transactions: vec![tx.into(), tx2],
         };
 
         let tx3: Transaction = TxBuilder::new(2322)
@@ -2028,78 +2392,8 @@ mod tests {
 
     #[tokio::test]
     async fn outputs_with_amount_are_included_utxo_set() {
-        let mut rng = StdRng::seed_from_u64(2322);
-        let asset_id: AssetId = rng.gen();
-        let owner: Address = rng.gen();
-        let input_amount = 1000;
-        let variable_transfer_amount = 100;
-        let coin_output_amount = 150;
-
-        let (tx, contract_id) = create_contract(
-            vec![
-                // load amount of coins to 0x10
-                Opcode::ADDI(0x10, REG_FP, CallFrame::a_offset() as Immediate12),
-                Opcode::LW(0x10, 0x10, 0),
-                // load asset id to 0x11
-                Opcode::ADDI(0x11, REG_FP, CallFrame::b_offset() as Immediate12),
-                Opcode::LW(0x11, 0x11, 0),
-                // load address to 0x12
-                Opcode::ADDI(0x12, 0x11, 32),
-                // load output index (0) to 0x13
-                Opcode::ADDI(0x13, REG_ZERO, 0),
-                Opcode::TRO(0x12, 0x13, 0x10, 0x11),
-                Opcode::RET(REG_ONE),
-            ]
-            .into_iter()
-            .collect::<Vec<u8>>(),
-            &mut rng,
-        );
-        let (script, data_offset) = script_with_data_offset!(
-            data_offset,
-            vec![
-                // set reg 0x10 to call data
-                Opcode::MOVI(0x10, (data_offset + 64) as Immediate18),
-                // set reg 0x11 to asset id
-                Opcode::MOVI(0x11, data_offset),
-                // set reg 0x12 to call amount
-                Opcode::MOVI(0x12, variable_transfer_amount),
-                // call contract without any tokens to transfer in (3rd arg arbitrary when 2nd is zero)
-                Opcode::CALL(0x10, 0x12, 0x11, REG_CGAS),
-                Opcode::RET(REG_ONE),
-            ],
-            ConsensusParameters::DEFAULT.tx_offset()
-        );
-
-        let script_data: Vec<u8> = [
-            asset_id.as_ref(),
-            owner.as_ref(),
-            Call::new(
-                contract_id,
-                variable_transfer_amount as Word,
-                data_offset as Word,
-            )
-            .to_bytes()
-            .as_ref(),
-        ]
-        .into_iter()
-        .flatten()
-        .copied()
-        .collect();
-
-        let tx2: Transaction = TxBuilder::new(2322)
-            .gas_limit(ConsensusParameters::DEFAULT.max_gas_per_tx)
-            .start_script(script, script_data)
-            .contract_input(contract_id)
-            .coin_input(asset_id, input_amount)
-            .variable_output(Default::default())
-            .coin_output(asset_id, coin_output_amount)
-            .change_output(asset_id)
-            .contract_output(&contract_id)
-            .build()
-            .transaction()
-            .clone()
-            .into();
-        let tx2_id = tx2.id();
+        let (deploy, script) = setup_executable_script();
+        let script_id = script.id();
 
         let database = &Database::default();
         let executor = Executor {
@@ -2109,7 +2403,7 @@ mod tests {
 
         let block = PartialFuelBlock {
             header: Default::default(),
-            transactions: vec![tx, tx2],
+            transactions: vec![deploy.into(), script.into()],
         };
 
         let block = executor
@@ -2125,7 +2419,7 @@ mod tests {
             .iter()
             .enumerate()
         {
-            let id = fuel_tx::UtxoId::new(tx2_id, idx as u8);
+            let id = fuel_tx::UtxoId::new(script_id, idx as u8);
             match output {
                 Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
                     let maybe_utxo = database.storage::<Coins>().get(&id).unwrap();

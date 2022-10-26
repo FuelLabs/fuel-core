@@ -142,7 +142,6 @@ impl Command {
         };
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
-        let consensus_params = chain_conf.transaction_parameters;
         // if consensus key is not configured, fallback to dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
             if consensus_dev_key {
@@ -188,7 +187,6 @@ impl Command {
             block_importer: Default::default(),
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
-                consensus_params,
                 coinbase_recipient,
             },
             block_executor: Default::default(),
