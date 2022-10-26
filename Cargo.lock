@@ -2572,8 +2572,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.21.0"
-source = "git+https://github.com/FuelLabs/fuel-tx/?branch=feature/mint-transaction-2#4eef42cede49574b731a19f78cb6ead770fce818"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57cf8472755f0dc19a85804319c56635fe41aca1783fdb22fc548966244a86fa"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2618,7 +2619,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.19.0"
-source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/mint-transaction#43a49d749b2b4b14e2cad482f0da8d0f3995132d"
+source = "git+https://github.com/FuelLabs/fuel-vm/?branch=feature/methods-refactoring#32a567dcdbff380de7982600a084b84393d1c205"
 dependencies = [
  "anyhow",
  "fuel-asm",

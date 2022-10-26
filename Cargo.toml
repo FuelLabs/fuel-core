@@ -27,5 +27,4 @@ lto = "fat"
 panic = "abort"
 
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/mint-transaction" }
-fuel-tx = { git = "https://github.com/FuelLabs/fuel-tx/", branch = "feature/mint-transaction-2" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm/", branch = "feature/methods-refactoring" }

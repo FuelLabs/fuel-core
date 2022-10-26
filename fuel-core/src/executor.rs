@@ -23,6 +23,7 @@ use fuel_core_interfaces::{
         fuel_asm::Word,
         fuel_storage,
         fuel_tx::{
+            field::Outputs,
             Address,
             AssetId,
             Bytes32,
@@ -37,6 +38,7 @@ use fuel_core_interfaces::{
             ScriptCheckedMetadata,
             Transaction,
             TransactionFee,
+            TxPointer,
             UniqueIdentifier,
             UtxoId,
         },
@@ -260,9 +262,27 @@ impl Executor {
         // Split out the execution kind and partial block.
         let (execution_kind, block) = block.split();
 
-        // TODO: Implement coinbase
+        let mut tx_iter = block.transactions.iter_mut().enumerate();
+        let block_height: u32 = (*block.header.height()).into();
+
+        let mut coinbase_tx: Mint = match execution_kind {
+            ExecutionKind::Production => {
+                // The coinbase transaction should be the first.
+                // We will add `Output::Coin` at the end of transactions execution.
+                Transaction::mint(TxPointer::new(block_height, 0), vec![])
+            }
+            ExecutionKind::Validation => {
+                let mint = if let Some((_, Transaction::Mint(mint))) = tx_iter.next() {
+                    mint.clone()
+                } else {
+                    return Err(Error::FirstTransactionIsNotCoinbase)
+                };
+                self.check_coinbase(block_height as Word, mint)?
+            }
+        };
+
         // Execute each transaction.
-        for (idx, tx) in block.transactions.iter_mut().enumerate() {
+        for (idx, tx) in tx_iter {
             let tx_id = tx.id();
 
             // Throw a clear error if the transaction id is a duplicate
@@ -316,14 +336,42 @@ impl Executor {
                 }
                 CheckedTransaction::Mint(mint) => {
                     // Right now, we only support `Mint` transactions for coinbase,
-                    // which are processed separately.
+                    // which are processed separately as a first transaction.
+                    //
+                    // All other `Mint` transaction is not allowed.
                     let (mint, _): (Mint, _) = mint.into();
                     return Err(Error::NotSupportedTransaction(Box::new(mint.into())))
                 }
             }
         }
 
+        // TODO: Compare calculated coinbase with existing
+        // TODO: Insert at the first slot in production mode `Mint` transaction with right values.
+        // TODO: Apply coinbase transaction
+
         Ok(execution_data)
+    }
+
+    fn check_coinbase(&self, block_height: Word, mint: Mint) -> Result<Mint, Error> {
+        let checked_mint = mint
+            .into_checked(block_height, &self.config.chain_conf.transaction_parameters)?;
+
+        if checked_mint.transaction().outputs().len() > 1 {
+            return Err(Error::SeveralCoinbaseOutputs)
+        }
+
+        if let Some(Output::Coin { asset_id, .. }) =
+            checked_mint.transaction().outputs().first()
+        {
+            if asset_id != &AssetId::BASE {
+                return Err(Error::CoinbaseOutputIsInvalid)
+            }
+        } else {
+            return Err(Error::CoinbaseOutputIsInvalid)
+        }
+
+        let (mint, _) = checked_mint.into();
+        Ok(mint)
     }
 
     fn execute_create_or_script<Tx>(
