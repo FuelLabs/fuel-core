@@ -141,6 +141,7 @@ query Query($_0: TransactionId!) {
       sender
       recipient
       nonce
+      contractId
     }
     script
     scriptData
