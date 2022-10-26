@@ -1,6 +1,6 @@
 [package]
 name = "fuel-core"
-version = "0.11.2"
+version = "0.12.0"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -35,20 +35,20 @@ derive_more = { version = "0.99" }
 dirs = "4.0"
 enum-iterator = "1.2"
 env_logger = "0.9"
-fuel-block-executor = { path = "../fuel-block-executor", version = "0.11.2" }
-fuel-block-importer = { path = "../fuel-block-importer", version = "0.11.2" }
-fuel-block-producer = { path = "../fuel-block-producer", version = "0.11.2" }
-fuel-chain-config = { path = "../fuel-chain-config", version = "0.11.2" }
-fuel-core-bft = { path = "../fuel-core-bft", version = "0.11.2" }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.11.2", features = [
+fuel-block-executor = { path = "../fuel-block-executor", version = "0.12.0" }
+fuel-block-importer = { path = "../fuel-block-importer", version = "0.12.0" }
+fuel-block-producer = { path = "../fuel-block-producer", version = "0.12.0" }
+fuel-chain-config = { path = "../fuel-chain-config", version = "0.12.0" }
+fuel-core-bft = { path = "../fuel-core-bft", version = "0.12.0" }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.12.0", features = [
     "serde",
 ] }
-fuel-metrics = { path = "../fuel-metrics", version = "0.11.2", optional = true }
-fuel-p2p = { path = "../fuel-p2p", version = "0.11.2", optional = true }
-fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.11.2" }
-fuel-relayer = { path = "../fuel-relayer", version = "0.11.2", optional = true }
-fuel-sync = { path = "../fuel-sync", version = "0.11.2" }
-fuel-txpool = { path = "../fuel-txpool", version = "0.11.2" }
+fuel-metrics = { path = "../fuel-metrics", version = "0.12.0", optional = true }
+fuel-p2p = { path = "../fuel-p2p", version = "0.12.0", optional = true }
+fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.12.0" }
+fuel-relayer = { path = "../fuel-relayer", version = "0.12.0", optional = true }
+fuel-sync = { path = "../fuel-sync", version = "0.12.0" }
+fuel-txpool = { path = "../fuel-txpool", version = "0.12.0" }
 futures = "0.3"
 hex = { version = "0.4", features = ["serde"] }
 itertools = "0.10"
