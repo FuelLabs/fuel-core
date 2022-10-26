@@ -169,6 +169,35 @@ async fn produce_block_custom_time() {
 
     let client = FuelClient::from(srv.bound_address);
 
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
+
+    assert_eq!(5, new_height);
+
+    assert_eq!(db.block_time(1).unwrap().timestamp(), 100);
+    assert_eq!(db.block_time(2).unwrap().timestamp(), 110);
+    assert_eq!(db.block_time(3).unwrap().timestamp(), 120);
+    assert_eq!(db.block_time(4).unwrap().timestamp(), 130);
+    assert_eq!(db.block_time(5).unwrap().timestamp(), 140);
+}
+
+#[tokio::test]
+async fn produce_block_bad_start_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
     // produce block with current timestamp
     let _ = client.produce_blocks(1, None).await.unwrap();
 

@@ -332,7 +332,8 @@ impl InterpreterStorage for Database {
     }
 
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
-        self.timestamp(height)?
+        self.block_time(height)?
+            .timestamp_millis()
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }

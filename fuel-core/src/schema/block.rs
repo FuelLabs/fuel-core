@@ -438,7 +438,7 @@ async fn check_start_after_latest_block(
         return Ok(())
     }
 
-    let latest_time = db.timestamp(current_height.into())?;
+    let latest_time = db.block_time(current_height.into())?.timestamp();
     if latest_time as u64 > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",
