@@ -284,7 +284,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let deduped = total_blocks
         .results
         .iter()
-        .map(|b| b.height.0)
+        .map(|b| b.header.height.0)
         .dedup()
         .collect_vec();
 

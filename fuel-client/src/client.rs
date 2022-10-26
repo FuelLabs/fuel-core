@@ -590,6 +590,24 @@ impl FuelClient {
 
         Ok(messages)
     }
+
+    /// Request a merkle proof of an output message.
+    pub async fn message_proof(
+        &self,
+        transaction_id: &str,
+        message_id: &str,
+    ) -> io::Result<Option<schema::message::MessageProof>> {
+        let transaction_id: schema::TransactionId = transaction_id.parse()?;
+        let message_id: schema::MessageId = message_id.parse()?;
+        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
+            transaction_id,
+            message_id,
+        });
+
+        let proof = self.query(query).await?.message_proof;
+
+        Ok(proof)
+    }
 }
 
 #[cfg(any(test, feature = "test-helpers"))]

@@ -2338,6 +2338,7 @@ dependencies = [
  "insta",
  "itertools",
  "lazy_static",
+ "mockall",
  "rand 0.8.5",
  "rocksdb",
  "serde",

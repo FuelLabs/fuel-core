@@ -46,9 +46,8 @@ input BalanceFilterInput {
 
 type Block {
 	id: BlockId!
-	height: U64!
+	header: Header!
 	transactions: [Transaction!]!
-	time: DateTime!
 }
 
 type BlockConnection {
@@ -268,6 +267,49 @@ type FailureStatus {
 }
 
 
+type Header {
+	"""
+	Hash of the header
+	"""
+	id: BlockId!
+	"""
+	The layer 1 height of messages and events to include since the last layer 1 block number.
+	"""
+	daHeight: U64!
+	"""
+	Number of transactions in this block.
+	"""
+	transactionsCount: U64!
+	"""
+	Number of output messages in this block.
+	"""
+	outputMessagesCount: U64!
+	"""
+	Merkle root of transactions.
+	"""
+	transactionsRoot: Bytes32!
+	"""
+	Merkle root of messages in this block.
+	"""
+	outputMessagesRoot: Bytes32!
+	"""
+	Fuel block height.
+	"""
+	height: U64!
+	"""
+	Merkle root of all previous block header hashes.
+	"""
+	prevRoot: Bytes32!
+	"""
+	The block producer time.
+	"""
+	time: DateTime!
+	"""
+	Hash of the application header.
+	"""
+	applicationHash: Bytes32!
+}
+
 scalar HexString
 
 
@@ -312,7 +354,7 @@ type Message {
 	sender: Address!
 	recipient: Address!
 	nonce: U64!
-	data: [Int!]!
+	data: HexString!
 	daHeight: U64!
 	fuelBlockSpend: U64
 }
@@ -351,6 +393,18 @@ scalar MessageId
 type MessageOutput {
 	recipient: Address!
 	amount: U64!
+}
+
+type MessageProof {
+	proofSet: [Bytes32!]!
+	proofIndex: U64!
+	sender: Address!
+	recipient: Address!
+	nonce: Bytes32!
+	amount: U64!
+	data: HexString!
+	signature: Signature!
+	header: Header!
 }
 
 type Mutation {
@@ -442,6 +496,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
+	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
 	"""
 	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned resources are actual resources
@@ -525,6 +580,8 @@ enum RunState {
 }
 
 scalar Salt
+
+scalar Signature
 
 input SpendQueryElementInput {
 	"""
