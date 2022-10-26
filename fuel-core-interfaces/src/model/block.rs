@@ -14,15 +14,69 @@ use chrono::{
     DateTime,
     Utc,
 };
-use core::ops::Deref;
 use fuel_vm::{
+    fuel_crypto,
     fuel_merkle,
     fuel_types::MessageId,
     prelude::Signature,
 };
 
+use crate::common::{
+    fuel_tx::Input,
+    fuel_types::Address,
+};
 #[cfg(any(test, feature = "test-helpers"))]
 use chrono::TimeZone;
+use derive_more::{
+    AsRef,
+    Display,
+    From,
+    FromStr,
+    Into,
+    LowerHex,
+    UpperHex,
+};
+
+/// A cryptographically secure hash, identifying a block.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    FromStr,
+    From,
+    Into,
+    LowerHex,
+    UpperHex,
+    Display,
+    AsRef,
+)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+#[repr(transparent)]
+pub struct BlockId(Bytes32);
+
+impl BlockId {
+    /// Converts the hash into a message having the same bytes.
+    pub fn into_message(self) -> fuel_crypto::Message {
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_crypto::Message::from_bytes_unchecked(*self.0) }
+        // Without this, the signature would be using a hash of the id making it more
+        // difficult to verify.
+    }
+
+    pub fn as_message(&self) -> &fuel_crypto::Message {
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_crypto::Message::as_ref_unchecked(self.0.as_slice()) }
+        // Without this, the signature would be using a hash of the id making it more
+        // difficult to verify.
+    }
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -120,7 +174,7 @@ pub struct GeneratedConsensusFields {
 /// Extra data that is not actually part of the header.
 pub struct HeaderMetadata {
     /// Hash of the header.
-    id: Bytes32,
+    id: BlockId,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,13 +236,13 @@ impl FuelBlockHeader {
     }
 
     /// Get the hash of the fuel header.
-    pub fn hash(&self) -> Bytes32 {
+    pub fn hash(&self) -> BlockId {
         // This internally hashes the hash of the application header.
         self.consensus.hash()
     }
 
     /// Get the cached fuel header hash.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         if let Some(ref metadata) = self.metadata {
             metadata.id
         } else {
@@ -299,14 +353,14 @@ impl FuelApplicationHeader<GeneratedApplicationFields> {
 
 impl FuelConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
-    fn hash(&self) -> Bytes32 {
+    fn hash(&self) -> BlockId {
         // Order matters and is the same as the spec.
         let mut hasher = Hasher::default();
         hasher.input(self.prev_root.as_ref());
         hasher.input(&self.height.to_bytes()[..]);
         hasher.input(self.time.timestamp_millis().to_be_bytes());
         hasher.input(self.application_hash.as_ref());
-        hasher.digest()
+        BlockId(hasher.digest())
     }
 }
 
@@ -367,7 +421,7 @@ pub struct FuelBlockDb {
 
 impl FuelBlockDb {
     /// Hash of the header.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         self.header.id()
     }
 
@@ -458,7 +512,7 @@ impl FuelBlock {
     }
 
     /// Get the hash of the header.
-    pub fn id(&self) -> Bytes32 {
+    pub fn id(&self) -> BlockId {
         self.header.id()
     }
 
@@ -467,6 +521,16 @@ impl FuelBlock {
         FuelBlockDb {
             header: self.header.clone(),
             transactions: self.transactions.iter().map(|tx| tx.id()).collect(),
+        }
+    }
+
+    /// Convert from a previously stored block back to a full block
+    pub fn from_db_block(db_block: FuelBlockDb, transactions: Vec<Transaction>) -> Self {
+        // TODO: should we perform an extra validation step to ensure the provided
+        //  txs match the expected ones in the block?
+        Self {
+            header: db_block.header,
+            transactions,
         }
     }
 
@@ -522,12 +586,62 @@ impl PartialFuelBlock {
         FuelBlock::new(self.header, self.transactions, message_ids)
     }
 }
+
+impl From<FuelBlock> for PartialFuelBlock {
+    fn from(block: FuelBlock) -> Self {
+        let FuelBlock {
+            header:
+                FuelBlockHeader {
+                    application: FuelApplicationHeader { da_height, .. },
+                    consensus:
+                        FuelConsensusHeader {
+                            prev_root,
+                            height,
+                            time,
+                            ..
+                        },
+                    ..
+                },
+            transactions,
+        } = block;
+        Self {
+            header: PartialFuelBlockHeader {
+                application: FuelApplicationHeader {
+                    da_height,
+                    generated: Empty {},
+                },
+                consensus: FuelConsensusHeader {
+                    prev_root,
+                    height,
+                    time,
+                    generated: Empty {},
+                },
+                metadata: None,
+            },
+            transactions,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
 /// header.
 pub enum FuelBlockConsensus {
     PoA(FuelBlockPoAConsensus),
+}
+
+impl FuelBlockConsensus {
+    /// Retrieve the block producer address from the consensus data
+    pub fn block_producer(&self, block_id: &BlockId) -> anyhow::Result<Address> {
+        match &self {
+            FuelBlockConsensus::PoA(poa_data) => {
+                let public_key = poa_data.signature.recover(block_id.as_message())?;
+                let address = Input::owner(&public_key);
+                Ok(address)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -539,6 +653,28 @@ pub struct FuelBlockPoAConsensus {
     pub signature: Signature,
 }
 
+#[cfg(any(test, feature = "test-helpers"))]
+impl<T> Default for FuelConsensusHeader<T>
+where
+    T: Default,
+{
+    fn default() -> Self {
+        Self {
+            time: Utc.timestamp(0, 0),
+            height: BlockHeight::default(),
+            prev_root: Bytes32::default(),
+            generated: Default::default(),
+        }
+    }
+}
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl Default for FuelBlockConsensus {
+    fn default() -> Self {
+        FuelBlockConsensus::PoA(Default::default())
+    }
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
@@ -546,14 +682,6 @@ pub struct FuelBlockPoAConsensus {
 pub struct SealedFuelBlock {
     pub block: FuelBlock,
     pub consensus: FuelBlockConsensus,
-}
-
-impl Deref for SealedFuelBlock {
-    type Target = FuelBlock;
-
-    fn deref(&self) -> &FuelBlock {
-        &self.block
-    }
 }
 
 impl FuelBlockPoAConsensus {
@@ -598,60 +726,11 @@ impl SealedFuelBlock {
     }
 }
 
-impl From<FuelBlock> for PartialFuelBlock {
-    fn from(block: FuelBlock) -> Self {
-        let FuelBlock {
-            header:
-                FuelBlockHeader {
-                    application: FuelApplicationHeader { da_height, .. },
-                    consensus:
-                        FuelConsensusHeader {
-                            prev_root,
-                            height,
-                            time,
-                            ..
-                        },
-                    ..
-                },
-            transactions,
-        } = block;
-        Self {
-            header: PartialFuelBlockHeader {
-                application: FuelApplicationHeader {
-                    da_height,
-                    generated: Empty {},
-                },
-                consensus: FuelConsensusHeader {
-                    prev_root,
-                    height,
-                    time,
-                    generated: Empty {},
-                },
-                metadata: None,
-            },
-            transactions,
-        }
-    }
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl<T> Default for FuelConsensusHeader<T>
-where
-    T: Default,
-{
-    fn default() -> Self {
-        Self {
-            time: Utc.timestamp(0, 0),
-            height: BlockHeight::default(),
-            prev_root: Bytes32::default(),
-            generated: Default::default(),
-        }
-    }
-}
-
-#[cfg(any(test, feature = "test-helpers"))]
-impl Default for FuelBlockConsensus {
-    fn default() -> Self {
-        FuelBlockConsensus::PoA(Default::default())
-    }
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "test-helpers"), derive(Default))]
+/// A fuel block with the related consensus data.
+pub struct SealedFuelBlockHeader {
+    pub header: FuelBlockHeader,
+    pub consensus: FuelBlockConsensus,
 }

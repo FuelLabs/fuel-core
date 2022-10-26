@@ -2377,16 +2377,18 @@ dependencies = [
  "futures",
  "lazy_static",
  "parking_lot 0.12.1",
+ "secrecy",
  "serde",
  "thiserror",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
 name = "fuel-crypto"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c27380c9c0a97da57123eb981289431069371cc71439f8d0192b604c1414f705"
+checksum = "00ff4fc0f9a733676b465765c9fb3c5a50ba447dce19b3df22549d4f386e79e3"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2397,6 +2399,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "sha2 0.10.6",
+ "zeroize",
 ]
 
 [[package]]
@@ -5440,6 +5443,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83080e2c2fc1006e625be82e5d1eb6a43b7fd9578b617fcc55814daf286bba4b"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]

@@ -19,9 +19,11 @@ fuel-vm = { version = "0.18", default-features = false, features = ["random"] }
 futures = "0.3"
 lazy_static = "1.4"
 parking_lot = "0.12"
+secrecy = "0.8"
 serde = { version = "1.0", features = ["derive"], optional = true }
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
+zeroize = "1.5"
 
 [features]
 test-helpers = [
