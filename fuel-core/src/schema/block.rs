@@ -373,7 +373,7 @@ impl BlockMutation {
             config: cfg.clone(),
         };
 
-        let block_time = get_time_closure(db, time, blocks_to_produce.0).await?;
+        let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
 
         for idx in 0..blocks_to_produce.0 {
             let current_height = db.get_block_height()?.unwrap_or_default();
@@ -405,14 +405,14 @@ impl BlockMutation {
     }
 }
 
-async fn get_time_closure(
+fn get_time_closure(
     db: &Database,
     time_parameters: Option<TimeParameters>,
     blocks_to_produce: u64,
 ) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>> {
     if let Some(params) = time_parameters {
-        check_start_after_latest_block(db, params.start_time.0).await?;
-        check_block_time_overflow(&params, blocks_to_produce).await?;
+        check_start_after_latest_block(db, params.start_time.0)?;
+        check_block_time_overflow(&params, blocks_to_produce)?;
 
         return Ok(Box::new(move |idx: u64| {
             let (timestamp, _) = params
@@ -428,10 +428,7 @@ async fn get_time_closure(
     Ok(Box::new(|_| Utc::now()))
 }
 
-async fn check_start_after_latest_block(
-    db: &Database,
-    start_time: u64,
-) -> anyhow::Result<()> {
+fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
     let current_height = db.get_block_height()?.unwrap_or_default();
 
     if current_height.as_usize() == 0 {
@@ -449,7 +446,7 @@ async fn check_start_after_latest_block(
     Ok(())
 }
 
-async fn check_block_time_overflow(
+fn check_block_time_overflow(
     params: &TimeParameters,
     blocks_to_produce: u64,
 ) -> anyhow::Result<()> {
