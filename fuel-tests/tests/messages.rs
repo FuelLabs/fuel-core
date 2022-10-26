@@ -25,7 +25,10 @@ use fuel_gql_client::{
     },
     fuel_tx::Input,
     fuel_types::MessageId,
-    prelude::Opcode,
+    prelude::{
+        Bytes64,
+        Opcode,
+    },
 };
 use rand::{
     rngs::StdRng,
@@ -316,8 +319,6 @@ async fn can_get_message_proof() {
             // This will be used to read the contract id + two
             // empty params. So 32 + 8 + 8.
             Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
-            // // Set register 17 to zeros which is the base asset id.
-            // Opcode::MOVI(0x11, 1_000),
             // Set register 18 to the amount of gas to forward to the contract.
             Opcode::MOVI(0x12, 1_000),
             // Call the contract and forward no coins.
@@ -387,8 +388,6 @@ async fn can_get_message_proof() {
         // Deploy the contract.
         let deploy_id = client.submit(&contract_deploy).await.unwrap();
 
-        // Call the contract.
-        let call_id = client.submit(&script).await.unwrap();
         tokio::time::timeout(
             std::time::Duration::from_secs(5),
             client.await_transaction_commit(&deploy_id.to_string()),
@@ -396,6 +395,9 @@ async fn can_get_message_proof() {
         .await
         .unwrap()
         .unwrap();
+
+        // Call the contract.
+        let call_id = client.submit(&script).await.unwrap();
 
         tokio::time::timeout(
             std::time::Duration::from_secs(5),
@@ -493,7 +495,7 @@ async fn can_get_message_proof() {
             );
 
             // 4. Verify the signature. (block_id, signature)
-            assert!(verify_signature(block_id, result.signature));
+            assert!(verify_signature(block_id.into(), result.signature));
         }
     }
 }
@@ -512,9 +514,11 @@ fn verify_merkle(
 }
 
 fn verify_signature(
-    _block_id: fuel_gql_client::prelude::Bytes32,
-    _signature: fuel_gql_client::client::schema::Signature,
+    block_id: fuel_core_interfaces::model::BlockId,
+    signature: fuel_gql_client::client::schema::Signature,
 ) -> bool {
-    // TODO: Verify using Signature verify() once we actually start signing headers.
-    true
+    let signature = fuel_gql_client::prelude::Signature::from(Bytes64::from(signature));
+    let m = block_id.as_message();
+    let public_key = signature.recover(m).unwrap();
+    signature.verify(&public_key, m).is_ok()
 }

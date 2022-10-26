@@ -16,6 +16,7 @@ use crate::{
         storage::{
             FuelBlocks,
             Receipts,
+            SealedBlockConsensus,
         },
         Database,
     },
@@ -37,14 +38,16 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
-        prelude::Signature,
     },
     db::{
         KvStoreError,
         Messages,
         Transactions,
     },
-    model,
+    model::{
+        self,
+        FuelBlockConsensus,
+    },
 };
 use itertools::Itertools;
 
@@ -305,10 +308,18 @@ impl MessageProofData for MessageProofContext<'_> {
 
     fn signature(
         &self,
-        _block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
     ) -> Result<Option<fuel_core_interfaces::common::fuel_crypto::Signature>, KvStoreError>
     {
-        Ok(Some(Signature::default()))
+        match self
+            .0
+            .storage::<SealedBlockConsensus>()
+            .get(block_id)?
+            .map(Cow::into_owned)
+        {
+            Some(FuelBlockConsensus::PoA(c)) => Ok(Some(c.signature)),
+            None => Ok(None),
+        }
     }
 
     fn block(
