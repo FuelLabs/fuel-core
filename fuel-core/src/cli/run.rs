@@ -98,6 +98,8 @@ pub struct Command {
     pub consensus_dev_key: bool,
 
     /// The block's fee recipient public key.
+    ///
+    /// If not set, `consensus_key` is used as the provider of the `Address`.
     #[clap(long = "coinbase-recipient")]
     pub coinbase_recipient: Option<String>,
 
