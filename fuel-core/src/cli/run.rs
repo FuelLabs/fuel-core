@@ -2,24 +2,37 @@ use crate::{
     cli::DEFAULT_DB_PATH,
     FuelService,
 };
+use anyhow::Context;
 use clap::Parser;
 use fuel_chain_config::ChainConfig;
 use fuel_core::service::{
+    config::default_consensus_dev_key,
     Config,
     DbType,
     VMConfig,
 };
+use fuel_core_interfaces::{
+    common::{
+        prelude::SecretKey,
+        secrecy::Secret,
+    },
+    model::SecretKeyWrapper,
+};
 use std::{
     env,
-    io,
     net,
     path::PathBuf,
+    str::FromStr,
 };
 use strum::VariantNames;
 use tracing::{
     info,
+    log::warn,
     trace,
 };
+
+pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
+
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -66,6 +79,16 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
+    /// The signing key used when producing blocks.
+    /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
+    #[clap(long = "consensus-key")]
+    pub consensus_key: Option<String>,
+
+    /// Use a default insecure consensus key for testing purposes.
+    /// This will not be enabled by default in the future.
+    #[clap(long = "dev-keys", default_value = "true")]
+    pub consensus_dev_key: bool,
+
     #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
@@ -76,7 +99,7 @@ pub struct Command {
 }
 
 impl Command {
-    pub fn get_config(self) -> io::Result<Config> {
+    pub fn get_config(self) -> anyhow::Result<Config> {
         let Command {
             ip,
             port,
@@ -87,6 +110,8 @@ impl Command {
             manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
+            consensus_key,
+            consensus_dev_key,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
@@ -99,12 +124,26 @@ impl Command {
         let p2p = {
             match p2p_args.into() {
                 Ok(value) => value,
-                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+                Err(e) => return Err(e),
             }
         };
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
         let consensus_params = chain_conf.transaction_parameters;
+        // if consensus key is not configured, fallback to dev consensus key
+        let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
+            if consensus_dev_key {
+                let key = default_consensus_dev_key();
+                warn!(
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
+                    key.public_key()
+                );
+                Some(Secret::new(key.into()))
+            } else {
+                // if consensus dev key is disabled, use no key
+                None
+            }
+        });
 
         Ok(Config {
             addr,
@@ -132,6 +171,7 @@ impl Command {
             sync: Default::default(),
             #[cfg(feature = "p2p")]
             p2p,
+            consensus_key,
         })
     }
 }
@@ -147,4 +187,24 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     server.run().await;
 
     Ok(())
+}
+
+// Attempt to load the consensus key from cli arg first, otherwise check the env.
+fn load_consensus_key(
+    cli_arg: Option<String>,
+) -> anyhow::Result<Option<Secret<SecretKeyWrapper>>> {
+    let secret_string = if let Some(cli_arg) = cli_arg {
+        warn!("Consensus key configured insecurely using cli args. Consider setting the {} env var instead.", CONSENSUS_KEY_ENV);
+        Some(cli_arg)
+    } else {
+        env::var(CONSENSUS_KEY_ENV).ok()
+    };
+
+    if let Some(key) = secret_string {
+        let key =
+            SecretKey::from_str(&key).context("failed to parse consensus signing key")?;
+        Ok(Some(Secret::new(key.into())))
+    } else {
+        Ok(None)
+    }
 }

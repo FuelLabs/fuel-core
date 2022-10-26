@@ -20,6 +20,7 @@ use std::{
         Formatter,
         LowerHex,
     },
+    ops::Deref,
     str::FromStr,
 };
 
@@ -110,6 +111,7 @@ fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
 fuel_type_scalar!(MessageId, MessageId);
+fuel_type_scalar!(Signature, Bytes64);
 
 impl LowerHex for MessageId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -174,6 +176,14 @@ impl From<HexString> for Vec<u8> {
     }
 }
 
+impl Deref for HexString {
+    type Target = Bytes;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Bytes(pub Vec<u8>);
 
@@ -211,6 +221,14 @@ impl<'de> Deserialize<'de> for Bytes {
 impl Display for Bytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x{}", hex::encode(&self.0))
+    }
+}
+
+impl Deref for Bytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 

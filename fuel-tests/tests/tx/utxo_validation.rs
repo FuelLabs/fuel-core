@@ -39,7 +39,7 @@ async fn submit_utxo_verified_tx_with_min_gas_price() {
                 Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(10000000)
+            .gas_limit(10000)
             .gas_price(1)
             .add_unsigned_coin_input(
                 SecretKey::random(&mut rng),
@@ -145,7 +145,7 @@ async fn dry_run_override_utxo_validation() {
         Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
         vec![],
     )
-    .gas_limit(10000000)
+    .gas_limit(10000)
     .add_input(Input::coin_signed(
         rng.gen(),
         rng.gen(),
@@ -285,7 +285,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let deduped = total_blocks
         .results
         .iter()
-        .map(|b| b.height.0)
+        .map(|b| b.header.height.0)
         .dedup()
         .collect_vec();
 

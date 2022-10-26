@@ -25,11 +25,14 @@ use fuel_core_interfaces::{
     },
     model::FuelConsensusHeader,
 };
-use fuel_gql_client::client::{
-    types::TransactionStatus,
-    FuelClient,
-    PageDirection,
-    PaginationRequest,
+use fuel_gql_client::{
+    client::{
+        types::TransactionStatus,
+        FuelClient,
+        PageDirection,
+        PaginationRequest,
+    },
+    prelude::Bytes32,
 };
 use itertools::{
     rev,
@@ -43,7 +46,9 @@ async fn block() {
     let block = FuelBlockDb::default();
     let id = block.id();
     let mut db = Database::default();
-    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+    db.storage::<FuelBlocks>()
+        .insert(&id.into(), &block)
+        .unwrap();
 
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
@@ -52,8 +57,9 @@ async fn block() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
+    let id_bytes: Bytes32 = id.into();
     let block = client
-        .block(BlockId::from(id).to_string().as_str())
+        .block(BlockId::from(id_bytes).to_string().as_str())
         .await
         .unwrap();
     assert!(block.is_some());
@@ -91,6 +97,7 @@ async fn produce_block() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -134,6 +141,7 @@ async fn produce_block_negative() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -169,7 +177,9 @@ async fn block_connection_5(
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+        db.storage::<FuelBlocks>()
+            .insert(&id.into(), &block)
+            .unwrap();
     }
 
     // setup server & client
@@ -194,13 +204,21 @@ async fn block_connection_5(
     match pagination_direction {
         PageDirection::Forward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(0..5).collect_vec()
             );
         }
         PageDirection::Backward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(5..10).collect_vec()
             );
         }
