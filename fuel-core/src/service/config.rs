@@ -1,4 +1,11 @@
 use fuel_chain_config::ChainConfig;
+use fuel_core_interfaces::{
+    common::{
+        prelude::SecretKey,
+        secrecy::Secret,
+    },
+    model::SecretKeyWrapper,
+};
 use std::{
     net::{
         Ipv4Addr,
@@ -34,11 +41,13 @@ pub struct Config {
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
     pub p2p: fuel_p2p::config::P2PConfig,
+    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
+
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
@@ -60,6 +69,7 @@ impl Config {
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
             p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
+            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }
 }
@@ -74,4 +84,12 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
+}
+
+/// A default secret key to use for testing purposes only
+pub fn default_consensus_dev_key() -> SecretKey {
+    const DEV_KEY_PHRASE: &str =
+        "winner alley monkey elephant sun off boil hope toward boss bronze dish";
+    SecretKey::new_from_mnemonic_phrase_with_path(DEV_KEY_PHRASE, "m/44'/60'/0'/0/0")
+        .expect("valid key")
 }
