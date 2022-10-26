@@ -74,7 +74,10 @@ pub use schema::{
 };
 
 use self::schema::{
-    block::ProduceBlockArgs,
+    block::{
+        ProduceBlockArgs,
+        TimeParameters,
+    },
     message::MessageProofArgs,
 };
 
@@ -419,9 +422,14 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+    pub async fn produce_blocks(
+        &self,
+        blocks_to_produce: u64,
+        time: Option<TimeParameters>,
+    ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
+            time,
         });
 
         let new_height = self.query(query).await?.produce_blocks;
