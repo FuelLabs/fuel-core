@@ -1586,6 +1586,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2564,10 +2575,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.20.2"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e6e4b2fb996102f086dd40f2d3f4f173aac03f2998a865d8b2248e76bb04c7f"
+checksum = "d91e0ec3248f8ffb639653489219ca3be9fb938b93f0c7c142fef4f150ce4224"
 dependencies = [
+ "derivative",
  "fuel-asm",
  "fuel-crypto",
  "fuel-merkle",
@@ -2608,9 +2620,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.18.2"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bc62660875a8942476f7bf934d97825e0c57b98eacd9e9194570224c609d47"
+checksum = "d764a72b195e8b152377e20c61021aca3a4744d6de056e6c889fe8ab785cde7d"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -2621,7 +2633,6 @@ dependencies = [
  "fuel-types",
  "itertools",
  "rand 0.8.5",
- "secp256k1",
  "serde",
  "sha3",
  "tai64",
