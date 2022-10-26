@@ -1,11 +1,10 @@
 use fuel_chain_config::ChainConfig;
-use fuel_core_interfaces::common::{
-    prelude::SecretKey,
-    secrecy::Secret,
-};
-use rand::{
-    rngs::StdRng,
-    SeedableRng,
+use fuel_core_interfaces::{
+    common::{
+        prelude::SecretKey,
+        secrecy::Secret,
+    },
+    model::SecretKeyWrapper,
 };
 use std::{
     net::{
@@ -42,21 +41,13 @@ pub struct Config {
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
     pub p2p: fuel_p2p::config::P2PConfig,
-    // TODO: make fuel_crypto::Secret support zeroize
-    pub consensus_key: Option<Secret<[u8; 32]>>,
+    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
 
-        let dev_key = {
-            // TODO: make fuel-crypto re-export deps needed for doing mnemomics instead of
-            //  using random keygen here
-            let mut rng = StdRng::seed_from_u64(50);
-            let secret = SecretKey::random(&mut rng);
-            <[u8; 32]>::from(secret)
-        };
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
@@ -78,7 +69,7 @@ impl Config {
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
             p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
-            consensus_key: Some(Secret::new(dev_key)),
+            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }
 }
@@ -93,4 +84,12 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
+}
+
+/// A default secret key to use for testing purposes only
+pub fn default_consensus_dev_key() -> SecretKey {
+    const DEV_KEY_PHRASE: &str =
+        "winner alley monkey elephant sun off boil hope toward boss bronze dish";
+    SecretKey::new_from_mnemonic_phrase_with_path(&DEV_KEY_PHRASE, "m/44'/60'/0'/0/0")
+        .expect("valid key")
 }

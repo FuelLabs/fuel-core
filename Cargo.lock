@@ -2381,13 +2381,14 @@ dependencies = [
  "serde",
  "thiserror",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
 name = "fuel-crypto"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c27380c9c0a97da57123eb981289431069371cc71439f8d0192b604c1414f705"
+checksum = "00ff4fc0f9a733676b465765c9fb3c5a50ba447dce19b3df22549d4f386e79e3"
 dependencies = [
  "borrown",
  "coins-bip32",
@@ -2398,6 +2399,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "sha2 0.10.6",
+ "zeroize",
 ]
 
 [[package]]

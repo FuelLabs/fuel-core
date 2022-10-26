@@ -21,6 +21,7 @@ use fuel_core_interfaces::{
         FuelConsensusHeader,
         PartialFuelBlock,
         PartialFuelBlockHeader,
+        SecretKeyWrapper,
     },
     poa_coordinator::{
         BlockDb,
@@ -319,7 +320,7 @@ impl MockTxPoolSender {
     }
 }
 
-fn test_signing_key() -> Secret<[u8; 32]> {
+fn test_signing_key() -> Secret<SecretKeyWrapper> {
     let mut rng = StdRng::seed_from_u64(0);
     let secret_key = SecretKey::random(&mut rng);
     Secret::new(secret_key.into())
@@ -512,10 +513,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         match consensus {
             FuelBlockConsensus::PoA(poa) => {
                 // verify against public key from test config
-                let pk = unsafe {
-                    SecretKey::from_bytes_unchecked(*test_signing_key().expose_secret())
-                }
-                .public_key();
+                let pk = test_signing_key().expose_secret().public_key();
 
                 let message = id.into_message();
 

@@ -15,7 +15,6 @@ use fuel_core_interfaces::{
     block_producer::BlockProducer,
     common::{
         prelude::{
-            SecretKey,
             Signature,
             Word,
         },
@@ -29,6 +28,7 @@ use fuel_core_interfaces::{
         FuelBlock,
         FuelBlockConsensus,
         FuelBlockPoAConsensus,
+        SecretKeyWrapper,
     },
     poa_coordinator::{
         BlockDb,
@@ -40,7 +40,10 @@ use fuel_core_interfaces::{
     },
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio::{
     sync::{
         broadcast,
@@ -132,7 +135,7 @@ where
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
-    signing_key: Option<Secret<[u8; 32]>>,
+    signing_key: Option<Secret<SecretKeyWrapper>>,
     db: S,
     block_producer: Arc<dyn BlockProducer>,
     txpool: T,
@@ -165,6 +168,11 @@ where
     }
 
     async fn produce_block(&mut self) -> anyhow::Result<()> {
+        // verify signing key is set
+        if self.signing_key.is_none() {
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
+        }
+
         // Ask the block producer to create the block
         let block = self.signal_produce_block().await?;
 
@@ -319,18 +327,10 @@ where
     fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
         if let Some(key) = &self.signing_key {
             let block_hash = block.id();
-            // Without this, the signature would be using a hash of the id making it more
-            // difficult to verify.
             let message = block_hash.into_message();
 
             // The length of the secret is checked
-            let signing_key =
-                unsafe { SecretKey::from_slice_unchecked(key.expose_secret()) };
-
-            // check if secret is in the field
-            if !signing_key.is_in_field() {
-                return Err(anyhow!("invalid poa signing key, not in field"))
-            }
+            let signing_key = key.expose_secret().deref();
 
             let poa_signature = Signature::sign(&signing_key, &message);
             let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
