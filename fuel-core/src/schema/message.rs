@@ -1,10 +1,26 @@
-use super::scalars::{
-    Address,
-    MessageId,
-    U64,
+use std::borrow::Cow;
+
+use super::{
+    block::Header,
+    scalars::{
+        Address,
+        Bytes32,
+        HexString,
+        MessageId,
+        TransactionId,
+        U64,
+    },
 };
 use crate::{
-    database::Database,
+    database::{
+        storage::{
+            FuelBlocks,
+            Receipts,
+            SealedBlockConsensus,
+        },
+        Database,
+    },
+    query::MessageProofData,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -26,8 +42,12 @@ use fuel_core_interfaces::{
     db::{
         KvStoreError,
         Messages,
+        Transactions,
     },
-    model,
+    model::{
+        self,
+        FuelBlockConsensus,
+    },
 };
 use itertools::Itertools;
 
@@ -55,8 +75,8 @@ impl Message {
         self.0.nonce.into()
     }
 
-    async fn data(&self) -> &Vec<u8> {
-        &self.0.data
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
     }
 
     async fn da_height(&self) -> U64 {
@@ -178,5 +198,138 @@ impl MessageQuery {
             },
         )
         .await
+    }
+
+    async fn message_proof(
+        &self,
+        ctx: &Context<'_>,
+        transaction_id: TransactionId,
+        message_id: MessageId,
+    ) -> async_graphql::Result<Option<MessageProof>> {
+        let data = MessageProofContext(ctx.data_unchecked());
+        Ok(
+            crate::query::message_proof(&data, transaction_id.into(), message_id.into())
+                .await?
+                .map(MessageProof),
+        )
+    }
+}
+
+pub struct MessageProof(pub(crate) model::MessageProof);
+
+#[Object]
+impl MessageProof {
+    async fn proof_set(&self) -> Vec<Bytes32> {
+        self.0
+            .proof_set
+            .iter()
+            .cloned()
+            .map(Bytes32::from)
+            .collect()
+    }
+
+    async fn proof_index(&self) -> U64 {
+        self.0.proof_index.into()
+    }
+
+    async fn sender(&self) -> Address {
+        self.0.sender.into()
+    }
+
+    async fn recipient(&self) -> Address {
+        self.0.recipient.into()
+    }
+
+    async fn nonce(&self) -> Bytes32 {
+        self.0.nonce.into()
+    }
+
+    async fn amount(&self) -> U64 {
+        self.0.amount.into()
+    }
+
+    async fn data(&self) -> HexString {
+        self.0.data.clone().into()
+    }
+
+    async fn signature(&self) -> super::scalars::Signature {
+        self.0.signature.into()
+    }
+
+    async fn header(&self) -> Header {
+        Header(self.0.header.clone())
+    }
+}
+
+struct MessageProofContext<'a>(&'a Database);
+
+impl MessageProofData for MessageProofContext<'_> {
+    fn receipts(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Receipt>, KvStoreError> {
+        Ok(self
+            .0
+            .storage::<Receipts>()
+            .get(transaction_id)?
+            .map(Cow::into_owned)
+            .unwrap_or_else(|| Vec::with_capacity(0)))
+    }
+
+    fn transaction(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Option<fuel_txpool::types::Transaction>, KvStoreError> {
+        Ok(self
+            .0
+            .storage::<Transactions>()
+            .get(transaction_id)?
+            .map(Cow::into_owned))
+    }
+
+    fn transaction_status(
+        &self,
+        transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Option<crate::tx_pool::TransactionStatus>, KvStoreError> {
+        Ok(self.0.get_tx_status(transaction_id)?)
+    }
+
+    fn transactions_on_block(
+        &self,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Vec<fuel_core_interfaces::common::prelude::Bytes32>, KvStoreError> {
+        Ok(self
+            .0
+            .storage::<FuelBlocks>()
+            .get(block_id)?
+            .map(|block| block.into_owned().transactions)
+            .unwrap_or_else(|| Vec::with_capacity(0)))
+    }
+
+    fn signature(
+        &self,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Option<fuel_core_interfaces::common::fuel_crypto::Signature>, KvStoreError>
+    {
+        match self
+            .0
+            .storage::<SealedBlockConsensus>()
+            .get(block_id)?
+            .map(Cow::into_owned)
+        {
+            Some(FuelBlockConsensus::PoA(c)) => Ok(Some(c.signature)),
+            None => Ok(None),
+        }
+    }
+
+    fn block(
+        &self,
+        block_id: &fuel_core_interfaces::common::prelude::Bytes32,
+    ) -> Result<Option<model::FuelBlockDb>, KvStoreError> {
+        Ok(self
+            .0
+            .storage::<FuelBlocks>()
+            .get(block_id)?
+            .map(Cow::into_owned))
     }
 }

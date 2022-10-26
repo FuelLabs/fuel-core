@@ -99,7 +99,7 @@ impl ChainInfo {
         let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_else(|| {
             std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
         });
-        Ok(Block(block.into_owned()))
+        Ok(Block::from(block.into_owned()))
     }
 
     async fn base_chain_height(&self) -> U64 {
