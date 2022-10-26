@@ -319,10 +319,8 @@ async fn can_get_message_proof() {
             // This will be used to read the contract id + two
             // empty params. So 32 + 8 + 8.
             Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
-            // Set register 18 to the amount of gas to forward to the contract.
-            Opcode::MOVI(0x12, 1_000),
             // Call the contract and forward no coins.
-            Opcode::CALL(0x10, REG_ZERO, REG_ZERO, 0x12),
+            Opcode::CALL(0x10, REG_ZERO, REG_ZERO, REG_CGAS),
             // Return.
             Opcode::RET(REG_ONE),
         ];
@@ -423,7 +421,7 @@ async fn can_get_message_proof() {
             .collect();
 
         // Check we actually go the correct amount of ids back.
-        assert_eq!(message_ids.len(), args.len());
+        assert_eq!(message_ids.len(), args.len(), "{:?}", receipts);
 
         for message_id in message_ids.clone() {
             // Request the proof.
