@@ -30,7 +30,6 @@ use fuel_core_interfaces::{
             Bytes32,
             InterpreterStorage,
         },
-        prelude::Signature,
     },
     model::{
         BlockHeight,
@@ -62,7 +61,6 @@ use std::{
 use crate::database::storage::SealedBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use anyhow::anyhow;
 use fuel_core_interfaces::model::FuelBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -352,21 +350,15 @@ impl InterpreterStorage for Database {
     }
 
     fn coinbase(&self) -> Result<Address, Error> {
-        let block = self.get_current_block()?.unwrap_or_else(|| {
-            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
-        });
-        match block.consensus_type() {
+        let current_block = self.get_current_block()?.ok_or(KvStoreError::NotFound)?;
+        match current_block.consensus_type() {
             ConsensusType::PoA => {
-                // FIXME: Get producer address from block signature.
-                // block_id -> Signature
-                let signature = Signature::default();
-                let message = block.header.id().into_message();
-                // TODO: throw an error if public key isn't recoverable
-                //  when implementing signing (https://github.com/FuelLabs/fuel-core/issues/668)
-                let public_key = signature.recover(&message).unwrap_or_default();
-                Ok(fuel_core_interfaces::common::prelude::Input::owner(
-                    &public_key,
-                ))
+                let block_id = current_block.header.id();
+                let consensus = self
+                    .storage::<SealedBlockConsensus>()
+                    .get(&block_id)?
+                    .ok_or(KvStoreError::NotFound)?;
+                consensus.block_producer(&block_id).map_err(Into::into)
             }
         }
     }

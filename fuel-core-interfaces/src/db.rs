@@ -65,6 +65,8 @@ pub enum Error {
     InvalidDatabaseVersion,
     #[error("error occurred in the underlying datastore `{0}`")]
     DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl From<Error> for std::io::Error {
