@@ -37,8 +37,10 @@ use fuel_core_interfaces::{
         Coin,
         CoinStatus,
     },
+    txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
+    Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
 };
@@ -48,7 +50,10 @@ use rand::{
     SeedableRng,
 };
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{
+    broadcast,
+    mpsc,
+};
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
 
@@ -108,8 +113,33 @@ async fn block_producer() -> Result<()> {
     let (import_block_events_tx, import_block_events_rx) = broadcast::channel(16);
 
     let mut txpool_builder = TxPoolServiceBuilder::new();
-    txpool_builder.db(Box::new(txpool_db));
-    txpool_builder.import_block_event(import_block_events_rx);
+
+    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
+
+    // Remove once tx_status events are used
+    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+
+    let (txpool_sender, txpool_receiver) = mpsc::channel(100);
+    let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
+
+    let keep_alive = Box::new(incoming_tx_sender);
+    Box::leak(keep_alive);
+
+    let mut tx_pool_config = TxPoolConfig::default();
+    tx_pool_config.chain_config.transaction_parameters = consensus_params;
+
+    txpool_builder
+        .config(tx_pool_config)
+        .db(Box::new(txpool_db))
+        .incoming_tx_receiver(incoming_tx_receiver)
+        .import_block_event(import_block_events_rx)
+        .tx_status_sender(tx_status_sender)
+        .txpool_sender(TxPoolSender::new(txpool_sender))
+        .txpool_receiver(txpool_receiver);
+
+    let (p2p_request_event_sender, _p2p_request_event_receiver) = mpsc::channel(100);
+    txpool_builder.network_sender(p2p_request_event_sender);
+
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
 
@@ -117,16 +147,16 @@ async fn block_producer() -> Result<()> {
 
     let block_producer = Producer {
         config: fuel_block_producer::config::Config {
-            max_gas_per_block,
             consensus_params,
+            utxo_validation: true,
         },
-        db: &mock_db,
-        txpool: &TxPoolAdapter {
+        db: Box::new(mock_db.clone()),
+        txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
             consensus_params,
-        },
-        executor: &MockExecutor(mock_db.clone()),
-        relayer: &MockRelayer::default(),
+        }),
+        executor: Box::new(MockExecutor(mock_db.clone())),
+        relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
     };
 
@@ -166,15 +196,15 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production
     let generated_block = block_producer
-        .produce_block(1u32.into())
+        .produce_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 2);
+    assert_eq!(generated_block.transactions().len(), 2);
 
-    assert_eq!(generated_block.transactions[0].gas_price(), 20);
-    assert_eq!(generated_block.transactions[1].gas_price(), 10);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 20);
+    assert_eq!(generated_block.transactions()[1].gas_price(), 10);
 
     // Import the block to txpool
     import_block_events_tx
@@ -185,13 +215,13 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production again
     let generated_block = block_producer
-        .produce_block(2u32.into())
+        .produce_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 1);
-    assert_eq!(generated_block.transactions[0].gas_price(), 15);
+    assert_eq!(generated_block.transactions().len(), 1);
+    assert_eq!(generated_block.transactions()[0].gas_price(), 15);
 
     // Import the block to txpool
     import_block_events_tx
@@ -202,12 +232,12 @@ async fn block_producer() -> Result<()> {
 
     // Trigger block production once more, now the block should be empty
     let generated_block = block_producer
-        .produce_block(3u32.into())
+        .produce_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 0);
+    assert_eq!(generated_block.transactions().len(), 0);
 
     Ok(())
 }
@@ -233,21 +263,27 @@ impl CoinInfo {
 }
 
 fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
-    TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-        .gas_price(gas_price)
-        .gas_limit(gas_limit)
-        .add_unsigned_coin_input(
-            coin.secret_key,
-            coin.utxo_id(),
-            COIN_AMOUNT,
-            AssetId::zeroed(),
-            Default::default(),
-            0,
-        )
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id: AssetId::zeroed(),
-        })
-        .finalize_without_signature()
+    let mut tx = TransactionBuilder::script(
+        vec![Opcode::RET(REG_ZERO)].into_iter().collect(),
+        vec![],
+    )
+    .gas_price(gas_price)
+    .gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        coin.secret_key,
+        coin.utxo_id(),
+        COIN_AMOUNT,
+        AssetId::zeroed(),
+        Default::default(),
+        0,
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: AssetId::zeroed(),
+    })
+    .finalize_without_signature();
+
+    tx.sign_inputs(&coin.secret_key);
+    tx
 }

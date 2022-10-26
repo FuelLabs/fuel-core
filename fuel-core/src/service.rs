@@ -6,7 +6,6 @@ use std::{
     panic,
 };
 use tokio::task::JoinHandle;
-use tracing::log::warn;
 
 pub use config::{
     Config,
@@ -54,11 +53,6 @@ impl FuelService {
 
     /// Private inner method for initializing the fuel service
     async fn init_service(database: Database, config: Config) -> Result<Self, AnyError> {
-        // check predicates flag
-        if config.predicates {
-            warn!("Predicates are currently an unstable feature!");
-        }
-
         // initialize state
         Self::initialize_state(&config, &database)?;
 
@@ -104,5 +98,24 @@ impl FuelService {
             task.abort();
         }
         self.modules.stop().await;
+    }
+
+    #[cfg(feature = "relayer")]
+    /// Wait for the [`Relayer`] to be in sync with
+    /// the data availability layer.
+    ///
+    /// Yields until the relayer reaches a point where it
+    /// considered up to date. Note that there's no guarantee
+    /// the relayer will ever catch up to the da layer and
+    /// may fall behind immediately after this future completes.
+    ///
+    /// The only guarantee is that if this future completes then
+    /// the relayer did reach consistency with the da layer for
+    /// some period of time.
+    pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
+        if let Some(relayer_handle) = &self.modules.relayer {
+            relayer_handle.listen_synced().await_synced().await?;
+        }
+        Ok(())
     }
 }

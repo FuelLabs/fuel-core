@@ -1,4 +1,11 @@
 use fuel_chain_config::ChainConfig;
+use fuel_core_interfaces::{
+    common::{
+        prelude::SecretKey,
+        secrecy::Secret,
+    },
+    model::SecretKeyWrapper,
+};
 use std::{
     net::{
         Ipv4Addr,
@@ -23,43 +30,46 @@ pub struct Config {
     pub chain_conf: ChainConfig,
     // default to false until downstream consumers stabilize
     pub utxo_validation: bool,
-    // default to false until predicates have fully stabilized
-    pub predicates: bool,
     pub manual_blocks_enabled: bool,
     pub vm: VMConfig,
     pub txpool: fuel_txpool::Config,
     pub block_importer: fuel_block_importer::Config,
     pub block_producer: fuel_block_producer::Config,
     pub block_executor: fuel_block_executor::Config,
-    pub bft: fuel_core_bft::Config,
     pub sync: fuel_sync::Config,
     #[cfg(feature = "relayer")]
     pub relayer: fuel_relayer::Config,
     #[cfg(feature = "p2p")]
     pub p2p: fuel_p2p::config::P2PConfig,
+    pub consensus_key: Option<Secret<SecretKeyWrapper>>,
 }
 
 impl Config {
     pub fn local_node() -> Self {
+        let chain_conf = ChainConfig::local_testnet();
+
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
             database_type: DbType::InMemory,
-            chain_conf: ChainConfig::local_testnet(),
+            chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
             vm: Default::default(),
             utxo_validation: false,
-            predicates: false,
-            txpool: Default::default(),
+            txpool: fuel_txpool::Config {
+                utxo_validation: false,
+                chain_config: chain_conf,
+                ..Default::default()
+            },
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),
-            bft: Default::default(),
             sync: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: Default::default(),
             #[cfg(feature = "p2p")]
             p2p: fuel_p2p::config::P2PConfig::default_with_network("test_network"),
+            consensus_key: Some(Secret::new(default_consensus_dev_key().into())),
         }
     }
 }
@@ -74,4 +84,12 @@ pub struct VMConfig {
 pub enum DbType {
     InMemory,
     RocksDb,
+}
+
+/// A default secret key to use for testing purposes only
+pub fn default_consensus_dev_key() -> SecretKey {
+    const DEV_KEY_PHRASE: &str =
+        "winner alley monkey elephant sun off boil hope toward boss bronze dish";
+    SecretKey::new_from_mnemonic_phrase_with_path(DEV_KEY_PHRASE, "m/44'/60'/0'/0/0")
+        .expect("valid key")
 }

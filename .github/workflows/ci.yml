@@ -95,9 +95,9 @@ jobs:
           - command: make
             args: check --locked
           - command: test
-            args: --all-targets --all-features --workspace
+            args: --tests --all-features --workspace
           - command: test
-            args: --all-targets --no-default-features --workspace
+            args: --tests --no-default-features --workspace
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}
@@ -109,7 +109,11 @@ jobs:
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
-          version: "0.36.0"
+          version: "0.36.0"      
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:          
+          token: ${{ secrets.GITHUB_TOKEN }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: '${{ matrix.command }} ${{ matrix.args }}'
@@ -148,6 +152,11 @@ jobs:
         with:
           toolchain: stable
           override: true
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify tag version
         run: |
@@ -288,6 +297,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
+        if: matrix.job.cross_image
         uses: docker/setup-buildx-action@v1
 
       - name: Setup custom cross env ${{ matrix.job.cross_image }}

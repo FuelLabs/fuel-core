@@ -1,8 +1,13 @@
 use super::{
+    block::Header,
+    Bytes32,
+    HexString,
     PageDirection,
     PageInfo,
     PaginatedResult,
     PaginationRequest,
+    Signature,
+    TransactionId,
 };
 use crate::client::schema::{
     schema,
@@ -19,7 +24,7 @@ pub struct Message {
     pub sender: Address,
     pub recipient: Address,
     pub nonce: U64,
-    pub data: Vec<i32>,
+    pub data: HexString,
     pub da_height: U64,
     pub fuel_block_spend: Option<U64>,
 }
@@ -62,6 +67,48 @@ pub struct OwnedMessagesConnectionArgs {
     /// Retrieve the last n coins in order (backward pagination).
     /// Can't be used at the same time as `first`.
     pub last: Option<i32>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "MessageProofArgs"
+)]
+pub struct MessageProofQuery {
+    #[arguments(transaction_id = &args.transaction_id, message_id = &args.message_id)]
+    pub message_proof: Option<MessageProof>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct MessageProof {
+    /// The proof set of the message proof.
+    pub proof_set: Vec<Bytes32>,
+    /// The index that was used to produce this proof.
+    pub proof_index: U64,
+    /// The signature of the fuel block.
+    pub signature: Signature,
+    /// The fuel block that contains the message.
+    pub header: Header,
+    /// The messages sender address.
+    pub sender: Address,
+    /// The messages recipient address.
+    pub recipient: Address,
+    /// The nonce from the message.
+    pub nonce: Bytes32,
+    /// The amount from the message.
+    pub amount: U64,
+    /// The data from the message.
+    pub data: HexString,
+}
+
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct MessageProofArgs {
+    /// Transaction id that contains the output message.
+    pub transaction_id: TransactionId,
+    /// Message id of the output message that requires a proof.
+    pub message_id: MessageId,
 }
 
 impl From<(Option<Address>, PaginationRequest<String>)> for OwnedMessagesConnectionArgs {

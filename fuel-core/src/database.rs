@@ -11,6 +11,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
+use fuel_block_producer::db::BlockProducerDatabase;
 use fuel_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -20,7 +21,10 @@ pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
-        fuel_storage::StorageAsRef,
+        fuel_storage::{
+            StorageAsMut,
+            StorageAsRef,
+        },
         fuel_vm::prelude::{
             Address,
             Bytes32,
@@ -29,9 +33,13 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        BlockId,
+        ConsensusType,
+        FuelBlockDb,
         SealedFuelBlock,
     },
     p2p::P2pDb,
+    poa_coordinator::BlockDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
@@ -40,6 +48,7 @@ use serde::{
     Serialize,
 };
 use std::{
+    borrow::Cow,
     fmt::{
         self,
         Debug,
@@ -49,8 +58,11 @@ use std::{
     sync::Arc,
 };
 
+use crate::database::storage::SealedBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use anyhow::Context;
+use fuel_core_interfaces::model::FuelBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -63,12 +75,10 @@ mod block;
 mod code_root;
 mod coin;
 mod contracts;
-mod delegates_index;
 mod message;
 mod receipts;
-mod staking_diffs;
+mod sealed_block;
 mod state;
-mod validator_set;
 
 pub mod metadata;
 pub mod resource;
@@ -112,17 +122,10 @@ pub enum Column {
     FuelBlockIds = 13,
     /// See [`Messages`](fuel_core_interfaces::db::Messages)
     Messages = 14,
-    /// Contain current validator stake and it consensus_key if set.
-    /// See [`ValidatorsSet`](fuel_core_interfaces::db::ValidatorsSet)
-    ValidatorsSet = 15,
-    /// Contain diff between da blocks it contains new registers consensus key and new delegate sets.
-    /// See [`StakingDiffs`](fuel_core_interfaces::db::StakingDiffs)
-    StakingDiffs = 16,
-    /// Maps delegate address with validator_set_diff index where last delegate change happened.
-    /// See [`DelegatesIndexes`](fuel_core_interfaces::db::DelegatesIndexes)
-    DelegatesIndexes = 17,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
-    OwnedMessageIds = 18,
+    OwnedMessageIds = 15,
+    /// The column that stores the consensus metadata associated with a finalized fuel block
+    FuelBlockConsensus = 16,
 }
 
 #[derive(Clone, Debug)]
@@ -303,6 +306,23 @@ impl Default for Database {
     }
 }
 
+impl BlockDb for Database {
+    fn block_height(&self) -> anyhow::Result<BlockHeight> {
+        Ok(self.get_block_height()?.unwrap_or_default())
+    }
+
+    fn seal_block(
+        &mut self,
+        block_id: BlockId,
+        consensus: FuelBlockConsensus,
+    ) -> anyhow::Result<()> {
+        self.storage::<SealedBlockConsensus>()
+            .insert(&block_id.into(), &consensus)
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+}
+
 impl InterpreterStorage for Database {
     type DataError = Error;
 
@@ -313,11 +333,14 @@ impl InterpreterStorage for Database {
 
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
         let id = self.block_hash(height)?;
-        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
         block
             .header
-            .time
-            .timestamp()
+            .time()
+            .timestamp_millis()
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }
@@ -328,14 +351,47 @@ impl InterpreterStorage for Database {
     }
 
     fn coinbase(&self) -> Result<Address, Error> {
-        let height = self.get_block_height()?.unwrap_or_default();
-        let id = self.block_hash(height.into())?;
-        let block = self.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
-        Ok(block.header.producer)
+        let current_block = self
+            .get_current_block()?
+            .ok_or(KvStoreError::NotFound)
+            .with_context(|| "no current block was found")?;
+
+        match current_block.consensus_type() {
+            ConsensusType::PoA => {
+                let block_id = current_block.header.id();
+                let consensus = self
+                    .storage::<SealedBlockConsensus>()
+                    .get(block_id.as_ref())?
+                    .ok_or(KvStoreError::NotFound)?;
+                consensus.block_producer(&block_id).map_err(Into::into)
+            }
+        }
     }
 }
 
-impl TxPoolDb for Database {}
+impl TxPoolDb for Database {
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
+        self.get_block_height()
+            .map(|h| h.unwrap_or_default())
+            .map_err(Into::into)
+    }
+}
+
+impl BlockProducerDatabase for Database {
+    fn get_block(
+        &self,
+        fuel_height: BlockHeight,
+    ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
+        let id = self.block_hash(fuel_height.into())?;
+        self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
+    }
+
+    fn current_block_height(&self) -> anyhow::Result<BlockHeight> {
+        self.get_block_height()
+            .map(|h| h.unwrap_or_default())
+            .map_err(Into::into)
+    }
+}
 
 #[async_trait]
 impl P2pDb for Database {
@@ -377,125 +433,17 @@ mod relayer {
         Database,
     };
     use fuel_core_interfaces::{
-        common::fuel_storage::StorageAsMut,
-        db::ValidatorsSet,
         model::{
             BlockHeight,
-            ConsensusId,
             DaBlockHeight,
             SealedFuelBlock,
-            ValidatorId,
-            ValidatorStake,
         },
-        relayer::{
-            RelayerDb,
-            StakingDiff,
-        },
+        relayer::RelayerDb,
     };
-    use std::{
-        collections::HashMap,
-        ops::DerefMut,
-        sync::Arc,
-    };
+    use std::sync::Arc;
 
     #[async_trait::async_trait]
     impl RelayerDb for Database {
-        async fn get_validators(
-            &self,
-        ) -> HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)> {
-            struct WrapAddress(pub ValidatorId);
-            impl From<Vec<u8>> for WrapAddress {
-                fn from(i: Vec<u8>) -> Self {
-                    Self(ValidatorId::try_from(i.as_ref()).unwrap())
-                }
-            }
-            let mut out = HashMap::new();
-            for diff in self
-                .iter_all::<WrapAddress, (ValidatorStake, Option<ConsensusId>)>(
-                    Column::ValidatorsSet,
-                    None,
-                    None,
-                    None,
-                )
-            {
-                match diff {
-                    Ok((address, stake)) => {
-                        out.insert(address.0, stake);
-                    }
-                    Err(err) => panic!("Database internal error:{:?}", err),
-                }
-            }
-            out
-        }
-
-        async fn get_staking_diffs(
-            &self,
-            from_da_height: DaBlockHeight,
-            to_da_height: Option<DaBlockHeight>,
-        ) -> Vec<(DaBlockHeight, StakingDiff)> {
-            let to_da_height = if let Some(to_da_height) = to_da_height {
-                if from_da_height > to_da_height {
-                    return Vec::new()
-                }
-                to_da_height
-            } else {
-                DaBlockHeight::from(u64::MAX)
-            };
-            struct WrapU64Be(pub DaBlockHeight);
-            impl From<Vec<u8>> for WrapU64Be {
-                fn from(i: Vec<u8>) -> Self {
-                    use byteorder::{
-                        BigEndian,
-                        ReadBytesExt,
-                    };
-                    use std::io::Cursor;
-                    let mut i = Cursor::new(i);
-                    Self(DaBlockHeight::from(
-                        i.read_u64::<BigEndian>().unwrap_or_default(),
-                    ))
-                }
-            }
-            let mut out = Vec::new();
-            for diff in self.iter_all::<WrapU64Be, StakingDiff>(
-                Column::StakingDiffs,
-                None,
-                Some(from_da_height.to_be_bytes().to_vec()),
-                None,
-            ) {
-                match diff {
-                    Ok((key, diff)) => {
-                        let block = key.0;
-                        if block > to_da_height {
-                            return out
-                        }
-                        out.push((block, diff))
-                    }
-                    Err(err) => panic!("get_validator_diffs unexpected error:{:?}", err),
-                }
-            }
-            out
-        }
-
-        async fn apply_validator_diffs(
-            &mut self,
-            da_height: DaBlockHeight,
-            changes: &HashMap<ValidatorId, (ValidatorStake, Option<ConsensusId>)>,
-        ) {
-            // this is reimplemented here to assure it is atomic operation in case of poweroff situation.
-            let mut db = self.transaction();
-            // TODO
-            for (address, stake) in changes {
-                let _ = db
-                    .deref_mut()
-                    .storage::<ValidatorsSet>()
-                    .insert(address, stake);
-            }
-            db.set_validators_da_height(da_height).await;
-            if let Err(err) = db.commit() {
-                panic!("apply_validator_diffs database corrupted: {:?}", err);
-            }
-        }
-
         async fn get_chain_height(&self) -> BlockHeight {
             match self.get_block_height() {
                 Ok(res) => {
@@ -509,10 +457,15 @@ mod relayer {
 
         async fn get_sealed_block(
             &self,
-            _height: BlockHeight,
+            height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            // TODO
-            Some(Arc::new(SealedFuelBlock::default()))
+            let block_id = self
+                .get_block_id(height)
+                .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
+
+            self.get_sealed_block(&block_id)
+                .expect("expected to find sealed block")
+                .map(Arc::new)
         }
 
         async fn set_finalized_da_height(&self, block: DaBlockHeight) {
@@ -523,77 +476,38 @@ mod relayer {
                 });
         }
 
-        async fn get_finalized_da_height(&self) -> DaBlockHeight {
+        async fn get_finalized_da_height(&self) -> Option<DaBlockHeight> {
             match self.get(metadata::FINALIZED_DA_HEIGHT_KEY, Column::Metadata) {
-                Ok(res) => {
-                    return res.expect(
-                        "get_finalized_da_height value should be always present and set",
-                    )
-                }
+                Ok(res) => res,
                 Err(err) => {
                     panic!("get_finalized_da_height database corruption, err:{:?}", err);
                 }
             }
         }
 
-        async fn set_validators_da_height(&self, block: DaBlockHeight) {
-            let _: Option<BlockHeight> = self
-                .insert(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata, block)
-                .unwrap_or_else(|err| {
-                    panic!("set_validators_da_height should always succeed: {:?}", err);
-                });
-        }
-
-        async fn get_validators_da_height(&self) -> DaBlockHeight {
-            match self.get(metadata::VALIDATORS_DA_HEIGHT_KEY, Column::Metadata) {
-                Ok(res) => {
-                    return res.expect(
-                        "get_validators_da_height value should be always present and set",
-                    )
-                }
+        async fn get_last_published_fuel_height(&self) -> Option<BlockHeight> {
+            match self.get(metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY, Column::Metadata) {
+                Ok(res) => res,
                 Err(err) => {
                     panic!(
-                        "get_validators_da_height database corruption, err:{:?}",
-                        err
-                    );
+                    "set_last_committed_finalized_fuel_height database corruption, err:{:?}",
+                    err
+                );
                 }
             }
         }
 
-        async fn get_last_committed_finalized_fuel_height(&self) -> BlockHeight {
-            match self.get(
-                metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
+        async fn set_last_published_fuel_height(&self, block_height: BlockHeight) {
+            if let Err(err) = self.insert::<_, _, BlockHeight>(
+                metadata::LAST_PUBLISHED_BLOCK_HEIGHT_KEY,
                 Column::Metadata,
+                block_height,
             ) {
-                Ok(res) => {
-                    return res
-                        .expect("set_last_committed_finalized_fuel_height value should be always present and set");
-                }
-                Err(err) => {
-                    panic!(
-                        "set_last_committed_finalized_fuel_height database corruption, err:{:?}",
-                        err
-                    );
-                }
+                panic!(
+                    "set_pending_committed_fuel_height should always succeed: {:?}",
+                    err
+                );
             }
-        }
-
-        async fn set_last_committed_finalized_fuel_height(
-            &self,
-            block_height: BlockHeight,
-        ) {
-            let _: Option<BlockHeight> = self
-                .insert(
-                    metadata::LAST_COMMITTED_FINALIZED_BLOCK_HEIGHT_KEY,
-                    Column::Metadata,
-                    block_height,
-                )
-                .unwrap_or_else(|err| {
-                    panic!(
-                        "set_last_committed_finalized_fuel_height should always succeed: {:?}",
-                        err
-                    );
-                });
         }
     }
 }

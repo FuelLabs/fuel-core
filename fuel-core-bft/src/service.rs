@@ -7,7 +7,6 @@ use fuel_core_interfaces::{
     },
     block_producer::BlockProducer,
     p2p::P2pRequestEvent,
-    relayer,
 };
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -35,7 +34,6 @@ impl Service {
 
     pub async fn start(
         &self,
-        _relayer: relayer::Sender,
         _p2p_consensus: mpsc::Sender<P2pRequestEvent>,
         _block_producer: Arc<dyn BlockProducer>,
         _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,

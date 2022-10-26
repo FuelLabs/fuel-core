@@ -10,7 +10,10 @@ use crate::{
             TxId,
             UtxoId,
         },
-        fuel_types::MessageId,
+        fuel_types::{
+            MessageId,
+            Word,
+        },
         fuel_vm::storage::ContractsRawCode,
     },
     db::{
@@ -21,6 +24,7 @@ use crate::{
     },
     model::{
         ArcTx,
+        BlockHeight,
         Coin,
         Message,
         TxInfo,
@@ -59,6 +63,8 @@ pub trait TxPoolDb:
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
+
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.
@@ -119,12 +125,28 @@ impl Sender {
         self.send(TxPoolMpsc::Remove { ids, response }).await?;
         receiver.await.map_err(Into::into)
     }
+
+    pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
+        let (sender, reciever) = mpsc::channel(buffer);
+        (Sender(sender), reciever)
+    }
+}
+
+#[async_trait::async_trait]
+impl super::poa_coordinator::TransactionPool for Sender {
+    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::ConsumableGas { response }).await?;
+        receiver.await.map_err(Into::into)
+    }
 }
 
 /// RPC commands that can be sent to the TxPool through an MPSC channel.
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
+    /// The amount of gas in all includable transactions combined
+    ConsumableGas { response: oneshot::Sender<u64> },
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     Includable {
@@ -249,6 +271,8 @@ pub enum Error {
     NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
+    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
+    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,

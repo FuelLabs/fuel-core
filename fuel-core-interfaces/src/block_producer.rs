@@ -1,9 +1,16 @@
-use crate::model::{
-    BlockHeight,
-    DaBlockHeight,
-    FuelBlock,
+use crate::{
+    common::fuel_tx::{
+        Receipt,
+        Transaction,
+    },
+    model::{
+        BlockHeight,
+        DaBlockHeight,
+        FuelBlock,
+    },
 };
 use anyhow::Result;
+use fuel_vm::prelude::Word;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -25,7 +32,18 @@ pub enum BlockProducerBroadcast {
 
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_block(&self, height: BlockHeight) -> Result<FuelBlock>;
+    async fn produce_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> Result<FuelBlock>;
+
+    async fn dry_run(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Receipt>>;
 }
 
 #[derive(Error, Debug)]
@@ -41,4 +59,10 @@ pub enum Error {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
+}
+
+#[async_trait::async_trait]
+pub trait Relayer: Sync + Send {
+    /// Get the best finalized height from the DA layer
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
 }

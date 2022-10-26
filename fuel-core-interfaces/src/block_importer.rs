@@ -22,7 +22,7 @@ impl ImportBlockBroadcast {
     pub fn block(&self) -> &FuelBlock {
         match self {
             Self::PendingFuelBlockImported { block } => block.as_ref(),
-            Self::SealedFuelBlockImported { block, .. } => block.as_ref(),
+            Self::SealedFuelBlockImported { block, .. } => &block.as_ref().block,
         }
     }
 }

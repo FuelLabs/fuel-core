@@ -72,7 +72,7 @@ pub async fn start_server(
         .data(modules.block_importer.clone())
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())
-        .data(modules.bft.clone());
+        .data(modules.coordinator.clone());
     let schema = dap::init(schema, params).extension(Tracing).finish();
 
     let router = Router::new()
@@ -96,7 +96,7 @@ pub async fn start_server(
         ));
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let listener = TcpListener::bind(&network_addr)?;
+    let listener = TcpListener::bind(network_addr)?;
     let bound_addr = listener.local_addr().unwrap();
 
     info!("Binding GraphQL provider to {}", bound_addr);

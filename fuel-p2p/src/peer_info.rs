@@ -1,25 +1,23 @@
 use crate::config::P2PConfig;
 use libp2p::{
     core::{
-        connection::{
-            ConnectionId,
-            ListenerId,
-        },
+        connection::ConnectionId,
         either::EitherOutput,
+        transport::ListenerId,
         ConnectedPoint,
         PublicKey,
     },
     identify::{
-        Identify,
-        IdentifyConfig,
-        IdentifyEvent,
-        IdentifyInfo,
+        Behaviour as Identify,
+        Config as IdentifyConfig,
+        Event as IdentifyEvent,
+        Info as IdentifyInfo,
     },
     ping::{
+        Behaviour as Ping,
+        Config as PingConfig,
         Event as PingEvent,
-        Ping,
-        PingConfig,
-        PingSuccess,
+        Success as PingSuccess,
     },
     swarm::{
         ConnectionHandler,

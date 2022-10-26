@@ -5,6 +5,7 @@ pub mod db;
 pub mod executor;
 pub mod model;
 pub mod p2p;
+pub mod poa_coordinator;
 pub mod relayer;
 pub mod signer;
 pub mod sync;
@@ -15,4 +16,6 @@ pub mod common {
     pub use fuel_vm;
     #[doc(no_inline)]
     pub use fuel_vm::*;
+    #[doc(no_inline)]
+    pub use secrecy;
 }

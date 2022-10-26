@@ -6,6 +6,7 @@ use crate::{
             Receipts,
         },
         transaction::TransactionIndex,
+        transactional::DatabaseTransaction,
         Database,
     },
     model::{
@@ -17,11 +18,9 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
-use chrono::Utc;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
-        fuel_merkle::binary::in_memory::MerkleTree,
         fuel_storage,
         fuel_tx::{
             Address,
@@ -35,7 +34,7 @@ use fuel_core_interfaces::{
             TransactionFee,
             UtxoId,
         },
-        fuel_types::bytes::SerializableVec,
+        fuel_types::MessageId,
         fuel_vm::{
             consts::REG_SP,
             prelude::{
@@ -44,6 +43,8 @@ use fuel_core_interfaces::{
                 PredicateStorage,
             },
         },
+        prelude::StorageInspect,
+        state::StateTransition,
     },
     db::{
         Coins,
@@ -52,25 +53,27 @@ use fuel_core_interfaces::{
     },
     executor::{
         Error,
-        ExecutionMode,
+        ExecutionBlock,
+        ExecutionKind,
+        ExecutionType,
+        ExecutionTypes,
+        Executor as ExecutorTrait,
         TransactionValidityError,
     },
     model::{
+        BlockId,
         DaBlockHeight,
-        FuelBlockHeader,
         Message,
+        PartialFuelBlock,
     },
 };
 use fuel_storage::{
     StorageAsMut,
     StorageAsRef,
 };
-use std::{
-    ops::{
-        Deref,
-        DerefMut,
-    },
-    sync::Arc,
+use std::ops::{
+    Deref,
+    DerefMut,
 };
 use tracing::{
     debug,
@@ -87,64 +90,166 @@ pub struct Executor {
     pub config: Config,
 }
 
+/// Data that is generated after executing all transactions.
+struct ExecutionData {
+    coinbase: u64,
+    message_ids: Vec<MessageId>,
+    tx_status: Vec<(Bytes32, TransactionStatus)>,
+}
+
+#[async_trait::async_trait]
+impl ExecutorTrait for Executor {
+    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+        self.execute_inner(block, &self.database).await
+    }
+
+    async fn dry_run(
+        &self,
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Vec<Receipt>>, Error> {
+        // run the block in a temporary transaction without persisting any state
+        let db_tx = self.database.transaction();
+        let temporary_db = db_tx.as_ref();
+
+        // fallback to service config value if no utxo_validation override is provided
+        let utxo_validation = utxo_validation.unwrap_or(self.config.utxo_validation);
+
+        // spawn a nested executor instance to override utxo_validation config
+        let executor = Self {
+            config: Config {
+                utxo_validation,
+                ..self.config.clone()
+            },
+            database: temporary_db.clone(),
+        };
+
+        let block = executor.execute_inner(block, temporary_db).await?;
+        block
+            .transactions()
+            .iter()
+            .map(|tx| {
+                let id = tx.id();
+                StorageInspect::<Receipts>::get(temporary_db, &id)
+                    .transpose()
+                    .unwrap_or_else(|| Ok(Default::default()))
+                    .map(|v| v.into_owned())
+            })
+            .collect::<Result<Vec<Vec<Receipt>>, _>>()
+            .map_err(Into::into)
+        // drop `temporary_db` without committing to avoid altering state.
+    }
+}
+
 impl Executor {
     #[tracing::instrument(skip(self))]
-    pub async fn submit_txs(&self, txs: Vec<Arc<Transaction>>) -> Result<(), Error> {
-        let db = self.database.clone();
+    async fn execute_inner(
+        &self,
+        block: ExecutionBlock,
+        database: &Database,
+    ) -> Result<FuelBlock, Error> {
+        // Compute the block id before execution if there is one.
+        let pre_exec_block_id = block.id();
+        // Get the transaction root before execution if there is one.
+        let pre_exec_txs_root = block.txs_root();
 
-        for tx in txs.iter() {
-            // set status to submitted
-            db.update_tx_status(
-                &tx.id(),
-                TransactionStatus::Submitted { time: Utc::now() },
-            )?;
+        // If there is full fuel block for validation then map it into
+        // a partial header.
+        let mut block = block.map_v(PartialFuelBlock::from);
+
+        // Create a new database transaction.
+        let mut block_db_transaction = database.transaction();
+
+        // Execute all transactions.
+        let execution_data = self
+            .execute_transactions(&mut block_db_transaction, block.as_mut())
+            .await?;
+
+        let ExecutionData {
+            coinbase,
+            message_ids,
+            mut tx_status,
+        } = execution_data;
+
+        // Now that the transactions have been executed, generate the full header.
+        let block = block.map(|b| b.generate(&message_ids[..]));
+
+        // check transaction commitment
+        if let Some(pre_exec_txs_root) = pre_exec_txs_root {
+            if block.header().transactions_root != pre_exec_txs_root {
+                return Err(Error::InvalidTransactionRoot)
+            }
         }
 
-        // setup and execute block
-        let current_height = db.get_block_height()?.unwrap_or_default();
-        let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
-        let new_block_height = current_height + 1u32.into();
+        let finalized_block_id = block.id();
 
-        let mut block = FuelBlock {
-            header: FuelBlockHeader {
-                height: new_block_height,
-                parent_hash: current_hash,
-                time: Utc::now(),
-                ..Default::default()
-            },
-            transactions: txs.into_iter().map(|t| t.as_ref().clone()).collect(),
-        };
-        // immediately execute block
-        self.execute(&mut block, ExecutionMode::Production).await?;
-        Ok(())
+        debug!(
+            "Block {:#x} fees: {}",
+            pre_exec_block_id.unwrap_or(finalized_block_id),
+            coinbase
+        );
+
+        // check if block id doesn't match proposed block id
+        if let Some(pre_exec_block_id) = pre_exec_block_id {
+            if pre_exec_block_id != finalized_block_id {
+                // In theory this shouldn't happen since any deviance in the block should've already
+                // been checked by now.
+                return Err(Error::InvalidBlockId)
+            }
+        }
+
+        // save the status for every transaction using the finalized block id
+        self.persist_transaction_status(
+            finalized_block_id,
+            &mut tx_status,
+            block_db_transaction.deref_mut(),
+        )?;
+
+        // cleanup unfinalized headers (block height + time + producer)
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .remove(&Bytes32::zeroed())?;
+
+        // insert block into database
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .insert(&finalized_block_id.into(), &block.to_db_block())?;
+
+        // Commit the database transaction.
+        block_db_transaction.commit()?;
+
+        // Get the complete fuel block.
+        Ok(block.into_inner())
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn execute(
+    /// Execute all transactions on the fuel block.
+    async fn execute_transactions(
         &self,
-        block: &mut FuelBlock,
-        mode: ExecutionMode,
-    ) -> Result<(), Error> {
-        // Compute the block id before execution, if mode is set to production just use zeroed id.
-        let pre_exec_block_id = match mode {
-            ExecutionMode::Production => Default::default(),
-            ExecutionMode::Validation => block.id(),
+        block_db_transaction: &mut DatabaseTransaction,
+        block: ExecutionType<&mut PartialFuelBlock>,
+    ) -> Result<ExecutionData, Error> {
+        let mut execution_data = ExecutionData {
+            coinbase: 0,
+            message_ids: Vec::new(),
+            tx_status: Vec::new(),
         };
 
-        let mut block_db_transaction = self.database.transaction();
-        // Insert the current headers (including time, block height, producer into the db tx)
+        // Insert the current headers (including time, block height into the db tx)
         block_db_transaction
             .deref_mut()
             .storage::<FuelBlocks>()
             .insert(
                 &Bytes32::zeroed(), // use id of zero as current block
-                &block.to_db_block(),
+                &block.to_partial_db_block(),
             )?;
 
-        let mut txs_merkle = MerkleTree::new();
-        let mut tx_status = vec![];
-        let mut coinbase = 0u64;
+        // Split out the execution kind and partial block.
+        let (execution_kind, block) = block.split();
 
+        // Execute each transaction.
         for (idx, tx) in block.transactions.iter_mut().enumerate() {
             let tx_id = tx.id();
 
@@ -157,15 +262,20 @@ impl Executor {
                 return Err(Error::TransactionIdCollision(tx_id))
             }
 
+            // Wrap the transaction in the execution kind.
+            let mut wrapped_tx: ExecutionTypes<&mut Transaction, &Transaction> =
+                match execution_kind {
+                    ExecutionKind::Production => ExecutionTypes::Production(tx),
+                    ExecutionKind::Validation => ExecutionTypes::Validation(&*tx),
+                };
             self.compute_contract_input_utxo_ids(
-                tx,
-                &mode,
+                &mut wrapped_tx,
                 block_db_transaction.deref(),
             )?;
 
             let checked_tx = CheckedTransaction::check_unsigned(
                 tx.clone(),
-                block.header.height.into(),
+                (*block.header.height()).into(),
                 &self.config.chain_conf.transaction_parameters,
             )?;
             let min_fee = checked_tx.min_fee();
@@ -180,7 +290,7 @@ impl Executor {
                 self.verify_input_state(
                     block_db_transaction.deref(),
                     tx,
-                    block.header.height,
+                    *block.header.height(),
                     block.header.da_height,
                 )?;
                 // validate transaction signature
@@ -190,7 +300,7 @@ impl Executor {
 
             // index owners of inputs and outputs with tx-id, regardless of validity (hence block_tx instead of tx_db)
             self.persist_owners_index(
-                block.header.height,
+                *block.header.height(),
                 tx,
                 &tx_id,
                 idx,
@@ -206,13 +316,13 @@ impl Executor {
                 sub_db_view.clone(),
                 self.config.chain_conf.transaction_parameters,
             );
-            let vm_result = vm
+            let vm_result: StateTransition = vm
                 .transact(checked_tx)
                 .map_err(|error| Error::VmExecution {
                     error,
                     transaction_id: tx_id,
                 })?
-                .into_owned();
+                .into();
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {
@@ -226,19 +336,14 @@ impl Executor {
                 tx.gas_price(),
                 vm_result.receipts(),
             )?;
-            coinbase = coinbase.checked_add(tx_fee).ok_or(Error::FeeOverflow)?;
+            execution_data.coinbase = execution_data
+                .coinbase
+                .checked_add(tx_fee)
+                .ok_or(Error::FeeOverflow)?;
 
-            // include the canonical serialization of the malleated tx into the commitment,
-            // including all witness data.
-            //
-            // TODO: reference the bytes directly from VM memory to save serialization. This isn't
-            //       possible atm because the change output values are set on the tx instance in the vm
-            //       and not also on the in-memory representation of the tx.
-            let tx_bytes = vm_result.tx().clone().to_bytes();
-            txs_merkle.push(&tx_bytes);
-
-            match mode {
-                ExecutionMode::Validation => {
+            // Check or set the executed transaction.
+            match execution_kind {
+                ExecutionKind::Validation => {
                     // ensure tx matches vm output exactly
                     if vm_result.tx() != tx {
                         return Err(Error::InvalidTransactionOutcome {
@@ -246,7 +351,7 @@ impl Executor {
                         })
                     }
                 }
-                ExecutionMode::Production => {
+                ExecutionKind::Production => {
                     // malleate the block with the resultant tx from the vm
                     *tx = vm_result.tx().clone()
                 }
@@ -262,12 +367,13 @@ impl Executor {
             self.spend_inputs(
                 vm_result.tx(),
                 block_db_transaction.deref_mut(),
-                block.header.height,
+                *block.header.height(),
+                self.config.utxo_validation,
             )?;
 
             // persist any outputs
             self.persist_outputs(
-                block.header.height,
+                *block.header.height(),
                 vm_result.tx(),
                 &tx_id,
                 block_db_transaction.deref_mut(),
@@ -299,7 +405,7 @@ impl Executor {
 
                 TransactionStatus::Failed {
                     block_id: Default::default(),
-                    time: block.header.time,
+                    time: *block.header.time(),
                     reason,
                     result: Some(*vm_result.state()),
                 }
@@ -307,59 +413,22 @@ impl Executor {
                 // else tx was a success
                 TransactionStatus::Success {
                     block_id: Default::default(),
-                    time: block.header.time,
+                    time: *block.header.time(),
                     result: *vm_result.state(),
                 }
             };
 
             // queue up status for this tx to be stored once block id is finalized.
-            tx_status.push((tx_id, status));
+            execution_data.tx_status.push((tx_id, status));
+            execution_data
+                .message_ids
+                .extend(vm_result.receipts().iter().filter_map(|r| match r {
+                    Receipt::MessageOut { message_id, .. } => Some(*message_id),
+                    _ => None,
+                }));
         }
 
-        // check or set transaction commitment
-        let txs_root = txs_merkle.root().into();
-        match mode {
-            ExecutionMode::Production => {
-                block.header.transactions_root = txs_root;
-            }
-            ExecutionMode::Validation => {
-                if block.header.transactions_root != txs_root {
-                    return Err(Error::InvalidTransactionRoot)
-                }
-            }
-        }
-
-        let finalized_block_id = block.id();
-
-        debug!("Block {:#x} fees: {}", pre_exec_block_id, coinbase);
-
-        // check if block id doesn't match proposed block id
-        if mode == ExecutionMode::Validation && pre_exec_block_id != finalized_block_id {
-            // In theory this shouldn't happen since any deviance in the block should've already
-            // been checked by now.
-            return Err(Error::InvalidBlockId)
-        }
-
-        // save the status for every transaction using the finalized block id
-        self.persist_transaction_status(
-            finalized_block_id,
-            &mut tx_status,
-            block_db_transaction.deref_mut(),
-        )?;
-
-        // cleanup unfinalized headers (block height + time + producer)
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .remove(&Bytes32::zeroed())?;
-
-        // insert block into database
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .insert(&finalized_block_id, &block.to_db_block())?;
-        block_db_transaction.commit()?;
-        Ok(())
+        Ok(execution_data)
     }
 
     fn verify_input_state(
@@ -416,31 +485,15 @@ impl Executor {
 
     /// Verify all the predicates of a tx.
     pub fn verify_tx_predicates(&self, tx: &CheckedTransaction) -> Result<(), Error> {
-        // fail if tx contains any predicates when predicates are disabled
-        if !self.config.predicates {
-            let has_predicate = tx
-                .as_ref()
-                .inputs()
-                .iter()
-                .any(|input| input.is_coin_predicate());
-            if has_predicate {
-                return Err(Error::TransactionValidity(
-                    TransactionValidityError::PredicateExecutionDisabled(
-                        tx.transaction().id(),
-                    ),
-                ))
-            }
-        } else {
-            // otherwise attempt to validate any predicates if the feature flag is enabled
-            if !Interpreter::<PredicateStorage>::check_predicates(
-                tx.clone(),
-                self.config.chain_conf.transaction_parameters,
-            ) {
-                return Err(Error::TransactionValidity(
-                    TransactionValidityError::InvalidPredicate(tx.transaction().id()),
-                ))
-            }
+        if !Interpreter::<PredicateStorage>::check_predicates(
+            tx.clone(),
+            self.config.chain_conf.transaction_parameters,
+        ) {
+            return Err(Error::TransactionValidity(
+                TransactionValidityError::InvalidPredicate(tx.transaction().id()),
+            ))
         }
+
         Ok(())
     }
 
@@ -469,6 +522,7 @@ impl Executor {
         tx: &Transaction,
         db: &mut Database,
         block_height: BlockHeight,
+        utxo_validation: bool,
     ) -> Result<(), Error> {
         for input in tx.inputs() {
             match input {
@@ -488,7 +542,7 @@ impl Executor {
                     maturity,
                     ..
                 } => {
-                    let block_created = if self.config.utxo_validation {
+                    let block_created = if utxo_validation {
                         db.storage::<Coins>()
                             .get(utxo_id)?
                             .ok_or(Error::TransactionValidity(
@@ -530,7 +584,7 @@ impl Executor {
                     data,
                     ..
                 } => {
-                    let da_height = if self.config.utxo_validation {
+                    let da_height = if utxo_validation {
                         db.storage::<Messages>()
                             .get(message_id)?
                             .ok_or(Error::TransactionValidity(
@@ -589,40 +643,54 @@ impl Executor {
     /// In validation mode, verify the proposed utxo ids on contract inputs match the expected values.
     fn compute_contract_input_utxo_ids(
         &self,
-        tx: &mut Transaction,
-        mode: &ExecutionMode,
+        tx: &mut ExecutionTypes<&mut Transaction, &Transaction>,
         db: &Database,
     ) -> Result<(), Error> {
-        if let Transaction::Script { inputs, .. } = tx {
-            for input in inputs {
-                if let Input::Contract {
-                    utxo_id,
-                    contract_id,
-                    ..
-                } = input
-                {
-                    let maybe_utxo_id =
-                        db.storage::<ContractsLatestUtxo>().get(contract_id)?;
-                    let expected_utxo_id = if self.config.utxo_validation {
-                        maybe_utxo_id
-                            .ok_or(Error::ContractUtxoMissing(*contract_id))?
-                            .into_owned()
-                    } else {
-                        maybe_utxo_id.unwrap_or_default().into_owned()
-                    };
-
-                    match mode {
-                        ExecutionMode::Production => *utxo_id = expected_utxo_id,
-                        ExecutionMode::Validation => {
-                            if *utxo_id != expected_utxo_id {
-                                return Err(Error::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
-                        }
+        let expected_utxo_id = |contract_id| {
+            let maybe_utxo_id = db.storage::<ContractsLatestUtxo>().get(contract_id)?;
+            let expected_utxo_id = if self.config.utxo_validation {
+                maybe_utxo_id
+                    .ok_or(Error::ContractUtxoMissing(*contract_id))?
+                    .into_owned()
+            } else {
+                maybe_utxo_id.unwrap_or_default().into_owned()
+            };
+            Result::<_, Error>::Ok(expected_utxo_id)
+        };
+        match tx {
+            ExecutionTypes::Production(Transaction::Script { inputs, .. }) => {
+                let iter = inputs.iter_mut().filter_map(|input| match input {
+                    Input::Contract {
+                        ref mut utxo_id,
+                        ref contract_id,
+                        ..
+                    } => Some((utxo_id, contract_id)),
+                    _ => None,
+                });
+                for (utxo_id, contract_id) in iter {
+                    *utxo_id = expected_utxo_id(contract_id)?;
+                }
+            }
+            // Needed to convince the compiler that tx is taken by ref here
+            #[allow(clippy::needless_borrow)]
+            ExecutionTypes::Validation(ref tx @ Transaction::Script { inputs, .. }) => {
+                let iter = inputs.iter().filter_map(|input| match input {
+                    Input::Contract {
+                        utxo_id,
+                        contract_id,
+                        ..
+                    } => Some((utxo_id, contract_id)),
+                    _ => None,
+                });
+                for (utxo_id, contract_id) in iter {
+                    if *utxo_id != expected_utxo_id(contract_id)? {
+                        return Err(Error::InvalidTransactionOutcome {
+                            transaction_id: tx.id(),
+                        })
                     }
                 }
             }
+            _ => (),
         }
         Ok(())
     }
@@ -814,7 +882,7 @@ impl Executor {
 
     fn persist_transaction_status(
         &self,
-        finalized_block_id: Bytes32,
+        finalized_block_id: BlockId,
         tx_status: &mut [(Bytes32, TransactionStatus)],
         db: &Database,
     ) -> Result<(), Error> {
@@ -837,8 +905,10 @@ impl Executor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::FuelBlockHeader;
-    use chrono::TimeZone;
+    use chrono::{
+        TimeZone,
+        Utc,
+    };
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -851,6 +921,7 @@ mod tests {
                 ValidationError,
             },
             fuel_types::{
+                bytes::SerializableVec,
                 ContractId,
                 Immediate12,
                 Immediate18,
@@ -871,10 +942,13 @@ mod tests {
                 util::test_helpers::TestBuilder as TxBuilder,
             },
         },
+        executor::ExecutionTypes,
         model::{
             CheckedMessage,
             DaBlockHeight,
+            FuelConsensusHeader,
             Message,
+            PartialFuelBlockHeader,
         },
         relayer::RelayerDb,
     };
@@ -900,10 +974,9 @@ mod tests {
             })
             .collect_vec();
 
-        FuelBlock {
-            header: Default::default(),
-            transactions,
-        }
+        let mut block = FuelBlock::default();
+        *block.transactions_mut() = transactions;
+        block
     }
 
     fn create_contract<R: Rng>(
@@ -944,16 +1017,14 @@ mod tests {
             database: Default::default(),
             config: Config::local_node(),
         };
-        let mut block = test_block(10);
+        let block = test_block(10);
 
-        producer
-            .execute(&mut block, ExecutionMode::Production)
+        let block = producer
+            .execute(ExecutionTypes::Production(block.into()))
             .await
             .unwrap();
 
-        let validation_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
-            .await;
+        let validation_result = verifier.execute(ExecutionTypes::Validation(block)).await;
         assert!(validation_result.is_ok());
     }
 
@@ -964,17 +1035,17 @@ mod tests {
             database: Default::default(),
             config: Config::local_node(),
         };
-        let mut block = test_block(10);
+        let block = test_block(10);
         let start_block = block.clone();
 
-        producer
-            .execute(&mut block, ExecutionMode::Production)
+        let block = producer
+            .execute(ExecutionBlock::Production(block.into()))
             .await
             .unwrap();
 
         assert_ne!(
-            start_block.header.transactions_root,
-            block.header.transactions_root
+            start_block.header().transactions_root,
+            block.header().transactions_root
         )
     }
 
@@ -1002,21 +1073,29 @@ mod tests {
         tx.set_gas_limit(gas_limit);
         tx.set_gas_price(gas_price);
 
-        let mut block = FuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
+        let mut block_db_transaction = producer.database.transaction();
         let produce_result = producer
-            .execute(&mut block, ExecutionMode::Production)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
             .await;
         assert!(matches!(
             produce_result,
             Err(Error::InvalidTransaction(ValidationError::InsufficientFeeAmount { expected, .. })) if expected == (gas_limit as f64 / factor).ceil() as u64
         ));
 
+        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
             .await;
         assert!(matches!(
             verify_result,
@@ -1036,21 +1115,29 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![Transaction::default(), Transaction::default()],
         };
 
+        let mut block_db_transaction = producer.database.transaction();
         let produce_result = producer
-            .execute(&mut block, ExecutionMode::Production)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
             .await;
         assert!(matches!(
             produce_result,
             Err(Error::TransactionIdCollision(_))
         ));
 
+        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
             .await;
         assert!(matches!(
             verify_result,
@@ -1123,13 +1210,17 @@ mod tests {
             config: config.clone(),
         };
 
-        let mut block = FuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
+        let mut block_db_transaction = producer.database.transaction();
         let produce_result = producer
-            .execute(&mut block, ExecutionMode::Production)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
             .await;
         assert!(matches!(
             produce_result,
@@ -1138,8 +1229,12 @@ mod tests {
             ))
         ));
 
+        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
             .await;
         assert!(matches!(
             verify_result,
@@ -1189,13 +1284,17 @@ mod tests {
             config: config.clone(),
         };
 
-        let mut block = FuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
+        let mut block_db_transaction = producer.database.transaction();
         let produce_result = producer
-            .execute(&mut block, ExecutionMode::Production)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
             .await;
         assert!(matches!(
             produce_result,
@@ -1204,8 +1303,12 @@ mod tests {
             ))
         ));
 
+        let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
             .await;
         assert!(matches!(
             verify_result,
@@ -1241,26 +1344,22 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
-            header: Default::default(),
-            transactions: vec![tx],
-        };
+        let mut block = FuelBlock::default();
+        *block.transactions_mut() = vec![tx];
 
-        producer
-            .execute(&mut block, ExecutionMode::Production)
+        let mut block = producer
+            .execute(ExecutionBlock::Production(block.into()))
             .await
             .unwrap();
 
         // modify change amount
-        if let Transaction::Script { outputs, .. } = &mut block.transactions[0] {
+        if let Transaction::Script { outputs, .. } = &mut block.transactions_mut()[0] {
             if let Output::Change { amount, .. } = &mut outputs[0] {
                 *amount = fake_output_amount
             }
         }
 
-        let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
-            .await;
+        let verify_result = verifier.execute(ExecutionBlock::Validation(block)).await;
         assert!(matches!(
             verify_result,
             Err(Error::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
@@ -1289,22 +1388,18 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
-            header: Default::default(),
-            transactions: vec![tx],
-        };
+        let mut block = FuelBlock::default();
+        *block.transactions_mut() = vec![tx];
 
-        producer
-            .execute(&mut block, ExecutionMode::Production)
+        let mut block = producer
+            .execute(ExecutionBlock::Production(block.into()))
             .await
             .unwrap();
 
         // randomize transaction commitment
-        block.header.transactions_root = rng.gen();
+        block.header_mut().application.generated.transactions_root = rng.gen();
 
-        let verify_result = verifier
-            .execute(&mut block, ExecutionMode::Validation)
-            .await;
+        let verify_result = verifier.execute(ExecutionBlock::Validation(block)).await;
 
         assert!(matches!(verify_result, Err(Error::InvalidTransactionRoot)))
     }
@@ -1323,13 +1418,13 @@ mod tests {
             },
         };
 
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
         let err = executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await
             .err()
             .unwrap();
@@ -1356,20 +1451,20 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
-        executor
-            .execute(&mut block, ExecutionMode::Production)
+        let block = executor
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
         // assert the tx coin is spent
         let coin = db
             .storage::<Coins>()
-            .get(block.transactions[0].inputs()[0].utxo_id().unwrap())
+            .get(block.transactions()[0].inputs()[0].utxo_id().unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
@@ -1440,24 +1535,26 @@ mod tests {
             },
         };
 
-        let mut block = FuelBlock {
-            header: FuelBlockHeader {
-                height: 6u64.into(),
+        let block = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height: 6u64.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![tx],
         };
-        block.header.recalculate_metadata();
 
-        executor
-            .execute(&mut block, ExecutionMode::Production)
+        let block = executor
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
         // assert the tx coin is spent
         let coin = db
             .storage::<Coins>()
-            .get(block.transactions[0].inputs()[0].utxo_id().unwrap())
+            .get(block.transactions()[0].inputs()[0].utxo_id().unwrap())
             .unwrap()
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Spent);
@@ -1471,7 +1568,7 @@ mod tests {
         // create a contract in block 1
         // verify a block 2 with tx containing contract id from block 1, using the correct contract utxo_id from block 1.
         let (tx, contract_id) = create_contract(vec![], &mut rng);
-        let mut first_block = FuelBlock {
+        let first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
@@ -1483,9 +1580,12 @@ mod tests {
             .build()
             .into();
 
-        let mut second_block = FuelBlock {
-            header: FuelBlockHeader {
-                height: 2u64.into(),
+        let second_block = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height: 2u64.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![tx2],
@@ -1499,7 +1599,7 @@ mod tests {
         };
 
         setup
-            .execute(&mut first_block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(first_block))
             .await
             .unwrap();
 
@@ -1508,8 +1608,8 @@ mod tests {
             database: producer_view,
             config: Config::local_node(),
         };
-        producer
-            .execute(&mut second_block, ExecutionMode::Production)
+        let second_block = producer
+            .execute(ExecutionBlock::Production(second_block))
             .await
             .unwrap();
 
@@ -1518,7 +1618,7 @@ mod tests {
             config: Config::local_node(),
         };
         let verify_result = verifier
-            .execute(&mut second_block, ExecutionMode::Validation)
+            .execute(ExecutionBlock::Validation(second_block))
             .await;
         assert!(verify_result.is_ok());
     }
@@ -1541,7 +1641,7 @@ mod tests {
             .build()
             .into();
 
-        let mut first_block = FuelBlock {
+        let first_block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx, tx2],
         };
@@ -1557,9 +1657,12 @@ mod tests {
             .into();
         let tx_id = tx3.id();
 
-        let mut second_block = FuelBlock {
-            header: FuelBlockHeader {
-                height: 2u64.into(),
+        let second_block = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height: 2u64.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![tx3],
@@ -1573,7 +1676,7 @@ mod tests {
         };
 
         setup
-            .execute(&mut first_block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(first_block))
             .await
             .unwrap();
 
@@ -1583,12 +1686,14 @@ mod tests {
             config: Config::local_node(),
         };
 
-        producer
-            .execute(&mut second_block, ExecutionMode::Production)
+        let mut second_block = producer
+            .execute(ExecutionBlock::Production(second_block))
             .await
             .unwrap();
         // Corrupt the utxo_id of the contract output
-        if let Transaction::Script { inputs, .. } = &mut second_block.transactions[0] {
+        if let Transaction::Script { inputs, .. } =
+            &mut second_block.transactions_mut()[0]
+        {
             if let Input::Contract { utxo_id, .. } = &mut inputs[0] {
                 // use a previously valid contract id which isn't the correct one for this block
                 *utxo_id = UtxoId::new(tx_id, 0);
@@ -1600,7 +1705,7 @@ mod tests {
             config: Config::local_node(),
         };
         let verify_result = verifier
-            .execute(&mut second_block, ExecutionMode::Validation)
+            .execute(ExecutionBlock::Validation(second_block))
             .await;
 
         assert!(matches!(
@@ -1690,18 +1795,18 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx, tx2],
         };
 
-        executor
-            .execute(&mut block, ExecutionMode::Production)
+        let block = executor
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
         // ensure that all utxos with an amount are stored into the utxo set
-        for (idx, output) in block.transactions[1].outputs().iter().enumerate() {
+        for (idx, output) in block.transactions()[1].outputs().iter().enumerate() {
             let id = fuel_tx::UtxoId::new(tx2_id, idx as u8);
             match output {
                 Output::Change { .. } | Output::Variable { .. } | Output::Coin { .. } => {
@@ -1737,13 +1842,13 @@ mod tests {
             config: Config::local_node(),
         };
 
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx],
         };
 
         executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
@@ -1811,20 +1916,20 @@ mod tests {
 
         let (tx, message) = make_tx_and_message(&mut rng, 0);
 
-        let mut block = FuelBlock {
+        let block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx.clone()],
         };
 
-        make_executor(&[&message])
+        let block = make_executor(&[&message])
             .await
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await
             .expect("block execution failed unexpectedly");
 
         make_executor(&[&message])
             .await
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute(ExecutionBlock::Validation(block))
             .await
             .expect("block validation failed unexpectedly");
     }
@@ -1835,14 +1940,12 @@ mod tests {
 
         let (tx, _message) = make_tx_and_message(&mut rng, 0);
 
-        let mut block = FuelBlock {
-            header: Default::default(),
-            transactions: vec![tx.clone()],
-        };
+        let mut block = FuelBlock::default();
+        *block.transactions_mut() = vec![tx.clone()];
 
         let res = make_executor(&[]) // No messages in the db
             .await
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block.clone().into()))
             .await;
         assert!(matches!(
             res,
@@ -1853,7 +1956,7 @@ mod tests {
 
         let res = make_executor(&[]) // No messages in the db
             .await
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute(ExecutionBlock::Validation(block))
             .await;
         assert!(matches!(
             res,
@@ -1869,14 +1972,12 @@ mod tests {
 
         let (tx, message) = make_tx_and_message(&mut rng, 1); // Block has zero da_height
 
-        let mut block = FuelBlock {
-            header: Default::default(),
-            transactions: vec![tx],
-        };
+        let mut block = FuelBlock::default();
+        *block.transactions_mut() = vec![tx];
 
         let res = make_executor(&[&message])
             .await
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block.clone().into()))
             .await;
         assert!(matches!(
             res,
@@ -1887,7 +1988,7 @@ mod tests {
 
         let res = make_executor(&[&message])
             .await
-            .execute(&mut block, ExecutionMode::Validation)
+            .execute(ExecutionBlock::Validation(block))
             .await;
         assert!(matches!(
             res,
@@ -1906,14 +2007,18 @@ mod tests {
         let (mut tx2, _) = make_tx_and_message(&mut rng, 0);
         tx2.inputs_mut()[0] = tx1.inputs()[0].clone();
 
-        let mut block = FuelBlock {
+        let mut block = PartialFuelBlock {
             header: Default::default(),
             transactions: vec![tx1, tx2],
         };
 
-        let res = make_executor(&[&message])
-            .await
-            .execute(&mut block, ExecutionMode::Production)
+        let exec = make_executor(&[&message]).await;
+        let mut block_db_transaction = exec.database.transaction();
+        let res = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Production(&mut block),
+            )
             .await;
         assert!(matches!(
             res,
@@ -1922,9 +2027,13 @@ mod tests {
             ))
         ));
 
-        let res = make_executor(&[&message])
-            .await
-            .execute(&mut block, ExecutionMode::Validation)
+        let exec = make_executor(&[&message]).await;
+        let mut block_db_transaction = exec.database.transaction();
+        let res = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
             .await;
         assert!(matches!(
             res,
@@ -1955,9 +2064,12 @@ mod tests {
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
 
-        let mut block = FuelBlock {
-            header: FuelBlockHeader {
-                height: block_height.into(),
+        let block = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height: block_height.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![tx.clone()],
@@ -1991,7 +2103,7 @@ mod tests {
         };
 
         executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
@@ -2027,12 +2139,15 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
-        let time = rng.gen_range(1u32..u32::MAX);
+        let time = Utc.timestamp(rng.gen_range(1u32..u32::MAX) as i64, 0);
 
-        let mut block = FuelBlock {
-            header: FuelBlockHeader {
-                height: block_height.into(),
-                time: Utc.timestamp(time as i64, 0),
+        let block = PartialFuelBlock {
+            header: PartialFuelBlockHeader {
+                consensus: FuelConsensusHeader {
+                    height: block_height.into(),
+                    time,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
             transactions: vec![tx.clone()],
@@ -2066,7 +2181,7 @@ mod tests {
         };
 
         executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await
             .unwrap();
 
@@ -2076,6 +2191,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(time as u64, receipts[0].val().unwrap());
+        assert_eq!(time.timestamp_millis() as Word, receipts[0].val().unwrap());
     }
 }

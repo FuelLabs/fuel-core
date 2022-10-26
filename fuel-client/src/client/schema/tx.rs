@@ -23,6 +23,9 @@ use std::convert::{
     TryInto,
 };
 
+pub mod transparent_receipt;
+pub mod transparent_tx;
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
     pub id: TransactionId,
@@ -260,7 +263,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
-    pub dry_run: Vec<OpaqueReceipt>,
+    pub dry_run: Vec<transparent_receipt::Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -279,9 +282,6 @@ pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
     use fuel_vm::fuel_types::bytes::SerializableVec;
-
-    pub mod transparent_receipt;
-    pub mod transparent_tx;
 
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {

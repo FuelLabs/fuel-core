@@ -1,3 +1,12 @@
+use crate::gossipsub::{
+    config::default_gossipsub_config,
+    topics::{
+        CON_VOTE_GOSSIP_TOPIC,
+        NEW_BLOCK_GOSSIP_TOPIC,
+        NEW_TX_GOSSIP_TOPIC,
+    },
+};
+
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
@@ -9,11 +18,16 @@ use libp2p::{
     },
     mplex,
     noise,
+    tcp::{
+        GenTcpConfig,
+        TokioTcpTransport,
+    },
     yamux,
     Multiaddr,
     PeerId,
     Transport,
 };
+
 use std::{
     net::{
         IpAddr,
@@ -21,6 +35,8 @@ use std::{
     },
     time::Duration,
 };
+
+use libp2p::gossipsub::GossipsubConfig;
 
 const REQ_RES_TIMEOUT: Duration = Duration::from_secs(20);
 
@@ -63,11 +79,9 @@ pub struct P2PConfig {
     /// and the next outbound ping
     pub info_interval: Option<Duration>,
 
-    // `Gossipsub` related fields
+    // `Gossipsub` config and topics
+    pub gossipsub_config: GossipsubConfig,
     pub topics: Vec<String>,
-    pub ideal_mesh_size: usize,
-    pub min_mesh_size: usize,
-    pub max_mesh_size: usize,
 
     // RequestResponse related fields
     /// Sets the timeout for inbound and outbound requests.
@@ -102,10 +116,12 @@ impl P2PConfig {
             allow_private_addresses: true,
             enable_random_walk: true,
             connection_idle_timeout: Some(Duration::from_secs(120)),
-            topics: vec![],
-            max_mesh_size: 12,
-            min_mesh_size: 4,
-            ideal_mesh_size: 6,
+            topics: vec![
+                NEW_TX_GOSSIP_TOPIC.into(),
+                NEW_BLOCK_GOSSIP_TOPIC.into(),
+                CON_VOTE_GOSSIP_TOPIC.into(),
+            ],
+            gossipsub_config: default_gossipsub_config(),
             set_request_timeout: REQ_RES_TIMEOUT,
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),
@@ -118,13 +134,17 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) async fn build_transport(
-    local_keypair: Keypair,
-) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
-        let tcp = libp2p::tcp::TcpConfig::new().nodelay(true);
-        let ws_tcp = libp2p::websocket::WsConfig::new(tcp.clone()).or_transport(tcp);
-        libp2p::dns::DnsConfig::system(ws_tcp).await.unwrap()
+        let generate_tcp_transport =
+            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+
+        let tcp = generate_tcp_transport();
+
+        let ws_tcp =
+            libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
+
+        libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
     };
 
     let auth_config = {
