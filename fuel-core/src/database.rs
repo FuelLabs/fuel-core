@@ -332,15 +332,7 @@ impl InterpreterStorage for Database {
     }
 
     fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
-        let id = self.block_hash(height)?;
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(Error::ChainUninitialized)?;
-        block
-            .header
-            .time()
-            .timestamp_millis()
+        self.timestamp(height)?
             .try_into()
             .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
     }

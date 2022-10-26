@@ -108,6 +108,15 @@ impl Database {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
     }
 
+    pub fn timestamp(&self, height: u32) -> Result<i64, Error> {
+        let id = self.get_block_id(height.into())?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
+        Ok(block.header.time().timestamp())
+    }
+
     pub fn all_block_ids(
         &self,
         start: Option<BlockHeight>,
