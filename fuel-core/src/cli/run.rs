@@ -13,6 +13,7 @@ use fuel_core::service::{
 };
 use fuel_core_interfaces::{
     common::{
+        fuel_tx::Address,
         prelude::SecretKey,
         secrecy::Secret,
     },
@@ -164,6 +165,8 @@ impl Command {
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
                 consensus_params,
+                // TODO: Init with real recipient
+                coinbase_recipient: Address::default(),
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]

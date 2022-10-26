@@ -23,6 +23,10 @@ use fuel_core_interfaces::{
         fuel_asm::Word,
         fuel_storage,
         fuel_tx::{
+            field::{
+                Outputs,
+                TxPointer as TxPointerField,
+            },
             Address,
             AssetId,
             Bytes32,
@@ -37,6 +41,7 @@ use fuel_core_interfaces::{
             ScriptCheckedMetadata,
             Transaction,
             TransactionFee,
+            TxPointer,
             UniqueIdentifier,
             UtxoId,
         },
@@ -261,24 +266,24 @@ impl Executor {
         // Split out the execution kind and partial block.
         let (execution_kind, block) = block.split();
 
-        let tx_iter = block.transactions.iter_mut().enumerate();
+        let mut tx_iter = block.transactions.iter_mut().enumerate();
         let block_height: u32 = (*block.header.height()).into();
 
-        // let mut coinbase_tx: Mint = match execution_kind {
-        //     ExecutionKind::Production => {
-        //         // The coinbase transaction should be the first.
-        //         // We will add `Output::Coin` at the end of transactions execution.
-        //         Transaction::mint(TxPointer::new(block_height, 0), vec![])
-        //     }
-        //     ExecutionKind::Validation => {
-        //         let mint = if let Some((_, Transaction::Mint(mint))) = tx_iter.next() {
-        //             mint.clone()
-        //         } else {
-        //             return Err(Error::FirstTransactionIsNotCoinbase)
-        //         };
-        //         self.check_coinbase(block_height as Word, mint)?
-        //     }
-        // };
+        let mut coinbase_tx: Mint = match execution_kind {
+            ExecutionKind::Production => {
+                // The coinbase transaction should be the first.
+                // We will add `Output::Coin` at the end of transactions execution.
+                Transaction::mint(TxPointer::new(block_height, 0), vec![])
+            }
+            ExecutionKind::Validation => {
+                let mint = if let Some((_, Transaction::Mint(mint))) = tx_iter.next() {
+                    mint.clone()
+                } else {
+                    return Err(Error::CoinbaseIsNotFirstTransaction)
+                };
+                self.check_coinbase(block_height as Word, mint, None)?
+            }
+        };
 
         // Execute each transaction.
         for (idx, tx) in tx_iter {
@@ -307,7 +312,7 @@ impl Executor {
             let checked_tx: CheckedTransaction = tx
                 .clone()
                 .into_checked_basic(
-                    block_height as u64,
+                    block_height as Word,
                     &self.config.chain_conf.transaction_parameters,
                 )?
                 .into();
@@ -341,37 +346,89 @@ impl Executor {
                     let (mint, _): (Mint, _) = mint.into();
                     return Err(Error::NotSupportedTransaction(Box::new(mint.into())))
                 }
-            }
+            };
         }
 
-        // TODO: Compare calculated coinbase with existing
-        // TODO: Insert at the first slot in production mode `Mint` transaction with right values.
-        // TODO: Apply coinbase transaction
+        if let ExecutionKind::Production = execution_kind {
+            coinbase_tx.outputs_mut().push(Output::coin(
+                self.config.block_producer.coinbase_recipient,
+                execution_data.coinbase,
+                AssetId::BASE,
+            ));
+            // TODO: Use a linked list instead of a vector to do it faster.
+            block.transactions.insert(0, coinbase_tx.clone().into());
+        }
+
+        coinbase_tx = self.check_coinbase(
+            block_height as Word,
+            coinbase_tx,
+            Some(execution_data.coinbase),
+        )?;
+
+        let coinbase_id = coinbase_tx.id();
+        self.persist_outputs(
+            *block.header.height(),
+            &coinbase_id,
+            block_db_transaction,
+            &vec![],
+            coinbase_tx.outputs(),
+        )?;
+        execution_data.tx_status.insert(
+            0,
+            (
+                coinbase_id,
+                TransactionStatus::Success {
+                    block_id: Default::default(),
+                    time: *block.header.time(),
+                    result: None,
+                },
+            ),
+        );
+        block_db_transaction
+            .deref_mut()
+            .storage::<Transactions>()
+            .insert(&coinbase_id, &coinbase_tx.into())?;
 
         Ok(execution_data)
     }
 
-    // fn check_coinbase(&self, block_height: Word, mint: Mint) -> Result<Mint, Error> {
-    //     let checked_mint = mint
-    //         .into_checked(block_height, &self.config.chain_conf.transaction_parameters)?;
-    //
-    //     if checked_mint.transaction().outputs().len() > 1 {
-    //         return Err(Error::SeveralCoinbaseOutputs)
-    //     }
-    //
-    //     if let Some(Output::Coin { asset_id, .. }) =
-    //         checked_mint.transaction().outputs().first()
-    //     {
-    //         if asset_id != &AssetId::BASE {
-    //             return Err(Error::CoinbaseOutputIsInvalid)
-    //         }
-    //     } else {
-    //         return Err(Error::CoinbaseOutputIsInvalid)
-    //     }
-    //
-    //     let (mint, _) = checked_mint.into();
-    //     Ok(mint)
-    // }
+    fn check_coinbase(
+        &self,
+        block_height: Word,
+        mint: Mint,
+        expected_amount: Option<Word>,
+    ) -> Result<Mint, Error> {
+        let checked_mint = mint
+            .into_checked(block_height, &self.config.chain_conf.transaction_parameters)?;
+
+        if checked_mint.transaction().tx_pointer().tx_index() != 0 {
+            return Err(Error::CoinbaseIsNotFirstTransaction)
+        }
+
+        if checked_mint.transaction().outputs().len() > 1 {
+            return Err(Error::CoinbaseSeveralOutputs)
+        }
+
+        if let Some(Output::Coin {
+            asset_id, amount, ..
+        }) = checked_mint.transaction().outputs().first()
+        {
+            if asset_id != &AssetId::BASE {
+                return Err(Error::CoinbaseOutputIsInvalid)
+            }
+
+            if let Some(expected_amount) = expected_amount {
+                if expected_amount != *amount {
+                    return Err(Error::CoinbaseAmountMismatch)
+                }
+            }
+        } else {
+            return Err(Error::CoinbaseOutputIsInvalid)
+        }
+
+        let (mint, _) = checked_mint.into();
+        Ok(mint)
+    }
 
     fn execute_create_or_script<Tx>(
         &self,
@@ -485,9 +542,10 @@ impl Executor {
         // persist any outputs
         self.persist_outputs(
             *header.height(),
-            vm_result.tx(),
             &tx_id,
             block_db_transaction.deref_mut(),
+            vm_result.tx().inputs(),
+            vm_result.tx().outputs(),
         )?;
 
         // persist receipts
@@ -523,7 +581,7 @@ impl Executor {
             TransactionStatus::Success {
                 block_id: Default::default(),
                 time: *header.time(),
-                result: *vm_result.state(),
+                result: Some(*vm_result.state()),
             }
         };
 
@@ -844,17 +902,15 @@ impl Executor {
         }
     }
 
-    fn persist_outputs<Tx>(
+    fn persist_outputs(
         &self,
         block_height: BlockHeight,
-        tx: &Tx,
         tx_id: &Bytes32,
         db: &mut Database,
-    ) -> Result<(), Error>
-    where
-        Tx: ExecutableTransaction,
-    {
-        for (output_index, output) in tx.outputs().iter().enumerate() {
+        inputs: &[Input],
+        outputs: &[Output],
+    ) -> Result<(), Error> {
+        for (output_index, output) in outputs.iter().enumerate() {
             let utxo_id = UtxoId::new(*tx_id, output_index as u8);
             match output {
                 Output::Coin {
@@ -874,7 +930,7 @@ impl Executor {
                     ..
                 } => {
                     if let Some(Input::Contract { contract_id, .. }) =
-                        tx.inputs().get(*input_idx as usize)
+                        inputs.get(*input_idx as usize)
                     {
                         db.storage::<ContractsLatestUtxo>()
                             .insert(contract_id, &utxo_id)?;
@@ -1118,6 +1174,17 @@ mod tests {
         SeedableRng,
     };
 
+    fn add_empty_coinbase_tx(transactions: &mut Vec<Transaction>) {
+        transactions.insert(
+            0,
+            Transaction::mint(
+                Default::default(),
+                vec![Output::coin(Address::default(), 0, AssetId::BASE)],
+            )
+            .into(),
+        );
+    }
+
     fn test_block(num_txs: usize) -> FuelBlock {
         let transactions = (1..num_txs + 1)
             .into_iter()
@@ -1260,6 +1327,19 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
+            Err(Error::CoinbaseIsNotFirstTransaction)
+        ));
+
+        add_empty_coinbase_tx(&mut block.transactions);
+        let mut block_db_transaction = verifier.database.transaction();
+        let verify_result = verifier
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
+            .await;
+        assert!(matches!(
+            verify_result,
             Err(Error::InvalidTransaction(CheckError::InsufficientFeeAmount { expected, ..})) if expected == (gas_limit as f64 / factor).ceil() as u64
         ))
     }
@@ -1293,6 +1373,19 @@ mod tests {
             Err(Error::TransactionIdCollision(_))
         ));
 
+        let mut block_db_transaction = verifier.database.transaction();
+        let verify_result = verifier
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
+            .await;
+        assert!(matches!(
+            verify_result,
+            Err(Error::CoinbaseIsNotFirstTransaction)
+        ));
+
+        add_empty_coinbase_tx(&mut block.transactions);
         let mut block_db_transaction = verifier.database.transaction();
         let verify_result = verifier
             .execute_transactions(
@@ -1399,6 +1492,19 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
+            Err(Error::CoinbaseIsNotFirstTransaction)
+        ));
+
+        add_empty_coinbase_tx(&mut block.transactions);
+        let mut block_db_transaction = verifier.database.transaction();
+        let verify_result = verifier
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
+            .await;
+        assert!(matches!(
+            verify_result,
             Err(Error::TransactionValidity(
                 TransactionValidityError::CoinAlreadySpent(_)
             ))
@@ -1473,6 +1579,19 @@ mod tests {
             .await;
         assert!(matches!(
             verify_result,
+            Err(Error::CoinbaseIsNotFirstTransaction)
+        ));
+
+        add_empty_coinbase_tx(&mut block.transactions);
+        let mut block_db_transaction = verifier.database.transaction();
+        let verify_result = verifier
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
+            .await;
+        assert!(matches!(
+            verify_result,
             Err(Error::TransactionValidity(
                 TransactionValidityError::CoinDoesNotExist(_)
             ))
@@ -1516,7 +1635,7 @@ mod tests {
             .unwrap();
 
         // modify change amount
-        if let Transaction::Script(script) = &mut block.transactions_mut()[0] {
+        if let Transaction::Script(script) = &mut block.transactions_mut()[1] {
             if let Output::Change { amount, .. } = &mut script.outputs_mut()[0] {
                 *amount = fake_output_amount
             }
@@ -1633,7 +1752,7 @@ mod tests {
         let coin = db
             .storage::<Coins>()
             .get(
-                block.transactions()[0].as_script().unwrap().inputs()[0]
+                block.transactions()[1].as_script().unwrap().inputs()[0]
                     .utxo_id()
                     .unwrap(),
             )
@@ -1727,7 +1846,7 @@ mod tests {
         let coin = db
             .storage::<Coins>()
             .get(
-                block.transactions()[0].as_script().unwrap().inputs()[0]
+                block.transactions()[1].as_script().unwrap().inputs()[0]
                     .utxo_id()
                     .unwrap(),
             )
@@ -1873,7 +1992,7 @@ mod tests {
             .await
             .unwrap();
         // Corrupt the utxo_id of the contract output
-        if let Transaction::Script(script) = &mut second_block.transactions_mut()[0] {
+        if let Transaction::Script(script) = &mut second_block.transactions_mut()[1] {
             if let Input::Contract { utxo_id, .. } = &mut script.inputs_mut()[0] {
                 // use a previously valid contract id which isn't the correct one for this block
                 *utxo_id = UtxoId::new(tx_id, 0);
@@ -1988,7 +2107,7 @@ mod tests {
             .unwrap();
 
         // ensure that all utxos with an amount are stored into the utxo set
-        for (idx, output) in block.transactions()[1]
+        for (idx, output) in block.transactions()[2]
             .as_script()
             .unwrap()
             .outputs()
@@ -2146,6 +2265,13 @@ mod tests {
 
         let res = make_executor(&[]) // No messages in the db
             .await
+            .execute(ExecutionBlock::Validation(block.clone()))
+            .await;
+        assert!(matches!(res, Err(Error::CoinbaseIsNotFirstTransaction)));
+
+        add_empty_coinbase_tx(block.transactions_mut());
+        let res = make_executor(&[]) // No messages in the db
+            .await
             .execute(ExecutionBlock::Validation(block))
             .await;
         assert!(matches!(
@@ -2176,6 +2302,13 @@ mod tests {
             ))
         ));
 
+        let res = make_executor(&[&message])
+            .await
+            .execute(ExecutionBlock::Validation(block.clone()))
+            .await;
+        assert!(matches!(res, Err(Error::CoinbaseIsNotFirstTransaction)));
+
+        add_empty_coinbase_tx(block.transactions_mut());
         let res = make_executor(&[&message])
             .await
             .execute(ExecutionBlock::Validation(block))
@@ -2218,6 +2351,17 @@ mod tests {
             ))
         ));
 
+        let exec = make_executor(&[&message]).await;
+        let mut block_db_transaction = exec.database.transaction();
+        let res = exec
+            .execute_transactions(
+                &mut block_db_transaction,
+                ExecutionType::Validation(&mut block),
+            )
+            .await;
+        assert!(matches!(res, Err(Error::CoinbaseIsNotFirstTransaction)));
+
+        add_empty_coinbase_tx(&mut block.transactions);
         let exec = make_executor(&[&message]).await;
         let mut block_db_transaction = exec.database.transaction();
         let res = exec

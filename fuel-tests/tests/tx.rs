@@ -251,14 +251,17 @@ async fn get_transactions() {
     let tx5 = context.transfer(charlie, alice, 1).await.unwrap();
     let tx6 = context.transfer(alice, charlie, 1).await.unwrap();
 
-    // there are six transactions
-    // [1, 2, 3, 4, 5, 6]
+    // there are 12 transactions
+    // [
+    //  coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3,
+    //  coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6
+    // ]
 
-    // Query for first 3: [1,2,3]
+    // Query for first 6: [coinbase_tx1, tx1, coinbase_tx2, tx2, coinbase_tx3, tx3]
     let client = context.client;
     let page_request = PaginationRequest {
         cursor: None,
-        results: 3,
+        results: 6,
         direction: PageDirection::Forward,
     };
 
@@ -268,29 +271,34 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions, &[tx1, tx2, tx3]);
+    // coinbase_tx1
+    assert_eq!(transactions[1], tx1);
+    // coinbase_tx2
+    assert_eq!(transactions[3], tx2);
+    // coinbase_tx3
+    assert_eq!(transactions[5], tx3);
     // Check pagination state for first page
     assert!(response.has_next_page);
     assert!(!response.has_previous_page);
 
-    // Query for second page 2 with last given cursor: [4,5]
+    // Query for second page 2 with last given cursor: [coinbase_tx4, tx4, coinbase_tx5, tx5]
     let page_request_middle_page = PaginationRequest {
         cursor: response.cursor.clone(),
-        results: 2,
+        results: 4,
         direction: PageDirection::Forward,
     };
 
-    // Query backwards from last given cursor [3]: [1,2]
+    // Query backwards from last given cursor [3]: [coinbase_tx1, tx1, coinbase_tx2, tx2]
     let page_request_backwards = PaginationRequest {
         cursor: response.cursor.clone(),
-        results: 3,
+        results: 6,
         direction: PageDirection::Backward,
     };
 
-    // Query forwards from last given cursor [3]: [4,5,6]
+    // Query forwards from last given cursor [3]: [coinbase_tx4, tx4, coinbase_tx5, tx5, coinbase_tx6, tx6]
     let page_request_forwards = PaginationRequest {
         cursor: response.cursor,
-        results: 3,
+        results: 6,
         direction: PageDirection::Forward,
     };
 
@@ -300,7 +308,10 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions, &[tx4, tx5]);
+    // coinbase_tx4
+    assert_eq!(transactions[1], tx4);
+    // coinbase_tx5
+    assert_eq!(transactions[3], tx5);
     // Check pagination state for middle page
     // it should have next and previous page
     assert!(response.has_next_page);
@@ -312,7 +323,10 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions, &[tx1, tx2]);
+    // coinbase_tx1
+    assert_eq!(transactions[1], tx1);
+    // coinbase_tx2
+    assert_eq!(transactions[3], tx2);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -323,7 +337,12 @@ async fn get_transactions() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions, &[tx4, tx5, tx6]);
+    // coinbase_tx4
+    assert_eq!(transactions[1], tx4);
+    // coinbase_tx5
+    assert_eq!(transactions[3], tx5);
+    // coinbase_tx6
+    assert_eq!(transactions[5], tx6);
     // Check pagination state for last page
     assert!(!response.has_next_page);
     assert!(response.has_previous_page);
@@ -377,10 +396,10 @@ async fn get_transactions_from_manual_blocks() {
         .await
         .unwrap();
 
-    // Query for first 3: [0,1,2]
+    // Query for first 4: [coinbase_tx1, 0, 1, 2]
     let page_request_forwards = PaginationRequest {
         cursor: None,
-        results: 3,
+        results: 4,
         direction: PageDirection::Forward,
     };
     let response = client.transactions(page_request_forwards).await.unwrap();
@@ -389,12 +408,15 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(transactions, &[txs[0].id(), txs[1].id(), txs[2].id()]);
+    // coinbase_tx1
+    assert_eq!(transactions[1], txs[0].id());
+    assert_eq!(transactions[2], txs[1].id());
+    assert_eq!(transactions[3], txs[2].id());
 
-    // Query forwards from last given cursor [2]: [3,4,5,6]
+    // Query forwards from last given cursor [2]: [3, 4, coinbase_tx2, 5, 6]
     let next_page_request_forwards = PaginationRequest {
         cursor: response.cursor,
-        results: 4,
+        results: 5,
         direction: PageDirection::Forward,
     };
     let response = client
@@ -406,10 +428,11 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(
-        transactions,
-        &[txs[3].id(), txs[4].id(), txs[5].id(), txs[6].id()]
-    );
+    assert_eq!(transactions[0], txs[3].id());
+    assert_eq!(transactions[1], txs[4].id());
+    // coinbase_tx2
+    assert_eq!(transactions[3], txs[5].id());
+    assert_eq!(transactions[4], txs[6].id());
 
     // Query backwards from last given cursor [6]: [0,1,2,3,4,5]
     let page_request_backwards = PaginationRequest {
@@ -423,17 +446,14 @@ async fn get_transactions_from_manual_blocks() {
         .iter()
         .map(|tx| tx.transaction.id())
         .collect_vec();
-    assert_eq!(
-        transactions,
-        &[
-            txs[0].id(),
-            txs[1].id(),
-            txs[2].id(),
-            txs[3].id(),
-            txs[4].id(),
-            txs[5].id()
-        ]
-    );
+    // coinbase_tx1
+    assert_eq!(transactions[1], txs[0].id());
+    assert_eq!(transactions[2], txs[1].id());
+    assert_eq!(transactions[3], txs[2].id());
+    assert_eq!(transactions[4], txs[3].id());
+    assert_eq!(transactions[5], txs[4].id());
+    // coinbase_tx2
+    assert_eq!(transactions[7], txs[5].id());
 }
 
 #[tokio::test]

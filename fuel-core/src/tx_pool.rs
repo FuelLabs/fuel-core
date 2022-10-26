@@ -19,7 +19,7 @@ pub enum TransactionStatus {
     Success {
         block_id: BlockId,
         time: DateTime<Utc>,
-        result: ProgramState,
+        result: Option<ProgramState>,
     },
     Failed {
         block_id: BlockId,
