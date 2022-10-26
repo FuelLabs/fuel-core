@@ -61,6 +61,7 @@ use std::{
 use crate::database::storage::SealedBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use anyhow::Context;
 use fuel_core_interfaces::model::FuelBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
@@ -350,7 +351,11 @@ impl InterpreterStorage for Database {
     }
 
     fn coinbase(&self) -> Result<Address, Error> {
-        let current_block = self.get_current_block()?.ok_or(KvStoreError::NotFound)?;
+        let current_block = self
+            .get_current_block()?
+            .ok_or(KvStoreError::NotFound)
+            .with_context(|| "no current block was found")?;
+
         match current_block.consensus_type() {
             ConsensusType::PoA => {
                 let block_id = current_block.header.id();
