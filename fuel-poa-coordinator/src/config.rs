@@ -1,4 +1,10 @@
-use fuel_core_interfaces::common::prelude::Word;
+use fuel_core_interfaces::{
+    common::{
+        prelude::Word,
+        secrecy::Secret,
+    },
+    model::SecretKeyWrapper,
+};
 use serde::{
     Deserialize,
     Serialize,
@@ -9,6 +15,7 @@ use tokio::time::Duration;
 pub struct Config {
     pub trigger: Trigger,
     pub block_gas_limit: Word,
+    pub signing_key: Option<Secret<SecretKeyWrapper>>,
 }
 
 /// Block production trigger for PoA operation

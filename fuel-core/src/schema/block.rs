@@ -70,7 +70,9 @@ pub struct Header(pub(crate) FuelBlockHeader);
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        self.header.0.id().into()
+        let bytes: fuel_core_interfaces::common::prelude::Bytes32 =
+            self.header.0.id().into();
+        bytes.into()
     }
 
     async fn header(&self) -> &Header {
@@ -100,7 +102,8 @@ impl Block {
 impl Header {
     /// Hash of the header
     async fn id(&self) -> BlockId {
-        self.0.id().into()
+        let bytes: fuel_core_interfaces::common::prelude::Bytes32 = self.0.id().into();
+        bytes.into()
     }
 
     /// The layer 1 height of messages and events to include since the last layer 1 block number.

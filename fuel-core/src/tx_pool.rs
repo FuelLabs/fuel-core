@@ -2,9 +2,9 @@ use chrono::{
     DateTime,
     Utc,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::Bytes32,
-    fuel_vm::prelude::ProgramState,
+use fuel_core_interfaces::{
+    common::fuel_vm::prelude::ProgramState,
+    model::BlockId,
 };
 use serde::{
     Deserialize,
@@ -17,12 +17,12 @@ pub enum TransactionStatus {
         time: DateTime<Utc>,
     },
     Success {
-        block_id: Bytes32,
+        block_id: BlockId,
         time: DateTime<Utc>,
         result: ProgramState,
     },
     Failed {
-        block_id: Bytes32,
+        block_id: BlockId,
         time: DateTime<Utc>,
         reason: String,
         result: Option<ProgramState>,

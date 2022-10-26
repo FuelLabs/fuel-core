@@ -93,7 +93,7 @@ pub async fn message_proof(
 
     // Get the message ids in the same order as the transactions.
     let leaves = data
-        .transactions_on_block(&block_id)?
+        .transactions_on_block(&block_id.into())?
         .into_iter()
         // Filter out transactions that contain no messages 
         // and get the receipts for the rest.
@@ -152,13 +152,13 @@ pub async fn message_proof(
             };
 
             // Get the signature.
-            let signature = match data.signature(&block_id)? {
+            let signature = match data.signature(&block_id.into())? {
                 Some(t) => t,
                 None => return Ok(None),
             };
 
             // Get the fuel block.
-            let header = match data.block(&block_id)? {
+            let header = match data.block(&block_id.into())? {
                 Some(t) => t.header,
                 None => return Ok(None),
             };

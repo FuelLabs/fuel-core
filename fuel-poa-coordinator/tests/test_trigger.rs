@@ -1,5 +1,6 @@
 #![deny(unused_must_use)]
 
+use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
@@ -7,16 +8,23 @@ use fuel_core_interfaces::{
         consts::REG_ZERO,
         fuel_tx::TransactionBuilder,
         prelude::*,
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
     },
     model::{
         BlockHeight,
+        BlockId,
         FuelBlock,
+        FuelBlockConsensus,
         FuelConsensusHeader,
         PartialFuelBlock,
         PartialFuelBlockHeader,
+        SecretKeyWrapper,
     },
     poa_coordinator::{
-        BlockHeightDb,
+        BlockDb,
         TransactionPool,
     },
     txpool::{
@@ -29,6 +37,7 @@ use fuel_poa_coordinator::{
     Service,
     Trigger,
 };
+use parking_lot::RwLock;
 use rand::{
     prelude::StdRng,
     Rng,
@@ -36,6 +45,7 @@ use rand::{
 };
 use std::{
     cmp::Reverse,
+    collections::HashMap,
     sync::Arc,
 };
 use tokio::{
@@ -54,11 +64,15 @@ use tokio::{
 
 pub struct MockBlockProducer {
     txpool_sender: MockTxPoolSender,
+    database: MockDatabase,
 }
 
 impl MockBlockProducer {
-    pub fn new(txpool_sender: MockTxPoolSender) -> Self {
-        Self { txpool_sender }
+    pub fn new(txpool_sender: MockTxPoolSender, database: MockDatabase) -> Self {
+        Self {
+            txpool_sender,
+            database,
+        }
     }
 }
 
@@ -90,6 +104,8 @@ impl BlockProducer for MockBlockProducer {
             .into_iter()
             .map(|c| c.transaction().clone())
             .collect();
+
+        self.database.inner.write().height += 1;
 
         Ok(PartialFuelBlock {
             header: PartialFuelBlockHeader {
@@ -145,17 +161,37 @@ fn select_transactions(
 
 #[derive(Clone, Default)]
 pub struct MockDatabase {
-    height: u32,
+    inner: Arc<RwLock<MockDatabaseInner>>,
 }
+
+#[derive(Default)]
+pub struct MockDatabaseInner {
+    height: u32,
+    consensus: HashMap<BlockId, FuelBlockConsensus>,
+}
+
 impl MockDatabase {
     pub fn new() -> Self {
-        Self { height: 0 }
+        Self::default()
     }
 }
 
-impl BlockHeightDb for MockDatabase {
+impl BlockDb for MockDatabase {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
-        Ok(BlockHeight::from(self.height))
+        Ok(BlockHeight::from(self.inner.read().height))
+    }
+
+    fn seal_block(
+        &mut self,
+        block_id: BlockId,
+        consensus: FuelBlockConsensus,
+    ) -> anyhow::Result<()> {
+        if self.inner.read().consensus.contains_key(&block_id) {
+            Err(anyhow!("block already sealed"))
+        } else {
+            self.inner.write().consensus.insert(block_id, consensus);
+            Ok(())
+        }
     }
 }
 
@@ -284,6 +320,12 @@ impl MockTxPoolSender {
     }
 }
 
+fn test_signing_key() -> Secret<SecretKeyWrapper> {
+    let mut rng = StdRng::seed_from_u64(0);
+    let secret_key = SecretKey::random(&mut rng);
+    Secret::new(secret_key.into())
+}
+
 #[async_trait::async_trait]
 impl TransactionPool for MockTxPoolSender {
     async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
@@ -317,6 +359,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
         let service = Service::new(&Config {
             trigger,
             block_gas_limit: 100_000,
+            signing_key: Some(test_signing_key()),
         });
 
         let (txpool, broadcast_rx) = MockTxPool::spawn();
@@ -326,7 +369,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
                 broadcast_rx,
                 txpool.sender(),
                 txpool.import_block_tx.clone(),
-                Arc::new(MockBlockProducer::new(txpool.sender())),
+                Arc::new(MockBlockProducer::new(txpool.sender(), db.clone())),
                 db,
             )
             .await;
@@ -391,10 +434,11 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
     let service = Service::new(&Config {
         trigger: Trigger::Never,
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     let producer = Arc::new(producer);
     service
         .start(
@@ -435,10 +479,11 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
     let service = Service::new(&Config {
         trigger: Trigger::Instant,
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
 
     let producer = Arc::new(producer);
     service
@@ -447,7 +492,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
             txpool.sender(),
             txpool.import_block_tx.clone(),
             producer.clone(),
-            db,
+            db.clone(),
         )
         .await;
 
@@ -456,6 +501,28 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 
     // Make sure it's produced
     assert_eq!(txpool.wait_block_produced().await, 1);
+
+    // Checked that it's sealed and signature is valid
+    {
+        let db_lock = db.inner.read();
+        let (id, consensus) = db_lock
+            .consensus
+            .iter()
+            .next()
+            .expect("expected sealed block info");
+        match consensus {
+            FuelBlockConsensus::PoA(poa) => {
+                // verify against public key from test config
+                let pk = test_signing_key().expose_secret().public_key();
+
+                let message = id.into_message();
+
+                poa.signature
+                    .verify(&pk, &message)
+                    .expect("expected signature to be valid");
+            } //_ => panic!("invalid sealed data"),
+        }
+    }
 
     // Stop
     let handle = service.stop().await.expect("Get join handle");
@@ -474,10 +541,11 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
             block_time: Duration::new(2, 0),
         },
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     let producer = Arc::new(producer);
     service
         .start(
@@ -566,10 +634,11 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
             block_time: Duration::new(2, 0),
         },
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     let producer = Arc::new(producer);
     service
         .start(
@@ -623,10 +692,11 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
             max_block_time: Duration::new(10, 0),
         },
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     let producer = Arc::new(producer);
     service
         .start(
@@ -702,10 +772,11 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
             max_block_time: Duration::new(10, 0),
         },
         block_gas_limit: 100_000,
+        signing_key: Some(test_signing_key()),
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
-    let producer = MockBlockProducer::new(txpool.sender());
+    let producer = MockBlockProducer::new(txpool.sender(), db.clone());
     let producer = Arc::new(producer);
     service
         .start(

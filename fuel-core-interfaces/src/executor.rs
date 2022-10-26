@@ -15,6 +15,7 @@ use crate::{
     },
     db::KvStoreError,
     model::{
+        BlockId,
         FuelBlock,
         PartialFuelBlock,
     },
@@ -136,7 +137,7 @@ pub enum Error {
 
 impl ExecutionBlock {
     /// Get the hash of the full [`FuelBlock`] if validating.
-    pub fn id(&self) -> Option<Bytes32> {
+    pub fn id(&self) -> Option<BlockId> {
         match self {
             ExecutionTypes::Production(_) => None,
             ExecutionTypes::Validation(v) => Some(v.id()),
