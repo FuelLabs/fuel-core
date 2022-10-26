@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         transactional::DatabaseTransaction,
     },
     state::{
@@ -10,6 +13,7 @@ use crate::{
         IterDirection,
     },
 };
+use anyhow::Context;
 use async_trait::async_trait;
 use fuel_block_producer::db::BlockProducerDatabase;
 use fuel_chain_config::{
@@ -25,16 +29,18 @@ use fuel_core_interfaces::{
             StorageAsMut,
             StorageAsRef,
         },
+        fuel_tx::field::Outputs,
         fuel_vm::prelude::{
             Address,
             Bytes32,
             InterpreterStorage,
         },
     },
+    db::Transactions,
     model::{
         BlockHeight,
         BlockId,
-        ConsensusType,
+        FuelBlockConsensus,
         FuelBlockDb,
         SealedFuelBlock,
     },
@@ -58,11 +64,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::database::storage::SealedBlockConsensus;
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-use anyhow::Context;
-use fuel_core_interfaces::model::FuelBlockConsensus;
+
+use fuel_core_interfaces::common::fuel_tx::Output;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -349,15 +354,26 @@ impl InterpreterStorage for Database {
             .ok_or(KvStoreError::NotFound)
             .with_context(|| "no current block was found")?;
 
-        match current_block.consensus_type() {
-            ConsensusType::PoA => {
-                let block_id = current_block.header.id();
-                let consensus = self
-                    .storage::<SealedBlockConsensus>()
-                    .get(block_id.as_ref())?
-                    .ok_or(KvStoreError::NotFound)?;
-                consensus.block_producer(&block_id).map_err(Into::into)
-            }
+        let coinbase_tx_id = current_block
+            .transactions
+            .get(0)
+            .ok_or(KvStoreError::NotFound)?;
+        let coinbase_tx = self
+            .storage::<Transactions>()
+            .get(coinbase_tx_id)?
+            .ok_or(KvStoreError::NotFound)?;
+
+        let coin = coinbase_tx
+            .as_mint()
+            .ok_or(KvStoreError::NotFound)?
+            .outputs()
+            .first()
+            .ok_or(KvStoreError::NotFound)?;
+
+        if let Output::Coin { to, .. } = coin {
+            Ok(*to)
+        } else {
+            Err(KvStoreError::NotFound.into())
         }
     }
 }
