@@ -164,7 +164,7 @@ impl Command {
             let consensus_key = consensus_key
                 .as_ref()
                 .cloned()
-                .unwrap_or(Secret::new(SecretKeyWrapper::default()));
+                .unwrap_or_else(|| Secret::new(SecretKeyWrapper::default()));
 
             let sk = consensus_key.expose_secret().deref();
             Address::from(*sk.public_key().hash())
