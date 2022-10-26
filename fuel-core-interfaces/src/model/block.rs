@@ -25,9 +25,31 @@ use std::fmt;
 
 #[cfg(any(test, feature = "test-helpers"))]
 use chrono::TimeZone;
+use derive_more::{
+    Display,
+    From,
+    FromStr,
+    LowerHex,
+    UpperHex,
+};
 
 /// A cryptographically secure hash, identifying a block.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Default,
+    FromStr,
+    From,
+    LowerHex,
+    UpperHex,
+    Display,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
 #[repr(transparent)]
@@ -40,25 +62,6 @@ impl BlockId {
         unsafe { fuel_crypto::Message::from_bytes_unchecked(*self.0) }
         // Without this, the signature would be using a hash of the id making it more
         // difficult to verify.
-    }
-}
-
-impl From<Bytes32> for BlockId {
-    fn from(bytes: Bytes32) -> Self {
-        Self(bytes)
-    }
-}
-
-#[allow(clippy::from_over_into)] // Avoids circular dependency
-impl Into<Bytes32> for BlockId {
-    fn into(self) -> Bytes32 {
-        self.0
-    }
-}
-
-impl fmt::LowerHex for BlockId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::LowerHex::fmt(&self.0, f)
     }
 }
 
