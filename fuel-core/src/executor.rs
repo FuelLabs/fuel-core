@@ -44,6 +44,7 @@ use fuel_core_interfaces::{
             },
         },
         prelude::StorageInspect,
+        state::StateTransition,
     },
     db::{
         Coins,
@@ -315,13 +316,13 @@ impl Executor {
                 sub_db_view.clone(),
                 self.config.chain_conf.transaction_parameters,
             );
-            let vm_result = vm
+            let vm_result: StateTransition = vm
                 .transact(checked_tx)
                 .map_err(|error| Error::VmExecution {
                     error,
                     transaction_id: tx_id,
                 })?
-                .into_owned();
+                .into();
 
             // only commit state changes if execution was a success
             if !vm_result.should_revert() {

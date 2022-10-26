@@ -2,7 +2,7 @@ use crate::client::schema::{
     contract::ContractIdFragment,
     schema,
     tx::{
-        tests::transparent_receipt::Receipt,
+        transparent_receipt::Receipt,
         TransactionStatus,
         TxIdArgs,
     },

@@ -540,6 +540,7 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Bytes32
+	contractId: ContractId
 }
 
 enum ReceiptType {
