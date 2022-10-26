@@ -37,6 +37,7 @@ use async_graphql::{
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
+        fuel_tx,
         fuel_types,
     },
     db::{
@@ -279,7 +280,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<fuel_txpool::types::Transaction>, KvStoreError> {
+    ) -> Result<Option<fuel_tx::Transaction>, KvStoreError> {
         Ok(self
             .0
             .storage::<Transactions>()

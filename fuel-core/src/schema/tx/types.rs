@@ -59,7 +59,6 @@ use fuel_core_interfaces::{
             Executable,
             UniqueIdentifier,
         },
-        fuel_types,
         fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
     },

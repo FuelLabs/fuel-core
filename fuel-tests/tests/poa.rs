@@ -6,7 +6,10 @@ use fuel_core::{
     },
 };
 use fuel_core_interfaces::{
-    common::secrecy::Secret,
+    common::{
+        fuel_tx::Transaction,
+        secrecy::Secret,
+    },
     model::FuelBlockConsensus,
 };
 use fuel_gql_client::{
@@ -17,7 +20,6 @@ use fuel_gql_client::{
     fuel_types::Bytes32,
     prelude::SecretKey,
 };
-use fuel_txpool::types::Transaction;
 use rand::{
     rngs::StdRng,
     SeedableRng,
