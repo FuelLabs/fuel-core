@@ -361,7 +361,7 @@ impl InterpreterStorage for Database {
                 let block_id = current_block.header.id();
                 let consensus = self
                     .storage::<SealedBlockConsensus>()
-                    .get(&block_id)?
+                    .get(block_id.as_ref())?
                     .ok_or(KvStoreError::NotFound)?;
                 consensus.block_producer(&block_id).map_err(Into::into)
             }

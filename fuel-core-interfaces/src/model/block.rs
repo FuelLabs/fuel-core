@@ -14,7 +14,6 @@ use chrono::{
     DateTime,
     Utc,
 };
-use core::ops::Deref;
 use fuel_vm::{
     fuel_crypto,
     fuel_merkle,
@@ -29,7 +28,7 @@ use crate::common::{
 #[cfg(any(test, feature = "test-helpers"))]
 use chrono::TimeZone;
 use derive_more::{
-    Deref,
+    AsRef,
     Display,
     From,
     FromStr,
@@ -55,7 +54,7 @@ use derive_more::{
     LowerHex,
     UpperHex,
     Display,
-    Deref,
+    AsRef,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
@@ -685,14 +684,6 @@ pub struct SealedFuelBlock {
     pub consensus: FuelBlockConsensus,
 }
 
-impl Deref for SealedFuelBlock {
-    type Target = FuelBlock;
-
-    fn deref(&self) -> &FuelBlock {
-        &self.block
-    }
-}
-
 impl FuelBlockPoAConsensus {
     /// Create a new block consensus.
     pub fn new(signature: Signature) -> Self {
@@ -742,12 +733,4 @@ impl SealedFuelBlock {
 pub struct SealedFuelBlockHeader {
     pub header: FuelBlockHeader,
     pub consensus: FuelBlockConsensus,
-}
-
-impl Deref for SealedFuelBlockHeader {
-    type Target = FuelBlockHeader;
-
-    fn deref(&self) -> &FuelBlockHeader {
-        &self.header
-    }
 }
