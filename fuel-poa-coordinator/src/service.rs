@@ -332,7 +332,7 @@ where
             // The length of the secret is checked
             let signing_key = key.expose_secret().deref();
 
-            let poa_signature = Signature::sign(&signing_key, &message);
+            let poa_signature = Signature::sign(signing_key, &message);
             let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
             self.db.seal_block(block_hash, seal)
         } else {
