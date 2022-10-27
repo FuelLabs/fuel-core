@@ -114,7 +114,7 @@ async fn can_build_message_proof() {
             Ok(Some(TransactionStatus::Success {
                 block_id: Default::default(),
                 time: Default::default(),
-                result: ProgramState::Return(Default::default()),
+                result: None,
             }))
         });
     data.expect_transactions_on_block()
