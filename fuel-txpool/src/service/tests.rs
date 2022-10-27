@@ -1,10 +1,13 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::txpool::{
-    Error as TxpoolError,
-    TxPoolMpsc,
-    TxStatus,
-    TxStatusBroadcast,
+use fuel_core_interfaces::{
+    common::fuel_tx::UniqueIdentifier,
+    txpool::{
+        Error as TxpoolError,
+        TxPoolMpsc,
+        TxStatus,
+        TxStatusBroadcast,
+    },
 };
 use tokio::sync::oneshot;
 
@@ -123,26 +126,31 @@ async fn simple_insert_removal_subscription() {
         .await;
     let out = receiver.await.unwrap();
 
-    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-    assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
+    if let Ok(tx) = &out[0] {
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx.inserted.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "First added should be tx1"
+        );
+    } else {
+        panic!("Tx1 should be OK, got err");
+    }
 
-    // we are sure that included tx are already broadcasted.
-    assert_eq!(
-        subscribe.try_recv(),
-        Ok(TxStatusBroadcast {
-            tx: tx1.clone(),
-            status: TxStatus::Submitted,
-        }),
-        "First added should be tx1"
-    );
-    assert_eq!(
-        subscribe.try_recv(),
-        Ok(TxStatusBroadcast {
-            tx: tx2.clone(),
-            status: TxStatus::Submitted,
-        }),
-        "Second added should be tx2"
-    );
+    if let Ok(tx) = &out[1] {
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: tx.inserted.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "Second added should be tx2"
+        );
+    } else {
+        panic!("Tx2 should be OK, got err");
+    }
 
     // remove them
     let (response, receiver) = oneshot::channel();
@@ -153,12 +161,12 @@ async fn simple_insert_removal_subscription() {
             response,
         })
         .await;
-    let _rem = receiver.await.unwrap();
+    let rem = receiver.await.unwrap();
 
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
         Ok(Ok(TxStatusBroadcast {
-            tx: tx1,
+            tx: rem[0].clone(),
             status: TxStatus::SqueezedOut {
                 reason: TxpoolError::Removed
             }
@@ -169,7 +177,7 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
         Ok(Ok(TxStatusBroadcast {
-            tx: tx2,
+            tx: rem[1].clone(),
             status: TxStatus::SqueezedOut {
                 reason: TxpoolError::Removed
             }

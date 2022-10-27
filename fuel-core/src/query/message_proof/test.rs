@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
-use fuel_core_interfaces::model::{
-    FuelApplicationHeader,
-    FuelConsensusHeader,
-    PartialFuelBlockHeader,
+use fuel_core_interfaces::{
+    common::fuel_tx::Script,
+    model::{
+        FuelApplicationHeader,
+        FuelConsensusHeader,
+        PartialFuelBlockHeader,
+    },
 };
 
 use super::*;
@@ -121,14 +124,9 @@ async fn can_build_message_proof() {
 
     data.expect_transaction().returning(move |txn_id| {
         Ok(TXNS.iter().find(|t| *t == txn_id).map(|_| {
-            let mut txn = Transaction::default();
-            match &mut txn {
-                Transaction::Script { outputs, .. }
-                | Transaction::Create { outputs, .. } => {
-                    outputs.extend(out.get(txn_id).unwrap());
-                }
-            }
-            txn
+            let mut txn = Script::default();
+            txn.outputs_mut().extend(out.get(txn_id).unwrap());
+            txn.into()
         }))
     });
 

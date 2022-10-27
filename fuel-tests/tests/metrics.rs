@@ -48,16 +48,19 @@ async fn test_database_metrics() {
         .collect();
 
     client
-        .submit_and_await_commit(&fuel_tx::Transaction::script(
-            0,
-            1000000,
-            0,
-            script,
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-        ))
+        .submit_and_await_commit(
+            &fuel_tx::Transaction::script(
+                0,
+                1000000,
+                0,
+                script,
+                vec![],
+                vec![],
+                vec![],
+                vec![],
+            )
+            .into(),
+        )
         .await
         .unwrap();
 

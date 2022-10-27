@@ -32,8 +32,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<Database>>,
-    tx: HashMap<ID, Vec<Transaction>>,
+    vm: HashMap<ID, Interpreter<Database, Script>>,
+    tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
 }
@@ -63,15 +63,14 @@ impl ConcreteStorage {
 
     pub fn init(
         &mut self,
-        txs: &[Transaction],
+        txs: &[Script],
         storage: DatabaseTransaction,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
-        let tx = txs.first().cloned().unwrap_or_default();
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
+        let tx = Script::default();
+        let checked_tx = tx.into_checked_basic(
             storage.get_block_height()?.unwrap_or_default().into(),
             &self.params,
         )?;
@@ -104,8 +103,7 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
+        let checked_tx = tx.into_checked_basic(
             storage.get_block_height()?.unwrap_or_default().into(),
             &self.params,
         )?;
@@ -319,51 +317,74 @@ impl DapMutation {
 
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            db.get_block_height()?.unwrap_or_default().into(),
-            &locked.params,
-        )?;
+        let checked_tx = tx
+            .into_checked_basic(
+                db.get_block_height()?.unwrap_or_default().into(),
+                &locked.params,
+            )?
+            .into();
 
         let vm = locked
             .vm
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        let state_ref = vm.transact(checked_tx).map_err(|err| {
-            async_graphql::Error::new(format!("Transaction failed: {err:?}"))
-        })?;
+        match checked_tx {
+            CheckedTransaction::Script(script) => {
+                let state_ref = vm.transact(script).map_err(|err| {
+                    async_graphql::Error::new(format!("Transaction failed: {err:?}"))
+                })?;
 
-        let json_receipts = state_ref
-            .receipts()
-            .iter()
-            .map(|r| serde_json::to_string(&r).expect("JSON serialization failed"))
-            .collect();
+                let json_receipts = state_ref
+                    .receipts()
+                    .iter()
+                    .map(|r| {
+                        serde_json::to_string(&r).expect("JSON serialization failed")
+                    })
+                    .collect();
 
-        #[cfg(feature = "debug")]
-        {
-            let dbgref = state_ref.state().debug_ref();
-            Ok(self::gql_types::RunResult {
-                state: match dbgref {
-                    Some(_) => self::gql_types::RunState::Breakpoint,
-                    None => self::gql_types::RunState::Completed,
-                },
-                breakpoint: dbgref.and_then(|d| match d {
-                    DebugEval::Continue => None,
-                    DebugEval::Breakpoint(bp) => Some(bp.into()),
-                }),
-                json_receipts,
-            })
-        }
+                #[cfg(feature = "debug")]
+                {
+                    let dbgref = state_ref.state().debug_ref();
+                    Ok(self::gql_types::RunResult {
+                        state: match dbgref {
+                            Some(_) => self::gql_types::RunState::Breakpoint,
+                            None => self::gql_types::RunState::Completed,
+                        },
+                        breakpoint: dbgref.and_then(|d| match d {
+                            DebugEval::Continue => None,
+                            DebugEval::Breakpoint(bp) => Some(bp.into()),
+                        }),
+                        json_receipts,
+                    })
+                }
 
-        #[cfg(not(feature = "debug"))]
-        {
-            let _ = state_ref;
-            Ok(self::gql_types::RunResult {
-                state: self::gql_types::RunState::Completed,
-                breakpoint: None,
-                json_receipts,
-            })
+                #[cfg(not(feature = "debug"))]
+                {
+                    let _ = state_ref;
+                    Ok(self::gql_types::RunResult {
+                        state: self::gql_types::RunState::Completed,
+                        breakpoint: None,
+                        json_receipts,
+                    })
+                }
+            }
+            CheckedTransaction::Create(create) => {
+                vm.deploy(create).map_err(|err| {
+                    async_graphql::Error::new(format!(
+                        "Transaction deploy failed: {err:?}"
+                    ))
+                })?;
+
+                Ok(self::gql_types::RunResult {
+                    state: self::gql_types::RunState::Completed,
+                    breakpoint: None,
+                    json_receipts: vec![],
+                })
+            }
+            CheckedTransaction::Mint(_) => {
+                Err(async_graphql::Error::new("`Mint` is not supported"))
+            }
         }
     }
 

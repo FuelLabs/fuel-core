@@ -622,15 +622,18 @@ input TimeParameters {
 
 type Transaction {
 	id: TransactionId!
-	inputAssetIds: [AssetId!]!
-	inputContracts: [Contract!]!
-	gasPrice: U64!
-	gasLimit: U64!
-	maturity: U64!
+	inputAssetIds: [AssetId!]
+	inputContracts: [Contract!]
+	gasPrice: U64
+	gasLimit: U64
+	maturity: U64
+	txPointer: TxPointer
 	isScript: Boolean!
-	inputs: [Input!]!
+	isCreate: Boolean!
+	isMint: Boolean!
+	inputs: [Input!]
 	outputs: [Output!]!
-	witnesses: [HexString!]!
+	witnesses: [HexString!]
 	receiptsRoot: Bytes32
 	status: TransactionStatus
 	receipts: [Receipt!]

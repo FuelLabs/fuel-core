@@ -62,7 +62,7 @@ async fn can_submit_genesis_message() {
                 msg1.amount,
                 msg1.data.clone(),
             )
-            .finalize();
+            .finalize_as_transaction();
 
     let mut node_config = Config::local_node();
     node_config.chain_conf.initial_state = Some(StateConfig {
@@ -296,7 +296,7 @@ async fn can_get_message_proof() {
         // Create the contract deploy transaction.
         let contract_deploy = TransactionBuilder::create(bytecode, salt, vec![])
             .add_output(output)
-            .finalize();
+            .finalize_as_transaction();
 
         let script_data = id
         .iter()
@@ -395,7 +395,7 @@ async fn can_get_message_proof() {
         .unwrap();
 
         // Call the contract.
-        let call_id = client.submit(&script).await.unwrap();
+        let call_id = client.submit(&script.into()).await.unwrap();
 
         tokio::time::timeout(
             std::time::Duration::from_secs(5),

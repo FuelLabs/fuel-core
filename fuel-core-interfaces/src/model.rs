@@ -45,7 +45,7 @@ use secrecy::{
     DebugSecret,
 };
 pub use txpool::{
-    ArcTx,
+    ArcPoolTx,
     TxInfo,
 };
 pub use vote::ConsensusVote;

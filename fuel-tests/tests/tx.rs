@@ -88,7 +88,8 @@ async fn dry_run() {
         vec![],
         vec![],
         vec![],
-    );
+    )
+    .into();
 
     let log = client.dry_run(&tx).await.unwrap();
     assert_eq!(3, log.len());
@@ -140,7 +141,8 @@ async fn submit() {
         vec![],
         vec![],
         vec![],
-    );
+    )
+    .into();
 
     client.submit_and_await_commit(&tx).await.unwrap();
     // verify that the tx returned from the api matches the submitted tx
@@ -492,14 +494,13 @@ impl TestContext {
         amount: u64,
     ) -> io::Result<Bytes32> {
         let script = Opcode::RET(0x10).to_bytes().to_vec();
-        let tx = Transaction::Script {
-            gas_price: 0,
-            gas_limit: 1_000_000,
-            maturity: 0,
-            receipts_root: Default::default(),
+        let tx = Transaction::script(
+            0,
+            1_000_000,
+            0,
             script,
-            script_data: vec![],
-            inputs: vec![Input::CoinSigned {
+            vec![],
+            vec![Input::CoinSigned {
                 utxo_id: self.rng.gen(),
                 owner: from,
                 amount,
@@ -508,14 +509,14 @@ impl TestContext {
                 witness_index: 0,
                 maturity: 0,
             }],
-            outputs: vec![Output::Coin {
+            vec![Output::Coin {
                 amount,
                 to,
                 asset_id: Default::default(),
             }],
-            witnesses: vec![vec![].into()],
-            metadata: None,
-        };
+            vec![vec![].into()],
+        )
+        .into();
         self.client.submit_and_await_commit(&tx).await?;
         Ok(tx.id())
     }
@@ -549,4 +550,5 @@ fn create_mock_tx(val: u64) -> Transaction {
         Default::default(),
         Default::default(),
     )
+    .into()
 }

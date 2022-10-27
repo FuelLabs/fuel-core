@@ -2,6 +2,7 @@ use fuel_core_interfaces::{
     common::{
         fuel_crypto,
         fuel_merkle,
+        fuel_tx::field::Outputs,
         fuel_types::MessageId,
         prelude::*,
     },
@@ -98,8 +99,11 @@ pub async fn message_proof(
         // Filter out transactions that contain no messages 
         // and get the receipts for the rest.
         .filter_map(|transaction_id| match data.transaction(&transaction_id) {
-            Ok(transaction) => transaction?
-                .outputs()
+            Ok(transaction) => transaction.as_ref().map(|tx| match tx {
+                Transaction::Script(script) => script.outputs(),
+                Transaction::Create(create) => create.outputs(),
+                Transaction::Mint(mint) => mint.outputs(),
+            })?
                 .iter()
                 .any(Output::is_message)
                 .then(|| data.receipts(&transaction_id)),

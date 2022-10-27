@@ -175,7 +175,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         db: Box::new(database.clone()),
         txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
             sender: txpool_builder.sender().clone(),
-            consensus_params: config.chain_conf.transaction_parameters,
         }),
         executor: Box::new(ExecutorAdapter {
             database: database.clone(),

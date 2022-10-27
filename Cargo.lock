@@ -2578,10 +2578,11 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d91e0ec3248f8ffb639653489219ca3be9fb938b93f0c7c142fef4f150ce4224"
+checksum = "57cf8472755f0dc19a85804319c56635fe41aca1783fdb22fc548966244a86fa"
 dependencies = [
+ "bitflags",
  "derivative",
  "fuel-asm",
  "fuel-crypto",
@@ -2623,9 +2624,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d764a72b195e8b152377e20c61021aca3a4744d6de056e6c889fe8ab785cde7d"
+checksum = "cd19c13c3b2af4f7bbfa2415d0f9ce668a31f4453eec3fcf6bb4be394df5e70c"
 dependencies = [
  "anyhow",
  "fuel-asm",

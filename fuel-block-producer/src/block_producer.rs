@@ -21,13 +21,12 @@ use fuel_core_interfaces::{
     },
     common::{
         crypto::ephemeral_merkle_root,
-        fuel_tx::Transaction,
-        fuel_types::Bytes32,
-        prelude::{
-            CheckedTransaction,
+        fuel_tx::{
             Receipt,
+            Transaction,
             Word,
         },
+        fuel_types::Bytes32,
     },
     executor::{
         Error,
@@ -44,7 +43,6 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
 };
-use std::ops::Deref;
 use tokio::sync::Mutex;
 use tracing::{
     debug,
@@ -91,7 +89,7 @@ impl Trait for Producer {
             header,
             best_transactions
                 .into_iter()
-                .map(|tx| tx.deref().clone().into())
+                .map(|tx| tx.as_ref().into())
                 .collect(),
         );
 
@@ -143,25 +141,10 @@ impl Trait for Producer {
             None => self.db.current_block_height()?,
             Some(height) => height,
         } + 1u64.into();
-        let checked = if self.config.utxo_validation {
-            CheckedTransaction::check(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
-        } else {
-            CheckedTransaction::check_unsigned(
-                transaction,
-                height.into(),
-                &self.config.consensus_params,
-            )?
-        };
 
         let header = self.new_header(height).await?;
-        let block = PartialFuelBlock::new(
-            header,
-            vec![Transaction::from(checked)].into_iter().collect(),
-        );
+        let block =
+            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
         let res = self
             .executor

@@ -79,7 +79,7 @@ impl TestContext {
         TransactionBuilder::script(vec![], vec![])
             .gas_price(gas_price)
             .add_input(gas_coin)
-            .finalize()
+            .finalize_as_transaction()
     }
 
     pub fn setup_coin(&self) -> (Coin, Input) {

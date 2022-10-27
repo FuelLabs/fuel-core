@@ -1,10 +1,17 @@
 use super::*;
 use crate::service::test_helpers::TestContext;
-use fuel_core_interfaces::txpool::{
-    TxPoolMpsc,
-    TxStatus,
-    TxStatusBroadcast,
+use fuel_core_interfaces::{
+    common::fuel_tx::{
+        Transaction,
+        UniqueIdentifier,
+    },
+    txpool::{
+        TxPoolMpsc,
+        TxStatus,
+        TxStatusBroadcast,
+    },
 };
+use std::ops::Deref;
 use tokio::sync::{
     mpsc::error::TryRecvError,
     oneshot,
@@ -36,9 +43,8 @@ async fn can_insert_from_p2p() {
         .await;
     let out = receiver.await.unwrap();
 
-    let arc_tx1 = Arc::new(tx1);
-
-    assert_eq!(arc_tx1, *out[0].as_ref().unwrap().tx());
+    let got_tx: Transaction = out[0].as_ref().unwrap().tx().clone().deref().into();
+    assert_eq!(tx1, got_tx);
 }
 
 #[tokio::test]
@@ -58,17 +64,19 @@ async fn insert_from_local_broadcasts_to_p2p() {
         .await;
     let out = receiver.await.unwrap();
 
-    assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-
-    // we are sure that included tx are already broadcasted.
-    assert_eq!(
-        subscribe.try_recv(),
-        Ok(TxStatusBroadcast {
-            tx: tx1.clone(),
-            status: TxStatus::Submitted,
-        }),
-        "First added should be tx1"
-    );
+    if let Ok(result) = &out[0] {
+        // we are sure that included tx are already broadcasted.
+        assert_eq!(
+            subscribe.try_recv(),
+            Ok(TxStatusBroadcast {
+                tx: result.inserted.clone(),
+                status: TxStatus::Submitted,
+            }),
+            "First added should be tx1"
+        );
+    } else {
+        panic!("Tx1 should be OK, got err");
+    }
 
     let ret = ctx.p2p_request_rx.lock().await.recv().await.unwrap();
 

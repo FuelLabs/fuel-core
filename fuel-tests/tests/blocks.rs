@@ -21,6 +21,7 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsMut,
         fuel_tx,
+        fuel_tx::UniqueIdentifier,
     },
     model::FuelConsensusHeader,
 };

@@ -748,7 +748,7 @@ mod tests {
                                 }
                             }
                             GossipsubMessage::NewBlock(block) => {
-                                    if block.header().height() != FuelBlock::default().header().height() {
+                                if block.header().height() != FuelBlock::default().header().height() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }

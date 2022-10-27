@@ -12,8 +12,8 @@ use fuel_core::{
 };
 use fuel_core_interfaces::common::{
     fuel_tx::{
+        field::Inputs,
         Contract,
-        Transaction,
     },
     fuel_vm::prelude::*,
 };
@@ -86,7 +86,7 @@ impl TestSetupBuilder {
     /// add input coins from a set of transaction to the genesis config
     pub fn config_coin_inputs_from_transactions(
         &mut self,
-        transactions: &[&Transaction],
+        transactions: &[&Script],
     ) -> &mut Self {
         self.initial_coins.extend(
             transactions

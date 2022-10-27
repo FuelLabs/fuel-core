@@ -5,6 +5,7 @@ use crate::{
         fuel_tx::{
             Bytes32,
             Transaction,
+            UniqueIdentifier,
         },
         fuel_types::bytes::SerializableVec,
     },
