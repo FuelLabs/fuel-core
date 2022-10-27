@@ -76,7 +76,7 @@ impl ConcreteStorage {
 
         let block = storage
             .get_current_block()?
-            .unwrap_or(Cow::Owned(FuelBlockDb::fix_me_default_block()))
+            .unwrap_or_else(|| Cow::Owned(FuelBlockDb::fix_me_default_block()))
             .into_owned();
         let current_block_height = block.header.consensus.height.into();
 
@@ -113,7 +113,7 @@ impl ConcreteStorage {
     pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
         let block = storage
             .get_current_block()?
-            .unwrap_or(Cow::Owned(FuelBlockDb::fix_me_default_block()))
+            .unwrap_or_else(|| Cow::Owned(FuelBlockDb::fix_me_default_block()))
             .into_owned();
         let current_block_height = block.header.consensus.height.into();
 
