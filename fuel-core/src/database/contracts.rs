@@ -3,7 +3,6 @@ use crate::{
         storage::ContractsLatestUtxo,
         Column,
         Database,
-        InterpreterStorage,
     },
     state::{
         Error,
@@ -30,7 +29,10 @@ use fuel_core_interfaces::{
             ContractId,
         },
     },
-    db::ContractsRawCode,
+    db::{
+        ContractsInfo,
+        ContractsRawCode,
+    },
 };
 use std::borrow::Cow;
 
@@ -123,10 +125,12 @@ impl Database {
                     .into_owned()
                     .into();
 
-                let salt = InterpreterStorage::storage_contract_root(self, &contract_id)?
+                let (salt, _) = self
+                    .storage::<ContractsInfo>()
+                    .get(&contract_id)
                     .unwrap()
-                    .into_owned()
-                    .0;
+                    .expect("Contract does not exist")
+                    .into_owned();
 
                 let state = Some(
                     self.iter_all::<Vec<u8>, Bytes32>(
