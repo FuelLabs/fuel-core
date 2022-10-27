@@ -12,15 +12,19 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::ConsensusParameters,
-    fuel_vm::{
-        consts,
-        prelude::*,
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx::ConsensusParameters,
+        fuel_vm::{
+            consts,
+            prelude::*,
+        },
     },
+    model::FuelBlockDb,
 };
 use futures::lock::Mutex;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     io,
     sync,
@@ -138,7 +142,7 @@ impl ConcreteStorage {
     ) -> Result<VmDatabase, InterpreterError> {
         let block = storage
             .get_current_block()?
-            .unwrap_or_default()
+            .unwrap_or_else(|| Cow::Owned(FuelBlockDb::fix_me_default_block()))
             .into_owned();
 
         let vm_database = VmDatabase::new(
