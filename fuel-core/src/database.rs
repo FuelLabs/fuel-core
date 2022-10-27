@@ -29,7 +29,11 @@ use fuel_core_interfaces::{
             StorageAsMut,
             StorageAsRef,
         },
-        fuel_tx::field::Outputs,
+        fuel_tx::{
+            field::Outputs,
+            ContractId,
+            Output,
+        },
         fuel_vm::prelude::{
             Address,
             Bytes32,
@@ -66,8 +70,6 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-
-use fuel_core_interfaces::common::fuel_tx::Output;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -375,6 +377,33 @@ impl InterpreterStorage for Database {
         } else {
             Err(KvStoreError::NotFound.into())
         }
+    }
+
+    fn merkle_contract_state_range(
+        &self,
+        _id: &ContractId,
+        _start_key: &Bytes32,
+        _range: Word,
+    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
+        unimplemented!()
+    }
+
+    fn merkle_contract_state_insert_range(
+        &mut self,
+        _contract: &ContractId,
+        _start_key: &Bytes32,
+        _values: &[Bytes32],
+    ) -> Result<Option<()>, Self::DataError> {
+        unimplemented!()
+    }
+
+    fn merkle_contract_state_remove_range(
+        &mut self,
+        _contract: &ContractId,
+        _start_key: &Bytes32,
+        _range: Word,
+    ) -> Result<Option<()>, Self::DataError> {
+        unimplemented!()
     }
 }
 
