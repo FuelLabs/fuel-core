@@ -150,6 +150,7 @@ async fn block_producer() -> Result<()> {
         config: fuel_block_producer::config::Config {
             utxo_validation: true,
             coinbase_recipient: Address::default(),
+            metrics: false,
         },
         db: Box::new(mock_db.clone()),
         txpool: Box::new(TxPoolAdapter {

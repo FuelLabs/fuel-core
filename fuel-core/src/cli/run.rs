@@ -190,6 +190,7 @@ impl Command {
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
                 coinbase_recipient,
+                metrics: true,
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]

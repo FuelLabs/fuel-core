@@ -12,6 +12,9 @@ pub struct Config {
     pub utxo_validation: bool,
     /// chain config
     pub chain_config: ChainConfig,
+
+    /// Enable prometheus metrics for this fuel-servive
+    pub metrics: bool,
 }
 
 impl Default for Config {
@@ -22,6 +25,7 @@ impl Default for Config {
             min_gas_price: 0,
             utxo_validation: true,
             chain_config: ChainConfig::default(),
+            metrics: true,
         }
     }
 }
