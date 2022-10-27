@@ -292,6 +292,9 @@ impl Executor {
 
         // Temporary insert coinbase into the storage because `InterpreterStorage::coinbase`
         // gets coinbase transaction from the storage during execution of `Script`.
+        //
+        // # Dev-note: in production mode, the `id` of the temporary coinbase is not the same as
+        // the `id ` of the final coinbase.
         let coinbase_id = coinbase_tx.id();
         if block_db_transaction
             .deref_mut()
@@ -369,7 +372,7 @@ impl Executor {
             };
         }
 
-        // Remove temporary added coinbase.
+        // Remove temporary added coinbase with `coinbase_id`.
         block_db_transaction
             .deref_mut()
             .storage::<Transactions>()
