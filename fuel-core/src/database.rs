@@ -29,7 +29,11 @@ use fuel_core_interfaces::{
             StorageAsMut,
             StorageAsRef,
         },
-        fuel_tx::field::Outputs,
+        fuel_tx::{
+            field::Outputs,
+            ContractId,
+            Output,
+        },
         fuel_vm::prelude::{
             Address,
             Bytes32,
@@ -66,11 +70,6 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
-
-use fuel_core_interfaces::common::fuel_tx::{
-    ContractId,
-    Output,
-};
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
