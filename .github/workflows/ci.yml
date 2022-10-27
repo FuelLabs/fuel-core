@@ -274,18 +274,20 @@ jobs:
             platform: linux
             target: x86_64-unknown-linux-gnu
             cross_image: x86_64-linux-gnu
-          - os: ubuntu-latest
-            platform: linux
-            target: x86_64-unknown-linux-musl
-            cross_image: x86_64-linux-musl
+#          libclang incompatible with musl, disabled for now
+#          - os: ubuntu-latest
+#            platform: linux
+#            target: x86_64-unknown-linux-musl
+#            cross_image: x86_64-linux-musl
           - os: ubuntu-latest
             platform: linux-arm
             target: aarch64-unknown-linux-gnu
             cross_image: aarch64-linux-gnu
-          - os: ubuntu-latest
-            platform: linux-arm
-            target: aarch64-unknown-linux-musl
-            cross_image: aarch64-linux-musl
+#           libclang incompatible with musl, disabled for now
+#          - os: ubuntu-latest
+#            platform: linux-arm
+#            target: aarch64-unknown-linux-musl
+#            cross_image: aarch64-linux-musl
           - os: macos-latest
             platform: darwin
             target: x86_64-apple-darwin

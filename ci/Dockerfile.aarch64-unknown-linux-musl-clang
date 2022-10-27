@@ -1,3 +1,5 @@
+# Currently Unsupported
+
 FROM ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
 
 RUN dpkg --add-architecture arm64 && \
