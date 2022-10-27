@@ -70,21 +70,10 @@ impl ConcreteStorage {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
-        let block = storage
-            .get_current_block()?
-            .unwrap_or_default()
-            .into_owned();
-        let current_block_height = block.header.consensus.height.into();
-
-        let vm_database = VmDatabase::new(
-            storage.as_ref().clone(),
-            &block.header.consensus,
-            // TODO: Use a real coinbase address
-            Address::zeroed(),
-        );
-
+        let vm_database = Self::vm_database(&storage)?;
         let tx = Script::default();
-        let checked_tx = tx.into_checked_basic(current_block_height, &self.params)?;
+        let checked_tx =
+            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -107,19 +96,7 @@ impl ConcreteStorage {
     }
 
     pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
-        let block = storage
-            .get_current_block()?
-            .unwrap_or_default()
-            .into_owned();
-        let current_block_height = block.header.consensus.height.into();
-
-        let vm_database = VmDatabase::new(
-            storage.as_ref().clone(),
-            &block.header.consensus,
-            // TODO: Use a real coinbase address
-            Address::zeroed(),
-        );
-
+        let vm_database = Self::vm_database(&storage)?;
         let tx = self
             .tx
             .get(id)
@@ -127,7 +104,8 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let checked_tx = tx.into_checked_basic(current_block_height, &self.params)?;
+        let checked_tx =
+            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
 
         let mut vm = Interpreter::with_storage(vm_database, self.params);
         vm.transact(checked_tx)?;
@@ -153,6 +131,24 @@ impl ConcreteStorage {
                     "The VM instance was not found",
                 ))
             })
+    }
+
+    fn vm_database(
+        storage: &DatabaseTransaction,
+    ) -> Result<VmDatabase, InterpreterError> {
+        let block = storage
+            .get_current_block()?
+            .unwrap_or_default()
+            .into_owned();
+
+        let vm_database = VmDatabase::new(
+            storage.as_ref().clone(),
+            &block.header.consensus,
+            // TODO: Use a real coinbase address
+            Address::zeroed(),
+        );
+
+        Ok(vm_database)
     }
 }
 

@@ -65,13 +65,13 @@ impl Contract {
         let contract_id = self.0;
 
         let db = ctx.data_unchecked::<Database>().clone();
-        let salt = db
+        let (salt, _) = db
             .storage::<ContractsInfo>()
-            .get(&contract_id)
-            .unwrap()
-            .expect("Contract does not exist");
+            .get(&contract_id)?
+            .ok_or(anyhow!("Contract does not exist"))?
+            .into_owned();
 
-        let cleaned_salt: Salt = salt.clone().0.into();
+        let cleaned_salt: Salt = salt.into();
 
         Ok(cleaned_salt)
     }

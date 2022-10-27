@@ -493,7 +493,7 @@ impl Executor {
         // execute transaction
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = block_db_transaction.transaction();
-        let sub_db_view = sub_block_db_commit.deref_mut();
+        let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
         let vm_db = VmDatabase::new(
             sub_db_view.clone(),
