@@ -290,6 +290,18 @@ impl Executor {
                 &block.to_partial_db_block(),
             )?;
 
+        // Temporary insert coinbase into the storage because `InterpreterStorage::coinbase`
+        // gets coinbase transaction from the storage during execution of `Script`.
+        let coinbase_id = coinbase_tx.id();
+        if block_db_transaction
+            .deref_mut()
+            .storage::<Transactions>()
+            .insert(&coinbase_id, &coinbase_tx.clone().into())?
+            .is_some()
+        {
+            return Err(Error::TransactionIdCollision(coinbase_id))
+        }
+
         // Skip `coinbase` from execution.
         let tx_iter = block.transactions.iter_mut().enumerate().skip(1);
 
@@ -357,6 +369,13 @@ impl Executor {
             };
         }
 
+        // Remove temporary added coinbase.
+        block_db_transaction
+            .deref_mut()
+            .storage::<Transactions>()
+            .remove(&coinbase_id)?;
+
+        // After the execution of all transactions in production mode, we can set the final fee.
         if let ExecutionKind::Production = execution_kind {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
@@ -410,14 +429,10 @@ impl Executor {
                 },
             ),
         );
-        if block_db_transaction
+        block_db_transaction
             .deref_mut()
             .storage::<Transactions>()
-            .insert(&coinbase_id, &coinbase_tx.into())?
-            .is_some()
-        {
-            return Err(Error::TransactionIdCollision(coinbase_id))
-        }
+            .insert(&coinbase_id, &coinbase_tx.into())?;
         Ok(())
     }
 
@@ -1154,8 +1169,8 @@ mod tests {
         common::{
             fuel_asm::Opcode,
             fuel_crypto::SecretKey,
+            fuel_tx,
             fuel_tx::{
-                self,
                 field::Outputs,
                 Buildable,
                 Chargeable,
@@ -1514,6 +1529,35 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
+        }
+
+        #[tokio::test]
+        async fn execute_cb_command() {
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(1000)
+                // Set a price for the test
+                .gas_price(0)
+                .start_script(vec![Opcode::CB(0x12), Opcode::RET(REG_ONE)], vec![])
+                .coin_input(AssetId::BASE, 1000)
+                .variable_output(Default::default())
+                .coin_output(AssetId::BASE, 1000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let producer = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            assert!(producer
+                .execute(ExecutionBlock::Production(block.into()))
+                .await
+                .is_ok());
         }
 
         #[tokio::test]
