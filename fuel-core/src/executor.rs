@@ -7,6 +7,7 @@ use crate::{
         },
         transaction::TransactionIndex,
         transactional::DatabaseTransaction,
+        vm_database::VmDatabase,
         Database,
     },
     model::{
@@ -281,15 +282,6 @@ impl Executor {
             }
         };
 
-        // Insert the current headers (including time, block height into the db tx)
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .insert(
-                &Bytes32::zeroed(), // use id of zero as current block
-                &block.to_partial_db_block(),
-            )?;
-
         // Skip `coinbase` from execution.
         let tx_iter = block.transactions.iter_mut().enumerate().skip(1);
 
@@ -357,6 +349,7 @@ impl Executor {
             };
         }
 
+        // After the execution of all transactions in production mode, we can set the final fee.
         if let ExecutionKind::Production = execution_kind {
             coinbase_tx.outputs_mut().clear();
             coinbase_tx.outputs_mut().push(Output::coin(
@@ -373,13 +366,6 @@ impl Executor {
             Some(execution_data.coinbase),
         )?;
         self.apply_coinbase(coinbase_tx, block, execution_data, block_db_transaction)?;
-
-        // Clean up unfinalized headers (block height + time + producer) that we inserted above
-        // for transaction execution.
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .remove(&Bytes32::zeroed())?;
 
         Ok(data)
     }
@@ -507,10 +493,15 @@ impl Executor {
         // execute transaction
         // setup database view that only lives for the duration of vm execution
         let mut sub_block_db_commit = block_db_transaction.transaction();
-        let sub_db_view = sub_block_db_commit.deref_mut();
+        let sub_db_view = sub_block_db_commit.as_mut();
         // execution vm
-        let mut vm = Interpreter::with_storage(
+        let vm_db = VmDatabase::new(
             sub_db_view.clone(),
+            &header.consensus,
+            self.config.block_producer.coinbase_recipient,
+        );
+        let mut vm = Interpreter::with_storage(
+            vm_db,
             self.config.chain_conf.transaction_parameters,
         );
         let vm_result: StateTransition<_> = vm
@@ -911,7 +902,7 @@ impl Executor {
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<Tx>(&self, vm: &Interpreter<Database, Tx>, receipts: &[Receipt]) {
+    fn log_backtrace<Tx>(&self, vm: &Interpreter<VmDatabase, Tx>, receipts: &[Receipt]) {
         if self.config.vm.backtrace {
             if let Some(backtrace) = receipts
                 .iter()
@@ -1154,8 +1145,8 @@ mod tests {
         common::{
             fuel_asm::Opcode,
             fuel_crypto::SecretKey,
+            fuel_tx,
             fuel_tx::{
-                self,
                 field::Outputs,
                 Buildable,
                 Chargeable,
@@ -1517,6 +1508,35 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn execute_cb_command() {
+            let script = TxBuilder::new(2322u64)
+                .gas_limit(1000)
+                // Set a price for the test
+                .gas_price(0)
+                .start_script(vec![Opcode::CB(0x12), Opcode::RET(REG_ONE)], vec![])
+                .coin_input(AssetId::BASE, 1000)
+                .variable_output(Default::default())
+                .coin_output(AssetId::BASE, 1000)
+                .change_output(AssetId::BASE)
+                .build()
+                .transaction()
+                .clone();
+
+            let producer = Executor {
+                database: Default::default(),
+                config: Config::local_node(),
+            };
+
+            let mut block = FuelBlock::default();
+            *block.transactions_mut() = vec![script.into()];
+
+            assert!(producer
+                .execute(ExecutionBlock::Production(block.into()))
+                .await
+                .is_ok());
+        }
+
+        #[tokio::test]
         async fn invalidate_is_not_first() {
             let mint = Transaction::mint(TxPointer::new(0, 1), vec![]);
 
@@ -1650,13 +1670,19 @@ mod tests {
 
         #[tokio::test]
         async fn invalidate_more_than_one_mint_is_not_allowed() {
-            let mint = Transaction::mint(
-                TxPointer::new(0, 0),
-                vec![Output::coin(Address::zeroed(), 0, AssetId::BASE)],
-            );
-
             let mut block = FuelBlock::default();
-            *block.transactions_mut() = vec![mint.clone().into(), mint.clone().into()];
+            *block.transactions_mut() = vec![
+                Transaction::mint(
+                    TxPointer::new(0, 0),
+                    vec![Output::coin(Address::from([1u8; 32]), 0, AssetId::BASE)],
+                )
+                .into(),
+                Transaction::mint(
+                    TxPointer::new(0, 0),
+                    vec![Output::coin(Address::from([2u8; 32]), 0, AssetId::BASE)],
+                )
+                .into(),
+            ];
 
             let validator = Executor {
                 database: Default::default(),
