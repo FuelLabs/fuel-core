@@ -282,15 +282,6 @@ impl Executor {
             }
         };
 
-        // Insert the current headers (including time, block height into the db tx)
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .insert(
-                &Bytes32::zeroed(), // use id of zero as current block
-                &block.to_partial_db_block(),
-            )?;
-
         // Temporary insert coinbase into the storage because `InterpreterStorage::coinbase`
         // gets coinbase transaction from the storage during execution of `Script`.
         //
@@ -396,13 +387,6 @@ impl Executor {
             Some(execution_data.coinbase),
         )?;
         self.apply_coinbase(coinbase_tx, block, execution_data, block_db_transaction)?;
-
-        // Clean up unfinalized headers (block height + time + producer) that we inserted above
-        // for transaction execution.
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
-            .remove(&Bytes32::zeroed())?;
 
         Ok(data)
     }
