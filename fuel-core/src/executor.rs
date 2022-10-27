@@ -1694,13 +1694,19 @@ mod tests {
 
         #[tokio::test]
         async fn invalidate_more_than_one_mint_is_not_allowed() {
-            let mint = Transaction::mint(
-                TxPointer::new(0, 0),
-                vec![Output::coin(Address::zeroed(), 0, AssetId::BASE)],
-            );
-
             let mut block = FuelBlock::default();
-            *block.transactions_mut() = vec![mint.clone().into(), mint.clone().into()];
+            *block.transactions_mut() = vec![
+                Transaction::mint(
+                    TxPointer::new(0, 0),
+                    vec![Output::coin(Address::from([1u8; 32]), 0, AssetId::BASE)],
+                )
+                .into(),
+                Transaction::mint(
+                    TxPointer::new(0, 0),
+                    vec![Output::coin(Address::from([2u8; 32]), 0, AssetId::BASE)],
+                )
+                .into(),
+            ];
 
             let validator = Executor {
                 database: Default::default(),
