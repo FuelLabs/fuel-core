@@ -68,7 +68,7 @@ impl Contract {
         let (salt, _) = db
             .storage::<ContractsInfo>()
             .get(&contract_id)?
-            .ok_or(anyhow!("Contract does not exist"))?
+            .ok_or_else(|| anyhow!("Contract does not exist"))?
             .into_owned();
 
         let cleaned_salt: Salt = salt.into();
