@@ -410,10 +410,14 @@ impl Executor {
                 },
             ),
         );
-        block_db_transaction
+        if block_db_transaction
             .deref_mut()
             .storage::<Transactions>()
-            .insert(&coinbase_id, &coinbase_tx.into())?;
+            .insert(&coinbase_id, &coinbase_tx.into())?
+            .is_some()
+        {
+            return Err(Error::TransactionIdCollision(coinbase_id))
+        }
         Ok(())
     }
 
