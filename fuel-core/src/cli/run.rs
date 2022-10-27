@@ -2,7 +2,10 @@ use crate::{
     cli::DEFAULT_DB_PATH,
     FuelService,
 };
-use anyhow::Context;
+use anyhow::{
+    anyhow,
+    Context,
+};
 use clap::Parser;
 use fuel_chain_config::ChainConfig;
 use fuel_core::service::{
@@ -13,14 +16,19 @@ use fuel_core::service::{
 };
 use fuel_core_interfaces::{
     common::{
+        fuel_tx::Address,
         prelude::SecretKey,
-        secrecy::Secret,
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
     },
     model::SecretKeyWrapper,
 };
 use std::{
     env,
     net,
+    ops::Deref,
     path::PathBuf,
     str::FromStr,
 };
@@ -89,6 +97,12 @@ pub struct Command {
     #[clap(long = "dev-keys", default_value = "true")]
     pub consensus_dev_key: bool,
 
+    /// The block's fee recipient public key.
+    ///
+    /// If not set, `consensus_key` is used as the provider of the `Address`.
+    #[clap(long = "coinbase-recipient")]
+    pub coinbase_recipient: Option<String>,
+
     #[cfg(feature = "relayer")]
     #[clap(flatten)]
     pub relayer_args: relayer::RelayerArgs,
@@ -112,6 +126,7 @@ impl Command {
             min_gas_price,
             consensus_key,
             consensus_dev_key,
+            coinbase_recipient,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
@@ -129,7 +144,6 @@ impl Command {
         };
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
-        let consensus_params = chain_conf.transaction_parameters;
         // if consensus key is not configured, fallback to dev consensus key
         let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
             if consensus_dev_key {
@@ -144,6 +158,18 @@ impl Command {
                 None
             }
         });
+
+        let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
+            Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
+        } else {
+            let consensus_key = consensus_key
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| Secret::new(SecretKeyWrapper::default()));
+
+            let sk = consensus_key.expose_secret().deref();
+            Address::from(*sk.public_key().hash())
+        };
 
         Ok(Config {
             addr,
@@ -163,7 +189,7 @@ impl Command {
             block_importer: Default::default(),
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
-                consensus_params,
+                coinbase_recipient,
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]

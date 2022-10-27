@@ -134,7 +134,7 @@ impl SubmittedStatus {
 pub struct SuccessStatus {
     block_id: fuel_core_interfaces::model::BlockId,
     time: DateTime<Utc>,
-    result: VmProgramState,
+    result: Option<VmProgramState>,
 }
 
 #[Object]
@@ -154,8 +154,8 @@ impl SuccessStatus {
         self.time
     }
 
-    async fn program_state(&self) -> ProgramState {
-        self.result.into()
+    async fn program_state(&self) -> Option<ProgramState> {
+        self.result.map(Into::into)
     }
 }
 

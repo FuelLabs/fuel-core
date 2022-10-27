@@ -606,7 +606,7 @@ type SubmittedStatus {
 type SuccessStatus {
 	block: Block!
 	time: DateTime!
-	programState: ProgramState!
+	programState: ProgramState
 }
 
 input TimeParameters {

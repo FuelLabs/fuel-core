@@ -146,13 +146,17 @@ impl Trait for Producer {
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
-        let res = self
+        let res: Vec<_> = self
             .executor
             .dry_run(ExecutionBlock::Production(block), utxo_validation)
-            .await?;
-        res.into_iter()
-            .next()
-            .ok_or_else(|| anyhow!("Expected at least one set of receipts"))
+            .await?
+            .into_iter()
+            .flatten()
+            .collect();
+        if res.is_empty() {
+            return Err(anyhow!("Expected at least one set of receipts"))
+        }
+        Ok(res)
     }
 }
 

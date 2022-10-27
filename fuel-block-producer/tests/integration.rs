@@ -148,8 +148,8 @@ async fn block_producer() -> Result<()> {
 
     let block_producer = Producer {
         config: fuel_block_producer::config::Config {
-            consensus_params,
             utxo_validation: true,
+            coinbase_recipient: Address::default(),
         },
         db: Box::new(mock_db.clone()),
         txpool: Box::new(TxPoolAdapter {

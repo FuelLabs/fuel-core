@@ -113,6 +113,14 @@ pub enum Error {
     FeeOverflow,
     #[error("Not supported transaction: {0:?}")]
     NotSupportedTransaction(Box<Transaction>),
+    #[error("The first transaction in the block is not `Mint` - coinbase.")]
+    CoinbaseIsNotFirstTransaction,
+    #[error("Coinbase should have one output.")]
+    CoinbaseSeveralOutputs,
+    #[error("Coinbase outputs is invalid.")]
+    CoinbaseOutputIsInvalid,
+    #[error("Coinbase amount mismatches with expected.")]
+    CoinbaseAmountMismatch,
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]

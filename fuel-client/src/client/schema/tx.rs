@@ -183,7 +183,7 @@ pub struct SubmittedStatus {
 pub struct SuccessStatus {
     pub block: BlockIdFragment,
     pub time: super::DateTime,
-    pub program_state: ProgramState,
+    pub program_state: Option<ProgramState>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

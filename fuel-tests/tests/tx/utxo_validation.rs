@@ -293,7 +293,12 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
     let included_txs: HashSet<Bytes32> = total_blocks
         .results
         .iter()
-        .flat_map(|b| b.transactions.iter().map(|t| t.id.clone().into()))
+        .flat_map(|b| {
+            b.transactions
+                .iter()
+                .skip(1 /* coinbase */)
+                .map(|t| t.id.clone().into())
+        })
         .dedup_with_count()
         .map(|(count, id)| {
             assert_eq!(count, 1, "duplicate tx detected {}", id);
