@@ -7,6 +7,7 @@ use crate::{
         },
         transaction::TransactionIndex,
         transactional::DatabaseTransaction,
+        vm_database::VmDatabase,
         Database,
     },
     model::{
@@ -527,8 +528,13 @@ impl Executor {
         let mut sub_block_db_commit = block_db_transaction.transaction();
         let sub_db_view = sub_block_db_commit.deref_mut();
         // execution vm
-        let mut vm = Interpreter::with_storage(
+        let vm_db = VmDatabase::new(
             sub_db_view.clone(),
+            &header.consensus,
+            self.config.block_producer.coinbase_recipient,
+        );
+        let mut vm = Interpreter::with_storage(
+            vm_db,
             self.config.chain_conf.transaction_parameters,
         );
         let vm_result: StateTransition<_> = vm
@@ -929,7 +935,7 @@ impl Executor {
     }
 
     /// Log a VM backtrace if configured to do so
-    fn log_backtrace<Tx>(&self, vm: &Interpreter<Database, Tx>, receipts: &[Receipt]) {
+    fn log_backtrace<Tx>(&self, vm: &Interpreter<VmDatabase, Tx>, receipts: &[Receipt]) {
         if self.config.vm.backtrace {
             if let Some(backtrace) = receipts
                 .iter()

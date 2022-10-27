@@ -13,7 +13,6 @@ use crate::{
         IterDirection,
     },
 };
-use anyhow::Context;
 use async_trait::async_trait;
 use fuel_block_producer::db::BlockProducerDatabase;
 use fuel_chain_config::{
@@ -23,24 +22,10 @@ use fuel_chain_config::{
 };
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
-    common::{
-        fuel_asm::Word,
-        fuel_storage::{
-            StorageAsMut,
-            StorageAsRef,
-        },
-        fuel_tx::{
-            field::Outputs,
-            ContractId,
-            Output,
-        },
-        fuel_vm::prelude::{
-            Address,
-            Bytes32,
-            InterpreterStorage,
-        },
+    common::fuel_storage::{
+        StorageAsMut,
+        StorageAsRef,
     },
-    db::Transactions,
     model::{
         BlockHeight,
         BlockId,
@@ -92,6 +77,7 @@ pub mod resource;
 pub mod storage;
 pub mod transaction;
 pub mod transactional;
+pub mod vm_database;
 
 /// Database tables column ids.
 #[repr(u32)]
@@ -330,83 +316,6 @@ impl BlockDb for Database {
     }
 }
 
-impl InterpreterStorage for Database {
-    type DataError = Error;
-
-    fn block_height(&self) -> Result<u32, Error> {
-        let height = self.get_block_height()?.unwrap_or_default();
-        Ok(height.into())
-    }
-
-    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
-        self.block_time(height)?
-            .timestamp_millis()
-            .try_into()
-            .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
-    }
-
-    fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
-        let hash = self.get_block_id(block_height.into())?.unwrap_or_default();
-        Ok(hash)
-    }
-
-    fn coinbase(&self) -> Result<Address, Error> {
-        let current_block = self
-            .get_current_block()?
-            .ok_or(KvStoreError::NotFound)
-            .with_context(|| "no current block was found")?;
-
-        let coinbase_tx_id = current_block
-            .transactions
-            .get(0)
-            .ok_or(KvStoreError::NotFound)?;
-        let coinbase_tx = self
-            .storage::<Transactions>()
-            .get(coinbase_tx_id)?
-            .ok_or(KvStoreError::NotFound)?;
-
-        let coin = coinbase_tx
-            .as_mint()
-            .ok_or(KvStoreError::NotFound)?
-            .outputs()
-            .first()
-            .ok_or(KvStoreError::NotFound)?;
-
-        if let Output::Coin { to, .. } = coin {
-            Ok(*to)
-        } else {
-            Err(KvStoreError::NotFound.into())
-        }
-    }
-
-    fn merkle_contract_state_range(
-        &self,
-        _id: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
-    ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        unimplemented!()
-    }
-
-    fn merkle_contract_state_insert_range(
-        &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _values: &[Bytes32],
-    ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
-    }
-
-    fn merkle_contract_state_remove_range(
-        &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
-    ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
-    }
-}
-
 impl TxPoolDb for Database {
     fn current_block_height(&self) -> Result<BlockHeight, KvStoreError> {
         self.get_block_height()
@@ -420,7 +329,9 @@ impl BlockProducerDatabase for Database {
         &self,
         fuel_height: BlockHeight,
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
-        let id = self.block_hash(fuel_height.into())?;
+        let id = self
+            .get_block_id(fuel_height)?
+            .ok_or(KvStoreError::NotFound)?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
