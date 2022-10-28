@@ -64,6 +64,7 @@ pub struct VmBench {
     pub maturity: Word,
     pub height: Word,
     pub prepare_script: Vec<Opcode>,
+    pub cleanup_script: Vec<Opcode>,
     pub data: Vec<u8>,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
@@ -80,6 +81,7 @@ pub struct VmBench {
 pub struct VmBenchPrepared {
     pub vm: Interpreter<Database>,
     pub instruction: Instruction,
+    pub cleanup_script: Vec<Instruction>,
 }
 
 impl VmBench {
@@ -88,7 +90,7 @@ impl VmBench {
 
     pub fn new(instruction: Opcode) -> Self {
         Self {
-            params: ConsensusParameters{
+            params: ConsensusParameters {
                 max_gas_per_tx: u64::MAX - 1000,
                 ..Default::default()
             },
@@ -97,6 +99,7 @@ impl VmBench {
             maturity: 0,
             height: 0,
             prepare_script: vec![],
+            cleanup_script: vec![],
             data: vec![],
             inputs: vec![],
             outputs: vec![],
@@ -206,6 +209,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_cleanup(mut self, cleanup_script: Vec<Opcode>) -> Self {
+        self.cleanup_script = cleanup_script;
+        self
+    }
+
     pub fn with_data(mut self, data: Vec<u8>) -> Self {
         self.data = data;
         self
@@ -259,6 +267,7 @@ impl VmBenchPrepared {
         let Self {
             mut vm,
             instruction,
+            cleanup_script: _,
         } = self;
 
         match OpcodeRepr::from_u8(instruction.op()) {
@@ -286,6 +295,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             maturity,
             height,
             prepare_script,
+            cleanup_script,
             data,
             inputs,
             outputs,
@@ -389,6 +399,8 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let instruction = Instruction::from(instruction);
 
+        let cleanup_script = cleanup_script.into_iter().map(Instruction::from).collect();
+
         let mut txtor = Transactor::new(db, params);
 
         txtor.transact(tx);
@@ -402,6 +414,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         }
 
-        Ok(Self { vm, instruction })
+        Ok(Self {
+            vm,
+            instruction,
+            cleanup_script,
+        })
     }
 }

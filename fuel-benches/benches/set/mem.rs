@@ -6,38 +6,29 @@ use fuel_core_benches::*;
 pub fn run(c: &mut Criterion) {
     let mut group = c.benchmark_group("mem");
 
-    let linear = vec![1, 10, 100, 1_000, 10_000, 100_000];
+    // let linear = vec![1, 10, 100, 1_000, 10_000, 100_000];
+    // let linear = vec![100_000];
+    let linear = vec![1, 10, 25, 50, 75, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1_000];
 
-    // for i in &linear {
-    //     run_group_ref(
-    //         &mut group,
-    //         format!("aloc ({})", i),
-    //         VmBench::new(Opcode::ALOC(0x10))
-    //             .with_prepare_script(vec![Opcode::MOVI(0x10, *i)]),
-    //     );
-    // }
+    run_group_ref(
+        &mut group,
+        format!("aloc ({})", 1),
+        VmBench::new(Opcode::ALOC(0x10)).with_prepare_script(vec![Opcode::MOVI(0x10, 1)]),
+    );
 
-    // for i in &linear {
-    //     run_group_ref(
-    //         &mut group,
-    //         format!("cfei ({})", i),
-    //         VmBench::new(Opcode::CFEI(*i)),
-    //     );
-    // }
+    for i in &linear {
+        run_group_ref(
+            &mut group,
+            format!("cfei ({})", i),
+            VmBench::new(Opcode::CFEI(*i)).with_cleanup(vec![Opcode::CFSI(*i)]),
+        );
+    }
 
-    // for i in &linear {
-    //     run_group_ref(
-    //         &mut group,
-    //         format!("cfsi ({})", i),
-    //         VmBench::new(Opcode::CFSI(*i)).with_prepare_script(vec![Opcode::CFEI(*i)]),
-    //     );
-    // }
-
-    // run_group_ref(
-    //     &mut group,
-    //     "lb",
-    //     VmBench::new(Opcode::LB(0x10, REG_ONE, 10)),
-    // );
+    run_group_ref(
+        &mut group,
+        "lb",
+        VmBench::new(Opcode::LB(0x10, REG_ONE, 10)),
+    );
 
     // run_group_ref(
     //     &mut group,

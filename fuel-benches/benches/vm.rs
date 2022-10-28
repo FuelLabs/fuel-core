@@ -40,7 +40,11 @@ where
     let mut i = bench.prepare().expect("failed to prepare bench");
     group.bench_function::<_, _>(id.as_ref(), move |b| {
         b.iter(|| {
-            let VmBenchPrepared { vm, instruction } = &mut i;
+            let VmBenchPrepared {
+                vm,
+                instruction,
+                cleanup_script,
+            } = &mut i;
 
             match OpcodeRepr::from_u8(instruction.op()) {
                 OpcodeRepr::CALL => {
@@ -49,6 +53,11 @@ where
                 }
                 _ => {
                     black_box(vm.instruction(black_box(*instruction)).unwrap());
+                    if !cleanup_script.is_empty() {
+                        for i in cleanup_script {
+                            vm.instruction(*i).unwrap();
+                        }
+                    }
                 }
             }
         })
