@@ -17,4 +17,7 @@ pub trait BlockProducerDatabase:
 {
     /// fetch previously committed block at given height
     fn get_block(&self, fuel_height: BlockHeight) -> Result<Option<Cow<FuelBlockDb>>>;
+
+    /// Fetch the current block height
+    fn current_block_height(&self) -> Result<BlockHeight>;
 }

@@ -1,18 +1,25 @@
 ---
 source: fuel-client/src/client/schema/block.rs
-assertion_line: 102
 expression: operation.query
-
 ---
 query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
   blocks(first: $_0, after: $_1, last: $_2, before: $_3) {
     edges {
       cursor
       node {
-        height
         id
-        time
-        producer
+        header {
+          id
+          daHeight
+          transactionsCount
+          outputMessagesCount
+          transactionsRoot
+          outputMessagesRoot
+          height
+          prevRoot
+          time
+          applicationHash
+        }
         transactions {
           id
         }

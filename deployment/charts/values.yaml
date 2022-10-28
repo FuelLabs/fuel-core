@@ -12,7 +12,6 @@ app:
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
-  predicates: ${fuel_core_predicates}
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}

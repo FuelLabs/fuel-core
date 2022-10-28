@@ -7,9 +7,7 @@ use crate::{
     executor::Executor,
     model::{
         BlockHeight,
-        FuelBlock,
         FuelBlockDb,
-        FuelBlockHeader,
     },
     schema::{
         scalars::{
@@ -30,10 +28,12 @@ use async_graphql::{
         EmptyFields,
     },
     Context,
+    InputObject,
     Object,
 };
 use chrono::{
     DateTime,
+    NaiveDateTime,
     Utc,
 };
 use fuel_core_interfaces::{
@@ -42,7 +42,17 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::Transactions,
-    executor::ExecutionMode,
+    executor::{
+        ExecutionBlock,
+        Executor as ExecutorTrait,
+    },
+    model::{
+        FuelApplicationHeader,
+        FuelBlockHeader,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
+    },
 };
 use itertools::Itertools;
 use std::{
@@ -50,18 +60,25 @@ use std::{
     convert::TryInto,
 };
 
-use super::scalars::Address;
+use super::scalars::Bytes32;
 
-pub struct Block(pub(crate) FuelBlockDb);
+pub struct Block {
+    pub(crate) header: Header,
+    pub(crate) transactions: Vec<fuel_types::Bytes32>,
+}
+
+pub struct Header(pub(crate) FuelBlockHeader);
 
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
-        self.0.id().into()
+        let bytes: fuel_core_interfaces::common::prelude::Bytes32 =
+            self.header.0.id().into();
+        bytes.into()
     }
 
-    async fn height(&self) -> U64 {
-        self.0.header.height.into()
+    async fn header(&self) -> &Header {
+        &self.header
     }
 
     async fn transactions(
@@ -69,8 +86,7 @@ impl Block {
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Vec<Transaction>> {
         let db = ctx.data_unchecked::<Database>().clone();
-        self.0
-            .transactions
+        self.transactions
             .iter()
             .map(|tx_id| {
                 Ok(Transaction(
@@ -82,13 +98,59 @@ impl Block {
             })
             .collect()
     }
+}
 
-    async fn time(&self) -> DateTime<Utc> {
-        self.0.header.time
+#[Object]
+impl Header {
+    /// Hash of the header
+    async fn id(&self) -> BlockId {
+        let bytes: fuel_core_interfaces::common::prelude::Bytes32 = self.0.id().into();
+        bytes.into()
     }
 
-    async fn producer(&self) -> Address {
-        self.0.header.producer.into()
+    /// The layer 1 height of messages and events to include since the last layer 1 block number.
+    async fn da_height(&self) -> U64 {
+        self.0.da_height.0.into()
+    }
+
+    /// Number of transactions in this block.
+    async fn transactions_count(&self) -> U64 {
+        self.0.transactions_count.into()
+    }
+
+    /// Number of output messages in this block.
+    async fn output_messages_count(&self) -> U64 {
+        self.0.output_messages_count.into()
+    }
+
+    /// Merkle root of transactions.
+    async fn transactions_root(&self) -> Bytes32 {
+        self.0.transactions_root.into()
+    }
+
+    /// Merkle root of messages in this block.
+    async fn output_messages_root(&self) -> Bytes32 {
+        self.0.output_messages_root.into()
+    }
+
+    /// Fuel block height.
+    async fn height(&self) -> U64 {
+        (*self.0.height()).into()
+    }
+
+    /// Merkle root of all previous block header hashes.
+    async fn prev_root(&self) -> Bytes32 {
+        (*self.0.prev_root()).into()
+    }
+
+    /// The block producer time.
+    async fn time(&self) -> DateTime<Utc> {
+        *self.0.time()
+    }
+
+    /// Hash of the application header.
+    async fn application_hash(&self) -> Bytes32 {
+        (*self.0.application_hash()).into()
     }
 }
 
@@ -130,7 +192,7 @@ impl BlockQuery {
         let block = db
             .storage::<FuelBlocks>()
             .get(&id)?
-            .map(|b| Block(b.into_owned()));
+            .map(|b| Block::from(b.into_owned()));
         Ok(block)
     }
 
@@ -149,81 +211,8 @@ impl BlockQuery {
             before,
             first,
             last,
-            |after: Option<usize>, before: Option<usize>, first, last| {
-                async move {
-                    let (records_to_fetch, direction) = if let Some(first) = first {
-                        (first, IterDirection::Forward)
-                    } else if let Some(last) = last {
-                        (last, IterDirection::Reverse)
-                    } else {
-                        (0, IterDirection::Forward)
-                    };
-
-                    if (first.is_some() && before.is_some())
-                        || (after.is_some() && before.is_some())
-                        || (last.is_some() && after.is_some())
-                    {
-                        return Err(anyhow!("Wrong argument combination"))
-                    }
-
-                    let start;
-                    let end;
-
-                    if direction == IterDirection::Forward {
-                        start = after;
-                        end = before;
-                    } else {
-                        start = before;
-                        end = after;
-                    }
-
-                    let mut blocks =
-                        db.all_block_ids(start.map(Into::into), Some(direction));
-                    let mut started = None;
-                    if start.is_some() {
-                        // skip initial result
-                        started = blocks.next();
-                    }
-
-                    // take desired amount of results
-                    let blocks = blocks
-                        .take_while(|r| {
-                            if let (Ok(b), Some(end)) = (r, end) {
-                                if b.0.as_usize() == end {
-                                    return false
-                                }
-                            }
-                            true
-                        })
-                        .take(records_to_fetch);
-                    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> =
-                        blocks.try_collect()?;
-                    if direction == IterDirection::Forward {
-                        blocks.reverse();
-                    }
-
-                    // TODO: do a batch get instead
-                    let blocks: Vec<Cow<FuelBlockDb>> = blocks
-                        .iter()
-                        .map(|(_, id)| {
-                            db.storage::<FuelBlocks>()
-                                .get(id)
-                                .transpose()
-                                .ok_or(KvStoreError::NotFound)?
-                        })
-                        .try_collect()?;
-
-                    let mut connection = Connection::new(
-                        started.is_some(),
-                        records_to_fetch <= blocks.len(),
-                    );
-
-                    connection.edges.extend(blocks.into_iter().map(|item| {
-                        Edge::new(item.header.height.to_usize(), Block(item.into_owned()))
-                    }));
-
-                    Ok::<Connection<usize, Block>, anyhow::Error>(connection)
-                }
+            |after: Option<usize>, before: Option<usize>, first, last| async move {
+                blocks_query(db, first, after, last, before)
             },
         )
         .await
@@ -231,7 +220,135 @@ impl BlockQuery {
 }
 
 #[derive(Default)]
+pub struct HeaderQuery;
+
+#[Object]
+impl HeaderQuery {
+    async fn header(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "ID of the block")] id: Option<BlockId>,
+        #[graphql(desc = "Height of the block")] height: Option<U64>,
+    ) -> async_graphql::Result<Option<Header>> {
+        Ok(BlockQuery {}
+            .block(ctx, id, height)
+            .await?
+            .map(|b| b.header))
+    }
+
+    async fn headers(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<i32>,
+        after: Option<String>,
+        last: Option<i32>,
+        before: Option<String>,
+    ) -> async_graphql::Result<Connection<usize, Header, EmptyFields, EmptyFields>> {
+        let db = ctx.data_unchecked::<Database>().clone();
+
+        query(
+            after,
+            before,
+            first,
+            last,
+            |after: Option<usize>, before: Option<usize>, first, last| async move {
+                blocks_query(db, first, after, last, before)
+            },
+        )
+        .await
+    }
+}
+
+fn blocks_query<T>(
+    db: Database,
+    first: Option<usize>,
+    after: Option<usize>,
+    last: Option<usize>,
+    before: Option<usize>,
+) -> anyhow::Result<Connection<usize, T, EmptyFields, EmptyFields>>
+where
+    T: async_graphql::OutputType,
+    T: From<FuelBlockDb>,
+{
+    let (records_to_fetch, direction) = if let Some(first) = first {
+        (first, IterDirection::Forward)
+    } else if let Some(last) = last {
+        (last, IterDirection::Reverse)
+    } else {
+        (0, IterDirection::Forward)
+    };
+
+    if (first.is_some() && before.is_some())
+        || (after.is_some() && before.is_some())
+        || (last.is_some() && after.is_some())
+    {
+        return Err(anyhow!("Wrong argument combination"))
+    }
+
+    let start;
+    let end;
+
+    if direction == IterDirection::Forward {
+        start = after;
+        end = before;
+    } else {
+        start = before;
+        end = after;
+    }
+
+    let mut blocks = db.all_block_ids(start.map(Into::into), Some(direction));
+    let mut started = None;
+    if start.is_some() {
+        // skip initial result
+        started = blocks.next();
+    }
+
+    // take desired amount of results
+    let blocks = blocks
+        .take_while(|r| {
+            if let (Ok(b), Some(end)) = (r, end) {
+                if b.0.as_usize() == end {
+                    return false
+                }
+            }
+            true
+        })
+        .take(records_to_fetch);
+    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
+    if direction == IterDirection::Forward {
+        blocks.reverse();
+    }
+
+    // TODO: do a batch get instead
+    let blocks: Vec<Cow<FuelBlockDb>> = blocks
+        .iter()
+        .map(|(_, id)| {
+            db.storage::<FuelBlocks>()
+                .get(id)
+                .transpose()
+                .ok_or(KvStoreError::NotFound)?
+        })
+        .try_collect()?;
+
+    let mut connection =
+        Connection::new(started.is_some(), records_to_fetch <= blocks.len());
+
+    connection.edges.extend(blocks.into_iter().map(|item| {
+        Edge::new(item.header.height().to_usize(), T::from(item.into_owned()))
+    }));
+
+    Ok::<Connection<usize, T>, anyhow::Error>(connection)
+}
+#[derive(Default)]
 pub struct BlockMutation;
+
+#[derive(InputObject)]
+struct TimeParameters {
+    /// The time to set on the first block
+    start_time: U64,
+    /// The time interval between subsequent blocks
+    block_time_interval: U64,
+}
 
 #[Object]
 impl BlockMutation {
@@ -239,6 +356,7 @@ impl BlockMutation {
         &self,
         ctx: &Context<'_>,
         blocks_to_produce: U64,
+        time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
         let cfg = ctx.data_unchecked::<Config>().clone();
@@ -248,36 +366,118 @@ impl BlockMutation {
                 anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
             )
         }
+        // todo!("trigger block production manually");
 
         let executor = Executor {
             database: db.clone(),
             config: cfg.clone(),
         };
 
-        let iterate: u64 = blocks_to_produce.into();
+        let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
 
-        for _ in 0..iterate {
+        for idx in 0..blocks_to_produce.0 {
             let current_height = db.get_block_height()?.unwrap_or_default();
-            let current_hash = db.get_block_id(current_height)?.unwrap_or_default();
             let new_block_height = current_height + 1u32.into();
 
-            let mut block = FuelBlock {
-                header: FuelBlockHeader {
-                    height: new_block_height,
-                    parent_hash: current_hash,
-                    time: Utc::now(),
-                    ..Default::default()
+            let block = PartialFuelBlock::new(
+                PartialFuelBlockHeader {
+                    consensus: FuelConsensusHeader {
+                        height: new_block_height,
+                        time: block_time(idx),
+                        prev_root: Default::default(),
+                        generated: Default::default(),
+                    },
+                    application: FuelApplicationHeader {
+                        da_height: Default::default(),
+                        generated: Default::default(),
+                    },
+                    metadata: Default::default(),
                 },
-                transactions: vec![],
-            };
+                vec![],
+            );
 
-            executor
-                .execute(&mut block, ExecutionMode::Production)
-                .await?;
+            executor.execute(ExecutionBlock::Production(block)).await?;
         }
 
         db.get_block_height()?
             .map(|new_height| Ok(new_height.into()))
             .ok_or("Block height not found")?
+    }
+}
+
+fn get_time_closure(
+    db: &Database,
+    time_parameters: Option<TimeParameters>,
+    blocks_to_produce: u64,
+) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>> {
+    if let Some(params) = time_parameters {
+        check_start_after_latest_block(db, params.start_time.0)?;
+        check_block_time_overflow(&params, blocks_to_produce)?;
+
+        return Ok(Box::new(move |idx: u64| {
+            let (timestamp, _) = params
+                .start_time
+                .0
+                .overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
+            let naive = NaiveDateTime::from_timestamp(timestamp as i64, 0);
+
+            DateTime::from_utc(naive, Utc)
+        }))
+    };
+
+    Ok(Box::new(|_| Utc::now()))
+}
+
+fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
+    let current_height = db.get_block_height()?.unwrap_or_default();
+
+    if current_height.as_usize() == 0 {
+        return Ok(())
+    }
+
+    let latest_time = db.block_time(current_height.into())?.timestamp();
+    if latest_time as u64 > start_time {
+        return Err(anyhow!(
+            "The start time must be set after the latest block time: {}",
+            latest_time
+        ))
+    }
+
+    Ok(())
+}
+
+fn check_block_time_overflow(
+    params: &TimeParameters,
+    blocks_to_produce: u64,
+) -> anyhow::Result<()> {
+    let (final_offset, overflow_mul) = params
+        .block_time_interval
+        .0
+        .overflowing_mul(blocks_to_produce);
+    let (_, overflow_add) = params.start_time.0.overflowing_add(final_offset);
+
+    if overflow_mul || overflow_add {
+        return Err(anyhow!("The provided time parameters lead to an overflow"))
+    };
+
+    Ok(())
+}
+
+impl From<FuelBlockDb> for Block {
+    fn from(block: FuelBlockDb) -> Self {
+        let FuelBlockDb {
+            header,
+            transactions,
+        } = block;
+        Block {
+            header: Header(header),
+            transactions,
+        }
+    }
+}
+
+impl From<FuelBlockDb> for Header {
+    fn from(block: FuelBlockDb) -> Self {
+        Header(block.header)
     }
 }

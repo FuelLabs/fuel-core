@@ -36,6 +36,9 @@ pub struct Config {
     /// How often progress logs are printed when the DA node is
     /// syncing.
     pub syncing_log_frequency: Duration,
+
+    /// Enables metrics on this fuel service
+    pub metrics: bool,
 }
 
 #[allow(missing_docs)]
@@ -62,6 +65,7 @@ impl Default for Config {
             sync_minimum_duration: Self::DEFAULT_SYNC_MINIMUM_DURATION,
             syncing_call_frequency: Self::DEFAULT_SYNCING_CALL_FREQ,
             syncing_log_frequency: Self::DEFAULT_SYNCING_LOG_FREQ,
+            metrics: false,
         }
     }
 }

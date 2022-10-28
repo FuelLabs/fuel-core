@@ -3,9 +3,11 @@
 use crate::helpers::TestSetupBuilder;
 use fuel_core_interfaces::common::{
     fuel_tx::{
+        field::Outputs,
         Input,
         Output,
         TransactionBuilder,
+        UniqueIdentifier,
     },
     fuel_vm::{
         consts::{
@@ -50,7 +52,7 @@ async fn transaction_with_predicates_is_rejected_when_feature_disabled() {
     .finalize()
     .await;
 
-    let result = context.client.submit(&predicate_tx).await;
+    let result = context.client.submit(&predicate_tx.into()).await;
     assert!(result.is_err());
 }
 
@@ -87,19 +89,24 @@ async fn transaction_with_predicate_is_executed_when_feature_enabled() {
     .finalize()
     .await;
 
-    let transaction_id = context.client.submit(&predicate_tx).await.unwrap();
+    let predicate_tx = predicate_tx.into();
+    context
+        .client
+        .submit_and_await_commit(&predicate_tx)
+        .await
+        .unwrap();
 
     // check transaction change amount to see if predicate was spent
     let transaction = context
         .client
-        .transaction(&transaction_id.to_string())
+        .transaction(&predicate_tx.id().to_string())
         .await
         .unwrap()
         .unwrap()
         .transaction;
 
     assert!(
-        matches!(transaction.outputs()[0], Output::Change { amount: change_amount, .. } if change_amount == amount)
+        matches!(transaction.as_script().unwrap().outputs()[0], Output::Change { amount: change_amount, .. } if change_amount == amount)
     )
 }
 
@@ -136,7 +143,7 @@ async fn transaction_with_invalid_predicate_is_rejected_when_feature_is_enabled(
     .finalize()
     .await;
 
-    let result = context.client.submit(&predicate_tx).await;
+    let result = context.client.submit(&predicate_tx.into()).await;
 
     assert!(result.is_err())
 }

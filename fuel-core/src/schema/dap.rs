@@ -1,6 +1,7 @@
 use crate::{
     database::{
         transactional::DatabaseTransaction,
+        vm_database::VmDatabase,
         Database,
     },
     schema::scalars::U64,
@@ -11,15 +12,19 @@ use async_graphql::{
     SchemaBuilder,
     ID,
 };
-use fuel_core_interfaces::common::{
-    fuel_tx::ConsensusParameters,
-    fuel_vm::{
-        consts,
-        prelude::*,
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx::ConsensusParameters,
+        fuel_vm::{
+            consts,
+            prelude::*,
+        },
     },
+    model::FuelBlockDb,
 };
 use futures::lock::Mutex;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     io,
     sync,
@@ -32,8 +37,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Default)]
 pub struct ConcreteStorage {
-    vm: HashMap<ID, Interpreter<Database>>,
-    tx: HashMap<ID, Vec<Transaction>>,
+    vm: HashMap<ID, Interpreter<VmDatabase, Script>>,
+    tx: HashMap<ID, Vec<Script>>,
     db: HashMap<ID, DatabaseTransaction>,
     params: ConsensusParameters,
 }
@@ -63,18 +68,16 @@ impl ConcreteStorage {
 
     pub fn init(
         &mut self,
-        txs: &[Transaction],
+        txs: &[Script],
         storage: DatabaseTransaction,
     ) -> anyhow::Result<ID> {
         let id = Uuid::new_v4();
         let id = ID::from(id);
 
-        let tx = txs.first().cloned().unwrap_or_default();
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            storage.get_block_height()?.unwrap_or_default().into(),
-            &self.params,
-        )?;
+        let vm_database = Self::vm_database(&storage)?;
+        let tx = Script::default();
+        let checked_tx =
+            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
         self.tx
             .get_mut(&id)
             .map(|tx| tx.extend_from_slice(txs))
@@ -82,7 +85,7 @@ impl ConcreteStorage {
                 self.tx.insert(id.clone(), txs.to_owned());
             });
 
-        let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
+        let mut vm = Interpreter::with_storage(vm_database, self.params);
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm);
         self.db.insert(id.clone(), storage);
@@ -97,6 +100,7 @@ impl ConcreteStorage {
     }
 
     pub fn reset(&mut self, id: &ID, storage: DatabaseTransaction) -> anyhow::Result<()> {
+        let vm_database = Self::vm_database(&storage)?;
         let tx = self
             .tx
             .get(id)
@@ -104,13 +108,10 @@ impl ConcreteStorage {
             .cloned()
             .unwrap_or_default();
 
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            storage.get_block_height()?.unwrap_or_default().into(),
-            &self.params,
-        )?;
+        let checked_tx =
+            tx.into_checked_basic(vm_database.block_height() as Word, &self.params)?;
 
-        let mut vm = Interpreter::with_storage(storage.as_ref().clone(), self.params);
+        let mut vm = Interpreter::with_storage(vm_database, self.params);
         vm.transact(checked_tx)?;
         self.vm.insert(id.clone(), vm).ok_or_else(|| {
             InterpreterError::Io(io::Error::new(
@@ -134,6 +135,24 @@ impl ConcreteStorage {
                     "The VM instance was not found",
                 ))
             })
+    }
+
+    fn vm_database(
+        storage: &DatabaseTransaction,
+    ) -> Result<VmDatabase, InterpreterError> {
+        let block = storage
+            .get_current_block()?
+            .unwrap_or_else(|| Cow::Owned(FuelBlockDb::fix_me_default_block()))
+            .into_owned();
+
+        let vm_database = VmDatabase::new(
+            storage.as_ref().clone(),
+            &block.header.consensus,
+            // TODO: Use a real coinbase address
+            Address::zeroed(),
+        );
+
+        Ok(vm_database)
     }
 }
 
@@ -319,51 +338,74 @@ impl DapMutation {
 
         let db = locked.db.get(&id).ok_or("Invalid debugging session ID")?;
 
-        let checked_tx = CheckedTransaction::check_unsigned(
-            tx,
-            db.get_block_height()?.unwrap_or_default().into(),
-            &locked.params,
-        )?;
+        let checked_tx = tx
+            .into_checked_basic(
+                db.get_block_height()?.unwrap_or_default().into(),
+                &locked.params,
+            )?
+            .into();
 
         let vm = locked
             .vm
             .get_mut(&id)
             .ok_or_else(|| async_graphql::Error::new("VM not found"))?;
 
-        let state_ref = vm.transact(checked_tx).map_err(|err| {
-            async_graphql::Error::new(format!("Transaction failed: {err:?}"))
-        })?;
+        match checked_tx {
+            CheckedTransaction::Script(script) => {
+                let state_ref = vm.transact(script).map_err(|err| {
+                    async_graphql::Error::new(format!("Transaction failed: {err:?}"))
+                })?;
 
-        let json_receipts = state_ref
-            .receipts()
-            .iter()
-            .map(|r| serde_json::to_string(&r).expect("JSON serialization failed"))
-            .collect();
+                let json_receipts = state_ref
+                    .receipts()
+                    .iter()
+                    .map(|r| {
+                        serde_json::to_string(&r).expect("JSON serialization failed")
+                    })
+                    .collect();
 
-        #[cfg(feature = "debug")]
-        {
-            let dbgref = state_ref.state().debug_ref();
-            Ok(self::gql_types::RunResult {
-                state: match dbgref {
-                    Some(_) => self::gql_types::RunState::Breakpoint,
-                    None => self::gql_types::RunState::Completed,
-                },
-                breakpoint: dbgref.and_then(|d| match d {
-                    DebugEval::Continue => None,
-                    DebugEval::Breakpoint(bp) => Some(bp.into()),
-                }),
-                json_receipts,
-            })
-        }
+                #[cfg(feature = "debug")]
+                {
+                    let dbgref = state_ref.state().debug_ref();
+                    Ok(self::gql_types::RunResult {
+                        state: match dbgref {
+                            Some(_) => self::gql_types::RunState::Breakpoint,
+                            None => self::gql_types::RunState::Completed,
+                        },
+                        breakpoint: dbgref.and_then(|d| match d {
+                            DebugEval::Continue => None,
+                            DebugEval::Breakpoint(bp) => Some(bp.into()),
+                        }),
+                        json_receipts,
+                    })
+                }
 
-        #[cfg(not(feature = "debug"))]
-        {
-            let _ = state_ref;
-            Ok(self::gql_types::RunResult {
-                state: self::gql_types::RunState::Completed,
-                breakpoint: None,
-                json_receipts,
-            })
+                #[cfg(not(feature = "debug"))]
+                {
+                    let _ = state_ref;
+                    Ok(self::gql_types::RunResult {
+                        state: self::gql_types::RunState::Completed,
+                        breakpoint: None,
+                        json_receipts,
+                    })
+                }
+            }
+            CheckedTransaction::Create(create) => {
+                vm.deploy(create).map_err(|err| {
+                    async_graphql::Error::new(format!(
+                        "Transaction deploy failed: {err:?}"
+                    ))
+                })?;
+
+                Ok(self::gql_types::RunResult {
+                    state: self::gql_types::RunState::Completed,
+                    breakpoint: None,
+                    json_receipts: vec![],
+                })
+            }
+            CheckedTransaction::Mint(_) => {
+                Err(async_graphql::Error::new("`Mint` is not supported"))
+            }
         }
     }
 

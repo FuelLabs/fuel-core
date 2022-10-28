@@ -6,14 +6,16 @@ use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
         fuel_tx::{
+            Chargeable,
             Input,
             Output,
+            UniqueIdentifier,
             UtxoId,
         },
         fuel_types::MessageId,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
         Coin,
         CoinStatus,
         TxInfo,
@@ -38,6 +40,8 @@ pub struct Dependency {
     messages: HashMap<MessageId, MessageState>,
     /// max depth of dependency.
     max_depth: usize,
+    /// utxo-validation feature flag
+    utxo_validation: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -83,12 +87,13 @@ pub struct MessageState {
 }
 
 impl Dependency {
-    pub fn new(max_depth: usize) -> Self {
+    pub fn new(max_depth: usize, utxo_validation: bool) -> Self {
         Self {
             coins: HashMap::new(),
             contracts: HashMap::new(),
             messages: HashMap::new(),
             max_depth,
+            utxo_validation,
         }
     }
 
@@ -96,8 +101,8 @@ impl Dependency {
     /// Does not check db. They can be sorted by gasPrice to get order of dependency
     pub(crate) fn find_dependent(
         &self,
-        tx: ArcTx,
-        seen: &mut HashMap<TxId, ArcTx>,
+        tx: ArcPoolTx,
+        seen: &mut HashMap<TxId, ArcPoolTx>,
         txs: &HashMap<TxId, TxInfo>,
     ) {
         // for every input aggregate UtxoId and check if it is inside
@@ -313,7 +318,7 @@ impl Dependency {
         &'a self,
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
-        tx: &'a ArcTx,
+        tx: &'a ArcPoolTx,
     ) -> anyhow::Result<(
         usize,
         HashMap<UtxoId, CoinState>,
@@ -346,7 +351,7 @@ impl Dependency {
                                 .get(spend_by)
                                 .expect("Tx should be always present in txpool");
                             // compare if tx has better price
-                            if txpool_tx.gas_price() > tx.gas_price() {
+                            if txpool_tx.price() > tx.price() {
                                 return Err(Error::NotInsertedCollision(
                                     *spend_by, *utxo_id,
                                 )
@@ -354,14 +359,16 @@ impl Dependency {
                             } else {
                                 if state.is_in_database() {
                                     // this means it is loaded from db. Get tx to compare output.
-                                    let coin = db.utxo(utxo_id)?.ok_or(
-                                        Error::NotInsertedInputUtxoIdNotExisting(
-                                            *utxo_id,
-                                        ),
-                                    )?;
-                                    Self::check_if_coin_input_can_spend_db_coin(
-                                        &coin, input,
-                                    )?;
+                                    if self.utxo_validation {
+                                        let coin = db.utxo(utxo_id)?.ok_or(
+                                            Error::NotInsertedInputUtxoIdNotExisting(
+                                                *utxo_id,
+                                            ),
+                                        )?;
+                                        Self::check_if_coin_input_can_spend_db_coin(
+                                            &coin, input,
+                                        )?;
+                                    }
                                 } else {
                                     // tx output is in pool
                                     let output_tx = txs.get(utxo_id.tx_id()).unwrap();
@@ -377,12 +384,15 @@ impl Dependency {
                         }
                         // if coin is not spend, it will be spend later down the line
                     } else {
-                        // fetch from db and check if tx exist.
-                        let coin = db
-                            .utxo(utxo_id)?
-                            .ok_or(Error::NotInsertedInputUtxoIdNotExisting(*utxo_id))?;
+                        if self.utxo_validation {
+                            // fetch from db and check if tx exist.
+                            let coin = db.utxo(utxo_id)?.ok_or(
+                                Error::NotInsertedInputUtxoIdNotExisting(*utxo_id),
+                            )?;
 
-                        Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                            Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
+                        }
+
                         max_depth = core::cmp::max(1, max_depth);
                         db_coins.insert(
                             *utxo_id,
@@ -400,22 +410,25 @@ impl Dependency {
                     // verify message id integrity
                     Self::check_if_message_input_matches_id(input)?;
                     // since message id is derived, we don't need to double check all the fields
-                    if let Some(msg) = db.message(message_id)? {
-                        // return an error if spent block is set
-                        if msg.fuel_block_spend.is_some() {
+                    if self.utxo_validation {
+                        if let Some(msg) = db.message(message_id)? {
+                            // return an error if spent block is set
+                            if msg.fuel_block_spend.is_some() {
+                                return Err(Error::NotInsertedInputMessageIdSpent(
+                                    *message_id,
+                                )
+                                .into())
+                            }
+                        } else {
                             return Err(
-                                Error::NotInsertedInputMessageIdSpent(*message_id).into()
+                                Error::NotInsertedInputMessageUnknown(*message_id).into()
                             )
                         }
-                    } else {
-                        return Err(
-                            Error::NotInsertedInputMessageUnknown(*message_id).into()
-                        )
                     }
 
                     if let Some(state) = self.messages.get(message_id) {
                         // some other is already attempting to spend this message, compare gas price
-                        if state.gas_price >= tx.gas_price() {
+                        if state.gas_price >= tx.price() {
                             return Err(Error::NotInsertedCollisionMessageId(
                                 state.spent_by,
                                 *message_id,
@@ -429,7 +442,7 @@ impl Dependency {
                         *message_id,
                         MessageState {
                             spent_by: tx.id(),
-                            gas_price: tx.gas_price(),
+                            gas_price: tx.price(),
                         },
                     );
                 }
@@ -437,7 +450,7 @@ impl Dependency {
                     // Does contract exist. We don't need to do any check here other then if contract_id exist or not.
                     if let Some(state) = self.contracts.get(contract_id) {
                         // check if contract is created after this transaction.
-                        if tx.gas_price() > state.gas_price {
+                        if tx.price() > state.gas_price {
                             return Err(Error::NotInsertedContractPricedLower(
                                 *contract_id,
                             )
@@ -486,7 +499,7 @@ impl Dependency {
                         )
                     }
                     // check who is priced more
-                    if contract.gas_price > tx.gas_price() {
+                    if contract.gas_price > tx.price() {
                         // new tx is priced less then current tx
                         return Err(
                             Error::NotInsertedCollisionContractId(*contract_id).into()
@@ -511,8 +524,8 @@ impl Dependency {
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
         db: &dyn TxPoolDb,
-        tx: &'a ArcTx,
-    ) -> anyhow::Result<Vec<ArcTx>> {
+        tx: &'a ArcPoolTx,
+    ) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (max_depth, db_coins, db_contracts, db_messages, collided) =
             self.check_for_collision(txs, db, tx)?;
 
@@ -579,7 +592,7 @@ impl Dependency {
                             depth: max_depth,
                             used_by: HashSet::new(),
                             origin: Some(utxo_id),
-                            gas_price: tx.gas_price(),
+                            gas_price: tx.price(),
                         },
                     );
                 }
@@ -600,8 +613,8 @@ impl Dependency {
     pub(crate) fn recursively_remove_all_dependencies<'a>(
         &'a mut self,
         txs: &'a HashMap<TxId, TxInfo>,
-        tx: ArcTx,
-    ) -> Vec<ArcTx> {
+        tx: ArcPoolTx,
+    ) -> Vec<ArcPoolTx> {
         let mut removed_transactions = vec![tx.clone()];
 
         // recursively remove all transactions that depend on the outputs of the current tx

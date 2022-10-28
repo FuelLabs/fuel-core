@@ -96,7 +96,7 @@ pub async fn start_server(
         ));
 
     let (tx, rx) = tokio::sync::oneshot::channel();
-    let listener = TcpListener::bind(&network_addr)?;
+    let listener = TcpListener::bind(network_addr)?;
     let bound_addr = listener.local_addr().unwrap();
 
     info!("Binding GraphQL provider to {}", bound_addr);

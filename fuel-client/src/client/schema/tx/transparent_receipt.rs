@@ -4,6 +4,7 @@ use crate::client::schema::{
     Address,
     AssetId,
     Bytes32,
+    ContractId,
     ConversionError,
     ConversionError::MissingField,
     HexString,
@@ -42,6 +43,7 @@ pub struct Receipt {
     pub sender: Option<Address>,
     pub recipient: Option<Address>,
     pub nonce: Option<Bytes32>,
+    pub contract_id: Option<ContractId>,
 }
 
 #[derive(cynic::Enum, Clone, Copy, Debug)]
@@ -173,6 +175,7 @@ impl TryFrom<Receipt> for fuel_vm::prelude::Receipt {
                     .is
                     .ok_or_else(|| MissingField("is".to_string()))?
                     .into(),
+                contract_id: schema.contract_id.map(Into::into),
             },
             ReceiptType::Revert => fuel_vm::prelude::Receipt::Revert {
                 id: schema

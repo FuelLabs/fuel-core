@@ -1,12 +1,10 @@
 use crate::{
     db::BlockProducerDatabase,
-    ports::{
-        Relayer,
-        TxPool,
-    },
+    ports::TxPool,
     Config,
 };
 use anyhow::{
+    anyhow,
     Context,
     Result,
 };
@@ -19,25 +17,32 @@ use fuel_core_interfaces::{
             InvalidDaFinalizationState,
             MissingBlock,
         },
+        Relayer,
     },
     common::{
         crypto::ephemeral_merkle_root,
+        fuel_tx::{
+            Receipt,
+            Transaction,
+            Word,
+        },
         fuel_types::Bytes32,
-        prelude::Word,
     },
     executor::{
         Error,
-        ExecutionMode,
+        ExecutionBlock,
         Executor,
     },
     model::{
         BlockHeight,
         DaBlockHeight,
+        FuelApplicationHeader,
         FuelBlock,
-        FuelBlockHeader,
+        FuelConsensusHeader,
+        PartialFuelBlock,
+        PartialFuelBlockHeader,
     },
 };
-use std::ops::Deref;
 use tokio::sync::Mutex;
 use tracing::{
     debug,
@@ -47,19 +52,19 @@ use tracing::{
 #[cfg(test)]
 mod tests;
 
-pub struct Producer<'a> {
+pub struct Producer {
     pub config: Config,
-    pub db: &'a dyn BlockProducerDatabase,
-    pub txpool: &'a dyn TxPool,
-    pub executor: &'a dyn Executor,
-    pub relayer: &'a dyn Relayer,
-    // use a tokio lock since we want callers to yeild until the previous block
+    pub db: Box<dyn BlockProducerDatabase>,
+    pub txpool: Box<dyn TxPool>,
+    pub executor: Box<dyn Executor>,
+    pub relayer: Box<dyn Relayer>,
+    // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
 }
 
 #[async_trait::async_trait]
-impl<'a> Trait for Producer<'a> {
+impl Trait for Producer {
     /// Produces a block for the specified height
     async fn produce_block(
         &self,
@@ -77,35 +82,25 @@ impl<'a> Trait for Producer<'a> {
         // prevent simultaneous block production calls, the guard will drop at the end of this fn.
         let _production_guard = self.lock.lock().await;
 
-        let previous_block_info = self.previous_block_info(height)?;
-        let new_da_height = self.select_new_da_height(previous_block_info.da_height)?;
-
         let best_transactions = self.txpool.get_includable_txs(height, max_gas).await?;
 
-        let header = FuelBlockHeader {
-            height,
-            da_height: new_da_height,
-            parent_hash: previous_block_info.hash,
-            // TODO: this needs to be updated using a proper BMT MMR
-            prev_root: previous_block_info.prev_root,
-            // This will be set by the executor
-            transactions_root: Default::default(),
-            time: Utc::now(),
-            // TODO: producer identity will be removed from the header eventually
-            //       and stored in the sealed block consensus info instead.
-            producer: Default::default(),
-            metadata: None,
-        };
-        let mut block = FuelBlock {
+        let header = self.new_header(height).await?;
+        let block = PartialFuelBlock::new(
             header,
-            transactions: best_transactions
+            best_transactions
                 .into_iter()
-                .map(|tx| tx.deref().clone().into())
+                .map(|tx| tx.as_ref().into())
                 .collect(),
-        };
+        );
+
+        // Store the context string incase we error.
+        let context_string = format!(
+            "Failed to produce block {:?} due to execution failure",
+            block
+        );
         let result = self
             .executor
-            .execute(&mut block, ExecutionMode::Production)
+            .execute(ExecutionBlock::Production(block))
             .await;
 
         if let Err(
@@ -123,22 +118,77 @@ impl<'a> Trait for Producer<'a> {
             );
         }
 
-        let _ = result.context(format!(
-            "Failed to produce block {:?} due to execution failure",
-            block
-        ))?;
+        let block = result.context(context_string)?;
 
         debug!("Produced block: {:?}", &block);
         Ok(block)
     }
+
+    // simulate a transaction without altering any state. Does not aquire the production lock
+    // since it is basically a "read only" operation and shouldn't get in the way of normal
+    // production.
+    async fn dry_run(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Receipt>> {
+        // setup the block with the provided tx and optional height
+        // dry_run execute tx on the executor
+        // return the receipts
+
+        let height = match height {
+            None => self.db.current_block_height()?,
+            Some(height) => height,
+        } + 1u64.into();
+
+        let header = self.new_header(height).await?;
+        let block =
+            PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
+
+        let res: Vec<_> = self
+            .executor
+            .dry_run(ExecutionBlock::Production(block), utxo_validation)
+            .await?
+            .into_iter()
+            .flatten()
+            .collect();
+        if res.is_empty() {
+            return Err(anyhow!("Expected at least one set of receipts"))
+        }
+        Ok(res)
+    }
 }
 
-impl<'a> Producer<'a> {
-    fn select_new_da_height(
+impl Producer {
+    /// Create the header for a new block at the provided height
+    async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
+        let previous_block_info = self.previous_block_info(height)?;
+        let new_da_height = self
+            .select_new_da_height(previous_block_info.da_height)
+            .await?;
+
+        Ok(PartialFuelBlockHeader {
+            application: FuelApplicationHeader {
+                da_height: new_da_height,
+                generated: Default::default(),
+            },
+            consensus: FuelConsensusHeader {
+                // TODO: this needs to be updated using a proper BMT MMR
+                prev_root: previous_block_info.prev_root,
+                height,
+                time: Utc::now(),
+                generated: Default::default(),
+            },
+            metadata: None,
+        })
+    }
+
+    async fn select_new_da_height(
         &self,
         previous_da_height: DaBlockHeight,
     ) -> Result<DaBlockHeight> {
-        let best_height = self.relayer.get_best_finalized_da_height()?;
+        let best_height = self.relayer.get_best_finalized_da_height().await?;
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
             // without waiting for our relayer's da_height to catch up to imported da_height.
@@ -160,7 +210,6 @@ impl<'a> Producer<'a> {
         else if height == 1u32.into() {
             // TODO: what should initial genesis data be here?
             Ok(PreviousBlockInfo {
-                hash: Default::default(),
                 prev_root: Default::default(),
                 da_height: Default::default(),
             })
@@ -173,11 +222,11 @@ impl<'a> Producer<'a> {
                 .ok_or(MissingBlock(prev_height))?;
             // TODO: this should use a proper BMT MMR
             let hash = previous_block.id();
-            let prev_root =
-                ephemeral_merkle_root(vec![previous_block.header.prev_root, hash].iter());
+            let prev_root = ephemeral_merkle_root(
+                vec![*previous_block.header.prev_root(), hash.into()].iter(),
+            );
 
             Ok(PreviousBlockInfo {
-                hash,
                 prev_root,
                 da_height: previous_block.header.da_height,
             })
@@ -186,7 +235,6 @@ impl<'a> Producer<'a> {
 }
 
 struct PreviousBlockInfo {
-    hash: Bytes32,
     prev_root: Bytes32,
     da_height: DaBlockHeight,
 }

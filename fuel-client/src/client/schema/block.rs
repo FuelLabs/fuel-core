@@ -1,9 +1,6 @@
 use crate::client::{
     schema::{
-        primitives::{
-            Address,
-            DateTime,
-        },
+        primitives::DateTime,
         schema,
         BlockId,
         ConnectionArgs,
@@ -13,7 +10,10 @@ use crate::client::{
     PaginatedResult,
 };
 
-use super::tx::TransactionIdFragment;
+use super::{
+    tx::TransactionIdFragment,
+    Bytes32,
+};
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct BlockByIdArgs {
@@ -70,10 +70,8 @@ pub struct BlockEdge {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct Block {
-    pub height: U64,
     pub id: BlockId,
-    pub time: DateTime,
-    pub producer: Address,
+    pub header: Header,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
@@ -83,9 +81,17 @@ pub struct BlockIdFragment {
     pub id: BlockId,
 }
 
+#[derive(cynic::InputObject, Clone, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct TimeParameters {
+    pub start_time: U64,
+    pub block_time_interval: U64,
+}
+
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct ProduceBlockArgs {
     pub blocks_to_produce: U64,
+    pub time: Option<TimeParameters>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -95,8 +101,23 @@ pub struct ProduceBlockArgs {
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(blocks_to_produce = &args.blocks_to_produce)]
+    #[arguments(blocks_to_produce = &args.blocks_to_produce, time = &args.time)]
     pub produce_blocks: U64,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Header {
+    pub id: BlockId,
+    pub da_height: U64,
+    pub transactions_count: U64,
+    pub output_messages_count: U64,
+    pub transactions_root: Bytes32,
+    pub output_messages_root: Bytes32,
+    pub height: U64,
+    pub prev_root: Bytes32,
+    pub time: DateTime,
+    pub application_hash: Bytes32,
 }
 
 #[cfg(test)]
@@ -117,6 +138,7 @@ mod tests {
         use cynic::MutationBuilder;
         let operation = BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: U64(0),
+            time: None,
         });
         insta::assert_snapshot!(operation.query)
     }
