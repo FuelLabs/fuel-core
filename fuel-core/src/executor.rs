@@ -1394,6 +1394,10 @@ mod tests {
 
     mod coinbase {
         use super::*;
+        use fuel_core_interfaces::common::{
+            consts::REG_HP,
+            fuel_asm::GTFArgs,
+        };
 
         #[tokio::test]
         async fn executor_commits_transactions_with_non_zero_coinbase_generation() {
@@ -1509,31 +1513,96 @@ mod tests {
 
         #[tokio::test]
         async fn execute_cb_command() {
-            let script = TxBuilder::new(2322u64)
-                .gas_limit(1000)
-                // Set a price for the test
-                .gas_price(0)
-                .start_script(vec![Opcode::CB(0x12), Opcode::RET(REG_ONE)], vec![])
-                .coin_input(AssetId::BASE, 1000)
-                .variable_output(Default::default())
-                .coin_output(AssetId::BASE, 1000)
-                .change_output(AssetId::BASE)
-                .build()
-                .transaction()
-                .clone();
+            async fn compare_coinbase_addresses(
+                config_coinbase: Address,
+                expected_in_tx_coinbase: Address,
+            ) -> bool {
+                let script = TxBuilder::new(2322u64)
+                    .gas_limit(100000)
+                    // Set a price for the test
+                    .gas_price(0)
+                    .start_script(vec![
+                        // Store the size of the `Address`(32 bytes) into register `0x11`.
+                        Opcode::MOVI(0x11, Address::LEN as Immediate18),
+                        // Allocate 32 bytes(register `0x11`) on the heap.
+                        Opcode::ALOC(0x11),
+                        // Store the pointer to the beginning of the free memory into register `0x10`.
+                        Opcode::ADDI(0x10, REG_HP, 1),
+                        // Store coinbase `Address` into MEM[$0x10; 32].
+                        Opcode::CB(0x10),
+                        // Store the pointer on the beginning of script data into register `0x12`.
+                        // Script data contains `coinbase` - 32 bytes of data.
+                        Opcode::gtf(0x12, 0x00, GTFArgs::ScriptData),
+                        // Compare retrieved coinbase(register `0x10`) with passed `coinbase` 
+                        // (register `0x12`) where teh length is `0x11`(32 bytes) and store result into
+                        // register `0x13`. 
+                        Opcode::MEQ(0x13, 0x10, 0x12, 0x11),
+                        // Return the result of the comparison.
+                        Opcode::RET(0x13)
+                    ], expected_in_tx_coinbase.to_vec())
+                    .coin_input(AssetId::BASE, 1000)
+                    .variable_output(Default::default())
+                    .coin_output(AssetId::BASE, 1000)
+                    .change_output(AssetId::BASE)
+                    .build()
+                    .transaction()
+                    .clone();
 
-            let producer = Executor {
-                database: Default::default(),
-                config: Config::local_node(),
-            };
+                let mut producer = Executor {
+                    database: Default::default(),
+                    config: Config::local_node(),
+                };
+                producer.config.block_producer.coinbase_recipient = config_coinbase;
 
-            let mut block = FuelBlock::default();
-            *block.transactions_mut() = vec![script.into()];
+                let mut block = FuelBlock::default();
+                *block.transactions_mut() = vec![script.clone().into()];
 
-            assert!(producer
-                .execute(ExecutionBlock::Production(block.into()))
+                assert!(producer
+                    .execute(ExecutionBlock::Production(block.into()))
+                    .await
+                    .is_ok());
+                let receipts = producer
+                    .database
+                    .storage::<Receipts>()
+                    .get(&script.id())
+                    .unwrap()
+                    .unwrap();
+
+                if let Some(Receipt::Return { val, .. }) = receipts.get(0) {
+                    *val == 1
+                } else {
+                    panic!("Execution of the `CB` script failed failed")
+                }
+            }
+
+            assert!(
+                compare_coinbase_addresses(
+                    Address::from([1u8; 32]),
+                    Address::from([1u8; 32])
+                )
                 .await
-                .is_ok());
+            );
+            assert!(
+                !compare_coinbase_addresses(
+                    Address::from([9u8; 32]),
+                    Address::from([1u8; 32])
+                )
+                .await
+            );
+            assert!(
+                !compare_coinbase_addresses(
+                    Address::from([1u8; 32]),
+                    Address::from([9u8; 32])
+                )
+                .await
+            );
+            assert!(
+                compare_coinbase_addresses(
+                    Address::from([9u8; 32]),
+                    Address::from([9u8; 32])
+                )
+                .await
+            );
         }
 
         #[tokio::test]
