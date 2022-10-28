@@ -29,9 +29,12 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
         fuel_types,
-        fuel_vm,
     },
-    db::ContractsRawCode,
+    db::{
+        ContractsAssets,
+        ContractsInfo,
+        ContractsRawCode,
+    },
 };
 use std::iter::IntoIterator;
 
@@ -62,14 +65,13 @@ impl Contract {
         let contract_id = self.0;
 
         let db = ctx.data_unchecked::<Database>().clone();
-        let salt = fuel_vm::storage::InterpreterStorage::storage_contract_root(
-            &db,
-            &contract_id,
-        )
-        .unwrap()
-        .expect("Contract does not exist");
+        let (salt, _) = db
+            .storage::<ContractsInfo>()
+            .get(&contract_id)?
+            .ok_or_else(|| anyhow!("Contract does not exist"))?
+            .into_owned();
 
-        let cleaned_salt: Salt = salt.clone().0.into();
+        let cleaned_salt: Salt = salt.into();
 
         Ok(cleaned_salt)
     }
@@ -140,13 +142,10 @@ impl ContractBalanceQuery {
 
         let asset_id: fuel_types::AssetId = asset.into();
 
-        let result =
-            fuel_vm::storage::InterpreterStorage::merkle_contract_asset_id_balance(
-                &db,
-                &contract_id,
-                &asset_id,
-            );
-        let balance = result.unwrap().unwrap_or_default();
+        let result = db
+            .storage::<ContractsAssets>()
+            .get(&(&contract_id, &asset_id))?;
+        let balance = result.unwrap_or_default().into_owned();
 
         Ok(ContractBalance {
             contract: contract.into(),

@@ -275,17 +275,9 @@ jobs:
             target: x86_64-unknown-linux-gnu
             cross_image: x86_64-linux-gnu
           - os: ubuntu-latest
-            platform: linux
-            target: x86_64-unknown-linux-musl
-            cross_image: x86_64-linux-musl
-          - os: ubuntu-latest
             platform: linux-arm
             target: aarch64-unknown-linux-gnu
             cross_image: aarch64-linux-gnu
-          - os: ubuntu-latest
-            platform: linux-arm
-            target: aarch64-unknown-linux-musl
-            cross_image: aarch64-linux-musl
           - os: macos-latest
             platform: darwin
             target: x86_64-apple-darwin
@@ -351,15 +343,6 @@ jobs:
           aarch64-linux-gnu:latest \
           aarch64-linux-gnu-strip \
           /target/aarch64-unknown-linux-gnu/release/fuel-core
-
-      - name: Strip release binary aarch64-linux-musl
-        if: matrix.job.target == 'aarch64-unknown-linux-musl'
-        run: |
-          docker run --rm -v \
-          "$PWD/target:/target:Z" \
-          aarch64-linux-musl:latest \
-          aarch64-linux-musl-strip \
-          /target/aarch64-unknown-linux-musl/release/fuel-core
 
       - name: Strip release binary mac
         if: matrix.job.os == 'macos-latest'

@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 use crate::{
     cli::DEFAULT_DB_PATH,
     FuelService,
@@ -110,6 +111,9 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     #[clap(flatten)]
     pub p2p_args: p2p::P2pArgs,
+
+    #[clap(long = "metrics")]
+    pub metrics: bool,
 }
 
 impl Command {
@@ -131,6 +135,7 @@ impl Command {
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            metrics,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -190,6 +195,7 @@ impl Command {
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
                 coinbase_recipient,
+                metrics: false,
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
