@@ -1,3 +1,4 @@
+#![allow(unused_variables)]
 use crate::{
     cli::DEFAULT_DB_PATH,
     FuelService,
