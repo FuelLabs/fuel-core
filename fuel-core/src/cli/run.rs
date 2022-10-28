@@ -110,6 +110,9 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     #[clap(flatten)]
     pub p2p_args: p2p::P2pArgs,
+
+    #[clap(default_value = "true")]
+    pub metrics: bool,
 }
 
 impl Command {
@@ -131,6 +134,7 @@ impl Command {
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            metrics,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
