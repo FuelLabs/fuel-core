@@ -142,6 +142,7 @@ impl Trait for Producer {
             Some(height) => height,
         } + 1u64.into();
 
+        let is_script = transaction.is_script();
         let header = self.new_header(height).await?;
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
@@ -153,7 +154,7 @@ impl Trait for Producer {
             .into_iter()
             .flatten()
             .collect();
-        if res.is_empty() {
+        if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }
         Ok(res)
