@@ -97,6 +97,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
                 trigger: *trigger,
                 block_gas_limit: config.chain_conf.block_gas_limit,
                 signing_key: config.consensus_key.clone(),
+                metrics: false,
             }),
         ),
         // TODO: enable when bft config is ready to use
