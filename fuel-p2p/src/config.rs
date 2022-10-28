@@ -129,7 +129,7 @@ impl P2PConfig {
             set_connection_keep_alive: REQ_RES_TIMEOUT,
             info_interval: Some(Duration::from_secs(3)),
             identify_interval: Some(Duration::from_secs(5)),
-            metrics: true,
+            metrics: false,
         }
     }
 }

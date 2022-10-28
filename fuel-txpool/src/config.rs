@@ -25,7 +25,7 @@ impl Default for Config {
             min_gas_price: 0,
             utxo_validation: true,
             chain_config: ChainConfig::default(),
-            metrics: true,
+            metrics: false,
         }
     }
 }

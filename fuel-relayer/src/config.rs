@@ -65,7 +65,7 @@ impl Default for Config {
             sync_minimum_duration: Self::DEFAULT_SYNC_MINIMUM_DURATION,
             syncing_call_frequency: Self::DEFAULT_SYNCING_CALL_FREQ,
             syncing_log_frequency: Self::DEFAULT_SYNCING_LOG_FREQ,
-            metrics: true,
+            metrics: false,
         }
     }
 }
