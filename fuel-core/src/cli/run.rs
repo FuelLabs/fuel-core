@@ -112,7 +112,7 @@ pub struct Command {
     #[clap(flatten)]
     pub p2p_args: p2p::P2pArgs,
 
-    #[clap(default_value = "true")]
+    #[clap(default_value = "false")]
     pub metrics: bool,
 }
 
