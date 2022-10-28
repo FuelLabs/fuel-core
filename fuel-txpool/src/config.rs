@@ -13,7 +13,7 @@ pub struct Config {
     /// chain config
     pub chain_config: ChainConfig,
 
-    /// Enables prometheus metrics for this fuel-servive
+    /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 }
 

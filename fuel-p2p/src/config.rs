@@ -89,7 +89,7 @@ pub struct P2PConfig {
     /// Sets the keep-alive timeout of idle connections.
     pub set_connection_keep_alive: Duration,
 
-    /// Enables prometheus metrics for this fuel-servive
+    /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 }
 
