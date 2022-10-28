@@ -41,7 +41,7 @@ impl Mappable for ContractsLatestUtxo {
 pub struct Receipts;
 
 impl Mappable for Receipts {
-    /// Unique identifier of the receipt.
+    /// Unique identifier of the transaction.
     type Key = Bytes32;
     type SetValue = [Receipt];
     type GetValue = Vec<Receipt>;
