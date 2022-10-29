@@ -14,14 +14,23 @@ use crate::{
         IterDirection,
     },
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::{
-        StorageInspect,
-        StorageMutate,
-    },
-    fuel_tx::Bytes32,
-    prelude::StorageAsRef,
+use chrono::{
+    DateTime,
+    Utc,
 };
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_tx::Bytes32,
+        prelude::StorageAsRef,
+    },
+    db::Transactions,
+    model::FuelBlock,
+};
+use itertools::Itertools;
 use std::{
     borrow::Cow,
     convert::{
@@ -99,6 +108,15 @@ impl Database {
         }
     }
 
+    pub fn block_time(&self, height: u32) -> Result<DateTime<Utc>, Error> {
+        let id = self.get_block_id(height.into())?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
+        Ok(block.header.time().to_owned())
+    }
+
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {
         Database::get(self, &height.to_bytes()[..], Column::FuelBlockIds)
     }
@@ -130,5 +148,30 @@ impl Database {
         )
         .next()
         .transpose()
+    }
+
+    /// Retrieve the full block and all associated transactions
+    pub(crate) fn get_full_block(
+        &self,
+        block_id: &Bytes32,
+    ) -> Result<Option<FuelBlock>, Error> {
+        let db_block = self.storage::<FuelBlocks>().get(block_id)?;
+        if let Some(block) = db_block {
+            // fetch all the transactions
+            // TODO: optimize with multi-key get
+            let txs = block
+                .transactions
+                .iter()
+                .map(|tx_id| {
+                    self.storage::<Transactions>()
+                        .get(tx_id)
+                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound))
+                        .map(Cow::into_owned)
+                })
+                .try_collect()?;
+            Ok(Some(FuelBlock::from_db_block(block.into_owned(), txs)))
+        } else {
+            Ok(None)
+        }
     }
 }

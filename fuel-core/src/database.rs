@@ -1,6 +1,9 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         transactional::DatabaseTransaction,
     },
     state::{
@@ -19,24 +22,19 @@ use fuel_chain_config::{
 };
 pub use fuel_core_interfaces::db::KvStoreError;
 use fuel_core_interfaces::{
-    common::{
-        fuel_asm::Word,
-        fuel_storage::StorageAsRef,
-        fuel_vm::prelude::{
-            Address,
-            Bytes32,
-            InterpreterStorage,
-        },
-        prelude::Signature,
+    common::fuel_storage::{
+        StorageAsMut,
+        StorageAsRef,
     },
     model::{
         BlockHeight,
-        ConsensusType,
+        BlockId,
+        FuelBlockConsensus,
         FuelBlockDb,
         SealedFuelBlock,
     },
     p2p::P2pDb,
-    poa_coordinator::BlockHeightDb,
+    poa_coordinator::BlockDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
@@ -71,6 +69,7 @@ mod coin;
 mod contracts;
 mod message;
 mod receipts;
+mod sealed_block;
 mod state;
 
 pub mod metadata;
@@ -78,6 +77,7 @@ pub mod resource;
 pub mod storage;
 pub mod transaction;
 pub mod transactional;
+pub mod vm_database;
 
 /// Database tables column ids.
 #[repr(u32)]
@@ -117,6 +117,8 @@ pub enum Column {
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,
+    /// The column that stores the consensus metadata associated with a finalized fuel block
+    FuelBlockConsensus = 16,
 }
 
 #[derive(Clone, Debug)]
@@ -297,61 +299,20 @@ impl Default for Database {
     }
 }
 
-impl BlockHeightDb for Database {
+impl BlockDb for Database {
     fn block_height(&self) -> anyhow::Result<BlockHeight> {
         Ok(self.get_block_height()?.unwrap_or_default())
     }
-}
 
-impl InterpreterStorage for Database {
-    type DataError = Error;
-
-    fn block_height(&self) -> Result<u32, Error> {
-        let height = self.get_block_height()?.unwrap_or_default();
-        Ok(height.into())
-    }
-
-    fn timestamp(&self, height: u32) -> Result<Word, Self::DataError> {
-        let id = self.block_hash(height)?;
-        let block = self
-            .storage::<FuelBlocks>()
-            .get(&id)?
-            .ok_or(Error::ChainUninitialized)?;
-        block
-            .header
-            .time()
-            .timestamp_millis()
-            .try_into()
-            .map_err(|e| Self::DataError::DatabaseError(Box::new(e)))
-    }
-
-    fn block_hash(&self, block_height: u32) -> Result<Bytes32, Error> {
-        let hash = self.get_block_id(block_height.into())?.unwrap_or_default();
-        Ok(hash)
-    }
-
-    fn coinbase(&self) -> Result<Address, Error> {
-        let block = self.get_current_block()?.unwrap_or_else(|| {
-            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
-        });
-        match block.consensus_type() {
-            ConsensusType::PoA => {
-                // FIXME: Get producer address from block signature.
-                // block_id -> Signature
-                let signature = Signature::default();
-                let message = unsafe {
-                    fuel_core_interfaces::common::fuel_crypto::Message::from_bytes_unchecked(
-                    block.header.id().into(),
-                )
-                };
-                // TODO: throw an error if public key isn't recoverable
-                //  when implementing signing (https://github.com/FuelLabs/fuel-core/issues/668)
-                let public_key = signature.recover(&message).unwrap_or_default();
-                Ok(fuel_core_interfaces::common::prelude::Input::owner(
-                    &public_key,
-                ))
-            }
-        }
+    fn seal_block(
+        &mut self,
+        block_id: BlockId,
+        consensus: FuelBlockConsensus,
+    ) -> anyhow::Result<()> {
+        self.storage::<SealedBlockConsensus>()
+            .insert(&block_id.into(), &consensus)
+            .map(|_| ())
+            .map_err(Into::into)
     }
 }
 
@@ -368,7 +329,9 @@ impl BlockProducerDatabase for Database {
         &self,
         fuel_height: BlockHeight,
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
-        let id = self.block_hash(fuel_height.into())?;
+        let id = self
+            .get_block_id(fuel_height)?
+            .ok_or(KvStoreError::NotFound)?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
@@ -443,9 +406,15 @@ mod relayer {
 
         async fn get_sealed_block(
             &self,
-            _height: BlockHeight,
+            height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            Some(Arc::new(SealedFuelBlock::fix_me_default_block()))
+            let block_id = self
+                .get_block_id(height)
+                .unwrap_or_else(|_| panic!("nonexistent block height {}", height))?;
+
+            self.get_sealed_block(&block_id)
+                .expect("expected to find sealed block")
+                .map(Arc::new)
         }
 
         async fn set_finalized_da_height(&self, block: DaBlockHeight) {

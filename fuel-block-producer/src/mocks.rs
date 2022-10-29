@@ -7,7 +7,6 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageInspect,
         fuel_tx::{
-            CheckedTransaction,
             MessageId,
             Receipt,
         },
@@ -23,6 +22,7 @@ use fuel_core_interfaces::{
         Executor,
     },
     model::{
+        ArcPoolTx,
         BlockHeight,
         DaBlockHeight,
         FuelBlock,
@@ -54,7 +54,7 @@ impl Relayer for MockRelayer {
 }
 
 #[derive(Default)]
-pub struct MockTxPool(pub Vec<CheckedTransaction>);
+pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
 #[async_trait::async_trait]
 impl TxPool for MockTxPool {
@@ -62,8 +62,8 @@ impl TxPool for MockTxPool {
         &self,
         _block_height: BlockHeight,
         _max_gas: u64,
-    ) -> Result<Vec<Arc<CheckedTransaction>>> {
-        Ok(self.0.iter().cloned().map(Arc::new).collect())
+    ) -> Result<Vec<ArcPoolTx>> {
+        Ok(self.0.clone().into_iter().collect())
     }
 }
 

@@ -233,3 +233,10 @@ fuel_type_scalar!("ContractId", ContractId, ContractId, 32);
 fuel_type_scalar!("Salt", Salt, Salt, 32);
 fuel_type_scalar!("TransactionId", TransactionId, Bytes32, 32);
 fuel_type_scalar!("MessageId", MessageId, MessageId, 32);
+fuel_type_scalar!("Signature", Signature, Bytes64, 64);
+
+impl From<fuel_core_interfaces::common::prelude::Signature> for Signature {
+    fn from(s: fuel_core_interfaces::common::prelude::Signature) -> Self {
+        Self(<[u8; 64]>::from(s).into())
+    }
+}

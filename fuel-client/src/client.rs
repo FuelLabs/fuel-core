@@ -73,7 +73,13 @@ pub use schema::{
     PaginationRequest,
 };
 
-use self::schema::block::ProduceBlockArgs;
+use self::schema::{
+    block::{
+        ProduceBlockArgs,
+        TimeParameters,
+    },
+    message::MessageProofArgs,
+};
 
 pub mod schema;
 pub mod types;
@@ -416,9 +422,14 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+    pub async fn produce_blocks(
+        &self,
+        blocks_to_produce: u64,
+        time: Option<TimeParameters>,
+    ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
+            time,
         });
 
         let new_height = self.query(query).await?.produce_blocks;
@@ -581,6 +592,24 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    /// Request a merkle proof of an output message.
+    pub async fn message_proof(
+        &self,
+        transaction_id: &str,
+        message_id: &str,
+    ) -> io::Result<Option<schema::message::MessageProof>> {
+        let transaction_id: schema::TransactionId = transaction_id.parse()?;
+        let message_id: schema::MessageId = message_id.parse()?;
+        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
+            transaction_id,
+            message_id,
+        });
+
+        let proof = self.query(query).await?.message_proof;
+
+        Ok(proof)
     }
 }
 

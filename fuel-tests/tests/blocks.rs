@@ -21,14 +21,22 @@ use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsMut,
         fuel_tx,
+        fuel_tx::UniqueIdentifier,
     },
     model::FuelConsensusHeader,
 };
-use fuel_gql_client::client::{
-    types::TransactionStatus,
-    FuelClient,
-    PageDirection,
-    PaginationRequest,
+use fuel_gql_client::{
+    client::{
+        schema::{
+            block::TimeParameters,
+            U64,
+        },
+        types::TransactionStatus,
+        FuelClient,
+        PageDirection,
+        PaginationRequest,
+    },
+    prelude::Bytes32,
 };
 use itertools::{
     rev,
@@ -42,7 +50,9 @@ async fn block() {
     let block = FuelBlockDb::default();
     let id = block.id();
     let mut db = Database::default();
-    db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+    db.storage::<FuelBlocks>()
+        .insert(&id.into(), &block)
+        .unwrap();
 
     // setup server & client
     let srv = FuelService::from_database(db, Config::local_node())
@@ -51,8 +61,9 @@ async fn block() {
     let client = FuelClient::from(srv.bound_address);
 
     // run test
+    let id_bytes: Bytes32 = id.into();
     let block = client
-        .block(BlockId::from(id).to_string().as_str())
+        .block(BlockId::from(id_bytes).to_string().as_str())
         .await
         .unwrap();
     assert!(block.is_some());
@@ -70,7 +81,7 @@ async fn produce_block() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_blocks(5).await.unwrap();
+    let new_height = client.produce_blocks(5, None).await.unwrap();
 
     assert_eq!(5, new_height);
 
@@ -90,6 +101,7 @@ async fn produce_block() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -110,7 +122,7 @@ async fn produce_block_negative() {
 
     let client = FuelClient::from(srv.bound_address);
 
-    let new_height = client.produce_blocks(5).await;
+    let new_height = client.produce_blocks(5, None).await;
 
     assert_eq!(
         "Response errors; Manual Blocks must be enabled to use this endpoint",
@@ -133,6 +145,7 @@ async fn produce_block_negative() {
             .await
             .unwrap()
             .unwrap()
+            .header
             .height
             .into();
 
@@ -141,6 +154,97 @@ async fn produce_block_negative() {
     } else {
         panic!("Wrong tx status");
     };
+}
+
+#[tokio::test]
+async fn produce_block_custom_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let new_height = client.produce_blocks(5, Some(time)).await.unwrap();
+
+    assert_eq!(5, new_height);
+
+    assert_eq!(db.block_time(1).unwrap().timestamp(), 100);
+    assert_eq!(db.block_time(2).unwrap().timestamp(), 110);
+    assert_eq!(db.block_time(3).unwrap().timestamp(), 120);
+    assert_eq!(db.block_time(4).unwrap().timestamp(), 130);
+    assert_eq!(db.block_time(5).unwrap().timestamp(), 140);
+}
+
+#[tokio::test]
+async fn produce_block_bad_start_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(100u64),
+        block_time_interval: U64::from(10u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The start time must be set after the latest block time"
+    ));
+}
+
+#[tokio::test]
+async fn produce_block_overflow_time() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db.clone(), config)
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    // produce block with current timestamp
+    let _ = client.produce_blocks(1, None).await.unwrap();
+
+    // try producing block with an ealier timestamp
+    let time = TimeParameters {
+        start_time: U64::from(u64::MAX),
+        block_time_interval: U64::from(1u64),
+    };
+    let err = client
+        .produce_blocks(1, Some(time))
+        .await
+        .expect_err("Completed unexpectedly");
+    assert!(err.to_string().starts_with(
+        "Response errors; The provided time parameters lead to an overflow"
+    ));
 }
 
 #[rstest]
@@ -168,7 +272,9 @@ async fn block_connection_5(
     let mut db = Database::default();
     for block in blocks {
         let id = block.id();
-        db.storage::<FuelBlocks>().insert(&id, &block).unwrap();
+        db.storage::<FuelBlocks>()
+            .insert(&id.into(), &block)
+            .unwrap();
     }
 
     // setup server & client
@@ -193,13 +299,21 @@ async fn block_connection_5(
     match pagination_direction {
         PageDirection::Forward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(0..5).collect_vec()
             );
         }
         PageDirection::Backward => {
             assert_eq!(
-                blocks.results.into_iter().map(|b| b.height.0).collect_vec(),
+                blocks
+                    .results
+                    .into_iter()
+                    .map(|b| b.header.height.0)
+                    .collect_vec(),
                 rev(5..10).collect_vec()
             );
         }

@@ -1,4 +1,4 @@
-use crate::common::fuel_tx::Transaction;
+use crate::txpool::PoolTransaction;
 use chrono::{
     DateTime,
     Utc,
@@ -8,23 +8,23 @@ use std::{
     sync::Arc,
 };
 
-pub type ArcTx = Arc<Transaction>;
+pub type ArcPoolTx = Arc<PoolTransaction>;
 
 #[derive(Debug, Clone)]
 pub struct TxInfo {
-    tx: ArcTx,
+    tx: ArcPoolTx,
     submitted_time: DateTime<Utc>,
 }
 
 impl TxInfo {
-    pub fn new(tx: ArcTx) -> Self {
+    pub fn new(tx: ArcPoolTx) -> Self {
         Self {
             tx,
             submitted_time: Utc::now(),
         }
     }
 
-    pub fn tx(&self) -> &ArcTx {
+    pub fn tx(&self) -> &ArcPoolTx {
         &self.tx
     }
 
@@ -34,7 +34,7 @@ impl TxInfo {
 }
 
 impl Deref for TxInfo {
-    type Target = ArcTx;
+    type Target = ArcPoolTx;
     fn deref(&self) -> &Self::Target {
         &self.tx
     }

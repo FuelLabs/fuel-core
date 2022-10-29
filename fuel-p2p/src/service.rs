@@ -757,7 +757,7 @@ mod tests {
                                 }
                             }
                             GossipsubMessage::NewBlock(block) => {
-                                    if block.header().height() != FuelBlock::default().header().height() {
+                                if block.header().height() != FuelBlock::default().header().height() {
                                     tracing::error!("Wrong p2p message {:?}", message);
                                     panic!("Wrong GossipsubMessage")
                                 }
@@ -844,7 +844,7 @@ mod tests {
                                     let response_message = rx_orchestrator.await;
 
                                     if let Ok(sealed_block) = response_message {
-                                        let _ = tx_test_end.send(*sealed_block.header().height() == 0_u64.into()).await;
+                                        let _ = tx_test_end.send(*sealed_block.block.header().height() == 0_u64.into()).await;
                                     } else {
                                         tracing::error!("Orchestrator failed to receive a message: {:?}", response_message);
                                         panic!("Message not received successfully!")

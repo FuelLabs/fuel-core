@@ -33,7 +33,7 @@ pub enum TransactionStatus {
     Success {
         block_id: String,
         time: DateTime<Utc>,
-        program_state: ProgramState,
+        program_state: Option<ProgramState>,
     },
     Failure {
         block_id: String,
@@ -54,7 +54,7 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
                 block_id: s.block.id.0.to_string(),
                 time: s.time,
-                program_state: s.program_state.try_into()?,
+                program_state: s.program_state.map(TryInto::try_into).transpose()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_id: s.block.id.0.to_string(),

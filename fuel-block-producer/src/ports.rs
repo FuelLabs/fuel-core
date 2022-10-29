@@ -1,10 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use fuel_core_interfaces::{
-    common::fuel_tx::CheckedTransaction,
-    model::BlockHeight,
+use fuel_core_interfaces::model::{
+    ArcPoolTx,
+    BlockHeight,
 };
-use std::sync::Arc;
 
 #[async_trait]
 pub trait TxPool: Sync + Send {
@@ -14,5 +13,5 @@ pub trait TxPool: Sync + Send {
         block_height: BlockHeight,
         // The upper limit for the total amount of gas of these txs
         max_gas: u64,
-    ) -> Result<Vec<Arc<CheckedTransaction>>>;
+    ) -> Result<Vec<ArcPoolTx>>;
 }

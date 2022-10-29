@@ -1,10 +1,10 @@
 use crate::{
     common::{
         fuel_tx::{
+            CheckError,
             Receipt,
             TxId,
             UtxoId,
-            ValidationError,
         },
         fuel_types::{
             Bytes32,
@@ -15,11 +15,13 @@ use crate::{
     },
     db::KvStoreError,
     model::{
+        BlockId,
         FuelBlock,
         PartialFuelBlock,
     },
 };
 use async_trait::async_trait;
+use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
 use thiserror::Error;
 
@@ -89,7 +91,7 @@ pub enum TransactionValidityError {
     )]
     InvalidPredicate(TxId),
     #[error("Transaction validity: {0:#?}")]
-    Validation(#[from] ValidationError),
+    Validation(#[from] CheckError),
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn StdError + Send + Sync>),
 }
@@ -109,6 +111,16 @@ pub enum Error {
     OutputAlreadyExists,
     #[error("The computed fee caused an integer overflow")]
     FeeOverflow,
+    #[error("Not supported transaction: {0:?}")]
+    NotSupportedTransaction(Box<Transaction>),
+    #[error("The first transaction in the block is not `Mint` - coinbase.")]
+    CoinbaseIsNotFirstTransaction,
+    #[error("Coinbase should have one output.")]
+    CoinbaseSeveralOutputs,
+    #[error("Coinbase outputs is invalid.")]
+    CoinbaseOutputIsInvalid,
+    #[error("Coinbase amount mismatches with expected.")]
+    CoinbaseAmountMismatch,
     #[error("Invalid transaction: {0}")]
     TransactionValidity(#[from] TransactionValidityError),
     #[error("corrupted block state")]
@@ -119,7 +131,7 @@ pub enum Error {
         transaction_id: Bytes32,
     },
     #[error(transparent)]
-    InvalidTransaction(#[from] ValidationError),
+    InvalidTransaction(#[from] CheckError),
     #[error("Execution error with backtrace")]
     Backtrace(Box<Backtrace>),
     #[error("Transaction doesn't match expected result: {transaction_id:#x}")]
@@ -136,7 +148,7 @@ pub enum Error {
 
 impl ExecutionBlock {
     /// Get the hash of the full [`FuelBlock`] if validating.
-    pub fn id(&self) -> Option<Bytes32> {
+    pub fn id(&self) -> Option<BlockId> {
         match self {
             ExecutionTypes::Production(_) => None,
             ExecutionTypes::Validation(v) => Some(v.id()),

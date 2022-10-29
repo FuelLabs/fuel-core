@@ -183,7 +183,7 @@ impl Context {
                         let txpool = txpool.as_ref();
                         if let GossipData { data: Some(TransactionBroadcast::NewTransaction ( tx )), .. } =  new_transaction.unwrap() {
                             let txs = vec!(Arc::new(tx));
-                            TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, txs).await;
+                            TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await;
                         }
                     });
                 }
@@ -209,7 +209,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender,txs.clone()).await;
+                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await;
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {

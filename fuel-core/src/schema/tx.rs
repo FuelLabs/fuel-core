@@ -30,7 +30,11 @@ use fuel_core_interfaces::{
     block_producer::BlockProducer,
     common::{
         fuel_storage::StorageAsRef,
-        fuel_tx::Transaction as FuelTx,
+        fuel_tx::{
+            Cacheable,
+            Transaction as FuelTx,
+            UniqueIdentifier,
+        },
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
@@ -74,7 +78,7 @@ impl TxQuery {
             .await;
 
         if let Ok(Some(transaction)) = receiver.await {
-            Ok(Some(Transaction((transaction.tx().deref()).clone())))
+            Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             Ok(db
                 .storage::<Transactions>()
@@ -318,7 +322,7 @@ impl TxMutation {
         let block_producer = ctx.data_unchecked::<Arc<dyn BlockProducer>>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute_metadata();
+        tx.precompute();
 
         let receipts = block_producer.dry_run(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
@@ -332,7 +336,7 @@ impl TxMutation {
     ) -> async_graphql::Result<Transaction> {
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute_metadata();
+        tx.precompute();
         let _: Vec<_> = txpool
             .sender()
             .insert(vec![Arc::new(tx.clone())])
