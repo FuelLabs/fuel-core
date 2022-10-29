@@ -140,8 +140,8 @@ impl KeyValueStore for RocksDb {
             if value.is_ok() && value.as_ref().unwrap().is_some() {
                 let value_as_vec = value.as_ref().cloned().unwrap().unwrap();
                 DATABASE_METRICS
-                    .bytes_read_meter
-                    .inc_by(value_as_vec.len() as u64);
+                    .bytes_read
+                    .observe(value_as_vec.len() as f64);
             }
         }
         value
@@ -156,9 +156,7 @@ impl KeyValueStore for RocksDb {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
-            DATABASE_METRICS
-                .bytes_written_meter
-                .inc_by(value.len() as u64);
+            DATABASE_METRICS.bytes_written.observe(value.len() as f64);
         }
         let prev = self.get(key, column)?;
         self.db
@@ -233,8 +231,8 @@ impl KeyValueStore for RocksDb {
                     {
                         DATABASE_METRICS.read_meter.inc();
                         DATABASE_METRICS
-                            .bytes_read_meter
-                            .inc_by(key_as_vec.len() as u64 + value_as_vec.len() as u64);
+                            .bytes_read
+                            .observe((key_as_vec.len() + value_as_vec.len()) as f64);
                     }
                     (key_as_vec, value_as_vec)
                 })
@@ -278,8 +276,8 @@ impl BatchOperations for RocksDb {
         {
             DATABASE_METRICS.write_meter.inc();
             DATABASE_METRICS
-                .bytes_written_meter
-                .inc_by(batch.size_in_bytes() as u64);
+                .bytes_written
+                .observe(batch.size_in_bytes() as f64);
         }
         self.db
             .write(batch)

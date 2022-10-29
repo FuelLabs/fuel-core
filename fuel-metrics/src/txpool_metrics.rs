@@ -4,7 +4,6 @@ use prometheus_client::registry::Registry;
 use std::{
     boxed::Box,
     default::Default,
-    sync::RwLock,
 };
 
 pub struct TxPoolMetrics {
@@ -50,10 +49,11 @@ pub fn init(mut metrics: TxPoolMetrics) -> TxPoolMetrics {
 }
 
 lazy_static! {
-    pub static ref TXPOOL_METRICS: RwLock<TxPoolMetrics> = {
+    pub static ref TXPOOL_METRICS: TxPoolMetrics = {
+        // Registries which are initialized inside the fuel-metrics crate are safe
+        // since they cannot be called before the registry is intialized
         let registry = TxPoolMetrics::default();
-        let metrics = init(registry);
 
-        RwLock::new(metrics)
+        init(registry)
     };
 }

@@ -83,27 +83,6 @@ impl TxPool {
         // verify gas price is at least the minimum
         self.verify_tx_min_gas_price(&tx)?;
 
-        if self.config.metrics {
-            TXPOOL_METRICS
-                .write()
-                .unwrap()
-                .gas_price_histogram
-                .observe(tx.gas_price() as f64);
-            TXPOOL_METRICS
-                .write()
-                .unwrap()
-                .tx_size_histogram
-                .observe(tx.bytecode_length().unwrap_or(0) as f64);
-        }
-
-        let current_height = db.current_block_height()?;
-
-        let checked = if self.config.utxo_validation {
-            CheckedTransaction::check(
-                (*tx).clone(),
-                current_height.into(),
-                &self.config.chain_config.transaction_parameters,
-            )?
         let tx: CheckedTransaction = if self.config.utxo_validation {
             tx.deref()
                 .clone()
@@ -228,6 +207,12 @@ impl TxPool {
             Transaction::Create(create) => create.price(),
             Transaction::Mint(_) => unreachable!(),
         };
+        if self.config.metrics {
+            // Gas Price metrics are recorded here to avoid double matching for
+            // every single transaction, but also means metrics aren't collected on gas
+            // price if there is no minimum gas price
+            TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
+        }
         if price < self.config.min_gas_price {
             return Err(Error::NotInsertedGasPriceTooLow)
         }

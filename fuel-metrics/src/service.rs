@@ -9,29 +9,19 @@ use axum::{
         Response,
     },
 };
-use prometheus::{
-    Encoder,
-    TextEncoder,
-};
 use prometheus_client::encoding::text::encode;
 use std::vec;
 
 pub fn encode_metrics_response() -> impl IntoResponse {
     let mut encoded = vec![];
 
-    // Ugly but encode database metrics with original prometheus encoder for now
-    let metric_families = prometheus::gather();
-    let encoder = TextEncoder::new();
-    encoder.encode(&metric_families, &mut encoded).unwrap();
+    if let Option::Some(value) = P2P_METRICS.gossip_sub_registry.get() {
+        encode(&mut encoded, value).unwrap();
+    }
 
-    encode(
-        &mut encoded,
-        &P2P_METRICS.read().unwrap().gossip_sub_registry,
-    )
-    .unwrap();
-    encode(&mut encoded, &P2P_METRICS.read().unwrap().peer_metrics).unwrap();
-    encode(&mut encoded, &TXPOOL_METRICS.read().unwrap().registry).unwrap();
-    encode(&mut encoded, &TXPOOL_METRICS.read().unwrap().registry).unwrap();
+    encode(&mut encoded, &P2P_METRICS.peer_metrics).unwrap();
+    encode(&mut encoded, &TXPOOL_METRICS.registry).unwrap();
+    encode(&mut encoded, &TXPOOL_METRICS.registry).unwrap();
 
     Response::builder()
         .status(200)

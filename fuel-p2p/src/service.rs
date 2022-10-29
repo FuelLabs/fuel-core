@@ -340,7 +340,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             FuelBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
                 PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
                     if self.metrics {
-                        P2P_METRICS.write().unwrap().unique_peers.inc();
+                        P2P_METRICS.unique_peers.inc();
                     }
                     self.swarm
                         .behaviour_mut()

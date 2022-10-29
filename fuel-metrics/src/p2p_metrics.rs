@@ -1,4 +1,5 @@
 use lazy_static::lazy_static;
+use once_cell::race::OnceBox;
 use prometheus_client::{
     metrics::counter::Counter,
     registry::Registry,
@@ -6,24 +7,22 @@ use prometheus_client::{
 use std::{
     boxed::Box,
     default::Default,
-    sync::RwLock,
 };
 
 pub struct P2PMetrics {
-    pub gossip_sub_registry: Registry,
+    pub gossip_sub_registry: OnceBox<Registry>,
     pub peer_metrics: Registry,
     pub unique_peers: Counter,
 }
 
 impl Default for P2PMetrics {
     fn default() -> Self {
-        let gossip_sub_registry = Registry::default();
         let peer_metrics = Registry::default();
 
         let unique_peers = Counter::default();
 
         Self {
-            gossip_sub_registry,
+            gossip_sub_registry: OnceBox::new(),
             peer_metrics,
             unique_peers,
         }
@@ -41,10 +40,9 @@ pub fn init(mut metrics: P2PMetrics) -> P2PMetrics {
 }
 
 lazy_static! {
-    pub static ref P2P_METRICS: RwLock<P2PMetrics> = {
+    pub static ref P2P_METRICS: P2PMetrics = {
         let registry = P2PMetrics::default();
-        let metrics = init(registry);
 
-        RwLock::new(metrics)
+        init(registry)
     };
 }

@@ -1,3 +1,4 @@
+use crate::config::P2PConfig;
 use fuel_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::gossipsub::{
     metrics::Config as MetricsConfig,
@@ -12,12 +13,11 @@ use libp2p::gossipsub::{
     PeerScoreThresholds,
     RawGossipsubMessage,
 };
+use prometheus_client::registry::Registry;
 use sha2::{
     Digest,
     Sha256,
 };
-
-use crate::config::P2PConfig;
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -55,19 +55,23 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
     if p2p_config.metrics {
         // Move to Metrics related feature flag
-        let p2p_registry = &mut P2P_METRICS
-            .write()
-            .expect("Something already captured p2p metrics")
-            .gossip_sub_registry;
+        let mut p2p_registry = Registry::default();
+
         let metrics_config = MetricsConfig::default();
 
         let mut gossipsub = Gossipsub::new_with_metrics(
             MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
             p2p_config.gossipsub_config.clone(),
-            p2p_registry,
+            &mut p2p_registry,
             metrics_config,
         )
         .expect("gossipsub initialized");
+
+        // This couldn't be set unless multiple p2p services are running? So it's ok to unwrap
+        P2P_METRICS
+            .gossip_sub_registry
+            .set(Box::new(p2p_registry))
+            .unwrap_or(());
 
         gossipsub
             .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
