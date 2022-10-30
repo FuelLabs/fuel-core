@@ -85,8 +85,6 @@ async fn test_database_metrics() {
             .parse::<f64>()
             .unwrap();
 
-        assert!(
-            value >= 0.0
-        );
+        assert!(value >= 0.0);
     }
 }
