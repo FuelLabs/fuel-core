@@ -7,6 +7,7 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
+        BlockId,
         FuelBlockDb,
     },
 };
@@ -20,4 +21,12 @@ pub trait BlockProducerDatabase:
 
     /// Fetch the current block height
     fn current_block_height(&self) -> Result<BlockHeight>;
+}
+
+pub trait ExecutorDatabase {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &FuelBlockDb,
+    ) -> std::result::Result<(), KvStoreError>;
 }

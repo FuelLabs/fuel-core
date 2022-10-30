@@ -19,6 +19,7 @@ use crate::{
     service::Config,
     tx_pool::TransactionStatus,
 };
+use fuel_block_producer::db::ExecutorDatabase;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -226,8 +227,7 @@ impl Executor {
         // insert block into database
         block_db_transaction
             .deref_mut()
-            .storage::<FuelBlocks>()
-            .insert(&finalized_block_id.into(), &block.to_db_block())?;
+            .insert_block(&finalized_block_id.into(), &block.to_db_block())?;
 
         // Commit the database transaction.
         block_db_transaction.commit()?;

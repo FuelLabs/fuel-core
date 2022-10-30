@@ -14,7 +14,10 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use fuel_block_producer::db::BlockProducerDatabase;
+use fuel_block_producer::db::{
+    BlockProducerDatabase,
+    ExecutorDatabase,
+};
 use fuel_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -50,9 +53,14 @@ use std::{
         Formatter,
     },
     marker::Send,
+    ops::DerefMut,
     sync::Arc,
 };
 
+use crate::database::storage::{
+    FuelBlockIds,
+    FuelBlockMerkleData,
+};
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 #[cfg(feature = "rocksdb")]
@@ -67,6 +75,7 @@ mod block;
 mod code_root;
 mod coin;
 mod contracts;
+mod merkle_metadata;
 mod message;
 mod receipts;
 mod sealed_block;
@@ -119,6 +128,10 @@ pub enum Column {
     OwnedMessageIds = 15,
     /// The column that stores the consensus metadata associated with a finalized fuel block
     FuelBlockConsensus = 16,
+    /// Merklized Fuel Block data
+    FuelBlockMerkleData = 17,
+    /// Merklized Fuel Block Metadata
+    FuelBlockMerkleMetadata = 18,
 }
 
 #[derive(Clone, Debug)]
@@ -339,6 +352,33 @@ impl BlockProducerDatabase for Database {
         self.get_block_height()
             .map(|h| h.unwrap_or_default())
             .map_err(Into::into)
+    }
+}
+
+impl ExecutorDatabase for Database {
+    fn insert_block(
+        &mut self,
+        block_id: &BlockId,
+        block: &FuelBlockDb,
+    ) -> Result<(), KvStoreError> {
+        // Atomic transaction
+        let mut block_db_transaction = self.transaction();
+
+        // Insert Block Height -> Block ID
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlockIds>()
+            .insert(block.header.height(), &(*block_id).into())?;
+
+        // Insert Block ID -> Block
+        block_db_transaction
+            .deref_mut()
+            .storage::<FuelBlocks>()
+            .insert(&(*block_id).into(), &block)?;
+
+        // block_db_transaction.deref_mut().storage::<FuelBlockMerkleData>().insert()
+
+        Ok(())
     }
 }
 

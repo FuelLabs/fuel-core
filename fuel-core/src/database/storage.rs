@@ -1,6 +1,10 @@
 use fuel_core_interfaces::{
     common::{
         fuel_crypto::fuel_types::Bytes32,
+        fuel_merkle::{
+            binary::Node,
+            common::Position,
+        },
         fuel_storage::Mappable,
         fuel_tx::{
             Receipt,
@@ -8,6 +12,7 @@ use fuel_core_interfaces::{
         },
     },
     model::{
+        BlockHeight,
         FuelBlockConsensus,
         FuelBlockDb,
     },
@@ -22,6 +27,14 @@ impl Mappable for FuelBlocks {
     /// Unique identifier of the fuel block.
     type Key = Bytes32;
     type SetValue = FuelBlockDb;
+    type GetValue = Self::SetValue;
+}
+
+pub struct FuelBlockIds;
+
+impl Mappable for FuelBlockIds {
+    type Key = BlockHeight;
+    type SetValue = Bytes32;
     type GetValue = Self::SetValue;
 }
 
@@ -54,6 +67,26 @@ impl Mappable for SealedBlockConsensus {
     type Key = Bytes32;
     type SetValue = FuelBlockConsensus;
     type GetValue = Self::SetValue;
+}
+
+/// BMT Nodes
+
+pub struct FuelBlockMerkleData;
+
+impl Mappable for FuelBlockMerkleData {
+    type Key = Position;
+    type SetValue = Node;
+    type GetValue = Node;
+}
+
+/// BMT Metadata
+
+pub struct FuelBlockMerkleMetadata;
+
+impl Mappable for FuelBlockMerkleMetadata {
+    type Key = ();
+    type SetValue = ();
+    type GetValue = ();
 }
 
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.
