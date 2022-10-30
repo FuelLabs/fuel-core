@@ -18,7 +18,7 @@ use fuel_gql_client::client::FuelClient;
 use tempfile::TempDir;
 
 #[tokio::test]
-async fn test_database_metrics() {
+async fn test_metrics_endpoint() {
     let mut config = Config::local_node();
     let tmp_dir = TempDir::new().unwrap();
     config.database_type = DbType::RocksDb;
@@ -78,8 +78,7 @@ async fn test_database_metrics() {
     // Gt check exists because testing can be weird with multiple instances running
     assert!(categories.len() == 27);
 
-    for index in vec![2, 6, 7, 8, 11, 12, 13, 17, 18, 19, 22, 23, 24] {
-        println!("{:?}", index);
+    for index in [2, 6, 7, 8, 11, 12, 13, 17, 18, 19, 22, 23, 24] {
         let value = categories[index].split(' ').collect::<Vec<&str>>()[1]
             .to_string()
             .parse::<f64>()
