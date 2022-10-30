@@ -42,16 +42,16 @@ impl Default for DatabaseMetrics {
 pub fn init(mut metrics: DatabaseMetrics) -> DatabaseMetrics {
     metrics
         .registry
-        .register("", "", Box::new(metrics.write_meter.clone()));
+        .register("Database_Writes", "Number of database write operations", Box::new(metrics.write_meter.clone()));
     metrics
         .registry
-        .register("", "", Box::new(metrics.read_meter.clone()));
+        .register("Database_Reads", "Number of database read operations", Box::new(metrics.read_meter.clone()));
     metrics
         .registry
-        .register("", "", Box::new(metrics.bytes_read.clone()));
+        .register("Bytes_Read", "Histogram containing values of amount of bytes read per operation", Box::new(metrics.bytes_read.clone()));
     metrics
         .registry
-        .register("", "", Box::new(metrics.bytes_written.clone()));
+        .register("Bytes_Written", "Histogram containing values of amount of bytes written per operation", Box::new(metrics.bytes_written.clone()));
 
     metrics
 }
