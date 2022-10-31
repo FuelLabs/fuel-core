@@ -33,7 +33,11 @@ use fuel_gql_client::client::{
     PaginationRequest,
 };
 use itertools::Itertools;
-use rand::Rng;
+use rand::{
+    prelude::StdRng,
+    Rng,
+    SeedableRng,
+};
 use std::{
     io,
     io::ErrorKind::NotFound,
@@ -60,7 +64,7 @@ fn basic_script_snapshot() {
 }
 
 #[tokio::test]
-async fn dry_run() {
+async fn dry_run_script() {
     let srv = FuelService::new_node(Config::local_node()).await.unwrap();
     let client = FuelClient::from(srv.bound_address);
 
@@ -103,6 +107,43 @@ async fn dry_run() {
         Receipt::Return {
             val, ..
         } if val == 1));
+
+    // ensure the tx isn't available in the blockchain history
+    let err = client
+        .transaction_status(&format!("{:#x}", tx.id()))
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind(), NotFound);
+}
+
+#[tokio::test]
+async fn dry_run_create() {
+    let mut rng = StdRng::seed_from_u64(2322);
+    let srv = FuelService::new_node(Config::local_node()).await.unwrap();
+    let client = FuelClient::from(srv.bound_address);
+
+    let salt: Salt = rng.gen();
+    let contract_code = vec![];
+    let contract = fuel_tx::Contract::from(contract_code.clone());
+    let root = contract.root();
+    let state_root = fuel_tx::Contract::default_state_root();
+    let contract_id = contract.id(&salt, &root, &state_root);
+
+    let tx = Transaction::create(
+        0,
+        0,
+        0,
+        0,
+        salt,
+        vec![],
+        vec![],
+        vec![Output::contract_created(contract_id, state_root)],
+        vec![contract_code.into()],
+    )
+    .into();
+
+    let receipts = client.dry_run(&tx).await.unwrap();
+    assert_eq!(0, receipts.len());
 
     // ensure the tx isn't available in the blockchain history
     let err = client
