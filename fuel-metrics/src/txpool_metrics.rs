@@ -1,12 +1,15 @@
 use lazy_static::lazy_static;
-pub use prometheus_client::metrics::histogram::Histogram;
-use prometheus_client::registry::Registry;
+use prometheus_client::{
+    metrics::histogram::Histogram,
+    registry::Registry,
+};
 use std::{
     boxed::Box,
     default::Default,
 };
 
 pub struct TxPoolMetrics {
+    // Attaches each Metric to the Registry
     pub registry: Registry,
     pub gas_price_histogram: Histogram,
     pub tx_size_histogram: Histogram,
