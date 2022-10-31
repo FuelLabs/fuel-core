@@ -6,18 +6,18 @@ use prometheus_client::{
     },
     registry::Registry,
 };
-use std::default::Default;
 
 pub struct DatabaseMetrics {
     pub registry: Registry,
+    // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
     pub write_meter: Counter,
     pub read_meter: Counter,
     pub bytes_written: Histogram,
     pub bytes_read: Histogram,
 }
 
-impl Default for DatabaseMetrics {
-    fn default() -> Self {
+impl DatabaseMetrics {
+    fn new() -> Self {
         let registry = Registry::default();
 
         let write_meter: Counter = Counter::default();
@@ -66,7 +66,7 @@ pub fn init(mut metrics: DatabaseMetrics) -> DatabaseMetrics {
 
 lazy_static! {
     pub static ref DATABASE_METRICS: DatabaseMetrics = {
-        let registry = DatabaseMetrics::default();
+        let registry = DatabaseMetrics::new();
 
         init(registry)
     };

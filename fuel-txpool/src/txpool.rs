@@ -141,6 +141,10 @@ impl TxPool {
         }
         if self.config.metrics {
             TXPOOL_METRICS
+                .gas_price_histogram
+                .observe(tx.price() as f64);
+
+            TXPOOL_METRICS
                 .tx_size_histogram
                 .observe(tx.metered_bytes_size() as f64);
         }

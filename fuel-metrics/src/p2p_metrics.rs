@@ -4,19 +4,17 @@ use prometheus_client::{
     metrics::counter::Counter,
     registry::Registry,
 };
-use std::{
-    boxed::Box,
-    default::Default,
-};
+use std::boxed::Box;
 
 pub struct P2PMetrics {
     pub gossip_sub_registry: OnceBox<Registry>,
+    // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
     pub peer_metrics: Registry,
     pub unique_peers: Counter,
 }
 
-impl Default for P2PMetrics {
-    fn default() -> Self {
+impl P2PMetrics {
+    fn new() -> Self {
         let peer_metrics = Registry::default();
 
         let unique_peers = Counter::default();
@@ -38,5 +36,5 @@ impl Default for P2PMetrics {
 }
 
 lazy_static! {
-    pub static ref P2P_METRICS: P2PMetrics = P2PMetrics::default();
+    pub static ref P2P_METRICS: P2PMetrics = P2PMetrics::new();
 }
