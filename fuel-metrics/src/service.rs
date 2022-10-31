@@ -21,7 +21,6 @@ pub fn encode_metrics_response() -> impl IntoResponse {
 
     encode(&mut encoded, &P2P_METRICS.peer_metrics).unwrap();
     encode(&mut encoded, &TXPOOL_METRICS.registry).unwrap();
-    encode(&mut encoded, &TXPOOL_METRICS.registry).unwrap();
 
     Response::builder()
         .status(200)

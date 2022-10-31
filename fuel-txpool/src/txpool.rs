@@ -139,6 +139,11 @@ impl TxPool {
                 return Err(Error::NotInsertedLimitHit.into())
             }
         }
+        if self.config.metrics {
+            TXPOOL_METRICS
+                .tx_size_histogram
+                .observe(tx.metered_bytes_size() as f64);
+        }
         // check and insert dependency
         let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));

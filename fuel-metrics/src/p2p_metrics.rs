@@ -21,28 +21,22 @@ impl Default for P2PMetrics {
 
         let unique_peers = Counter::default();
 
-        Self {
+        let mut metrics = P2PMetrics {
             gossip_sub_registry: OnceBox::new(),
             peer_metrics,
             unique_peers,
-        }
+        };
+
+        metrics.peer_metrics.register(
+            "Peer_Counter",
+            "A Counter which keeps track of each unique peer the p2p service has connected to",
+            Box::new(metrics.unique_peers.clone()),
+        );
+
+        metrics
     }
 }
 
-pub fn init(mut metrics: P2PMetrics) -> P2PMetrics {
-    metrics.peer_metrics.register(
-        "Peer_Counter",
-        "A Counter which keeps track of each unique peer the p2p service has connected to",
-        Box::new(metrics.unique_peers.clone()),
-    );
-
-    metrics
-}
-
 lazy_static! {
-    pub static ref P2P_METRICS: P2PMetrics = {
-        let registry = P2PMetrics::default();
-
-        init(registry)
-    };
+    pub static ref P2P_METRICS: P2PMetrics = P2PMetrics::default();
 }
