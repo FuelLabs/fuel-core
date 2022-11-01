@@ -242,6 +242,17 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    argument_struct = "TxIdArgs"
+)]
+pub struct StatusChangeSubscription {
+    #[arguments(id = &args.id)]
+    pub status_change: TransactionStatus,
+}
+
 // mutations
 
 #[derive(cynic::FragmentArguments)]

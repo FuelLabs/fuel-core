@@ -151,10 +151,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         });
     }
 
-    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
-
-    // Remove once tx_status events are used
-    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+    let (tx_status_sender, _) = broadcast::channel(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 

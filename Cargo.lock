@@ -2349,8 +2349,10 @@ dependencies = [
  "strum",
  "strum_macros",
  "tempfile",
+ "test-case",
  "thiserror",
  "tokio",
+ "tokio-stream",
  "tower-http",
  "tower-layer",
  "tracing",
@@ -6246,6 +6248,18 @@ dependencies = [
  "rustls 0.20.7",
  "tokio",
  "webpki 0.22.0",
+]
+
+[[package]]
+name = "tokio-stream"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d660770404473ccd7bc9f8b28494a811bc18542b915c0855c51e8f419d5223ce"
+dependencies = [
+ "futures-core",
+ "pin-project-lite 0.2.9",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]

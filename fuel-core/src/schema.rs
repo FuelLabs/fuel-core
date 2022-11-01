@@ -1,6 +1,6 @@
 use async_graphql::{
-    EmptySubscription,
     MergedObject,
+    MergedSubscription,
     Schema,
     SchemaBuilder,
 };
@@ -37,17 +37,16 @@ pub struct Query(
 #[derive(MergedObject, Default)]
 pub struct Mutation(dap::DapMutation, tx::TxMutation, block::BlockMutation);
 
-// Placeholder for when we need to add subscriptions
-// #[derive(MergedSubscription, Default)]
-// pub struct Subscription();
+#[derive(MergedSubscription, Default)]
+pub struct Subscription(tx::TxStatusSubscription);
 
-pub type CoreSchema = Schema<Query, Mutation, EmptySubscription>;
+pub type CoreSchema = Schema<Query, Mutation, Subscription>;
 
-pub fn build_schema() -> SchemaBuilder<Query, Mutation, EmptySubscription> {
+pub fn build_schema() -> SchemaBuilder<Query, Mutation, Subscription> {
     Schema::build_with_ignore_name_conflicts(
         Query::default(),
         Mutation::default(),
-        EmptySubscription::default(),
+        Subscription::default(),
         ["TransactionConnection", "MessageConnection"],
     )
 }

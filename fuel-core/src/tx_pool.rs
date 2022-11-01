@@ -11,7 +11,7 @@ use serde::{
     Serialize,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransactionStatus {
     Submitted {
         time: DateTime<Utc>,

@@ -222,6 +222,35 @@ impl From<TxStatus> for TransactionStatus {
     }
 }
 
+impl From<TransactionStatus> for TxStatus {
+    fn from(s: TransactionStatus) -> Self {
+        match s {
+            TransactionStatus::Submitted(SubmittedStatus(time)) => {
+                TxStatus::Submitted { time }
+            }
+            TransactionStatus::Success(SuccessStatus {
+                block_id,
+                result,
+                time,
+            }) => TxStatus::Success {
+                block_id,
+                result,
+                time,
+            },
+            TransactionStatus::Failed(FailureStatus {
+                block_id,
+                reason,
+                time,
+                state: result,
+            }) => TxStatus::Failed {
+                block_id,
+                reason,
+                time,
+                result,
+            },
+        }
+    }
+}
 pub struct Transaction(pub(crate) fuel_tx::Transaction);
 
 #[Object]
@@ -358,23 +387,10 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
+        let id = self.0.id();
         let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
-        let id = self.0.id();
-
-        let (response, receiver) = oneshot::channel();
-        let _ = txpool
-            .sender()
-            .send(TxPoolMpsc::FindOne { id, response })
-            .await;
-
-        if let Ok(Some(transaction_in_pool)) = receiver.await {
-            let time = transaction_in_pool.submitted_time();
-            Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-        } else {
-            let status = db.get_tx_status(&self.0.id())?;
-            Ok(status.map(Into::into))
-        }
+        get_tx_status(id, &db, &txpool).await
     }
 
     async fn receipts(
@@ -460,5 +476,25 @@ impl Transaction {
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+}
+
+pub(super) async fn get_tx_status(
+    id: fuel_core_interfaces::common::fuel_types::Bytes32,
+    db: &Database,
+    txpool: &TxPoolService,
+) -> async_graphql::Result<Option<TransactionStatus>> {
+    let (response, receiver) = oneshot::channel();
+    let _ = txpool
+        .sender()
+        .send(TxPoolMpsc::FindOne { id, response })
+        .await;
+
+    if let Ok(Some(transaction_in_pool)) = receiver.await {
+        let time = transaction_in_pool.submitted_time();
+        Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+    } else {
+        let status = db.get_tx_status(&id)?;
+        Ok(status.map(Into::into))
     }
 }
