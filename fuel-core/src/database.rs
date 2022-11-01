@@ -53,6 +53,7 @@ use std::{
         Formatter,
     },
     marker::Send,
+    mem::size_of,
     ops::DerefMut,
     sync::Arc,
 };
@@ -60,9 +61,17 @@ use std::{
 use crate::database::storage::{
     FuelBlockIds,
     FuelBlockMerkleData,
+    FuelBlockMerkleMetadata,
 };
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+
+use fuel_core_interfaces::common::fuel_merkle::{
+    binary::MerkleTree,
+    common::Position,
+};
+
+use crate::schema::scalars::Bytes32;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -361,22 +370,35 @@ impl ExecutorDatabase for Database {
         block_id: &BlockId,
         block: &FuelBlockDb,
     ) -> Result<(), KvStoreError> {
-        // Atomic transaction
-        let mut block_db_transaction = self.transaction();
-
         // Insert Block Height -> Block ID
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlockIds>()
+        self.storage::<FuelBlockIds>()
             .insert(block.header.height(), &(*block_id).into())?;
 
         // Insert Block ID -> Block
-        block_db_transaction
-            .deref_mut()
-            .storage::<FuelBlocks>()
+        self.storage::<FuelBlocks>()
             .insert(&(*block_id).into(), &block)?;
 
-        // block_db_transaction.deref_mut().storage::<FuelBlockMerkleData>().insert()
+        let mut metadata = self
+            .storage::<FuelBlockMerkleMetadata>()
+            .get(&"FuelBlocks".to_string())?
+            .unwrap_or_default();
+
+        let leaf_count = metadata.leaves_count;
+        let mut tree = MerkleTree::load(self, leaf_count).map_err(Into::into)?;
+        let data = unsafe {
+            let sz = block.transactions.len() * size_of::<Bytes32>();
+            let ptr = block.transactions.as_ptr().cast::<[u8; sz]>();
+            &*ptr
+        };
+
+        // Insert the data into the database
+        tree.push(data)?;
+
+        metadata.leaves_count += 1;
+        metadata.root = tree.root()?.into();
+
+        self.storage::<FuelBlockMerkleMetadata>()
+            .insert(&"FuelBlocks".to_string(), &metadata)?;
 
         Ok(())
     }

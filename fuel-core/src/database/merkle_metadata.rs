@@ -3,9 +3,10 @@ use fuel_core_interfaces::common::{
     fuel_tx::Bytes32,
 };
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct DenseMerkleMetadata {
-    root: Bytes32,
-    leaves_count: u64,
+    pub root: Bytes32,
+    pub leaves_count: u64,
 }
 
 impl Default for DenseMerkleMetadata {

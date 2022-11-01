@@ -1,8 +1,10 @@
 use crate::{
     database::{
+        merkle_metadata::DenseMerkleMetadata,
         storage::{
             FuelBlockIds,
             FuelBlockMerkleData,
+            FuelBlockMerkleMetadata,
             FuelBlocks,
         },
         Column,
@@ -25,8 +27,12 @@ use chrono::{
 };
 use fuel_core_interfaces::{
     common::{
+        fuel_merkle,
         fuel_merkle::{
-            binary::Node,
+            binary::{
+                MerkleTree,
+                Node,
+            },
             common::Position,
         },
         fuel_storage::{
@@ -39,7 +45,6 @@ use fuel_core_interfaces::{
     db::Transactions,
     model::FuelBlock,
 };
-use fuel_txpool::mock_db::Data;
 use itertools::Itertools;
 use std::{
     borrow::Cow,
@@ -120,36 +125,65 @@ impl StorageMutate<FuelBlockIds> for Database {
     }
 }
 
-impl StorageInspect<FuelBlockMerkleData> for Database {
+impl StorageInspect<fuel_merkle::binary::NodesTable> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &Position) -> Result<Option<Cow<Node>>, Self::Error> {
+    fn get(&self, key: &u64) -> Result<Option<Cow<Node>>, Self::Error> {
         let key: u64 = key.clone().into();
         Database::get(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
             .map_err(Into::into)
     }
 
-    fn contains_key(&self, key: &Position) -> Result<bool, Self::Error> {
+    fn contains_key(&self, key: &u64) -> Result<bool, Self::Error> {
         let key: u64 = key.clone().into();
         Database::exists(self, &key.to_be_bytes(), Column::FuelBlockMerkleData)
             .map_err(Into::into)
     }
 }
 
-impl StorageMutate<FuelBlockMerkleData> for Database {
-    fn insert(
-        &mut self,
-        key: &Position,
-        value: &Node,
-    ) -> Result<Option<Node>, Self::Error> {
+impl StorageMutate<fuel_merkle::binary::NodesTable> for Database {
+    fn insert(&mut self, key: &u64, value: &Node) -> Result<Option<Node>, Self::Error> {
         let key: u64 = key.clone().into();
         Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)
             .map_err(Into::into)
     }
 
-    fn remove(&mut self, _key: &Position) -> Result<Option<Node>, KvStoreError> {
+    fn remove(&mut self, _key: &u64) -> Result<Option<Node>, KvStoreError> {
         // BMTs are append only; removal is not supported
         Err(KvStoreError::NotFound)
+    }
+}
+
+impl StorageInspect<FuelBlockMerkleMetadata> for Database {
+    type Error = KvStoreError;
+
+    fn get(&self, key: &String) -> Result<Option<Cow<DenseMerkleMetadata>>, Self::Error> {
+        Database::get(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
+    }
+
+    fn contains_key(&self, key: &String) -> Result<bool, Self::Error> {
+        Database::exists(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
+    }
+}
+
+impl StorageMutate<FuelBlockMerkleMetadata> for Database {
+    fn insert(
+        &mut self,
+        key: &String,
+        value: &DenseMerkleMetadata,
+    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
+        Database::insert(self, key.as_bytes(), Column::FuelBlockMerkleMetadata, value)
+            .map_err(Into::into)
+    }
+
+    fn remove(
+        &mut self,
+        key: &String,
+    ) -> Result<Option<DenseMerkleMetadata>, Self::Error> {
+        Database::remove(self, key.as_bytes(), Column::FuelBlockMerkleMetadata)
+            .map_err(Into::into)
     }
 }
 

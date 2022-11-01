@@ -1,3 +1,4 @@
+use crate::database::merkle_metadata::DenseMerkleMetadata;
 use fuel_core_interfaces::{
     common::{
         fuel_crypto::fuel_types::Bytes32,
@@ -69,24 +70,14 @@ impl Mappable for SealedBlockConsensus {
     type GetValue = Self::SetValue;
 }
 
-/// BMT Nodes
-
-pub struct FuelBlockMerkleData;
-
-impl Mappable for FuelBlockMerkleData {
-    type Key = Position;
-    type SetValue = Node;
-    type GetValue = Node;
-}
-
 /// BMT Metadata
 
 pub struct FuelBlockMerkleMetadata;
 
 impl Mappable for FuelBlockMerkleMetadata {
-    type Key = ();
-    type SetValue = ();
-    type GetValue = ();
+    type Key = String;
+    type SetValue = DenseMerkleMetadata;
+    type GetValue = DenseMerkleMetadata;
 }
 
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.

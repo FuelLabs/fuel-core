@@ -2387,7 +2387,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_more",
- "fuel-vm 0.22.1",
+ "fuel-vm 0.22.2",
  "futures",
  "lazy_static",
  "parking_lot 0.12.1",
@@ -2425,7 +2425,7 @@ dependencies = [
  "clap",
  "cynic",
  "derive_more",
- "fuel-vm 0.22.0",
+ "fuel-vm 0.22.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures",
  "futures-timer",
  "hex",
@@ -2441,13 +2441,12 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12e56cc8be0a2ea7cfb30ae4696bf5f658a9447df1b32af699b6273a11fdcfa3"
 dependencies = [
  "digest 0.10.5",
  "fuel-storage",
  "hashbrown",
  "hex",
+ "serde",
  "sha2 0.10.6",
  "thiserror",
 ]
@@ -2455,12 +2454,13 @@ dependencies = [
 [[package]]
 name = "fuel-merkle"
 version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12e56cc8be0a2ea7cfb30ae4696bf5f658a9447df1b32af699b6273a11fdcfa3"
 dependencies = [
  "digest 0.10.5",
  "fuel-storage",
  "hashbrown",
  "hex",
- "serde",
  "sha2 0.10.6",
  "thiserror",
 ]
@@ -2599,7 +2599,7 @@ dependencies = [
  "derivative",
  "fuel-asm",
  "fuel-crypto",
- "fuel-merkle 0.4.0",
+ "fuel-merkle 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "fuel-types",
  "itertools",
  "num-integer",
@@ -2638,26 +2638,6 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30a1816f7a44ad20b08e3a88c62ca863345bdfba5248f0c2cfc4e6ccf30e9b1c"
-dependencies = [
- "fuel-asm",
- "fuel-crypto",
- "fuel-merkle 0.4.0",
- "fuel-storage",
- "fuel-tx",
- "fuel-types",
- "itertools",
- "serde",
- "sha3",
- "tai64",
- "thiserror",
- "tracing",
-]
-
-[[package]]
-name = "fuel-vm"
-version = "0.22.1"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -2668,6 +2648,26 @@ dependencies = [
  "fuel-types",
  "itertools",
  "rand 0.8.5",
+ "serde",
+ "sha3",
+ "tai64",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "fuel-vm"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30a1816f7a44ad20b08e3a88c62ca863345bdfba5248f0c2cfc4e6ccf30e9b1c"
+dependencies = [
+ "fuel-asm",
+ "fuel-crypto",
+ "fuel-merkle 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fuel-storage",
+ "fuel-tx",
+ "fuel-types",
+ "itertools",
  "serde",
  "sha3",
  "tai64",
