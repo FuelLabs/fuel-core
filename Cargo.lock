@@ -2252,7 +2252,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-executor"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-importer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-producer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-chain-config"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2307,7 +2307,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2371,7 +2371,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2418,7 +2418,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2454,7 +2454,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-metrics"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2463,7 +2463,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2486,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-poa-coordinator"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-relayer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2542,7 +2542,7 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 
 [[package]]
 name = "fuel-sync"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2578,9 +2578,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4a9936140e5879aa160c2c2a25ff2b9e4fcf8302380849ea934a7c71898b72"
+checksum = "dffd148866f191397915b4a407455ece148197890ce5cf86d4b3f1eedcc7f35e"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2624,9 +2624,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30a1816f7a44ad20b08e3a88c62ca863345bdfba5248f0c2cfc4e6ccf30e9b1c"
+checksum = "98e685e7f73195d470bb54de69ff14570a835c97ed42dd32c395aba3c09dc8f9"
 dependencies = [
  "anyhow",
  "fuel-asm",
