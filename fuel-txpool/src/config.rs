@@ -19,12 +19,26 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        let min_gas_price = 0;
+        let utxo_validation = true;
+        Self::new(ChainConfig::default(), min_gas_price, utxo_validation)
+    }
+}
+
+impl Config {
+    pub fn new(
+        chain_config: ChainConfig,
+        min_gas_price: u64,
+        utxo_validation: bool,
+    ) -> Self {
+        // # Dev-note: If you add a new field, be sure that this field is propagated correctly
+        //  in all places where `new` is used.
         Self {
             max_tx: 4064,
             max_depth: 10,
-            min_gas_price: 0,
-            utxo_validation: true,
-            chain_config: ChainConfig::default(),
+            min_gas_price,
+            utxo_validation,
+            chain_config,
             metrics: false,
         }
     }
