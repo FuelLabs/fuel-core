@@ -221,9 +221,9 @@ dependencies = [
 
 [[package]]
 name = "async-global-executor"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0da5b41ee986eed3f524c380e6d64965aea573882a8907682ad100f7859305ca"
+checksum = "f1b6f5d7df27bd294849f8eec66ecfc63d11814df7a4f5d74168a2394467b776"
 dependencies = [
  "async-channel",
  "async-executor",
@@ -327,16 +327,16 @@ dependencies = [
 
 [[package]]
 name = "async-io"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e21f3a490c72b3b0cf44962180e60045de2925d8dff97918f7ee43c8f637c7"
+checksum = "e8121296a9f05be7f34aa4196b1747243b3b62e048bb7906f644f3fbfc490cf7"
 dependencies = [
+ "async-lock",
  "autocfg",
  "concurrent-queue",
  "futures-lite",
  "libc",
  "log",
- "once_cell",
  "parking",
  "polling",
  "slab",
@@ -734,9 +734,9 @@ checksum = "572f695136211188308f16ad2ca5c851a712c464060ae6974944458eb83880ba"
 
 [[package]]
 name = "byte-slice-cast"
-version = "1.2.1"
+version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87c5fdd0166095e1d463fc6cc01aa8ce547ad77a4e84d42eb6762b084e28067e"
+checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
 name = "byte-tools"
@@ -816,9 +816,9 @@ checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
 
 [[package]]
 name = "cc"
-version = "1.0.73"
+version = "1.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
+checksum = "581f5dba903aac52ea3feb5ec4810848460ee833876f1f9b0fdeab1f19091574"
 dependencies = [
  "jobserver",
 ]
@@ -2167,9 +2167,9 @@ dependencies = [
 
 [[package]]
 name = "ff"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df689201f395c6b90dfe87127685f8dbfc083a5e779e613575d8bd7314300c3e"
+checksum = "d013fc25338cc558c5c2cfbad646908fb23591e2404481826742b651c9af7160"
 dependencies = [
  "rand_core 0.6.4",
  "subtle",
@@ -2252,7 +2252,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-executor"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2261,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-importer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2271,7 +2271,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-block-producer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-chain-config"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2307,7 +2307,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "assert_matches",
@@ -2371,7 +2371,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-bft"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2381,7 +2381,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-core-interfaces"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2418,7 +2418,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-gql-client"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2454,7 +2454,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-metrics"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "axum",
  "lazy_static",
@@ -2463,7 +2463,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-p2p"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2486,7 +2486,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-poa-coordinator"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2501,7 +2501,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-relayer"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2542,7 +2542,7 @@ checksum = "b0f895423d18472d60eb078cf949608ff3fe6e42e91d41b85993b11528d2c4c3"
 
 [[package]]
 name = "fuel-sync"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
@@ -2578,9 +2578,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-tx"
-version = "0.23.0"
+version = "0.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa4a9936140e5879aa160c2c2a25ff2b9e4fcf8302380849ea934a7c71898b72"
+checksum = "dffd148866f191397915b4a407455ece148197890ce5cf86d4b3f1eedcc7f35e"
 dependencies = [
  "bitflags",
  "derivative",
@@ -2597,7 +2597,7 @@ dependencies = [
 
 [[package]]
 name = "fuel-txpool"
-version = "0.13.0"
+version = "0.13.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2624,9 +2624,9 @@ dependencies = [
 
 [[package]]
 name = "fuel-vm"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30a1816f7a44ad20b08e3a88c62ca863345bdfba5248f0c2cfc4e6ccf30e9b1c"
+checksum = "98e685e7f73195d470bb54de69ff14570a835c97ed42dd32c395aba3c09dc8f9"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -3127,9 +3127,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.20"
+version = "0.14.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c929dc5c39e335a03c405292728118860721b10190d98c2a0f0efd5baafbac"
+checksum = "abfba89e19b959ca163c7752ba59d737c1ceea53a5d31a149c805446fc958064"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -3164,9 +3164,9 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.51"
+version = "0.1.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5a6ef98976b22b3b7f2f3a806f858cb862044cfa66805aa3ad84cb3d3b785ed"
+checksum = "64c122667b287044802d6ce17ee2ddf13207ed924c712de9a66a5814d5b64765"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
@@ -4294,9 +4294,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82dad04139b71a90c080c8463fe0dc7902db5192d939bd0950f074d014339e1"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "oorandom"
