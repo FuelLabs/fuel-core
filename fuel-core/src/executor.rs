@@ -319,7 +319,7 @@ impl Executor {
                         // means that the caller didn't validate it first, so maybe something
                         // is wrong with validation rules in the `TxPool`(or in another place that
                         // should validate it). Or we forgot to clean up some dependent/conflict
-                        // transactions. But it definitely means that something goes wrong, and
+                        // transactions. But it definitely means that something went wrong, and
                         // we must fix it.
                         let skipped: (Transaction, Error) =
                             (transactions.swap_remove(tx_index), err);
