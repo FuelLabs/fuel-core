@@ -128,20 +128,23 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
+        let chain_config = ChainConfig {
+            initial_state: Some(StateConfig {
+                coins: Some(self.initial_coins.clone()),
+                contracts: Some(self.contracts.values().cloned().collect_vec()),
+                ..StateConfig::default()
+            }),
+            ..ChainConfig::local_testnet()
+        };
+        let utxo_validation = true;
         let config = Config {
-            utxo_validation: true,
-            txpool: fuel_txpool::Config {
-                min_gas_price: self.min_gas_price,
-                ..Default::default()
-            },
-            chain_conf: ChainConfig {
-                initial_state: Some(StateConfig {
-                    coins: Some(self.initial_coins.clone()),
-                    contracts: Some(self.contracts.values().cloned().collect_vec()),
-                    ..StateConfig::default()
-                }),
-                ..ChainConfig::local_testnet()
-            },
+            utxo_validation,
+            txpool: fuel_txpool::Config::new(
+                chain_config.clone(),
+                self.min_gas_price,
+                utxo_validation,
+            ),
+            chain_conf: chain_config,
             ..Config::local_node()
         };
 

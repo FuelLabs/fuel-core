@@ -47,7 +47,8 @@ pub struct Config {
 impl Config {
     pub fn local_node() -> Self {
         let chain_conf = ChainConfig::local_testnet();
-
+        let utxo_validation = false;
+        let min_gas_price = 0;
         Self {
             addr: SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0),
             database_path: Default::default(),
@@ -55,12 +56,8 @@ impl Config {
             chain_conf: chain_conf.clone(),
             manual_blocks_enabled: false,
             vm: Default::default(),
-            utxo_validation: false,
-            txpool: fuel_txpool::Config {
-                utxo_validation: false,
-                chain_config: chain_conf,
-                ..Default::default()
-            },
+            utxo_validation,
+            txpool: fuel_txpool::Config::new(chain_conf, min_gas_price, utxo_validation),
             block_importer: Default::default(),
             block_producer: Default::default(),
             block_executor: Default::default(),

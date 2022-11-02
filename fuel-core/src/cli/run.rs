@@ -180,17 +180,13 @@ impl Command {
             addr,
             database_path,
             database_type,
-            chain_conf,
+            chain_conf: chain_conf.clone(),
             utxo_validation,
             manual_blocks_enabled,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: fuel_txpool::Config {
-                min_gas_price,
-                utxo_validation,
-                ..Default::default()
-            },
+            txpool: fuel_txpool::Config::new(chain_conf, min_gas_price, utxo_validation),
             block_importer: Default::default(),
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
