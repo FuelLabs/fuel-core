@@ -19,13 +19,13 @@ use fuel_core_interfaces::{
     executor::{
         Error as ExecutorError,
         ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
         ArcPoolTx,
         BlockHeight,
         DaBlockHeight,
-        FuelBlock,
         FuelBlockDb,
         Message,
     },
@@ -72,7 +72,10 @@ pub struct MockExecutor(pub MockDb);
 
 #[async_trait]
 impl Executor for MockExecutor {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
+    async fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<ExecutionResult, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -80,7 +83,10 @@ impl Executor for MockExecutor {
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(*block.header().height(), block.to_db_block());
-        Ok(block)
+        Ok(ExecutionResult {
+            block,
+            skipped_transactions: vec![],
+        })
     }
 
     async fn dry_run(
@@ -96,16 +102,23 @@ pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
 #[async_trait]
 impl Executor for FailingMockExecutor {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
+    async fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<ExecutionResult, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            match block {
-                ExecutionBlock::Production(b) => Ok(b.generate(&[])),
-                ExecutionBlock::Validation(b) => Ok(b),
-            }
+            let block = match block {
+                ExecutionBlock::Production(b) => b.generate(&[]),
+                ExecutionBlock::Validation(b) => b,
+            };
+            Ok(ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+            })
         }
     }
 

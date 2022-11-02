@@ -18,9 +18,9 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionBlock,
+        ExecutionResult,
         Executor as ExecutorTrait,
     },
-    model::FuelBlock,
     relayer::RelayerDb,
     txpool::{
         Sender,
@@ -252,7 +252,7 @@ struct ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl ExecutorTrait for ExecutorAdapter {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+    async fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
