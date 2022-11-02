@@ -1487,9 +1487,10 @@ mod tests {
             )
             .unwrap()
             .total();
+            let invalid_duplicate_tx = script.clone().into();
 
             let mut block = FuelBlock::default();
-            *block.transactions_mut() = vec![script.into()];
+            *block.transactions_mut() = vec![script.into(), invalid_duplicate_tx];
 
             let ExecutionResult {
                 block,
@@ -1499,7 +1500,7 @@ mod tests {
                 .await
                 .unwrap();
 
-            assert!(skipped_transactions.is_empty());
+            assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
             assert!(block.transactions()[0].as_mint().is_some());
             assert_eq!(
@@ -1513,6 +1514,7 @@ mod tests {
             }) = block.transactions()[0].as_mint().unwrap().outputs().first()
             {
                 assert_eq!(asset_id, &AssetId::BASE);
+                assert!(expected_fee_amount > 0);
                 assert_eq!(*amount, expected_fee_amount);
                 assert_eq!(to, &recipient);
             } else {
@@ -2288,6 +2290,116 @@ mod tests {
             err,
             &Error::TransactionValidity(TransactionValidityError::NoCoinOrMessageInput(id)) if id == tx_id
         ));
+    }
+
+    #[tokio::test]
+    async fn skipped_tx_not_changed_spent_status() {
+        // `tx2` has two inputs: one used by `tx1` and on random. So after the execution of `tx1`,
+        // the `tx2` become invalid and should be skipped by the block producers. Skipped
+        // transactions should not affect the state so the second input should be `Unspent`.
+        // # Dev-note: `TxBuilder::new(2322u64)` is used to create transactions, it produces
+        // the same first input.
+        let tx1 = TxBuilder::new(2322u64)
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let tx2 = TxBuilder::new(2322u64)
+            // The same input as `tx1`
+            .coin_input(AssetId::default(), 100)
+            // Additional unique for `tx2` input
+            .coin_input(AssetId::default(), 100)
+            .change_output(AssetId::default())
+            .build()
+            .transaction()
+            .clone();
+
+        let first_input = tx2.inputs()[0].clone();
+        let second_input = tx2.inputs()[1].clone();
+        let db = &mut Database::default();
+        // Insert both inputs
+        db.storage::<Coins>()
+            .insert(
+                &first_input.utxo_id().unwrap().clone(),
+                &Coin {
+                    owner: first_input.input_owner().unwrap().clone(),
+                    amount: 100,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: Default::default(),
+                },
+            )
+            .unwrap();
+        db.storage::<Coins>()
+            .insert(
+                &second_input.utxo_id().unwrap().clone(),
+                &Coin {
+                    owner: second_input.input_owner().unwrap().clone(),
+                    amount: 100,
+                    asset_id: AssetId::default(),
+                    maturity: Default::default(),
+                    status: CoinStatus::Unspent,
+                    block_created: Default::default(),
+                },
+            )
+            .unwrap();
+        let executor = Executor {
+            database: db.clone(),
+            config: Config {
+                utxo_validation: true,
+                ..Config::local_node()
+            },
+        };
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![tx1.clone().into(), tx2.clone().into()],
+        };
+
+        // The first input should be `Unspent` before execution.
+        let coin = db
+            .storage::<Coins>()
+            .get(first_input.utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Unspent);
+        // The second input should be `Unspent` before execution.
+        let coin = db
+            .storage::<Coins>()
+            .get(second_input.utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Unspent);
+
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+        } = executor
+            .execute(ExecutionBlock::Production(block))
+            .await
+            .unwrap();
+        // `tx2` should be skipped.
+        assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx2));
+
+        // The first input should be spent by `tx1` after execution.
+        let coin = db
+            .storage::<Coins>()
+            .get(first_input.utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Spent);
+        // The second input should be `Unspent` after execution.
+        let coin = db
+            .storage::<Coins>()
+            .get(second_input.utxo_id().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(coin.status, CoinStatus::Unspent);
     }
 
     #[tokio::test]
