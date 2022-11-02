@@ -155,8 +155,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         })
     }
 
-    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
+    pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
         self.swarm.behaviour().get_peers()
+    }
+
+    pub fn get_peers_ids(&self) -> Vec<PeerId> {
+        self.get_peers_info().iter().map(|(id, _)| *id).collect()
     }
 
     pub fn publish_message(
@@ -188,7 +192,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers();
+                let connected_peers = self.get_peers_info();
                 if connected_peers.is_empty() {
                     return Err(RequestError::NoPeersConnected)
                 }
