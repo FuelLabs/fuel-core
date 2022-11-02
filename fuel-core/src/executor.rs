@@ -2324,7 +2324,7 @@ mod tests {
             .insert(
                 &first_input.utxo_id().unwrap().clone(),
                 &Coin {
-                    owner: first_input.input_owner().unwrap().clone(),
+                    owner: *first_input.input_owner().unwrap(),
                     amount: 100,
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
@@ -2337,7 +2337,7 @@ mod tests {
             .insert(
                 &second_input.utxo_id().unwrap().clone(),
                 &Coin {
-                    owner: second_input.input_owner().unwrap().clone(),
+                    owner: *second_input.input_owner().unwrap(),
                     amount: 100,
                     asset_id: AssetId::default(),
                     maturity: Default::default(),
