@@ -364,7 +364,7 @@ impl Executor {
 
     fn execute_transaction(
         &self,
-        idx: usize,
+        idx: u16,
         tx: &mut Transaction,
         header: &PartialFuelBlockHeader,
         execution_data: &mut ExecutionData,
@@ -381,7 +381,7 @@ impl Executor {
             return Err(Error::TransactionIdCollision(tx_id))
         }
 
-        let block_height: Word = (*header.height()).into();
+        let block_height: u32 = (*header.height()).into();
         // Wrap the transaction in the execution kind.
         let mut wrapped_tx: ExecutionTypes<&mut Transaction, &Transaction> =
             match execution_kind {
@@ -393,7 +393,7 @@ impl Executor {
         let checked_tx: CheckedTransaction = tx
             .clone()
             .into_checked_basic(
-                block_height,
+                block_height as Word,
                 &self.config.chain_conf.transaction_parameters,
             )?
             .into();
@@ -509,7 +509,7 @@ impl Executor {
 
     fn execute_create_or_script<Tx>(
         &self,
-        idx: usize,
+        idx: u16,
         checked_tx: Checked<Tx>,
         header: &PartialFuelBlockHeader,
         execution_data: &mut ExecutionData,
@@ -1106,7 +1106,7 @@ impl Executor {
         block_height: BlockHeight,
         tx: &Tx,
         tx_id: &Bytes32,
-        tx_idx: usize,
+        tx_idx: u16,
         db: &mut Database,
     ) -> Result<(), Error>
     where
@@ -2408,6 +2408,59 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Unspent);
+    }
+
+    #[tokio::test]
+    async fn skipped_txs_not_affect_order() {
+        // `tx1` is invalid because it doesn't have inputs for gas.
+        // `tx2` is a `Create` transaction with some code inside.
+        // `tx3` is a `Script` transaction that depends on `tx2`. It will be skipped
+        // if `tx2` is not executed before `tx3`.
+        //
+        // The test checks that execution for the block with transactions [tx1, tx2, tx3] skips
+        // transaction `tx1` and produce a block [tx2, tx3] with the expected order.
+        let mut tx1 = Script::default();
+        tx1.set_gas_limit(1000000);
+        tx1.set_gas_price(1000000);
+        let (tx2, tx3) = setup_executable_script();
+
+        let executor = Executor {
+            database: Default::default(),
+            config: Config::local_node(),
+        };
+
+        let block = PartialFuelBlock {
+            header: Default::default(),
+            transactions: vec![
+                tx1.clone().into(),
+                tx2.clone().into(),
+                tx3.clone().into(),
+            ],
+        };
+
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+        } = executor
+            .execute(ExecutionBlock::Production(block))
+            .await
+            .unwrap();
+        assert_eq!(
+            block.transactions().len(),
+            3 // coinbase, `tx2` and `tx3`
+        );
+        assert_eq!(block.transactions()[1].id(), tx2.id());
+        assert_eq!(block.transactions()[2].id(), tx3.id());
+        // `tx1` should be skipped.
+        assert_eq!(skipped_transactions.len(), 1);
+        assert_eq!(skipped_transactions[0].0.as_script(), Some(&tx1));
+        // TODO: Uncomment when https://github.com/FuelLabs/fuel-core/issues/544 ready
+        // let tx2_index_in_the_block =
+        //     block.transactions()[2].as_script().unwrap().inputs()[0]
+        //         .tx_pointer()
+        //         .unwrap()
+        //         .tx_index();
+        // assert_eq!(tx2_index_in_the_block, 1);
     }
 
     #[tokio::test]
