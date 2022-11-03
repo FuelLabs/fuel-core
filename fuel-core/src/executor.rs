@@ -303,10 +303,10 @@ impl Executor {
 
         let mut filtered_transactions: Vec<_> = iter
             .filter_map(|transaction| {
-                let mut filter_tx = |mut tx, tx_index| {
+                let mut filter_tx = |mut tx, idx| {
                     let mut tx_db_transaction = block_db_transaction.transaction();
                     let result = self.execute_transaction(
-                        tx_index,
+                        idx,
                         &mut tx,
                         &block.header,
                         execution_data,
