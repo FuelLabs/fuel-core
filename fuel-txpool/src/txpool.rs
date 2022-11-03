@@ -233,14 +233,14 @@ impl TxPool {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
                         let _ = tx_status_sender.send(TxStatusBroadcast {
-                            tx: removed.clone(),
+                            tx_id: removed.id(),
                             status: TxStatus::SqueezedOut {
                                 reason: Error::Removed,
                             },
                         });
                     }
                     let _ = tx_status_sender.send(TxStatusBroadcast {
-                        tx: inserted.clone(),
+                        tx_id: inserted.id(),
                         status: TxStatus::Submitted,
                     });
                 }
@@ -343,7 +343,7 @@ impl TxPool {
         }
         for tx in &removed {
             let _ = broadcast.send(TxStatusBroadcast {
-                tx: tx.clone(),
+                tx_id: tx.id(),
                 status: TxStatus::SqueezedOut {
                     reason: Error::Removed,
                 },

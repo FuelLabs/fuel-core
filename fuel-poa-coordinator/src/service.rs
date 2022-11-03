@@ -264,6 +264,7 @@ where
                 }
             },
             TxStatus::Executed => Ok(()), // This has been processed already
+            TxStatus::Failed { .. } => Ok(()), // This has been processed already
             TxStatus::SqueezedOut { .. } => {
                 // TODO: If this is the only tx, set timer deadline to last_block_time + max_block_time
                 Ok(())

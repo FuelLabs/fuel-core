@@ -320,6 +320,10 @@ impl Service {
         self.tx_status_sender.subscribe()
     }
 
+    pub fn status_sender(&self) -> broadcast::Sender<TxStatusBroadcast> {
+        self.tx_status_sender.clone()
+    }
+
     pub fn sender(&self) -> &txpool::Sender {
         &self.txpool_sender
     }

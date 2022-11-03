@@ -598,6 +598,10 @@ input SpendQueryElementInput {
 	max: U64
 }
 
+type SqueezedOutStatus {
+	reason: String!
+}
+
 
 type SubmittedStatus {
 	time: DateTime!
@@ -698,7 +702,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 scalar TxPointer
 

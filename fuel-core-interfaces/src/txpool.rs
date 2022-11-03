@@ -331,11 +331,13 @@ pub enum TxStatus {
     Executed,
     /// removed from txpool.
     SqueezedOut { reason: Error },
+    /// Transaction failed to execute.
+    Failed { reason: String },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxStatusBroadcast {
-    pub tx: ArcPoolTx,
+    pub tx_id: Bytes32,
     pub status: TxStatus,
 }
 
@@ -407,4 +409,6 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
+    #[error("Transaction squeezed out because {0}")]
+    SqueezedOut(String),
 }

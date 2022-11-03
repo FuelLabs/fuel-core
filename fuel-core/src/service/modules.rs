@@ -2,7 +2,10 @@
 use crate::{
     chain_config::BlockProduction,
     database::Database,
-    executor::Executor,
+    executor::{
+        DynTxnStatusSender,
+        Executor,
+    },
     service::Config,
 };
 use anyhow::Result;
@@ -161,7 +164,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(block_import_rx)
-        .tx_status_sender(tx_status_sender)
+        .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
@@ -176,6 +179,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         executor: Box::new(ExecutorAdapter {
             database: database.clone(),
             config: config.clone(),
+            tx_status_sender: Box::new(tx_status_sender),
         }),
         relayer: Box::new(MaybeRelayerAdapter {
             database: database.clone(),
@@ -244,6 +248,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 struct ExecutorAdapter {
     database: Database,
     config: Config,
+    tx_status_sender: DynTxnStatusSender,
 }
 
 #[async_trait::async_trait]
@@ -252,6 +257,7 @@ impl ExecutorTrait for ExecutorAdapter {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
+            tx_status_sender: self.tx_status_sender.clone(),
         };
         executor.execute(block).await
     }
@@ -264,6 +270,7 @@ impl ExecutorTrait for ExecutorAdapter {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
+            tx_status_sender: self.tx_status_sender.clone(),
         };
         executor.dry_run(block, utxo_validation).await
     }

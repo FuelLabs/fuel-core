@@ -119,6 +119,7 @@ impl From<VmProgramState> for ProgramState {
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
+    SqueezedOut(SqueezedOutStatus),
     Failed(FailureStatus),
 }
 
@@ -192,6 +193,17 @@ impl FailureStatus {
     }
 }
 
+pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[Object]
+impl SqueezedOutStatus {
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
 impl From<TxStatus> for TransactionStatus {
     fn from(s: TxStatus) -> Self {
         match s {
@@ -207,6 +219,9 @@ impl From<TxStatus> for TransactionStatus {
                 result,
                 time,
             }),
+            TxStatus::SqueezedOut { reason } => {
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
+            }
             TxStatus::Failed {
                 block_id,
                 reason,
@@ -237,6 +252,9 @@ impl From<TransactionStatus> for TxStatus {
                 result,
                 time,
             },
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
+                TxStatus::SqueezedOut { reason }
+            }
             TransactionStatus::Failed(FailureStatus {
                 block_id,
                 reason,
@@ -390,7 +408,7 @@ impl Transaction {
         let id = self.0.id();
         let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
-        get_tx_status(id, &db, &txpool).await
+        get_tx_status(id, db, txpool).await
     }
 
     async fn receipts(

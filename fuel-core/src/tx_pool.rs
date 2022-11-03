@@ -21,6 +21,9 @@ pub enum TransactionStatus {
         time: DateTime<Utc>,
         result: Option<ProgramState>,
     },
+    SqueezedOut {
+        reason: String,
+    },
     Failed {
         block_id: BlockId,
         time: DateTime<Utc>,

@@ -130,7 +130,7 @@ async fn simple_insert_removal_subscription() {
         assert_eq!(
             subscribe.try_recv(),
             Ok(TxStatusBroadcast {
-                tx: tx.inserted.clone(),
+                tx_id: tx.inserted.id(),
                 status: TxStatus::Submitted,
             }),
             "First added should be tx1"
@@ -143,7 +143,7 @@ async fn simple_insert_removal_subscription() {
         assert_eq!(
             subscribe.try_recv(),
             Ok(TxStatusBroadcast {
-                tx: tx.inserted.clone(),
+                tx_id: tx.inserted.id(),
                 status: TxStatus::Submitted,
             }),
             "Second added should be tx2"
@@ -166,7 +166,7 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
         Ok(Ok(TxStatusBroadcast {
-            tx: rem[0].clone(),
+            tx_id: rem[0].id(),
             status: TxStatus::SqueezedOut {
                 reason: TxpoolError::Removed
             }
@@ -177,7 +177,7 @@ async fn simple_insert_removal_subscription() {
     assert_eq!(
         tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
         Ok(Ok(TxStatusBroadcast {
-            tx: rem[1].clone(),
+            tx_id: rem[1].id(),
             status: TxStatus::SqueezedOut {
                 reason: TxpoolError::Removed
             }

@@ -169,6 +169,7 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SqueezedOutStatus(SqueezedOutStatus),
     FailureStatus(FailureStatus),
 }
 
@@ -193,6 +194,12 @@ pub struct FailureStatus {
     pub time: super::DateTime,
     pub reason: String,
     pub program_state: Option<ProgramState>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutStatus {
+    pub reason: String,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]

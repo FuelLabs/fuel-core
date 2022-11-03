@@ -8,16 +8,12 @@ use super::*;
 use crate::tx_pool::TransactionStatus;
 use test_case::test_case;
 
-fn txn_id(i: u8) -> Bytes32 {
-    [i; 32].into()
-}
-
 struct Input<I>
 where
     I: Iterator<Item = anyhow::Result<Option<TransactionStatus>>> + Send + 'static,
 {
     requested_id: Bytes32,
-    status_updates: Vec<Result<Bytes32, BroadcastStreamRecvError>>,
+    status_updates: Vec<Result<TxStatusBroadcast, BroadcastStreamRecvError>>,
     db_statuses: I,
 }
 
@@ -26,6 +22,26 @@ enum Expected {
     Received(Vec<TransactionStatus>),
     TimedOut(Vec<TransactionStatus>),
     Error,
+}
+
+fn txn_id(i: u8) -> Bytes32 {
+    [i; 32].into()
+}
+
+fn txn_success(tx_id: Bytes32) -> TxStatusBroadcast {
+    TxStatusBroadcast {
+        tx_id,
+        status: fuel_core_interfaces::txpool::TxStatus::Executed,
+    }
+}
+
+fn txn_squeezed(tx_id: Bytes32) -> TxStatusBroadcast {
+    TxStatusBroadcast {
+        tx_id,
+        status: fuel_core_interfaces::txpool::TxStatus::SqueezedOut {
+            reason: fuel_txpool::Error::SqueezedOut(String::new()),
+        },
+    }
 }
 
 fn db_always_some(
@@ -57,7 +73,7 @@ fn db_none(n: usize) -> impl Iterator<Item = anyhow::Result<Option<TransactionSt
 fn db_error(
     f: Vec<anyhow::Error>,
 ) -> impl Iterator<Item = anyhow::Result<Option<TransactionStatus>>> {
-    f.into_iter().map(|t| Err(t))
+    f.into_iter().map(Err)
 }
 
 fn submitted() -> TransactionStatus {
@@ -83,6 +99,12 @@ fn failed() -> TransactionStatus {
     }
 }
 
+fn squeezed() -> TransactionStatus {
+    TransactionStatus::SqueezedOut {
+        reason: fuel_txpool::Error::SqueezedOut(String::new()).to_string(),
+    }
+}
+
 #[test_case(
     Input {
         requested_id: txn_id(2),
@@ -95,7 +117,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(3))],
+        status_updates: vec![Ok(txn_success(txn_id(3)))],
         db_statuses: db_always_none(),
     }
     => Expected::TimedOut(vec![])
@@ -104,7 +126,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(2))],
+        status_updates: vec![Ok(txn_success(txn_id(2)))],
         db_statuses: db_always_none(),
     }
     => Expected::Received(vec![])
@@ -113,7 +135,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(2))],
+        status_updates: vec![Ok(txn_success(txn_id(2)))],
         db_statuses: db_none(1).chain(db_always_some(submitted)),
     }
     => Expected::TimedOut(vec![submitted()])
@@ -122,7 +144,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(2))],
+        status_updates: vec![Ok(txn_success(txn_id(2)))],
         db_statuses: db_none(1).chain(db_always_error(|| anyhow::anyhow!("db failed"))),
     }
     => Expected::Error
@@ -149,7 +171,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(2)), Ok(txn_id(2))],
+        status_updates: vec![Ok(txn_success(txn_id(2))), Ok(txn_success(txn_id(2)))],
         db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(success)),
     }
     => Expected::Received(vec![submitted(), success()])
@@ -158,7 +180,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(20)), Ok(txn_id(8))],
+        status_updates: vec![Ok(txn_success(txn_id(20))), Ok(txn_success(txn_id(8)))],
         db_statuses: db_none(1),
     }
     => Expected::TimedOut(vec![])
@@ -167,7 +189,7 @@ fn failed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_id(2)), Ok(txn_id(2))],
+        status_updates: vec![Ok(txn_success(txn_id(2))), Ok(txn_success(txn_id(2)))],
         db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(failed)),
     }
     => Expected::Received(vec![submitted(), failed()])
@@ -191,6 +213,15 @@ fn failed() -> TransactionStatus {
     => Expected::Received(vec![failed()])
     ; "no status update, failed db status, received failed status"
 )]
+#[test_case(
+    Input {
+        requested_id: txn_id(2),
+        status_updates: vec![Ok(txn_squeezed(txn_id(2)))],
+        db_statuses: db_none(1),
+    }
+    => Expected::Received(vec![squeezed()])
+    ; "squeezed status updates, no db status, received squeezed status"
+)]
 #[tokio::test]
 async fn create_tx_status_change_stream<I>(input: Input<I>) -> Expected
 where
@@ -206,13 +237,13 @@ where
         .expect_get_tx_status()
         .returning(move |_| db_statuses.next().unwrap().map(|t| t.map(|t| t.into())));
     let state = Box::new(state);
-    let ids = status_updates.iter().cloned().collect::<Vec<_>>();
+    let ids = status_updates.to_vec();
     let reached_end = Arc::new(AtomicBool::new(false));
     let re = reached_end.clone();
     let stream = futures::stream::iter(ids)
         .chain(futures::stream::once(async move {
             re.store(true, atomic::Ordering::SeqCst);
-            Ok(txn_id(255))
+            Ok(txn_success(txn_id(255)))
         }))
         .boxed();
 

@@ -1,5 +1,11 @@
-use crate::schema::tx::types::TransactionStatus;
-use fuel_core_interfaces::common::prelude::Bytes32;
+use crate::schema::tx::types::{
+    SqueezedOutStatus,
+    TransactionStatus,
+};
+use fuel_core_interfaces::{
+    common::prelude::Bytes32,
+    txpool::TxStatusBroadcast,
+};
 use futures::{
     stream::BoxStream,
     Stream,
@@ -23,11 +29,9 @@ pub(crate) trait TxnStatusChangeState {
 
 pub(crate) async fn transaction_status_change(
     state: Box<dyn TxnStatusChangeState + Send + Sync>,
-    stream: BoxStream<'static, Result<Bytes32, BroadcastStreamRecvError>>,
+    stream: BoxStream<'static, Result<TxStatusBroadcast, BroadcastStreamRecvError>>,
     transaction_id: Bytes32,
 ) -> impl Stream<Item = anyhow::Result<TransactionStatus>> {
-    let transaction_id = transaction_id.into();
-
     let check_db_first = state.get_tx_status(transaction_id).await.transpose();
     let (close, mut closed) = tokio::sync::oneshot::channel();
     let mut close = Some(close);
@@ -43,17 +47,34 @@ pub(crate) async fn transaction_status_change(
             }
             match stream.next().await {
                 // Got status update that matches the transaction_id we are looking for.
-                Some(Ok(id)) if id == transaction_id.into() => {
-                    let status = state.get_tx_status(transaction_id).await;
+                Some(Ok(TxStatusBroadcast { tx_id, status }))
+                    if tx_id == transaction_id =>
+                {
                     match status {
-                        // Got the status from the db.
-                        Ok(Some(s)) => Some((Some(Ok(s)), (state, stream))),
-                        // Could not get status from the db so the stream must exit
-                        // as a value has been missed and the only valid thing to do
-                        // is to restart the stream.
-                        Ok(None) => None,
-                        // Got an error so return it.
-                        Err(e) => Some((Some(Err(e)), (state, stream))),
+                        // Squeezed out status is never stored in the database so must be
+                        // outputted inline.
+                        fuel_core_interfaces::txpool::TxStatus::SqueezedOut {
+                            reason,
+                        } => {
+                            let status =
+                                TransactionStatus::SqueezedOut(SqueezedOutStatus {
+                                    reason: reason.to_string(),
+                                });
+                            Some((Some(Ok(status)), (state, stream)))
+                        }
+                        _ => {
+                            let status = state.get_tx_status(transaction_id).await;
+                            match status {
+                                // Got the status from the db.
+                                Ok(Some(s)) => Some((Some(Ok(s)), (state, stream))),
+                                // Could not get status from the db so the stream must exit
+                                // as a value has been missed and the only valid thing to do
+                                // is to restart the stream.
+                                Ok(None) => None,
+                                // Got an error so return it.
+                                Err(e) => Some((Some(Err(e)), (state, stream))),
+                            }
+                        }
                     }
                 }
                 // Got a status update but it's not this transaction so ignore it.

@@ -268,7 +268,7 @@ impl MockTxPool {
         self.transactions.lock().await.push(tx.clone());
         self.broadcast_tx
             .send(TxStatusBroadcast {
-                tx,
+                tx_id: tx.id(),
                 status: TxStatus::Submitted,
             })
             .unwrap();

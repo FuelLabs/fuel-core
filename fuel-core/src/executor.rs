@@ -84,6 +84,10 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    txpool::{
+        TxStatus,
+        TxStatusBroadcast,
+    },
 };
 use fuel_storage::{
     StorageAsMut,
@@ -93,6 +97,7 @@ use std::ops::{
     Deref,
     DerefMut,
 };
+use tokio::sync::broadcast;
 use tracing::{
     debug,
     warn,
@@ -106,6 +111,7 @@ use tracing::{
 pub struct Executor {
     pub database: Database,
     pub config: Config,
+    pub tx_status_sender: DynTxnStatusSender,
 }
 
 /// Data that is generated after executing all transactions.
@@ -113,6 +119,23 @@ struct ExecutionData {
     coinbase: u64,
     message_ids: Vec<MessageId>,
     tx_status: Vec<(Bytes32, TransactionStatus)>,
+}
+
+pub trait TxnStatusSender: Send + Sync {
+    fn send(&self, value: TxStatusBroadcast);
+    fn clone_sender(&self) -> Box<dyn TxnStatusSender>;
+}
+
+pub type DynTxnStatusSender = Box<dyn TxnStatusSender>;
+
+impl TxnStatusSender for broadcast::Sender<TxStatusBroadcast> {
+    fn send(&self, value: TxStatusBroadcast) {
+        let _ = self.send(value);
+    }
+
+    fn clone_sender(&self) -> Box<dyn TxnStatusSender> {
+        Box::new(self.clone())
+    }
 }
 
 #[async_trait::async_trait]
@@ -140,6 +163,7 @@ impl ExecutorTrait for Executor {
                 ..self.config.clone()
             },
             database: temporary_db.clone(),
+            tx_status_sender: self.tx_status_sender.clone(),
         };
 
         let block = executor.execute_inner(block, temporary_db).await?;
@@ -231,6 +255,20 @@ impl Executor {
 
         // Commit the database transaction.
         block_db_transaction.commit()?;
+
+        // Broadcast the transaction statuses.
+        for (tx_id, status) in tx_status {
+            let status = match status {
+                TransactionStatus::Submitted { .. } => TxStatus::Submitted,
+                TransactionStatus::Success { .. } => TxStatus::Executed,
+                TransactionStatus::SqueezedOut { reason, .. } => TxStatus::SqueezedOut {
+                    reason: fuel_core_interfaces::txpool::Error::SqueezedOut(reason),
+                },
+                TransactionStatus::Failed { reason, .. } => TxStatus::Failed { reason },
+            };
+            let status = TxStatusBroadcast { tx_id, status };
+            self.tx_status_sender.send(status);
+        }
 
         // Get the complete fuel block.
         Ok(block.into_inner())
@@ -1101,6 +1139,9 @@ impl Executor {
                 TransactionStatus::Failed { block_id, .. } => {
                     *block_id = finalized_block_id;
                 }
+                TransactionStatus::SqueezedOut { .. } => {
+                    unreachable!("A squeezed out transaction will never make it to here")
+                }
             }
             db.update_tx_status(tx_id, status.clone())?;
         }
@@ -1131,6 +1172,20 @@ impl Fee for CreateCheckedMetadata {
 
     fn min_fee(&self) -> Word {
         TransactionFee::min(&self.fee)
+    }
+}
+
+impl Clone for Box<dyn TxnStatusSender> {
+    fn clone(&self) -> Self {
+        self.clone_sender()
+    }
+}
+
+#[cfg(test)]
+impl Default for DynTxnStatusSender {
+    fn default() -> Self {
+        let (tx, _) = tokio::sync::broadcast::channel(1);
+        Box::new(tx)
     }
 }
 
@@ -1336,10 +1391,12 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let verifier = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let block = test_block(10);
 
@@ -1358,6 +1415,7 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let block = test_block(10);
         let start_block = block.clone();
@@ -1413,6 +1471,7 @@ mod tests {
             let mut producer = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let recipient = [1u8; 32].into();
             producer.config.block_producer.coinbase_recipient = recipient;
@@ -1477,6 +1536,7 @@ mod tests {
             let mut producer = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let recipient = [1u8; 32].into();
             producer.config.block_producer.coinbase_recipient = recipient;
@@ -1499,6 +1559,7 @@ mod tests {
                 database: Default::default(),
                 // Use the same config as block producer
                 config: producer.config,
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validated_block = validator
                 .execute(ExecutionBlock::Validation(produced_block))
@@ -1525,6 +1586,7 @@ mod tests {
             let producer = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
 
             let mut block = FuelBlock::default();
@@ -1546,6 +1608,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1567,6 +1630,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1590,6 +1654,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1614,6 +1679,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1639,6 +1705,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1660,6 +1727,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1687,6 +1755,7 @@ mod tests {
             let validator = Executor {
                 database: Default::default(),
                 config: Config::local_node(),
+                tx_status_sender: DynTxnStatusSender::default(),
             };
             let validation_err = validator
                 .execute(ExecutionBlock::Validation(block))
@@ -1702,6 +1771,7 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let factor = producer
             .config
@@ -1712,6 +1782,7 @@ mod tests {
         let verifier = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let gas_limit = 100;
@@ -1755,11 +1826,13 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let verifier = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut block = PartialFuelBlock {
@@ -1850,11 +1923,13 @@ mod tests {
         let producer = Executor {
             database: db.clone(),
             config: config.clone(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let verifier = Executor {
             database: db.clone(),
             config: config.clone(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut block = PartialFuelBlock {
@@ -1924,11 +1999,13 @@ mod tests {
         let producer = Executor {
             database: Database::default(),
             config: config.clone(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let verifier = Executor {
             database: Default::default(),
             config: config.clone(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut block = PartialFuelBlock {
@@ -1986,11 +2063,13 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let verifier = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut block = FuelBlock::default();
@@ -2032,11 +2111,13 @@ mod tests {
         let producer = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let verifier = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut block = FuelBlock::default();
@@ -2068,6 +2149,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2103,6 +2185,7 @@ mod tests {
         let executor = Executor {
             database: db.clone(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2191,6 +2274,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2260,6 +2344,7 @@ mod tests {
         let setup = Executor {
             database: db.clone(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         setup
@@ -2271,6 +2356,7 @@ mod tests {
         let producer = Executor {
             database: producer_view,
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let second_block = producer
             .execute(ExecutionBlock::Production(second_block))
@@ -2280,6 +2366,7 @@ mod tests {
         let verifier = Executor {
             database: db,
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let verify_result = verifier
             .execute(ExecutionBlock::Validation(second_block))
@@ -2341,6 +2428,7 @@ mod tests {
         let setup = Executor {
             database: db.clone(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         setup
@@ -2352,6 +2440,7 @@ mod tests {
         let producer = Executor {
             database: producer_view,
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let mut second_block = producer
@@ -2369,6 +2458,7 @@ mod tests {
         let verifier = Executor {
             database: db,
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
         let verify_result = verifier
             .execute(ExecutionBlock::Validation(second_block))
@@ -2391,6 +2481,7 @@ mod tests {
         let executor = Executor {
             database: database.clone(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2446,6 +2537,7 @@ mod tests {
         let executor = Executor {
             database: database.clone(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2513,6 +2605,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         }
     }
 
@@ -2721,6 +2814,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         executor
@@ -2799,6 +2893,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         executor

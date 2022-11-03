@@ -69,7 +69,7 @@ async fn insert_from_local_broadcasts_to_p2p() {
         assert_eq!(
             subscribe.try_recv(),
             Ok(TxStatusBroadcast {
-                tx: result.inserted.clone(),
+                tx_id: result.inserted.id(),
                 status: TxStatus::Submitted,
             }),
             "First added should be tx1"
