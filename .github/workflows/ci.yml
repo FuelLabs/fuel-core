@@ -108,6 +108,10 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
       - name: Install Cargo Make
         uses: davidB/rust-cargo-make@v1
         with:
