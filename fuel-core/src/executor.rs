@@ -89,6 +89,7 @@ use fuel_storage::{
     StorageAsMut,
     StorageAsRef,
 };
+use itertools::Itertools;
 use std::ops::{
     Deref,
     DerefMut,
@@ -269,7 +270,7 @@ impl Executor {
         let (execution_kind, block) = block.split();
 
         let block_height: u32 = (*block.header.height()).into();
-        let transactions = &mut block.transactions;
+        let mut transactions = ::core::mem::replace(&mut block.transactions, vec![]);
 
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::Production => {
@@ -295,43 +296,49 @@ impl Executor {
                 self.check_coinbase(block_height as Word, mint, None)?
             }
         };
-        // Skip the coinbase transaction.
-        let mut tx_index = 1;
-
-        // Execute each transaction.
-        while tx_index < transactions.len() {
-            let tx = &mut transactions[tx_index];
-            let mut tx_db_transaction = block_db_transaction.transaction();
-            let result = self.execute_transaction(
-                tx_index,
-                tx,
-                &block.header,
-                execution_data,
-                execution_kind,
-                &mut tx_db_transaction,
-            );
-
-            if let Err(err) = result {
-                match execution_kind {
-                    ExecutionKind::Production => {
-                        // If, during block production, we get an invalid transaction, remove it
-                        // from the block and continue block creation. An invalid transaction
-                        // means that the caller didn't validate it first, so maybe something
-                        // is wrong with validation rules in the `TxPool`(or in another place that
-                        // should validate it). Or we forgot to clean up some dependent/conflict
-                        // transactions. But it definitely means that something goes wrong, and
-                        // we must fix it.
-                        let skipped: (Transaction, Error) =
-                            (transactions.swap_remove(tx_index), err);
-                        execution_data.skipped_transactions.push(skipped);
-                        continue
-                    }
-                    ExecutionKind::Validation => return Err(err),
+        let mut tx_index = 0;
+        let mut transactions: Vec<_> = transactions
+            .into_iter()
+            .filter_map(|mut tx| {
+                // Skip the coinbase transaction.
+                if tx_index == 0 {
+                    tx_index += 1;
+                    return Some(Ok(tx))
                 }
-            }
-            tx_db_transaction.commit()?;
-            tx_index += 1;
-        }
+
+                let mut tx_db_transaction = block_db_transaction.transaction();
+                let result = self.execute_transaction(
+                    tx_index,
+                    &mut tx,
+                    &block.header,
+                    execution_data,
+                    execution_kind,
+                    &mut tx_db_transaction,
+                );
+
+                if let Err(err) = result {
+                    match execution_kind {
+                        ExecutionKind::Production => {
+                            // If, during block production, we get an invalid transaction, remove it
+                            // from the block and continue block creation. An invalid transaction
+                            // means that the caller didn't validate it first, so maybe something
+                            // is wrong with validation rules in the `TxPool`(or in another place that
+                            // should validate it). Or we forgot to clean up some dependent/conflict
+                            // transactions. But it definitely means that something goes wrong, and
+                            // we must fix it.
+                            execution_data.skipped_transactions.push((tx, err));
+                            return None
+                        }
+                        ExecutionKind::Validation => return Some(Err(err)),
+                    }
+                }
+                if let Err(err) = tx_db_transaction.commit() {
+                    return Some(Err(err.into()))
+                }
+                tx_index += 1;
+                Some(Ok(tx))
+            })
+            .try_collect()?;
 
         // After the execution of all transactions in production mode, we can set the final fee.
         if let ExecutionKind::Production = execution_kind {
@@ -343,6 +350,7 @@ impl Executor {
             ));
             transactions[0] = coinbase_tx.clone().into();
         }
+        block.transactions = transactions;
 
         coinbase_tx = self.check_coinbase(
             block_height as Word,
