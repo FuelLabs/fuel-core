@@ -29,8 +29,8 @@ use fuel_core_interfaces::{
         fuel_types::Bytes32,
     },
     executor::{
-        Error,
         ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
@@ -98,27 +98,22 @@ impl Trait for Producer {
             "Failed to produce block {:?} due to execution failure",
             block
         );
-        let result = self
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+        } = self
             .executor
             .execute(ExecutionBlock::Production(block))
-            .await;
+            .await
+            .context(context_string)?;
 
-        if let Err(
-            Error::VmExecution { transaction_id, .. }
-            | Error::TransactionIdCollision(transaction_id),
-        ) = &result
-        {
-            // TODO: if block execution fails due to any transaction validity errors,
-            //          should those txs be removed from the txpool? While this
-            //          theoretically shouldn't happen due to txpool validation rules,
-            //          it is a possibility.
+        for (tx, err) in skipped_transactions {
+            // TODO: Removed from `TxPool` invalid transactions
             error!(
-                "faulty tx prevented block production: {:#x}",
-                transaction_id
+                "During block production got invalid transaction {:?} with error {:?}",
+                tx, err
             );
         }
-
-        let block = result.context(context_string)?;
 
         debug!("Produced block: {:?}", &block);
         Ok(block)
