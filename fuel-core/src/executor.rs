@@ -270,73 +270,78 @@ impl Executor {
         let (execution_kind, block) = block.split();
 
         let block_height: u32 = (*block.header.height()).into();
-        let mut transactions = ::core::mem::take(&mut block.transactions);
+
+        // Clean block from transactions and gather them from scratch.
+        let mut iter = ::core::mem::take(&mut block.transactions).into_iter();
 
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::Production => {
                 // The coinbase transaction should be the first.
                 // We will add actual amount of `Output::Coin` at the end of transactions execution.
-                let mint = Transaction::mint(
+                Transaction::mint(
                     TxPointer::new(block_height, 0),
                     vec![Output::coin(
                         self.config.block_producer.coinbase_recipient,
                         0, // We will set it later
                         AssetId::BASE,
                     )],
-                );
-                transactions.insert(0, mint.clone().into());
-                mint
+                )
             }
             ExecutionKind::Validation => {
-                let mint = if let Some(Transaction::Mint(mint)) = transactions.get(0) {
-                    mint.clone()
+                let mint = if let Some(Transaction::Mint(mint)) = iter.next() {
+                    mint
                 } else {
                     return Err(Error::CoinbaseIsNotFirstTransaction)
                 };
                 self.check_coinbase(block_height as Word, mint, None)?
             }
         };
-        let mut tx_index = 0;
-        let mut transactions: Vec<_> = transactions
-            .into_iter()
-            .filter_map(|mut tx| {
-                // Skip the coinbase transaction.
-                if tx_index == 0 {
-                    tx_index += 1;
-                    return Some(Ok(tx))
-                }
 
-                let mut tx_db_transaction = block_db_transaction.transaction();
-                let result = self.execute_transaction(
-                    tx_index,
-                    &mut tx,
-                    &block.header,
-                    execution_data,
-                    execution_kind,
-                    &mut tx_db_transaction,
-                );
+        // Skip the coinbase transaction.
+        block.transactions.push(coinbase_tx.clone().into());
+        let mut tx_index = 1;
 
-                if let Err(err) = result {
-                    match execution_kind {
-                        ExecutionKind::Production => {
-                            // If, during block production, we get an invalid transaction, remove it
-                            // from the block and continue block creation. An invalid transaction
-                            // means that the caller didn't validate it first, so maybe something
-                            // is wrong with validation rules in the `TxPool`(or in another place that
-                            // should validate it). Or we forgot to clean up some dependent/conflict
-                            // transactions. But it definitely means that something went wrong, and
-                            // we must fix it.
-                            execution_data.skipped_transactions.push((tx, err));
-                            return None
+        let mut filtered_transactions: Vec<_> = iter
+            .filter_map(|transaction| {
+                let mut filter_tx = |mut tx, tx_index| {
+                    let mut tx_db_transaction = block_db_transaction.transaction();
+                    let result = self.execute_transaction(
+                        tx_index,
+                        &mut tx,
+                        &block.header,
+                        execution_data,
+                        execution_kind,
+                        &mut tx_db_transaction,
+                    );
+
+                    if let Err(err) = result {
+                        return match execution_kind {
+                            ExecutionKind::Production => {
+                                // If, during block production, we get an invalid transaction,
+                                // remove it from the block and continue block creation. An invalid
+                                // transaction means that the caller didn't validate it first, so
+                                // maybe something is wrong with validation rules in the `TxPool`
+                                // (or in another place that should validate it). Or we forgot to
+                                // clean up some dependent/conflict transactions. But it definitely
+                                // means that something went wrong, and we must fix it.
+                                execution_data.skipped_transactions.push((tx, err));
+                                None
+                            }
+                            ExecutionKind::Validation => Some(Err(err)),
                         }
-                        ExecutionKind::Validation => return Some(Err(err)),
                     }
+
+                    if let Err(err) = tx_db_transaction.commit() {
+                        return Some(Err(err.into()))
+                    }
+                    Some(Ok(tx))
+                };
+
+                let filtered_tx = filter_tx(transaction, tx_index);
+                if filtered_tx.is_some() {
+                    tx_index += 1;
                 }
-                if let Err(err) = tx_db_transaction.commit() {
-                    return Some(Err(err.into()))
-                }
-                tx_index += 1;
-                Some(Ok(tx))
+                filtered_tx
             })
             .try_collect()?;
 
@@ -348,9 +353,9 @@ impl Executor {
                 execution_data.coinbase,
                 AssetId::BASE,
             ));
-            transactions[0] = coinbase_tx.clone().into();
+            block.transactions[0] = coinbase_tx.clone().into();
         }
-        block.transactions = transactions;
+        block.transactions.append(&mut filtered_transactions);
 
         coinbase_tx = self.check_coinbase(
             block_height as Word,
