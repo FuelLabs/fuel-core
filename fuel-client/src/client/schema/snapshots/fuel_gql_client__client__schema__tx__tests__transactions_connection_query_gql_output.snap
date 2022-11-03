@@ -1,8 +1,6 @@
 ---
 source: fuel-client/src/client/schema/tx.rs
-assertion_line: 292
 expression: operation.query
-
 ---
 query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
   transactions(first: $_0, after: $_1, last: $_2, before: $_3) {
@@ -27,6 +25,9 @@ query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
               returnType
               data
             }
+          }
+          ... on SqueezedOutStatus {
+            reason
           }
           ... on FailureStatus {
             block {
