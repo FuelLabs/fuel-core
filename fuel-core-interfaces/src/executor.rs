@@ -43,6 +43,16 @@ pub enum ExecutionTypes<P, V> {
     Validation(V),
 }
 
+/// The result of transactions execution.
+#[derive(Debug)]
+pub struct ExecutionResult {
+    /// Created block during the execution of transactions. It contains only valid transactions.
+    pub block: FuelBlock,
+    /// The list of skipped transactions with corresponding errors. Those transactions were
+    /// not included in the block and didn't affect the state of the blockchain.
+    pub skipped_transactions: Vec<(Transaction, Error)>,
+}
+
 #[derive(Debug, Clone, Copy)]
 /// The kind of execution.
 pub enum ExecutionKind {
@@ -54,7 +64,7 @@ pub enum ExecutionKind {
 
 #[async_trait]
 pub trait Executor: Sync + Send {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error>;
+    async fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error>;
 
     async fn dry_run(
         &self,
