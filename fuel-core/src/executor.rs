@@ -415,7 +415,7 @@ impl Executor {
                 // Right now, we only support `Mint` transactions for coinbase,
                 // which are processed separately as a first transaction.
                 //
-                // All other `Mint` transaction is not allowed.
+                // All other `Mint` transactions are not allowed.
                 let (mint, _): (Mint, _) = mint.into();
                 return Err(Error::NotSupportedTransaction(Box::new(mint.into())))
             }
