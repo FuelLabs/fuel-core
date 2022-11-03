@@ -270,7 +270,7 @@ impl Executor {
         let (execution_kind, block) = block.split();
 
         let block_height: u32 = (*block.header.height()).into();
-        let mut transactions = ::core::mem::replace(&mut block.transactions, vec![]);
+        let mut transactions = ::core::mem::take(&mut block.transactions);
 
         let mut coinbase_tx: Mint = match execution_kind {
             ExecutionKind::Production => {
