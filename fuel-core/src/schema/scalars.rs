@@ -146,7 +146,7 @@ impl FromStr for HexString {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+        let value = s.strip_prefix("0x").unwrap_or(s);
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
         Ok(HexString(bytes))
@@ -178,7 +178,7 @@ macro_rules! fuel_type_scalar {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 // trim leading 0x
-                let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+                let value = s.strip_prefix("0x").unwrap_or(s);
                 // pad input to $len bytes
                 let mut bytes = ((value.len() / 2)..$len).map(|_| 0).collect::<Vec<u8>>();
                 // decode into bytes
