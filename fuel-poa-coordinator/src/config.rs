@@ -16,6 +16,7 @@ pub struct Config {
     pub trigger: Trigger,
     pub block_gas_limit: Word,
     pub signing_key: Option<Secret<SecretKeyWrapper>>,
+    pub metrics: bool,
 }
 
 /// Block production trigger for PoA operation

@@ -23,7 +23,7 @@ ethers = "0.17"
 fuel-core = { path = "../fuel-core", default-features = false }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }
-fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.12.0" }
+fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.13.2" }
 fuel-relayer = { path = "../fuel-relayer", features = ["test-helpers"] }
 fuel-txpool = { path = "../fuel-txpool" }
 futures = "0.3"

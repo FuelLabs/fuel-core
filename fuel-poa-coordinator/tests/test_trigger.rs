@@ -349,6 +349,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
             trigger,
             block_gas_limit: 100_000,
             signing_key: Some(test_signing_key()),
+            metrics: false,
         });
 
         let (txpool, broadcast_rx) = MockTxPool::spawn();
@@ -425,6 +426,7 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
         trigger: Trigger::Never,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
@@ -470,6 +472,7 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         trigger: Trigger::Instant,
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
@@ -532,6 +535,7 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
@@ -625,6 +629,7 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
@@ -683,6 +688,7 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
@@ -763,6 +769,7 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
         },
         block_gas_limit: 100_000,
         signing_key: Some(test_signing_key()),
+        metrics: false,
     });
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
