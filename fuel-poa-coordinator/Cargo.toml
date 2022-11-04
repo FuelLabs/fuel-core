@@ -21,5 +21,6 @@ tracing = "0.1"
 [dev-dependencies]
 async-trait = "0.1"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+mockall = "0.11"
 rand = "0.8"
 tokio = { version = "1.21", features = ["full", "test-util"] }

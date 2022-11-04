@@ -29,25 +29,21 @@ use fuel_core_interfaces::{
         fuel_types::Bytes32,
     },
     executor::{
-        Error,
         ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
         BlockHeight,
         DaBlockHeight,
         FuelApplicationHeader,
-        FuelBlock,
         FuelConsensusHeader,
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
 };
 use tokio::sync::Mutex;
-use tracing::{
-    debug,
-    error,
-};
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -65,12 +61,12 @@ pub struct Producer {
 
 #[async_trait::async_trait]
 impl Trait for Producer {
-    /// Produces a block for the specified height
-    async fn produce_block(
+    /// Produces and execute block for the specified height
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<FuelBlock> {
+    ) -> Result<ExecutionResult> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -101,27 +97,11 @@ impl Trait for Producer {
         let result = self
             .executor
             .execute(ExecutionBlock::Production(block))
-            .await;
+            .await
+            .context(context_string)?;
 
-        if let Err(
-            Error::VmExecution { transaction_id, .. }
-            | Error::TransactionIdCollision(transaction_id),
-        ) = &result
-        {
-            // TODO: if block execution fails due to any transaction validity errors,
-            //          should those txs be removed from the txpool? While this
-            //          theoretically shouldn't happen due to txpool validation rules,
-            //          it is a possibility.
-            error!(
-                "faulty tx prevented block production: {:#x}",
-                transaction_id
-            );
-        }
-
-        let block = result.context(context_string)?;
-
-        debug!("Produced block: {:?}", &block);
-        Ok(block)
+        debug!("Produced block with result: {:?}", &result);
+        Ok(result)
     }
 
     // simulate a transaction without altering any state. Does not aquire the production lock

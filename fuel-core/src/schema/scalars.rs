@@ -146,7 +146,7 @@ impl FromStr for HexString {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+        let value = s.strip_prefix("0x").unwrap_or(s);
         // decode into bytes
         let bytes = hex::decode(value).map_err(|e| e.to_string())?;
         Ok(HexString(bytes))
@@ -178,7 +178,7 @@ macro_rules! fuel_type_scalar {
 
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 // trim leading 0x
-                let value = s.strip_prefix("0x").ok_or("expected 0x prefix")?;
+                let value = s.strip_prefix("0x").unwrap_or(s);
                 // pad input to $len bytes
                 let mut bytes = ((value.len() / 2)..$len).map(|_| 0).collect::<Vec<u8>>();
                 // decode into bytes
@@ -238,5 +238,52 @@ fuel_type_scalar!("Signature", Signature, Bytes64, 64);
 impl From<fuel_core_interfaces::common::prelude::Signature> for Signature {
     fn from(s: fuel_core_interfaces::common::prelude::Signature) -> Self {
         Self(<[u8; 64]>::from(s).into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transaction_id_parseable_with_0x_prefix() {
+        let id = "0x0101010101010101010101010101010101010101010101010101010101010101";
+        let tx_id = TransactionId::from_str(id).expect("parseable with 0x");
+        assert_eq!(*tx_id.0, [0x01; 32]);
+    }
+
+    #[test]
+    fn transaction_id_parseable_without_0x_prefix() {
+        let id = "0101010101010101010101010101010101010101010101010101010101010101";
+        let tx_id = TransactionId::from_str(id).expect("parseable without 0x");
+        assert_eq!(*tx_id.0, [0x01; 32]);
+    }
+
+    #[test]
+    fn transaction_id_only_parses_valid_hex() {
+        let id = "0xZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ";
+        let res = TransactionId::from_str(id);
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn hex_string_parses_with_0x_prefix() {
+        let hex_data = "0x0101";
+        let parsed_data = HexString::from_str(hex_data).expect("parseable with 0x");
+        assert_eq!(*parsed_data.0, [0x01; 2]);
+    }
+
+    #[test]
+    fn hex_string_parses_without_0x_prefix() {
+        let hex_data = "0101";
+        let parsed_data = HexString::from_str(hex_data).expect("parseable without 0x");
+        assert_eq!(*parsed_data.0, [0x01; 2]);
+    }
+
+    #[test]
+    fn hex_string_only_parses_valid_hex() {
+        let hex_data = "0xZZZZ";
+        let res = HexString::from_str(hex_data);
+        assert!(res.is_err());
     }
 }
