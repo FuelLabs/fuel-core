@@ -251,7 +251,7 @@ pub struct PageInfo {
 }
 
 /// Specifies the direction of a paginated query
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum PageDirection {
     Forward,
     Backward,

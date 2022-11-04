@@ -30,6 +30,7 @@ use fuel_gql_client::client::{
     PageDirection,
     PaginationRequest,
 };
+use itertools::Itertools;
 use rstest::rstest;
 
 #[tokio::test]
@@ -65,13 +66,14 @@ async fn coin() {
 // Backward fails, tracking in https://github.com/FuelLabs/fuel-core/issues/610
 #[rstest]
 #[tokio::test]
-async fn first_5_coins(
-    #[values(PageDirection::Forward)] pagination_direction: PageDirection,
+async fn first_and_last_5_coins(
+    #[values(PageDirection::Forward, PageDirection::Backward)]
+    pagination_direction: PageDirection,
 ) {
     let owner = Address::default();
 
     // setup test data in the node
-    let coins: Vec<(UtxoId, Coin)> = (1..10usize)
+    let coins: Vec<(UtxoId, Coin)> = (1..=10usize)
         .map(|i| {
             let coin = Coin {
                 owner,
@@ -110,9 +112,20 @@ async fn first_5_coins(
             },
         )
         .await
-        .unwrap();
-    assert!(!coins.results.is_empty());
-    assert_eq!(coins.results.len(), 5)
+        .unwrap()
+        .results
+        .iter()
+        .map(|coin| coin.amount.0)
+        .collect_vec();
+
+    match pagination_direction {
+        PageDirection::Forward => {
+            assert_eq!(coins, (1..=5).collect_vec());
+        }
+        PageDirection::Backward => {
+            assert_eq!(coins, (6..=10).collect_vec());
+        }
+    }
 }
 
 #[tokio::test]

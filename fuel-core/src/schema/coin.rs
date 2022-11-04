@@ -141,14 +141,11 @@ impl CoinQuery {
                     let before = before.map(fuel_tx::UtxoId::from);
 
                     let start;
-                    let end;
 
                     if direction == IterDirection::Forward {
                         start = after;
-                        end = before;
                     } else {
                         start = before;
-                        end = after;
                     }
 
                     let owner: fuel_tx::Address = filter.owner.into();
@@ -161,17 +158,7 @@ impl CoinQuery {
                     }
 
                     // take desired amount of results
-                    let coins = coin_ids
-                        .take_while(|r| {
-                            // take until we've reached the end
-                            if let (Ok(t), Some(end)) = (r, end.as_ref()) {
-                                if *t == *end {
-                                    return false
-                                }
-                            }
-                            true
-                        })
-                        .take(records_to_fetch);
+                    let coins = coin_ids.take(records_to_fetch);
                     let mut coins: Vec<fuel_tx::UtxoId> = coins.try_collect()?;
                     if direction == IterDirection::Reverse {
                         coins.reverse();
