@@ -2,18 +2,21 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 
-use fuel_core_interfaces::p2p::{
-    BlockBroadcast,
-    BlockGossipData,
-    ConsensusBroadcast,
-    ConsensusGossipData,
-    GossipData,
-    GossipsubMessageAcceptance,
-    GossipsubMessageInfo,
-    P2pDb,
-    P2pRequestEvent,
-    TransactionBroadcast,
-    TransactionGossipData,
+use fuel_core_interfaces::{
+    model::SealedFuelBlock,
+    p2p::{
+        BlockBroadcast,
+        BlockGossipData,
+        ConsensusBroadcast,
+        ConsensusGossipData,
+        GossipData,
+        GossipsubMessageAcceptance,
+        GossipsubMessageInfo,
+        P2pDb,
+        P2pRequestEvent,
+        TransactionBroadcast,
+        TransactionGossipData,
+    },
 };
 use libp2p::{
     gossipsub::MessageAcceptance,
@@ -59,48 +62,61 @@ use crate::{
     },
 };
 
+/// Orchestrates various p2p-related events between the inner `P2pService`
+/// and the top level `NetworkService`.
 struct NetworkOrchestrator {
     p2p_config: P2PConfig,
+    db: Arc<dyn P2pDb>,
 
-    /// receives messages from different Fuel components
-    rx_request_event: Receiver<P2pRequestEvent>,
-    /// receives messages from Service that wraps the Orchestrator
-    rx_service_request: Receiver<ServiceToOrchestratorRequest>,
-    rx_outbound_responses: Receiver<Option<(OutboundResponse, RequestId)>>,
+    /// External P2P Request Events received from different Fuel Components
+    rx_p2p_request: Receiver<P2pRequestEvent>,
+    /// Internal Orchestrator Requests generated either from the enclosing `NetworkService`
+    /// or from the `NetworkOrchestrator` itself
+    rx_orchestrator_request: Receiver<OrchestratorRequest>,
 
-    // senders
+    // Broadcasters
+    // Broadcast different p2p events to external Fuel Components
     tx_consensus: Sender<ConsensusGossipData>,
     tx_transaction: broadcast::Sender<TransactionGossipData>,
     tx_block: Sender<BlockGossipData>,
-    tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
-    db: Arc<dyn P2pDb>,
+
+    /// Generate internal Orchestrator Requests
+    tx_orchestrator_request: Sender<OrchestratorRequest>,
+}
+
+enum OrchestratorRequest {
+    Stop,
+    GetPeersIds(oneshot::Sender<Vec<PeerId>>),
+    RespondWithRequestedBlock((Option<Arc<SealedFuelBlock>>, RequestId)),
 }
 
 impl NetworkOrchestrator {
     fn new(
         p2p_config: P2PConfig,
-        rx_request_event: Receiver<P2pRequestEvent>,
-        rx_service_request: Receiver<ServiceToOrchestratorRequest>,
+        db: Arc<dyn P2pDb>,
+
+        rx_p2p_request: Receiver<P2pRequestEvent>,
+        orchestrator_request_channels: (
+            Receiver<OrchestratorRequest>,
+            Sender<OrchestratorRequest>,
+        ),
 
         tx_consensus: Sender<ConsensusGossipData>,
         tx_transaction: broadcast::Sender<TransactionGossipData>,
         tx_block: Sender<BlockGossipData>,
-
-        db: Arc<dyn P2pDb>,
     ) -> Self {
-        let (tx_outbound_responses, rx_outbound_responses) =
-            tokio::sync::mpsc::channel(100);
+        let (rx_orchestrator_request, tx_orchestrator_request) =
+            orchestrator_request_channels;
 
         Self {
             p2p_config,
-            rx_request_event,
-            rx_service_request,
-            rx_outbound_responses,
+            db,
+            rx_p2p_request,
+            rx_orchestrator_request,
             tx_block,
             tx_consensus,
             tx_transaction,
-            tx_outbound_responses,
-            db,
+            tx_orchestrator_request,
         }
     }
 
@@ -112,16 +128,14 @@ impl NetworkOrchestrator {
 
         loop {
             tokio::select! {
-                next_response = self.rx_outbound_responses.recv() => {
-                    if let Some(Some((response, request_id))) = next_response {
-                        let _ = p2p_service.send_response_msg(request_id, response);
-                    }
-                },
-                next_service_request = self.rx_service_request.recv() => {
+                next_service_request = self.rx_orchestrator_request.recv() => {
                     match next_service_request {
-                        Some(ServiceToOrchestratorRequest::Stop) => break,
-                        Some(ServiceToOrchestratorRequest::GetPeersIds(channel)) => {
+                        Some(OrchestratorRequest::Stop) => break,
+                        Some(OrchestratorRequest::GetPeersIds(channel)) => {
                             let _ = channel.send(p2p_service.get_peers_ids());
+                        }
+                        Some(OrchestratorRequest::RespondWithRequestedBlock((response, request_id))) => {
+                            let _ = p2p_service.send_response_msg(request_id, response.map(OutboundResponse::ResponseBlock));
                         }
                         _ => {}
                     }
@@ -147,11 +161,11 @@ impl NetworkOrchestrator {
                             match request_message {
                                 RequestMessage::RequestBlock(block_height) => {
                                     let db = self.db.clone();
-                                    let tx_outbound_response = self.tx_outbound_responses.clone();
+                                    let tx_orchestrator_request = self.tx_orchestrator_request.clone();
 
                                     tokio::spawn(async move {
-                                        let res = db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id));
-                                        let _ = tx_outbound_response.send(res);
+                                        let block_response = db.get_sealed_block(block_height).await;
+                                        let _ = tx_orchestrator_request.send(OrchestratorRequest::RespondWithRequestedBlock((block_response, request_id)));
                                     });
                                 }
                             }
@@ -159,7 +173,7 @@ impl NetworkOrchestrator {
                         _ => {}
                     }
                 },
-                module_request_msg = self.rx_request_event.recv() => {
+                module_request_msg = self.rx_p2p_request.recv() => {
                     if let Some(request_event) = module_request_msg {
                         match request_event {
                             P2pRequestEvent::RequestBlock { height, response } => {
@@ -231,45 +245,41 @@ fn report_message<T: NetworkCodec>(
     }
 }
 
-enum ServiceToOrchestratorRequest {
-    Stop,
-    GetPeersIds(oneshot::Sender<Vec<PeerId>>),
-}
-
 pub struct Service {
     /// Network Orchestrator that handles p2p network and inter-module communication
     network_orchestrator: Arc<Mutex<Option<NetworkOrchestrator>>>,
     /// Holds the spawned task when Netowrk Orchestrator is started
     join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
     /// Used for communicating with the Orchestrator
-    tx_service_request: Sender<ServiceToOrchestratorRequest>,
+    tx_orchestrator_request: Sender<OrchestratorRequest>,
 }
 
 impl Service {
     pub fn new(
         p2p_config: P2PConfig,
         db: Arc<dyn P2pDb>,
-        rx_request_event: Receiver<P2pRequestEvent>,
+        rx_p2p_request: Receiver<P2pRequestEvent>,
         tx_consensus: Sender<ConsensusGossipData>,
         tx_transaction: broadcast::Sender<TransactionGossipData>,
         tx_block: Sender<BlockGossipData>,
     ) -> Self {
-        let (tx_service_request, rx_service_request) = tokio::sync::mpsc::channel(100);
+        let (tx_orchestrator_request, rx_orchestrator_request) =
+            tokio::sync::mpsc::channel(100);
 
         let network_orchestrator = NetworkOrchestrator::new(
             p2p_config,
-            rx_request_event,
-            rx_service_request,
+            db,
+            rx_p2p_request,
+            (rx_orchestrator_request, tx_orchestrator_request.clone()),
             tx_consensus,
             tx_transaction,
             tx_block,
-            db,
         );
 
         Self {
             join: Mutex::new(None),
             network_orchestrator: Arc::new(Mutex::new(Some(network_orchestrator))),
-            tx_service_request,
+            tx_orchestrator_request,
         }
     }
 
@@ -277,8 +287,8 @@ impl Service {
         let (sender, receiver) = oneshot::channel();
 
         let _ = self
-            .tx_service_request
-            .send(ServiceToOrchestratorRequest::GetPeersIds(sender))
+            .tx_orchestrator_request
+            .send(OrchestratorRequest::GetPeersIds(sender))
             .await;
 
         receiver.await.map_err(|e| anyhow!("{}", e))
@@ -308,8 +318,8 @@ impl Service {
         if let Some(join_handle) = join_handle {
             let network_orchestrator = self.network_orchestrator.clone();
             let _ = self
-                .tx_service_request
-                .send(ServiceToOrchestratorRequest::Stop)
+                .tx_orchestrator_request
+                .send(OrchestratorRequest::Stop)
                 .await;
             Some(tokio::spawn(async move {
                 if let Ok(res) = join_handle.await {
