@@ -6,21 +6,13 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Transaction,
-        secrecy::Secret,
-    },
-    model::FuelBlockConsensus,
-};
+use fuel_core_interfaces::common::secrecy::Secret;
 use fuel_gql_client::{
     client::{
-        types::TransactionStatus,
         FuelClient,
         PageDirection,
         PaginationRequest,
     },
-    fuel_types::Bytes32,
     prelude::{
         Immediate18,
         Opcode,

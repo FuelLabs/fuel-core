@@ -1,5 +1,3 @@
-use core::panic;
-
 use fuel_core::{
     chain_config::BlockProduction,
     database::Database,
