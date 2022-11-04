@@ -66,7 +66,7 @@ impl TxPool {
     }
 
     // this is atomic operation. Return removed(pushed out/replaced) transactions
-    pub async fn insert_inner(
+    async fn insert_inner(
         &mut self,
         // TODO: Pass `&Transaction`
         tx: Arc<Transaction>,
@@ -353,5 +353,7 @@ impl TxPool {
     }
 }
 
+#[cfg(test)]
+mod test_helpers;
 #[cfg(test)]
 mod tests;

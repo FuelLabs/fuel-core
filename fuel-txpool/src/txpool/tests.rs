@@ -5,6 +5,12 @@ use crate::{
         setup_coin,
         TEST_COIN_AMOUNT,
     },
+    txpool::test_helpers::{
+        create_coin_output,
+        create_contract_input,
+        create_contract_output,
+        create_message_predicate_from_message,
+    },
     types::ContractId,
     Config,
     Error,
@@ -45,92 +51,8 @@ use std::{
 };
 use tokio::sync::RwLock;
 
-mod helpers {
-    use crate::types::TxId;
-    use fuel_core_interfaces::{
-        common::{
-            fuel_tx::{
-                Contract,
-                ContractId,
-                Input,
-                Output,
-                UtxoId,
-            },
-            prelude::{
-                Opcode,
-                Word,
-            },
-        },
-        model::{
-            BlockHeight,
-            Message,
-        },
-    };
-
-    pub(crate) fn create_message_predicate_from_message(
-        amount: Word,
-        spent_block: Option<BlockHeight>,
-    ) -> (Message, Input) {
-        let predicate = vec![Opcode::RET(1)].into_iter().collect::<Vec<u8>>();
-        let message = Message {
-            sender: Default::default(),
-            recipient: Input::predicate_owner(&predicate),
-            nonce: 0,
-            amount,
-            data: vec![],
-            da_height: Default::default(),
-            fuel_block_spend: spent_block,
-        };
-
-        (
-            message.clone(),
-            Input::message_predicate(
-                message.id(),
-                message.sender,
-                Input::predicate_owner(&predicate),
-                message.amount,
-                message.nonce,
-                message.data,
-                predicate,
-                Default::default(),
-            ),
-        )
-    }
-
-    pub(crate) fn create_coin_output() -> Output {
-        Output::Coin {
-            amount: Default::default(),
-            to: Default::default(),
-            asset_id: Default::default(),
-        }
-    }
-
-    pub(crate) fn create_contract_input(tx_id: TxId, output_index: u8) -> Input {
-        Input::Contract {
-            utxo_id: UtxoId::new(tx_id, output_index),
-            balance_root: Default::default(),
-            state_root: Default::default(),
-            tx_pointer: Default::default(),
-            contract_id: Default::default(),
-        }
-    }
-
-    pub(crate) fn create_contract_output(contract_id: ContractId) -> Output {
-        Output::ContractCreated {
-            contract_id,
-            state_root: Contract::default_state_root(),
-        }
-    }
-}
-
-use helpers::{
-    create_coin_output,
-    create_contract_input,
-    create_contract_output,
-};
-
 #[tokio::test]
-async fn simple_insertion() {
+async fn insert_simple_tx_succeeds() {
     let mut rng = StdRng::seed_from_u64(0);
     let mut txpool = TxPool::new(Default::default());
     let db = MockDb::default();
@@ -149,7 +71,7 @@ async fn simple_insertion() {
 }
 
 #[tokio::test]
-async fn simple_dependency_tx1_tx2() {
+async fn insert_simple_tx_dependency_chain_succeeds() {
     let mut rng = StdRng::seed_from_u64(0);
     let mut txpool = TxPool::new(Default::default());
     let db = MockDb::default();
@@ -166,7 +88,6 @@ async fn simple_dependency_tx1_tx2() {
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
     let input = unset_input.into_input(UtxoId::new(tx1.id(), 0));
-
     let tx2 = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .gas_price(1)
@@ -859,7 +780,7 @@ async fn tx_below_min_gas_price_is_not_insertable() {
 
 #[tokio::test]
 async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
-    let (message, input) = helpers::create_message_predicate_from_message(5000, None);
+    let (message, input) = create_message_predicate_from_message(5000, None);
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -887,7 +808,7 @@ async fn tx_inserted_into_pool_when_input_message_id_exists_in_db() {
 #[tokio::test]
 async fn tx_rejected_when_input_message_id_is_spent() {
     let (message, input) =
-        helpers::create_message_predicate_from_message(5_000, Some(1u64.into()));
+        create_message_predicate_from_message(5_000, Some(1u64.into()));
 
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -915,7 +836,7 @@ async fn tx_rejected_when_input_message_id_is_spent() {
 
 #[tokio::test]
 async fn tx_rejected_from_pool_when_input_message_id_does_not_exist_in_db() {
-    let (message, input) = helpers::create_message_predicate_from_message(5000, None);
+    let (message, input) = create_message_predicate_from_message(5000, None);
     let tx = Arc::new(
         TransactionBuilder::script(vec![], vec![])
             .add_input(input)
@@ -947,7 +868,7 @@ async fn tx_rejected_from_pool_when_gas_price_is_lower_than_another_tx_with_same
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        helpers::create_message_predicate_from_message(message_amount, None);
+        create_message_predicate_from_message(message_amount, None);
 
     let tx_high = Arc::new(
         TransactionBuilder::script(vec![], vec![])
@@ -998,7 +919,7 @@ async fn higher_priced_tx_squeezes_out_lower_priced_tx_with_same_message_id() {
     let gas_price_high = 2u64;
     let gas_price_low = 1u64;
     let (message, conflicting_message_input) =
-        helpers::create_message_predicate_from_message(message_amount, None);
+        create_message_predicate_from_message(message_amount, None);
 
     // Insert a tx for the message id with a low gas amount
     let tx_low = Arc::new(
@@ -1049,9 +970,9 @@ async fn message_of_squeezed_out_tx_can_be_resubmitted_at_lower_gas_price() {
     //   works since tx1 is no longer part of txpool state even though gas price is less
 
     let (message_1, message_input_1) =
-        helpers::create_message_predicate_from_message(10_000, None);
+        create_message_predicate_from_message(10_000, None);
     let (message_2, message_input_2) =
-        helpers::create_message_predicate_from_message(20_000, None);
+        create_message_predicate_from_message(20_000, None);
 
     // Insert a tx for the message id with a low gas amount
     let tx_1 = Arc::new(
