@@ -3,6 +3,7 @@ use crate::{
         Receipt,
         Transaction,
     },
+    executor::ExecutionResult,
     model::{
         BlockHeight,
         DaBlockHeight,
@@ -32,11 +33,13 @@ pub enum BlockProducerBroadcast {
 
 #[async_trait::async_trait]
 pub trait BlockProducer: Send + Sync {
-    async fn produce_block(
+    // TODO: Right now production and execution of the block is one step, but in the future,
+    //  `produce_block` should only produce a block without affecting the blockchain state.
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<FuelBlock>;
+    ) -> Result<ExecutionResult>;
 
     async fn dry_run(
         &self,

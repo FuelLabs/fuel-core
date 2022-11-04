@@ -37,17 +37,13 @@ use fuel_core_interfaces::{
         BlockHeight,
         DaBlockHeight,
         FuelApplicationHeader,
-        FuelBlock,
         FuelConsensusHeader,
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
 };
 use tokio::sync::Mutex;
-use tracing::{
-    debug,
-    error,
-};
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -65,12 +61,12 @@ pub struct Producer {
 
 #[async_trait::async_trait]
 impl Trait for Producer {
-    /// Produces a block for the specified height
-    async fn produce_block(
+    /// Produces and execute block for the specified height
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<FuelBlock> {
+    ) -> Result<ExecutionResult> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -98,25 +94,14 @@ impl Trait for Producer {
             "Failed to produce block {:?} due to execution failure",
             block
         );
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-        } = self
+        let result = self
             .executor
             .execute(ExecutionBlock::Production(block))
             .await
             .context(context_string)?;
 
-        for (tx, err) in skipped_transactions {
-            // TODO: Removed from `TxPool` invalid transactions
-            error!(
-                "During block production got invalid transaction {:?} with error {:?}",
-                tx, err
-            );
-        }
-
-        debug!("Produced block: {:?}", &block);
-        Ok(block)
+        debug!("Produced block with result: {:?}", &result);
+        Ok(result)
     }
 
     // simulate a transaction without altering any state. Does not aquire the production lock
