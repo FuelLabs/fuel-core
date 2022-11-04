@@ -46,7 +46,10 @@ use serde::{
     Serialize,
 };
 use std::{
-    borrow::Cow,
+    borrow::{
+        BorrowMut,
+        Cow,
+    },
     fmt::{
         self,
         Debug,
@@ -54,7 +57,7 @@ use std::{
     },
     marker::Send,
     mem::size_of,
-    ops::DerefMut,
+    slice,
     sync::Arc,
 };
 
@@ -66,12 +69,13 @@ use crate::database::storage::{
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
 
-use fuel_core_interfaces::common::fuel_merkle::{
-    binary::MerkleTree,
-    common::Position,
-};
+use fuel_core_interfaces::common::fuel_merkle::binary::MerkleTree;
 
-use crate::schema::scalars::Bytes32;
+use crate::{
+    database::merkle_metadata::DenseMerkleMetadata,
+    schema::scalars::Bytes32,
+};
+use fuel_core_interfaces::common::fuel_storage::StorageMutate;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -378,27 +382,35 @@ impl ExecutorDatabase for Database {
         self.storage::<FuelBlocks>()
             .insert(&(*block_id).into(), &block)?;
 
-        let mut metadata = self
+        let metadata = self
             .storage::<FuelBlockMerkleMetadata>()
             .get(&"FuelBlocks".to_string())?
             .unwrap_or_default();
 
-        let leaf_count = metadata.leaves_count;
-        let mut tree = MerkleTree::load(self, leaf_count).map_err(Into::into)?;
+        let mut leaves_count = metadata.leaves_count;
+
+        type T = dyn StorageMutate<FuelBlockMerkleData, Error = KvStoreError>;
+        let storage: &mut T = self.borrow_mut();
+        let mut tree = MerkleTree::load(storage, leaves_count).unwrap();
         let data = unsafe {
             let sz = block.transactions.len() * size_of::<Bytes32>();
-            let ptr = block.transactions.as_ptr().cast::<[u8; sz]>();
-            &*ptr
+            let ptr = block.transactions.as_ptr() as *const u8;
+            slice::from_raw_parts(ptr, sz)
         };
 
-        // Insert the data into the database
-        tree.push(data)?;
+        // Insert the block data into the tree backed by database storage
+        tree.push(data).unwrap();
 
-        metadata.leaves_count += 1;
-        metadata.root = tree.root()?.into();
+        leaves_count += 1;
+        let root = tree.root().unwrap().into();
 
-        self.storage::<FuelBlockMerkleMetadata>()
-            .insert(&"FuelBlocks".to_string(), &metadata)?;
+        println!("{}", hex::encode(root));
+
+        // Update the Block Merkle metadata
+        self.storage::<FuelBlockMerkleMetadata>().insert(
+            &"FuelBlocks".to_string(),
+            &DenseMerkleMetadata { leaves_count, root },
+        )?;
 
         Ok(())
     }

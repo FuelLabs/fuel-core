@@ -2,7 +2,6 @@ use crate::{
     database::{
         storage::{
             ContractsLatestUtxo,
-            FuelBlocks,
             Receipts,
         },
         transaction::TransactionIndex,

@@ -15,7 +15,6 @@ use crate::{
         BlockHeight,
         FuelBlockDb,
     },
-    schema::block::Block,
     state::{
         Error,
         IterDirection,
@@ -28,13 +27,7 @@ use chrono::{
 use fuel_core_interfaces::{
     common::{
         fuel_merkle,
-        fuel_merkle::{
-            binary::{
-                MerkleTree,
-                Node,
-            },
-            common::Position,
-        },
+        fuel_merkle::binary::Node,
         fuel_storage::{
             StorageInspect,
             StorageMutate,
@@ -100,11 +93,11 @@ impl StorageMutate<FuelBlocks> for Database {
 impl StorageInspect<FuelBlockIds> for Database {
     type Error = KvStoreError;
 
-    fn get(&self, key: &BlockHeight) -> Result<Option<Cow<Bytes32>>, Self::Error> {
+    fn get(&self, _key: &BlockHeight) -> Result<Option<Cow<Bytes32>>, Self::Error> {
         todo!()
     }
 
-    fn contains_key(&self, key: &BlockHeight) -> Result<bool, Self::Error> {
+    fn contains_key(&self, _key: &BlockHeight) -> Result<bool, Self::Error> {
         todo!()
     }
 }
@@ -125,7 +118,7 @@ impl StorageMutate<FuelBlockIds> for Database {
     }
 }
 
-impl StorageInspect<fuel_merkle::binary::NodesTable> for Database {
+impl StorageInspect<FuelBlockMerkleData> for Database {
     type Error = KvStoreError;
 
     fn get(&self, key: &u64) -> Result<Option<Cow<Node>>, Self::Error> {
@@ -141,7 +134,7 @@ impl StorageInspect<fuel_merkle::binary::NodesTable> for Database {
     }
 }
 
-impl StorageMutate<fuel_merkle::binary::NodesTable> for Database {
+impl StorageMutate<FuelBlockMerkleData> for Database {
     fn insert(&mut self, key: &u64, value: &Node) -> Result<Option<Node>, Self::Error> {
         let key: u64 = key.clone().into();
         Database::insert(self, key.to_be_bytes(), Column::FuelBlockMerkleData, value)

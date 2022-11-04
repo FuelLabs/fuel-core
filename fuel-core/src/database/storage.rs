@@ -2,10 +2,7 @@ use crate::database::merkle_metadata::DenseMerkleMetadata;
 use fuel_core_interfaces::{
     common::{
         fuel_crypto::fuel_types::Bytes32,
-        fuel_merkle::{
-            binary::Node,
-            common::Position,
-        },
+        fuel_merkle::binary::Node,
         fuel_storage::Mappable,
         fuel_tx::{
             Receipt,
@@ -67,6 +64,16 @@ pub struct SealedBlockConsensus;
 impl Mappable for SealedBlockConsensus {
     type Key = Bytes32;
     type SetValue = FuelBlockConsensus;
+    type GetValue = Self::SetValue;
+}
+
+/// Block BMT Data
+
+pub struct FuelBlockMerkleData;
+
+impl Mappable for FuelBlockMerkleData {
+    type Key = u64;
+    type SetValue = Node;
     type GetValue = Self::SetValue;
 }
 
