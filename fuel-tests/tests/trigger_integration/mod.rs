@@ -1,3 +1,4 @@
-mod instant;
-mod never;
 mod hybrid;
+mod instant;
+mod interval;
+mod never;

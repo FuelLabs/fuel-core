@@ -6,31 +6,21 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::Transaction,
-        secrecy::Secret,
-    },
-    model::FuelBlockConsensus,
-};
+use fuel_core_interfaces::common::secrecy::Secret;
 use fuel_gql_client::{
     client::{
-        types::TransactionStatus,
         FuelClient,
         PageDirection,
         PaginationRequest,
     },
-    fuel_types::Bytes32,
     prelude::SecretKey,
 };
 use rand::{
     rngs::StdRng,
+    Rng,
     SeedableRng,
 };
-use std::{
-    str::FromStr,
-    time::Duration,
-};
+use std::time::Duration;
 
 #[tokio::test(start_paused = true)]
 async fn poa_hybrid_produces_empty_blocks_at_correct_rate() {
@@ -78,8 +68,12 @@ async fn poa_hybrid_produces_empty_blocks_at_correct_rate() {
             .await
             .expect("blocks request failed");
 
-        let count_now = resp.results.len();
+        // Make sure that we do not depend on scheduler behavior too much
+        for _ in 0..(rng.gen::<u8>() % 8) {
+            tokio::task::yield_now().await;
+        }
 
+        let count_now = resp.results.len();
         if count_now > count_start + rounds {
             break
         }
@@ -90,8 +84,9 @@ async fn poa_hybrid_produces_empty_blocks_at_correct_rate() {
     // Require at least minimum time, allow up to one round time of error
     let secs_per_round = (time_end - time_start).as_secs() / (rounds as u64);
     assert!(
-        30 <= secs_per_round
-            && secs_per_round <= 30 + (rounds as u64) / round_time_seconds,
+        round_time_seconds <= secs_per_round
+            && secs_per_round
+                <= round_time_seconds + 2 * (rounds as u64) / round_time_seconds,
         "Round time not within treshold"
     );
 }
