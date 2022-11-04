@@ -2464,6 +2464,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-gql-client",
+ "fuel-poa-coordinator",
  "fuel-relayer",
  "fuel-txpool",
  "futures",

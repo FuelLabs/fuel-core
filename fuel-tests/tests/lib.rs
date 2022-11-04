@@ -1,3 +1,5 @@
+#![deny(unused_must_use)]
+
 mod balances;
 mod blocks;
 mod chain;
@@ -16,6 +18,7 @@ mod poa;
 mod relayer;
 mod resource;
 mod snapshot;
+mod trigger_integration;
 mod tx;
 #[cfg(feature = "p2p")]
 mod tx_gossip;
