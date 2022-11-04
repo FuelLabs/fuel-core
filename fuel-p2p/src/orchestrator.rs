@@ -241,7 +241,7 @@ pub struct Service {
     network_orchestrator: Arc<Mutex<Option<NetworkOrchestrator>>>,
     /// Holds the spawned task when Netowrk Orchestrator is started
     join: Mutex<Option<JoinHandle<Result<NetworkOrchestrator, anyhow::Error>>>>,
-    /// Used for comminicating with the Orchestrator
+    /// Used for communicating with the Orchestrator
     tx_service_request: Sender<ServiceToOrchestratorRequest>,
 }
 
