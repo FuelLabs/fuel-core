@@ -4,6 +4,7 @@ use crate::{
         schema,
         tx::{
             transparent_receipt::Receipt,
+            MultipleTxIdArgs,
             TransactionStatus,
             TxIdArgs,
         },
@@ -40,6 +41,17 @@ use itertools::Itertools;
 pub struct TransactionQuery {
     #[arguments(id = &args.id)]
     pub transaction: Option<Transaction>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "MultipleTxIdArgs"
+)]
+pub struct MultipleTransactionQuery {
+    #[arguments(ids = &args.ids)]
+    pub transactions: Vec<Option<Transaction>>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]

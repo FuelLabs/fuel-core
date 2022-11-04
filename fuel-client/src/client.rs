@@ -23,6 +23,7 @@ use schema::{
     },
     resource::SpendQueryElementInput,
     tx::{
+        MultipleTxIdArgs,
         TxArg,
         TxIdArgs,
     },
@@ -399,6 +400,22 @@ impl FuelClient {
         let query = schema::tx::TransactionsByOwnerQuery::build(&(owner, request).into());
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
+        Ok(transactions)
+    }
+
+    pub async fn transactions_by_id(
+        &self,
+        ids: Vec<&str>,
+    ) -> io::Result<Vec<Option<TransactionResponse>>> {
+        let mut parsed_ids = Vec::new();
+        for id in ids {
+            parsed_ids.push(id.parse()?);
+        }
+        let query = schema::tx::MultipleTransactionQuery::build(&MultipleTxIdArgs {
+            ids: parsed_ids,
+        });
+
+        let transactions = self.query(query).await?.transactions;
         Ok(transactions)
     }
 

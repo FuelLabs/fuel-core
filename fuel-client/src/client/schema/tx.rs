@@ -43,6 +43,22 @@ pub struct TransactionQuery {
     pub transaction: Option<OpaqueTransaction>,
 }
 
+#[derive(cynic::FragmentArguments, Debug)]
+pub struct MultipleTxIdArgs {
+    pub ids: Vec<TransactionId>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    argument_struct = "MultipleTxIdArgs"
+)]
+pub struct MultipleTransactionQuery {
+    #[arguments(ids = &args.ids)]
+    pub transactions: Vec<Option<OpaqueTransaction>>,
+}
+
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",

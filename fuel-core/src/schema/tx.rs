@@ -302,6 +302,44 @@ impl TxQuery {
         )
         .await
     }
+
+    async fn transactions_by_id(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The IDs of the transactions")] ids: Vec<TransactionId>,
+    ) -> async_graphql::Result<Vec<Option<Transaction>>> {
+        let db = ctx.data_unchecked::<Database>();
+        let tx_ids: Vec<fuel_core_interfaces::common::prelude::Bytes32> =
+            ids.iter().map(|id| id.0).collect();
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
+
+        let (response, receiver) = oneshot::channel();
+        let _ = txpool
+            .sender()
+            .send(TxPoolMpsc::Find {
+                ids: tx_ids.clone(),
+                response,
+            })
+            .await;
+
+        if let Ok(transactions) = receiver.await {
+            Ok(transactions
+                .into_iter()
+                .flatten()
+                .map(|tx_info| Some(Transaction(tx_info.tx().clone().deref().into())))
+                .collect())
+        } else {
+            let mut transactions = Vec::new();
+            for tx_id in tx_ids {
+                transactions.push(
+                    db.storage::<Transactions>()
+                        .get(&tx_id)?
+                        .map(|tx| Transaction(tx.into_owned())),
+                );
+            }
+            Ok(transactions)
+        }
+    }
 }
 
 #[derive(Default)]

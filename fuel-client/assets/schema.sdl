@@ -485,6 +485,7 @@ type Query {
 	transaction(id: TransactionId!): Transaction
 	transactions(first: Int, after: String, last: Int, before: String): TransactionConnection!
 	transactionsByOwner(owner: Address!, first: Int, after: String, last: Int, before: String): TransactionConnection!
+	transactionsById(ids: [TransactionId!]!): [Transaction]!
 	"""
 	Returns true when the GraphQL API is serving requests.
 	"""
