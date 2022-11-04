@@ -115,7 +115,7 @@ impl From<VmProgramState> for ProgramState {
     }
 }
 
-#[derive(Union)]
+#[derive(Union, Debug)]
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
@@ -123,6 +123,7 @@ pub enum TransactionStatus {
     Failed(FailureStatus),
 }
 
+#[derive(Debug)]
 pub struct SubmittedStatus(DateTime<Utc>);
 
 #[Object]
@@ -132,6 +133,7 @@ impl SubmittedStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct SuccessStatus {
     block_id: fuel_core_interfaces::model::BlockId,
     time: DateTime<Utc>,
@@ -160,6 +162,7 @@ impl SuccessStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct FailureStatus {
     block_id: fuel_core_interfaces::model::BlockId,
     time: DateTime<Utc>,
@@ -193,6 +196,7 @@ impl FailureStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct SqueezedOutStatus {
     pub reason: String,
 }
@@ -502,17 +506,21 @@ pub(super) async fn get_tx_status(
     db: &Database,
     txpool: &TxPoolService,
 ) -> async_graphql::Result<Option<TransactionStatus>> {
-    let (response, receiver) = oneshot::channel();
-    let _ = txpool
-        .sender()
-        .send(TxPoolMpsc::FindOne { id, response })
-        .await;
-
-    if let Ok(Some(transaction_in_pool)) = receiver.await {
-        let time = transaction_in_pool.submitted_time();
-        Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-    } else {
-        let status = db.get_tx_status(&id)?;
-        Ok(status.map(Into::into))
+    match db.get_tx_status(&id)? {
+        Some(status) => Ok(Some(status.into())),
+        None => {
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::FindOne { id, response })
+                .await;
+            match receiver.await {
+                Ok(Some(transaction_in_pool)) => {
+                    let time = transaction_in_pool.submitted_time();
+                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+                }
+                _ => Ok(None),
+            }
+        }
     }
 }

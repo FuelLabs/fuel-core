@@ -62,11 +62,19 @@ pub(crate) async fn transaction_status_change(
                                 });
                             Some((Some(Ok(status)), (state, stream)))
                         }
-                        _ => {
+                        published_status => {
                             let status = state.get_tx_status(transaction_id).await;
                             match status {
                                 // Got the status from the db.
-                                Ok(Some(s)) => Some((Some(Ok(s)), (state, stream))),
+                                Ok(Some(s)) => {
+                                    if matches!(s, TransactionStatus::Submitted(_)) && !matches!(published_status, fuel_core_interfaces::txpool::TxStatus::Submitted) {
+                                        // If the status from the db is submitted but we know we got a "final" status
+                                        // published to us then we need to end the stream or it will wait forever.
+                                        None
+                                    } else {
+                                        Some((Some(Ok(s)), (state, stream)))
+                                    }
+                                }
                                 // Could not get status from the db so the stream must exit
                                 // as a value has been missed and the only valid thing to do
                                 // is to restart the stream.

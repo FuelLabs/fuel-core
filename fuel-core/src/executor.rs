@@ -2447,6 +2447,7 @@ mod tests {
                 utxo_validation: true,
                 ..Config::local_node()
             },
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
@@ -2514,6 +2515,7 @@ mod tests {
         let executor = Executor {
             database: Default::default(),
             config: Config::local_node(),
+            tx_status_sender: DynTxnStatusSender::default(),
         };
 
         let block = PartialFuelBlock {
