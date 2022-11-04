@@ -58,11 +58,9 @@ use itertools::Itertools;
 use std::{
     borrow::Cow,
     convert::TryInto,
-    sync::Arc,
 };
 
 use super::scalars::Bytes32;
-use fuel_txpool::Service as TxPoolService;
 
 pub struct Block {
     pub(crate) header: Header,
@@ -362,8 +360,6 @@ impl BlockMutation {
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
         let cfg = ctx.data_unchecked::<Config>().clone();
-        let tx_status_sender =
-            Box::new(ctx.data_unchecked::<Arc<TxPoolService>>().status_sender());
 
         if !cfg.manual_blocks_enabled {
             return Err(
@@ -375,7 +371,6 @@ impl BlockMutation {
         let executor = Executor {
             database: db.clone(),
             config: cfg.clone(),
-            tx_status_sender,
         };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;

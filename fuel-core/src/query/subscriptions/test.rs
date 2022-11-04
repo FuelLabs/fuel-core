@@ -13,7 +13,7 @@ where
     I: Iterator<Item = anyhow::Result<Option<TransactionStatus>>> + Send + 'static,
 {
     requested_id: Bytes32,
-    status_updates: Vec<Result<TxStatusBroadcast, BroadcastStreamRecvError>>,
+    status_updates: Vec<Result<TxUpdate, BroadcastStreamRecvError>>,
     db_statuses: I,
 }
 
@@ -28,36 +28,12 @@ fn txn_id(i: u8) -> Bytes32 {
     [i; 32].into()
 }
 
-fn txn_success(tx_id: Bytes32) -> TxStatusBroadcast {
-    TxStatusBroadcast {
-        tx_id,
-        status: fuel_core_interfaces::txpool::TxStatus::Executed,
-    }
+fn txn_updated(tx_id: Bytes32) -> TxUpdate {
+    TxUpdate::updated(tx_id)
 }
 
-fn txn_submitted(tx_id: Bytes32) -> TxStatusBroadcast {
-    TxStatusBroadcast {
-        tx_id,
-        status: fuel_core_interfaces::txpool::TxStatus::Submitted,
-    }
-}
-
-fn txn_failed(tx_id: Bytes32) -> TxStatusBroadcast {
-    TxStatusBroadcast {
-        tx_id,
-        status: fuel_core_interfaces::txpool::TxStatus::Failed {
-            reason: String::new(),
-        },
-    }
-}
-
-fn txn_squeezed(tx_id: Bytes32) -> TxStatusBroadcast {
-    TxStatusBroadcast {
-        tx_id,
-        status: fuel_core_interfaces::txpool::TxStatus::SqueezedOut {
-            reason: fuel_txpool::Error::SqueezedOut(String::new()),
-        },
-    }
+fn txn_squeezed(tx_id: Bytes32) -> TxUpdate {
+    TxUpdate::squeezed_out(tx_id, fuel_txpool::Error::SqueezedOut(String::new()))
 }
 
 fn db_always_some(
@@ -133,7 +109,7 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_success(txn_id(3)))],
+        status_updates: vec![Ok(txn_updated(txn_id(3)))],
         db_statuses: db_always_none(),
     }
     => Expected::TimedOut(vec![])
@@ -142,7 +118,7 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_success(txn_id(2)))],
+        status_updates: vec![Ok(txn_updated(txn_id(2)))],
         db_statuses: db_always_none(),
     }
     => Expected::Received(vec![])
@@ -151,7 +127,7 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_submitted(txn_id(2)))],
+        status_updates: vec![Ok(txn_updated(txn_id(2)))],
         db_statuses: db_none(1).chain(db_always_some(submitted)),
     }
     => Expected::TimedOut(vec![submitted()])
@@ -160,7 +136,7 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_success(txn_id(2)))],
+        status_updates: vec![Ok(txn_updated(txn_id(2)))],
         db_statuses: db_none(1).chain(db_always_error(|| anyhow::anyhow!("db failed"))),
     }
     => Expected::Error
@@ -187,16 +163,16 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_submitted(txn_id(2))), Ok(txn_success(txn_id(2)))],
+        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_updated(txn_id(2)))],
         db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(success)),
     }
     => Expected::Received(vec![submitted(), success()])
-    ; "submitted then success update, submitted then success db status, received submitted then success status"
+    ; "updated then updated status, submitted then success db status, received submitted then success status"
 )]
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_success(txn_id(20))), Ok(txn_success(txn_id(8)))],
+        status_updates: vec![Ok(txn_updated(txn_id(20))), Ok(txn_updated(txn_id(8)))],
         db_statuses: db_none(1),
     }
     => Expected::TimedOut(vec![])
@@ -205,20 +181,11 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_submitted(txn_id(2))), Ok(txn_submitted(txn_id(2)))],
+        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_updated(txn_id(2)))],
         db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(failed)),
     }
     => Expected::Received(vec![submitted(), failed()])
-    ; "submitted then submitted update, submitted then failed db status, received submitted then failed status"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_submitted(txn_id(2))), Ok(txn_failed(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_always_some(failed)),
-    }
-    => Expected::Received(vec![submitted(), failed()])
-    ; "submitted then failed update, submitted then failed db status, received submitted then failed status"
+    ; "updated then updated status, submitted then failed db status, received submitted then failed status"
 )]
 #[test_case(
     Input {
@@ -250,20 +217,11 @@ fn squeezed() -> TransactionStatus {
 #[test_case(
     Input {
         requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_failed(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![submitted()])),
+        status_updates: vec![Ok(txn_updated(txn_id(2))), Ok(txn_squeezed(txn_id(2)))],
+        db_statuses: db_none(1).chain(db_some(vec![submitted()])).chain(db_none(1)),
     }
-    => Expected::Received(vec![])
-    ; "Get a failed status update, db is set to submitted, failed overrides submitted"
-)]
-#[test_case(
-    Input {
-        requested_id: txn_id(2),
-        status_updates: vec![Ok(txn_submitted(txn_id(2)))],
-        db_statuses: db_none(1).chain(db_some(vec![failed()])),
-    }
-    => Expected::Received(vec![failed()])
-    ; "Get a submitted status update, db is set to failed, failed overrides submitted"
+    => Expected::Received(vec![submitted(), squeezed()])
+    ; "updated then squeezed status, db is set to submitted then nothing, received submitted squeezed"
 )]
 #[tokio::test]
 async fn create_tx_status_change_stream<I>(input: Input<I>) -> Expected
@@ -286,7 +244,7 @@ where
     let stream = futures::stream::iter(ids)
         .chain(futures::stream::once(async move {
             re.store(true, atomic::Ordering::SeqCst);
-            Ok(txn_success(txn_id(255)))
+            Ok(txn_updated(txn_id(255)))
         }))
         .boxed();
 

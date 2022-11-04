@@ -42,7 +42,6 @@ use std::{
     io,
     io::ErrorKind::NotFound,
 };
-use tokio::sync::broadcast;
 
 mod predicates;
 mod txn_status_subscription;
@@ -587,11 +586,9 @@ impl TestContext {
 
 fn get_executor_and_db() -> (Executor, Database) {
     let db = Database::default();
-    let (tx_status_sender, _) = broadcast::channel(1);
     let executor = Executor {
         database: db.clone(),
         config: Config::local_node(),
-        tx_status_sender: Box::new(tx_status_sender),
     };
 
     (executor, db)

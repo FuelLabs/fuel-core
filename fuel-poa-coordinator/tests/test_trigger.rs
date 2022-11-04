@@ -31,7 +31,6 @@ use fuel_core_interfaces::{
     txpool::{
         PoolTransaction,
         TxStatus,
-        TxStatusBroadcast,
     },
 };
 use fuel_poa_coordinator::{
@@ -187,7 +186,7 @@ impl BlockDb for MockDatabase {
 /// Txpool with manually controllable contents
 pub struct MockTxPool {
     transactions: Arc<Mutex<Vec<ArcPoolTx>>>,
-    broadcast_tx: broadcast::Sender<TxStatusBroadcast>,
+    broadcast_tx: broadcast::Sender<TxStatus>,
     import_block_tx: broadcast::Sender<ImportBlockBroadcast>,
     sender: MockTxPoolSender,
     stopper: oneshot::Sender<()>,
@@ -199,7 +198,7 @@ pub struct MockTxPool {
 
 impl MockTxPool {
     /// Spawn a background task for handling the messages
-    fn spawn() -> (Self, broadcast::Receiver<TxStatusBroadcast>) {
+    fn spawn() -> (Self, broadcast::Receiver<TxStatus>) {
         let transactions = Arc::new(Mutex::new(Vec::<ArcPoolTx>::new()));
 
         let (block_event_tx, block_event_rx) = mpsc::channel(16);
@@ -266,12 +265,7 @@ impl MockTxPool {
 
     async fn add_tx(&mut self, tx: ArcPoolTx) {
         self.transactions.lock().await.push(tx.clone());
-        self.broadcast_tx
-            .send(TxStatusBroadcast {
-                tx_id: tx.id(),
-                status: TxStatus::Submitted,
-            })
-            .unwrap();
+        self.broadcast_tx.send(TxStatus::Submitted).unwrap();
     }
 
     fn check_block_produced(&mut self) -> Result<usize, mpsc::error::TryRecvError> {

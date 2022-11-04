@@ -3,6 +3,7 @@ use crate::{
         dependency::Dependency,
         price_sort::PriceSort,
     },
+    service::TxStatusChange,
     types::*,
     Config,
     Error,
@@ -24,8 +25,6 @@ use fuel_core_interfaces::{
     txpool::{
         InsertionResult,
         TxPoolDb,
-        TxStatus,
-        TxStatusBroadcast,
     },
 };
 use std::{
@@ -34,10 +33,7 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio::sync::{
-    broadcast,
-    RwLock,
-};
+use tokio::sync::RwLock;
 
 #[derive(Debug, Clone)]
 pub struct TxPool {
@@ -215,7 +211,7 @@ impl TxPool {
     pub async fn insert(
         txpool: &RwLock<Self>,
         db: &dyn TxPoolDb,
-        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: &TxStatusChange,
         txs: &[Arc<Transaction>],
     ) -> Vec<anyhow::Result<InsertionResult>> {
         // Check if that data is okay (witness match input/output, and if recovered signatures ara valid).
@@ -232,17 +228,9 @@ impl TxPool {
                     for removed in removed {
                         // small todo there is possibility to have removal reason (ReplacedByHigherGas, DependencyRemoved)
                         // but for now it is okay to just use Error::Removed.
-                        let _ = tx_status_sender.send(TxStatusBroadcast {
-                            tx_id: removed.id(),
-                            status: TxStatus::SqueezedOut {
-                                reason: Error::Removed,
-                            },
-                        });
+                        tx_status_sender.send_squeezed_out(removed.id(), Error::Removed);
                     }
-                    let _ = tx_status_sender.send(TxStatusBroadcast {
-                        tx_id: inserted.id(),
-                        status: TxStatus::Submitted,
-                    });
+                    tx_status_sender.send_submitted(inserted.id());
                 }
                 Err(_) => {
                     // @dev should not broadcast tx if error occurred
@@ -319,6 +307,7 @@ impl TxPool {
     /// When block is updated we need to receive all spend outputs and remove them from txpool.
     pub async fn block_update(
         txpool: &RwLock<Self>,
+        tx_status_sender: &TxStatusChange,
         block: Arc<FuelBlock>,
         // spend_outputs: [Input], added_outputs: [AddedOutputs]
     ) {
@@ -326,6 +315,7 @@ impl TxPool {
         // TODO https://github.com/FuelLabs/fuel-core/issues/465
 
         for tx in block.transactions() {
+            tx_status_sender.send_complete(tx.id());
             let _removed = guard.remove_by_tx_id(&tx.id());
         }
     }
@@ -333,21 +323,14 @@ impl TxPool {
     /// remove transaction from pool needed on user demand. Low priority
     pub async fn remove(
         txpool: &RwLock<Self>,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: &TxStatusChange,
         tx_ids: &[TxId],
     ) -> Vec<ArcPoolTx> {
         let mut removed = Vec::new();
         for tx_id in tx_ids {
             let rem = { txpool.write().await.remove_by_tx_id(tx_id) };
+            tx_status_sender.send_squeezed_out(*tx_id, Error::Removed);
             removed.extend(rem.into_iter());
-        }
-        for tx in &removed {
-            let _ = broadcast.send(TxStatusBroadcast {
-                tx_id: tx.id(),
-                status: TxStatus::SqueezedOut {
-                    reason: Error::Removed,
-                },
-            });
         }
         removed
     }

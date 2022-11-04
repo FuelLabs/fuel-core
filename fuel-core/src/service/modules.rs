@@ -2,10 +2,7 @@
 use crate::{
     chain_config::BlockProduction,
     database::Database,
-    executor::{
-        DynTxnStatusSender,
-        Executor,
-    },
+    executor::Executor,
     service::Config,
 };
 use anyhow::Result;
@@ -32,6 +29,7 @@ use fuel_core_interfaces::{
 };
 #[cfg(feature = "relayer")]
 use fuel_relayer::RelayerSynced;
+use fuel_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -155,7 +153,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         });
     }
 
-    let (tx_status_sender, _) = broadcast::channel(100);
+    let tx_status_sender = TxStatusChange::new(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
@@ -180,7 +178,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         executor: Box::new(ExecutorAdapter {
             database: database.clone(),
             config: config.clone(),
-            tx_status_sender: Box::new(tx_status_sender),
         }),
         relayer: Box::new(MaybeRelayerAdapter {
             database: database.clone(),
@@ -197,7 +194,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_builder.subscribe(),
+                txpool_builder.tx_status_subscribe(),
                 txpool_builder.sender().clone(),
                 block_import_tx,
                 block_producer.clone(),
@@ -249,7 +246,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 struct ExecutorAdapter {
     database: Database,
     config: Config,
-    tx_status_sender: DynTxnStatusSender,
 }
 
 #[async_trait::async_trait]
@@ -258,7 +254,6 @@ impl ExecutorTrait for ExecutorAdapter {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
-            tx_status_sender: self.tx_status_sender.clone(),
         };
         executor.execute(block).await
     }
@@ -271,7 +266,6 @@ impl ExecutorTrait for ExecutorAdapter {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
-            tx_status_sender: self.tx_status_sender.clone(),
         };
         executor.dry_run(block, utxo_validation).await
     }
