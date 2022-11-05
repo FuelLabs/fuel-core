@@ -30,7 +30,7 @@ where
                             .to_block(page.latest())
                             .address(ValueOrArray::Array(contracts));
 
-                        tracing::debug!(
+                        tracing::info!(
                             "Downloading logs for block range: {}..={}",
                             page.oldest(),
                             page.latest()

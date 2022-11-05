@@ -85,6 +85,38 @@ spec:
           {{- end}}
             - "--min-gas-price"
             - "{{ .Values.app.min_gas_price }}"
+          {{- if .Values.app.relayer }}
+            - "--relayer"
+            - "{{ .Values.app.relayer }}"
+          {{- end }}
+          {{- if .Values.app.relayer_v2_listening_contracts }}
+            - "--relayer-v2-listening-contracts"
+            - "{{ .Values.app.relayer_v2_listening_contracts }}"
+          {{- end }}
+          {{- if .Values.app.relayer_da_finalization }}
+            - "--relayer-da-finalization"
+            - "{{ .Values.app.relayer_da_finalization }}"
+          {{- end }}
+          {{- if .Values.app.relayer_da_deploy_height }}
+            - "--relayer-da-deploy-height"
+            - "{{ .Values.app.relayer_da_deploy_height }}"
+          {{- end }}
+          {{- if .Values.app.relayer_log_page_size }}
+            - "--relayer-log-page-size"
+            - "{{ .Values.app.relayer_log_page_size }}"
+          {{- end }}
+          {{- if .Values.app.relayer_min_duration_s }}
+            - "--relayer-min-duration-s"
+            - "{{ .Values.app.relayer_min_duration_s }}"
+          {{- end }}
+          {{- if .Values.app.relayer_eth_sync_call_freq_s }}
+            - "--relayer-eth-sync-call-freq-s"
+            - "{{ .Values.app.relayer_eth_sync_call_freq_s }}"
+          {{- end }}
+          {{- if .Values.app.relayer_eth_sync_log_freq_s }}
+            - "--relayer-eth-sync-log-freq-s"
+            - "{{ .Values.app.relayer_eth_sync_log_freq_s }}"
+          {{- end }}
           resources: {}
           imagePullPolicy: {{ .Values.app.image.pullPolicy }}
           ports:
