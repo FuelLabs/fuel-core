@@ -1,12 +1,5 @@
 use crate::database::Database;
-use anyhow::{
-    anyhow,
-    Context,
-};
-use chrono::{
-    DateTime,
-    Utc,
-};
+use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
@@ -23,6 +16,7 @@ use fuel_core_interfaces::{
             MerkleRootStorage,
             Word,
         },
+        tai64::Tai64,
     },
     db::{
         Error,
@@ -33,12 +27,23 @@ use fuel_core_interfaces::{
 use std::borrow::Cow;
 
 /// Used to store metadata relevant during the execution of a transaction
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct VmDatabase {
     current_block_height: u32,
-    current_timestamp: DateTime<Utc>,
+    current_timestamp: Tai64,
     coinbase: Address,
     database: Database,
+}
+
+impl Default for VmDatabase {
+    fn default() -> Self {
+        Self {
+            current_block_height: 0,
+            current_timestamp: Tai64::now(),
+            coinbase: Default::default(),
+            database: Default::default(),
+        }
+    }
 }
 
 impl VmDatabase {
@@ -49,7 +54,7 @@ impl VmDatabase {
     ) -> Self {
         Self {
             current_block_height: header.height.into(),
-            current_timestamp: header.time,
+            current_timestamp: header.time_tai64(),
             coinbase,
             database,
         }
@@ -115,13 +120,9 @@ impl InterpreterStorage for VmDatabase {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time(height)?,
+            height => self.database.block_time_tai64(height)?,
         };
-        timestamp
-            .timestamp_millis()
-            .try_into()
-            .context("invalid timestamp")
-            .map_err(Into::into)
+        Ok(timestamp.0)
     }
 
     fn block_hash(&self, block_height: u32) -> Result<Bytes32, Self::DataError> {

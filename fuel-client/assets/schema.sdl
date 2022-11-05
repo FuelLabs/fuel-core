@@ -305,6 +305,10 @@ type Header {
 	"""
 	time: DateTime!
 	"""
+	The block producer time in tai64 format
+	"""
+	timeTai64: U64!
+	"""
 	Hash of the application header.
 	"""
 	applicationHash: Bytes32!

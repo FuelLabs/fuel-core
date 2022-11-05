@@ -26,6 +26,7 @@ use fuel_core_interfaces::{
         },
         fuel_tx::Bytes32,
         prelude::StorageAsRef,
+        tai64::Tai64,
     },
     db::Transactions,
     model::FuelBlock,
@@ -115,6 +116,15 @@ impl Database {
             .get(&id)?
             .ok_or(Error::ChainUninitialized)?;
         Ok(block.header.time().to_owned())
+    }
+
+    pub fn block_time_tai64(&self, height: u32) -> Result<Tai64, Error> {
+        let id = self.get_block_id(height.into())?.unwrap_or_default();
+        let block = self
+            .storage::<FuelBlocks>()
+            .get(&id)?
+            .ok_or(Error::ChainUninitialized)?;
+        Ok(block.header.time_tai64())
     }
 
     pub fn get_block_id(&self, height: BlockHeight) -> Result<Option<Bytes32>, Error> {

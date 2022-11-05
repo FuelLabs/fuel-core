@@ -148,6 +148,11 @@ impl Header {
         *self.0.time()
     }
 
+    /// The block producer time in tai64 format
+    async fn time_tai64(&self) -> U64 {
+        U64(self.0.time_tai64().0)
+    }
+
     /// Hash of the application header.
     async fn application_hash(&self) -> Bytes32 {
         (*self.0.application_hash()).into()

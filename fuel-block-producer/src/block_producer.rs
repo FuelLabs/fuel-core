@@ -8,7 +8,10 @@ use anyhow::{
     Context,
     Result,
 };
-use chrono::Utc;
+use chrono::{
+    TimeZone,
+    Utc,
+};
 use fuel_core_interfaces::{
     block_producer::{
         BlockProducer as Trait,
@@ -27,6 +30,7 @@ use fuel_core_interfaces::{
             Word,
         },
         fuel_types::Bytes32,
+        tai64::Tai64,
     },
     executor::{
         ExecutionBlock,
@@ -158,7 +162,7 @@ impl Producer {
                 // TODO: this needs to be updated using a proper BMT MMR
                 prev_root: previous_block_info.prev_root,
                 height,
-                time: Utc::now(),
+                time: Utc.timestamp(Tai64::now().to_unix(), 0),
                 generated: Default::default(),
             },
             metadata: None,

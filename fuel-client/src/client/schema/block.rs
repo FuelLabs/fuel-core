@@ -117,6 +117,7 @@ pub struct Header {
     pub height: U64,
     pub prev_root: Bytes32,
     pub time: DateTime,
+    pub time_tai64: U64,
     pub application_hash: Bytes32,
 }
 

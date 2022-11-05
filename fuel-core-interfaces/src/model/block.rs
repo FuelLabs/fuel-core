@@ -37,6 +37,7 @@ use derive_more::{
     LowerHex,
     UpperHex,
 };
+use tai64::Tai64;
 
 /// A cryptographically secure hash, identifying a block.
 #[derive(
@@ -189,13 +190,20 @@ impl FuelBlockHeader {
     pub fn prev_root(&self) -> &Bytes32 {
         &self.as_ref().prev_root
     }
+
     /// Fuel block height.
     pub fn height(&self) -> &BlockHeight {
         &self.as_ref().height
     }
+
     /// The block producer time.
     pub fn time(&self) -> &DateTime<Utc> {
         &self.as_ref().time
+    }
+
+    /// The block producer time in tai64 format
+    pub fn time_tai64(&self) -> Tai64 {
+        self.as_ref().time_tai64()
     }
 
     /// The hash of the application header.
@@ -223,7 +231,10 @@ impl PartialFuelBlockHeader {
     pub fn time(&self) -> &DateTime<Utc> {
         &self.as_ref().time
     }
-
+    /// The block producer time in tai64 format
+    pub fn time_tai64(&self) -> Tai64 {
+        self.as_ref().time_tai64()
+    }
     /// The type of consensus this header is using.
     pub fn consensus_type(&self) -> ConsensusType {
         ConsensusType::PoA
@@ -352,6 +363,12 @@ impl FuelApplicationHeader<GeneratedApplicationFields> {
     }
 }
 
+impl<T> FuelConsensusHeader<T> {
+    pub fn time_tai64(&self) -> Tai64 {
+        Tai64::from_unix(self.time.timestamp())
+    }
+}
+
 impl FuelConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
     fn hash(&self) -> BlockId {
@@ -359,7 +376,7 @@ impl FuelConsensusHeader<GeneratedConsensusFields> {
         let mut hasher = Hasher::default();
         hasher.input(self.prev_root.as_ref());
         hasher.input(&self.height.to_bytes()[..]);
-        hasher.input(self.time.timestamp_millis().to_be_bytes());
+        hasher.input(self.time_tai64().0.to_be_bytes());
         hasher.input(self.application_hash.as_ref());
         BlockId(hasher.digest())
     }
