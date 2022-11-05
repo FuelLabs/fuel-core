@@ -199,8 +199,6 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_NOTIFY_BUILD }}
 
   publish-docker-image:
-    needs:
-      - cargo-verifications
     runs-on: ubuntu-latest
     permissions:
       contents: read
