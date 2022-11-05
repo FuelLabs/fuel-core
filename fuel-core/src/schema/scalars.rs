@@ -10,7 +10,10 @@ use async_graphql::{
     ScalarType,
     Value,
 };
-use fuel_core_interfaces::common::fuel_types;
+use fuel_core_interfaces::common::{
+    fuel_types,
+    tai64::Tai64,
+};
 use std::{
     convert::TryInto,
     fmt::{
@@ -55,6 +58,26 @@ impl From<BlockHeight> for U64 {
 impl From<U64> for usize {
     fn from(u: U64) -> Self {
         u.0 as usize
+    }
+}
+
+/// Need our own u64 type since GraphQL integers are restricted to i32.
+#[derive(Copy, Clone, Debug, derive_more::Into, derive_more::From)]
+pub struct Tai64Timestamp(pub Tai64);
+
+#[Scalar(name = "Tai64Timestamp")]
+impl ScalarType for Tai64Timestamp {
+    fn parse(value: Value) -> InputValueResult<Self> {
+        if let Value::String(value) = &value {
+            let num: u64 = value.parse().map_err(InputValueError::custom)?;
+            Ok(Tai64Timestamp(Tai64(num)))
+        } else {
+            Err(InputValueError::expected_type(value))
+        }
+    }
+
+    fn to_value(&self) -> Value {
+        Value::String(self.0 .0.to_string())
     }
 }
 

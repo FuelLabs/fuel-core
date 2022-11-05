@@ -19,6 +19,7 @@ use crate::{
             Bytes32,
             HexString,
             Salt,
+            Tai64Timestamp,
             TransactionId,
             TxPointer,
             U64,
@@ -123,8 +124,8 @@ pub struct SubmittedStatus(Tai64);
 
 #[Object]
 impl SubmittedStatus {
-    async fn time(&self) -> U64 {
-        U64(self.0 .0)
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.0)
     }
 }
 
@@ -147,8 +148,8 @@ impl SuccessStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> U64 {
-        U64(self.time.0)
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn program_state(&self) -> Option<ProgramState> {
@@ -176,8 +177,8 @@ impl FailureStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> U64 {
-        U64(self.time.0)
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn reason(&self) -> String {

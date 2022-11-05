@@ -254,7 +254,7 @@ input ExcludeInput {
 
 type FailureStatus {
 	block: Block!
-	time: U64!
+	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
 }
@@ -296,7 +296,7 @@ type Header {
 	"""
 	The block producer time.
 	"""
-	time: U64!
+	time: Tai64Timestamp!
 	"""
 	Hash of the application header.
 	"""
@@ -593,14 +593,16 @@ input SpendQueryElementInput {
 
 
 type SubmittedStatus {
-	time: U64!
+	time: Tai64Timestamp!
 }
 
 type SuccessStatus {
 	block: Block!
-	time: U64!
+	time: Tai64Timestamp!
 	programState: ProgramState
 }
+
+scalar Tai64Timestamp
 
 input TimeParameters {
 	"""

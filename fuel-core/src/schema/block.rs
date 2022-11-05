@@ -1,3 +1,7 @@
+use super::scalars::{
+    Bytes32,
+    Tai64Timestamp,
+};
 use crate::{
     database::{
         storage::FuelBlocks,
@@ -55,8 +59,6 @@ use std::{
     borrow::Cow,
     convert::TryInto,
 };
-
-use super::scalars::Bytes32;
 
 pub struct Block {
     pub(crate) header: Header,
@@ -140,8 +142,8 @@ impl Header {
     }
 
     /// The block producer time.
-    async fn time(&self) -> U64 {
-        U64(self.0.time().0)
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.0.time())
     }
 
     /// Hash of the application header.

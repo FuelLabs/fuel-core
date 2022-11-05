@@ -188,8 +188,8 @@ impl FuelBlockHeader {
         &self.as_ref().height
     }
     /// The block producer time.
-    pub fn time(&self) -> &Tai64 {
-        &self.as_ref().time
+    pub fn time(&self) -> Tai64 {
+        self.as_ref().time
     }
     /// The hash of the application header.
     pub fn application_hash(&self) -> &Bytes32 {

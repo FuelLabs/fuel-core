@@ -19,11 +19,7 @@ test = false
 
 [dependencies]
 anyhow = "1.0"
-async-graphql = { version = "4.0", features = [
-    "chrono",
-    "chrono-tz",
-    "tracing",
-], default-features = false }
+async-graphql = { version = "4.0", features = ["tracing"], default-features = false }
 async-trait = "0.1"
 axum = { version = "0.5" }
 bech32 = "0.9.0"
