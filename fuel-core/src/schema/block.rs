@@ -1,3 +1,7 @@
+use super::scalars::{
+    Bytes32,
+    Tai64Timestamp,
+};
 use crate::{
     database::{
         storage::FuelBlocks,
@@ -31,15 +35,11 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use chrono::{
-    DateTime,
-    NaiveDateTime,
-    Utc,
-};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
+        tai64::Tai64,
     },
     db::Transactions,
     executor::{
@@ -59,8 +59,6 @@ use std::{
     borrow::Cow,
     convert::TryInto,
 };
-
-use super::scalars::Bytes32;
 
 pub struct Block {
     pub(crate) header: Header,
@@ -144,8 +142,8 @@ impl Header {
     }
 
     /// The block producer time.
-    async fn time(&self) -> DateTime<Utc> {
-        *self.0.time()
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.0.time())
     }
 
     /// Hash of the application header.
@@ -409,7 +407,7 @@ fn get_time_closure(
     db: &Database,
     time_parameters: Option<TimeParameters>,
     blocks_to_produce: u64,
-) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>> {
+) -> anyhow::Result<Box<dyn Fn(u64) -> Tai64 + Send>> {
     if let Some(params) = time_parameters {
         check_start_after_latest_block(db, params.start_time.0)?;
         check_block_time_overflow(&params, blocks_to_produce)?;
@@ -419,13 +417,11 @@ fn get_time_closure(
                 .start_time
                 .0
                 .overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
-            let naive = NaiveDateTime::from_timestamp(timestamp as i64, 0);
-
-            DateTime::from_utc(naive, Utc)
+            Tai64(timestamp)
         }))
     };
 
-    Ok(Box::new(|_| Utc::now()))
+    Ok(Box::new(|_| Tai64::now()))
 }
 
 fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
@@ -435,7 +431,7 @@ fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Res
         return Ok(())
     }
 
-    let latest_time = db.block_time(current_height.into())?.timestamp();
+    let latest_time = db.block_time(current_height.into())?.0;
     if latest_time as u64 > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",

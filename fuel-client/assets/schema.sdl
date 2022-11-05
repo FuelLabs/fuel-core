@@ -241,13 +241,6 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
-"""
-Implement the DateTime<Utc> scalar
-
-The input/output is a string in RFC3339 format.
-"""
-scalar DateTime
-
 input ExcludeInput {
 	"""
 	Utxos to exclude from the selection.
@@ -261,7 +254,7 @@ input ExcludeInput {
 
 type FailureStatus {
 	block: Block!
-	time: DateTime!
+	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
 }
@@ -303,7 +296,7 @@ type Header {
 	"""
 	The block producer time.
 	"""
-	time: DateTime!
+	time: Tai64Timestamp!
 	"""
 	Hash of the application header.
 	"""
@@ -600,14 +593,16 @@ input SpendQueryElementInput {
 
 
 type SubmittedStatus {
-	time: DateTime!
+	time: Tai64Timestamp!
 }
 
 type SuccessStatus {
 	block: Block!
-	time: DateTime!
+	time: Tai64Timestamp!
 	programState: ProgramState
 }
+
+scalar Tai64Timestamp
 
 input TimeParameters {
 	"""
