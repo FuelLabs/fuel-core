@@ -1,10 +1,10 @@
 use crate::client::{
     schema::{
-        primitives::DateTime,
         schema,
         BlockId,
         ConnectionArgs,
         PageInfo,
+        Tai64Timestamp,
         U64,
     },
     PaginatedResult,
@@ -116,7 +116,7 @@ pub struct Header {
     pub output_messages_root: Bytes32,
     pub height: U64,
     pub prev_root: Bytes32,
-    pub time: DateTime,
+    pub time: Tai64Timestamp,
     pub application_hash: Bytes32,
 }
 

@@ -16,7 +16,6 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["derive"] }
 cynic = { version = "1.0", features = ["surf"] }
 derive_more = { version = "0.99" }
@@ -28,6 +27,7 @@ itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 surf = { version = "2.2", default-features = false, features = ["h1-client-rustls"] }
+tai64 = {version = "4.0", features = ["serde"] }
 thiserror = "1.0"
 
 [dev-dependencies]

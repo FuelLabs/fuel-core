@@ -19,17 +19,12 @@ test = false
 
 [dependencies]
 anyhow = "1.0"
-async-graphql = { version = "4.0", features = [
-    "chrono",
-    "chrono-tz",
-    "tracing",
-], default-features = false }
+async-graphql = { version = "4.0", features = ["tracing"], default-features = false }
 async-trait = "0.1"
 axum = { version = "0.5" }
 bech32 = "0.9.0"
 bincode = "1.3"
 byteorder = "1.4.3"
-chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.2", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
 dirs = "4.0"
