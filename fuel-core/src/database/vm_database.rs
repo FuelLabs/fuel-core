@@ -54,7 +54,7 @@ impl VmDatabase {
     ) -> Self {
         Self {
             current_block_height: header.height.into(),
-            current_timestamp: header.time_tai64(),
+            current_timestamp: header.time,
             coinbase,
             database,
         }
@@ -120,7 +120,7 @@ impl InterpreterStorage for VmDatabase {
                 return Err(anyhow!("block height too high for timestamp").into())
             }
             height if height == self.current_block_height => self.current_timestamp,
-            height => self.database.block_time_tai64(height)?,
+            height => self.database.block_time(height)?,
         };
         Ok(timestamp.0)
     }

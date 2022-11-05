@@ -4,30 +4,17 @@ use crate::{
         fuel_crypto::Hasher,
         fuel_tx::{
             Bytes32,
+            Input,
             Transaction,
             UniqueIdentifier,
         },
-        fuel_types::bytes::SerializableVec,
+        fuel_types::{
+            bytes::SerializableVec,
+            Address,
+        },
     },
     model::DaBlockHeight,
 };
-use chrono::{
-    DateTime,
-    Utc,
-};
-use fuel_vm::{
-    fuel_crypto,
-    fuel_merkle,
-    fuel_types::MessageId,
-    prelude::Signature,
-};
-
-use crate::common::{
-    fuel_tx::Input,
-    fuel_types::Address,
-};
-#[cfg(any(test, feature = "test-helpers"))]
-use chrono::TimeZone;
 use derive_more::{
     AsRef,
     Display,
@@ -36,6 +23,12 @@ use derive_more::{
     Into,
     LowerHex,
     UpperHex,
+};
+use fuel_vm::{
+    fuel_crypto,
+    fuel_merkle,
+    fuel_types::MessageId,
+    prelude::Signature,
 };
 use tai64::Tai64;
 
@@ -156,7 +149,7 @@ pub struct FuelConsensusHeader<Generated> {
     /// Fuel block height.
     pub height: BlockHeight,
     /// The block producer time.
-    pub time: DateTime<Utc>,
+    pub time: Tai64,
     /// generated consensus fields.
     pub generated: Generated,
 }
@@ -190,22 +183,14 @@ impl FuelBlockHeader {
     pub fn prev_root(&self) -> &Bytes32 {
         &self.as_ref().prev_root
     }
-
     /// Fuel block height.
     pub fn height(&self) -> &BlockHeight {
         &self.as_ref().height
     }
-
     /// The block producer time.
-    pub fn time(&self) -> &DateTime<Utc> {
+    pub fn time(&self) -> &Tai64 {
         &self.as_ref().time
     }
-
-    /// The block producer time in tai64 format
-    pub fn time_tai64(&self) -> Tai64 {
-        self.as_ref().time_tai64()
-    }
-
     /// The hash of the application header.
     pub fn application_hash(&self) -> &Bytes32 {
         &self.as_ref().application_hash
@@ -228,12 +213,8 @@ impl PartialFuelBlockHeader {
         &self.as_ref().height
     }
     /// The block producer time.
-    pub fn time(&self) -> &DateTime<Utc> {
+    pub fn time(&self) -> &Tai64 {
         &self.as_ref().time
-    }
-    /// The block producer time in tai64 format
-    pub fn time_tai64(&self) -> Tai64 {
-        self.as_ref().time_tai64()
     }
     /// The type of consensus this header is using.
     pub fn consensus_type(&self) -> ConsensusType {
@@ -363,12 +344,6 @@ impl FuelApplicationHeader<GeneratedApplicationFields> {
     }
 }
 
-impl<T> FuelConsensusHeader<T> {
-    pub fn time_tai64(&self) -> Tai64 {
-        Tai64::from_unix(self.time.timestamp())
-    }
-}
-
 impl FuelConsensusHeader<GeneratedConsensusFields> {
     /// Hash the consensus header.
     fn hash(&self) -> BlockId {
@@ -376,7 +351,7 @@ impl FuelConsensusHeader<GeneratedConsensusFields> {
         let mut hasher = Hasher::default();
         hasher.input(self.prev_root.as_ref());
         hasher.input(&self.height.to_bytes()[..]);
-        hasher.input(self.time_tai64().0.to_be_bytes());
+        hasher.input(self.time.0.to_be_bytes());
         hasher.input(self.application_hash.as_ref());
         BlockId(hasher.digest())
     }
@@ -465,7 +440,7 @@ impl FuelBlockDb {
                 consensus: FuelConsensusHeader {
                     prev_root: Default::default(),
                     height: Default::default(),
-                    time: Default::default(),
+                    time: Tai64::UNIX_EPOCH,
                     generated: GeneratedConsensusFields {
                         application_hash: Default::default(),
                     },
@@ -678,7 +653,7 @@ where
 {
     fn default() -> Self {
         Self {
-            time: Utc.timestamp(0, 0),
+            time: Tai64::UNIX_EPOCH,
             height: BlockHeight::default(),
             prev_root: Bytes32::default(),
             generated: Default::default(),
@@ -728,7 +703,7 @@ impl SealedFuelBlock {
                     consensus: FuelConsensusHeader {
                         prev_root: Default::default(),
                         height: Default::default(),
-                        time: Default::default(),
+                        time: Tai64::UNIX_EPOCH,
                         generated: GeneratedConsensusFields {
                             application_hash: Default::default(),
                         },

@@ -8,6 +8,7 @@ use crate::client::{
         HexString,
         PageInfo,
         TransactionId,
+        U64,
     },
     types::TransactionResponse,
     PageDirection,
@@ -175,14 +176,14 @@ pub enum TransactionStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
-    pub time: super::DateTime,
+    pub time: U64,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: U64,
     pub program_state: Option<ProgramState>,
 }
 
@@ -190,7 +191,7 @@ pub struct SuccessStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: U64,
     pub reason: String,
     pub program_state: Option<ProgramState>,
 }

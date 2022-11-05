@@ -24,9 +24,6 @@ use std::{
     str::FromStr,
 };
 
-pub type DateTime = chrono::DateTime<chrono::Utc>;
-impl_scalar!(DateTime, schema::DateTime);
-
 #[derive(Debug, Clone, Default)]
 pub struct HexFormatted<T: Debug + Clone + Default>(pub T);
 

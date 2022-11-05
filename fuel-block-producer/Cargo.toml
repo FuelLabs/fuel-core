@@ -12,7 +12,6 @@ description = "Fuel Block Producer"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = "0.4"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.13.2" }
 parking_lot = "0.12"
 tokio = { version = "1.21", features = ["full"] }

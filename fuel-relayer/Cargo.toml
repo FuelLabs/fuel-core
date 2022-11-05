@@ -13,7 +13,6 @@ description = "Fuel Relayer"
 anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.1"
-chrono = "0.4"
 env_logger = "0.9"
 ethers-contract = { version = "0.17", default-features = false, features = [
     "abigen",

@@ -13,7 +13,6 @@ description = "Transaction pool"
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1"
-chrono = "0.4"
 fuel-chain-config = { path = "../fuel-chain-config", version = "0.13.2" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.13.2" }
 futures = "0.3"

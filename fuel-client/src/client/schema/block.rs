@@ -1,6 +1,5 @@
 use crate::client::{
     schema::{
-        primitives::DateTime,
         schema,
         BlockId,
         ConnectionArgs,
@@ -116,8 +115,7 @@ pub struct Header {
     pub output_messages_root: Bytes32,
     pub height: U64,
     pub prev_root: Bytes32,
-    pub time: DateTime,
-    pub time_tai64: U64,
+    pub time: U64,
     pub application_hash: Bytes32,
 }
 
