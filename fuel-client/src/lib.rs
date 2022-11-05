@@ -7,3 +7,5 @@ pub mod schema;
 pub use fuel_vm;
 #[doc(no_inline)]
 pub use fuel_vm::*;
+#[doc(no_inline)]
+pub use tai64;
