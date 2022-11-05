@@ -368,7 +368,7 @@ impl BlockMutation {
 
         let executor = Executor {
             database: db.clone(),
-            config: cfg.clone(),
+            config: cfg,
         };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
@@ -394,7 +394,7 @@ impl BlockMutation {
                 vec![],
             );
 
-            executor.execute(ExecutionBlock::Production(block)).await?;
+            executor.execute(ExecutionBlock::Production(block))?;
         }
 
         db.get_block_height()?
