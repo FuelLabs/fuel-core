@@ -6,6 +6,7 @@ use std::{
     panic,
 };
 use tokio::task::JoinHandle;
+use tracing::log::warn;
 
 pub use config::{
     Config,
@@ -30,7 +31,8 @@ pub struct FuelService {
 impl FuelService {
     /// Create a fuel node instance from service config
     #[tracing::instrument(skip(config))]
-    pub async fn new_node(config: Config) -> Result<Self, AnyError> {
+    pub async fn new_node(mut config: Config) -> Result<Self, AnyError> {
+        Self::make_config_consistent(&mut config);
         // initialize database
         let database = match config.database_type {
             #[cfg(feature = "rocksdb")]
@@ -41,6 +43,22 @@ impl FuelService {
         };
         // initialize service
         Self::init_service(database, config).await
+    }
+
+    // TODO: Rework our configs system to avoid nesting of the same configs.
+    fn make_config_consistent(config: &mut Config) {
+        if config.txpool.chain_config != config.chain_conf {
+            warn!("The `ChainConfig` of `TxPool` was inconsistent");
+            config.txpool.chain_config = config.chain_conf.clone();
+        }
+        if config.txpool.utxo_validation != config.utxo_validation {
+            warn!("The `utxo_validation` of `TxPool` was inconsistent");
+            config.txpool.utxo_validation = config.utxo_validation;
+        }
+        if config.block_producer.utxo_validation != config.utxo_validation {
+            warn!("The `utxo_validation` of `BlockProducer` was inconsistent");
+            config.block_producer.utxo_validation = config.utxo_validation;
+        }
     }
 
     /// Used to initialize a service with a pre-existing database

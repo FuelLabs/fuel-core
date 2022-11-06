@@ -5,10 +5,6 @@ use crate::client::schema::{
     },
     ConversionError,
 };
-use chrono::{
-    DateTime,
-    Utc,
-};
 use fuel_vm::{
     fuel_tx::Transaction,
     fuel_types::bytes::Deserializable,
@@ -18,6 +14,7 @@ use serde::{
     Deserialize,
     Serialize,
 };
+use tai64::Tai64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResponse {
@@ -28,16 +25,16 @@ pub struct TransactionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TransactionStatus {
     Submitted {
-        submitted_at: DateTime<Utc>,
+        submitted_at: Tai64,
     },
     Success {
         block_id: String,
-        time: DateTime<Utc>,
+        time: Tai64,
         program_state: Option<ProgramState>,
     },
     Failure {
         block_id: String,
-        time: DateTime<Utc>,
+        time: Tai64,
         reason: String,
         program_state: Option<ProgramState>,
     },
@@ -49,16 +46,16 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
     fn try_from(status: SchemaTxStatus) -> Result<Self, Self::Error> {
         Ok(match status {
             SchemaTxStatus::SubmittedStatus(s) => TransactionStatus::Submitted {
-                submitted_at: s.time,
+                submitted_at: s.time.0,
             },
             SchemaTxStatus::SuccessStatus(s) => TransactionStatus::Success {
                 block_id: s.block.id.0.to_string(),
-                time: s.time,
+                time: s.time.0,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
             },
             SchemaTxStatus::FailureStatus(s) => TransactionStatus::Failure {
                 block_id: s.block.id.0.to_string(),
-                time: s.time,
+                time: s.time.0,
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
             },

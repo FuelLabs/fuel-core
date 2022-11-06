@@ -35,6 +35,7 @@ use fuel_core_interfaces::{
         prelude::StorageAsMut,
     },
     db::Coins,
+    executor::ExecutionResult,
     model::{
         Coin,
         CoinStatus,
@@ -197,8 +198,11 @@ async fn block_producer() -> Result<()> {
     assert_eq!(results[2].removed, vec![]);
 
     // Trigger block production
-    let generated_block = block_producer
-        .produce_block(1u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -228,8 +232,11 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production again
-    let generated_block = block_producer
-        .produce_block(2u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -251,8 +258,11 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production once more, now the block should be empty
-    let generated_block = block_producer
-        .produce_block(3u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 

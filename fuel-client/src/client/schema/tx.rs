@@ -7,6 +7,7 @@ use crate::client::{
         ConversionError,
         HexString,
         PageInfo,
+        Tai64Timestamp,
         TransactionId,
     },
     types::TransactionResponse,
@@ -175,14 +176,14 @@ pub enum TransactionStatus {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
 }
 
@@ -190,7 +191,7 @@ pub struct SuccessStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
 }

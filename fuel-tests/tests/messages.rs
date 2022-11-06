@@ -452,7 +452,7 @@ async fn can_get_message_proof() {
             hasher.input(Bytes32::from(result.header.prev_root).as_ref());
             hasher
                 .input(&u32::try_from(result.header.height.0).unwrap().to_be_bytes()[..]);
-            hasher.input(result.header.time.timestamp_millis().to_be_bytes());
+            hasher.input(result.header.time.0 .0.to_be_bytes());
             hasher.input(Bytes32::from(result.header.application_hash).as_ref());
             let block_id = hasher.digest();
             assert_eq!(block_id, Bytes32::from(result.header.id));

@@ -12,6 +12,14 @@ app:
   utxo_validation: ${fuel_core_utxo_validation}
   vm_backtrace: ${fuel_core_vm_backtrace}
   min_gas_price: ${fuel_core_min_gas_price}
+  relayer: ${fuel_core_relayer}
+  relayer_v2_listening_contracts: ${fuel_core_relayer_v2_listening_contracts}
+  relayer_da_finalization: "${fuel_core_relayer_da_finalization}"
+  relayer_da_deploy_height: "${fuel_core_relayer_da_deploy_height}"
+  relayer_log_page_size: "${fuel_core_relayer_log_page_size}"
+  relayer_min_duration_s: "${fuel_core_relayer_min_duration_s}"
+  relayer_eth_sync_call_freq_s: "${fuel_core_relayer_eth_sync_call_freq_s}"
+  relayer_eth_sync_log_freq_s: "${fuel_core_relayer_eth_sync_log_freq_s}"
   image:
     repository: ${fuel_core_image_repository}
     tag: ${fuel_core_image_tag}
