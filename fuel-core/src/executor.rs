@@ -1206,10 +1206,6 @@ impl Fee for CreateCheckedMetadata {
 mod tests {
     use super::*;
     use crate::model::FuelBlock;
-    use chrono::{
-        TimeZone,
-        Utc,
-    };
     use fuel_core_interfaces::{
         common::{
             fuel_asm::Opcode,
@@ -1247,6 +1243,7 @@ mod tests {
                 script_with_data_offset,
                 util::test_helpers::TestBuilder as TxBuilder,
             },
+            tai64::Tai64,
         },
         executor::ExecutionTypes,
         model::{
@@ -3175,7 +3172,7 @@ mod tests {
 
         // setup block
         let block_height = rng.gen_range(5u32..1000u32);
-        let time = Utc.timestamp(rng.gen_range(1u32..u32::MAX) as i64, 0);
+        let time = Tai64(rng.gen_range(1u32..u32::MAX) as u64);
 
         let block = PartialFuelBlock {
             header: PartialFuelBlockHeader {
@@ -3227,6 +3224,6 @@ mod tests {
             .unwrap()
             .unwrap();
 
-        assert_eq!(time.timestamp_millis() as Word, receipts[0].val().unwrap());
+        assert_eq!(time.0, receipts[0].val().unwrap());
     }
 }

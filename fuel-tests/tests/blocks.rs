@@ -1,7 +1,3 @@
-use chrono::{
-    TimeZone,
-    Utc,
-};
 use fuel_core::{
     database::{
         storage::FuelBlocks,
@@ -22,6 +18,7 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsMut,
         fuel_tx,
         fuel_tx::UniqueIdentifier,
+        tai64::Tai64,
     },
     model::FuelConsensusHeader,
 };
@@ -178,11 +175,11 @@ async fn produce_block_custom_time() {
 
     assert_eq!(5, new_height);
 
-    assert_eq!(db.block_time(1).unwrap().timestamp(), 100);
-    assert_eq!(db.block_time(2).unwrap().timestamp(), 110);
-    assert_eq!(db.block_time(3).unwrap().timestamp(), 120);
-    assert_eq!(db.block_time(4).unwrap().timestamp(), 130);
-    assert_eq!(db.block_time(5).unwrap().timestamp(), 140);
+    assert_eq!(db.block_time(1).unwrap().0, 100);
+    assert_eq!(db.block_time(2).unwrap().0, 110);
+    assert_eq!(db.block_time(3).unwrap().0, 120);
+    assert_eq!(db.block_time(4).unwrap().0, 130);
+    assert_eq!(db.block_time(5).unwrap().0, 140);
 }
 
 #[tokio::test]
@@ -259,7 +256,7 @@ async fn block_connection_5(
             header: FuelBlockHeader {
                 consensus: FuelConsensusHeader {
                     height: i.into(),
-                    time: Utc.timestamp(i.into(), 0),
+                    time: Tai64(i.into()),
                     ..Default::default()
                 },
                 ..Default::default()
