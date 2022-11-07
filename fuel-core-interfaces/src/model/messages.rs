@@ -1,4 +1,7 @@
-use super::BlockHeight;
+use super::{
+    BlockHeight,
+    FuelBlockHeader,
+};
 use crate::{
     common::{
         fuel_types::{
@@ -11,6 +14,11 @@ use crate::{
     model::DaBlockHeight,
 };
 use core::ops::Deref;
+use fuel_vm::{
+    fuel_crypto,
+    fuel_tx::Bytes32,
+    prelude::Output,
+};
 
 /// Message send from Da layer to fuel by bridge
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -47,6 +55,39 @@ impl Message {
 pub struct CheckedMessage {
     message: Message,
     id: MessageId,
+}
+
+pub struct MessageProof {
+    /// The proof set of the message proof.
+    pub proof_set: Vec<Bytes32>,
+    /// The index used to generate this proof.
+    pub proof_index: u64,
+    /// The signature of the fuel block.
+    pub signature: fuel_crypto::Signature,
+    /// The fuel block header that contains the message.
+    pub header: FuelBlockHeader,
+    /// The messages sender address.
+    pub sender: Address,
+    /// The messages recipient address.
+    pub recipient: Address,
+    /// The nonce from the message.
+    pub nonce: Bytes32,
+    /// The amount from the message.
+    pub amount: Word,
+    /// The data from the message.
+    pub data: Vec<u8>,
+}
+
+impl MessageProof {
+    pub fn message_id(&self) -> MessageId {
+        Output::message_id(
+            &self.sender,
+            &self.recipient,
+            &self.nonce,
+            self.amount,
+            &self.data,
+        )
+    }
 }
 
 impl CheckedMessage {

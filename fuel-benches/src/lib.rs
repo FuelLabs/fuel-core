@@ -1,4 +1,5 @@
 use criterion::black_box;
+use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
@@ -16,9 +17,9 @@ use std::{
 
 const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 
-fn new_db() -> Database {
+fn new_db() -> VmDatabase {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
-    Database::default()
+    VmDatabase::default()
 }
 
 pub struct ContractCode {
@@ -69,17 +70,17 @@ pub struct VmBench {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub witnesses: Vec<Witness>,
-    pub db: Option<Database>,
+    pub db: Option<VmDatabase>,
     pub instruction: Opcode,
     pub prepare_call: Option<PrepareCall>,
     pub dummy_contract: Option<ContractId>,
     pub contract_code: Option<ContractCode>,
-    pub prepare_db: Option<Box<dyn FnMut(Database) -> io::Result<Database>>>,
+    pub prepare_db: Option<Box<dyn FnMut(VmDatabase) -> io::Result<VmDatabase>>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct VmBenchPrepared {
-    pub vm: Interpreter<Database>,
+    pub vm: Interpreter<VmDatabase, Script>,
     pub instruction: Instruction,
     pub cleanup_script: Vec<Instruction>,
 }
@@ -174,7 +175,7 @@ impl VmBench {
             .with_prepare_call(prepare_call))
     }
 
-    pub fn with_db(mut self, db: Database) -> Self {
+    pub fn with_db(mut self, db: VmDatabase) -> Self {
         self.db.replace(db);
         self
     }
@@ -251,7 +252,7 @@ impl VmBench {
 
     pub fn with_prepare_db<F>(mut self, prepare_db: F) -> Self
     where
-        F: FnMut(Database) -> io::Result<Database> + 'static,
+        F: FnMut(VmDatabase) -> io::Result<VmDatabase> + 'static,
     {
         self.prepare_db.replace(Box::new(prepare_db));
         self
@@ -263,7 +264,7 @@ impl VmBench {
 }
 
 impl VmBenchPrepared {
-    pub fn run(self) -> io::Result<Interpreter<Database>> {
+    pub fn run(self) -> io::Result<Interpreter<VmDatabase, Script>> {
         let Self {
             mut vm,
             instruction,

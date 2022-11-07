@@ -18,7 +18,7 @@ pub fn cargo_build_and_dump_schema() -> Result<(), Box<dyn std::error::Error>> {
     let cargo = env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = Command::new(cargo)
         .current_dir(project_root())
-        .args(&["build"])
+        .args(["build"])
         .status()?;
 
     if !status.success() {

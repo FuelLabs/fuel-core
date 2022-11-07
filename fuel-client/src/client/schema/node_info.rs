@@ -7,7 +7,6 @@ use crate::client::schema::{
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct NodeInfo {
     pub utxo_validation: bool,
-    pub predicates: bool,
     pub vm_backtrace: bool,
     pub min_gas_price: U64,
     pub max_tx: U64,

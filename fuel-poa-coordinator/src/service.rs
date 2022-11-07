@@ -6,17 +6,34 @@ use crate::{
     Config,
     Trigger,
 };
-use anyhow::Context;
+use anyhow::{
+    anyhow,
+    Context,
+};
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     block_producer::BlockProducer,
-    common::prelude::Word,
+    common::{
+        fuel_tx::UniqueIdentifier,
+        prelude::{
+            Signature,
+            Word,
+        },
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
+    },
+    executor::ExecutionResult,
     model::{
         BlockHeight,
         FuelBlock,
+        FuelBlockConsensus,
+        FuelBlockPoAConsensus,
+        SecretKeyWrapper,
     },
     poa_coordinator::{
-        BlockHeightDb,
+        BlockDb,
         TransactionPool,
     },
     txpool::{
@@ -25,7 +42,10 @@ use fuel_core_interfaces::{
     },
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::Arc,
+};
 use tokio::{
     sync::{
         broadcast,
@@ -65,7 +85,7 @@ impl Service {
         block_producer: Arc<dyn BlockProducer>,
         db: S,
     ) where
-        S: BlockHeightDb + Send + Clone + 'static,
+        S: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
     {
         let mut running = self.running.lock();
@@ -80,6 +100,7 @@ impl Service {
         let task = Task {
             stop: stop_rx,
             block_gas_limit: self.config.block_gas_limit,
+            signing_key: self.config.signing_key.clone(),
             db,
             block_producer,
             txpool_broadcast,
@@ -111,11 +132,12 @@ impl Service {
 
 pub struct Task<S, T>
 where
-    S: BlockHeightDb + Send,
+    S: BlockDb + Send + Sync,
     T: TransactionPool,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
+    signing_key: Option<Secret<SecretKeyWrapper>>,
     db: S,
     block_producer: Arc<dyn BlockProducer>,
     txpool: T,
@@ -131,11 +153,11 @@ where
 }
 impl<S, T> Task<S, T>
 where
-    S: BlockHeightDb + Send,
+    S: BlockDb + Send,
     T: TransactionPool,
 {
     // Request the block producer to make a new block, and return it when ready
-    async fn signal_produce_block(&mut self) -> anyhow::Result<FuelBlock> {
+    async fn signal_produce_block(&mut self) -> anyhow::Result<ExecutionResult> {
         let current_height = self
             .db
             .block_height()
@@ -143,13 +165,40 @@ where
         let height = BlockHeight::from(current_height.as_usize() + 1);
 
         self.block_producer
-            .produce_block(height, self.block_gas_limit)
+            .produce_and_execute_block(height, self.block_gas_limit)
             .await
     }
 
     async fn produce_block(&mut self) -> anyhow::Result<()> {
+        // verify signing key is set
+        if self.signing_key.is_none() {
+            return Err(anyhow!("unable to produce blocks without a consensus key"))
+        }
+
         // Ask the block producer to create the block
-        let block = self.signal_produce_block().await?;
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+        } = self.signal_produce_block().await?;
+
+        // sign the block and seal it
+        self.seal_block(&block)?;
+
+        let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
+        for (tx, err) in skipped_transactions {
+            error!(
+                "During block production got invalid transaction {:?} with error {:?}",
+                tx, err
+            );
+            tx_ids_to_remove.push(tx.id());
+        }
+
+        if let Err(err) = self.txpool.remove_txs(tx_ids_to_remove).await {
+            error!(
+                "Unable to clean up skipped transaction from `TxPool` with error {:?}",
+                err
+            );
+        };
 
         // Send the block back to the txpool
         // TODO: this probably must be done differently with multi-node configuration
@@ -296,6 +345,22 @@ where
         }
     }
 
+    fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
+        if let Some(key) = &self.signing_key {
+            let block_hash = block.id();
+            let message = block_hash.into_message();
+
+            // The length of the secret is checked
+            let signing_key = key.expose_secret().deref();
+
+            let poa_signature = Signature::sign(signing_key, &message);
+            let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+            self.db.seal_block(block_hash, seal)
+        } else {
+            Err(anyhow!("no PoA signing key configured"))
+        }
+    }
+
     /// Start event loop
     async fn run(mut self) {
         self.init_timers().await;
@@ -307,11 +372,169 @@ where
                     }
                 }
                 Err(err) => {
-                    // TODO: is this the right way to handle an error here?
-                    error!("Stopping PoA block production due to an error: {err:?}");
-                    break
+                    error!("PoA module encountered an error: {err:?}");
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use fuel_core_interfaces::{
+        common::{
+            fuel_crypto::SecretKey,
+            fuel_tx::{
+                Receipt,
+                Transaction,
+                TransactionBuilder,
+                TxId,
+            },
+        },
+        executor::Error,
+        model::{
+            ArcPoolTx,
+            BlockId,
+        },
+    };
+    use rand::{
+        prelude::StdRng,
+        Rng,
+        SeedableRng,
+    };
+    use std::collections::HashSet;
+
+    struct MockBlockProducer {
+        skipped_transactions: Vec<Transaction>,
+    }
+
+    #[async_trait::async_trait]
+    impl BlockProducer for MockBlockProducer {
+        async fn produce_and_execute_block(
+            &self,
+            _height: BlockHeight,
+            _max_gas: Word,
+        ) -> anyhow::Result<ExecutionResult> {
+            let result = ExecutionResult {
+                block: Default::default(),
+                skipped_transactions: self
+                    .skipped_transactions
+                    .clone()
+                    .into_iter()
+                    .map(|tx| (tx, Error::OutputAlreadyExists))
+                    .collect(),
+            };
+            Ok(result)
+        }
+
+        async fn dry_run(
+            &self,
+            _transaction: Transaction,
+            _height: Option<BlockHeight>,
+            _utxo_validation: Option<bool>,
+        ) -> anyhow::Result<Vec<Receipt>> {
+            unimplemented!()
+        }
+    }
+
+    mockall::mock! {
+        TxPool {}
+
+        #[async_trait::async_trait]
+        impl TransactionPool for TxPool {
+            async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
+
+            async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
+        }
+    }
+
+    mockall::mock! {
+        Database {}
+
+        unsafe impl Sync for Database {}
+        unsafe impl Send for Database {}
+
+        #[async_trait::async_trait]
+        impl BlockDb for Database {
+            fn block_height(&self) -> anyhow::Result<BlockHeight>;
+
+            fn seal_block(
+                &mut self,
+                block_id: BlockId,
+                consensus: FuelBlockConsensus,
+            ) -> anyhow::Result<()>;
+        }
+    }
+
+    fn make_tx(rng: &mut StdRng) -> Transaction {
+        TransactionBuilder::create(rng.gen(), rng.gen(), vec![])
+            .gas_price(rng.gen())
+            .gas_limit(rng.gen())
+            .finalize_without_signature_as_transaction()
+    }
+
+    #[tokio::test]
+    async fn remove_skipped_transactions() {
+        // The test verifies that if `BlockProducer` returns skipped transactions, they would
+        // be propagated to `TxPool` for removal.
+        let mut rng = StdRng::seed_from_u64(2322);
+        let secret_key = SecretKey::random(&mut rng);
+
+        let (_, stop) = mpsc::channel(1);
+        let (_, txpool_broadcast) = broadcast::channel(1);
+        let (import_block_events_tx, mut import_block_receiver_tx) =
+            broadcast::channel(1);
+        tokio::spawn(async move {
+            import_block_receiver_tx.recv().await.unwrap();
+        });
+
+        const TX_NUM: usize = 100;
+        let skipped_transactions: Vec<_> =
+            (0..TX_NUM).map(|_| make_tx(&mut rng)).collect();
+
+        let block_producer = MockBlockProducer {
+            skipped_transactions: skipped_transactions.clone(),
+        };
+
+        let mut db = MockDatabase::default();
+        db.expect_block_height()
+            .returning(|| Ok(BlockHeight::from(1u32)));
+        db.expect_seal_block().returning(|_, _| Ok(()));
+
+        let mut txpool = MockTxPool::default();
+        // Test created for only for this check.
+        txpool.expect_remove_txs().returning(move |skipped_ids| {
+            // Transform transactions into ids.
+            let skipped_transactions: Vec<_> =
+                skipped_transactions.iter().map(|tx| tx.id()).collect();
+
+            // Check that all transactions are unique.
+            let expected_skipped_ids_set: HashSet<_> =
+                skipped_transactions.clone().into_iter().collect();
+            assert_eq!(expected_skipped_ids_set.len(), TX_NUM);
+
+            // Check that `TxPool::remove_txs` was called with the same ids in the same order.
+            assert_eq!(skipped_ids.len(), TX_NUM);
+            assert_eq!(skipped_transactions.len(), TX_NUM);
+            assert_eq!(skipped_transactions, skipped_ids);
+            Ok(vec![])
+        });
+
+        let mut task = Task {
+            stop,
+            block_gas_limit: 1000000,
+            signing_key: Some(Secret::new(secret_key.into())),
+            db,
+            block_producer: Arc::new(block_producer),
+            txpool,
+            txpool_broadcast,
+            import_block_events_tx,
+            last_block_created: Instant::now(),
+            trigger: Default::default(),
+            timer: DeadlineClock::new(),
+        };
+
+        assert!(task.produce_block().await.is_ok());
     }
 }

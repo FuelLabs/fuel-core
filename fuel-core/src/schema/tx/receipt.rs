@@ -4,6 +4,7 @@ use crate::schema::{
         Address,
         AssetId,
         Bytes32,
+        ContractId,
         HexString,
         MessageId,
         U64,
@@ -140,6 +141,10 @@ impl Receipt {
     }
     async fn nonce(&self) -> Option<Bytes32> {
         self.0.nonce().copied().map(Bytes32)
+    }
+
+    async fn contract_id(&self) -> Option<ContractId> {
+        self.0.contract_id().map(|id| ContractId(*id))
     }
 }
 

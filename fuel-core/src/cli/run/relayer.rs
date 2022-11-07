@@ -59,6 +59,7 @@ impl From<RelayerArgs> for Config {
             sync_minimum_duration: Duration::from_secs(args.sync_minimum_duration_secs),
             syncing_call_frequency: Duration::from_secs(args.syncing_call_frequency_secs),
             syncing_log_frequency: Duration::from_secs(args.syncing_log_frequency_secs),
+            metrics: false,
         }
     }
 }

@@ -103,7 +103,7 @@ impl RocksDb {
 
     fn cf(&self, column: Column) -> Arc<BoundColumnFamily> {
         self.db
-            .cf_handle(&*RocksDb::col_name(column))
+            .cf_handle(&RocksDb::col_name(column))
             .expect("invalid column state")
     }
 

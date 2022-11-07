@@ -16,4 +16,8 @@ pub mod common {
     pub use fuel_vm;
     #[doc(no_inline)]
     pub use fuel_vm::*;
+    #[doc(no_inline)]
+    pub use secrecy;
+    #[doc(no_inline)]
+    pub use tai64;
 }

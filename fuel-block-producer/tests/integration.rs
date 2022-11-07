@@ -19,9 +19,11 @@ use fuel_core_interfaces::{
         },
         fuel_merkle::common::Bytes32,
         fuel_tx::{
+            Chargeable,
             ConsensusParameters,
             Output,
-            Transaction,
+            Script,
+            Signable,
             TransactionBuilder,
             UtxoId,
         },
@@ -33,6 +35,7 @@ use fuel_core_interfaces::{
         prelude::StorageAsMut,
     },
     db::Coins,
+    executor::ExecutionResult,
     model::{
         Coin,
         CoinStatus,
@@ -61,11 +64,12 @@ const COIN_AMOUNT: u64 = 1_000_000_000;
 async fn block_producer() -> Result<()> {
     let mut rng = StdRng::seed_from_u64(1234u64);
 
+    let max_gas_per_block = 1_000_000;
     let consensus_params = ConsensusParameters {
         contract_max_size: 10000,
         gas_per_byte: 1,
         gas_price_factor: 1,
-        max_gas_per_tx: 1_000_000,
+        max_gas_per_tx: max_gas_per_block,
         max_inputs: 16,
         max_message_data_length: 16,
         max_outputs: 16,
@@ -76,8 +80,6 @@ async fn block_producer() -> Result<()> {
         max_storage_slots: 10000,
         max_witnesses: 16,
     };
-
-    let max_gas_per_block = 1_000_000;
 
     let mut txpool_db = TxPoolDb::default();
 
@@ -125,8 +127,11 @@ async fn block_producer() -> Result<()> {
     let keep_alive = Box::new(incoming_tx_sender);
     Box::leak(keep_alive);
 
+    let mut tx_pool_config = TxPoolConfig::default();
+    tx_pool_config.chain_config.transaction_parameters = consensus_params;
+
     txpool_builder
-        .config(TxPoolConfig::default())
+        .config(tx_pool_config)
         .db(Box::new(txpool_db))
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(import_block_events_rx)
@@ -143,14 +148,17 @@ async fn block_producer() -> Result<()> {
     let mock_db = MockDb::default();
 
     let block_producer = Producer {
-        config: fuel_block_producer::config::Config { consensus_params },
-        db: &mock_db,
-        txpool: &TxPoolAdapter {
-            sender: txpool.sender().clone(),
-            consensus_params,
+        config: fuel_block_producer::config::Config {
+            utxo_validation: true,
+            coinbase_recipient: Address::default(),
+            metrics: false,
         },
-        executor: &MockExecutor(mock_db.clone()),
-        relayer: &MockRelayer::default(),
+        db: Box::new(mock_db.clone()),
+        txpool: Box::new(TxPoolAdapter {
+            sender: txpool.sender().clone(),
+        }),
+        executor: Box::new(MockExecutor(mock_db.clone())),
+        relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
     };
 
@@ -165,40 +173,56 @@ async fn block_producer() -> Result<()> {
     );
     let limit2_takes_whole_block = max_gas_per_block.checked_sub(txsize).unwrap();
     let gas_prices = [10, 20, 15];
+    let txs = coins
+        .iter()
+        .zip([
+            (gas_prices[0], small_limit),
+            (gas_prices[1], small_limit),
+            (gas_prices[2], limit2_takes_whole_block),
+        ]) // Produces blocks [1, 0] and [2]
+        .map(|(coin, (gas_price, gas_limit))| {
+            Arc::new(make_tx(coin, gas_price, gas_limit).into())
+        })
+        .collect();
     let results: Vec<_> = txpool
         .sender()
-        .insert(
-            coins
-                .iter()
-                .zip([
-                    (gas_prices[0], small_limit),
-                    (gas_prices[1], small_limit),
-                    (gas_prices[2], limit2_takes_whole_block),
-                ]) // Produces blocks [1, 0] and [2]
-                .map(|(coin, (gas_price, gas_limit))| {
-                    Arc::new(make_tx(coin, gas_price, gas_limit))
-                })
-                .collect(),
-        )
+        .insert(txs)
         .await
         .expect("Couldn't insert transaction")
         .into_iter()
         .map(|r| r.expect("Invalid tx"))
         .collect();
 
-    assert_eq!(results, vec![vec![], vec![], vec![]]);
+    assert_eq!(results[0].removed, vec![]);
+    assert_eq!(results[1].removed, vec![]);
+    assert_eq!(results[2].removed, vec![]);
 
     // Trigger block production
-    let generated_block = block_producer
-        .produce_block(1u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 2);
+    assert_eq!(generated_block.transactions().len(), 2);
 
-    assert_eq!(generated_block.transactions[0].gas_price(), 20);
-    assert_eq!(generated_block.transactions[1].gas_price(), 10);
+    assert_eq!(
+        generated_block.transactions()[0]
+            .as_script()
+            .unwrap()
+            .price(),
+        20
+    );
+    assert_eq!(
+        generated_block.transactions()[1]
+            .as_script()
+            .unwrap()
+            .price(),
+        10
+    );
 
     // Import the block to txpool
     import_block_events_tx
@@ -208,14 +232,23 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production again
-    let generated_block = block_producer
-        .produce_block(2u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 1);
-    assert_eq!(generated_block.transactions[0].gas_price(), 15);
+    assert_eq!(generated_block.transactions().len(), 1);
+    assert_eq!(
+        generated_block.transactions()[0]
+            .as_script()
+            .unwrap()
+            .price(),
+        15
+    );
 
     // Import the block to txpool
     import_block_events_tx
@@ -225,13 +258,16 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production once more, now the block should be empty
-    let generated_block = block_producer
-        .produce_block(3u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
     // Check that the generated block looks right
-    assert_eq!(generated_block.transactions.len(), 0);
+    assert_eq!(generated_block.transactions().len(), 0);
 
     Ok(())
 }
@@ -256,22 +292,28 @@ impl CoinInfo {
     }
 }
 
-fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Transaction {
-    TransactionBuilder::script(vec![Opcode::RET(REG_ZERO)].into_iter().collect(), vec![])
-        .gas_price(gas_price)
-        .gas_limit(gas_limit)
-        .add_unsigned_coin_input(
-            coin.secret_key,
-            coin.utxo_id(),
-            COIN_AMOUNT,
-            AssetId::zeroed(),
-            Default::default(),
-            0,
-        )
-        .add_output(Output::Change {
-            to: Default::default(),
-            amount: 0,
-            asset_id: AssetId::zeroed(),
-        })
-        .finalize_without_signature()
+fn make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> Script {
+    let mut tx = TransactionBuilder::script(
+        vec![Opcode::RET(REG_ZERO)].into_iter().collect(),
+        vec![],
+    )
+    .gas_price(gas_price)
+    .gas_limit(gas_limit)
+    .add_unsigned_coin_input(
+        coin.secret_key,
+        coin.utxo_id(),
+        COIN_AMOUNT,
+        AssetId::zeroed(),
+        Default::default(),
+        0,
+    )
+    .add_output(Output::Change {
+        to: Default::default(),
+        amount: 0,
+        asset_id: AssetId::zeroed(),
+    })
+    .finalize_without_signature();
+
+    tx.sign_inputs(&coin.secret_key);
+    tx
 }

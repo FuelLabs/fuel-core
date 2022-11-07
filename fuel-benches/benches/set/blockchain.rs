@@ -63,7 +63,7 @@ pub fn run(c: &mut Criterion) {
         run_group(
             &mut group,
             format!("sww ({})", i),
-            VmBench::contract(rng, Opcode::SWW(REG_ZERO, REG_ONE))
+            VmBench::contract(rng, Opcode::SWW(REG_ZERO, 0x29, REG_ONE))
                 .expect("failed to prepare contract")
                 .with_prepare_db(move |mut db| {
                     let mut key = Bytes32::zeroed();

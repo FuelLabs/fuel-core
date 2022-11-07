@@ -7,7 +7,6 @@ use async_graphql::{
 
 pub struct NodeInfo {
     utxo_validation: bool,
-    predicates: bool,
     vm_backtrace: bool,
     min_gas_price: U64,
     max_tx: U64,
@@ -19,10 +18,6 @@ pub struct NodeInfo {
 impl NodeInfo {
     async fn utxo_validation(&self) -> bool {
         self.utxo_validation
-    }
-
-    async fn predicates(&self) -> bool {
-        self.predicates
     }
 
     async fn vm_backtrace(&self) -> bool {
@@ -54,7 +49,6 @@ impl NodeQuery {
     async fn node_info(&self, ctx: &Context<'_>) -> async_graphql::Result<NodeInfo> {
         let Config {
             utxo_validation,
-            predicates,
             vm,
             txpool,
             ..
@@ -64,7 +58,6 @@ impl NodeQuery {
 
         Ok(NodeInfo {
             utxo_validation: *utxo_validation,
-            predicates: *predicates,
             vm_backtrace: vm.backtrace,
             min_gas_price: txpool.min_gas_price.into(),
             max_tx: (txpool.max_tx as u64).into(),

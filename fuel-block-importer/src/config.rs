@@ -1,2 +1,4 @@
 #[derive(Default, Debug, Clone)]
-pub struct Config {}
+pub struct Config {
+    pub metrics: bool,
+}

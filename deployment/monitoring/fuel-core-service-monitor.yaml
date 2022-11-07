@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: fuel-core
+  namespace: ${k8s_namespace}
+  labels:
+    release: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: fuel-core
+  endpoints:
+  - path: /metrics 
+    port: http
