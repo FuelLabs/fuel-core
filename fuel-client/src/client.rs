@@ -8,6 +8,7 @@ use cynic::{
     QueryBuilder,
 };
 use fuel_vm::prelude::*;
+use futures_timer::Delay;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
@@ -44,6 +45,7 @@ use schema::{
     U64,
 };
 use std::{
+    cmp::min,
     convert::TryInto,
     io::{
         self,
@@ -54,6 +56,7 @@ use std::{
         self,
         FromStr,
     },
+    time::Duration,
 };
 use types::{
     TransactionResponse,
@@ -70,10 +73,19 @@ pub use schema::{
     PaginationRequest,
 };
 
-use self::schema::block::ProduceBlockArgs;
+use self::schema::{
+    block::{
+        ProduceBlockArgs,
+        TimeParameters,
+    },
+    message::MessageProofArgs,
+};
 
 pub mod schema;
 pub mod types;
+
+pub const STATUS_POLLING_INTERVAL_MAX_MS: u64 = 500u64;
+pub const STATUS_POLLING_INTERVAL_MIN_MS: u64 = 16u64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -186,6 +198,18 @@ impl FuelClient {
 
         let id = self.query(query).await.map(|r| r.submit)?.id;
         Ok(id)
+    }
+
+    /// Submit the transaction and wait for it to be included into a block.
+    ///
+    /// This will wait forever if needed, so consider wrapping this call
+    /// with a `tokio::time::timeout`.
+    pub async fn submit_and_await_commit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<TransactionStatus> {
+        let tx_id = self.submit(tx).await?;
+        self.await_transaction_commit(&tx_id.to_string()).await
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -325,6 +349,36 @@ impl FuelClient {
         Ok(status)
     }
 
+    /// Awaits for the transaction to be committed into a block
+    ///
+    /// This will wait forever if needed, so consider wrapping this call
+    /// with a `tokio::time::timeout`.
+    pub async fn await_transaction_commit(
+        &self,
+        id: &str,
+    ) -> io::Result<TransactionStatus> {
+        // use polling until subscriptions are available
+        let mut exponential_backoff_interval = STATUS_POLLING_INTERVAL_MIN_MS;
+        let mut status = self.transaction_status(id).await?;
+        loop {
+            match status {
+                TransactionStatus::Submitted { .. } => {
+                    exponential_backoff_interval = min(
+                        // double the interval duration on each attempt until max is reached
+                        exponential_backoff_interval * 2,
+                        STATUS_POLLING_INTERVAL_MAX_MS,
+                    );
+                    // sleep for polling interval
+                    Delay::new(Duration::from_millis(exponential_backoff_interval)).await;
+                    // check status again
+                    status = self.transaction_status(id).await?;
+                }
+                status @ TransactionStatus::Success { .. } => return Ok(status),
+                status @ TransactionStatus::Failure { .. } => return Ok(status),
+            }
+        }
+    }
+
     /// returns a paginated set of transactions sorted by block height
     pub async fn transactions(
         &self,
@@ -368,9 +422,14 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+    pub async fn produce_blocks(
+        &self,
+        blocks_to_produce: u64,
+        time: Option<TimeParameters>,
+    ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
+            time,
         });
 
         let new_height = self.query(query).await?.produce_blocks;
@@ -533,6 +592,24 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    /// Request a merkle proof of an output message.
+    pub async fn message_proof(
+        &self,
+        transaction_id: &str,
+        message_id: &str,
+    ) -> io::Result<Option<schema::message::MessageProof>> {
+        let transaction_id: schema::TransactionId = transaction_id.parse()?;
+        let message_id: schema::MessageId = message_id.parse()?;
+        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
+            transaction_id,
+            message_id,
+        });
+
+        let proof = self.query(query).await?.message_proof;
+
+        Ok(proof)
     }
 }
 

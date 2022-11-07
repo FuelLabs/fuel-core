@@ -12,7 +12,6 @@ use crate::{
             UtxoId,
         },
         fuel_types::{
-            Address,
             Bytes32,
             MessageId,
         },
@@ -20,13 +19,8 @@ use crate::{
     },
     model::{
         Coin,
-        ConsensusId,
-        DaBlockHeight,
         Message,
-        ValidatorId,
-        ValidatorStake,
     },
-    relayer::StakingDiff,
 };
 use std::io::ErrorKind;
 use thiserror::Error;
@@ -58,34 +52,6 @@ impl Mappable for Transactions {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of delegate's indexes used by relayer.
-/// Delegate index maps delegate `Address` with list of da block where delegation happened.
-pub struct DelegatesIndexes;
-
-impl Mappable for DelegatesIndexes {
-    type Key = Address;
-    type SetValue = [DaBlockHeight];
-    type GetValue = Vec<DaBlockHeight>;
-}
-
-/// The storage table of relayer validators set.
-pub struct ValidatorsSet;
-
-impl Mappable for ValidatorsSet {
-    type Key = ValidatorId;
-    type SetValue = (ValidatorStake, Option<ConsensusId>);
-    type GetValue = Self::SetValue;
-}
-
-/// The storage table of relayer staking diffs.
-pub struct StakingDiffs;
-
-impl Mappable for StakingDiffs {
-    type Key = DaBlockHeight;
-    type SetValue = StakingDiff;
-    type GetValue = Self::SetValue;
-}
-
 #[derive(Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
@@ -99,6 +65,8 @@ pub enum Error {
     InvalidDatabaseVersion,
     #[error("error occurred in the underlying datastore `{0}`")]
     DatabaseError(Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
 }
 
 impl From<Error> for std::io::Error {

@@ -12,8 +12,8 @@ use fuel_core::{
 };
 use fuel_core_interfaces::common::{
     fuel_tx::{
+        field::Inputs,
         Contract,
-        Transaction,
     },
     fuel_vm::prelude::*,
 };
@@ -86,7 +86,7 @@ impl TestSetupBuilder {
     /// add input coins from a set of transaction to the genesis config
     pub fn config_coin_inputs_from_transactions(
         &mut self,
-        transactions: &[&Transaction],
+        transactions: &[&Script],
     ) -> &mut Self {
         self.initial_coins.extend(
             transactions
@@ -128,21 +128,23 @@ impl TestSetupBuilder {
 
     // setup chainspec and spin up a fuel-node
     pub async fn finalize(&mut self) -> TestContext {
+        let chain_config = ChainConfig {
+            initial_state: Some(StateConfig {
+                coins: Some(self.initial_coins.clone()),
+                contracts: Some(self.contracts.values().cloned().collect_vec()),
+                ..StateConfig::default()
+            }),
+            ..ChainConfig::local_testnet()
+        };
+        let utxo_validation = true;
         let config = Config {
-            utxo_validation: true,
-            predicates: self.predicates,
-            txpool: fuel_txpool::Config {
-                min_gas_price: self.min_gas_price,
-                ..Default::default()
-            },
-            chain_conf: ChainConfig {
-                initial_state: Some(StateConfig {
-                    coins: Some(self.initial_coins.clone()),
-                    contracts: Some(self.contracts.values().cloned().collect_vec()),
-                    ..StateConfig::default()
-                }),
-                ..ChainConfig::local_testnet()
-            },
+            utxo_validation,
+            txpool: fuel_txpool::Config::new(
+                chain_config.clone(),
+                self.min_gas_price,
+                utxo_validation,
+            ),
+            chain_conf: chain_config,
             ..Config::local_node()
         };
 

@@ -2,7 +2,7 @@
 source: fuel-client/src/client/schema/block.rs
 expression: operation.query
 ---
-mutation Mutation($_0: U64!) {
-  produceBlocks(blocksToProduce: $_0)
+mutation Mutation($_0: U64!, $_1: TimeParameters) {
+  produceBlocks(blocksToProduce: $_0, time: $_1)
 }
 

@@ -13,9 +13,12 @@ use async_graphql::{
     Context,
     Object,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::StorageAsRef,
-    fuel_tx,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsRef,
+        fuel_tx,
+    },
+    model::FuelBlockDb,
 };
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";
@@ -93,8 +96,10 @@ impl ChainInfo {
         let db = ctx.data_unchecked::<Database>().clone();
         let height = db.get_block_height()?.unwrap_or_default();
         let id = db.get_block_id(height)?.unwrap_or_default();
-        let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_default();
-        Ok(Block(block.into_owned()))
+        let block = db.storage::<FuelBlocks>().get(&id)?.unwrap_or_else(|| {
+            std::borrow::Cow::Owned(FuelBlockDb::fix_me_default_block())
+        });
+        Ok(Block::from(block.into_owned()))
     }
 
     async fn base_chain_height(&self) -> U64 {

@@ -1,17 +1,27 @@
 use std::sync::Arc;
 
 use anyhow::anyhow;
+
 use fuel_core_interfaces::p2p::{
     BlockBroadcast,
+    BlockGossipData,
     ConsensusBroadcast,
+    ConsensusGossipData,
+    GossipData,
+    GossipsubMessageAcceptance,
+    GossipsubMessageInfo,
     P2pDb,
     P2pRequestEvent,
     TransactionBroadcast,
+    TransactionGossipData,
 };
-
-use libp2p::request_response::RequestId;
+use libp2p::{
+    gossipsub::MessageAcceptance,
+    request_response::RequestId,
+};
 use tokio::{
     sync::{
+        broadcast,
         mpsc::{
             Receiver,
             Sender,
@@ -20,10 +30,17 @@ use tokio::{
     },
     task::JoinHandle,
 };
-use tracing::warn;
+use tracing::{
+    debug,
+    error,
+    warn,
+};
 
 use crate::{
-    behavior::FuelBehaviourEvent,
+    codecs::{
+        bincode::BincodeCodec,
+        NetworkCodec,
+    },
     config::P2PConfig,
     gossipsub::messages::{
         GossipsubBroadcastRequest,
@@ -48,11 +65,10 @@ pub struct NetworkOrchestrator {
     rx_outbound_responses: Receiver<Option<(OutboundResponse, RequestId)>>,
 
     // senders
-    tx_consensus: Sender<ConsensusBroadcast>,
-    tx_transaction: Sender<TransactionBroadcast>,
-    tx_block: Sender<BlockBroadcast>,
+    tx_consensus: Sender<ConsensusGossipData>,
+    tx_transaction: broadcast::Sender<TransactionGossipData>,
+    tx_block: Sender<BlockGossipData>,
     tx_outbound_responses: Sender<Option<(OutboundResponse, RequestId)>>,
-
     db: Arc<dyn P2pDb>,
 }
 
@@ -61,9 +77,9 @@ impl NetworkOrchestrator {
         p2p_config: P2PConfig,
         rx_request_event: Receiver<P2pRequestEvent>,
 
-        tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
-        tx_block: Sender<BlockBroadcast>,
+        tx_consensus: Sender<ConsensusGossipData>,
+        tx_transaction: broadcast::Sender<TransactionGossipData>,
+        tx_block: Sender<BlockGossipData>,
 
         db: Arc<dyn P2pDb>,
     ) -> Self {
@@ -83,7 +99,10 @@ impl NetworkOrchestrator {
     }
 
     pub async fn run(mut self) -> anyhow::Result<Self> {
-        let mut p2p_service = FuelP2PService::new(self.p2p_config.clone()).await?;
+        let mut p2p_service = FuelP2PService::new(
+            self.p2p_config.clone(),
+            BincodeCodec::new(self.p2p_config.max_block_size),
+        )?;
 
         loop {
             tokio::select! {
@@ -93,36 +112,36 @@ impl NetworkOrchestrator {
                     }
                 },
                 p2p_event = p2p_service.next_event() => {
-                    if let FuelP2PEvent::Behaviour(behaviour_event) = p2p_event {
-                        match behaviour_event {
-                            FuelBehaviourEvent::GossipsubMessage { message, .. } => {
-                                match message {
-                                    GossipsubMessage::NewTx(tx) => {
-                                        let _ = self.tx_transaction.send(TransactionBroadcast::NewTransaction(tx));
-                                    },
-                                    GossipsubMessage::NewBlock(block) => {
-                                        let _ = self.tx_block.send(BlockBroadcast::NewBlock(block));
-                                    },
-                                    GossipsubMessage::ConsensusVote(vote) => {
-                                        let _ = self.tx_consensus.send(ConsensusBroadcast::NewVote(vote));
-                                    },
-                                }
-                            },
-                            FuelBehaviourEvent::RequestMessage { request_message, request_id } => {
-                                match request_message {
-                                    RequestMessage::RequestBlock(block_height) => {
-                                        let db = self.db.clone();
-                                        let tx_outbound_response = self.tx_outbound_responses.clone();
+                    match p2p_event {
+                        Some(FuelP2PEvent::GossipsubMessage { message, message_id, peer_id,.. }) => {
+                            let message_id = message_id.0;
 
-                                        tokio::spawn(async move {
-                                            let res = db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id));
-                                            let _ = tx_outbound_response.send(res);
-                                        });
-                                    }
+                            match message {
+                                GossipsubMessage::NewTx(tx) => {
+                                    let _ = self.tx_transaction.send(GossipData::new(TransactionBroadcast::NewTransaction(tx), peer_id, message_id));
+                                },
+                                GossipsubMessage::NewBlock(block) => {
+                                    let _ = self.tx_block.send(GossipData::new(BlockBroadcast::NewBlock(block), peer_id, message_id));
+                                },
+                                GossipsubMessage::ConsensusVote(vote) => {
+                                    let _ = self.tx_consensus.send(GossipData::new(ConsensusBroadcast::NewVote(vote), peer_id, message_id));
+                                },
+                            }
+                        },
+                        Some(FuelP2PEvent::RequestMessage { request_message, request_id }) => {
+                            match request_message {
+                                RequestMessage::RequestBlock(block_height) => {
+                                    let db = self.db.clone();
+                                    let tx_outbound_response = self.tx_outbound_responses.clone();
+
+                                    tokio::spawn(async move {
+                                        let res = db.get_sealed_block(block_height).await.map(|block| (OutboundResponse::ResponseBlock(block), request_id));
+                                        let _ = tx_outbound_response.send(res);
+                                    });
                                 }
-                            },
-                            _ => {}
-                        }
+                            }
+                        },
+                        _ => {}
                     }
                 },
                 module_request_msg = self.rx_request_event.recv() => {
@@ -145,6 +164,9 @@ impl NetworkOrchestrator {
                                 let broadcast = GossipsubBroadcastRequest::ConsensusVote(vote);
                                 let _ = p2p_service.publish_message(broadcast);
                             },
+                            P2pRequestEvent::GossipsubMessageReport { message, acceptance } => {
+                                report_message(message, acceptance, &mut p2p_service);
+                            }
                             P2pRequestEvent::Stop => break,
                         }
                     } else {
@@ -155,6 +177,42 @@ impl NetworkOrchestrator {
         }
 
         Ok(self)
+    }
+}
+
+fn report_message<T: NetworkCodec>(
+    message: GossipsubMessageInfo,
+    acceptance: GossipsubMessageAcceptance,
+    p2p_service: &mut FuelP2PService<T>,
+) {
+    let GossipsubMessageInfo {
+        peer_id,
+        message_id,
+    } = message;
+
+    let msg_id = message_id.into();
+
+    if let Ok(peer_id) = peer_id.try_into() {
+        let acceptance = match acceptance {
+            GossipsubMessageAcceptance::Accept => MessageAcceptance::Accept,
+            GossipsubMessageAcceptance::Reject => MessageAcceptance::Reject,
+            GossipsubMessageAcceptance::Ignore => MessageAcceptance::Ignore,
+        };
+
+        match p2p_service.report_message_validation_result(&msg_id, &peer_id, acceptance)
+        {
+            Ok(true) => {
+                debug!(target: "fuel-libp2p", "Sent a report for MessageId: {} from PeerId: {}", msg_id, peer_id);
+            }
+            Ok(false) => {
+                warn!(target: "fuel-libp2p", "Message with MessageId: {} not found in the Gossipsub Message Cache", msg_id);
+            }
+            Err(e) => {
+                error!(target: "fuel-libp2p", "Failed to publish Message with MessageId: {} with Error: {:?}", msg_id, e);
+            }
+        }
+    } else {
+        warn!(target: "fuel-libp2p", "Failed to read PeerId from received GossipsubMessageId: {}", msg_id);
     }
 }
 
@@ -173,9 +231,9 @@ impl Service {
         db: Arc<dyn P2pDb>,
         tx_request_event: Sender<P2pRequestEvent>,
         rx_request_event: Receiver<P2pRequestEvent>,
-        tx_consensus: Sender<ConsensusBroadcast>,
-        tx_transaction: Sender<TransactionBroadcast>,
-        tx_block: Sender<BlockBroadcast>,
+        tx_consensus: Sender<ConsensusGossipData>,
+        tx_transaction: broadcast::Sender<TransactionGossipData>,
+        tx_block: Sender<BlockGossipData>,
     ) -> Self {
         let network_orchestrator = NetworkOrchestrator::new(
             p2p_config,
@@ -236,6 +294,7 @@ pub mod tests {
         BlockHeight,
         FuelBlock,
         FuelBlockConsensus,
+        FuelBlockPoAConsensus,
         SealedFuelBlock,
     };
     use tokio::time::{
@@ -252,17 +311,13 @@ pub mod tests {
             &self,
             _height: BlockHeight,
         ) -> Option<Arc<SealedFuelBlock>> {
-            let block = FuelBlock {
-                header: Default::default(),
-                transactions: vec![],
-            };
+            let block = FuelBlock::new(Default::default(), vec![], &[]);
 
             Some(Arc::new(SealedFuelBlock {
                 block,
-                consensus: FuelBlockConsensus {
-                    required_stake: 100_000,
-                    validators: Default::default(),
-                },
+                consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(
+                    Default::default(),
+                )),
             }))
         }
     }
@@ -274,7 +329,7 @@ pub mod tests {
 
         let (tx_request_event, rx_request_event) = tokio::sync::mpsc::channel(100);
         let (tx_consensus, _) = tokio::sync::mpsc::channel(100);
-        let (tx_transaction, _) = tokio::sync::mpsc::channel(100);
+        let (tx_transaction, _) = tokio::sync::broadcast::channel(100);
         let (tx_block, _) = tokio::sync::mpsc::channel(100);
 
         let service = Service::new(

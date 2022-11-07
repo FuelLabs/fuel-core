@@ -1,13 +1,28 @@
 use crate::{
     common::{
+        fuel_asm::Word,
         fuel_storage::{
             StorageAsRef,
             StorageInspect,
         },
         fuel_tx::{
+            field::{
+                Inputs,
+                Outputs,
+            },
+            Bytes32,
+            Cacheable,
+            Chargeable,
+            Checked,
+            ConsensusParameters,
             ContractId,
+            Create,
+            Input,
+            Output,
+            Script,
             Transaction,
             TxId,
+            UniqueIdentifier,
             UtxoId,
         },
         fuel_types::MessageId,
@@ -20,7 +35,8 @@ use crate::{
         Messages,
     },
     model::{
-        ArcTx,
+        ArcPoolTx,
+        BlockHeight,
         Coin,
         Message,
         TxInfo,
@@ -30,12 +46,132 @@ use derive_more::{
     Deref,
     DerefMut,
 };
-use std::sync::Arc;
+use fuel_vm::prelude::{
+    Interpreter,
+    PredicateStorage,
+};
+use std::{
+    fmt::Debug,
+    sync::Arc,
+};
 use thiserror::Error;
 use tokio::sync::{
     mpsc,
     oneshot,
 };
+
+/// Transaction used by the transaction pool.
+#[derive(Debug, Eq, PartialEq)]
+pub enum PoolTransaction {
+    Script(Checked<Script>),
+    Create(Checked<Create>),
+}
+
+impl Chargeable for PoolTransaction {
+    fn price(&self) -> Word {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().price(),
+            PoolTransaction::Create(create) => create.transaction().price(),
+        }
+    }
+
+    fn limit(&self) -> Word {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().limit(),
+            PoolTransaction::Create(create) => create.transaction().limit(),
+        }
+    }
+
+    fn metered_bytes_size(&self) -> usize {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().metered_bytes_size(),
+            PoolTransaction::Create(create) => create.transaction().metered_bytes_size(),
+        }
+    }
+}
+
+impl UniqueIdentifier for PoolTransaction {
+    fn id(&self) -> Bytes32 {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().id(),
+            PoolTransaction::Create(create) => create.transaction().id(),
+        }
+    }
+}
+
+impl PoolTransaction {
+    pub fn is_computed(&self) -> bool {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().is_computed(),
+            PoolTransaction::Create(create) => create.transaction().is_computed(),
+        }
+    }
+
+    pub fn inputs(&self) -> &Vec<Input> {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().inputs(),
+            PoolTransaction::Create(create) => create.transaction().inputs(),
+        }
+    }
+
+    pub fn outputs(&self) -> &Vec<Output> {
+        match self {
+            PoolTransaction::Script(script) => script.transaction().outputs(),
+            PoolTransaction::Create(create) => create.transaction().outputs(),
+        }
+    }
+
+    pub fn max_gas(&self) -> Word {
+        match self {
+            PoolTransaction::Script(script) => script.metadata().fee.max_gas(),
+            PoolTransaction::Create(create) => create.metadata().fee.max_gas(),
+        }
+    }
+
+    pub fn check_predicates(&self, params: ConsensusParameters) -> bool {
+        match self {
+            PoolTransaction::Script(script) => {
+                Interpreter::<PredicateStorage>::check_predicates(script.clone(), params)
+            }
+            PoolTransaction::Create(create) => {
+                Interpreter::<PredicateStorage>::check_predicates(create.clone(), params)
+            }
+        }
+    }
+}
+
+impl From<&PoolTransaction> for Transaction {
+    fn from(tx: &PoolTransaction) -> Self {
+        match tx {
+            PoolTransaction::Script(script) => {
+                Transaction::Script(script.transaction().clone())
+            }
+            PoolTransaction::Create(create) => {
+                Transaction::Create(create.transaction().clone())
+            }
+        }
+    }
+}
+
+impl From<Checked<Script>> for PoolTransaction {
+    fn from(checked: Checked<Script>) -> Self {
+        Self::Script(checked)
+    }
+}
+
+impl From<Checked<Create>> for PoolTransaction {
+    fn from(checked: Checked<Create>) -> Self {
+        Self::Create(checked)
+    }
+}
+
+/// The `removed` field contains the list of removed transactions during the insertion
+/// of the `inserted` transaction.
+#[derive(Debug)]
+pub struct InsertionResult {
+    pub inserted: ArcPoolTx,
+    pub removed: Vec<ArcPoolTx>,
+}
 
 pub trait TxPoolDb:
     StorageInspect<Coins, Error = KvStoreError>
@@ -59,6 +195,8 @@ pub trait TxPoolDb:
             .get(message_id)
             .map(|t| t.map(|t| t.as_ref().clone()))
     }
+
+    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.
@@ -73,7 +211,7 @@ impl Sender {
     pub async fn insert(
         &self,
         txs: Vec<Arc<Transaction>>,
-    ) -> anyhow::Result<Vec<anyhow::Result<Vec<Arc<Transaction>>>>> {
+    ) -> anyhow::Result<Vec<anyhow::Result<InsertionResult>>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Insert { txs, response }).await?;
         receiver.await.map_err(Into::into)
@@ -91,10 +229,7 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn find_dependent(
-        &self,
-        ids: Vec<TxId>,
-    ) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn find_dependent(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::FindDependent { ids, response })
             .await?;
@@ -108,13 +243,33 @@ impl Sender {
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn includable(&self) -> anyhow::Result<Vec<Arc<Transaction>>> {
+    pub async fn includable(&self) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Includable { response }).await?;
         receiver.await.map_err(Into::into)
     }
 
-    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcTx>> {
+    pub async fn remove(&self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::Remove { ids, response }).await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    pub fn channel(buffer: usize) -> (Sender, mpsc::Receiver<TxPoolMpsc>) {
+        let (sender, reciever) = mpsc::channel(buffer);
+        (Sender(sender), reciever)
+    }
+}
+
+#[async_trait::async_trait]
+impl super::poa_coordinator::TransactionPool for Sender {
+    async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::ConsumableGas { response }).await?;
+        receiver.await.map_err(Into::into)
+    }
+
+    async fn remove_txs(&mut self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::Remove { ids, response }).await?;
         receiver.await.map_err(Into::into)
@@ -125,10 +280,12 @@ impl Sender {
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
+    /// The amount of gas in all includable transactions combined
+    ConsumableGas { response: oneshot::Sender<u64> },
     /// Return all sorted transactions that are includable in next block.
     /// This is going to be heavy operation, use it only when needed.
     Includable {
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// import list of transaction into txpool. All needed parents need to be known
     /// and parent->child order should be enforced in Vec, we will not do that check inside
@@ -138,7 +295,7 @@ pub enum TxPoolMpsc {
     /// error for every insert for better user experience.
     Insert {
         txs: Vec<Arc<Transaction>>,
-        response: oneshot::Sender<Vec<anyhow::Result<Vec<Arc<Transaction>>>>>,
+        response: oneshot::Sender<Vec<anyhow::Result<InsertionResult>>>,
     },
     /// find all tx by their hash
     Find {
@@ -153,12 +310,12 @@ pub enum TxPoolMpsc {
     /// find all dependent tx and return them with requested dependencies in one list sorted by Price.
     FindDependent {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// remove transaction from pool needed on user demand. Low priority
     Remove {
         ids: Vec<TxId>,
-        response: oneshot::Sender<Vec<Arc<Transaction>>>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
     },
     /// Iterate over `hashes` and return all hashes that we don't have.
     /// Needed when we receive list of new hashed from peer with
@@ -184,19 +341,21 @@ pub enum TxStatus {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TxStatusBroadcast {
-    pub tx: Arc<Transaction>,
+    pub tx: ArcPoolTx,
     pub status: TxStatus,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 #[non_exhaustive]
 pub enum Error {
+    #[error("TxPool required that transaction contains metadata")]
+    NoMetadata,
+    #[error("TxPool doesn't support this type of transaction.")]
+    NotSupportedTransactionType,
     #[error("Transaction is not inserted. Hash is already known")]
     NotInsertedTxKnown,
     #[error("Transaction is not inserted. Pool limit is hit, try to increase gas_price")]
     NotInsertedLimitHit,
-    #[error("TxPool required that transaction contains metadata")]
-    NoMetadata,
     #[error("Transaction is not inserted. The gas price is too low.")]
     NotInsertedGasPriceTooLow,
     #[error(
@@ -249,6 +408,8 @@ pub enum Error {
     NotInsertedIoMessageInput,
     #[error("Transaction is not inserted. Maximum depth of dependent transaction chain reached")]
     NotInsertedMaxDepth,
+    #[error("Transaction exceeds the max gas per block limit. Tx gas: {tx_gas}, block limit {block_limit}")]
+    NotInsertedMaxGasLimit { tx_gas: Word, block_limit: Word },
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,

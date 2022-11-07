@@ -1,12 +1,10 @@
 use crate::Config;
 use fuel_core_interfaces::{
-    bft::BftMpsc,
     block_importer::ImportBlockMpsc,
     p2p::{
-        BlockBroadcast,
+        BlockGossipData,
         P2pRequestEvent,
     },
-    relayer,
     sync::SyncMpsc,
 };
 use parking_lot::Mutex;
@@ -31,10 +29,10 @@ impl Service {
 
     pub async fn start(
         &self,
-        _p2p_block: mpsc::Receiver<BlockBroadcast>,
+        _p2p_block: mpsc::Receiver<BlockGossipData>,
         _p2p_request: mpsc::Sender<P2pRequestEvent>,
-        _relayer: relayer::Sender,
-        _bft: mpsc::Sender<BftMpsc>,
+        // TODO: re-introduce this when sync actually depends on the coordinator
+        // _bft: mpsc::Sender<BftMpsc>,
         _block_importer: mpsc::Sender<ImportBlockMpsc>,
     ) {
         let mut join = self.join.lock();

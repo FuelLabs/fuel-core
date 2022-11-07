@@ -1,24 +1,47 @@
+#![allow(unused_variables)]
 use crate::{
     cli::DEFAULT_DB_PATH,
     FuelService,
 };
+use anyhow::{
+    anyhow,
+    Context,
+};
 use clap::Parser;
+use fuel_chain_config::ChainConfig;
 use fuel_core::service::{
+    config::default_consensus_dev_key,
     Config,
     DbType,
     VMConfig,
 };
+use fuel_core_interfaces::{
+    common::{
+        fuel_tx::Address,
+        prelude::SecretKey,
+        secrecy::{
+            ExposeSecret,
+            Secret,
+        },
+    },
+    model::SecretKeyWrapper,
+};
 use std::{
     env,
-    io,
     net,
+    ops::Deref,
     path::PathBuf,
+    str::FromStr,
 };
 use strum::VariantNames;
 use tracing::{
     info,
+    log::warn,
     trace,
 };
+
+pub const CONSENSUS_KEY_ENV: &str = "CONSENSUS_KEY_SECRET";
+
 #[cfg(feature = "p2p")]
 mod p2p;
 
@@ -65,10 +88,21 @@ pub struct Command {
     #[clap(long = "min-gas-price", default_value = "0")]
     pub min_gas_price: u64,
 
-    /// Enable predicate execution on transaction inputs.
-    /// Will reject any transactions with predicates if set to false.
-    #[clap(long = "predicates")]
-    pub predicates: bool,
+    /// The signing key used when producing blocks.
+    /// Setting via the `CONSENSUS_KEY_SECRET` ENV var is preferred.
+    #[clap(long = "consensus-key")]
+    pub consensus_key: Option<String>,
+
+    /// Use a default insecure consensus key for testing purposes.
+    /// This will not be enabled by default in the future.
+    #[clap(long = "dev-keys", default_value = "true")]
+    pub consensus_dev_key: bool,
+
+    /// The block's fee recipient public key.
+    ///
+    /// If not set, `consensus_key` is used as the provider of the `Address`.
+    #[clap(long = "coinbase-recipient")]
+    pub coinbase_recipient: Option<String>,
 
     #[cfg(feature = "relayer")]
     #[clap(flatten)]
@@ -77,10 +111,13 @@ pub struct Command {
     #[cfg(feature = "p2p")]
     #[clap(flatten)]
     pub p2p_args: p2p::P2pArgs,
+
+    #[clap(long = "metrics")]
+    pub metrics: bool,
 }
 
 impl Command {
-    pub fn get_config(self) -> io::Result<Config> {
+    pub fn get_config(self) -> anyhow::Result<Config> {
         let Command {
             ip,
             port,
@@ -91,11 +128,14 @@ impl Command {
             manual_blocks_enabled,
             utxo_validation,
             min_gas_price,
-            predicates,
+            consensus_key,
+            consensus_dev_key,
+            coinbase_recipient,
             #[cfg(feature = "relayer")]
             relayer_args,
             #[cfg(feature = "p2p")]
             p2p_args,
+            metrics,
         } = self;
 
         let addr = net::SocketAddr::new(ip, port);
@@ -104,34 +144,62 @@ impl Command {
         let p2p = {
             match p2p_args.into() {
                 Ok(value) => value,
-                Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e)),
+                Err(e) => return Err(e),
             }
+        };
+
+        let chain_conf: ChainConfig = chain_config.as_str().parse()?;
+        // if consensus key is not configured, fallback to dev consensus key
+        let consensus_key = load_consensus_key(consensus_key)?.or_else(|| {
+            if consensus_dev_key {
+                let key = default_consensus_dev_key();
+                warn!(
+                    "Fuel Core is using an insecure test key for consensus. Public key: {}",
+                    key.public_key()
+                );
+                Some(Secret::new(key.into()))
+            } else {
+                // if consensus dev key is disabled, use no key
+                None
+            }
+        });
+
+        let coinbase_recipient = if let Some(coinbase_recipient) = coinbase_recipient {
+            Address::from_str(coinbase_recipient.as_str()).map_err(|err| anyhow!(err))?
+        } else {
+            let consensus_key = consensus_key
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| Secret::new(SecretKeyWrapper::default()));
+
+            let sk = consensus_key.expose_secret().deref();
+            Address::from(*sk.public_key().hash())
         };
 
         Ok(Config {
             addr,
             database_path,
             database_type,
-            chain_conf: chain_config.as_str().parse()?,
+            chain_conf: chain_conf.clone(),
             utxo_validation,
             manual_blocks_enabled,
             vm: VMConfig {
                 backtrace: vm_backtrace,
             },
-            txpool: fuel_txpool::Config {
-                min_gas_price,
-                ..Default::default()
-            },
-            predicates,
+            txpool: fuel_txpool::Config::new(chain_conf, min_gas_price, utxo_validation),
             block_importer: Default::default(),
-            block_producer: Default::default(),
+            block_producer: fuel_block_producer::Config {
+                utxo_validation,
+                coinbase_recipient,
+                metrics: false,
+            },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
-            bft: Default::default(),
             sync: Default::default(),
             #[cfg(feature = "p2p")]
             p2p,
+            consensus_key,
         })
     }
 }
@@ -147,4 +215,24 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
     server.run().await;
 
     Ok(())
+}
+
+// Attempt to load the consensus key from cli arg first, otherwise check the env.
+fn load_consensus_key(
+    cli_arg: Option<String>,
+) -> anyhow::Result<Option<Secret<SecretKeyWrapper>>> {
+    let secret_string = if let Some(cli_arg) = cli_arg {
+        warn!("Consensus key configured insecurely using cli args. Consider setting the {} env var instead.", CONSENSUS_KEY_ENV);
+        Some(cli_arg)
+    } else {
+        env::var(CONSENSUS_KEY_ENV).ok()
+    };
+
+    if let Some(key) = secret_string {
+        let key =
+            SecretKey::from_str(&key).context("failed to parse consensus signing key")?;
+        Ok(Some(Secret::new(key.into())))
+    } else {
+        Ok(None)
+    }
 }
