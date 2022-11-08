@@ -155,8 +155,12 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         })
     }
 
-    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
+    pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
         self.swarm.behaviour().get_peers()
+    }
+
+    pub fn get_peers_ids(&self) -> Vec<PeerId> {
+        self.get_peers_info().iter().map(|(id, _)| *id).collect()
     }
 
     pub fn publish_message(
@@ -188,7 +192,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers();
+                let connected_peers = self.get_peers_info();
                 if connected_peers.is_empty() {
                     return Err(RequestError::NoPeersConnected)
                 }
@@ -212,10 +216,18 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: OutboundResponse,
+        message: Option<OutboundResponse>,
     ) -> Result<(), ResponseError> {
+        // if the response message wasn't successfully prepared
+        // we still need to remove the `request_id` from `inbound_requests_table`
+        if message.is_none() {
+            self.inbound_requests_table.remove(&request_id);
+            return Ok(())
+        }
+
         match (
-            self.network_codec.convert_to_intermediate(&message),
+            self.network_codec
+                .convert_to_intermediate(&message.unwrap()),
             self.inbound_requests_table.remove(&request_id),
         ) {
             (Ok(message), Some(channel)) => {
@@ -858,7 +870,7 @@ mod tests {
                             consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(Default::default())),
                         };
 
-                        let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));
+                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::ResponseBlock(Arc::new(sealed_block))));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);
