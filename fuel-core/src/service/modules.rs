@@ -133,7 +133,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         fuel_p2p::orchestrator::Service::new(
             config.p2p.clone(),
             p2p_db,
-            p2p_request_event_sender.clone(),
             p2p_request_event_receiver,
             tx_consensus,
             incoming_tx_sender,
