@@ -36,6 +36,7 @@ use tokio::{
         broadcast,
         mpsc,
         Mutex,
+        Semaphore,
     },
     task::JoinHandle,
 };
@@ -171,13 +172,16 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
 
     txpool_builder.network_sender(p2p_request_event_sender.clone());
 
+    // restrict the max number of concurrent dry runs to the number of CPUs
+    // as execution in the worst case will be CPU bound rather than I/O bound.
+    let max_dry_run_concurrency = num_cpus::get();
     let block_producer = Arc::new(fuel_block_producer::Producer {
         config: config.block_producer.clone(),
         db: Box::new(database.clone()),
         txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
             sender: txpool_builder.sender().clone(),
         }),
-        executor: Box::new(ExecutorAdapter {
+        executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
             config: config.clone(),
         }),
@@ -187,6 +191,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             relayer_synced: relayer.as_ref().map(|r| r.listen_synced()),
         }),
         lock: Mutex::new(()),
+        dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     });
 
     // start services
@@ -252,15 +257,15 @@ struct ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl ExecutorTrait for ExecutorAdapter {
-    async fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
         };
-        executor.execute(block).await
+        executor.execute(block)
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
@@ -269,7 +274,7 @@ impl ExecutorTrait for ExecutorAdapter {
             database: self.database.clone(),
             config: self.config.clone(),
         };
-        executor.dry_run(block, utxo_validation).await
+        executor.dry_run(block, utxo_validation)
     }
 }
 
