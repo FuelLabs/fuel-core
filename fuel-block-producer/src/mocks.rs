@@ -1,7 +1,6 @@
 use super::db::BlockProducerDatabase;
 use crate::ports::TxPool;
 use anyhow::Result;
-use async_trait::async_trait;
 use fuel_core_interfaces::{
     block_producer::Relayer,
     common::{
@@ -70,12 +69,8 @@ impl TxPool for MockTxPool {
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-#[async_trait]
 impl Executor for MockExecutor {
-    async fn execute(
-        &self,
-        block: ExecutionBlock,
-    ) -> Result<ExecutionResult, ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -89,7 +84,7 @@ impl Executor for MockExecutor {
         })
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,
@@ -100,12 +95,8 @@ impl Executor for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-#[async_trait]
 impl Executor for FailingMockExecutor {
-    async fn execute(
-        &self,
-        block: ExecutionBlock,
-    ) -> Result<ExecutionResult, ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -122,7 +113,7 @@ impl Executor for FailingMockExecutor {
         }
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,

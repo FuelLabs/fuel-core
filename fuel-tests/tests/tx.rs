@@ -430,11 +430,9 @@ async fn get_transactions_from_manual_blocks() {
     // process blocks and save block height
     executor
         .execute(ExecutionBlock::Production(first_test_block))
-        .await
         .unwrap();
     executor
         .execute(ExecutionBlock::Production(second_test_block))
-        .await
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]
