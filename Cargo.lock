@@ -2246,6 +2246,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "mockall",
+ "num_cpus",
  "rand 0.8.5",
  "rocksdb",
  "serde",

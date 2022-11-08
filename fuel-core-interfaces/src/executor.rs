@@ -20,7 +20,6 @@ use crate::{
         PartialFuelBlock,
     },
 };
-use async_trait::async_trait;
 use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
 use thiserror::Error;
@@ -62,11 +61,10 @@ pub enum ExecutionKind {
     Validation,
 }
 
-#[async_trait]
 pub trait Executor: Sync + Send {
-    async fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error>;
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error>;
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
