@@ -42,7 +42,14 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
 };
-use tokio::sync::Mutex;
+use std::sync::Arc;
+use tokio::{
+    sync::{
+        Mutex,
+        Semaphore,
+    },
+    task::spawn_blocking,
+};
 use tracing::debug;
 
 #[cfg(test)]
@@ -52,11 +59,12 @@ pub struct Producer {
     pub config: Config,
     pub db: Box<dyn BlockProducerDatabase>,
     pub txpool: Box<dyn TxPool>,
-    pub executor: Box<dyn Executor>,
+    pub executor: Arc<dyn Executor>,
     pub relayer: Box<dyn Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
+    pub dry_run_semaphore: Semaphore,
 }
 
 #[async_trait::async_trait]
@@ -97,7 +105,6 @@ impl Trait for Producer {
         let result = self
             .executor
             .execute(ExecutionBlock::Production(block))
-            .await
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", &result);
@@ -116,6 +123,7 @@ impl Trait for Producer {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
         // return the receipts
+        let _permit = self.dry_run_semaphore.acquire().await;
 
         let height = match height {
             None => self.db.current_block_height()?,
@@ -127,13 +135,16 @@ impl Trait for Producer {
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
-        let res: Vec<_> = self
-            .executor
-            .dry_run(ExecutionBlock::Production(block), utxo_validation)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
+        let executor = self.executor.clone();
+        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        let res: Vec<_> = spawn_blocking(move || -> Result<Vec<Receipt>> {
+            Ok(executor
+                .dry_run(ExecutionBlock::Production(block), utxo_validation)?
+                .into_iter()
+                .flatten()
+                .collect())
+        })
+        .await??;
         if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }

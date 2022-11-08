@@ -31,6 +31,7 @@ use std::sync::{
     Arc,
     Mutex,
 };
+use tokio::sync::Semaphore;
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
@@ -174,7 +175,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 #[tokio::test]
 async fn production_fails_on_execution_error() {
     let ctx = TestContext {
-        executor: Box::new(FailingMockExecutor(Mutex::new(Some(
+        executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
             fuel_core_interfaces::executor::Error::TransactionIdCollision(
                 Default::default(),
             ),
@@ -203,7 +204,7 @@ struct TestContext {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Box<dyn Executor>,
+    executor: Arc<dyn Executor>,
     txpool: MockTxPool,
 }
 
@@ -222,7 +223,7 @@ impl TestContext {
             config,
             db,
             relayer,
-            executor: Box::new(executor),
+            executor: Arc::new(executor),
             txpool,
         }
     }
@@ -235,6 +236,7 @@ impl TestContext {
             executor: self.executor,
             relayer: Box::new(self.relayer),
             lock: Default::default(),
+            dry_run_semaphore: Semaphore::new(1),
         }
     }
 }

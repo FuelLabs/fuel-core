@@ -56,6 +56,7 @@ use std::sync::Arc;
 use tokio::sync::{
     broadcast,
     mpsc,
+    Semaphore,
 };
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
@@ -157,9 +158,10 @@ async fn block_producer() -> Result<()> {
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
         }),
-        executor: Box::new(MockExecutor(mock_db.clone())),
+        executor: Arc::new(MockExecutor(mock_db.clone())),
         relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
+        dry_run_semaphore: Semaphore::new(1),
     };
 
     // Add new transactions
