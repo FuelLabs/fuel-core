@@ -526,6 +526,54 @@ async fn more_priced_tx3_removes_tx1_and_dependent_tx2() {
 }
 
 #[tokio::test]
+async fn more_priced_tx2_removes_tx1_and_more_priced_tx3_removes_tx2() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let mut txpool = TxPool::new(Default::default());
+    let db = MockDb::default();
+
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+
+    let tx1 = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_price(10)
+            .add_input(gas_coin.clone())
+            .finalize_as_transaction(),
+    );
+    let tx2 = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_price(11)
+            .add_input(gas_coin.clone())
+            .finalize_as_transaction(),
+    );
+    let tx3 = Arc::new(
+        TransactionBuilder::script(vec![], vec![])
+            .gas_price(12)
+            .add_input(gas_coin)
+            .finalize_as_transaction(),
+    );
+
+    txpool
+        .insert_inner(tx1.clone(), &db)
+        .await
+        .expect("Tx1 should be OK, got Err");
+    let squeezed = txpool
+        .insert_inner(tx2.clone(), &db)
+        .await
+        .expect("Tx2 should be OK, got Err");
+    assert_eq!(squeezed.removed.len(), 1);
+    let squeezed = txpool
+        .insert_inner(tx3.clone(), &db)
+        .await
+        .expect("Tx3 should be OK, got Err");
+    assert_eq!(
+        squeezed.removed.len(),
+        1,
+        "Tx2 should be removed:{:?}",
+        squeezed
+    );
+}
+
+#[tokio::test]
 async fn tx_limit_hit() {
     let mut rng = StdRng::seed_from_u64(0);
     let mut txpool = TxPool::new(Config {
