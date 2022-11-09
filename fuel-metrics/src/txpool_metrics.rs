@@ -1,0 +1,54 @@
+use lazy_static::lazy_static;
+use prometheus_client::{
+    metrics::histogram::Histogram,
+    registry::Registry,
+};
+use std::{
+    boxed::Box,
+    default::Default,
+};
+
+pub struct TxPoolMetrics {
+    // Attaches each Metric to the Registry
+    pub registry: Registry,
+    pub gas_price_histogram: Histogram,
+    pub tx_size_histogram: Histogram,
+}
+
+impl Default for TxPoolMetrics {
+    fn default() -> Self {
+        let registry = Registry::default();
+
+        let gas_prices = Vec::new();
+
+        let gas_price_histogram = Histogram::new(gas_prices.into_iter());
+
+        let tx_sizes = Vec::new();
+
+        let tx_size_histogram = Histogram::new(tx_sizes.into_iter());
+
+        let mut metrics = TxPoolMetrics {
+            registry,
+            gas_price_histogram,
+            tx_size_histogram,
+        };
+
+        metrics.registry.register(
+            "Tx_Gas_Price_Histogram",
+            "A Histogram keeping track of all gas prices for each tx in the mempool",
+            Box::new(metrics.gas_price_histogram.clone()),
+        );
+
+        metrics.registry.register(
+            "Tx_Size_Histogram",
+            "A Histogram keeping track of the size of txs",
+            Box::new(metrics.tx_size_histogram.clone()),
+        );
+
+        metrics
+    }
+}
+
+lazy_static! {
+    pub static ref TXPOOL_METRICS: TxPoolMetrics = TxPoolMetrics::default();
+}

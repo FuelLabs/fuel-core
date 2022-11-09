@@ -8,8 +8,6 @@ mod debugger;
 mod health;
 mod helpers;
 mod messages;
-#[cfg(feature = "metrics")]
-mod metrics;
 mod node_info;
 mod poa;
 #[cfg(feature = "relayer")]

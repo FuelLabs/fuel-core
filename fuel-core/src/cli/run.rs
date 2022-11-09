@@ -141,11 +141,13 @@ impl Command {
         let addr = net::SocketAddr::new(ip, port);
 
         #[cfg(feature = "p2p")]
-        let p2p = {
-            match p2p_args.into() {
+        let p2p_cfg = {
+            let mut p2p = match p2p_args.into() {
                 Ok(value) => value,
                 Err(e) => return Err(e),
-            }
+            };
+            p2p.metrics = metrics;
+            p2p
         };
 
         let chain_conf: ChainConfig = chain_config.as_str().parse()?;
@@ -191,14 +193,14 @@ impl Command {
             block_producer: fuel_block_producer::Config {
                 utxo_validation,
                 coinbase_recipient,
-                metrics: false,
+                metrics,
             },
             block_executor: Default::default(),
             #[cfg(feature = "relayer")]
             relayer: relayer_args.into(),
             sync: Default::default(),
             #[cfg(feature = "p2p")]
-            p2p,
+            p2p: p2p_cfg,
             consensus_key,
         })
     }
