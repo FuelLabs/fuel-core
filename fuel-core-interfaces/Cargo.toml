@@ -31,3 +31,4 @@ test-helpers = [
 ]
 serde = ["dep:serde", "fuel-vm/serde"]
 debug = ["fuel-vm/debug"]
+ignore_gas = ["fuel-vm/ignore_gas"]

@@ -1,4 +1,4 @@
-use super::run_group;
+use super::run_group_ref;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
@@ -16,7 +16,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut group = c.benchmark_group("crypto");
 
-    run_group(
+    run_group_ref(
         &mut group,
         "ecr",
         VmBench::new(Opcode::ECR(0x11, 0x20, 0x21))
@@ -31,7 +31,7 @@ pub fn run(c: &mut Criterion) {
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
 
-    run_group(
+    run_group_ref(
         &mut group,
         "s256",
         VmBench::new(Opcode::S256(0x10, 0x00, 0x11))
@@ -44,7 +44,7 @@ pub fn run(c: &mut Criterion) {
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
     );
 
-    run_group(
+    run_group_ref(
         &mut group,
         "k256",
         VmBench::new(Opcode::K256(0x10, 0x00, 0x11))
@@ -55,19 +55,6 @@ pub fn run(c: &mut Criterion) {
                 Opcode::MOVI(0x11, 32),
             ])
             .with_data(signature.iter().chain(message.iter()).copied().collect()),
-    );
-    crate::run_group_ref(
-        &mut group,
-        "blaaah",
-        VmBench::new(Opcode::K256(0x10, 0x00, 0x11))
-            .with_prepare_script(vec![
-                Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
-                Opcode::ALOC(0x10),
-                Opcode::ADDI(0x10, REG_HP, 1),
-                Opcode::MOVI(0x11, 32),
-            ])
-            .with_data(signature.iter().chain(message.iter()).copied().collect())
-            .with_gas_limit(u64::MAX - 1001),
     );
     group.finish();
 }

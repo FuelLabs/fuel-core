@@ -6,10 +6,13 @@ license = "BUSL-1.1"
 publish = false
 
 [dependencies]
+ctrlc = "3.2.3"
+clap = { version = "4.0.17", features = ["derive"] }
 fuel-core = { path = "../fuel-core", default-features = false, features = ["rocksdb"] }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers", "ignore_gas"] }
 rand = "0.8"
 criterion = { version = "0.4", features = ["html_reports"] }
+serde_json = "1.0.86"
 serde_yaml = "0.9.13"
 
 [[bench]]

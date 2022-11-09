@@ -1,4 +1,4 @@
-use super::run_group;
+use super::run_group_ref;
 
 use criterion::Criterion;
 use fuel_core_benches::*;
@@ -14,11 +14,12 @@ pub fn run(c: &mut Criterion) {
     let mut group = c.benchmark_group("blockchain");
 
     let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
+    // let cases = vec![1_000_000];
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
     for i in cases.clone() {
-        run_group(
+        run_group_ref(
             &mut group,
             format!("bal ({})", i),
             VmBench::new(Opcode::BAL(0x10, 0x10, 0x11))
@@ -47,9 +48,9 @@ pub fn run(c: &mut Criterion) {
         );
     }
 
-    run_group(&mut group, "bhei", VmBench::new(Opcode::BHEI(0x10)));
+    run_group_ref(&mut group, "bhei", VmBench::new(Opcode::BHEI(0x10)));
 
-    run_group(
+    run_group_ref(
         &mut group,
         "bhsh",
         VmBench::new(Opcode::BHSH(0x10, REG_ZERO)).with_prepare_script(vec![
@@ -60,7 +61,7 @@ pub fn run(c: &mut Criterion) {
     );
 
     for i in cases.clone() {
-        run_group(
+        run_group_ref(
             &mut group,
             format!("sww ({})", i),
             VmBench::contract(rng, Opcode::SWW(REG_ZERO, 0x29, REG_ONE))
@@ -79,6 +80,8 @@ pub fn run(c: &mut Criterion) {
         );
     }
 
+    let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
+    
     for i in cases {
         let mut code = vec![0u8; i as usize];
 
@@ -103,9 +106,9 @@ pub fn run(c: &mut Criterion) {
             Opcode::MOVI(0x12, 100_000),
         ];
 
-        run_group(
+        run_group_ref(
             &mut group,
-            format!("call ({})", i),
+            format!("call {}", i),
             VmBench::new(Opcode::CALL(0x10, REG_ZERO, 0x11, 0x12))
                 .with_contract_code(code)
                 .with_data(data)
