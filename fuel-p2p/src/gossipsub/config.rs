@@ -1,4 +1,7 @@
+use crate::config::P2PConfig;
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 use libp2p::gossipsub::{
+    metrics::Config as MetricsConfig,
     FastMessageId,
     Gossipsub,
     GossipsubConfig,
@@ -10,12 +13,11 @@ use libp2p::gossipsub::{
     PeerScoreThresholds,
     RawGossipsubMessage,
 };
+use prometheus_client::registry::Registry;
 use sha2::{
     Digest,
     Sha256,
 };
-
-use crate::config::P2PConfig;
 
 /// Creates `GossipsubConfigBuilder` with few of the Gossipsub values already defined
 pub fn default_gossipsub_builder() -> GossipsubConfigBuilder {
@@ -51,15 +53,42 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
 
 /// Given a `P2pConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
-    let mut gossipsub = Gossipsub::new(
-        MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
-        p2p_config.gossipsub_config.clone(),
-    )
-    .expect("gossipsub initialized");
+    if p2p_config.metrics {
+        // Move to Metrics related feature flag
+        let mut p2p_registry = Registry::default();
 
-    gossipsub
-        .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
-        .expect("gossipsub initialized with peer score");
+        let metrics_config = MetricsConfig::default();
 
-    gossipsub
+        let mut gossipsub = Gossipsub::new_with_metrics(
+            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            p2p_config.gossipsub_config.clone(),
+            &mut p2p_registry,
+            metrics_config,
+        )
+        .expect("gossipsub initialized");
+
+        // This couldn't be set unless multiple p2p services are running? So it's ok to unwrap
+        P2P_METRICS
+            .gossip_sub_registry
+            .set(Box::new(p2p_registry))
+            .unwrap_or(());
+
+        gossipsub
+            .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
+            .expect("gossipsub initialized with peer score");
+
+        gossipsub
+    } else {
+        let mut gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(p2p_config.local_keypair.clone()),
+            p2p_config.gossipsub_config.clone(),
+        )
+        .expect("gossipsub initialized");
+
+        gossipsub
+            .with_peer_score(PeerScoreParams::default(), PeerScoreThresholds::default())
+            .expect("gossipsub initialized with peer score");
+
+        gossipsub
+    }
 }

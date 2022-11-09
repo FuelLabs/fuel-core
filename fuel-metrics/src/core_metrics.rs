@@ -1,89 +1,73 @@
-use axum::{
-    body::Body,
-    http::header::CONTENT_TYPE,
-    response::{
-        IntoResponse,
-        Response,
-    },
-};
 use lazy_static::lazy_static;
-use prometheus::{
-    self,
-    register_int_counter,
-    Encoder,
-    IntCounter,
-    TextEncoder,
+use prometheus_client::{
+    metrics::{
+        counter::Counter,
+        histogram::Histogram,
+    },
+    registry::Registry,
 };
 
-/// DatabaseMetrics is a wrapper struct for all
-/// of the initialized counters for Database-related metrics
-#[derive(Clone, Debug)]
 pub struct DatabaseMetrics {
-    pub write_meter: IntCounter,
-    pub read_meter: IntCounter,
-    pub bytes_written_meter: IntCounter,
-    pub bytes_read_meter: IntCounter,
+    pub registry: Registry,
+    // For descriptions of each Counter, see the `new` function where each Counter/Histogram is initialized
+    pub write_meter: Counter,
+    pub read_meter: Counter,
+    pub bytes_written: Histogram,
+    pub bytes_read: Histogram,
+}
+
+impl DatabaseMetrics {
+    fn new() -> Self {
+        let registry = Registry::default();
+
+        let write_meter: Counter = Counter::default();
+        let read_meter: Counter = Counter::default();
+
+        let bytes_written = Vec::new();
+        let bytes_written_histogram = Histogram::new(bytes_written.into_iter());
+
+        let bytes_read = Vec::new();
+        let bytes_read_histogram = Histogram::new(bytes_read.into_iter());
+
+        DatabaseMetrics {
+            registry,
+            write_meter,
+            read_meter,
+            bytes_read: bytes_read_histogram,
+            bytes_written: bytes_written_histogram,
+        }
+    }
+}
+
+pub fn init(mut metrics: DatabaseMetrics) -> DatabaseMetrics {
+    metrics.registry.register(
+        "Database_Writes",
+        "Number of database write operations",
+        Box::new(metrics.write_meter.clone()),
+    );
+    metrics.registry.register(
+        "Database_Reads",
+        "Number of database read operations",
+        Box::new(metrics.read_meter.clone()),
+    );
+    metrics.registry.register(
+        "Bytes_Read",
+        "Histogram containing values of amount of bytes read per operation",
+        Box::new(metrics.bytes_read.clone()),
+    );
+    metrics.registry.register(
+        "Bytes_Written",
+        "Histogram containing values of amount of bytes written per operation",
+        Box::new(metrics.bytes_written.clone()),
+    );
+
+    metrics
 }
 
 lazy_static! {
-    pub static ref DATABASE_METRICS: DatabaseMetrics = DatabaseMetrics {
-        write_meter: register_int_counter!(
-            "Writes",
-            "Number of database write operations"
-        )
-        .unwrap(),
-        read_meter: register_int_counter!("Reads", "Number of database read operations")
-            .unwrap(),
-        bytes_written_meter: register_int_counter!(
-            "Bytes_Written",
-            "The number of bytes written to the database"
-        )
-        .unwrap(),
-        bytes_read_meter: register_int_counter!(
-            "Bytes_Read",
-            "The number of bytes read from the database"
-        )
-        .unwrap(),
+    pub static ref DATABASE_METRICS: DatabaseMetrics = {
+        let registry = DatabaseMetrics::new();
+
+        init(registry)
     };
-}
-
-/// CoreMetrics tracks metrics for most of fuel-core, wrapping core metrics similar to
-/// DatabaseMetrics, kept seperate from GQLMetrics which holds more specific endpoint metrics
-#[derive(Clone, Debug)]
-pub struct CoreMetrics {
-    pub blocks_processed: IntCounter,
-    pub transactions_executed: IntCounter,
-    pub requests_handled: IntCounter,
-}
-
-lazy_static! {
-    pub static ref CORE_METRICS: CoreMetrics = CoreMetrics {
-        blocks_processed: register_int_counter!(
-            "Blocks_Processed",
-            "Number of blocks processed"
-        )
-        .unwrap(),
-        transactions_executed: register_int_counter!(
-            "Transactions_Processed",
-            "Number of transactions executed"
-        )
-        .unwrap(),
-        requests_handled: register_int_counter!(
-            "Requests_Handled",
-            "Number of GraphQL Requests handled"
-        )
-        .unwrap(),
-    };
-}
-
-pub fn encode_metrics_response() -> impl IntoResponse {
-    let mut buffer = vec![];
-    let encoder = TextEncoder::new();
-    let metric_families = prometheus::gather();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
-    Response::builder()
-        .status(200)
-        .header(CONTENT_TYPE, encoder.format_type())
-        .body(Body::from(buffer))
-        .unwrap()
 }

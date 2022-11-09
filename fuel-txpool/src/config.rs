@@ -12,7 +12,6 @@ pub struct Config {
     pub utxo_validation: bool,
     /// chain config
     pub chain_config: ChainConfig,
-
     /// Enables prometheus metrics for this fuel-service
     pub metrics: bool,
 }

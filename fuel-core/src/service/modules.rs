@@ -139,6 +139,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             block_event_sender,
         )
     };
+
     #[cfg(not(feature = "p2p"))]
     {
         let keep_alive = Box::new(incoming_tx_sender);

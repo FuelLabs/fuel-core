@@ -28,6 +28,7 @@ use fuel_core_interfaces::{
         TxStatusBroadcast,
     },
 };
+use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 use std::{
     cmp::Reverse,
     collections::HashMap,
@@ -50,6 +51,7 @@ pub struct TxPool {
 impl TxPool {
     pub fn new(config: Config) -> Self {
         let max_depth = config.max_depth;
+
         Self {
             by_hash: HashMap::new(),
             by_gas_price: PriceSort::default(),
@@ -137,6 +139,15 @@ impl TxPool {
                 return Err(Error::NotInsertedLimitHit.into())
             }
         }
+        if self.config.metrics {
+            TXPOOL_METRICS
+                .gas_price_histogram
+                .observe(tx.price() as f64);
+
+            TXPOOL_METRICS
+                .tx_size_histogram
+                .observe(tx.metered_bytes_size() as f64);
+        }
         // check and insert dependency
         let rem = self.by_dependency.insert(&self.by_hash, db, &tx).await?;
         self.by_hash.insert(tx.id(), TxInfo::new(tx.clone()));
@@ -205,6 +216,12 @@ impl TxPool {
             Transaction::Create(create) => create.price(),
             Transaction::Mint(_) => unreachable!(),
         };
+        if self.config.metrics {
+            // Gas Price metrics are recorded here to avoid double matching for
+            // every single transaction, but also means metrics aren't collected on gas
+            // price if there is no minimum gas price
+            TXPOOL_METRICS.gas_price_histogram.observe(price as f64);
+        }
         if price < self.config.min_gas_price {
             return Err(Error::NotInsertedGasPriceTooLow)
         }

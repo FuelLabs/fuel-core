@@ -16,6 +16,13 @@ name = "integration_tests"
 path = "tests/lib.rs"
 harness = true
 
+# Metrics tests need to query /metrics without and explicit endpoint, and without
+# a seperate endpoint, the noise can cause issues
+[[test]]
+name = "metrics_tests"
+path = "tests/metrics.rs"
+harness = true
+
 [dependencies]
 async-std = "1.12"
 ethers = "0.17"

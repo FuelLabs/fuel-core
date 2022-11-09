@@ -30,7 +30,7 @@ use crate::{
         ResponseMessage,
     },
 };
-
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
@@ -87,6 +87,9 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
+
+    /// Whether or not metrics collection is enabled
+    metrics: bool,
 }
 
 /// Holds additional Network data for FuelBehavior
@@ -145,6 +148,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let gossipsub_topics = GossipsubTopics::new(&config.network_name);
         let network_metadata = NetworkMetadata { gossipsub_topics };
 
+        let metrics = config.metrics;
+
         Ok(Self {
             local_peer_id,
             swarm,
@@ -152,6 +157,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             network_metadata,
+            metrics,
         })
     }
 
@@ -345,6 +351,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
             FuelBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
                 PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
+                    if self.metrics {
+                        P2P_METRICS.unique_peers.inc();
+                    }
                     self.swarm
                         .behaviour_mut()
                         .add_addresses_to_discovery(&peer_id, addresses);
