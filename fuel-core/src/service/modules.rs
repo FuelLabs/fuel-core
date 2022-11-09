@@ -29,6 +29,7 @@ use fuel_core_interfaces::{
 };
 #[cfg(feature = "relayer")]
 use fuel_relayer::RelayerSynced;
+use fuel_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -153,10 +154,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         });
     }
 
-    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
-
-    // Remove once tx_status events are used
-    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+    let tx_status_sender = TxStatusChange::new(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
@@ -166,7 +164,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(block_import_rx)
-        .tx_status_sender(tx_status_sender)
+        .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
@@ -201,7 +199,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_builder.subscribe(),
+                txpool_builder.tx_status_subscribe(),
                 txpool_builder.sender().clone(),
                 block_import_tx,
                 block_producer.clone(),

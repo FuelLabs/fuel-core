@@ -4,3 +4,5 @@
 *.tfstate*
 *.terraform.lock.hcl*
 .vscode
+.cov
+lcov.info

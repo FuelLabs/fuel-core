@@ -333,16 +333,46 @@ pub enum TxPoolMpsc {
 pub enum TxStatus {
     /// Submitted into txpool.
     Submitted,
-    /// Executed in fuel block.
-    Executed,
+    /// Transaction has either been:
+    /// - successfully executed and included in a block.
+    /// - failed to execute and state changes reverted
+    Completed,
     /// removed from txpool.
     SqueezedOut { reason: Error },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TxStatusBroadcast {
-    pub tx: ArcPoolTx,
-    pub status: TxStatus,
+pub struct TxUpdate {
+    tx_id: Bytes32,
+    squeezed_out: Option<Error>,
+}
+
+impl TxUpdate {
+    pub fn updated(tx_id: Bytes32) -> Self {
+        Self {
+            tx_id,
+            squeezed_out: None,
+        }
+    }
+
+    pub fn squeezed_out(tx_id: Bytes32, reason: Error) -> Self {
+        Self {
+            tx_id,
+            squeezed_out: Some(reason),
+        }
+    }
+
+    pub fn tx_id(&self) -> &Bytes32 {
+        &self.tx_id
+    }
+
+    pub fn was_squeezed_out(&self) -> bool {
+        self.squeezed_out.is_some()
+    }
+
+    pub fn into_squeezed_out_reason(self) -> Option<Error> {
+        self.squeezed_out
+    }
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -413,4 +443,6 @@ pub enum Error {
     // small todo for now it can pass but in future we should include better messages
     #[error("Transaction removed.")]
     Removed,
+    #[error("Transaction squeezed out because {0}")]
+    SqueezedOut(String),
 }

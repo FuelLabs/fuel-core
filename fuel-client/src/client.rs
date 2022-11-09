@@ -2,13 +2,15 @@ use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
 use cynic::{
     http::SurfExt,
+    GraphQlResponse,
     Id,
     MutationBuilder,
     Operation,
     QueryBuilder,
+    StreamingOperation,
 };
 use fuel_vm::prelude::*;
-use futures_timer::Delay;
+use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
@@ -45,7 +47,6 @@ use schema::{
     U64,
 };
 use std::{
-    cmp::min,
     convert::TryInto,
     io::{
         self,
@@ -56,7 +57,6 @@ use std::{
         self,
         FromStr,
     },
-    time::Duration,
 };
 use types::{
     TransactionResponse,
@@ -83,9 +83,6 @@ use self::schema::{
 
 pub mod schema;
 pub mod types;
-
-pub const STATUS_POLLING_INTERVAL_MAX_MS: u64 = 500u64;
-pub const STATUS_POLLING_INTERVAL_MIN_MS: u64 = 16u64;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
@@ -149,6 +146,93 @@ impl FuelClient {
             )),
             _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
         }
+    }
+
+    async fn subscribe<'a, R: 'a>(
+        &self,
+        q: StreamingOperation<'a, R>,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<R>> + 'a> {
+        use eventsource_client as es;
+        let mut url = self.url.clone();
+        url.set_path("/graphql-sub");
+        let json_query = serde_json::to_string(&q)?;
+        let client = es::ClientBuilder::for_url(url.as_str())
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to start client {:?}", e),
+                )
+            })?
+            .body(json_query)
+            .method("POST".to_string())
+            .header("content-type", "application/json")
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to add header to client {:?}", e),
+                )
+            })?
+            .build_http();
+
+        let mut last = None;
+
+        let stream = es::Client::stream(&client)
+            .take_while(|result| {
+                futures::future::ready(!matches!(result, Err(es::Error::Eof)))
+            })
+            .filter_map(move |result| {
+                let r = match result {
+                    Ok(es::SSE::Event(es::Event { data, .. })) => {
+                        match serde_json::from_str::<GraphQlResponse<serde_json::Value>>(
+                            &data,
+                        ) {
+                            Ok(resp) => {
+                                match q.decode_response(resp) {
+                                    Ok(resp) => {
+                                        match last.replace(data) {
+                                            // Remove duplicates
+                                            Some(l)
+                                                if l == *last.as_ref().expect(
+                                                    "Safe because of the replace above",
+                                                ) =>
+                                            {
+                                                None
+                                            }
+                                            _ => Some(Ok(resp)),
+                                        }
+                                    }
+                                    Err(e) => Some(Err(io::Error::new(
+                                        io::ErrorKind::Other,
+                                        format!("Decode error: {:?}", e),
+                                    ))),
+                                }
+                            }
+                            Err(e) => Some(Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Json error: {:?}", e),
+                            ))),
+                        }
+                    }
+                    Ok(_) => None,
+                    Err(e) => Some(Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Graphql error: {:?}", e),
+                    ))),
+                };
+                futures::future::ready(r)
+            })
+            .map(|r| match r {
+                Ok(response) => match (response.data, response.errors) {
+                    (Some(d), _) => Ok(d),
+                    (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                        e.into_iter().map(|e| e.message).collect(),
+                    )),
+                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
+                },
+                Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("{:?}", e))),
+            });
+
+        Ok(stream)
     }
 
     pub async fn health(&self) -> io::Result<bool> {
@@ -349,6 +433,24 @@ impl FuelClient {
         Ok(status)
     }
 
+    /// Subscribe to the status of a transaction
+    pub async fn subscribe_transaction_status(
+        &self,
+        id: &str,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
+        use cynic::SubscriptionBuilder;
+        let s =
+            schema::tx::StatusChangeSubscription::build(&TxIdArgs { id: id.parse()? });
+
+        let stream = self.subscribe(s).await?.map(|tx| {
+            let tx = tx?;
+            let status = tx.status_change.try_into()?;
+            Ok(status)
+        });
+
+        Ok(stream)
+    }
+
     /// Awaits for the transaction to be committed into a block
     ///
     /// This will wait forever if needed, so consider wrapping this call
@@ -357,26 +459,13 @@ impl FuelClient {
         &self,
         id: &str,
     ) -> io::Result<TransactionStatus> {
-        // use polling until subscriptions are available
-        let mut exponential_backoff_interval = STATUS_POLLING_INTERVAL_MIN_MS;
-        let mut status = self.transaction_status(id).await?;
-        loop {
-            match status {
-                TransactionStatus::Submitted { .. } => {
-                    exponential_backoff_interval = min(
-                        // double the interval duration on each attempt until max is reached
-                        exponential_backoff_interval * 2,
-                        STATUS_POLLING_INTERVAL_MAX_MS,
-                    );
-                    // sleep for polling interval
-                    Delay::new(Duration::from_millis(exponential_backoff_interval)).await;
-                    // check status again
-                    status = self.transaction_status(id).await?;
-                }
-                status @ TransactionStatus::Success { .. } => return Ok(status),
-                status @ TransactionStatus::Failure { .. } => return Ok(status),
-            }
-        }
+        let mut outcomes: Vec<_> = futures::TryStreamExt::try_collect(
+            self.subscribe_transaction_status(id).await?,
+        )
+        .await?;
+        outcomes.pop().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Failed to get status for transaction")
+        })
     }
 
     /// returns a paginated set of transactions sorted by block height

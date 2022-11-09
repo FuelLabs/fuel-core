@@ -1167,6 +1167,9 @@ impl Executor {
                 TransactionStatus::Failed { block_id, .. } => {
                     *block_id = finalized_block_id;
                 }
+                TransactionStatus::SqueezedOut { .. } => {
+                    unreachable!("A squeezed out transaction will never make it to here")
+                }
             }
             db.update_tx_status(tx_id, status.clone())?;
         }

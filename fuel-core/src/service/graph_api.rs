@@ -32,8 +32,10 @@ use axum::{
         HeaderValue,
     },
     response::{
+        sse::Event,
         Html,
         IntoResponse,
+        Sse,
     },
     routing::{
         get,
@@ -42,6 +44,7 @@ use axum::{
     Json,
     Router,
 };
+use futures::Stream;
 use serde_json::json;
 use std::net::{
     SocketAddr,
@@ -51,6 +54,7 @@ use tokio::{
     signal::unix::SignalKind,
     task::JoinHandle,
 };
+use tokio_stream::StreamExt;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
@@ -78,6 +82,10 @@ pub async fn start_server(
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/graphql-sub",
+            post(graphql_subscription_handler).options(ok),
+        )
         .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
@@ -159,6 +167,17 @@ async fn graphql_handler(
     req: Json<Request>,
 ) -> Json<Response> {
     schema.execute(req.0).await.into()
+}
+
+async fn graphql_subscription_handler(
+    schema: Extension<CoreSchema>,
+    req: Json<Request>,
+) -> Sse<impl Stream<Item = Result<Event, serde_json::Error>>> {
+    let stream = schema
+        .execute_stream(req.0)
+        .map(|r| Ok(Event::default().json_data(r).unwrap()));
+    Sse::new(stream)
+        .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }
 
 async fn ok() -> Result<(), ()> {

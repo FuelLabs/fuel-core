@@ -113,13 +113,15 @@ impl From<VmProgramState> for ProgramState {
     }
 }
 
-#[derive(Union)]
+#[derive(Union, Debug)]
 pub enum TransactionStatus {
     Submitted(SubmittedStatus),
     Success(SuccessStatus),
+    SqueezedOut(SqueezedOutStatus),
     Failed(FailureStatus),
 }
 
+#[derive(Debug)]
 pub struct SubmittedStatus(Tai64);
 
 #[Object]
@@ -129,6 +131,7 @@ impl SubmittedStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct SuccessStatus {
     block_id: fuel_core_interfaces::model::BlockId,
     time: Tai64,
@@ -157,6 +160,7 @@ impl SuccessStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct FailureStatus {
     block_id: fuel_core_interfaces::model::BlockId,
     time: Tai64,
@@ -190,6 +194,18 @@ impl FailureStatus {
     }
 }
 
+#[derive(Debug)]
+pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[Object]
+impl SqueezedOutStatus {
+    async fn reason(&self) -> String {
+        self.reason.clone()
+    }
+}
+
 impl From<TxStatus> for TransactionStatus {
     fn from(s: TxStatus) -> Self {
         match s {
@@ -205,6 +221,9 @@ impl From<TxStatus> for TransactionStatus {
                 result,
                 time,
             }),
+            TxStatus::SqueezedOut { reason } => {
+                TransactionStatus::SqueezedOut(SqueezedOutStatus { reason })
+            }
             TxStatus::Failed {
                 block_id,
                 reason,
@@ -220,6 +239,38 @@ impl From<TxStatus> for TransactionStatus {
     }
 }
 
+impl From<TransactionStatus> for TxStatus {
+    fn from(s: TransactionStatus) -> Self {
+        match s {
+            TransactionStatus::Submitted(SubmittedStatus(time)) => {
+                TxStatus::Submitted { time }
+            }
+            TransactionStatus::Success(SuccessStatus {
+                block_id,
+                result,
+                time,
+            }) => TxStatus::Success {
+                block_id,
+                result,
+                time,
+            },
+            TransactionStatus::SqueezedOut(SqueezedOutStatus { reason }) => {
+                TxStatus::SqueezedOut { reason }
+            }
+            TransactionStatus::Failed(FailureStatus {
+                block_id,
+                reason,
+                time,
+                state: result,
+            }) => TxStatus::Failed {
+                block_id,
+                reason,
+                time,
+                result,
+            },
+        }
+    }
+}
 pub struct Transaction(pub(crate) fuel_tx::Transaction);
 
 #[Object]
@@ -356,23 +407,10 @@ impl Transaction {
         &self,
         ctx: &Context<'_>,
     ) -> async_graphql::Result<Option<TransactionStatus>> {
+        let id = self.0.id();
         let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
-        let id = self.0.id();
-
-        let (response, receiver) = oneshot::channel();
-        let _ = txpool
-            .sender()
-            .send(TxPoolMpsc::FindOne { id, response })
-            .await;
-
-        if let Ok(Some(transaction_in_pool)) = receiver.await {
-            let time = transaction_in_pool.submitted_time();
-            Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
-        } else {
-            let status = db.get_tx_status(&self.0.id())?;
-            Ok(status.map(Into::into))
-        }
+        get_tx_status(id, db, txpool).await
     }
 
     async fn receipts(
@@ -458,5 +496,29 @@ impl Transaction {
     /// Return the transaction bytes using canonical encoding
     async fn raw_payload(&self) -> HexString {
         HexString(self.0.clone().to_bytes())
+    }
+}
+
+pub(super) async fn get_tx_status(
+    id: fuel_core_interfaces::common::fuel_types::Bytes32,
+    db: &Database,
+    txpool: &TxPoolService,
+) -> async_graphql::Result<Option<TransactionStatus>> {
+    match db.get_tx_status(&id)? {
+        Some(status) => Ok(Some(status.into())),
+        None => {
+            let (response, receiver) = oneshot::channel();
+            let _ = txpool
+                .sender()
+                .send(TxPoolMpsc::FindOne { id, response })
+                .await;
+            match receiver.await {
+                Ok(Some(transaction_in_pool)) => {
+                    let time = transaction_in_pool.submitted_time();
+                    Ok(Some(TransactionStatus::Submitted(SubmittedStatus(time))))
+                }
+                _ => Ok(None),
+            }
+        }
     }
 }

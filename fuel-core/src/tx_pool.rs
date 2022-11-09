@@ -10,7 +10,7 @@ use serde::{
     Serialize,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TransactionStatus {
     Submitted {
         time: Tai64,
@@ -19,6 +19,9 @@ pub enum TransactionStatus {
         block_id: BlockId,
         time: Tai64,
         result: Option<ProgramState>,
+    },
+    SqueezedOut {
+        reason: String,
     },
     Failed {
         block_id: BlockId,

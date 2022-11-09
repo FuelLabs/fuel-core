@@ -39,7 +39,7 @@ impl TestContext {
         let (block_tx, block_rx) = broadcast::channel(10);
         let (p2p_request_tx, p2p_request_rx) = mpsc::channel(100);
         let (gossip_tx, gossip_rx) = broadcast::channel(100);
-        let (status_tx, status_rx) = broadcast::channel(100);
+        let status_tx = TxStatusChange::new(100);
         let (txpool_tx, txpool_rx) = Sender::channel(100);
 
         let mut builder = ServiceBuilder::new();
@@ -57,8 +57,7 @@ impl TestContext {
         service.start().await.unwrap();
 
         // resources to keep alive for the during of the test context
-        let drop_resources: Vec<Box<dyn Any>> =
-            vec![Box::new(block_tx), Box::new(status_rx)];
+        let drop_resources: Vec<Box<dyn Any>> = vec![Box::new(block_tx)];
 
         Self {
             service,
