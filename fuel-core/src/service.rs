@@ -5,7 +5,10 @@ use std::{
     net::SocketAddr,
     panic,
 };
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::oneshot,
+    task::JoinHandle,
+};
 use tracing::log::warn;
 
 pub use config::{
@@ -26,6 +29,8 @@ pub struct FuelService {
     modules: Modules,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
+    /// Shutdown the graphql api
+    stop_graphql_api: oneshot::Sender<()>,
 }
 
 impl FuelService {
@@ -77,10 +82,11 @@ impl FuelService {
         // start modules
         let modules = modules::start_modules(&config, &database).await?;
 
+        let (stop_tx, stop_rx) = oneshot::channel();
         // start background tasks
         let mut tasks = vec![];
         let (bound_address, api_server) =
-            graph_api::start_server(config.clone(), database, &modules).await?;
+            graph_api::start_server(config.clone(), database, &modules, stop_rx).await?;
         tasks.push(api_server);
         // Socket is ignored for now, but as more services are added
         // it may be helpful to have a way to list all services and their ports
@@ -89,12 +95,29 @@ impl FuelService {
             tasks,
             bound_address,
             modules,
+            stop_graphql_api: stop_tx,
         })
     }
 
     /// Awaits for the completion of any server background tasks
     pub async fn run(self) {
-        for task in self.tasks {
+        let Self {
+            tasks,
+            modules,
+            stop_graphql_api,
+            ..
+        } = self;
+        let run_fut = Self::run_inner(tasks);
+        let shutdown_fut = shutdown_signal(stop_graphql_api);
+        tokio::pin!(run_fut);
+        tokio::pin!(shutdown_fut);
+        futures::future::select(shutdown_fut, run_fut).await;
+        modules.stop().await;
+    }
+
+    /// Awaits for the completion of any server background tasks
+    async fn run_inner(tasks: Vec<JoinHandle<anyhow::Result<()>>>) {
+        for task in tasks {
             match task.await {
                 Err(err) => {
                     if err.is_panic() {
@@ -135,5 +158,40 @@ impl FuelService {
             relayer_handle.listen_synced().await_synced().await?;
         }
         Ok(())
+    }
+}
+
+async fn shutdown_signal(stop_graphql_api: oneshot::Sender<()>) {
+    #[cfg(unix)]
+    {
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install sigterm handler");
+
+        let mut sigint =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+                .expect("failed to install sigint handler");
+        loop {
+            tokio::select! {
+                _ = sigterm.recv() => {
+                    tracing::info!("sigterm received");
+                    let _ = stop_graphql_api.send(());
+                    break;
+                }
+                _ = sigint.recv() => {
+                    tracing::log::info!("sigint received");
+                    let _ = stop_graphql_api.send(());
+                    break;
+                }
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C signal handler");
+        let _ = stop_graphql_api.send(());
+        info!("CTRL+C received");
     }
 }
