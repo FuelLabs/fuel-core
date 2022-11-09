@@ -6,6 +6,7 @@ use std::sync::{
 
 use super::*;
 use crate::tx_pool::TransactionStatus;
+use fuel_core_interfaces::common::tai64::Tai64;
 use test_case::test_case;
 
 struct Input<I>
@@ -69,15 +70,13 @@ fn db_error(
 }
 
 fn submitted() -> TransactionStatus {
-    TransactionStatus::Submitted {
-        time: Default::default(),
-    }
+    TransactionStatus::Submitted { time: Tai64(0) }
 }
 
 fn success() -> TransactionStatus {
     TransactionStatus::Success {
         block_id: Default::default(),
-        time: Default::default(),
+        time: Tai64(0),
         result: None,
     }
 }
@@ -85,7 +84,7 @@ fn success() -> TransactionStatus {
 fn failed() -> TransactionStatus {
     TransactionStatus::Failed {
         block_id: Default::default(),
-        time: Default::default(),
+        time: Tai64(0),
         result: None,
         reason: Default::default(),
     }
