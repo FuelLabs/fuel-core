@@ -154,19 +154,7 @@ impl FuelClient {
     ) -> io::Result<impl futures::Stream<Item = io::Result<R>> + 'a> {
         use eventsource_client as es;
         let mut url = self.url.clone();
-        let port = url.port().unwrap_or_default();
-        url.path_segments_mut()
-            .expect("Url cannot be a base")
-            .pop()
-            .push("graphql-sub");
-        let mut socket =
-            url.socket_addrs(|| None)?
-                .into_iter()
-                .next()
-                .ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::Other, "Failed to connect to socket")
-                })?;
-        socket.set_port(port);
+        url.set_path("/graphql-sub");
         let json_query = serde_json::to_string(&q)?;
         let client = es::ClientBuilder::for_url(url.as_str())
             .map_err(|e| {
