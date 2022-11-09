@@ -28,6 +28,9 @@ pub struct FuelService {
     handle: JoinHandle<()>,
     /// Shutdown the fuel service.
     shutdown: oneshot::Sender<()>,
+    #[cfg(feature = "relayer")]
+    /// Relayer handle
+    relayer_handle: Option<fuel_relayer::RelayerSynced>,
     /// The address bound by the system for serving the API
     pub bound_address: SocketAddr,
 }
@@ -64,6 +67,14 @@ impl FuelService {
     fn spawn_service(service: FuelServiceInner) -> Self {
         let bound_address = service.bound_address.clone();
         let (shutdown, stop_rx) = oneshot::channel();
+
+        #[cfg(feature = "relayer")]
+        let relayer_handle = service
+            .modules
+            .relayer
+            .as_ref()
+            .map(fuel_relayer::RelayerHandle::listen_synced);
+
         let handle = tokio::spawn(async move {
             let run_fut = service.run();
             let shutdown_fut = stop_rx.then(|stop| async move {
@@ -82,6 +93,8 @@ impl FuelService {
             handle,
             shutdown,
             bound_address,
+            #[cfg(feature = "relayer")]
+            relayer_handle,
         }
     }
 
@@ -161,6 +174,25 @@ impl FuelService {
             }
         }
     }
+
+    #[cfg(feature = "relayer")]
+    /// Wait for the [`Relayer`] to be in sync with
+    /// the data availability layer.
+    ///
+    /// Yields until the relayer reaches a point where it
+    /// considered up to date. Note that there's no guarantee
+    /// the relayer will ever catch up to the da layer and
+    /// may fall behind immediately after this future completes.
+    ///
+    /// The only guarantee is that if this future completes then
+    /// the relayer did reach consistency with the da layer for
+    /// some period of time.
+    pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
+        if let Some(relayer_handle) = &self.relayer_handle {
+            relayer_handle.await_synced().await?;
+        }
+        Ok(())
+    }
 }
 
 impl FuelServiceInner {
@@ -196,33 +228,6 @@ impl FuelServiceInner {
                 Ok(Ok(_)) => {}
             }
         }
-    }
-
-    /// Shutdown background tasks
-    pub async fn stop(&self) {
-        for task in &self.tasks {
-            task.abort();
-        }
-        self.modules.stop().await;
-    }
-
-    #[cfg(feature = "relayer")]
-    /// Wait for the [`Relayer`] to be in sync with
-    /// the data availability layer.
-    ///
-    /// Yields until the relayer reaches a point where it
-    /// considered up to date. Note that there's no guarantee
-    /// the relayer will ever catch up to the da layer and
-    /// may fall behind immediately after this future completes.
-    ///
-    /// The only guarantee is that if this future completes then
-    /// the relayer did reach consistency with the da layer for
-    /// some period of time.
-    pub async fn await_relayer_synced(&self) -> anyhow::Result<()> {
-        if let Some(relayer_handle) = &self.modules.relayer {
-            relayer_handle.listen_synced().await_synced().await?;
-        }
-        Ok(())
     }
 }
 
