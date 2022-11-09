@@ -65,7 +65,7 @@ impl FuelService {
     }
 
     fn spawn_service(service: FuelServiceInner) -> Self {
-        let bound_address = service.bound_address.clone();
+        let bound_address = service.bound_address;
         let (shutdown, stop_rx) = oneshot::channel();
 
         #[cfg(feature = "relayer")]
