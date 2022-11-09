@@ -399,7 +399,7 @@ impl Dependency {
                         *utxo_id,
                         CoinState {
                             is_spend_by: Some(tx.id() as TxId),
-                            depth: 0,
+                            depth: max_depth - 1,
                         },
                     );
                     // yey we got our coin
