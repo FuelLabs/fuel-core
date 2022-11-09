@@ -41,8 +41,11 @@ async fn subscribe_txn_status() {
 
         let predicate = Opcode::RET(REG_ONE).to_bytes().to_vec();
         let owner = Input::predicate_owner(&predicate);
+        // The third transaction needs to have a different input.
+        let utxo_id = if i == 2 { 2 } else { 1 };
+        let utxo_id = UtxoId::new(Bytes32::from([utxo_id; 32]), 1);
         let coin_input = Input::coin_predicate(
-            UtxoId::new(Bytes32::from([1; 32]), 1),
+            utxo_id,
             owner,
             1000,
             AssetId::zeroed(),
