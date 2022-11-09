@@ -1,5 +1,6 @@
 use crate::database::Database;
 use anyhow::Error as AnyError;
+use futures::FutureExt;
 use modules::Modules;
 use std::{
     net::SocketAddr,
@@ -66,10 +67,10 @@ impl FuelService {
         let handle = tokio::spawn(async move {
             let run_fut = service.run();
             let shutdown_fut = stop_rx.then(|stop| async move {
-                if stop.is_error() {
+                if stop.is_err() {
                     // If the handle is dropped we don't want
                     // this to ever shutdown the service.
-                    futures::future::pending().await;
+                    futures::future::pending::<()>().await;
                 }
                 // Only a successful recv results in a shutdown.
             });
@@ -140,18 +141,25 @@ impl FuelService {
 
     /// Awaits for the completion of any server background tasks
     pub async fn run(self) {
-        if let Err(e) = self.handle.await {
+        Self::wait_for_handle(self.handle).await;
+    }
+
+    /// Shutdown background tasks
+    pub async fn stop(self) {
+        let Self {
+            handle, shutdown, ..
+        } = self;
+        let _ = shutdown.send(());
+        Self::wait_for_handle(handle).await;
+    }
+
+    async fn wait_for_handle(handle: JoinHandle<()>) {
+        if let Err(err) = handle.await {
             if err.is_panic() {
                 // Resume the panic on the main task
                 panic::resume_unwind(err.into_panic());
             }
         }
-    }
-
-    /// Shutdown background tasks
-    pub async fn stop(self) {
-        let _ = self.shutdown.send(());
-        self.run();
     }
 }
 
