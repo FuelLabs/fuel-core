@@ -39,7 +39,7 @@ pub(crate) fn create_message_predicate_from_message(
         Input::message_predicate(
             message.id(),
             message.sender,
-            Input::predicate_owner(&predicate),
+            message.recipient,
             message.amount,
             message.nonce,
             message.data,

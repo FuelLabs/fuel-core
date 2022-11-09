@@ -28,6 +28,7 @@ use fuel_core_interfaces::{
             AssetId,
             Chargeable,
             Output,
+            Transaction,
             TransactionBuilder,
             UniqueIdentifier,
             UtxoId,
@@ -164,6 +165,44 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
     assert!(matches!(
         err.downcast_ref::<Error>(),
         Some(Error::NotInsertedCollisionContractId(id)) if id == &contract_id
+    ));
+}
+
+#[tokio::test]
+async fn insert_tx_without_metadata_fails_with_no_metadata_error() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let mut txpool = TxPool::new(Default::default());
+    let db = MockDb::default();
+
+    let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+    let tx = Arc::new(Transaction::default());
+    let err = txpool
+        .insert_inner(tx, &db)
+        .await
+        .expect_err("Insert Tx should be Err, got Ok");
+    assert!(matches!(
+        err.downcast_ref::<Error>(),
+        Some(Error::NoMetadata)
+    ));
+}
+
+#[tokio::test]
+async fn insert_mint_tx_fails_with_unsupported_transaction_type_error() {
+    let mut txpool = TxPool::new(Default::default());
+    let db = MockDb::default();
+
+    let tx = Arc::new(
+        TransactionBuilder::mint(Default::default(), Default::default())
+            .finalize_as_transaction(),
+    );
+
+    let err = txpool
+        .insert_inner(tx, &db)
+        .await
+        .expect_err("Insert Tx should be Err, got Ok");
+    assert!(matches!(
+        err.downcast_ref::<Error>(),
+        Some(Error::NotSupportedTransactionType)
     ));
 }
 
