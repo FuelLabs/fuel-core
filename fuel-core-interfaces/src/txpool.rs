@@ -268,6 +268,12 @@ impl super::poa_coordinator::TransactionPool for Sender {
         self.send(TxPoolMpsc::ConsumableGas { response }).await?;
         receiver.await.map_err(Into::into)
     }
+
+    async fn remove_txs(&mut self, ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::Remove { ids, response }).await?;
+        receiver.await.map_err(Into::into)
+    }
 }
 
 /// RPC commands that can be sent to the TxPool through an MPSC channel.

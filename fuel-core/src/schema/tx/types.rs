@@ -19,6 +19,7 @@ use crate::{
             Bytes32,
             HexString,
             Salt,
+            Tai64Timestamp,
             TransactionId,
             TxPointer,
             U64,
@@ -31,10 +32,6 @@ use async_graphql::{
     Enum,
     Object,
     Union,
-};
-use chrono::{
-    DateTime,
-    Utc,
 };
 use fuel_core_interfaces::{
     common::{
@@ -61,6 +58,7 @@ use fuel_core_interfaces::{
         },
         fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
+        tai64::Tai64,
     },
     db::KvStoreError,
     txpool::TxPoolMpsc,
@@ -124,19 +122,19 @@ pub enum TransactionStatus {
 }
 
 #[derive(Debug)]
-pub struct SubmittedStatus(DateTime<Utc>);
+pub struct SubmittedStatus(Tai64);
 
 #[Object]
 impl SubmittedStatus {
-    async fn time(&self) -> DateTime<Utc> {
-        self.0
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.0)
     }
 }
 
 #[derive(Debug)]
 pub struct SuccessStatus {
     block_id: fuel_core_interfaces::model::BlockId,
-    time: DateTime<Utc>,
+    time: Tai64,
     result: Option<VmProgramState>,
 }
 
@@ -153,8 +151,8 @@ impl SuccessStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> DateTime<Utc> {
-        self.time
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn program_state(&self) -> Option<ProgramState> {
@@ -165,7 +163,7 @@ impl SuccessStatus {
 #[derive(Debug)]
 pub struct FailureStatus {
     block_id: fuel_core_interfaces::model::BlockId,
-    time: DateTime<Utc>,
+    time: Tai64,
     reason: String,
     state: Option<VmProgramState>,
 }
@@ -183,8 +181,8 @@ impl FailureStatus {
         Ok(block)
     }
 
-    async fn time(&self) -> DateTime<Utc> {
-        self.time
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.time)
     }
 
     async fn reason(&self) -> String {

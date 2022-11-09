@@ -19,7 +19,6 @@ pub async fn wait_if_eth_syncing<P>(
 where
     P: Middleware<Error = ProviderError> + 'static,
 {
-    tracing::info!("Waiting for the Ethereum endpoint to finish syncing");
     let mut start = tokio::time::Instant::now();
     let mut loop_time = tokio::time::Instant::now();
     while let SyncingStatus::IsSyncing {

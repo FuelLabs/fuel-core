@@ -13,11 +13,11 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
+    executor::ExecutionResult,
     model::{
         ArcPoolTx,
         BlockHeight,
         BlockId,
-        FuelBlock,
         FuelBlockConsensus,
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -79,11 +79,11 @@ impl MockBlockProducer {
 
 #[async_trait::async_trait]
 impl BlockProducer for MockBlockProducer {
-    async fn produce_block(
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<FuelBlock> {
+    ) -> anyhow::Result<ExecutionResult> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<_> = select_transactions(includable_txs, max_gas)
@@ -93,7 +93,7 @@ impl BlockProducer for MockBlockProducer {
 
         self.database.inner.write().height += 1;
 
-        Ok(PartialFuelBlock {
+        let block = PartialFuelBlock {
             header: PartialFuelBlockHeader {
                 consensus: FuelConsensusHeader {
                     height,
@@ -103,7 +103,12 @@ impl BlockProducer for MockBlockProducer {
             },
             transactions,
         }
-        .generate(&[]))
+        .generate(&[]);
+
+        Ok(ExecutionResult {
+            block,
+            skipped_transactions: vec![],
+        })
     }
 
     async fn dry_run(
@@ -217,14 +222,21 @@ impl MockTxPool {
                     },
                     msg = txpool_rx.recv() => {
                         match msg.expect("Closed unexpectedly") {
-                            MockTxPoolMsg::Includable(response) => {
-                                let resp = txs.lock().await.clone();
-                                response.send(resp).unwrap();
-                            },
                             MockTxPoolMsg::ConsumableGas(response) => {
                                 let t = txs.lock().await.clone();
                                 let resp = t.into_iter().map(|t| t.limit()).sum();
                                 response.send(resp).unwrap();
+                            },
+                            MockTxPoolMsg::Includable(response) => {
+                                let resp = txs.lock().await.clone();
+                                response.send(resp).unwrap();
+                            },
+                            MockTxPoolMsg::Remove { tx_ids, response } => {
+                                let mut g = txs.lock().await;
+                                let mut removed = g.clone();
+                                removed.retain(|tx| tx_ids.contains(&tx.id()));
+                                g.retain(|tx| !tx_ids.contains(&tx.id()));
+                                response.send(removed).unwrap();
                             }
                         }
                     },
@@ -232,10 +244,12 @@ impl MockTxPool {
                         match msg.expect("Closed unexpectedly") {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let mut g = txs.lock().await;
-                                for tx in block.transactions() {
-                                    let i = g.iter().position(|t| t.id() == tx.id()).unwrap();
-                                    g.swap_remove(i);
-                                }
+                                let block_tx_ids: Vec<_> = block
+                                        .transactions()
+                                        .iter()
+                                        .map(|tx| tx.id())
+                                        .collect();
+                                g.retain(|tx| !block_tx_ids.contains(&tx.id()));
                                 block_event_tx.send(block.transactions().len()).await.unwrap();
                             },
                             _ => todo!("This block import type is not mocked yet"),
@@ -287,6 +301,10 @@ impl MockTxPool {
 pub enum MockTxPoolMsg {
     ConsumableGas(oneshot::Sender<u64>),
     Includable(oneshot::Sender<Vec<ArcPoolTx>>),
+    Remove {
+        tx_ids: Vec<TxId>,
+        response: oneshot::Sender<Vec<ArcPoolTx>>,
+    },
 }
 
 #[derive(Clone)]
@@ -320,6 +338,15 @@ impl TransactionPool for MockTxPoolSender {
         Ok(rx
             .await
             .expect("MockTxPool panicked in total_consumable_gas query"))
+    }
+
+    async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>> {
+        let (response, rx) = oneshot::channel();
+        self.0
+            .send(MockTxPoolMsg::Remove { tx_ids, response })
+            .await
+            .expect("Send error");
+        Ok(rx.await.expect("MockTxPool panicked in remove_txs query"))
     }
 }
 
@@ -399,13 +426,12 @@ fn _make_tx(coin: &CoinInfo, gas_price: u64, gas_limit: u64) -> PoolTransaction 
         .into()
 }
 
-fn make_tx() -> PoolTransaction {
-    let mut rng = StdRng::seed_from_u64(1234u64);
+fn make_tx(rng: &mut StdRng) -> PoolTransaction {
     _make_tx(
         &CoinInfo {
             index: 0,
             id: rng.gen(),
-            secret_key: SecretKey::random(&mut rng),
+            secret_key: SecretKey::random(rng),
         },
         1,
         10_000,
@@ -437,8 +463,9 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
         .await;
 
     // Submit some txs
+    let mut rng = StdRng::seed_from_u64(1234u64);
     for _ in 0..10 {
-        txpool.add_tx(Arc::new(make_tx())).await;
+        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
     }
 
     // Make sure enough time passes for the block to be produced
@@ -484,7 +511,8 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
         .await;
 
     // Submit tx
-    txpool.add_tx(Arc::new(make_tx())).await;
+    let mut rng = StdRng::seed_from_u64(1234u64);
+    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
 
     // Make sure it's produced
     assert_eq!(txpool.wait_block_produced().await, 1);
@@ -558,7 +586,8 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     assert_eq!(txpool.check_block_produced(), Ok(0));
 
     // Submit tx
-    txpool.add_tx(Arc::new(make_tx())).await;
+    let mut rng = StdRng::seed_from_u64(1234u64);
+    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
 
     // Make sure no blocks are produced before next interval
     assert_eq!(
@@ -573,8 +602,9 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
     assert_eq!(txpool.check_block_produced(), Ok(1));
 
     // Submit two tx
+    let mut rng = StdRng::seed_from_u64(1234u64);
     for _ in 0..2 {
-        txpool.add_tx(Arc::new(make_tx())).await;
+        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
     }
 
     time::sleep(Duration::from_millis(1)).await;
@@ -640,8 +670,9 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
         .await;
 
     // Fill txpool completely
+    let mut rng = StdRng::seed_from_u64(1234u64);
     for _ in 0..1_000 {
-        txpool.add_tx(Arc::new(make_tx())).await;
+        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
         tokio::spawn(async {}).await.unwrap(); // Process messages so the channel doesn't lag
     }
 
@@ -714,7 +745,8 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     );
 
     // Submit tx
-    txpool.add_tx(Arc::new(make_tx())).await;
+    let mut rng = StdRng::seed_from_u64(1234u64);
+    txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
 
     // Make sure no block is produced immediately, as none of the timers has expired yet
     assert_eq!(
@@ -735,8 +767,9 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
     assert_eq!(txpool.check_block_produced(), Ok(0));
 
     // Submit two tx
+    let mut rng = StdRng::seed_from_u64(1234u64);
     for _ in 0..2 {
-        txpool.add_tx(Arc::new(make_tx())).await;
+        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
     }
 
     // Wait for both max_tx_idle_time and min_block_time to pass, and see that the block is produced
@@ -780,8 +813,9 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
         .await;
 
     // Fill txpool completely
+    let mut rng = StdRng::seed_from_u64(1234u64);
     for _ in 0..100 {
-        txpool.add_tx(Arc::new(make_tx())).await;
+        txpool.add_tx(Arc::new(make_tx(&mut rng))).await;
         tokio::task::yield_now().await; // Process messages so the channel doesn't lag
     }
 
@@ -796,7 +830,8 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
     for _ in 0..5 {
         time::sleep(Duration::new(2, 0)).await;
         tokio::task::yield_now().await;
-        assert!(txpool.check_block_produced().is_ok());
+        let result = txpool.check_block_produced();
+        assert!(result.is_ok());
         assert_eq!(
             txpool.check_block_produced(),
             Err(mpsc::error::TryRecvError::Empty)
