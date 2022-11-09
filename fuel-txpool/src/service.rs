@@ -5,6 +5,7 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
+    common::prelude::Bytes32,
     p2p::{
         GossipData,
         P2pRequestEvent,
@@ -13,9 +14,11 @@ use fuel_core_interfaces::{
     },
     txpool::{
         self,
+        Error,
         TxPoolDb,
         TxPoolMpsc,
-        TxStatusBroadcast,
+        TxStatus,
+        TxUpdate,
     },
 };
 use std::sync::Arc;
@@ -35,10 +38,47 @@ pub struct ServiceBuilder {
     db: Option<Box<dyn TxPoolDb>>,
     txpool_sender: Option<txpool::Sender>,
     txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
-    tx_status_sender: Option<broadcast::Sender<TxStatusBroadcast>>,
+    tx_status_sender: Option<TxStatusChange>,
     import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
     incoming_tx_receiver: Option<broadcast::Receiver<TransactionGossipData>>,
     network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
+}
+
+#[derive(Clone)]
+pub struct TxStatusChange {
+    status_sender: broadcast::Sender<TxStatus>,
+    update_sender: broadcast::Sender<TxUpdate>,
+}
+
+impl TxStatusChange {
+    pub fn new(capacity: usize) -> Self {
+        let (status_sender, _) = broadcast::channel(capacity);
+        let (update_sender, _) = broadcast::channel(capacity);
+        Self {
+            status_sender,
+            update_sender,
+        }
+    }
+    pub fn send_complete(&self, id: Bytes32) {
+        let _ = self.status_sender.send(TxStatus::Completed);
+        self.updated(id);
+    }
+
+    pub fn send_submitted(&self, id: Bytes32) {
+        let _ = self.status_sender.send(TxStatus::Submitted);
+        self.updated(id);
+    }
+
+    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
+        let _ = self.status_sender.send(TxStatus::SqueezedOut {
+            reason: reason.clone(),
+        });
+        let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
+    }
+
+    fn updated(&self, id: Bytes32) {
+        let _ = self.update_sender.send(TxUpdate::updated(id));
+    }
 }
 
 impl Default for ServiceBuilder {
@@ -65,8 +105,20 @@ impl ServiceBuilder {
         self.txpool_sender.as_ref().unwrap()
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<TxStatusBroadcast> {
-        self.tx_status_sender.as_ref().unwrap().subscribe()
+    pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
+        self.tx_status_sender
+            .as_ref()
+            .unwrap()
+            .status_sender
+            .subscribe()
+    }
+
+    pub fn tx_change_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
+        self.tx_status_sender
+            .as_ref()
+            .unwrap()
+            .update_sender
+            .subscribe()
     }
 
     pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
@@ -87,10 +139,7 @@ impl ServiceBuilder {
         self
     }
 
-    pub fn tx_status_sender(
-        &mut self,
-        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
-    ) -> &mut Self {
+    pub fn tx_status_sender(&mut self, tx_status_sender: TxStatusChange) -> &mut Self {
         self.tx_status_sender = Some(tx_status_sender);
         self
     }
@@ -157,7 +206,7 @@ pub struct Context {
     pub config: Config,
     pub db: Arc<Box<dyn TxPoolDb>>,
     pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
-    pub tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+    pub tx_status_sender: TxStatusChange,
     pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
     pub incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
     pub network_sender: mpsc::Sender<P2pRequestEvent>,
@@ -183,7 +232,7 @@ impl Context {
                         let txpool = txpool.as_ref();
                         if let GossipData { data: Some(TransactionBroadcast::NewTransaction ( tx )), .. } =  new_transaction.unwrap() {
                             let txs = vec!(Arc::new(tx));
-                            TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await;
+                            TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
                         }
                     });
                 }
@@ -209,7 +258,7 @@ impl Context {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), tx_status_sender, &txs).await;
+                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
                             for (ret, tx) in insert.iter().zip(txs.into_iter()) {
                                 match ret {
                                     Ok(_) => {
@@ -235,7 +284,7 @@ impl Context {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
                         TxPoolMpsc::Remove { ids, response } => {
-                            let _ = response.send(TxPool::remove(txpool,tx_status_sender,&ids).await);
+                            let _ = response.send(TxPool::remove(txpool, &tx_status_sender ,&ids).await);
                         }
                         TxPoolMpsc::Stop => {}
                     }});
@@ -246,7 +295,7 @@ impl Context {
                         match block_updated {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let txpool = txpool.clone();
-                                TxPool::block_update(txpool.as_ref(), block).await
+                                TxPool::block_update(txpool.as_ref(), &self.tx_status_sender, block).await
                                 // TODO: Should this be done in a separate task? Like this:
                                 // tokio::spawn( async move {
                                 //     TxPool::block_update(txpool.as_ref(), block).await
@@ -267,7 +316,7 @@ impl Context {
 
 pub struct Service {
     txpool_sender: txpool::Sender,
-    tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+    tx_status_sender: TxStatusChange,
     join: Mutex<Option<JoinHandle<Context>>>,
     context: Arc<Mutex<Option<Context>>>,
 }
@@ -275,7 +324,7 @@ pub struct Service {
 impl Service {
     pub fn new(
         txpool_sender: txpool::Sender,
-        tx_status_sender: broadcast::Sender<TxStatusBroadcast>,
+        tx_status_sender: TxStatusChange,
         context: Context,
     ) -> anyhow::Result<Self> {
         Ok(Self {
@@ -316,8 +365,12 @@ impl Service {
         }
     }
 
-    pub fn subscribe_ch(&self) -> broadcast::Receiver<TxStatusBroadcast> {
-        self.tx_status_sender.subscribe()
+    pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
+        self.tx_status_sender.status_sender.subscribe()
+    }
+
+    pub fn tx_update_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
+        self.tx_status_sender.update_sender.subscribe()
     }
 
     pub fn sender(&self) -> &txpool::Sender {

@@ -591,9 +591,31 @@ input SpendQueryElementInput {
 	max: U64
 }
 
+type SqueezedOutStatus {
+	reason: String!
+}
+
 
 type SubmittedStatus {
 	time: Tai64Timestamp!
+}
+
+type Subscription {
+	"""
+	Returns a stream of status updates for the given transaction id.
+	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
+	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
+	If the current status is [`TransactionStatus::Submitted`] this will be returned
+	and the stream will wait for a future update.
+	
+	This stream will wait forever so it's advised to use within a timeout.
+	
+	It is possible for the stream to miss an update if it is polled slower
+	then the updates arrive. In such a case the stream will close without
+	a status. If this occurs the stream can simply be restarted to return
+	the latest status.
+	"""
+	statusChange(id: TransactionId!): TransactionStatus!
 }
 
 type SuccessStatus {
@@ -675,7 +697,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 scalar TxPointer
 
@@ -692,4 +714,5 @@ type VariableOutput {
 schema {
 	query: Query
 	mutation: Mutation
+	subscription: Subscription
 }

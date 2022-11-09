@@ -44,6 +44,7 @@ use std::{
 };
 
 mod predicates;
+mod txn_status_subscription;
 mod utxo_validation;
 
 #[test]

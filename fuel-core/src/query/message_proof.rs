@@ -83,7 +83,8 @@ pub async fn message_proof(
         .and_then(|status| match status {
             TransactionStatus::Failed { block_id, .. }
             | TransactionStatus::Success { block_id, .. } => Some(block_id),
-            TransactionStatus::Submitted { .. } => None,
+            TransactionStatus::Submitted { .. }
+            | TransactionStatus::SqueezedOut { .. } => None,
         });
 
     // Exit if the status doesn't exist or is not ready.
