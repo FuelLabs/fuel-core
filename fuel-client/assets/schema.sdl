@@ -603,8 +603,8 @@ type SubmittedStatus {
 type Subscription {
 	"""
 	Returns a stream of status updates for the given transaction id.
-	If the current status is [`TransactionStatus::Success`] or
-	[`TransactionStatus::Failed`] the stream will return that and end immediately.
+	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
+	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
 	If the current status is [`TransactionStatus::Submitted`] this will be returned
 	and the stream will wait for a future update.
 	
