@@ -329,7 +329,7 @@ pub enum TxStatus {
     Submitted,
     /// Transaction has either been:
     /// - successfully executed and included in a block.
-    /// - failed to execute and discarded.
+    /// - failed to execute and state changes reverted
     Completed,
     /// removed from txpool.
     SqueezedOut { reason: Error },
