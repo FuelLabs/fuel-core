@@ -51,7 +51,7 @@ use std::net::{
     TcpListener,
 };
 use tokio::{
-    signal::unix::SignalKind,
+    sync::oneshot,
     task::JoinHandle,
 };
 use tokio_stream::StreamExt;
@@ -66,6 +66,7 @@ pub async fn start_server(
     config: Config,
     db: Database,
     modules: &Modules,
+    stop: oneshot::Receiver<()>,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
@@ -112,7 +113,9 @@ pub async fn start_server(
         let server = axum::Server::from_tcp(listener)
             .unwrap()
             .serve(router.into_make_service())
-            .with_graceful_shutdown(shutdown_signal());
+            .with_graceful_shutdown(async move {
+                let _ = stop.await;
+            });
 
         tx.send(()).unwrap();
         server.await.map_err(Into::into)
@@ -122,36 +125,6 @@ pub async fn start_server(
     rx.await.unwrap();
 
     Ok((bound_addr, handle))
-}
-
-async fn shutdown_signal() {
-    #[cfg(unix)]
-    {
-        let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())
-            .expect("failed to install sigterm handler");
-
-        let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())
-            .expect("failed to install sigint handler");
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    info!("sigint received");
-                    break;
-                }
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install CTRL+C signal handler");
-        info!("CTRL+C received");
-    }
 }
 
 async fn graphql_playground() -> impl IntoResponse {
