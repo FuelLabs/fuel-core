@@ -52,6 +52,8 @@ fn main() {
     let mut line = String::new();
     let mut state = State {
         state: HashMap::new(),
+        throughput: HashMap::new(),
+        groups: HashMap::new(),
         baseline: baseline.unwrap_or_else(|| "alu/noop".to_string()),
     };
     while let Err(TryRecvError::Empty) = rx.try_recv() {
@@ -60,12 +62,7 @@ fn main() {
         if debug {
             eprintln!("{}", line);
         }
-        if let Some(Mean { id, mean }) = decode_input(&line) {
-            if debug {
-                eprintln!("id: {}, mean: {:?}", id, mean);
-            }
-            state.state.insert(id, mean);
-        }
+        extract_state(&line, &mut state, debug);
 
         line.clear();
     }
@@ -78,23 +75,120 @@ fn main() {
     match state.state.get(&state.baseline).copied() {
         Some(baseline) => {
             let baseline: u64 = baseline.as_nanos().try_into().unwrap();
-            let yaml: serde_yaml::Mapping = state
-                .state
-                .into_iter()
-                .map(|(id, mean)| {
-                    let ratio = map_to_ratio(baseline, mean);
-                    if debug {
-                        eprintln!(
-                            "id: {}, baseline: {}, mean: {:?}, ratio: {}",
-                            id, baseline, mean, ratio
+            let State {
+                mut state,
+                groups,
+                throughput,
+                ..
+            } = state;
+            let mut groups: Vec<_> = groups.into_iter().collect();
+            groups.sort_unstable_by_key(|(k, _)| k.clone());
+            let mut yaml = serde_yaml::Mapping::with_capacity(groups.len() + 1);
+            for (group, mut benches) in groups.into_iter() {
+                benches.sort_unstable();
+                let mut benches_yaml = serde_yaml::Mapping::with_capacity(benches.len());
+                for bench in benches {
+                    if let Some(mean) = state.remove(&bench) {
+                        let ratio = map_to_ratio(baseline, mean);
+                        if debug {
+                            eprintln!(
+                                "id: {}, baseline: {}, mean: {:?}, ratio: {}",
+                                bench, baseline, mean, ratio
+                            );
+                        }
+                        benches_yaml.insert(
+                            serde_yaml::to_value(bench).unwrap(),
+                            serde_yaml::to_value(ratio).unwrap(),
                         );
                     }
-                    (
-                        serde_yaml::to_value(id).unwrap(),
-                        serde_yaml::to_value(ratio).unwrap(),
-                    )
+                }
+                if !benches_yaml.is_empty() {
+                    yaml.insert(
+                        serde_yaml::to_value(group).unwrap(),
+                        serde_yaml::to_value(benches_yaml).unwrap(),
+                    );
+                }
+            }
+            if !state.is_empty() {
+                let mut benches: Vec<_> = state.into_iter().collect();
+                benches.sort_unstable_by_key(|(k, _)| k.clone());
+                let benches_yaml: serde_yaml::Mapping = benches
+                    .into_iter()
+                    .map(|(bench, mean)| {
+                        let ratio = map_to_ratio(baseline, mean);
+                        if debug {
+                            eprintln!(
+                                "id: {}, baseline: {}, mean: {:?}, ratio: {}",
+                                bench, baseline, mean, ratio
+                            );
+                        }
+                        (
+                            serde_yaml::to_value(bench).unwrap(),
+                            serde_yaml::to_value(ratio).unwrap(),
+                        )
+                    })
+                    .collect();
+                if !benches_yaml.is_empty() {
+                    yaml.insert(
+                        serde_yaml::to_value("no-group".to_string()).unwrap(),
+                        serde_yaml::to_value(benches_yaml).unwrap(),
+                    );
+                }
+            }
+            let slopes: Vec<_> = yaml
+                .iter()
+                .filter_map(|(group, benches)| {
+                    let benches = benches.as_mapping()?;
+                    let x: Vec<_> = benches
+                        .keys()
+                        .filter_map(|bench| throughput.get(bench.as_str()?))
+                        .collect();
+                    if x.len() != benches.len() {
+                        return None
+                    };
+
+                    let avg_x = x.iter().copied().sum::<u64>() as f64 / x.len() as f64;
+                    let avg_y = benches.values().filter_map(|i| i.as_u64()).sum::<u64>()
+                        as f64
+                        / benches.len() as f64;
+                    let sum_x_y: f64 = x
+                        .iter()
+                        .copied()
+                        .zip(benches.values().filter_map(|i| i.as_u64()))
+                        .map(|(x, y)| (*x as f64 - avg_x) * (y as f64 - avg_y))
+                        .sum();
+                    let sq_x: f64 = x.iter().map(|i| (**i as f64 - avg_x).powi(2)).sum();
+                    let slope = sum_x_y / sq_x;
+                    Some((group.as_str()?.to_string(), slope))
                 })
                 .collect();
+            for (group, slope) in slopes {
+                if let Some(map) =
+                    yaml.get_mut(group).and_then(|map| map.as_mapping_mut())
+                {
+                    map.insert(
+                        serde_yaml::to_value("throughput-slope".to_string()).unwrap(),
+                        serde_yaml::to_value(slope).unwrap(),
+                    );
+                }
+            }
+            // let yaml: serde_yaml::Mapping = state
+            //     .state
+            //     .into_iter()
+            //     .map(|(id, mean)| {
+            //         let ratio = map_to_ratio(baseline, mean);
+            //         if debug {
+            //             eprintln!(
+            //                 "id: {}, baseline: {}, mean: {:?}, ratio: {}",
+            //                 id, baseline, mean, ratio
+            //             );
+            //         }
+            //         (
+            //             serde_yaml::to_value(id).unwrap(),
+            //             serde_yaml::to_value(ratio).unwrap(),
+            //         )
+            //     })
+            //     .collect();
             let file = std::fs::File::create(output.clone()).unwrap();
             let writer = BufWriter::new(file);
             serde_yaml::to_writer(writer, &serde_yaml::Value::Mapping(yaml)).unwrap();
@@ -109,41 +203,102 @@ fn main() {
 }
 
 #[derive(Debug)]
+enum Output {
+    Mean(Mean),
+    Group(Group),
+}
+
+#[derive(Debug)]
 struct Mean {
     id: String,
     mean: Duration,
+    throughput: Option<u64>,
+}
+
+#[derive(Debug)]
+struct Group {
+    id: String,
+    benches: Vec<String>,
 }
 
 #[derive(Debug)]
 struct State {
     baseline: String,
     state: HashMap<String, Duration>,
+    throughput: HashMap<String, u64>,
+    groups: HashMap<String, Vec<String>>,
 }
 
-fn decode_input(line: &str) -> Option<Mean> {
-    let val: Value = serde_json::from_str(line).ok()?;
-    let id = match val.get("id") {
-        Some(Value::String(val)) => val.clone(),
-        _ => return None,
-    };
-    let mean = val.get("mean")?;
-    let mean = match mean.get("estimate") {
-        Some(Value::Number(val)) => match mean.get("unit") {
-            Some(Value::String(unit)) => {
-                let val = val.as_f64().unwrap();
-                match unit.as_str() {
-                    "ns" => std::time::Duration::from_nanos(val as u64),
-                    "us" => std::time::Duration::from_micros(val as u64),
-                    "ms" => std::time::Duration::from_millis(val as u64),
-                    "s" => std::time::Duration::from_secs(val as u64),
-                    _ => return None,
-                }
+fn extract_state(line: &str, state: &mut State, debug: bool) {
+    match decode_input(&line) {
+        Some(Output::Mean(Mean {
+            id,
+            mean,
+            throughput,
+        })) => {
+            if debug {
+                eprintln!("id: {}, mean: {:?}", id, mean);
             }
-            _ => return None,
-        },
-        _ => return None,
-    };
-    Some(Mean { id, mean })
+            state.state.insert(id.clone(), mean);
+            if let Some(throughput) = throughput {
+                state.throughput.insert(id, throughput);
+            }
+        }
+        Some(Output::Group(Group { id, benches })) => {
+            state.groups.entry(id).or_default().extend(benches);
+        }
+        _ => (),
+    }
+}
+
+fn decode_input(line: &str) -> Option<Output> {
+    let val: Value = serde_json::from_str(line).ok()?;
+    match val.get("reason")?.as_str()? {
+        "benchmark-complete" => {
+            let id = match val.get("id") {
+                Some(Value::String(val)) => val.clone(),
+                _ => return None,
+            };
+            let mean = val.get("mean")?;
+            let mean = match mean.get("estimate") {
+                Some(Value::Number(val)) => match mean.get("unit") {
+                    Some(Value::String(unit)) => {
+                        let val = val.as_f64().unwrap();
+                        match unit.as_str() {
+                            "ns" => std::time::Duration::from_nanos(val as u64),
+                            "us" => std::time::Duration::from_micros(val as u64),
+                            "ms" => std::time::Duration::from_millis(val as u64),
+                            "s" => std::time::Duration::from_secs(val as u64),
+                            _ => return None,
+                        }
+                    }
+                    _ => return None,
+                },
+                _ => return None,
+            };
+            let throughput = if let Some(t) = val.get("throughput")?.as_array()?.get(0) {
+                Some(t.as_object()?.get("per_iteration")?.as_u64()?)
+            } else {
+                None
+            };
+            Some(Output::Mean(Mean {
+                id,
+                mean,
+                throughput,
+            }))
+        }
+        "group-complete" => {
+            let id = val.get("group_name")?.as_str()?.to_owned();
+            let benches = val
+                .get("benchmarks")?
+                .as_array()?
+                .iter()
+                .filter_map(|v| Some(v.as_str()?.to_string()))
+                .collect();
+            Some(Output::Group(Group { id, benches }))
+        }
+        _ => None,
+    }
 }
 
 fn map_to_ratio(baseline: u64, mean: Duration) -> u64 {
@@ -195,5 +350,40 @@ mod tests {
         let baseline: u64 = baseline.as_nanos().try_into().unwrap();
         let ratio = map_to_ratio(baseline, mean);
         dbg!(ratio);
+    }
+
+    #[test]
+    fn handles_groups() {
+        let input = r#"
+        {"reason":"group-complete","group_name":"mem/mcli","benchmarks":["mem/mcli/10000","mem/mcli/100000"],"report_directory":""}
+        {"reason":"benchmark-complete","id":"mem/mcp/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        {"reason":"benchmark-complete","id":"mem/mcp/100000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        {"reason":"group-complete","group_name":"mem/mcp","benchmarks":["mem/mcp/10000","mem/mcp/100000"],"report_directory":""}
+        {"reason":"benchmark-complete","id":"mem/mcpi/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        "#;
+
+        let mut state = State {
+            baseline: "".into(),
+            state: Default::default(),
+            throughput: Default::default(),
+            groups: Default::default(),
+        };
+        for line in input.lines() {
+            extract_state(line, &mut state, false);
+        }
+
+        assert_eq!(state.groups.len(), 2);
+        assert_eq!(
+            state.groups.get("mem/mcli").unwrap(),
+            &["mem/mcli/10000", "mem/mcli/100000"]
+        );
+        assert_eq!(
+            state.groups.get("mem/mcp").unwrap(),
+            &["mem/mcp/10000", "mem/mcp/100000"]
+        );
+        assert_eq!(state.state.len(), 3);
+        assert!(state.state.contains_key("mem/mcp/10000"));
+        assert!(state.state.contains_key("mem/mcp/100000"));
+        assert!(state.state.contains_key("mem/mcpi/10000"));
     }
 }

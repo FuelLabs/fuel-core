@@ -2579,6 +2579,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.22.4"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/vm-benches#84721b9dc68961712929e336fcae810c6c029332"
 dependencies = [
  "anyhow",
  "fuel-asm",
