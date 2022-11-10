@@ -775,7 +775,7 @@ mod tests {
             max_resources: 1,
         }
         => Ok(1)
-        ; "Enough resources in the DB to reach target(u64::MAX) by two resources"
+        ; "Enough resources in the DB to reach target(u64::MAX) by 1 resource"
     )]
     #[test_case::test_case(
         TestCase {
