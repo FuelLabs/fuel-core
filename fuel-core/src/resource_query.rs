@@ -141,9 +141,7 @@ pub fn largest_first(
         }
 
         // Add to list
-        collected_amount = collected_amount
-            .checked_add(*resource.amount())
-            .unwrap_or(u64::MAX);
+        collected_amount = collected_amount.saturating_add(*resource.amount());
         resources.push(resource.into_owned());
     }
 
@@ -174,7 +172,7 @@ pub fn random_improve(
 
         // Set parameters according to spec
         let target = query.asset.target;
-        let upper_target = query.asset.target.checked_mul(2).unwrap_or(u64::MAX);
+        let upper_target = query.asset.target.saturating_mul(2);
 
         for resource in inputs {
             // Try to improve the result by adding dust to the result.
@@ -194,9 +192,7 @@ pub fn random_improve(
             }
 
             // Add to list
-            collected_amount = collected_amount
-                .checked_add(*resource.amount())
-                .unwrap_or(u64::MAX);
+            collected_amount = collected_amount.saturating_add(*resource.amount());
             resources.push(resource.into_owned());
         }
 
