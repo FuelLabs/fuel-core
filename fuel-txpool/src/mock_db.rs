@@ -47,6 +47,27 @@ pub struct MockDb {
     pub data: Arc<Mutex<Data>>,
 }
 
+impl MockDb {
+    pub fn insert_contract(
+        &mut self,
+        contract_id: &ContractId,
+        contract_code: &[u8],
+    ) -> Result<Option<Contract>, Error> {
+        <Self as StorageMutate<ContractsRawCode>>::insert(
+            self,
+            contract_id,
+            contract_code,
+        )
+    }
+
+    pub fn get_contract(
+        &self,
+        contract_id: &ContractId,
+    ) -> Result<Option<Cow<Contract>>, Error> {
+        <Self as StorageInspect<ContractsRawCode>>::get(self, contract_id)
+    }
+}
+
 // TODO: Generate storage implementation with macro.
 
 impl StorageInspect<Coins> for MockDb {

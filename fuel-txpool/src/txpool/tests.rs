@@ -23,10 +23,14 @@ use fuel_core_interfaces::{
             rngs::StdRng,
             SeedableRng,
         },
-        fuel_storage::StorageAsMut,
+        fuel_storage::{
+            StorageAsMut,
+            StorageMutate,
+        },
         fuel_tx::{
             AssetId,
             Chargeable,
+            Input,
             Output,
             Transaction,
             TransactionBuilder,
@@ -169,13 +173,121 @@ async fn faulty_t2_collided_on_contract_id_from_tx1() {
 }
 
 #[tokio::test]
+async fn insert_tx_with_contract_input_fails_when_contract_not_found_in_database() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let mut txpool = TxPool::new(Default::default());
+    let db = MockDb::default();
+
+    let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
+    let contract_input = create_contract_input(Default::default(), Default::default());
+    let tx = Arc::new(
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(gas_funds)
+            .add_input(contract_input)
+            .add_output(Output::contract(1, Default::default(), Default::default()))
+            .finalize_as_transaction(),
+    );
+
+    let err = txpool
+        .insert_inner(tx, &db)
+        .await
+        .expect_err("Insert Tx should be Err, got Ok");
+    assert!(matches!(
+        err.downcast_ref::<Error>(),
+        Some(Error::NotInsertedInputContractNotExisting(_))
+    ));
+}
+
+#[tokio::test]
+async fn insert_tx_with_contract_output_fails_when_contract_already_exists_in_database() {
+    let mut rng = StdRng::seed_from_u64(0);
+    let mut txpool = TxPool::new(Default::default());
+    let mut db = MockDb::default();
+
+    let contract_id = ContractId::from_str(
+        "0x000000000000000000000000000000000000000000000000000000000000ff00",
+    )
+    .unwrap();
+
+    db.insert_contract(&contract_id, b"data".as_slice())
+        .expect("cannot insert contract");
+
+    let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
+    let contract_output = create_contract_output(contract_id);
+
+    let tx_1 = Arc::new(
+        TransactionBuilder::create(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .add_input(gas_funds)
+        .add_output(contract_output)
+        .finalize_as_transaction(),
+    );
+
+    let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
+
+    let tx_2 = Arc::new(
+        TransactionBuilder::create(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        )
+        .add_input(gas_funds)
+        // .add_input(contract_input)
+        // .add_output(Output::contract(1, Default::default(), Default::default()))
+        .add_output(contract_output)
+        .finalize_as_transaction(),
+    );
+
+    let (_, gas_funds) = setup_coin(&mut rng, Some(&db));
+    let contract_input = Input::Contract {
+        utxo_id: UtxoId::new(Default::default(), Default::default()),
+        balance_root: Default::default(),
+        state_root: Default::default(),
+        tx_pointer: Default::default(),
+        contract_id,
+    };
+    let tx_3 = Arc::new(
+        TransactionBuilder::script(Default::default(), Default::default())
+            .add_input(gas_funds)
+            .add_input(contract_input)
+            .add_output(Output::contract(1, Default::default(), Default::default()))
+            .finalize_as_transaction(),
+    );
+
+    txpool
+        .insert_inner(tx_1, &db)
+        .await
+        .expect("Insert tx should be Ok");
+
+    db.get_contract(&contract_id)
+        .expect("Unable to get contract")
+        .expect("Expected contract with contract id to be present");
+
+    txpool
+        .insert_inner(tx_2, &db)
+        .await
+        .expect("adfadjkljfslkfj akdjl fa");
+
+    // println!("{:?}", err);
+    // assert!(matches!(
+    //     err.downcast_ref::<Error>(),
+    //     Some(Error::NotInsertedContractIdAlreadyTaken(id)) if *id == contract_id
+    // ));
+}
+
+#[tokio::test]
 async fn insert_tx_without_metadata_fails_with_no_metadata_error() {
     let mut rng = StdRng::seed_from_u64(0);
     let mut txpool = TxPool::new(Default::default());
     let db = MockDb::default();
 
     let (_, gas_coin) = setup_coin(&mut rng, Some(&db));
+
     let tx = Arc::new(Transaction::default());
+
     let err = txpool
         .insert_inner(tx, &db)
         .await
