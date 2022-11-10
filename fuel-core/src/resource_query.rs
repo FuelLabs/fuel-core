@@ -770,12 +770,12 @@ mod tests {
     )]
     #[test_case::test_case(
         TestCase {
-            db_amount: vec![1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, u64::MAX],
+            db_amount: vec![2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, u64::MAX - 1],
             target_amount: u64::MAX,
-            max_resources: 1,
+            max_resources: 2,
         }
-        => Ok(1)
-        ; "Enough resources in the DB to reach target(u64::MAX) by 1 resource"
+        => Ok(2)
+        ; "Enough resources in the DB to reach target(u64::MAX) by 2 resource"
     )]
     #[test_case::test_case(
         TestCase {
