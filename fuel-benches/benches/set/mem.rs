@@ -1,7 +1,9 @@
 use super::run_group_ref;
 
-use criterion::Criterion;
-use criterion::Throughput;
+use criterion::{
+    Criterion,
+    Throughput,
+};
 use fuel_core_benches::*;
 
 pub fn run(c: &mut Criterion) {
@@ -46,6 +48,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_cfei = c.benchmark_group("mem/cfei");
     for i in &linear {
+        mem_cfei.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_cfei,
             format!("{}", i),
@@ -56,6 +59,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_mcl = c.benchmark_group("mem/mcl");
     for i in &linear {
+        mem_mcl.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcl,
             format!("{}", i),
@@ -70,6 +74,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_mcli = c.benchmark_group("mem/mcli");
     for i in &linear {
+        mem_mcli.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcli,
             format!("{}", i),
@@ -99,6 +104,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_mcpi = c.benchmark_group("mem/mcpi");
     for i in &linear {
+        mem_mcpi.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_mcpi,
             format!("{}", i),
@@ -114,6 +120,7 @@ pub fn run(c: &mut Criterion) {
 
     let mut mem_meq = c.benchmark_group("mem/meq");
     for i in &linear {
+        mem_meq.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
             &mut mem_meq,
             format!("{}", i),
