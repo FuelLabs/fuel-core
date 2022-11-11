@@ -94,15 +94,16 @@ impl Block {
         &self.header
     }
 
-    async fn consensus(&self, ctx: &Context<'_>) -> Option<Consensus> {
+    async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
         let db = ctx.data_unchecked::<Database>().clone();
+        let id = self.header.0.id().into();
         let consensus = db
             .storage::<SealedBlockConsensus>()
-            .get(&self.header.0.id().into())
-            .map(|c| c.map(|c| c.into_owned().into()))
-            .unwrap_or(None);
+            .get(&id)
+            .map(|c| c.map(|c| c.into_owned().into()))?
+            .ok_or(KvStoreError::NotFound)?;
 
-        consensus
+        Ok(consensus)
     }
 
     async fn transactions(

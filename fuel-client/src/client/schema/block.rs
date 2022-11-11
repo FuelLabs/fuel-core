@@ -73,7 +73,7 @@ pub struct BlockEdge {
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
-    pub consensus: Option<Consensus>,
+    pub consensus: Consensus,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
@@ -139,12 +139,11 @@ impl Block {
     pub fn block_producer(&self) -> Option<fuel_vm::fuel_crypto::PublicKey> {
         let message = self.header.id.clone().into_message();
         match &self.consensus {
-            Some(Consensus::PoAConsensus(poa)) => {
+            Consensus::PoAConsensus(poa) => {
                 let signature = poa.signature.clone().into_signature();
                 let producer_pub_key = signature.recover(&message);
                 producer_pub_key.ok()
             }
-            _ => None,
         }
     }
 }

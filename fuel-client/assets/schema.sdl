@@ -47,7 +47,7 @@ input BalanceFilterInput {
 type Block {
 	id: BlockId!
 	header: Header!
-	consensus: Consensus
+	consensus: Consensus!
 	transactions: [Transaction!]!
 }
 

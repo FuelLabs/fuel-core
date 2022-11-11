@@ -1,6 +1,9 @@
 use fuel_core::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         Database,
     },
     model::{
@@ -21,7 +24,10 @@ use fuel_core_interfaces::{
         secrecy::ExposeSecret,
         tai64::Tai64,
     },
-    model::FuelConsensusHeader,
+    model::{
+        FuelBlockConsensus,
+        FuelConsensusHeader,
+    },
 };
 use fuel_gql_client::{
     client::{
@@ -50,7 +56,13 @@ async fn block() {
     let id = block.id();
     let mut db = Database::default();
     db.storage::<FuelBlocks>()
-        .insert(&id.into(), &block)
+        .insert(&id.clone().into(), &block)
+        .unwrap();
+    db.storage::<SealedBlockConsensus>()
+        .insert(
+            &id.clone().into(),
+            &FuelBlockConsensus::PoA(Default::default()),
+        )
         .unwrap();
 
     // setup server & client
@@ -280,7 +292,13 @@ async fn block_connection_5(
     for block in blocks {
         let id = block.id();
         db.storage::<FuelBlocks>()
-            .insert(&id.into(), &block)
+            .insert(&id.clone().into(), &block)
+            .unwrap();
+        db.storage::<SealedBlockConsensus>()
+            .insert(
+                &id.clone().into(),
+                &FuelBlockConsensus::PoA(Default::default()),
+            )
             .unwrap();
     }
 

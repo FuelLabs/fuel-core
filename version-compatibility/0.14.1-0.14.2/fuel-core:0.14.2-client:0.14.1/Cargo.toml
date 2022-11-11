@@ -1,0 +1,15 @@
+[package]
+name = "fuel-core-0_14_2-client-0_14_1"
+version = "0.0.0"
+edition = "2021"
+license = "BUSL-1.1"
+publish = false
+
+[lib]
+path = "test.rs"
+
+[dependencies]
+# TODO: Use `0.14.2` when it is released
+fuel-core = { path = "../../../fuel-core" }
+fuel-gql-client = { version = "0.14.1", features = ["test-helpers"] }
+tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
