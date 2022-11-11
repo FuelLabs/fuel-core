@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use fuel_client::{
+    use f_client::{
         client::{
             types::TransactionStatus,
             FuelClient,
