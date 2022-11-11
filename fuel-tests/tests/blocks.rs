@@ -56,13 +56,10 @@ async fn block() {
     let id = block.id();
     let mut db = Database::default();
     db.storage::<FuelBlocks>()
-        .insert(&id.clone().into(), &block)
+        .insert(&id.into(), &block)
         .unwrap();
     db.storage::<SealedBlockConsensus>()
-        .insert(
-            &id.clone().into(),
-            &FuelBlockConsensus::PoA(Default::default()),
-        )
+        .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
         .unwrap();
 
     // setup server & client
@@ -292,13 +289,10 @@ async fn block_connection_5(
     for block in blocks {
         let id = block.id();
         db.storage::<FuelBlocks>()
-            .insert(&id.clone().into(), &block)
+            .insert(&id.into(), &block)
             .unwrap();
         db.storage::<SealedBlockConsensus>()
-            .insert(
-                &id.clone().into(),
-                &FuelBlockConsensus::PoA(Default::default()),
-            )
+            .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
             .unwrap();
     }
 
