@@ -104,7 +104,7 @@ async fn produce_block() {
             .unwrap();
         let block_height: u64 = block.header.height.into();
         let signature = block.signature.unwrap().into_signature();
-        let producer_pub_key = signature.recover(&block.header.id.clone().into_message());
+        let producer_pub_key = signature.recover(&block.header.id.into_message());
         let expected_pub_key = config
             .consensus_key
             .unwrap()
