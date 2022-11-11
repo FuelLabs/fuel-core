@@ -1,19 +1,19 @@
 #[cfg(test)]
 mod test {
-    use fuel_core::{
-        database::Database,
-        service::{
-            Config,
-            FuelService,
-        },
-    };
-    use fuel_gql_client::{
+    use fuel_client::{
         client::{
             types::TransactionStatus,
             FuelClient,
         },
         fuel_tx,
         fuel_tx::UniqueIdentifier,
+    };
+    use fuel_core::{
+        database::Database,
+        service::{
+            Config,
+            FuelService,
+        },
     };
 
     #[tokio::test]

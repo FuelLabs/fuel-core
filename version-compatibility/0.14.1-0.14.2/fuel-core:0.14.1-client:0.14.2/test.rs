@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use fuel_core::{
+    use f_core::{
         database::Database,
         service::{
             Config,
