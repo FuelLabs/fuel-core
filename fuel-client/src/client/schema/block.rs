@@ -73,7 +73,7 @@ pub struct BlockEdge {
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
-    pub signature: Option<Signature>,
+    pub consensus: Option<Consensus>,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
@@ -120,6 +120,33 @@ pub struct Header {
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
     pub application_hash: Bytes32,
+}
+
+#[derive(cynic::InlineFragments, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum Consensus {
+    PoAConsensus(PoAConsensus),
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PoAConsensus {
+    pub signature: Signature,
+}
+
+impl Block {
+    /// Returns the block producer public key, if any.
+    pub fn block_producer(&self) -> Option<fuel_vm::fuel_crypto::PublicKey> {
+        let message = self.header.id.clone().into_message();
+        match &self.consensus {
+            Some(Consensus::PoAConsensus(poa)) => {
+                let signature = poa.signature.clone().into_signature();
+                let producer_pub_key = signature.recover(&message);
+                producer_pub_key.ok()
+            }
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

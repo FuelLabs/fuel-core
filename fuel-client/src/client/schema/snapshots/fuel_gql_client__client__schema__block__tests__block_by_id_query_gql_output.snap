@@ -17,7 +17,12 @@ query Query($_0: BlockId) {
       time
       applicationHash
     }
-    signature
+    consensus {
+      __typename
+      ... on PoAConsensus {
+        signature
+      }
+    }
     transactions {
       id
     }

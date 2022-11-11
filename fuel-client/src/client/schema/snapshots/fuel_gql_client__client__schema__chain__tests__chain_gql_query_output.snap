@@ -21,7 +21,12 @@ query Query {
         time
         applicationHash
       }
-      signature
+      consensus {
+        __typename
+        ... on PoAConsensus {
+          signature
+        }
+      }
       transactions {
         id
       }

@@ -102,9 +102,8 @@ async fn produce_block() {
             .await
             .unwrap()
             .unwrap();
+        let actual_pub_key = block.block_producer().unwrap();
         let block_height: u64 = block.header.height.into();
-        let signature = block.signature.unwrap().into_signature();
-        let producer_pub_key = signature.recover(&block.header.id.into_message());
         let expected_pub_key = config
             .consensus_key
             .unwrap()
@@ -114,7 +113,7 @@ async fn produce_block() {
 
         // Block height is now 6 after being advance 5
         assert!(6 == block_height);
-        assert_eq!(producer_pub_key.unwrap(), expected_pub_key);
+        assert_eq!(actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };

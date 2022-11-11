@@ -38,6 +38,7 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
+    Union,
 };
 use fuel_core_interfaces::{
     common::{
@@ -72,6 +73,15 @@ pub struct Block {
 
 pub struct Header(pub(crate) FuelBlockHeader);
 
+#[derive(Union)]
+pub enum Consensus {
+    PoA(PoAConsensus),
+}
+
+pub struct PoAConsensus {
+    signature: Signature,
+}
+
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
@@ -84,17 +94,15 @@ impl Block {
         &self.header
     }
 
-    async fn signature(&self, ctx: &Context<'_>) -> Option<Signature> {
+    async fn consensus(&self, ctx: &Context<'_>) -> Option<Consensus> {
         let db = ctx.data_unchecked::<Database>().clone();
         let consensus = db
             .storage::<SealedBlockConsensus>()
             .get(&self.header.0.id().into())
-            .map(|c| c.map(|c| c.into_owned()));
+            .map(|c| c.map(|c| c.into_owned().into()))
+            .unwrap_or(None);
 
-        match consensus {
-            Ok(Some(FuelBlockConsensus::PoA(poa))) => Some(poa.signature.into()),
-            _ => None,
-        }
+        consensus
     }
 
     async fn transactions(
@@ -167,6 +175,14 @@ impl Header {
     /// Hash of the application header.
     async fn application_hash(&self) -> Bytes32 {
         (*self.0.application_hash()).into()
+    }
+}
+
+#[Object]
+impl PoAConsensus {
+    /// Gets the signature of the block produced by `PoA` consensus.
+    async fn signature(&self) -> Signature {
+        self.signature
     }
 }
 
@@ -493,5 +509,15 @@ impl From<FuelBlockDb> for Block {
 impl From<FuelBlockDb> for Header {
     fn from(block: FuelBlockDb) -> Self {
         Header(block.header)
+    }
+}
+
+impl From<FuelBlockConsensus> for Consensus {
+    fn from(consensus: FuelBlockConsensus) -> Self {
+        match consensus {
+            FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+                signature: poa.signature.into(),
+            }),
+        }
     }
 }
