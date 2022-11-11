@@ -17,6 +17,7 @@ query Query($_0: BlockId) {
       time
       applicationHash
     }
+    signature
     transactions {
       id
     }

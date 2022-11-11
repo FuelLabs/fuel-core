@@ -47,6 +47,7 @@ input BalanceFilterInput {
 type Block {
 	id: BlockId!
 	header: Header!
+	signature: Signature
 	transactions: [Transaction!]!
 }
 

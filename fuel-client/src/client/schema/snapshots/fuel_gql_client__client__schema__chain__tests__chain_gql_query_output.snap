@@ -21,6 +21,7 @@ query Query {
         time
         applicationHash
       }
+      signature
       transactions {
         id
       }

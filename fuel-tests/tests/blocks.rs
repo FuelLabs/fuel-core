@@ -18,6 +18,7 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsMut,
         fuel_tx,
         fuel_tx::UniqueIdentifier,
+        secrecy::ExposeSecret,
         tai64::Tai64,
     },
     model::FuelConsensusHeader,
@@ -40,6 +41,7 @@ use itertools::{
     Itertools,
 };
 use rstest::rstest;
+use std::ops::Deref;
 
 #[tokio::test]
 async fn block() {
@@ -74,7 +76,9 @@ async fn produce_block() {
 
     config.manual_blocks_enabled = true;
 
-    let srv = FuelService::from_database(db, config).await.unwrap();
+    let srv = FuelService::from_database(db, config.clone())
+        .await
+        .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
@@ -93,17 +97,24 @@ async fn produce_block() {
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
-        let block_height: u64 = client
+        let block = client
             .block(block_id.to_string().as_str())
             .await
             .unwrap()
+            .unwrap();
+        let block_height: u64 = block.header.height.into();
+        let signature = block.signature.unwrap().into_signature();
+        let producer_pub_key = signature.recover(&block.header.id.clone().into_message());
+        let expected_pub_key = config
+            .consensus_key
             .unwrap()
-            .header
-            .height
-            .into();
+            .expose_secret()
+            .deref()
+            .public_key();
 
         // Block height is now 6 after being advance 5
         assert!(6 == block_height);
+        assert_eq!(producer_pub_key.unwrap(), expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };

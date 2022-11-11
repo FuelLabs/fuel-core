@@ -20,6 +20,7 @@ query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
           time
           applicationHash
         }
+        signature
         transactions {
           id
         }

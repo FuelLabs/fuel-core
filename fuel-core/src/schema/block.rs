@@ -4,7 +4,10 @@ use super::scalars::{
 };
 use crate::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         Database,
         KvStoreError,
     },
@@ -16,6 +19,7 @@ use crate::{
     schema::{
         scalars::{
             BlockId,
+            Signature,
             U64,
         },
         tx::types::Transaction,
@@ -48,6 +52,7 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelApplicationHeader,
+        FuelBlockConsensus,
         FuelBlockHeader,
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -77,6 +82,19 @@ impl Block {
 
     async fn header(&self) -> &Header {
         &self.header
+    }
+
+    async fn signature(&self, ctx: &Context<'_>) -> Option<Signature> {
+        let db = ctx.data_unchecked::<Database>().clone();
+        let consensus = db
+            .storage::<SealedBlockConsensus>()
+            .get(&self.header.0.id().into())
+            .map(|c| c.map(|c| c.into_owned()));
+
+        match consensus {
+            Ok(Some(FuelBlockConsensus::PoA(poa))) => Some(poa.signature.into()),
+            _ => None,
+        }
     }
 
     async fn transactions(

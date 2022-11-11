@@ -293,3 +293,19 @@ impl<'de> Deserialize<'de> for Tai64Timestamp {
         Ok(Self(Tai64(s.parse().map_err(D::Error::custom)?)))
     }
 }
+
+impl BlockId {
+    /// Converts the hash into a message having the same bytes.
+    pub fn into_message(self) -> fuel_vm::fuel_crypto::Message {
+        let bytes: fuel_vm::fuel_types::Bytes32 = self.into();
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_vm::fuel_crypto::Message::from_bytes_unchecked(bytes.into()) }
+    }
+}
+
+impl Signature {
+    pub fn into_signature(self) -> fuel_vm::fuel_crypto::Signature {
+        let bytes: fuel_vm::fuel_types::Bytes64 = self.into();
+        bytes.into()
+    }
+}

@@ -4,6 +4,7 @@ use crate::client::{
         BlockId,
         ConnectionArgs,
         PageInfo,
+        Signature,
         Tai64Timestamp,
         U64,
     },
@@ -72,6 +73,7 @@ pub struct BlockEdge {
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
+    pub signature: Option<Signature>,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
