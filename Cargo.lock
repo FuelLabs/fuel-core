@@ -2477,7 +2477,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-0_14_1-client-0_14_2"
+name = "fuel-core-0_14_1-client-0_15_0"
 version = "0.0.0"
 dependencies = [
  "fuel-core 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2486,7 +2486,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "fuel-core-0_14_2-client-0_14_1"
+name = "fuel-core-0_15_0-client-0_14_1"
 version = "0.0.0"
 dependencies = [
  "fuel-core 0.14.1",
@@ -6306,6 +6306,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95059e91184749cb66be6dc994f67f182b6d897cb3df74a5bf66b5e709295fd8"
 
 [[package]]
+name = "test-0_14_1-0_15_0"
+version = "0.0.0"
+dependencies = [
+ "fuel-core-0_14_1-client-0_15_0",
+ "fuel-core-0_15_0-client-0_14_1",
+]
+
+[[package]]
 name = "test-case"
 version = "2.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6325,14 +6333,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "test_0_14_1-0_14_2"
-version = "0.0.0"
-dependencies = [
- "fuel-core-0_14_1-client-0_14_2",
- "fuel-core-0_14_2-client-0_14_1",
 ]
 
 [[package]]
@@ -7013,7 +7013,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "version-compatibility"
 version = "0.0.0"
 dependencies = [
- "test_0_14_1-0_14_2",
+ "test-0_14_1-0_15_0",
 ]
 
 [[package]]

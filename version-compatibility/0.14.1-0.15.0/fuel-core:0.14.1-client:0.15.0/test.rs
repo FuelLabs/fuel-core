@@ -45,8 +45,6 @@ mod test {
         if let TransactionStatus::Success { block_id, .. } =
             transaction_response.unwrap().status
         {
-            // TODO: We need to decide is that breaking change or not. For now, the test fails,
-            //  so it is breaking change.
             let block = client.block(block_id.to_string().as_str()).await;
             assert!(block.is_err());
         } else {

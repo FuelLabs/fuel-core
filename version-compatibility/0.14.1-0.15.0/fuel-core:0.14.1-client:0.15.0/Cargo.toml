@@ -1,5 +1,5 @@
 [package]
-name = "fuel-core-0_14_1-client-0_14_2"
+name = "fuel-core-0_14_1-client-0_15_0"
 version = "0.0.0"
 edition = "2021"
 license = "BUSL-1.1"
@@ -10,6 +10,6 @@ path = "test.rs"
 
 [dev-dependencies]
 f_core = { version = "=0.14.1", package = "fuel-core" }
-# TODO: Use `0.14.2` when it is released
+# TODO: Use `0.15.0` when it is released
 fuel-gql-client = { path = "../../../fuel-client", features = ["test-helpers"] }
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }

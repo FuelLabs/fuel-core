@@ -9,4 +9,4 @@ publish = false
 path = "dummy.rs"
 
 [dev-dependencies]
-test_0_14_1-0_14_2 = { path = "0.14.1-0.14.2" }
+test-0_14_1-0_15_0 = { path = "0.14.1-0.15.0" }
