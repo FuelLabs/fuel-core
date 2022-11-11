@@ -9,5 +9,5 @@ publish = false
 path = "dummy.rs"
 
 [dev-dependencies]
-fuel-core-0_14_2-client-0_14_1 = { path = "fuel-core:0.14.2-client:0.14.1" }
 fuel-core-0_14_1-client-0_14_2 = { path = "fuel-core:0.14.1-client:0.14.2" }
+fuel-core-0_14_2-client-0_14_1 = { path = "fuel-core:0.14.2-client:0.14.1" }
