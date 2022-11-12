@@ -19,6 +19,7 @@ members = [
   "fuel-tests",
   "fuel-txpool",
   "xtask",
+  "version-compatibility",
 ]
 
 [profile.release]
