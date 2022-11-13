@@ -1,16 +1,13 @@
-use super::{
-    db::BlockProducerDatabase,
-    ports::Relayer,
-};
+use super::db::BlockProducerDatabase;
 use crate::ports::TxPool;
 use anyhow::Result;
-use async_trait::async_trait;
 use fuel_core_interfaces::{
+    block_producer::Relayer,
     common::{
         fuel_storage::StorageInspect,
         fuel_tx::{
-            CheckedTransaction,
             MessageId,
+            Receipt,
         },
         fuel_types::Address,
     },
@@ -20,13 +17,14 @@ use fuel_core_interfaces::{
     },
     executor::{
         Error as ExecutorError,
-        ExecutionMode,
+        ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
+        ArcPoolTx,
         BlockHeight,
         DaBlockHeight,
-        FuelBlock,
         FuelBlockDb,
         Message,
     },
@@ -46,15 +44,16 @@ pub struct MockRelayer {
     pub best_finalized_height: DaBlockHeight,
 }
 
+#[async_trait::async_trait]
 impl Relayer for MockRelayer {
     /// Get the best finalized height from the DA layer
-    fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight> {
         Ok(self.best_finalized_height)
     }
 }
 
 #[derive(Default)]
-pub struct MockTxPool(pub Vec<CheckedTransaction>);
+pub struct MockTxPool(pub Vec<ArcPoolTx>);
 
 #[async_trait::async_trait]
 impl TxPool for MockTxPool {
@@ -62,43 +61,68 @@ impl TxPool for MockTxPool {
         &self,
         _block_height: BlockHeight,
         _max_gas: u64,
-    ) -> Result<Vec<Arc<CheckedTransaction>>> {
-        Ok(self.0.iter().cloned().map(Arc::new).collect())
+    ) -> Result<Vec<ArcPoolTx>> {
+        Ok(self.0.clone().into_iter().collect())
     }
 }
 
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-#[async_trait]
 impl Executor for MockExecutor {
-    async fn execute(
-        &self,
-        block: &mut FuelBlock,
-        _mode: ExecutionMode,
-    ) -> Result<(), ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
+        let block = match block {
+            ExecutionBlock::Production(block) => block.generate(&[]),
+            ExecutionBlock::Validation(block) => block,
+        };
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
-        block_db.insert(block.header.height, block.to_db_block());
-        Ok(())
+        block_db.insert(*block.header().height(), block.to_db_block());
+        Ok(ExecutionResult {
+            block,
+            skipped_transactions: vec![],
+        })
+    }
+
+    fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        Ok(Default::default())
     }
 }
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-#[async_trait]
 impl Executor for FailingMockExecutor {
-    async fn execute(
-        &self,
-        _block: &mut FuelBlock,
-        _mode: ExecutionMode,
-    ) -> Result<(), ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            Ok(())
+            let block = match block {
+                ExecutionBlock::Production(b) => b.generate(&[]),
+                ExecutionBlock::Validation(b) => b,
+            };
+            Ok(ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+            })
+        }
+    }
+
+    fn dry_run(
+        &self,
+        _block: ExecutionBlock,
+        _utxo_validation: Option<bool>,
+    ) -> std::result::Result<Vec<Vec<Receipt>>, ExecutorError> {
+        let mut err = self.0.lock().unwrap();
+        if let Some(err) = err.take() {
+            Err(err)
+        } else {
+            Ok(Default::default())
         }
     }
 }
@@ -132,5 +156,11 @@ impl BlockProducerDatabase for MockDb {
         let blocks = self.blocks.lock().unwrap();
 
         Ok(blocks.get(&fuel_height).cloned().map(Cow::Owned))
+    }
+
+    fn current_block_height(&self) -> Result<BlockHeight> {
+        let blocks = self.blocks.lock().unwrap();
+
+        Ok(blocks.keys().max().cloned().unwrap_or_default())
     }
 }

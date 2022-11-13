@@ -1,5 +1,4 @@
 use crate::{
-    chain_config::CoinConfig,
     database::{
         Column,
         Database,
@@ -13,6 +12,7 @@ use crate::{
         UtxoIdAsRef,
     },
 };
+use fuel_chain_config::CoinConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{

@@ -1,5 +1,11 @@
 use crate::types::*;
-use fuel_core_interfaces::model::ArcTx;
+use fuel_core_interfaces::{
+    common::fuel_tx::{
+        Chargeable,
+        UniqueIdentifier,
+    },
+    model::ArcPoolTx,
+};
 use std::{
     cmp,
     collections::BTreeMap,
@@ -8,16 +14,16 @@ use std::{
 #[derive(Debug, Default, Clone)]
 pub struct PriceSort {
     /// all transactions sorted by min/max value
-    pub sort: BTreeMap<PriceSortKey, ArcTx>,
+    pub sort: BTreeMap<PriceSortKey, ArcPoolTx>,
 }
 
 impl PriceSort {
-    pub fn remove(&mut self, tx: &ArcTx) {
+    pub fn remove(&mut self, tx: &ArcPoolTx) {
         self.sort.remove(&PriceSortKey::new(tx));
     }
 
     // get last transaction. It has lowest gas price.
-    pub fn last(&self) -> Option<ArcTx> {
+    pub fn last(&self) -> Option<ArcPoolTx> {
         self.sort.iter().next().map(|(_, tx)| tx.clone())
     }
 
@@ -29,7 +35,7 @@ impl PriceSort {
             .unwrap_or_default()
     }
 
-    pub fn insert(&mut self, tx: &ArcTx) {
+    pub fn insert(&mut self, tx: &ArcPoolTx) {
         self.sort.insert(PriceSortKey::new(tx), tx.clone());
     }
 }
@@ -41,9 +47,9 @@ pub struct PriceSortKey {
 }
 
 impl PriceSortKey {
-    pub fn new(tx: &ArcTx) -> Self {
+    pub fn new(tx: &ArcPoolTx) -> Self {
         Self {
-            price: tx.gas_price(),
+            price: tx.price(),
             tx_id: tx.id(),
         }
     }

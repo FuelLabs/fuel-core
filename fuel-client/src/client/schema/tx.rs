@@ -7,6 +7,7 @@ use crate::client::{
         ConversionError,
         HexString,
         PageInfo,
+        Tai64Timestamp,
         TransactionId,
     },
     types::TransactionResponse,
@@ -22,6 +23,9 @@ use std::convert::{
     TryFrom,
     TryInto,
 };
+
+pub mod transparent_receipt;
+pub mod transparent_tx;
 
 #[derive(cynic::FragmentArguments, Debug)]
 pub struct TxIdArgs {
@@ -166,30 +170,37 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SqueezedOutStatus(SqueezedOutStatus),
     FailureStatus(FailureStatus),
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
-    pub program_state: ProgramState,
+    pub time: Tai64Timestamp,
+    pub program_state: Option<ProgramState>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutStatus {
+    pub reason: String,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -239,6 +250,17 @@ pub struct TransactionsByOwnerQuery {
     pub transactions_by_owner: TransactionConnection,
 }
 
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    argument_struct = "TxIdArgs"
+)]
+pub struct StatusChangeSubscription {
+    #[arguments(id = &args.id)]
+    pub status_change: TransactionStatus,
+}
+
 // mutations
 
 #[derive(cynic::FragmentArguments)]
@@ -260,7 +282,7 @@ pub struct DryRunArg {
 )]
 pub struct DryRun {
     #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
-    pub dry_run: Vec<OpaqueReceipt>,
+    pub dry_run: Vec<transparent_receipt::Receipt>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -279,9 +301,6 @@ pub mod tests {
     use super::*;
     use crate::client::schema::Bytes;
     use fuel_vm::fuel_types::bytes::SerializableVec;
-
-    pub mod transparent_receipt;
-    pub mod transparent_tx;
 
     #[test]
     fn transparent_transaction_by_id_query_gql_output() {

@@ -5,11 +5,20 @@ use crate::{
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
+    common::prelude::Bytes32,
+    p2p::{
+        GossipData,
+        P2pRequestEvent,
+        TransactionBroadcast,
+        TransactionGossipData,
+    },
     txpool::{
         self,
+        Error,
         TxPoolDb,
         TxPoolMpsc,
-        TxStatusBroadcast,
+        TxStatus,
+        TxUpdate,
     },
 };
 use std::sync::Arc;
@@ -22,14 +31,54 @@ use tokio::{
     },
     task::JoinHandle,
 };
+use tracing::error;
 
 pub struct ServiceBuilder {
-    sender: txpool::Sender,
-    receiver: mpsc::Receiver<TxPoolMpsc>,
     config: Config,
-    broadcast: broadcast::Sender<TxStatusBroadcast>,
     db: Option<Box<dyn TxPoolDb>>,
-    import_block_events: Option<broadcast::Receiver<ImportBlockBroadcast>>,
+    txpool_sender: Option<txpool::Sender>,
+    txpool_receiver: Option<mpsc::Receiver<TxPoolMpsc>>,
+    tx_status_sender: Option<TxStatusChange>,
+    import_block_receiver: Option<broadcast::Receiver<ImportBlockBroadcast>>,
+    incoming_tx_receiver: Option<broadcast::Receiver<TransactionGossipData>>,
+    network_sender: Option<mpsc::Sender<P2pRequestEvent>>,
+}
+
+#[derive(Clone)]
+pub struct TxStatusChange {
+    status_sender: broadcast::Sender<TxStatus>,
+    update_sender: broadcast::Sender<TxUpdate>,
+}
+
+impl TxStatusChange {
+    pub fn new(capacity: usize) -> Self {
+        let (status_sender, _) = broadcast::channel(capacity);
+        let (update_sender, _) = broadcast::channel(capacity);
+        Self {
+            status_sender,
+            update_sender,
+        }
+    }
+    pub fn send_complete(&self, id: Bytes32) {
+        let _ = self.status_sender.send(TxStatus::Completed);
+        self.updated(id);
+    }
+
+    pub fn send_submitted(&self, id: Bytes32) {
+        let _ = self.status_sender.send(TxStatus::Submitted);
+        self.updated(id);
+    }
+
+    pub fn send_squeezed_out(&self, id: Bytes32, reason: Error) {
+        let _ = self.status_sender.send(TxStatus::SqueezedOut {
+            reason: reason.clone(),
+        });
+        let _ = self.update_sender.send(TxUpdate::squeezed_out(id, reason));
+    }
+
+    fn updated(&self, id: Bytes32) {
+        let _ = self.update_sender.send(TxUpdate::updated(id));
+    }
 }
 
 impl Default for ServiceBuilder {
@@ -40,24 +89,36 @@ impl Default for ServiceBuilder {
 
 impl ServiceBuilder {
     pub fn new() -> Self {
-        let (sender, receiver) = mpsc::channel(100);
-        let (broadcast, _receiver) = broadcast::channel(100);
         Self {
-            sender: txpool::Sender::new(sender),
-            receiver,
-            db: None,
-            broadcast,
             config: Default::default(),
-            import_block_events: None,
+            db: None,
+            txpool_sender: None,
+            txpool_receiver: None,
+            tx_status_sender: None,
+            import_block_receiver: None,
+            incoming_tx_receiver: None,
+            network_sender: None,
         }
     }
 
     pub fn sender(&self) -> &txpool::Sender {
-        &self.sender
+        self.txpool_sender.as_ref().unwrap()
     }
 
-    pub fn subscribe(&self) -> broadcast::Receiver<TxStatusBroadcast> {
-        self.broadcast.subscribe()
+    pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
+        self.tx_status_sender
+            .as_ref()
+            .unwrap()
+            .status_sender
+            .subscribe()
+    }
+
+    pub fn tx_change_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
+        self.tx_status_sender
+            .as_ref()
+            .unwrap()
+            .update_sender
+            .subscribe()
     }
 
     pub fn db(&mut self, db: Box<dyn TxPoolDb>) -> &mut Self {
@@ -65,11 +126,45 @@ impl ServiceBuilder {
         self
     }
 
+    pub fn txpool_sender(&mut self, txpool_sender: txpool::Sender) -> &mut Self {
+        self.txpool_sender = Some(txpool_sender);
+        self
+    }
+
+    pub fn txpool_receiver(
+        &mut self,
+        txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
+    ) -> &mut Self {
+        self.txpool_receiver = Some(txpool_receiver);
+        self
+    }
+
+    pub fn tx_status_sender(&mut self, tx_status_sender: TxStatusChange) -> &mut Self {
+        self.tx_status_sender = Some(tx_status_sender);
+        self
+    }
+
+    pub fn incoming_tx_receiver(
+        &mut self,
+        incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
+    ) -> &mut Self {
+        self.incoming_tx_receiver = Some(incoming_tx_receiver);
+        self
+    }
+
+    pub fn network_sender(
+        &mut self,
+        network_sender: mpsc::Sender<P2pRequestEvent>,
+    ) -> &mut Self {
+        self.network_sender = Some(network_sender);
+        self
+    }
+
     pub fn import_block_event(
         &mut self,
-        import_block_event: broadcast::Receiver<ImportBlockBroadcast>,
+        import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
     ) -> &mut Self {
-        self.import_block_events = Some(import_block_event);
+        self.import_block_receiver = Some(import_block_receiver);
         self
     }
 
@@ -79,18 +174,28 @@ impl ServiceBuilder {
     }
 
     pub fn build(self) -> anyhow::Result<Service> {
-        if self.db.is_none() || self.import_block_events.is_none() {
+        if self.db.is_none()
+            || self.import_block_receiver.is_none()
+            || self.incoming_tx_receiver.is_none()
+            || self.txpool_sender.is_none()
+            || self.tx_status_sender.is_none()
+            || self.txpool_receiver.is_none()
+            || self.network_sender.is_none()
+        {
             return Err(anyhow!("One of context items are not set"))
         }
+
         let service = Service::new(
-            self.sender,
-            self.broadcast.clone(),
+            self.txpool_sender.unwrap(),
+            self.tx_status_sender.clone().unwrap(),
             Context {
-                receiver: self.receiver,
-                broadcast: self.broadcast,
-                db: Arc::new(self.db.unwrap()),
-                import_block_events: self.import_block_events.unwrap(),
                 config: self.config,
+                db: Arc::new(self.db.unwrap()),
+                txpool_receiver: self.txpool_receiver.unwrap(),
+                tx_status_sender: self.tx_status_sender.unwrap(),
+                import_block_receiver: self.import_block_receiver.unwrap(),
+                incoming_tx_receiver: self.incoming_tx_receiver.unwrap(),
+                network_sender: self.network_sender.unwrap(),
             },
         )?;
         Ok(service)
@@ -99,10 +204,12 @@ impl ServiceBuilder {
 
 pub struct Context {
     pub config: Config,
-    pub broadcast: broadcast::Sender<TxStatusBroadcast>,
     pub db: Arc<Box<dyn TxPoolDb>>,
-    pub receiver: mpsc::Receiver<TxPoolMpsc>,
-    pub import_block_events: broadcast::Receiver<ImportBlockBroadcast>,
+    pub txpool_receiver: mpsc::Receiver<TxPoolMpsc>,
+    pub tx_status_sender: TxStatusChange,
+    pub import_block_receiver: broadcast::Receiver<ImportBlockBroadcast>,
+    pub incoming_tx_receiver: broadcast::Receiver<TransactionGossipData>,
+    pub network_sender: mpsc::Sender<P2pRequestEvent>,
 }
 
 impl Context {
@@ -111,23 +218,58 @@ impl Context {
 
         loop {
             tokio::select! {
-                event = self.receiver.recv() => {
+                new_transaction = self.incoming_tx_receiver.recv() => {
+                    if new_transaction.is_err() {
+                        error!("Incoming tx receiver channel closed unexpectedly; shutting down transaction pool service.");
+                        break;
+                    }
+
+                    let txpool = txpool.clone();
+                    let db = self.db.clone();
+                    let tx_status_sender = self.tx_status_sender.clone();
+
+                    tokio::spawn( async move {
+                        let txpool = txpool.as_ref();
+                        if let GossipData { data: Some(TransactionBroadcast::NewTransaction ( tx )), .. } =  new_transaction.unwrap() {
+                            let txs = vec!(Arc::new(tx));
+                            TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
+                        }
+                    });
+                }
+
+                event = self.txpool_receiver.recv() => {
                     if matches!(event,Some(TxPoolMpsc::Stop) | None) {
                         break;
                     }
-                    let broadcast = self.broadcast.clone();
-                    let db = self.db.clone();
                     let txpool = txpool.clone();
+                    let db = self.db.clone();
+                    let tx_status_sender = self.tx_status_sender.clone();
+
+                    let network_sender = self.network_sender.clone();
 
                     // This is little bit risky but we can always add semaphore to limit number of requests.
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
+                        TxPoolMpsc::ConsumableGas { response } => {
+                            let _ = response.send(TxPool::consumable_gas(txpool).await);
+                        }
                         TxPoolMpsc::Includable { response } => {
                             let _ = response.send(TxPool::includable(txpool).await);
                         }
                         TxPoolMpsc::Insert { txs, response } => {
-                            let _ = response.send(TxPool::insert(txpool,db.as_ref().as_ref(),broadcast, txs).await);
+                            let insert = TxPool::insert(txpool, db.as_ref().as_ref(), &tx_status_sender, &txs).await;
+                            for (ret, tx) in insert.iter().zip(txs.into_iter()) {
+                                match ret {
+                                    Ok(_) => {
+                                        let _ = network_sender.send(P2pRequestEvent::BroadcastNewTransaction {
+                                            transaction: tx.clone(),
+                                        }).await;
+                                    }
+                                    Err(_) => {}
+                                }
+                            }
+                            let _ = response.send(insert);
                         }
                         TxPoolMpsc::Find { ids, response } => {
                             let _ = response.send(TxPool::find(txpool,&ids).await);
@@ -142,18 +284,18 @@ impl Context {
                             let _ = response.send(TxPool::filter_by_negative(txpool,&ids).await);
                         }
                         TxPoolMpsc::Remove { ids, response } => {
-                            let _ = response.send(TxPool::remove(txpool,broadcast,&ids).await);
+                            let _ = response.send(TxPool::remove(txpool, &tx_status_sender ,&ids).await);
                         }
                         TxPoolMpsc::Stop => {}
                     }});
                 }
-                block_updated = self.import_block_events.recv() => {
-                    if let Ok(block_updated) = block_updated {
 
+                block_updated = self.import_block_receiver.recv() => {
+                  if let Ok(block_updated) = block_updated {
                         match block_updated {
                             ImportBlockBroadcast::PendingFuelBlockImported { block } => {
                                 let txpool = txpool.clone();
-                                TxPool::block_update(txpool.as_ref(), block).await
+                                TxPool::block_update(txpool.as_ref(), &self.tx_status_sender, block).await
                                 // TODO: Should this be done in a separate task? Like this:
                                 // tokio::spawn( async move {
                                 //     TxPool::block_update(txpool.as_ref(), block).await
@@ -173,21 +315,21 @@ impl Context {
 }
 
 pub struct Service {
-    sender: txpool::Sender,
-    broadcast: broadcast::Sender<TxStatusBroadcast>,
+    txpool_sender: txpool::Sender,
+    tx_status_sender: TxStatusChange,
     join: Mutex<Option<JoinHandle<Context>>>,
     context: Arc<Mutex<Option<Context>>>,
 }
 
 impl Service {
     pub fn new(
-        sender: txpool::Sender,
-        broadcast: broadcast::Sender<TxStatusBroadcast>,
+        txpool_sender: txpool::Sender,
+        tx_status_sender: TxStatusChange,
         context: Context,
     ) -> anyhow::Result<Self> {
         Ok(Self {
-            sender,
-            broadcast,
+            txpool_sender,
+            tx_status_sender,
             join: Mutex::new(None),
             context: Arc::new(Mutex::new(Some(context))),
         })
@@ -210,8 +352,9 @@ impl Service {
     pub async fn stop(&self) -> Option<JoinHandle<()>> {
         let mut join = self.join.lock().await;
         let join_handle = join.take();
+
         if let Some(join_handle) = join_handle {
-            let _ = self.sender.send(TxPoolMpsc::Stop).await;
+            let _ = self.txpool_sender.send(TxPoolMpsc::Stop).await;
             let context = self.context.clone();
             Some(tokio::spawn(async move {
                 let ret = join_handle.await;
@@ -222,254 +365,22 @@ impl Service {
         }
     }
 
-    pub fn subscribe_ch(&self) -> broadcast::Receiver<TxStatusBroadcast> {
-        self.broadcast.subscribe()
+    pub fn tx_status_subscribe(&self) -> broadcast::Receiver<TxStatus> {
+        self.tx_status_sender.status_sender.subscribe()
+    }
+
+    pub fn tx_update_subscribe(&self) -> broadcast::Receiver<TxUpdate> {
+        self.tx_status_sender.update_sender.subscribe()
     }
 
     pub fn sender(&self) -> &txpool::Sender {
-        &self.sender
+        &self.txpool_sender
     }
 }
 
-#[cfg(any(test))]
-pub mod tests {
-    use super::*;
-    use crate::MockDb;
-    use fuel_core_interfaces::{
-        common::fuel_tx::TransactionBuilder,
-        txpool::{
-            Error as TxpoolError,
-            TxStatus,
-        },
-    };
-    use tokio::sync::oneshot;
-
-    #[tokio::test]
-    async fn test_start_stop() {
-        let config = Config::default();
-        let db = Box::new(MockDb::default());
-        let (bs, _br) = broadcast::channel(10);
-
-        let mut builder = ServiceBuilder::new();
-        builder
-            .config(config)
-            .db(db)
-            .import_block_event(bs.subscribe());
-        let service = builder.build().unwrap();
-
-        assert!(service.start().await.is_ok(), "start service");
-
-        // Double start will return false.
-        assert!(service.start().await.is_err(), "double start should fail");
-
-        let stop_handle = service.stop().await;
-        assert!(stop_handle.is_some());
-        let _ = stop_handle.unwrap().await;
-
-        assert!(service.start().await.is_ok(), "Should start again");
-    }
-
-    #[tokio::test]
-    async fn test_filter_by_negative() {
-        let config = Config::default();
-        let db = Box::new(MockDb::default());
-        let (_bs, br) = broadcast::channel(10);
-
-        let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
-        let service = builder.build().unwrap();
-        service.start().await.ok();
-
-        let tx1 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
-                .finalize(),
-        );
-        let tx2 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(20)
-                .finalize(),
-        );
-        let tx3 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(30)
-                .finalize(),
-        );
-
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::Insert {
-                txs: vec![tx1.clone(), tx2.clone()],
-                response,
-            })
-            .await;
-        let out = receiver.await.unwrap();
-
-        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::FilterByNegative {
-                ids: vec![tx1.id(), tx2.id(), tx3.id()],
-                response,
-            })
-            .await;
-        let out = receiver.await.unwrap();
-
-        assert_eq!(out.len(), 1, "Should be len 1:{:?}", out);
-        assert_eq!(out[0], tx3.id(), "Found tx id match{:?}", out);
-        service.stop().await.unwrap().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_find() {
-        let config = Config::default();
-        let db = Box::new(MockDb::default());
-        let (_bs, br) = broadcast::channel(10);
-
-        let tx1 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
-                .finalize(),
-        );
-        let tx2 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(20)
-                .finalize(),
-        );
-        let tx3 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(30)
-                .finalize(),
-        );
-
-        let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
-        let service = builder.build().unwrap();
-        service.start().await.ok();
-
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::Insert {
-                txs: vec![tx1.clone(), tx2.clone()],
-                response,
-            })
-            .await;
-        let out = receiver.await.unwrap();
-
-        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::Find {
-                ids: vec![tx1.id(), tx3.id()],
-                response,
-            })
-            .await;
-        let out = receiver.await.unwrap();
-        assert_eq!(out.len(), 2, "Should be len 2:{:?}", out);
-        assert!(out[0].is_some(), "Tx1 should be some:{:?}", out);
-        let id = out[0].as_ref().unwrap().id();
-        assert_eq!(id, tx1.id(), "Found tx id match{:?}", out);
-        assert!(out[1].is_none(), "Tx3 should not be found:{:?}", out);
-        service.stop().await.unwrap().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn simple_insert_removal_subscription() {
-        let config = Config::default();
-        let db = Box::new(MockDb::default());
-        let (_bs, br) = broadcast::channel(10);
-
-        let tx1 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(10)
-                .finalize(),
-        );
-        let tx2 = Arc::new(
-            TransactionBuilder::script(vec![], vec![])
-                .gas_price(20)
-                .finalize(),
-        );
-
-        let mut builder = ServiceBuilder::new();
-        builder.config(config).db(db).import_block_event(br);
-        let service = builder.build().unwrap();
-        service.start().await.ok();
-
-        let mut subscribe = service.subscribe_ch();
-
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::Insert {
-                txs: vec![tx1.clone(), tx2.clone()],
-                response,
-            })
-            .await;
-        let out = receiver.await.unwrap();
-
-        assert!(out[0].is_ok(), "Tx1 should be OK, got err:{:?}", out);
-        assert!(out[1].is_ok(), "Tx2 should be OK, got err:{:?}", out);
-
-        // we are sure that included tx are already broadcasted.
-        assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx1.clone(),
-                status: TxStatus::Submitted,
-            }),
-            "First added should be tx1"
-        );
-        assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx2.clone(),
-                status: TxStatus::Submitted,
-            }),
-            "Second added should be tx2"
-        );
-
-        // remove them
-        let (response, receiver) = oneshot::channel();
-        let _ = service
-            .sender()
-            .send(TxPoolMpsc::Remove {
-                ids: vec![tx1.id(), tx2.id()],
-                response,
-            })
-            .await;
-        let _rem = receiver.await.unwrap();
-
-        assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
-                .await,
-            Ok(Ok(TxStatusBroadcast {
-                tx: tx1,
-                status: TxStatus::SqueezedOut {
-                    reason: TxpoolError::Removed
-                }
-            })),
-            "First removed should be tx1"
-        );
-
-        assert_eq!(
-            tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv())
-                .await,
-            Ok(Ok(TxStatusBroadcast {
-                tx: tx2,
-                status: TxStatus::SqueezedOut {
-                    reason: TxpoolError::Removed
-                }
-            })),
-            "Second removed should be tx2"
-        );
-    }
-}
+#[cfg(test)]
+pub mod test_helpers;
+#[cfg(test)]
+pub mod tests;
+#[cfg(test)]
+pub mod tests_p2p;

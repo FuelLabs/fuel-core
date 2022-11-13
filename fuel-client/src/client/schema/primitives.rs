@@ -20,11 +20,10 @@ use std::{
         Formatter,
         LowerHex,
     },
+    ops::Deref,
     str::FromStr,
 };
-
-pub type DateTime = chrono::DateTime<chrono::Utc>;
-impl_scalar!(DateTime, schema::DateTime);
+use tai64::Tai64;
 
 #[derive(Debug, Clone, Default)]
 pub struct HexFormatted<T: Debug + Clone + Default>(pub T);
@@ -110,6 +109,7 @@ fuel_type_scalar!(ContractId, ContractId);
 fuel_type_scalar!(Salt, Salt);
 fuel_type_scalar!(TransactionId, Bytes32);
 fuel_type_scalar!(MessageId, MessageId);
+fuel_type_scalar!(Signature, Bytes64);
 
 impl LowerHex for MessageId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -174,6 +174,14 @@ impl From<HexString> for Vec<u8> {
     }
 }
 
+impl Deref for HexString {
+    type Target = Bytes;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Bytes(pub Vec<u8>);
 
@@ -214,6 +222,14 @@ impl Display for Bytes {
     }
 }
 
+impl Deref for Bytes {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[derive(
     Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq,
 )]
@@ -249,5 +265,47 @@ impl From<usize> for U64 {
 impl From<U64> for InstructionResult {
     fn from(s: U64) -> Self {
         s.0.into()
+    }
+}
+
+#[derive(
+    Debug, Clone, derive_more::Into, derive_more::From, PartialOrd, Eq, PartialEq,
+)]
+pub struct Tai64Timestamp(pub Tai64);
+impl_scalar!(Tai64Timestamp, schema::Tai64Timestamp);
+
+impl Serialize for Tai64Timestamp {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.0 .0.to_string();
+        serializer.serialize_str(s.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for Tai64Timestamp {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Ok(Self(Tai64(s.parse().map_err(D::Error::custom)?)))
+    }
+}
+
+impl BlockId {
+    /// Converts the hash into a message having the same bytes.
+    pub fn into_message(self) -> fuel_vm::fuel_crypto::Message {
+        let bytes: fuel_vm::fuel_types::Bytes32 = self.into();
+        // This is safe because BlockId is a cryptographically secure hash.
+        unsafe { fuel_vm::fuel_crypto::Message::from_bytes_unchecked(bytes.into()) }
+    }
+}
+
+impl Signature {
+    pub fn into_signature(self) -> fuel_vm::fuel_crypto::Signature {
+        let bytes: fuel_vm::fuel_types::Bytes64 = self.into();
+        bytes.into()
     }
 }

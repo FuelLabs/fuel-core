@@ -2,12 +2,15 @@ use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
 use cynic::{
     http::SurfExt,
+    GraphQlResponse,
     Id,
     MutationBuilder,
     Operation,
     QueryBuilder,
+    StreamingOperation,
 };
 use fuel_vm::prelude::*;
+use futures::StreamExt;
 use itertools::Itertools;
 use schema::{
     balance::BalanceArgs,
@@ -70,7 +73,13 @@ pub use schema::{
     PaginationRequest,
 };
 
-use self::schema::block::ProduceBlockArgs;
+use self::schema::{
+    block::{
+        ProduceBlockArgs,
+        TimeParameters,
+    },
+    message::MessageProofArgs,
+};
 
 pub mod schema;
 pub mod types;
@@ -139,6 +148,93 @@ impl FuelClient {
         }
     }
 
+    async fn subscribe<'a, R: 'a>(
+        &self,
+        q: StreamingOperation<'a, R>,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<R>> + 'a> {
+        use eventsource_client as es;
+        let mut url = self.url.clone();
+        url.set_path("/graphql-sub");
+        let json_query = serde_json::to_string(&q)?;
+        let client = es::ClientBuilder::for_url(url.as_str())
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to start client {:?}", e),
+                )
+            })?
+            .body(json_query)
+            .method("POST".to_string())
+            .header("content-type", "application/json")
+            .map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("Failed to add header to client {:?}", e),
+                )
+            })?
+            .build_http();
+
+        let mut last = None;
+
+        let stream = es::Client::stream(&client)
+            .take_while(|result| {
+                futures::future::ready(!matches!(result, Err(es::Error::Eof)))
+            })
+            .filter_map(move |result| {
+                let r = match result {
+                    Ok(es::SSE::Event(es::Event { data, .. })) => {
+                        match serde_json::from_str::<GraphQlResponse<serde_json::Value>>(
+                            &data,
+                        ) {
+                            Ok(resp) => {
+                                match q.decode_response(resp) {
+                                    Ok(resp) => {
+                                        match last.replace(data) {
+                                            // Remove duplicates
+                                            Some(l)
+                                                if l == *last.as_ref().expect(
+                                                    "Safe because of the replace above",
+                                                ) =>
+                                            {
+                                                None
+                                            }
+                                            _ => Some(Ok(resp)),
+                                        }
+                                    }
+                                    Err(e) => Some(Err(io::Error::new(
+                                        io::ErrorKind::Other,
+                                        format!("Decode error: {:?}", e),
+                                    ))),
+                                }
+                            }
+                            Err(e) => Some(Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Json error: {:?}", e),
+                            ))),
+                        }
+                    }
+                    Ok(_) => None,
+                    Err(e) => Some(Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Graphql error: {:?}", e),
+                    ))),
+                };
+                futures::future::ready(r)
+            })
+            .map(|r| match r {
+                Ok(response) => match (response.data, response.errors) {
+                    (Some(d), _) => Ok(d),
+                    (_, Some(e)) => Err(from_strings_errors_to_std_error(
+                        e.into_iter().map(|e| e.message).collect(),
+                    )),
+                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
+                },
+                Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("{:?}", e))),
+            });
+
+        Ok(stream)
+    }
+
     pub async fn health(&self) -> io::Result<bool> {
         let query = schema::Health::build(());
         self.query(query).await.map(|r| r.health)
@@ -186,6 +282,18 @@ impl FuelClient {
 
         let id = self.query(query).await.map(|r| r.submit)?.id;
         Ok(id)
+    }
+
+    /// Submit the transaction and wait for it to be included into a block.
+    ///
+    /// This will wait forever if needed, so consider wrapping this call
+    /// with a `tokio::time::timeout`.
+    pub async fn submit_and_await_commit(
+        &self,
+        tx: &Transaction,
+    ) -> io::Result<TransactionStatus> {
+        let tx_id = self.submit(tx).await?;
+        self.await_transaction_commit(&tx_id.to_string()).await
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
@@ -325,6 +433,41 @@ impl FuelClient {
         Ok(status)
     }
 
+    /// Subscribe to the status of a transaction
+    pub async fn subscribe_transaction_status(
+        &self,
+        id: &str,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
+        use cynic::SubscriptionBuilder;
+        let s =
+            schema::tx::StatusChangeSubscription::build(&TxIdArgs { id: id.parse()? });
+
+        let stream = self.subscribe(s).await?.map(|tx| {
+            let tx = tx?;
+            let status = tx.status_change.try_into()?;
+            Ok(status)
+        });
+
+        Ok(stream)
+    }
+
+    /// Awaits for the transaction to be committed into a block
+    ///
+    /// This will wait forever if needed, so consider wrapping this call
+    /// with a `tokio::time::timeout`.
+    pub async fn await_transaction_commit(
+        &self,
+        id: &str,
+    ) -> io::Result<TransactionStatus> {
+        let mut outcomes: Vec<_> = futures::TryStreamExt::try_collect(
+            self.subscribe_transaction_status(id).await?,
+        )
+        .await?;
+        outcomes.pop().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "Failed to get status for transaction")
+        })
+    }
+
     /// returns a paginated set of transactions sorted by block height
     pub async fn transactions(
         &self,
@@ -368,9 +511,14 @@ impl FuelClient {
         Ok(receipts?)
     }
 
-    pub async fn produce_blocks(&self, blocks_to_produce: u64) -> io::Result<u64> {
+    pub async fn produce_blocks(
+        &self,
+        blocks_to_produce: u64,
+        time: Option<TimeParameters>,
+    ) -> io::Result<u64> {
         let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
+            time,
         });
 
         let new_height = self.query(query).await?.produce_blocks;
@@ -533,6 +681,24 @@ impl FuelClient {
         let messages = self.query(query).await?.messages.into();
 
         Ok(messages)
+    }
+
+    /// Request a merkle proof of an output message.
+    pub async fn message_proof(
+        &self,
+        transaction_id: &str,
+        message_id: &str,
+    ) -> io::Result<Option<schema::message::MessageProof>> {
+        let transaction_id: schema::TransactionId = transaction_id.parse()?;
+        let message_id: schema::MessageId = message_id.parse()?;
+        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
+            transaction_id,
+            message_id,
+        });
+
+        let proof = self.query(query).await?.message_proof;
+
+        Ok(proof)
     }
 }
 

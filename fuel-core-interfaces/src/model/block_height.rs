@@ -22,6 +22,7 @@ use std::{
     Default,
     PartialEq,
     PartialOrd,
+    Ord,
     Eq,
     Add,
     Sub,

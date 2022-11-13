@@ -1,15 +1,15 @@
 use crate::{
     database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-        },
+        storage::FuelBlocks,
         transaction::OwnedTransactionIndexCursor,
         Database,
         KvStoreError,
     },
-    executor::Executor,
     model::BlockHeight,
+    query::{
+        transaction_status_change,
+        TxnStatusChangeState,
+    },
     schema::scalars::{
         Address,
         Bytes32,
@@ -17,7 +17,6 @@ use crate::{
         SortedTxCursor,
         TransactionId,
     },
-    service::Config,
     state::IterDirection,
 };
 use anyhow::anyhow;
@@ -30,11 +29,17 @@ use async_graphql::{
     },
     Context,
     Object,
+    Subscription,
 };
 use fuel_core_interfaces::{
+    block_producer::BlockProducer,
     common::{
         fuel_storage::StorageAsRef,
-        fuel_tx::Transaction as FuelTx,
+        fuel_tx::{
+            Cacheable,
+            Transaction as FuelTx,
+            UniqueIdentifier,
+        },
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
@@ -42,6 +47,11 @@ use fuel_core_interfaces::{
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 use itertools::Itertools;
 use std::{
     borrow::Cow,
@@ -49,11 +59,11 @@ use std::{
     ops::Deref,
     sync::Arc,
 };
-use tokio::sync::{
-    oneshot,
-    Mutex,
-};
+use tokio::sync::oneshot;
+use tokio_stream::wrappers::BroadcastStream;
 use types::Transaction;
+
+use self::types::TransactionStatus;
 
 pub mod input;
 pub mod output;
@@ -81,7 +91,7 @@ impl TxQuery {
             .await;
 
         if let Ok(Some(transaction)) = receiver.await {
-            Ok(Some(Transaction((transaction.tx().deref()).clone())))
+            Ok(Some(Transaction(transaction.tx().clone().deref().into())))
         } else {
             Ok(db
                 .storage::<Transactions>()
@@ -171,7 +181,7 @@ impl TxQuery {
                             false
                         }
                     })
-                    .skip(if tx_id.is_some() { 1 } else { 0 })
+                    .skip(usize::from(tx_id.is_some()))
                     .take(records_to_fetch + 1);
 
                 let tx_ids: Vec<(fuel_types::Bytes32, BlockHeight)> = txs.try_collect()?;
@@ -308,9 +318,7 @@ impl TxQuery {
 }
 
 #[derive(Default)]
-pub struct TxMutation {
-    block_production_lock: Mutex<()>,
-}
+pub struct TxMutation;
 
 #[Object]
 impl TxMutation {
@@ -324,28 +332,12 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let transaction = ctx.data_unchecked::<Database>().transaction();
-        let mut cfg = ctx.data_unchecked::<Config>().clone();
-        // override utxo_validation if set
-        if let Some(utxo_validation) = utxo_validation {
-            cfg.utxo_validation = utxo_validation;
-        }
-        let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute_metadata();
-        let id = tx.id();
+        let block_producer = ctx.data_unchecked::<Arc<dyn BlockProducer>>();
 
-        // make executor from transaction database view.
-        let executor = Executor {
-            database: transaction.deref().clone(),
-            config: cfg.clone(),
-        };
-        executor.submit_txs(vec![Arc::new(tx)]).await?;
-        // get receipts from db transaction
-        let receipts = transaction
-            .deref()
-            .storage::<Receipts>()
-            .get(&id)?
-            .unwrap_or_default();
+        let mut tx = FuelTx::from_bytes(&tx.0)?;
+        tx.precompute();
+
+        let receipts = block_producer.dry_run(tx, None, utxo_validation).await?;
         Ok(receipts.iter().map(Into::into).collect())
     }
 
@@ -355,43 +347,67 @@ impl TxMutation {
         ctx: &Context<'_>,
         tx: HexString,
     ) -> async_graphql::Result<Transaction> {
-        let db = ctx.data_unchecked::<Database>();
         let txpool = ctx.data_unchecked::<Arc<TxPoolService>>();
-        let cfg = ctx.data_unchecked::<Config>().clone();
         let mut tx = FuelTx::from_bytes(&tx.0)?;
-        tx.precompute_metadata();
+        tx.precompute();
+        let _: Vec<_> = txpool
+            .sender()
+            .insert(vec![Arc::new(tx.clone())])
+            .await?
+            .into_iter()
+            .try_collect()?;
 
-        // only allow one block to be produced at a time
-        let _block_production_guard = self.block_production_lock.lock().await;
-
-        let includable = if cfg.utxo_validation {
-            // include transaction
-            let ret = txpool.sender().insert(vec![Arc::new(tx.clone())]).await?;
-            ret.get(0).unwrap().as_ref()?;
-
-            // get includable transactions
-            let txs = txpool.sender().includable().await?;
-
-            txpool
-                .sender()
-                .remove(txs.iter().map(|tx| tx.id()).collect())
-                .await?;
-            txs
-        } else {
-            vec![Arc::new(tx.clone())]
-        };
-
-        // next part can be extracted to separate endpoint that will trigger block building
-        // just include call to txpool.includable
-
-        let executor = Executor {
-            database: db.clone(),
-            config: cfg.clone(),
-        };
-        executor.submit_txs(includable).await?;
-
-        // probably need to fetch executed tx that is now in db.
         let tx = Transaction(tx);
         Ok(tx)
+    }
+}
+
+#[derive(Default)]
+pub struct TxStatusSubscription;
+
+struct StreamState {
+    txpool: Arc<TxPoolService>,
+    db: Database,
+}
+
+#[Subscription]
+impl TxStatusSubscription {
+    /// Returns a stream of status updates for the given transaction id.
+    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
+    /// or [`TransactionStatus::Failed`] the stream will return that and end immediately.
+    /// If the current status is [`TransactionStatus::Submitted`] this will be returned
+    /// and the stream will wait for a future update.
+    ///
+    /// This stream will wait forever so it's advised to use within a timeout.
+    ///
+    /// It is possible for the stream to miss an update if it is polled slower
+    /// then the updates arrive. In such a case the stream will close without
+    /// a status. If this occurs the stream can simply be restarted to return
+    /// the latest status.
+    async fn status_change(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The ID of the transaction")] id: TransactionId,
+    ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>().clone();
+        let db = ctx.data_unchecked::<Database>().clone();
+        let rx = BroadcastStream::new(txpool.tx_update_subscribe());
+        let state = Box::new(StreamState { txpool, db });
+
+        transaction_status_change(state, rx.boxed(), id.into())
+            .await
+            .map_err(async_graphql::Error::from)
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnStatusChangeState for StreamState {
+    async fn get_tx_status(
+        &self,
+        id: fuel_core_interfaces::common::fuel_types::Bytes32,
+    ) -> anyhow::Result<Option<TransactionStatus>> {
+        Ok(types::get_tx_status(id, &self.db, &self.txpool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Database lookup failed {:?}", e))?)
     }
 }

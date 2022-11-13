@@ -1,6 +1,5 @@
 ---
 source: fuel-client/src/client/schema/chain.rs
-assertion_line: 66
 expression: operation.query
 ---
 query Query {
@@ -9,10 +8,25 @@ query Query {
     name
     peerCount
     latestBlock {
-      height
       id
-      time
-      producer
+      header {
+        id
+        daHeight
+        transactionsCount
+        outputMessagesCount
+        transactionsRoot
+        outputMessagesRoot
+        height
+        prevRoot
+        time
+        applicationHash
+      }
+      consensus {
+        __typename
+        ... on PoAConsensus {
+          signature
+        }
+      }
       transactions {
         id
       }

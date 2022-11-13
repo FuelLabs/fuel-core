@@ -46,10 +46,9 @@ input BalanceFilterInput {
 
 type Block {
 	id: BlockId!
-	height: U64!
+	header: Header!
+	consensus: Consensus!
 	transactions: [Transaction!]!
-	time: DateTime!
-	producer: Address!
 }
 
 type BlockConnection {
@@ -166,6 +165,8 @@ enum CoinStatus {
 	SPENT
 }
 
+union Consensus = PoAConsensus
+
 type ConsensusParameters {
 	contractMaxSize: U64!
 	maxInputs: U64!
@@ -243,13 +244,6 @@ type ContractOutput {
 	stateRoot: Bytes32!
 }
 
-"""
-Implement the DateTime<Utc> scalar
-
-The input/output is a string in RFC3339 format.
-"""
-scalar DateTime
-
 input ExcludeInput {
 	"""
 	Utxos to exclude from the selection.
@@ -263,11 +257,54 @@ input ExcludeInput {
 
 type FailureStatus {
 	block: Block!
-	time: DateTime!
+	time: Tai64Timestamp!
 	reason: String!
 	programState: ProgramState
 }
 
+
+type Header {
+	"""
+	Hash of the header
+	"""
+	id: BlockId!
+	"""
+	The layer 1 height of messages and events to include since the last layer 1 block number.
+	"""
+	daHeight: U64!
+	"""
+	Number of transactions in this block.
+	"""
+	transactionsCount: U64!
+	"""
+	Number of output messages in this block.
+	"""
+	outputMessagesCount: U64!
+	"""
+	Merkle root of transactions.
+	"""
+	transactionsRoot: Bytes32!
+	"""
+	Merkle root of messages in this block.
+	"""
+	outputMessagesRoot: Bytes32!
+	"""
+	Fuel block height.
+	"""
+	height: U64!
+	"""
+	Merkle root of all previous block header hashes.
+	"""
+	prevRoot: Bytes32!
+	"""
+	The block producer time.
+	"""
+	time: Tai64Timestamp!
+	"""
+	Hash of the application header.
+	"""
+	applicationHash: Bytes32!
+}
 
 scalar HexString
 
@@ -313,7 +350,7 @@ type Message {
 	sender: Address!
 	recipient: Address!
 	nonce: U64!
-	data: [Int!]!
+	data: HexString!
 	daHeight: U64!
 	fuelBlockSpend: U64
 }
@@ -354,6 +391,18 @@ type MessageOutput {
 	amount: U64!
 }
 
+type MessageProof {
+	proofSet: [Bytes32!]!
+	proofIndex: U64!
+	sender: Address!
+	recipient: Address!
+	nonce: Bytes32!
+	amount: U64!
+	data: HexString!
+	signature: Signature!
+	header: Header!
+}
+
 type Mutation {
 	startSession: ID!
 	endSession(id: ID!): Boolean!
@@ -371,12 +420,11 @@ type Mutation {
 	Submits transaction to the txpool
 	"""
 	submit(tx: HexString!): Transaction!
-	produceBlocks(blocksToProduce: U64!): U64!
+	produceBlocks(blocksToProduce: U64!, time: TimeParameters): U64!
 }
 
 type NodeInfo {
 	utxoValidation: Boolean!
-	predicates: Boolean!
 	vmBacktrace: Boolean!
 	minGasPrice: U64!
 	maxTx: U64!
@@ -417,6 +465,13 @@ type PageInfo {
 	endCursor: String
 }
 
+type PoAConsensus {
+	"""
+	Gets the signature of the block produced by `PoA` consensus.
+	"""
+	signature: Signature!
+}
+
 type ProgramState {
 	returnType: ReturnType!
 	data: HexString!
@@ -444,6 +499,7 @@ type Query {
 	contractBalances(filter: ContractBalanceFilterInput!, first: Int, after: String, last: Int, before: String): ContractBalanceConnection!
 	nodeInfo: NodeInfo!
 	messages(owner: Address, first: Int, after: String, last: Int, before: String): MessageConnection!
+	messageProof(transactionId: TransactionId!, messageId: MessageId!): MessageProof
 	"""
 	For each `query_per_asset`, get some spendable resources(of asset specified by the query) owned by
 	`owner` that add up at least the query amount. The returned resources are actual resources
@@ -487,6 +543,7 @@ type Receipt {
 	sender: Address
 	recipient: Address
 	nonce: Bytes32
+	contractId: ContractId
 }
 
 enum ReceiptType {
@@ -527,6 +584,8 @@ enum RunState {
 
 scalar Salt
 
+scalar Signature
+
 input SpendQueryElementInput {
 	"""
 	Identifier of the asset to spend.
@@ -542,28 +601,66 @@ input SpendQueryElementInput {
 	max: U64
 }
 
+type SqueezedOutStatus {
+	reason: String!
+}
+
 
 type SubmittedStatus {
-	time: DateTime!
+	time: Tai64Timestamp!
+}
+
+type Subscription {
+	"""
+	Returns a stream of status updates for the given transaction id.
+	If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
+	or [`TransactionStatus::Failed`] the stream will return that and end immediately.
+	If the current status is [`TransactionStatus::Submitted`] this will be returned
+	and the stream will wait for a future update.
+	
+	This stream will wait forever so it's advised to use within a timeout.
+	
+	It is possible for the stream to miss an update if it is polled slower
+	then the updates arrive. In such a case the stream will close without
+	a status. If this occurs the stream can simply be restarted to return
+	the latest status.
+	"""
+	statusChange(id: TransactionId!): TransactionStatus!
 }
 
 type SuccessStatus {
 	block: Block!
-	time: DateTime!
-	programState: ProgramState!
+	time: Tai64Timestamp!
+	programState: ProgramState
+}
+
+scalar Tai64Timestamp
+
+input TimeParameters {
+	"""
+	The time to set on the first block
+	"""
+	startTime: U64!
+	"""
+	The time interval between subsequent blocks
+	"""
+	blockTimeInterval: U64!
 }
 
 type Transaction {
 	id: TransactionId!
-	inputAssetIds: [AssetId!]!
-	inputContracts: [Contract!]!
-	gasPrice: U64!
-	gasLimit: U64!
-	maturity: U64!
+	inputAssetIds: [AssetId!]
+	inputContracts: [Contract!]
+	gasPrice: U64
+	gasLimit: U64
+	maturity: U64
+	txPointer: TxPointer
 	isScript: Boolean!
-	inputs: [Input!]!
+	isCreate: Boolean!
+	isMint: Boolean!
+	inputs: [Input!]
 	outputs: [Output!]!
-	witnesses: [HexString!]!
+	witnesses: [HexString!]
 	receiptsRoot: Bytes32
 	status: TransactionStatus
 	receipts: [Receipt!]
@@ -610,7 +707,7 @@ type TransactionEdge {
 
 scalar TransactionId
 
-union TransactionStatus = SubmittedStatus | SuccessStatus | FailureStatus
+union TransactionStatus = SubmittedStatus | SuccessStatus | SqueezedOutStatus | FailureStatus
 
 scalar TxPointer
 
@@ -627,4 +724,5 @@ type VariableOutput {
 schema {
 	query: Query
 	mutation: Mutation
+	subscription: Subscription
 }

@@ -6,9 +6,11 @@ members = [
   "fuel-block-executor",
   "fuel-block-importer",
   "fuel-block-producer",
+  "fuel-chain-config",
   "fuel-client",
   "fuel-core",
   "fuel-core-bft",
+  "fuel-poa-coordinator",
   "fuel-core-interfaces",
   "fuel-metrics",
   "fuel-p2p",
@@ -17,6 +19,7 @@ members = [
   "fuel-tests",
   "fuel-txpool",
   "xtask",
+  "version-compatibility",
 ]
 
 [profile.release]

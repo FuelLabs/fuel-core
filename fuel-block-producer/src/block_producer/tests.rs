@@ -16,8 +16,10 @@ use fuel_core_interfaces::{
     },
     executor::Executor,
     model::{
+        FuelApplicationHeader,
         FuelBlockDb,
         FuelBlockHeader,
+        FuelConsensusHeader,
     },
 };
 use rand::{
@@ -29,6 +31,7 @@ use std::sync::{
     Arc,
     Mutex,
 };
+use tokio::sync::Semaphore;
 
 #[tokio::test]
 async fn cant_produce_at_genesis_height() {
@@ -36,7 +39,7 @@ async fn cant_produce_at_genesis_height() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_block(0u32.into())
+        .produce_and_execute_block(0u32.into(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -53,7 +56,9 @@ async fn can_produce_initial_block() {
     let ctx = TestContext::default();
     let producer = ctx.producer();
 
-    let result = producer.produce_block(1u32.into()).await;
+    let result = producer
+        .produce_and_execute_block(1u32.into(), 1_000_000_000)
+        .await;
 
     assert!(result.is_ok());
 }
@@ -66,8 +71,11 @@ async fn can_produce_next_block() {
     let prev_height = 1u32.into();
     let previous_block = FuelBlockDb {
         header: FuelBlockHeader {
-            height: prev_height,
-            prev_root: rng.gen(),
+            consensus: FuelConsensusHeader {
+                height: prev_height,
+                prev_root: rng.gen(),
+                ..Default::default()
+            },
             ..Default::default()
         },
         transactions: vec![],
@@ -82,7 +90,9 @@ async fn can_produce_next_block() {
 
     let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();
-    let result = producer.produce_block(prev_height + 1u32.into()).await;
+    let result = producer
+        .produce_and_execute_block(prev_height + 1u32.into(), 1_000_000_000)
+        .await;
 
     assert!(result.is_ok());
 }
@@ -94,7 +104,7 @@ async fn cant_produce_if_no_previous_block() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_block(100u32.into())
+        .produce_and_execute_block(100u32.into(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -115,8 +125,14 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let prev_height = 1u32.into();
     let previous_block = FuelBlockDb {
         header: FuelBlockHeader {
-            height: prev_height,
-            da_height: prev_da_height,
+            application: FuelApplicationHeader {
+                da_height: prev_da_height,
+                ..Default::default()
+            },
+            consensus: FuelConsensusHeader {
+                height: prev_height,
+                ..Default::default()
+            },
             ..Default::default()
         },
         transactions: vec![],
@@ -139,7 +155,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_block(prev_height + 1u32.into())
+        .produce_and_execute_block(prev_height + 1u32.into(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -159,7 +175,7 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 #[tokio::test]
 async fn production_fails_on_execution_error() {
     let ctx = TestContext {
-        executor: Box::new(FailingMockExecutor(Mutex::new(Some(
+        executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
             fuel_core_interfaces::executor::Error::TransactionIdCollision(
                 Default::default(),
             ),
@@ -170,7 +186,7 @@ async fn production_fails_on_execution_error() {
     let producer = ctx.producer();
 
     let err = producer
-        .produce_block(1u32.into())
+        .produce_and_execute_block(1u32.into(), 1_000_000_000)
         .await
         .expect_err("expected failure");
 
@@ -188,7 +204,7 @@ struct TestContext {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Box<dyn Executor>,
+    executor: Arc<dyn Executor>,
     txpool: MockTxPool,
 }
 
@@ -207,19 +223,20 @@ impl TestContext {
             config,
             db,
             relayer,
-            executor: Box::new(executor),
+            executor: Arc::new(executor),
             txpool,
         }
     }
 
-    pub fn producer(&self) -> Producer {
+    pub fn producer(self) -> Producer {
         Producer {
-            config: self.config.clone(),
-            db: &self.db,
-            txpool: &self.txpool,
-            executor: &*self.executor,
-            relayer: &self.relayer,
+            config: self.config,
+            db: Box::new(self.db),
+            txpool: Box::new(self.txpool),
+            executor: self.executor,
+            relayer: Box::new(self.relayer),
             lock: Default::default(),
+            dry_run_semaphore: Semaphore::new(1),
         }
     }
 }
