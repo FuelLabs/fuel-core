@@ -1,6 +1,13 @@
+use super::scalars::{
+    Bytes32,
+    Tai64Timestamp,
+};
 use crate::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         Database,
         KvStoreError,
     },
@@ -12,6 +19,7 @@ use crate::{
     schema::{
         scalars::{
             BlockId,
+            Signature,
             U64,
         },
         tx::types::Transaction,
@@ -30,16 +38,13 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
-};
-use chrono::{
-    DateTime,
-    NaiveDateTime,
-    Utc,
+    Union,
 };
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
         fuel_types,
+        tai64::Tai64,
     },
     db::Transactions,
     executor::{
@@ -48,6 +53,7 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelApplicationHeader,
+        FuelBlockConsensus,
         FuelBlockHeader,
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -60,14 +66,21 @@ use std::{
     convert::TryInto,
 };
 
-use super::scalars::Bytes32;
-
 pub struct Block {
     pub(crate) header: Header,
     pub(crate) transactions: Vec<fuel_types::Bytes32>,
 }
 
 pub struct Header(pub(crate) FuelBlockHeader);
+
+#[derive(Union)]
+pub enum Consensus {
+    PoA(PoAConsensus),
+}
+
+pub struct PoAConsensus {
+    signature: Signature,
+}
 
 #[Object]
 impl Block {
@@ -79,6 +92,18 @@ impl Block {
 
     async fn header(&self) -> &Header {
         &self.header
+    }
+
+    async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
+        let db = ctx.data_unchecked::<Database>().clone();
+        let id = self.header.0.id().into();
+        let consensus = db
+            .storage::<SealedBlockConsensus>()
+            .get(&id)
+            .map(|c| c.map(|c| c.into_owned().into()))?
+            .ok_or(KvStoreError::NotFound)?;
+
+        Ok(consensus)
     }
 
     async fn transactions(
@@ -144,13 +169,21 @@ impl Header {
     }
 
     /// The block producer time.
-    async fn time(&self) -> DateTime<Utc> {
-        *self.0.time()
+    async fn time(&self) -> Tai64Timestamp {
+        Tai64Timestamp(self.0.time())
     }
 
     /// Hash of the application header.
     async fn application_hash(&self) -> Bytes32 {
         (*self.0.application_hash()).into()
+    }
+}
+
+#[Object]
+impl PoAConsensus {
+    /// Gets the signature of the block produced by `PoA` consensus.
+    async fn signature(&self) -> Signature {
+        self.signature
     }
 }
 
@@ -370,7 +403,7 @@ impl BlockMutation {
 
         let executor = Executor {
             database: db.clone(),
-            config: cfg.clone(),
+            config: cfg,
         };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
@@ -396,7 +429,7 @@ impl BlockMutation {
                 vec![],
             );
 
-            executor.execute(ExecutionBlock::Production(block)).await?;
+            executor.execute(ExecutionBlock::Production(block))?;
         }
 
         db.get_block_height()?
@@ -409,7 +442,7 @@ fn get_time_closure(
     db: &Database,
     time_parameters: Option<TimeParameters>,
     blocks_to_produce: u64,
-) -> anyhow::Result<Box<dyn Fn(u64) -> DateTime<Utc> + Send>> {
+) -> anyhow::Result<Box<dyn Fn(u64) -> Tai64 + Send>> {
     if let Some(params) = time_parameters {
         check_start_after_latest_block(db, params.start_time.0)?;
         check_block_time_overflow(&params, blocks_to_produce)?;
@@ -419,13 +452,11 @@ fn get_time_closure(
                 .start_time
                 .0
                 .overflowing_add(params.block_time_interval.0.overflowing_mul(idx).0);
-            let naive = NaiveDateTime::from_timestamp(timestamp as i64, 0);
-
-            DateTime::from_utc(naive, Utc)
+            Tai64(timestamp)
         }))
     };
 
-    Ok(Box::new(|_| Utc::now()))
+    Ok(Box::new(|_| Tai64::now()))
 }
 
 fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Result<()> {
@@ -435,7 +466,7 @@ fn check_start_after_latest_block(db: &Database, start_time: u64) -> anyhow::Res
         return Ok(())
     }
 
-    let latest_time = db.block_time(current_height.into())?.timestamp();
+    let latest_time = db.block_time(current_height.into())?.0;
     if latest_time as u64 > start_time {
         return Err(anyhow!(
             "The start time must be set after the latest block time: {}",
@@ -479,5 +510,15 @@ impl From<FuelBlockDb> for Block {
 impl From<FuelBlockDb> for Header {
     fn from(block: FuelBlockDb) -> Self {
         Header(block.header)
+    }
+}
+
+impl From<FuelBlockConsensus> for Consensus {
+    fn from(consensus: FuelBlockConsensus) -> Self {
+        match consensus {
+            FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+                signature: poa.signature.into(),
+            }),
+        }
     }
 }

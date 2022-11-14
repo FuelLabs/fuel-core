@@ -1,7 +1,6 @@
 use super::db::BlockProducerDatabase;
 use crate::ports::TxPool;
 use anyhow::Result;
-use async_trait::async_trait;
 use fuel_core_interfaces::{
     block_producer::Relayer,
     common::{
@@ -19,13 +18,13 @@ use fuel_core_interfaces::{
     executor::{
         Error as ExecutorError,
         ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
         ArcPoolTx,
         BlockHeight,
         DaBlockHeight,
-        FuelBlock,
         FuelBlockDb,
         Message,
     },
@@ -70,9 +69,8 @@ impl TxPool for MockTxPool {
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-#[async_trait]
 impl Executor for MockExecutor {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -80,10 +78,13 @@ impl Executor for MockExecutor {
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(*block.header().height(), block.to_db_block());
-        Ok(block)
+        Ok(ExecutionResult {
+            block,
+            skipped_transactions: vec![],
+        })
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,
@@ -94,22 +95,25 @@ impl Executor for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-#[async_trait]
 impl Executor for FailingMockExecutor {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, ExecutorError> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
             Err(err)
         } else {
-            match block {
-                ExecutionBlock::Production(b) => Ok(b.generate(&[])),
-                ExecutionBlock::Validation(b) => Ok(b),
-            }
+            let block = match block {
+                ExecutionBlock::Production(b) => b.generate(&[]),
+                ExecutionBlock::Validation(b) => b,
+            };
+            Ok(ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+            })
         }
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         _block: ExecutionBlock,
         _utxo_validation: Option<bool>,

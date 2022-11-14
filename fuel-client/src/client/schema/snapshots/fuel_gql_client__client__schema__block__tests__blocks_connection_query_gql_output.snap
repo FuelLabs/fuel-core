@@ -20,6 +20,12 @@ query Query($_0: Int, $_1: String, $_2: Int, $_3: String) {
           time
           applicationHash
         }
+        consensus {
+          __typename
+          ... on PoAConsensus {
+            signature
+          }
+        }
         transactions {
           id
         }

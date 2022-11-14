@@ -1,6 +1,6 @@
 [package]
 name = "fuel-gql-client"
-version = "0.13.2"
+version = "0.14.1"
 authors = ["Fuel Labs <contact@fuel.sh>"]
 categories = ["concurrency", "cryptography::cryptocurrencies", "emulators"]
 edition = "2021"
@@ -16,9 +16,9 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0"
-chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.1", features = ["derive"] }
 derive_more = { version = "0.99" }
+eventsource-client = "0.10.2"
 fuel-vm = { version = "0.22", features = ["serde"] }
 futures = "0.3"
 futures-timer = "3.0"
@@ -26,6 +26,7 @@ hex = "0.4"
 itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
+tai64 = {version = "4.0", features = ["serde"] }
 thiserror = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

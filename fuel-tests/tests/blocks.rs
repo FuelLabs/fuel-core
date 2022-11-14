@@ -1,10 +1,9 @@
-use chrono::{
-    TimeZone,
-    Utc,
-};
 use fuel_core::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         Database,
     },
     model::{
@@ -22,8 +21,13 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsMut,
         fuel_tx,
         fuel_tx::UniqueIdentifier,
+        secrecy::ExposeSecret,
+        tai64::Tai64,
     },
-    model::FuelConsensusHeader,
+    model::{
+        FuelBlockConsensus,
+        FuelConsensusHeader,
+    },
 };
 use fuel_gql_client::{
     client::{
@@ -43,6 +47,7 @@ use itertools::{
     Itertools,
 };
 use rstest::rstest;
+use std::ops::Deref;
 
 #[tokio::test]
 async fn block() {
@@ -52,6 +57,9 @@ async fn block() {
     let mut db = Database::default();
     db.storage::<FuelBlocks>()
         .insert(&id.into(), &block)
+        .unwrap();
+    db.storage::<SealedBlockConsensus>()
+        .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
         .unwrap();
 
     // setup server & client
@@ -77,7 +85,9 @@ async fn produce_block() {
 
     config.manual_blocks_enabled = true;
 
-    let srv = FuelService::from_database(db, config).await.unwrap();
+    let srv = FuelService::from_database(db, config.clone())
+        .await
+        .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
 
@@ -96,17 +106,23 @@ async fn produce_block() {
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
-        let block_height: u64 = client
+        let block = client
             .block(block_id.to_string().as_str())
             .await
             .unwrap()
+            .unwrap();
+        let actual_pub_key = block.block_producer().unwrap();
+        let block_height: u64 = block.header.height.into();
+        let expected_pub_key = config
+            .consensus_key
             .unwrap()
-            .header
-            .height
-            .into();
+            .expose_secret()
+            .deref()
+            .public_key();
 
         // Block height is now 6 after being advance 5
         assert!(6 == block_height);
+        assert_eq!(actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };
@@ -178,11 +194,11 @@ async fn produce_block_custom_time() {
 
     assert_eq!(5, new_height);
 
-    assert_eq!(db.block_time(1).unwrap().timestamp(), 100);
-    assert_eq!(db.block_time(2).unwrap().timestamp(), 110);
-    assert_eq!(db.block_time(3).unwrap().timestamp(), 120);
-    assert_eq!(db.block_time(4).unwrap().timestamp(), 130);
-    assert_eq!(db.block_time(5).unwrap().timestamp(), 140);
+    assert_eq!(db.block_time(1).unwrap().0, 100);
+    assert_eq!(db.block_time(2).unwrap().0, 110);
+    assert_eq!(db.block_time(3).unwrap().0, 120);
+    assert_eq!(db.block_time(4).unwrap().0, 130);
+    assert_eq!(db.block_time(5).unwrap().0, 140);
 }
 
 #[tokio::test]
@@ -259,7 +275,7 @@ async fn block_connection_5(
             header: FuelBlockHeader {
                 consensus: FuelConsensusHeader {
                     height: i.into(),
-                    time: Utc.timestamp(i.into(), 0),
+                    time: Tai64(i.into()),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -274,6 +290,9 @@ async fn block_connection_5(
         let id = block.id();
         db.storage::<FuelBlocks>()
             .insert(&id.into(), &block)
+            .unwrap();
+        db.storage::<SealedBlockConsensus>()
+            .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
             .unwrap();
     }
 

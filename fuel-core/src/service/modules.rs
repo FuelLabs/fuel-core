@@ -18,9 +18,9 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionBlock,
+        ExecutionResult,
         Executor as ExecutorTrait,
     },
-    model::FuelBlock,
     relayer::RelayerDb,
     txpool::{
         Sender,
@@ -29,6 +29,7 @@ use fuel_core_interfaces::{
 };
 #[cfg(feature = "relayer")]
 use fuel_relayer::RelayerSynced;
+use fuel_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -36,6 +37,7 @@ use tokio::{
         broadcast,
         mpsc,
         Mutex,
+        Semaphore,
     },
     task::JoinHandle,
 };
@@ -132,13 +134,13 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         fuel_p2p::orchestrator::Service::new(
             config.p2p.clone(),
             p2p_db,
-            p2p_request_event_sender.clone(),
             p2p_request_event_receiver,
             tx_consensus,
             incoming_tx_sender,
             block_event_sender,
         )
     };
+
     #[cfg(not(feature = "p2p"))]
     {
         let keep_alive = Box::new(incoming_tx_sender);
@@ -152,10 +154,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         });
     }
 
-    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
-
-    // Remove once tx_status events are used
-    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+    let tx_status_sender = TxStatusChange::new(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
 
@@ -165,19 +164,22 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         .db(Box::new(database.clone()) as Box<dyn TxPoolDb>)
         .incoming_tx_receiver(incoming_tx_receiver)
         .import_block_event(block_import_rx)
-        .tx_status_sender(tx_status_sender)
+        .tx_status_sender(tx_status_sender.clone())
         .txpool_sender(Sender::new(txpool_sender))
         .txpool_receiver(txpool_receiver);
 
     txpool_builder.network_sender(p2p_request_event_sender.clone());
 
+    // restrict the max number of concurrent dry runs to the number of CPUs
+    // as execution in the worst case will be CPU bound rather than I/O bound.
+    let max_dry_run_concurrency = num_cpus::get();
     let block_producer = Arc::new(fuel_block_producer::Producer {
         config: config.block_producer.clone(),
         db: Box::new(database.clone()),
         txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
             sender: txpool_builder.sender().clone(),
         }),
-        executor: Box::new(ExecutorAdapter {
+        executor: Arc::new(ExecutorAdapter {
             database: database.clone(),
             config: config.clone(),
         }),
@@ -187,6 +189,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             relayer_synced: relayer.as_ref().map(|r| r.listen_synced()),
         }),
         lock: Mutex::new(()),
+        dry_run_semaphore: Semaphore::new(max_dry_run_concurrency),
     });
 
     // start services
@@ -196,7 +199,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     match &coordinator {
         CoordinatorService::Poa(poa) => {
             poa.start(
-                txpool_builder.subscribe(),
+                txpool_builder.tx_status_subscribe(),
                 txpool_builder.sender().clone(),
                 block_import_tx,
                 block_producer.clone(),
@@ -252,15 +255,15 @@ struct ExecutorAdapter {
 
 #[async_trait::async_trait]
 impl ExecutorTrait for ExecutorAdapter {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error> {
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
         };
-        executor.execute(block).await
+        executor.execute(block)
     }
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,
@@ -269,7 +272,7 @@ impl ExecutorTrait for ExecutorAdapter {
             database: self.database.clone(),
             config: self.config.clone(),
         };
-        executor.dry_run(block, utxo_validation).await
+        executor.dry_run(block, utxo_validation)
     }
 }
 

@@ -6,7 +6,6 @@ use fuel_core_interfaces::{
         Error as TxpoolError,
         TxPoolMpsc,
         TxStatus,
-        TxStatusBroadcast,
     },
 };
 use tokio::sync::oneshot;
@@ -114,7 +113,8 @@ async fn simple_insert_removal_subscription() {
     let tx2 = Arc::new(ctx.setup_script_tx(20));
     let service = ctx.service();
 
-    let mut subscribe = service.subscribe_ch();
+    let mut subscribe_status = service.tx_status_subscribe();
+    let mut subscribe_update = service.tx_update_subscribe();
 
     let (response, receiver) = oneshot::channel();
     let _ = service
@@ -128,11 +128,14 @@ async fn simple_insert_removal_subscription() {
 
     if let Ok(tx) = &out[0] {
         assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx.inserted.clone(),
-                status: TxStatus::Submitted,
-            }),
+            subscribe_status.try_recv(),
+            Ok(TxStatus::Submitted),
+            "First added should be tx1"
+        );
+        let update = subscribe_update.try_recv().unwrap();
+        assert_eq!(
+            *update.tx_id(),
+            tx.inserted.id(),
             "First added should be tx1"
         );
     } else {
@@ -141,11 +144,14 @@ async fn simple_insert_removal_subscription() {
 
     if let Ok(tx) = &out[1] {
         assert_eq!(
-            subscribe.try_recv(),
-            Ok(TxStatusBroadcast {
-                tx: tx.inserted.clone(),
-                status: TxStatus::Submitted,
-            }),
+            subscribe_status.try_recv(),
+            Ok(TxStatus::Submitted),
+            "Second added should be tx2"
+        );
+        let update = subscribe_update.try_recv().unwrap();
+        assert_eq!(
+            *update.tx_id(),
+            tx.inserted.id(),
             "Second added should be tx2"
         );
     } else {
@@ -164,26 +170,34 @@ async fn simple_insert_removal_subscription() {
     let rem = receiver.await.unwrap();
 
     assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
-        Ok(Ok(TxStatusBroadcast {
-            tx: rem[0].clone(),
-            status: TxStatus::SqueezedOut {
-                reason: TxpoolError::Removed
-            }
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
+            .await,
+        Ok(Ok(TxStatus::SqueezedOut {
+            reason: TxpoolError::Removed
         })),
         "First removed should be tx1"
     );
+    let update =
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_update.recv())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(*update.tx_id(), rem[0].id(), "First removed should be tx1");
 
     assert_eq!(
-        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe.recv()).await,
-        Ok(Ok(TxStatusBroadcast {
-            tx: rem[1].clone(),
-            status: TxStatus::SqueezedOut {
-                reason: TxpoolError::Removed
-            }
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_status.recv())
+            .await,
+        Ok(Ok(TxStatus::SqueezedOut {
+            reason: TxpoolError::Removed
         })),
         "Second removed should be tx2"
     );
+    let update =
+        tokio::time::timeout(std::time::Duration::from_secs(2), subscribe_update.recv())
+            .await
+            .unwrap()
+            .unwrap();
+    assert_eq!(*update.tx_id(), rem[1].id(), "Second removed should be tx2");
 
     service.stop().await.unwrap().await.unwrap();
 }

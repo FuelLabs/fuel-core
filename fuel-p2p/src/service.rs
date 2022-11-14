@@ -30,7 +30,7 @@ use crate::{
         ResponseMessage,
     },
 };
-
+use fuel_metrics::p2p_metrics::P2P_METRICS;
 use futures::prelude::*;
 use libp2p::{
     gossipsub::{
@@ -87,6 +87,9 @@ pub struct FuelP2PService<Codec: NetworkCodec> {
 
     /// Stores additional p2p network info    
     network_metadata: NetworkMetadata,
+
+    /// Whether or not metrics collection is enabled
+    metrics: bool,
 }
 
 /// Holds additional Network data for FuelBehavior
@@ -145,6 +148,8 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let gossipsub_topics = GossipsubTopics::new(&config.network_name);
         let network_metadata = NetworkMetadata { gossipsub_topics };
 
+        let metrics = config.metrics;
+
         Ok(Self {
             local_peer_id,
             swarm,
@@ -152,11 +157,16 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
             outbound_requests_table: HashMap::default(),
             inbound_requests_table: HashMap::default(),
             network_metadata,
+            metrics,
         })
     }
 
-    pub fn get_peers(&self) -> &HashMap<PeerId, PeerInfo> {
+    pub fn get_peers_info(&self) -> &HashMap<PeerId, PeerInfo> {
         self.swarm.behaviour().get_peers()
+    }
+
+    pub fn get_peers_ids(&self) -> Vec<PeerId> {
+        self.get_peers_info().iter().map(|(id, _)| *id).collect()
     }
 
     pub fn publish_message(
@@ -188,7 +198,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let peer_id = match peer_id {
             Some(peer_id) => peer_id,
             _ => {
-                let connected_peers = self.get_peers();
+                let connected_peers = self.get_peers_info();
                 if connected_peers.is_empty() {
                     return Err(RequestError::NoPeersConnected)
                 }
@@ -212,10 +222,18 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
     pub fn send_response_msg(
         &mut self,
         request_id: RequestId,
-        message: OutboundResponse,
+        message: Option<OutboundResponse>,
     ) -> Result<(), ResponseError> {
+        // if the response message wasn't successfully prepared
+        // we still need to remove the `request_id` from `inbound_requests_table`
+        if message.is_none() {
+            self.inbound_requests_table.remove(&request_id);
+            return Ok(())
+        }
+
         match (
-            self.network_codec.convert_to_intermediate(&message),
+            self.network_codec
+                .convert_to_intermediate(&message.unwrap()),
             self.inbound_requests_table.remove(&request_id),
         ) {
             (Ok(message), Some(channel)) => {
@@ -333,6 +351,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
 
             FuelBehaviourEvent::PeerInfo(peer_info_event) => match peer_info_event {
                 PeerInfoEvent::PeerIdentified { peer_id, addresses } => {
+                    if self.metrics {
+                        P2P_METRICS.unique_peers.inc();
+                    }
                     self.swarm
                         .behaviour_mut()
                         .add_addresses_to_discovery(&peer_id, addresses);
@@ -858,7 +879,7 @@ mod tests {
                             consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(Default::default())),
                         };
 
-                        let _ = node_b.send_response_msg(request_id, OutboundResponse::ResponseBlock(Arc::new(sealed_block)));
+                        let _ = node_b.send_response_msg(request_id, Some(OutboundResponse::ResponseBlock(Arc::new(sealed_block))));
                     }
 
                     tracing::info!("Node B Event: {:?}", node_b_event);

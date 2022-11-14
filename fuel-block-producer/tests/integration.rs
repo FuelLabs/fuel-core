@@ -35,6 +35,7 @@ use fuel_core_interfaces::{
         prelude::StorageAsMut,
     },
     db::Coins,
+    executor::ExecutionResult,
     model::{
         Coin,
         CoinStatus,
@@ -42,6 +43,7 @@ use fuel_core_interfaces::{
     txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
+    service::TxStatusChange,
     Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
@@ -55,6 +57,7 @@ use std::sync::Arc;
 use tokio::sync::{
     broadcast,
     mpsc,
+    Semaphore,
 };
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
@@ -115,10 +118,7 @@ async fn block_producer() -> Result<()> {
 
     let mut txpool_builder = TxPoolServiceBuilder::new();
 
-    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
-
-    // Remove once tx_status events are used
-    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+    let tx_status_sender = TxStatusChange::new(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
@@ -156,9 +156,10 @@ async fn block_producer() -> Result<()> {
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
         }),
-        executor: Box::new(MockExecutor(mock_db.clone())),
+        executor: Arc::new(MockExecutor(mock_db.clone())),
         relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
+        dry_run_semaphore: Semaphore::new(1),
     };
 
     // Add new transactions
@@ -197,8 +198,11 @@ async fn block_producer() -> Result<()> {
     assert_eq!(results[2].removed, vec![]);
 
     // Trigger block production
-    let generated_block = block_producer
-        .produce_block(1u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(1u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -228,8 +232,11 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production again
-    let generated_block = block_producer
-        .produce_block(2u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(2u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 
@@ -251,8 +258,11 @@ async fn block_producer() -> Result<()> {
         .expect("Failed to import the generated block");
 
     // Trigger block production once more, now the block should be empty
-    let generated_block = block_producer
-        .produce_block(3u32.into(), max_gas_per_block)
+    let ExecutionResult {
+        block: generated_block,
+        ..
+    } = block_producer
+        .produce_and_execute_block(3u32.into(), max_gas_per_block)
         .await
         .expect("Failed to generate block");
 

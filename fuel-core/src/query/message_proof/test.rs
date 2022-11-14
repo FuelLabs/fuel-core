@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use fuel_core_interfaces::{
-    common::fuel_tx::Script,
+    common::{
+        fuel_tx::Script,
+        tai64::Tai64,
+    },
     model::{
         FuelApplicationHeader,
         FuelConsensusHeader,
@@ -113,7 +116,7 @@ async fn can_build_message_proof() {
         .returning(|_| {
             Ok(Some(TransactionStatus::Success {
                 block_id: Default::default(),
-                time: Default::default(),
+                time: Tai64::UNIX_EPOCH,
                 result: None,
             }))
         });
@@ -143,7 +146,7 @@ async fn can_build_message_proof() {
         consensus: FuelConsensusHeader {
             prev_root: Bytes32::zeroed(),
             height: 1u64.into(),
-            time: Default::default(),
+            time: Tai64::UNIX_EPOCH,
             generated: Default::default(),
         },
         metadata: None,

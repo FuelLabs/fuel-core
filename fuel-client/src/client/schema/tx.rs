@@ -7,6 +7,7 @@ use crate::client::{
         ConversionError,
         HexString,
         PageInfo,
+        Tai64Timestamp,
         TransactionId,
     },
     types::TransactionResponse,
@@ -169,20 +170,21 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SqueezedOutStatus(SqueezedOutStatus),
     FailureStatus(FailureStatus),
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SubmittedStatus {
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct SuccessStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
     pub program_state: Option<ProgramState>,
 }
 
@@ -190,9 +192,15 @@ pub struct SuccessStatus {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub struct FailureStatus {
     pub block: BlockIdFragment,
-    pub time: super::DateTime,
+    pub time: Tai64Timestamp,
     pub reason: String,
     pub program_state: Option<ProgramState>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutStatus {
+    pub reason: String,
 }
 
 #[derive(cynic::FragmentArguments, Debug)]
@@ -240,6 +248,17 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
 pub struct TransactionsByOwnerQuery {
     #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
     pub transactions_by_owner: TransactionConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    argument_struct = "TxIdArgs"
+)]
+pub struct StatusChangeSubscription {
+    #[arguments(id = &args.id)]
+    pub status_change: TransactionStatus,
 }
 
 // mutations

@@ -392,17 +392,16 @@ impl Dependency {
 
                             Self::check_if_coin_input_can_spend_db_coin(&coin, input)?;
                         }
-
                         max_depth = core::cmp::max(1, max_depth);
-                        db_coins.insert(
-                            *utxo_id,
-                            CoinState {
-                                is_spend_by: Some(tx.id() as TxId),
-                                depth: 0,
-                            },
-                        );
                     }
-
+                    // mark this coin as spent by the current tx
+                    db_coins.insert(
+                        *utxo_id,
+                        CoinState {
+                            is_spend_by: Some(tx.id() as TxId),
+                            depth: max_depth - 1,
+                        },
+                    );
                     // yey we got our coin
                 }
                 Input::MessagePredicate { message_id, .. }

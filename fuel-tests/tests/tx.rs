@@ -1,5 +1,4 @@
 use crate::helpers::TestContext;
-use chrono::Utc;
 use fuel_core::{
     database::Database,
     executor::Executor,
@@ -15,6 +14,7 @@ use fuel_core_interfaces::{
             consts::*,
             prelude::*,
         },
+        tai64::Tai64,
     },
     executor::{
         ExecutionBlock,
@@ -44,6 +44,7 @@ use std::{
 };
 
 mod predicates;
+mod txn_status_subscription;
 mod utxo_validation;
 
 #[test]
@@ -403,7 +404,7 @@ async fn get_transactions_from_manual_blocks() {
         header: PartialFuelBlockHeader {
             consensus: FuelConsensusHeader {
                 height: 1u32.into(),
-                time: Utc::now(),
+                time: Tai64::now(),
                 ..Default::default()
             },
             ..Default::default()
@@ -418,7 +419,7 @@ async fn get_transactions_from_manual_blocks() {
         header: PartialFuelBlockHeader {
             consensus: FuelConsensusHeader {
                 height: 2u32.into(),
-                time: Utc::now(),
+                time: Tai64::now(),
                 ..Default::default()
             },
             ..Default::default()
@@ -430,11 +431,9 @@ async fn get_transactions_from_manual_blocks() {
     // process blocks and save block height
     executor
         .execute(ExecutionBlock::Production(first_test_block))
-        .await
         .unwrap();
     executor
         .execute(ExecutionBlock::Production(second_test_block))
-        .await
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]

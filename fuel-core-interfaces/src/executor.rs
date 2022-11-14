@@ -20,7 +20,6 @@ use crate::{
         PartialFuelBlock,
     },
 };
-use async_trait::async_trait;
 use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
 use thiserror::Error;
@@ -43,6 +42,16 @@ pub enum ExecutionTypes<P, V> {
     Validation(V),
 }
 
+/// The result of transactions execution.
+#[derive(Debug)]
+pub struct ExecutionResult {
+    /// Created block during the execution of transactions. It contains only valid transactions.
+    pub block: FuelBlock,
+    /// The list of skipped transactions with corresponding errors. Those transactions were
+    /// not included in the block and didn't affect the state of the blockchain.
+    pub skipped_transactions: Vec<(Transaction, Error)>,
+}
+
 #[derive(Debug, Clone, Copy)]
 /// The kind of execution.
 pub enum ExecutionKind {
@@ -52,11 +61,10 @@ pub enum ExecutionKind {
     Validation,
 }
 
-#[async_trait]
 pub trait Executor: Sync + Send {
-    async fn execute(&self, block: ExecutionBlock) -> Result<FuelBlock, Error>;
+    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error>;
 
-    async fn dry_run(
+    fn dry_run(
         &self,
         block: ExecutionBlock,
         utxo_validation: Option<bool>,

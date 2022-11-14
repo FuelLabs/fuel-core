@@ -8,7 +8,6 @@ use anyhow::{
     Context,
     Result,
 };
-use chrono::Utc;
 use fuel_core_interfaces::{
     block_producer::{
         BlockProducer as Trait,
@@ -27,27 +26,31 @@ use fuel_core_interfaces::{
             Word,
         },
         fuel_types::Bytes32,
+        tai64::Tai64,
     },
     executor::{
-        Error,
         ExecutionBlock,
+        ExecutionResult,
         Executor,
     },
     model::{
         BlockHeight,
         DaBlockHeight,
         FuelApplicationHeader,
-        FuelBlock,
         FuelConsensusHeader,
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
 };
-use tokio::sync::Mutex;
-use tracing::{
-    debug,
-    error,
+use std::sync::Arc;
+use tokio::{
+    sync::{
+        Mutex,
+        Semaphore,
+    },
+    task::spawn_blocking,
 };
+use tracing::debug;
 
 #[cfg(test)]
 mod tests;
@@ -56,21 +59,22 @@ pub struct Producer {
     pub config: Config,
     pub db: Box<dyn BlockProducerDatabase>,
     pub txpool: Box<dyn TxPool>,
-    pub executor: Box<dyn Executor>,
+    pub executor: Arc<dyn Executor>,
     pub relayer: Box<dyn Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
+    pub dry_run_semaphore: Semaphore,
 }
 
 #[async_trait::async_trait]
 impl Trait for Producer {
-    /// Produces a block for the specified height
-    async fn produce_block(
+    /// Produces and execute block for the specified height
+    async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<FuelBlock> {
+    ) -> Result<ExecutionResult> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -101,27 +105,10 @@ impl Trait for Producer {
         let result = self
             .executor
             .execute(ExecutionBlock::Production(block))
-            .await;
+            .context(context_string)?;
 
-        if let Err(
-            Error::VmExecution { transaction_id, .. }
-            | Error::TransactionIdCollision(transaction_id),
-        ) = &result
-        {
-            // TODO: if block execution fails due to any transaction validity errors,
-            //          should those txs be removed from the txpool? While this
-            //          theoretically shouldn't happen due to txpool validation rules,
-            //          it is a possibility.
-            error!(
-                "faulty tx prevented block production: {:#x}",
-                transaction_id
-            );
-        }
-
-        let block = result.context(context_string)?;
-
-        debug!("Produced block: {:?}", &block);
-        Ok(block)
+        debug!("Produced block with result: {:?}", &result);
+        Ok(result)
     }
 
     // simulate a transaction without altering any state. Does not aquire the production lock
@@ -136,6 +123,7 @@ impl Trait for Producer {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
         // return the receipts
+        let _permit = self.dry_run_semaphore.acquire().await;
 
         let height = match height {
             None => self.db.current_block_height()?,
@@ -147,13 +135,16 @@ impl Trait for Producer {
         let block =
             PartialFuelBlock::new(header, vec![transaction].into_iter().collect());
 
-        let res: Vec<_> = self
-            .executor
-            .dry_run(ExecutionBlock::Production(block), utxo_validation)
-            .await?
-            .into_iter()
-            .flatten()
-            .collect();
+        let executor = self.executor.clone();
+        // use the blocking threadpool for dry_run to avoid clogging up the main async runtime
+        let res: Vec<_> = spawn_blocking(move || -> Result<Vec<Receipt>> {
+            Ok(executor
+                .dry_run(ExecutionBlock::Production(block), utxo_validation)?
+                .into_iter()
+                .flatten()
+                .collect())
+        })
+        .await??;
         if is_script && res.is_empty() {
             return Err(anyhow!("Expected at least one set of receipts"))
         }
@@ -178,7 +169,7 @@ impl Producer {
                 // TODO: this needs to be updated using a proper BMT MMR
                 prev_root: previous_block_info.prev_root,
                 height,
-                time: Utc::now(),
+                time: Tai64::now(),
                 generated: Default::default(),
             },
             metadata: None,

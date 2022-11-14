@@ -32,8 +32,10 @@ use axum::{
         HeaderValue,
     },
     response::{
+        sse::Event,
         Html,
         IntoResponse,
+        Sse,
     },
     routing::{
         get,
@@ -42,15 +44,17 @@ use axum::{
     Json,
     Router,
 };
+use futures::Stream;
 use serde_json::json;
 use std::net::{
     SocketAddr,
     TcpListener,
 };
 use tokio::{
-    signal::unix::SignalKind,
+    sync::oneshot,
     task::JoinHandle,
 };
+use tokio_stream::StreamExt;
 use tower_http::{
     set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
@@ -62,6 +66,7 @@ pub async fn start_server(
     config: Config,
     db: Database,
     modules: &Modules,
+    stop: oneshot::Receiver<()>,
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
@@ -78,6 +83,10 @@ pub async fn start_server(
     let router = Router::new()
         .route("/playground", get(graphql_playground))
         .route("/graphql", post(graphql_handler).options(ok))
+        .route(
+            "/graphql-sub",
+            post(graphql_subscription_handler).options(ok),
+        )
         .route("/metrics", get(metrics))
         .route("/health", get(health))
         .layer(Extension(schema))
@@ -104,7 +113,9 @@ pub async fn start_server(
         let server = axum::Server::from_tcp(listener)
             .unwrap()
             .serve(router.into_make_service())
-            .with_graceful_shutdown(shutdown_signal());
+            .with_graceful_shutdown(async move {
+                let _ = stop.await;
+            });
 
         tx.send(()).unwrap();
         server.await.map_err(Into::into)
@@ -114,36 +125,6 @@ pub async fn start_server(
     rx.await.unwrap();
 
     Ok((bound_addr, handle))
-}
-
-async fn shutdown_signal() {
-    #[cfg(unix)]
-    {
-        let mut sigterm = tokio::signal::unix::signal(SignalKind::terminate())
-            .expect("failed to install sigterm handler");
-
-        let mut sigint = tokio::signal::unix::signal(SignalKind::interrupt())
-            .expect("failed to install sigint handler");
-        loop {
-            tokio::select! {
-                _ = sigterm.recv() => {
-                    info!("sigterm received");
-                    break;
-                }
-                _ = sigint.recv() => {
-                    info!("sigint received");
-                    break;
-                }
-            }
-        }
-    }
-    #[cfg(not(unix))]
-    {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install CTRL+C signal handler");
-        info!("CTRL+C received");
-    }
 }
 
 async fn graphql_playground() -> impl IntoResponse {
@@ -159,6 +140,17 @@ async fn graphql_handler(
     req: Json<Request>,
 ) -> Json<Response> {
     schema.execute(req.0).await.into()
+}
+
+async fn graphql_subscription_handler(
+    schema: Extension<CoreSchema>,
+    req: Json<Request>,
+) -> Sse<impl Stream<Item = Result<Event, serde_json::Error>>> {
+    let stream = schema
+        .execute_stream(req.0)
+        .map(|r| Ok(Event::default().json_data(r).unwrap()));
+    Sse::new(stream)
+        .keep_alive(axum::response::sse::KeepAlive::new().text("keep-alive-text"))
 }
 
 async fn ok() -> Result<(), ()> {

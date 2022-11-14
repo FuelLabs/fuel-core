@@ -99,6 +99,9 @@ query Query($_0: TransactionId!) {
           data
         }
       }
+      ... on SqueezedOutStatus {
+        reason
+      }
       ... on FailureStatus {
         block {
           id
