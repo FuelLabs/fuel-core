@@ -47,6 +47,7 @@ input BalanceFilterInput {
 type Block {
 	id: BlockId!
 	header: Header!
+	consensus: Consensus!
 	transactions: [Transaction!]!
 }
 
@@ -163,6 +164,8 @@ enum CoinStatus {
 	UNSPENT
 	SPENT
 }
+
+union Consensus = PoAConsensus
 
 type ConsensusParameters {
 	contractMaxSize: U64!
@@ -460,6 +463,13 @@ type PageInfo {
 	When paginating forwards, the cursor to continue.
 	"""
 	endCursor: String
+}
+
+type PoAConsensus {
+	"""
+	Gets the signature of the block produced by `PoA` consensus.
+	"""
+	signature: Signature!
 }
 
 type ProgramState {
