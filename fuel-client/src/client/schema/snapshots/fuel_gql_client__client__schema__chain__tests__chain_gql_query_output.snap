@@ -2,7 +2,7 @@
 source: fuel-client/src/client/schema/chain.rs
 expression: operation.query
 ---
-query Query {
+query {
   chain {
     baseChainHeight
     name
@@ -48,4 +48,5 @@ query Query {
     }
   }
 }
+
 

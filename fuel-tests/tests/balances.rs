@@ -122,6 +122,7 @@ async fn balance() {
                     nonce: message.nonce.into(),
                     data: Default::default(),
                 }),
+                Resource::Unknown => panic!("Unknown resource"),
             };
         }
     }

@@ -12,7 +12,7 @@ use crate::client::{
     PaginationRequest,
 };
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct CoinByIdArgs {
     pub utxo_id: UtxoId,
 }
@@ -21,10 +21,10 @@ pub struct CoinByIdArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "CoinByIdArgs"
+    variables = "CoinByIdArgs"
 )]
 pub struct CoinByIdQuery {
-    #[arguments(utxo_id = &args.utxo_id)]
+    #[arguments(utxoId: $utxo_id)]
     pub coin: Option<Coin>,
 }
 
@@ -37,7 +37,7 @@ pub struct CoinFilterInput {
     pub asset_id: Option<AssetId>,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct CoinsConnectionArgs {
     /// Filter coins based on a filter
     filter: CoinFilterInput,
@@ -83,10 +83,10 @@ impl From<(Address, AssetId, PaginationRequest<String>)> for CoinsConnectionArgs
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "CoinsConnectionArgs"
+    variables = "CoinsConnectionArgs"
 )]
 pub struct CoinsQuery {
-    #[arguments(filter = &args.filter, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(filter: $filter, after: $after, before: $before, first: $first, last: $last)]
     pub coins: CoinConnection,
 }
 
