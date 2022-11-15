@@ -27,7 +27,7 @@ hex = "0.4"
 itertools = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
-surf = { version = "2.2", default-features = false, features = ["h1-client-rustls"] }
+surf = { version = "2.2", default-features = false, features = ["curl-client"] }
 tai64 = {version = "4.0", features = ["serde"] }
 thiserror = "1.0"
 
