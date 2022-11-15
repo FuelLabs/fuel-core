@@ -1453,6 +1453,7 @@ dependencies = [
 [[package]]
 name = "cynic"
 version = "2.2.0"
+source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
 dependencies = [
  "cynic-proc-macros 2.2.0",
  "serde",
@@ -1481,6 +1482,7 @@ dependencies = [
 [[package]]
 name = "cynic-codegen"
 version = "2.2.0"
+source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
 dependencies = [
  "counter",
  "darling 0.13.4",
@@ -1505,6 +1507,7 @@ dependencies = [
 [[package]]
 name = "cynic-proc-macros"
 version = "2.2.0"
+source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
 dependencies = [
  "cynic-codegen 2.2.0",
  "syn",

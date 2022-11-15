@@ -28,4 +28,4 @@ lto = "fat"
 panic = "abort"
 
 [patch.crates-io]
-cynic = { git = "https://github.com/FuelLabs/fuel-core", branch = "feature/cynic-2.2" }
+cynic = { git = "https://github.com/xgreenx/cynic", branch = "feagure/expose-steaming-operation" }
