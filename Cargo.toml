@@ -28,4 +28,4 @@ lto = "fat"
 panic = "abort"
 
 [patch.crates-io]
-cynic = { path = "../cynic/cynic" }
+cynic = { git = "https://github.com/FuelLabs/fuel-core", branch = "feature/cynic-2.2" }
