@@ -3,12 +3,15 @@ use crate::{
         Database,
         KvStoreError,
     },
-    schema::scalars::{
+    schema::{
+        check_pagination_parameters,
+        scalars::{
         AssetId,
         ContractId,
         HexString,
         Salt,
         U64,
+        },
     },
     state::IterDirection,
 };
@@ -165,6 +168,10 @@ impl ContractBalanceQuery {
     ) -> async_graphql::Result<
         Connection<AssetId, ContractBalance, EmptyFields, EmptyFields>,
     > {
+        if check_pagination_parameters(&first, &after, &last, &before) {
+            return Err(async_graphql::Error::new("Wrong Argument Combination"))
+        };
+    
         let db = ctx.data_unchecked::<Database>().clone();
 
         query(
@@ -182,13 +189,6 @@ impl ContractBalanceQuery {
                     } else {
                         (0, IterDirection::Forward)
                     };
-
-                    if (first.is_some() && before.is_some())
-                        || (after.is_some() && before.is_some())
-                        || (last.is_some() && after.is_some())
-                    {
-                        return Err(anyhow!("Wrong argument combination"))
-                    }
 
                     let after = after.map(fuel_tx::AssetId::from);
                     let before = before.map(fuel_tx::AssetId::from);

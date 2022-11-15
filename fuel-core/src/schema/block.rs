@@ -23,6 +23,7 @@ use crate::{
             U64,
         },
         tx::types::Transaction,
+        check_pagination_parameters
     },
     service::Config,
     state::IterDirection,
@@ -238,6 +239,10 @@ impl BlockQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<usize, Block, EmptyFields, EmptyFields>> {
         let db = ctx.data_unchecked::<Database>().clone();
+
+        if check_pagination_parameters(&first, &after, &last, &before) {
+            return Err(async_graphql::Error::new("Wrong Argument Combination"))
+        };
 
         query(
             after,

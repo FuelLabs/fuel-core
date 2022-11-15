@@ -3,15 +3,17 @@ use crate::{
         Database,
         KvStoreError,
     },
-    schema::scalars::{
+    schema::{
+        check_pagination_parameters,
+        scalars::{
         Address,
         AssetId,
         UtxoId,
         U64,
+        },
     },
     state::IterDirection,
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         query,
@@ -113,6 +115,10 @@ impl CoinQuery {
         last: Option<i32>,
         before: Option<String>,
     ) -> async_graphql::Result<Connection<UtxoId, Coin, EmptyFields, EmptyFields>> {
+        if check_pagination_parameters(&first, &after, &last, &before) {
+            return Err(async_graphql::Error::new("Wrong Argument Combination"))
+        };
+
         let db = ctx.data_unchecked::<Database>();
 
         query(
@@ -129,13 +135,6 @@ impl CoinQuery {
                     } else {
                         (0, IterDirection::Forward)
                     };
-
-                    if (first.is_some() && before.is_some())
-                        || (after.is_some() && before.is_some())
-                        || (last.is_some() && after.is_some())
-                    {
-                        return Err(anyhow!("Wrong argument combination"))
-                    }
 
                     let after = after.map(fuel_tx::UtxoId::from);
                     let before = before.map(fuel_tx::UtxoId::from);
@@ -154,12 +153,12 @@ impl CoinQuery {
                     let owner: fuel_tx::Address = filter.owner.into();
 
                     let mut coin_ids = db.owned_coins_ids(&owner, start, Some(direction));
+                                        
                     let mut started = None;
                     if start.is_some() {
                         // skip initial result
                         started = coin_ids.next();
                     }
-
                     // take desired amount of results
                     let coins = coin_ids
                         .take_while(|r| {

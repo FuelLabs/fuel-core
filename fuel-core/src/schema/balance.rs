@@ -7,17 +7,19 @@ use crate::{
         },
         Database,
     },
-    schema::scalars::{
+    schema::{
+        check_pagination_parameters,
+        scalars::{
         Address,
         AssetId,
         U64,
+        },
     },
     state::{
         Error,
         IterDirection,
     },
 };
-use anyhow::anyhow;
 use async_graphql::{
     connection::{
         query,
@@ -118,6 +120,10 @@ impl BalanceQuery {
         before: Option<String>,
     ) -> async_graphql::Result<Connection<AssetId, Balance, EmptyFields, EmptyFields>>
     {
+        if check_pagination_parameters(&first, &after, &last, &before) {
+            return Err(async_graphql::Error::new("Wrong Argument Combination"))
+        };
+        
         let db = ctx.data_unchecked::<Database>();
         let owner = filter.owner.into();
 
@@ -159,13 +165,6 @@ impl BalanceQuery {
                     } else {
                         (0, IterDirection::Forward)
                     };
-
-                    if (first.is_some() && before.is_some())
-                        || (after.is_some() && before.is_some())
-                        || (last.is_some() && after.is_some())
-                    {
-                        return Err(anyhow!("Wrong argument combination"))
-                    }
 
                     let after = after.map(fuel_tx::AssetId::from);
                     let before = before.map(fuel_tx::AssetId::from);
