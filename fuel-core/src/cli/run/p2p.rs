@@ -40,9 +40,18 @@ pub struct P2pArgs {
     pub max_block_size: usize,
 
     /// Addresses of the bootstrap nodes
-    /// They should contain PeerId at the end of the specified Multiaddr
+    /// They should contain PeerId within their `Multiaddr`
     #[clap(long = "bootstrap_nodes")]
     pub bootstrap_nodes: Vec<Multiaddr>,
+
+    /// Addresses of the reserved nodes
+    /// They should contain PeerId within their `Multiaddr`
+    #[clap(long = "reserved_nodes")]
+    pub reserved_nodes: Vec<Multiaddr>,
+
+    /// Set to true if you only want to connect to the reserved nodes
+    #[clap(long = "reserved_nodes_only_mode")]
+    pub reserved_nodes_only_mode: bool,
 
     /// Allow nodes to be discoverable on the local network
     #[clap(long = "enable_mdns")]
@@ -139,10 +148,13 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             }
         };
 
+        // Reserved nodes do not count against the configured peer input/output limits.
+        let reserved_nodes_count = args.reserved_nodes.len();
+
         let gossipsub_config = default_gossipsub_builder()
-            .mesh_n(args.ideal_mesh_size)
-            .mesh_n_low(args.min_mesh_size)
-            .mesh_n_high(args.max_mesh_size)
+            .mesh_n(args.ideal_mesh_size + reserved_nodes_count)
+            .mesh_n_low(args.min_mesh_size + reserved_nodes_count)
+            .mesh_n_high(args.max_mesh_size + reserved_nodes_count)
             .history_length(args.history_length)
             .history_gossip(args.history_gossip)
             .heartbeat_interval(Duration::from_secs(args.heartbeat_interval))
@@ -159,6 +171,8 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             tcp_port: args.peering_port,
             max_block_size: args.max_block_size,
             bootstrap_nodes: args.bootstrap_nodes,
+            reserved_nodes: args.reserved_nodes,
+            reserved_nodes_only_mode: args.reserved_nodes_only_mode,
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,
