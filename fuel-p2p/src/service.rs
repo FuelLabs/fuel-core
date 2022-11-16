@@ -121,7 +121,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let local_peer_id = PeerId::from(config.local_keypair.public());
 
         // configure and build P2P Service
-        let transport = build_transport(config.local_keypair.clone());
+        let transport = build_transport(&config);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .executor(Box::new(|fut| {
