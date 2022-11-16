@@ -94,7 +94,9 @@ async fn test_tx_gossiping() {
     let node_two = FuelService::new_node(node_config).await.unwrap();
     let client_two = FuelClient::from(node_two.bound_address);
 
-    tokio::time::sleep(Duration::new(3, 0)).await;
+    let wait_time = Duration::from_secs(6);
+
+    tokio::time::sleep(wait_time).await;
 
     let tx = tx.into();
     client_one.submit_and_await_commit(&tx).await.unwrap();
@@ -102,7 +104,7 @@ async fn test_tx_gossiping() {
     let response = client_one.transaction(&tx.id().to_string()).await.unwrap();
     assert!(response.is_some());
 
-    tokio::time::sleep(Duration::new(3, 0)).await;
+    tokio::time::sleep(wait_time).await;
 
     let response = client_two.transaction(&tx.id().to_string()).await.unwrap();
     assert!(response.is_some());
