@@ -25,6 +25,8 @@ use tracing::warn;
 pub struct DiscoveryConfig {
     local_peer_id: PeerId,
     bootstrap_nodes: Vec<Multiaddr>,
+    reserved_nodes: Vec<Multiaddr>,
+    reserved_nodes_only_mode: bool,
     with_mdns: bool,
     with_random_walk: bool,
     allow_private_addresses: bool,
@@ -38,6 +40,8 @@ impl DiscoveryConfig {
         Self {
             local_peer_id,
             bootstrap_nodes: vec![],
+            reserved_nodes: vec![],
+            reserved_nodes_only_mode: false,
             max_peers_connected: std::usize::MAX,
             allow_private_addresses: false,
             with_mdns: false,
@@ -77,6 +81,20 @@ impl DiscoveryConfig {
         self
     }
 
+    // List of reserved nodes to bootstrap the network
+    pub fn with_reserved_nodes<I>(&mut self, reserved_nodes: I) -> &mut Self
+    where
+        I: IntoIterator<Item = Multiaddr>,
+    {
+        self.reserved_nodes.extend(reserved_nodes);
+        self
+    }
+
+    pub fn enable_reserved_nodes_only_mode(&mut self, value: bool) -> &mut Self {
+        self.reserved_nodes_only_mode = value;
+        self
+    }
+
     pub fn enable_mdns(&mut self, value: bool) -> &mut Self {
         self.with_mdns = value;
         self
@@ -95,6 +113,8 @@ impl DiscoveryConfig {
             max_peers_connected,
             allow_private_addresses,
             connection_idle_timeout,
+            reserved_nodes,
+            reserved_nodes_only_mode,
             ..
         } = self;
 
@@ -117,7 +137,22 @@ impl DiscoveryConfig {
             })
             .collect::<Vec<_>>();
 
-        for (peer_id, address) in &bootstrap_nodes {
+        // reserved nodes need to have their peer_id defined in the Multiaddr
+        let reserved_nodes = reserved_nodes
+            .into_iter()
+            .filter_map(|node| {
+                PeerId::try_from_multiaddr(&node).map(|peer_id| (peer_id, node))
+            })
+            .collect::<Vec<_>>();
+
+        // add bootstrap nodes only if `reserved_nodes_only_mode` is disabled
+        if !reserved_nodes_only_mode {
+            for (peer_id, address) in &bootstrap_nodes {
+                kademlia.add_address(peer_id, address.clone());
+            }
+        }
+
+        for (peer_id, address) in &reserved_nodes {
             kademlia.add_address(peer_id, address.clone());
         }
 
@@ -125,8 +160,8 @@ impl DiscoveryConfig {
             warn!("Kademlia bootstrap failed: {}", e);
         }
 
-        let next_kad_random_walk = if self.with_random_walk {
-            Some(Delay::new(Duration::new(0, 0)))
+        let next_kad_random_walk = if self.with_random_walk && !reserved_nodes_only_mode {
+            Some(Delay::new(Duration::from_secs(5)))
         } else {
             None
         };
@@ -140,6 +175,7 @@ impl DiscoveryConfig {
 
         DiscoveryBehaviour {
             bootstrap_nodes,
+            reserved_nodes,
             connected_peers: HashSet::new(),
             events: VecDeque::new(),
             kademlia,
