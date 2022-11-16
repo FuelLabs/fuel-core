@@ -6,10 +6,10 @@ use crate::{
     schema::{
         check_pagination_parameters,
         scalars::{
-        Address,
-        AssetId,
-        UtxoId,
-        U64,
+            Address,
+            AssetId,
+            UtxoId,
+            U64,
         },
     },
     state::IterDirection,
@@ -153,7 +153,7 @@ impl CoinQuery {
                     let owner: fuel_tx::Address = filter.owner.into();
 
                     let mut coin_ids = db.owned_coins_ids(&owner, start, Some(direction));
-                                        
+
                     let mut started = None;
                     if start.is_some() {
                         // skip initial result

@@ -6,11 +6,11 @@ use crate::{
     schema::{
         check_pagination_parameters,
         scalars::{
-        AssetId,
-        ContractId,
-        HexString,
-        Salt,
-        U64,
+            AssetId,
+            ContractId,
+            HexString,
+            Salt,
+            U64,
         },
     },
     state::IterDirection,
@@ -171,7 +171,7 @@ impl ContractBalanceQuery {
         if check_pagination_parameters(&first, &after, &last, &before) {
             return Err(async_graphql::Error::new("Wrong Argument Combination"))
         };
-    
+
         let db = ctx.data_unchecked::<Database>().clone();
 
         query(

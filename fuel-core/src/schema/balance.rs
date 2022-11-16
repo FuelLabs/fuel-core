@@ -10,9 +10,9 @@ use crate::{
     schema::{
         check_pagination_parameters,
         scalars::{
-        Address,
-        AssetId,
-        U64,
+            Address,
+            AssetId,
+            U64,
         },
     },
     state::{
@@ -123,7 +123,7 @@ impl BalanceQuery {
         if check_pagination_parameters(&first, &after, &last, &before) {
             return Err(async_graphql::Error::new("Wrong Argument Combination"))
         };
-        
+
         let db = ctx.data_unchecked::<Database>();
         let owner = filter.owner.into();
 

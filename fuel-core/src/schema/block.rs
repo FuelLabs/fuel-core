@@ -17,13 +17,13 @@ use crate::{
         FuelBlockDb,
     },
     schema::{
+        check_pagination_parameters,
         scalars::{
             BlockId,
             Signature,
             U64,
         },
         tx::types::Transaction,
-        check_pagination_parameters
     },
     service::Config,
     state::IterDirection,

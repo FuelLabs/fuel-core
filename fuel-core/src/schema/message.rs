@@ -21,8 +21,8 @@ use crate::{
         Database,
     },
     query::MessageProofData,
-    state::IterDirection,
     schema::check_pagination_parameters,
+    state::IterDirection,
 };
 use async_graphql::{
     connection::{
