@@ -4,7 +4,10 @@ use super::scalars::{
 };
 use crate::{
     database::{
-        storage::FuelBlocks,
+        storage::{
+            FuelBlocks,
+            SealedBlockConsensus,
+        },
         Database,
         KvStoreError,
     },
@@ -16,6 +19,7 @@ use crate::{
     schema::{
         scalars::{
             BlockId,
+            Signature,
             U64,
         },
         tx::types::Transaction,
@@ -34,6 +38,7 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
+    Union,
 };
 use fuel_core_interfaces::{
     common::{
@@ -48,6 +53,7 @@ use fuel_core_interfaces::{
     },
     model::{
         FuelApplicationHeader,
+        FuelBlockConsensus,
         FuelBlockHeader,
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -67,6 +73,15 @@ pub struct Block {
 
 pub struct Header(pub(crate) FuelBlockHeader);
 
+#[derive(Union)]
+pub enum Consensus {
+    PoA(PoAConsensus),
+}
+
+pub struct PoAConsensus {
+    signature: Signature,
+}
+
 #[Object]
 impl Block {
     async fn id(&self) -> BlockId {
@@ -77,6 +92,18 @@ impl Block {
 
     async fn header(&self) -> &Header {
         &self.header
+    }
+
+    async fn consensus(&self, ctx: &Context<'_>) -> async_graphql::Result<Consensus> {
+        let db = ctx.data_unchecked::<Database>().clone();
+        let id = self.header.0.id().into();
+        let consensus = db
+            .storage::<SealedBlockConsensus>()
+            .get(&id)
+            .map(|c| c.map(|c| c.into_owned().into()))?
+            .ok_or(KvStoreError::NotFound)?;
+
+        Ok(consensus)
     }
 
     async fn transactions(
@@ -149,6 +176,14 @@ impl Header {
     /// Hash of the application header.
     async fn application_hash(&self) -> Bytes32 {
         (*self.0.application_hash()).into()
+    }
+}
+
+#[Object]
+impl PoAConsensus {
+    /// Gets the signature of the block produced by `PoA` consensus.
+    async fn signature(&self) -> Signature {
+        self.signature
     }
 }
 
@@ -475,5 +510,15 @@ impl From<FuelBlockDb> for Block {
 impl From<FuelBlockDb> for Header {
     fn from(block: FuelBlockDb) -> Self {
         Header(block.header)
+    }
+}
+
+impl From<FuelBlockConsensus> for Consensus {
+    fn from(consensus: FuelBlockConsensus) -> Self {
+        match consensus {
+            FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
+                signature: poa.signature.into(),
+            }),
+        }
     }
 }
