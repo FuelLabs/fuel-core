@@ -550,9 +550,9 @@ mod tests {
         }
     }
 
-    // Simulate 2 Sets of Sentry nodes
-    // In both Sets, a single Node should only be connected to their sentry nodes
-    // While other nodes can and should connect to nodes outside of the Set
+    // Simulate 2 Sets of Sentry nodes.
+    // In both Sets, a single Guarded Node should only be connected to their sentry nodes.
+    // While other nodes can and should connect to nodes outside of the Sentry Set.
     #[tokio::test]
     #[instrument]
     async fn sentry_nodes_working() {
@@ -573,7 +573,7 @@ mod tests {
             .expect("valid gossipsub configuration");
         p2p_config.gossipsub_config = gossipsub_builder;
 
-        let build_nodes = || async {
+        let build_sentry_nodes = || async {
             let instantiate_nodes: Vec<_> = (0..reserved_nodes_size)
                 .map(|_| async {
                     let mut node = build_fuel_p2p_service(p2p_config.clone());
@@ -587,47 +587,47 @@ mod tests {
                 })
                 .collect();
 
-            // collect reserved nodes
-            let reserved_nodes_collected =
-                futures::future::join_all(instantiate_nodes).await;
+            // collect sentry nodes
+            let sentry_nodes = futures::future::join_all(instantiate_nodes).await;
 
             // store resrved nodes' addresses
-            let reserved_nodes: Vec<Multiaddr> = reserved_nodes_collected
+            let reserved_nodes: Vec<Multiaddr> = sentry_nodes
                 .iter()
                 .map(|(node, address)| {
                     build_node_multiaddr(node.local_peer_id, address.clone())
                 })
                 .collect();
 
-            // set up the sentry node with `reserved_nodes_only_mode`
-            let protected_node = {
+            // set up the guraded node with `reserved_nodes_only_mode`
+            let guarded_node = {
                 let mut config = p2p_config.clone();
                 config.reserved_nodes = reserved_nodes;
                 config.reserved_nodes_only_mode = true;
                 build_fuel_p2p_service(config)
             };
 
-            (protected_node, reserved_nodes_collected)
+            (guarded_node, sentry_nodes)
         };
 
-        let (mut first_sentry_node, mut first_reserved_nodes) = build_nodes().await;
-        let (mut second_sentry_node, mut second_reserved_nodes) = build_nodes().await;
+        let (mut first_guarded_node, mut first_sentry_nodes) = build_sentry_nodes().await;
+        let (mut second_guarded_node, mut second_sentry_nodes) =
+            build_sentry_nodes().await;
 
-        let mut first_sentry_set: HashSet<_> = first_reserved_nodes
+        let mut first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
             .map(|(node, _)| node.local_peer_id)
             .collect();
 
-        let mut second_sentry_set: HashSet<_> = second_reserved_nodes
+        let mut second_sentry_set: HashSet<_> = second_sentry_nodes
             .iter()
             .map(|(node, _)| node.local_peer_id)
             .collect();
 
-        let (mut single_reserved_node, _) = first_reserved_nodes.pop().unwrap();
+        let (mut single_sentry_node, _) = first_sentry_nodes.pop().unwrap();
 
         loop {
             tokio::select! {
-                event_from_first_protected = first_sentry_node.next_event() => {
+                event_from_first_protected = first_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_protected {
                         if !first_sentry_set.remove(&peer_id)            {
                             panic!("The node should only connect to the specified reserved nodes!");
@@ -635,7 +635,7 @@ mod tests {
                     }
                     tracing::info!("Event from the first protected node: {:?}", event_from_first_protected);
                 },
-                event_from_second_protected = second_sentry_node.next_event() => {
+                event_from_second_protected = second_guarded_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_protected {
                         if !second_sentry_set.remove(&peer_id)            {
                             panic!("The node should only connect to the specified reserved nodes!");
@@ -643,11 +643,11 @@ mod tests {
                     }
                     tracing::info!("Event from the second protected node: {:?}", event_from_second_protected);
                 },
-                // Poll one of the reserved nodes
-                _ = single_reserved_node.next_event() => {
+                // Poll one of the reserved, sentry nodes
+                _ = single_sentry_node.next_event() => {
                     // This reserved node has connected to more than the number of reserved nodes it is part of.
                     // It means it has discovered other nodes in the network.
-                    if single_reserved_node.get_peers_ids().len() > double_reserved_nodes_size - 2 {
+                    if single_sentry_node.get_peers_ids().len() > double_reserved_nodes_size - 2 {
                         // At the same time, the sentry nodes have only connected to the reserved nodes.
                         if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
                             break;
@@ -657,14 +657,14 @@ mod tests {
                 }
                 // Keep polling other nodes to do their work
                 _ = async {
-                    for (node, _) in &mut first_reserved_nodes {
+                    for (node, _) in &mut first_sentry_nodes {
                         node.next_event().await;
                     }
 
 
                 } => {},
                 _ = async {
-                    for (node, _) in &mut second_reserved_nodes {
+                    for (node, _) in &mut second_sentry_nodes {
                         node.next_event().await;
                     }
                 } => {}
