@@ -213,7 +213,7 @@ pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMu
     }
 }
 
-/// Wraper over Noise protocol authentication.
+/// Wrapper over Noise protocol authentication.
 /// Used in case where the local node wants to limit
 /// who establishes the connection with it.
 /// During the Identity (PeerId) exchange, the node can check if the inbound connection
