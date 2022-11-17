@@ -526,7 +526,7 @@ mod tests {
     }
 
     /// attaches PeerId to the Multiaddr
-    fn build_bootstrap_node(peer_id: PeerId, address: Multiaddr) -> Multiaddr {
+    fn build_node_multiaddr(peer_id: PeerId, address: Multiaddr) -> Multiaddr {
         format!("{}/p2p/{}", address, peer_id).parse().unwrap()
     }
 
@@ -556,21 +556,24 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn sentry_nodes_working() {
-        let mut p2p_config = P2PConfig::default_with_network("sentry_nodes_working");
-
         let reserved_nodes_size = 4;
+        let double_reserved_nodes_size = reserved_nodes_size * 2;
 
-        // let's increase the mesh number
+        let mut p2p_config = P2PConfig::default_with_network("sentry_nodes_working");
+        // enable mdns for faster discovery of nodes
+        p2p_config.enable_mdns = true;
+
+        // let's increase the ideal mesh number
         // this still should not affect the nodes that are enabling `reserved_nodes_only_mode`
         let gossipsub_builder = default_gossipsub_builder()
-            .mesh_n(8)
-            .mesh_n_low(6)
-            .mesh_n_high(12)
+            .mesh_n(double_reserved_nodes_size)
+            .mesh_n_low(double_reserved_nodes_size - 2)
+            .mesh_n_high(double_reserved_nodes_size + 4)
             .build()
             .expect("valid gossipsub configuration");
         p2p_config.gossipsub_config = gossipsub_builder;
 
-        let build_sentry_nodes = || async {
+        let build_nodes = || async {
             let instantiate_nodes: Vec<_> = (0..reserved_nodes_size)
                 .map(|_| async {
                     let mut node = build_fuel_p2p_service(p2p_config.clone());
@@ -584,18 +587,19 @@ mod tests {
                 })
                 .collect();
 
-            // collect sentry nodes
-            let sentry_nodes = futures::future::join_all(instantiate_nodes).await;
+            // collect reserved nodes
+            let reserved_nodes_collected =
+                futures::future::join_all(instantiate_nodes).await;
 
-            // store Sentry nodes' addresses as `reserved_nodes`
-            let reserved_nodes: Vec<Multiaddr> = sentry_nodes
+            // store resrved nodes' addresses
+            let reserved_nodes: Vec<Multiaddr> = reserved_nodes_collected
                 .iter()
                 .map(|(node, address)| {
-                    build_bootstrap_node(node.local_peer_id, address.clone())
+                    build_node_multiaddr(node.local_peer_id, address.clone())
                 })
                 .collect();
 
-            // set up the node with `reserved_nodes_only_mode`
+            // set up the sentry node with `reserved_nodes_only_mode`
             let protected_node = {
                 let mut config = p2p_config.clone();
                 config.reserved_nodes = reserved_nodes;
@@ -603,61 +607,64 @@ mod tests {
                 build_fuel_p2p_service(config)
             };
 
-            (protected_node, sentry_nodes)
+            (protected_node, reserved_nodes_collected)
         };
 
-        let (mut first_protected_node, mut first_sentry) = build_sentry_nodes().await;
-        let (mut second_protected_node, mut second_sentry) = build_sentry_nodes().await;
+        let (mut first_sentry_node, mut first_reserved_nodes) = build_nodes().await;
+        let (mut second_sentry_node, mut second_reserved_nodes) = build_nodes().await;
 
-        let mut first_sentry_set: HashSet<_> = first_sentry
+        let mut first_sentry_set: HashSet<_> = first_reserved_nodes
             .iter()
             .map(|(node, _)| node.local_peer_id)
             .collect();
 
-        let mut second_sentry_set: HashSet<_> = second_sentry
+        let mut second_sentry_set: HashSet<_> = second_reserved_nodes
             .iter()
             .map(|(node, _)| node.local_peer_id)
             .collect();
+
+        let (mut single_reserved_node, _) = first_reserved_nodes.pop().unwrap();
 
         loop {
             tokio::select! {
-                event_from_first_protected = first_protected_node.next_event() => {
+                event_from_first_protected = first_sentry_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_protected {
                         if !first_sentry_set.remove(&peer_id)            {
-                            panic!("The node should only connect to the reserved nodes!")
+                            panic!("The node should only connect to the specified reserved nodes!");
                         }
-
-                        // both "protected" nodes have connected to their reserved nodes
-                        if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
-                            break;
-                        }
-
                     }
                     tracing::info!("Event from the first protected node: {:?}", event_from_first_protected);
                 },
-                event_from_second_protected = second_protected_node.next_event() => {
+                event_from_second_protected = second_sentry_node.next_event() => {
                     if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_protected {
                         if !second_sentry_set.remove(&peer_id)            {
-                            panic!("The node should only connect to the reserved nodes!")
-                        }
-
-                        // both "protected" nodes have connected to their reserved nodes
-                        if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
-                            break;
+                            panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
                     tracing::info!("Event from the second protected node: {:?}", event_from_second_protected);
                 },
-                // keep polling other nodes to do their work
+                // Poll one of the reserved nodes
+                _ = single_reserved_node.next_event() => {
+                    // This reserved node has connected to more than the number of reserved nodes it is part of.
+                    // It means it has discovered other nodes in the network.
+                    if single_reserved_node.get_peers_ids().len() > double_reserved_nodes_size - 2 {
+                        // At the same time, the sentry nodes have only connected to the reserved nodes.
+                        if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
+                            break;
+                        }
+                    }
+
+                }
+                // Keep polling other nodes to do their work
                 _ = async {
-                    for (node, _) in &mut first_sentry {
+                    for (node, _) in &mut first_reserved_nodes {
                         node.next_event().await;
                     }
 
 
                 } => {},
                 _ = async {
-                    for (node, _) in &mut second_sentry {
+                    for (node, _) in &mut second_reserved_nodes {
                         node.next_event().await;
                     }
                 } => {}
@@ -710,7 +717,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
         )];
@@ -756,7 +763,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
         )];
@@ -845,7 +852,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
         )];
@@ -934,7 +941,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
         )];
@@ -1019,7 +1026,7 @@ mod tests {
         };
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_bootstrap_node(
+        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
             node_a.local_peer_id,
             node_a_address.clone().unwrap(),
         )];
