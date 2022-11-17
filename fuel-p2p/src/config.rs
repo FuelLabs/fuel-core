@@ -234,6 +234,8 @@ impl<P, C: Zeroize, R> NoiseWithReservedNodes<P, C, R> {
             noise_authenticated,
             reserved_nodes: reserved_nodes
                 .iter()
+                // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
+                // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
                 .map(|address| PeerId::try_from_multiaddr(address).unwrap())
                 .collect(),
         }
