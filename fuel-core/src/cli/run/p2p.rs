@@ -49,7 +49,7 @@ pub struct P2pArgs {
     #[clap(long = "reserved_nodes")]
     pub reserved_nodes: Vec<Multiaddr>,
 
-    /// Set to true if you only want to connect to the reserved nodes
+    /// With this set to `true` you create a guarded node that is only ever connected to trusted, reserved nodes.    
     #[clap(long = "reserved_nodes_only_mode")]
     pub reserved_nodes_only_mode: bool,
 
