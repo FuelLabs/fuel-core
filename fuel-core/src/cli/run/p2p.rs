@@ -160,6 +160,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             address: args
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
+            public_address: args.public_address,
             tcp_port: args.peering_port,
             max_block_size: args.max_block_size,
             bootstrap_nodes: args.bootstrap_nodes,
