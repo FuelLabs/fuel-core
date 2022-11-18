@@ -49,6 +49,7 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::{
+        AddressScore,
         SwarmBuilder,
         SwarmEvent,
     },
@@ -149,6 +150,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let network_metadata = NetworkMetadata { gossipsub_topics };
 
         let metrics = config.metrics;
+
+        if let Some(public_address) = config.public_address {
+            let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
+        }
 
         Ok(Self {
             local_peer_id,
