@@ -32,11 +32,11 @@ pub struct P2pArgs {
     pub address: Option<IpAddr>,
 
     /// Optional address of your local node made reachable for other nodes in the network.
-    #[clap(long = "public-address")]
+    #[clap(long = "public_address")]
     pub public_address: Option<Multiaddr>,
 
     /// p2p network's TCP Port
-    #[clap(long = "peering-port", default_value = "4001")]
+    #[clap(long = "peering_port", default_value = "4001")]
     pub peering_port: u16,
 
     /// Max Block size
@@ -121,6 +121,10 @@ pub struct P2pArgs {
 
 impl From<P2pArgs> for anyhow::Result<P2PConfig> {
     fn from(args: P2pArgs) -> Self {
+        eprintln!(
+            "------------------------p2p address is: {:?}",
+            args.public_address
+        );
         let local_keypair = {
             match args.keypair {
                 Some(path) => {
