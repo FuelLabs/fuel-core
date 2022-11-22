@@ -57,6 +57,9 @@ pub struct P2PConfig {
     /// IP address for Swarm to listen on
     pub address: IpAddr,
 
+    /// Optional address of your local node made reachable for other nodes in the network.
+    pub public_address: Option<Multiaddr>,
+
     /// The TCP port that Swarm listens on
     pub tcp_port: u16,
 
@@ -111,6 +114,7 @@ impl P2PConfig {
             local_keypair,
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
+            public_address: None,
             tcp_port: 0,
             max_block_size: 100_000,
             bootstrap_nodes: vec![],
