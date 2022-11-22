@@ -7,10 +7,21 @@ use crate::gossipsub::{
     },
 };
 
+use futures::{
+    AsyncRead,
+    AsyncWrite,
+    Future,
+    FutureExt,
+};
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
         transport::Boxed,
+        upgrade::{
+            read_length_prefixed,
+            write_length_prefixed,
+        },
+        UpgradeInfo,
     },
     identity::{
         secp256k1::SecretKey,
@@ -23,16 +34,22 @@ use libp2p::{
         TokioTcpTransport,
     },
     yamux,
+    InboundUpgrade,
     Multiaddr,
+    OutboundUpgrade,
     PeerId,
     Transport,
 };
 
 use std::{
+    error::Error,
+    fmt,
+    io,
     net::{
         IpAddr,
         Ipv4Addr,
     },
+    pin::Pin,
     time::Duration,
 };
 
@@ -53,6 +70,9 @@ pub struct P2PConfig {
 
     /// Name of the Network
     pub network_name: String,
+
+    /// Checksum (sha256) of Chain ID + Chain Config
+    pub checksum: Vec<u8>,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
@@ -110,6 +130,7 @@ impl P2PConfig {
         P2PConfig {
             local_keypair,
             network_name: network_name.into(),
+            checksum: vec![1, 2, 3, 4],
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 0,
             max_block_size: 100_000,
@@ -138,7 +159,10 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(
+    local_keypair: Keypair,
+    checksum: Vec<u8>,
+) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
@@ -167,10 +191,108 @@ pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMu
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 
+    let fuel_upgrade = FuelUpgrade::new(checksum);
+
     transport
         .upgrade(libp2p::core::upgrade::Version::V1)
         .authenticate(auth_config)
+        .apply(fuel_upgrade)
         .multiplex(multiplex_config)
         .timeout(TRANSPORT_TIMEOUT)
         .boxed()
+}
+
+#[derive(Debug, Clone)]
+struct FuelUpgrade {
+    checksum: Vec<u8>,
+}
+
+impl FuelUpgrade {
+    fn new(checksum: Vec<u8>) -> Self {
+        Self { checksum }
+    }
+}
+
+#[derive(Debug)]
+enum FuelUpgradeError {
+    IncorrectChecksum,
+    Io(io::Error),
+}
+
+impl fmt::Display for FuelUpgradeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FuelUpgradeError::Io(e) => write!(f, "{}", e),            
+            FuelUpgradeError::IncorrectChecksum => f.write_str("Fuel node checksum does not match, either ChainId or ChainConfig are not the same, or both."),            
+        }
+    }
+}
+
+impl From<io::Error> for FuelUpgradeError {
+    fn from(e: io::Error) -> Self {
+        FuelUpgradeError::Io(e)
+    }
+}
+
+impl Error for FuelUpgradeError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            FuelUpgradeError::Io(e) => Some(e),
+            FuelUpgradeError::IncorrectChecksum => None,
+        }
+    }
+}
+
+impl UpgradeInfo for FuelUpgrade {
+    type Info = &'static [u8];
+    type InfoIter = std::iter::Once<Self::Info>;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        std::iter::once(b"/fuel/upgrade/0")
+    }
+}
+
+impl<C> InboundUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        async move {
+            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
+            if res != self.checksum {
+                return Err(FuelUpgradeError::IncorrectChecksum)
+            }
+
+            write_length_prefixed(&mut socket, &self.checksum).await?;
+
+            Ok(socket)
+        }
+        .boxed()
+    }
+}
+
+impl<C> OutboundUpgrade<C> for FuelUpgrade
+where
+    C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
+    type Output = C;
+    type Error = FuelUpgradeError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
+        async move {
+            write_length_prefixed(&mut socket, &self.checksum).await?;
+
+            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
+            if res != self.checksum {
+                return Err(FuelUpgradeError::IncorrectChecksum)
+            }
+            Ok(socket)
+        }
+        .boxed()
+    }
 }
