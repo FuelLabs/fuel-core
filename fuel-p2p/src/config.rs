@@ -64,6 +64,7 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
+/// Sha256 hash of chain id and chain config
 type Checksum = [u8; 32];
 
 #[derive(Clone, Debug)]
@@ -204,6 +205,10 @@ pub(crate) fn build_transport(
         .boxed()
 }
 
+/// When two nodes want to establish a connection they need to
+/// exchange the Hash of their respective Chain Id and Chain Config.
+/// The connection is only accepted if their hashes match.
+/// This is used to aviod peers having same network name but different configurations connecting to each other.
 #[derive(Debug, Clone)]
 struct FuelUpgrade {
     checksum: Checksum,
