@@ -121,8 +121,7 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let local_peer_id = PeerId::from(config.local_keypair.public());
 
         // configure and build P2P Service
-        let transport =
-            build_transport(config.local_keypair.clone(), config.checksum.clone());
+        let transport = build_transport(config.local_keypair.clone(), config.checksum);
         let behaviour = FuelBehaviour::new(&config, codec.clone());
         let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
             .executor(Box::new(|fut| {
@@ -596,7 +595,7 @@ mod tests {
         let mut node_a = build_fuel_p2p_service(p2p_config.clone()).await;
 
         // different checksum
-        p2p_config.checksum = vec![4, 3, 2, 1];
+        p2p_config.checksum = [1u8; 32];
         // Node B
         let mut node_b = build_fuel_p2p_service(p2p_config).await;
 

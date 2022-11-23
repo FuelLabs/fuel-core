@@ -64,6 +64,8 @@ const MAX_NUM_OF_FRAMES_BUFFERED: usize = 256;
 /// inbound and outbound connections established through the transport.
 const TRANSPORT_TIMEOUT: Duration = Duration::from_secs(20);
 
+type Checksum = [u8; 32];
+
 #[derive(Clone, Debug)]
 pub struct P2PConfig {
     pub local_keypair: Keypair,
@@ -72,7 +74,7 @@ pub struct P2PConfig {
     pub network_name: String,
 
     /// Checksum (sha256) of Chain ID + Chain Config
-    pub checksum: Vec<u8>,
+    pub checksum: Checksum,
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
@@ -130,7 +132,7 @@ impl P2PConfig {
         P2PConfig {
             local_keypair,
             network_name: network_name.into(),
-            checksum: vec![1, 2, 3, 4],
+            checksum: [0u8; 32],
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
             tcp_port: 0,
             max_block_size: 100_000,
@@ -161,7 +163,7 @@ impl P2PConfig {
 /// mplex or yamux for multiplexing
 pub(crate) fn build_transport(
     local_keypair: Keypair,
-    checksum: Vec<u8>,
+    checksum: Checksum,
 ) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
@@ -204,11 +206,11 @@ pub(crate) fn build_transport(
 
 #[derive(Debug, Clone)]
 struct FuelUpgrade {
-    checksum: Vec<u8>,
+    checksum: Checksum,
 }
 
 impl FuelUpgrade {
-    fn new(checksum: Vec<u8>) -> Self {
+    fn new(checksum: Checksum) -> Self {
         Self { checksum }
     }
 }
