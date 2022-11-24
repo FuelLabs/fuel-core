@@ -1452,10 +1452,11 @@ dependencies = [
 
 [[package]]
 name = "cynic"
-version = "2.2.0"
-source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07097754f62237ba04e4c3315d50c0f6e85e6b2b95d57256941c3ec88b03be73"
 dependencies = [
- "cynic-proc-macros 2.2.0",
+ "cynic-proc-macros 2.2.1",
  "serde",
  "serde_json",
  "static_assertions",
@@ -1481,8 +1482,9 @@ dependencies = [
 
 [[package]]
 name = "cynic-codegen"
-version = "2.2.0"
-source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "738b5c475d60eb95d83af1234aba8014f3f934fd166c752339011ac05165457f"
 dependencies = [
  "counter",
  "darling 0.13.4",
@@ -1506,10 +1508,11 @@ dependencies = [
 
 [[package]]
 name = "cynic-proc-macros"
-version = "2.2.0"
-source = "git+https://github.com/xgreenx/cynic?branch=feagure/expose-steaming-operation#a8753b9a287a46a2e1cffaaa7fae2659e60a9787"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa32c5bf6c87846b0332ca4b912881b28c91f8945c972cedeae3fd18eaf65751"
 dependencies = [
- "cynic-codegen 2.2.0",
+ "cynic-codegen 2.2.1",
  "syn",
 ]
 
@@ -2636,7 +2639,7 @@ version = "0.14.1"
 dependencies = [
  "anyhow",
  "clap",
- "cynic 2.2.0",
+ "cynic 2.2.1",
  "derive_more",
  "eventsource-client",
  "fuel-vm",

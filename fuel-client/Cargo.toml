@@ -17,7 +17,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
-cynic = { version = "2", features = ["http-surf"] }
+cynic = { version = "2.2.1", features = ["http-surf"] }
 derive_more = { version = "0.99" }
 eventsource-client = "0.10.2"
 fuel-vm = { version = "0.22", features = ["serde"] }
