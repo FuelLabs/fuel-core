@@ -2,8 +2,8 @@
 source: fuel-client/src/client/schema/tx.rs
 expression: operation.query
 ---
-query Query($_0: TransactionId!) {
-  transaction(id: $_0) {
+query($id: TransactionId!) {
+  transaction(id: $id) {
     gasLimit
     gasPrice
     id
@@ -157,4 +157,5 @@ query Query($_0: TransactionId!) {
     bytecodeLength
   }
 }
+
 
