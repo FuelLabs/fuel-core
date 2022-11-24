@@ -133,12 +133,26 @@ impl FuelClient {
         Self::from_str(url.as_ref())
     }
 
-    async fn query<'a, R: 'a>(&self, q: Operation<'a, R>) -> io::Result<R> {
+    async fn query<ResponseData, Vars>(
+        &self,
+        q: Operation<ResponseData, Vars>,
+    ) -> io::Result<ResponseData>
+    where
+        Vars: serde::Serialize,
+        ResponseData: serde::de::DeserializeOwned + 'static,
+    {
         let response = surf::post(&self.url)
             .run_graphql(q)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
+        Self::decode_response(response)
+    }
+
+    fn decode_response<R>(response: GraphQlResponse<R>) -> io::Result<R>
+    where
+        R: serde::de::DeserializeOwned + 'static,
+    {
         match (response.data, response.errors) {
             (Some(d), _) => Ok(d),
             (_, Some(e)) => Err(from_strings_errors_to_std_error(
@@ -148,10 +162,14 @@ impl FuelClient {
         }
     }
 
-    async fn subscribe<'a, R: 'a>(
+    async fn subscribe<ResponseData, Vars>(
         &self,
-        q: StreamingOperation<'a, R>,
-    ) -> io::Result<impl futures::Stream<Item = io::Result<R>> + 'a> {
+        q: StreamingOperation<ResponseData, Vars>,
+    ) -> io::Result<impl futures::Stream<Item = io::Result<ResponseData>>>
+    where
+        Vars: serde::Serialize,
+        ResponseData: serde::de::DeserializeOwned + 'static,
+    {
         use eventsource_client as es;
         let mut url = self.url.clone();
         url.set_path("/graphql-sub");
@@ -183,11 +201,10 @@ impl FuelClient {
             .filter_map(move |result| {
                 let r = match result {
                     Ok(es::SSE::Event(es::Event { data, .. })) => {
-                        match serde_json::from_str::<GraphQlResponse<serde_json::Value>>(
-                            &data,
-                        ) {
+                        match serde_json::from_str::<GraphQlResponse<ResponseData>>(&data)
+                        {
                             Ok(resp) => {
-                                match q.decode_response(resp) {
+                                match Self::decode_response(resp) {
                                     Ok(resp) => {
                                         match last.replace(data) {
                                             // Remove duplicates
@@ -220,16 +237,6 @@ impl FuelClient {
                     ))),
                 };
                 futures::future::ready(r)
-            })
-            .map(|r| match r {
-                Ok(response) => match (response.data, response.errors) {
-                    (Some(d), _) => Ok(d),
-                    (_, Some(e)) => Err(from_strings_errors_to_std_error(
-                        e.into_iter().map(|e| e.message).collect(),
-                    )),
-                    _ => Err(io::Error::new(io::ErrorKind::Other, "Invalid response")),
-                },
-                Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("{:?}", e))),
             });
 
         Ok(stream)
@@ -263,7 +270,7 @@ impl FuelClient {
         utxo_validation: Option<bool>,
     ) -> io::Result<Vec<Receipt>> {
         let tx = tx.clone().to_bytes();
-        let query = schema::tx::DryRun::build(&DryRunArg {
+        let query = schema::tx::DryRun::build(DryRunArg {
             tx: HexString(Bytes(tx)),
             utxo_validation,
         });
@@ -276,7 +283,7 @@ impl FuelClient {
 
     pub async fn submit(&self, tx: &Transaction) -> io::Result<TransactionId> {
         let tx = tx.clone().to_bytes();
-        let query = schema::tx::Submit::build(&TxArg {
+        let query = schema::tx::Submit::build(TxArg {
             tx: HexString(Bytes(tx)),
         });
 
@@ -297,7 +304,7 @@ impl FuelClient {
     }
 
     pub async fn start_session(&self) -> io::Result<String> {
-        let query = schema::StartSession::build(&());
+        let query = schema::StartSession::build(());
 
         self.query(query)
             .await
@@ -305,26 +312,26 @@ impl FuelClient {
     }
 
     pub async fn end_session(&self, id: &str) -> io::Result<bool> {
-        let query = schema::EndSession::build(&IdArg { id: id.into() });
+        let query = schema::EndSession::build(IdArg { id: id.into() });
 
         self.query(query).await.map(|r| r.end_session)
     }
 
     pub async fn reset(&self, id: &str) -> io::Result<bool> {
-        let query = schema::Reset::build(&IdArg { id: id.into() });
+        let query = schema::Reset::build(IdArg { id: id.into() });
 
         self.query(query).await.map(|r| r.reset)
     }
 
     pub async fn execute(&self, id: &str, op: &Opcode) -> io::Result<bool> {
         let op = serde_json::to_string(op)?;
-        let query = schema::Execute::build(&schema::ExecuteArgs { id: id.into(), op });
+        let query = schema::Execute::build(schema::ExecuteArgs { id: id.into(), op });
 
         self.query(query).await.map(|r| r.execute)
     }
 
     pub async fn register(&self, id: &str, register: RegisterId) -> io::Result<Word> {
-        let query = schema::Register::build(&RegisterArgs {
+        let query = schema::Register::build(RegisterArgs {
             id: id.into(),
             register: register.into(),
         });
@@ -338,7 +345,7 @@ impl FuelClient {
         start: usize,
         size: usize,
     ) -> io::Result<Vec<u8>> {
-        let query = schema::Memory::build(&MemoryArgs {
+        let query = schema::Memory::build(MemoryArgs {
             id: id.into(),
             start: start.into(),
             size: size.into(),
@@ -406,7 +413,7 @@ impl FuelClient {
     }
 
     pub async fn transaction(&self, id: &str) -> io::Result<Option<TransactionResponse>> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;
 
@@ -415,7 +422,7 @@ impl FuelClient {
 
     /// Get the status of a transaction
     pub async fn transaction_status(&self, id: &str) -> io::Result<TransactionStatus> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
@@ -439,8 +446,7 @@ impl FuelClient {
         id: &str,
     ) -> io::Result<impl futures::Stream<Item = io::Result<TransactionStatus>>> {
         use cynic::SubscriptionBuilder;
-        let s =
-            schema::tx::StatusChangeSubscription::build(&TxIdArgs { id: id.parse()? });
+        let s = schema::tx::StatusChangeSubscription::build(TxIdArgs { id: id.parse()? });
 
         let stream = self.subscribe(s).await?.map(|tx| {
             let tx = tx?;
@@ -473,7 +479,7 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
-        let query = schema::tx::TransactionsQuery::build(&request.into());
+        let query = schema::tx::TransactionsQuery::build(request.into());
         let transactions = self.query(query).await?.transactions.try_into()?;
         Ok(transactions)
     }
@@ -485,7 +491,7 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<TransactionResponse, String>> {
         let owner: schema::Address = owner.parse()?;
-        let query = schema::tx::TransactionsByOwnerQuery::build(&(owner, request).into());
+        let query = schema::tx::TransactionsByOwnerQuery::build((owner, request).into());
 
         let transactions = self.query(query).await?.transactions_by_owner.try_into()?;
         Ok(transactions)
@@ -495,7 +501,7 @@ impl FuelClient {
         &self,
         id: &str,
     ) -> io::Result<Vec<::fuel_vm::fuel_tx::Receipt>> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
@@ -516,7 +522,7 @@ impl FuelClient {
         blocks_to_produce: u64,
         time: Option<TimeParameters>,
     ) -> io::Result<u64> {
-        let query = schema::block::BlockMutation::build(&ProduceBlockArgs {
+        let query = schema::block::BlockMutation::build(ProduceBlockArgs {
             blocks_to_produce: blocks_to_produce.into(),
             time,
         });
@@ -528,7 +534,7 @@ impl FuelClient {
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
         let query =
-            schema::block::BlockByIdQuery::build(&BlockByIdArgs { id: id.parse()? });
+            schema::block::BlockByIdQuery::build(BlockByIdArgs { id: id.parse()? });
 
         let block = self.query(query).await?.block;
 
@@ -540,7 +546,7 @@ impl FuelClient {
         &self,
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::block::Block, String>> {
-        let query = schema::block::BlocksQuery::build(&request.into());
+        let query = schema::block::BlocksQuery::build(request.into());
 
         let blocks = self.query(query).await?.blocks.into();
 
@@ -567,7 +573,7 @@ impl FuelClient {
             Some(asset_id) => asset_id.parse()?,
             None => schema::AssetId::default(),
         };
-        let query = schema::coin::CoinsQuery::build(&(owner, asset_id, request).into());
+        let query = schema::coin::CoinsQuery::build((owner, asset_id, request).into());
 
         let coins = self.query(query).await?.coins.into();
         Ok(coins)
@@ -595,7 +601,7 @@ impl FuelClient {
         let excluded_ids: Option<ExcludeInput> =
             excluded_ids.map(ExcludeInput::from_tuple).transpose()?;
         let query = schema::resource::ResourcesToSpendQuery::build(
-            &(owner, spend_query, excluded_ids).into(),
+            (owner, spend_query, excluded_ids).into(),
         );
 
         let resources_per_asset = self.query(query).await?.resources_to_spend;
@@ -648,7 +654,7 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::balance::Balance, String>> {
         let owner: schema::Address = owner.parse()?;
-        let query = schema::balance::BalancesQuery::build(&(owner, request).into());
+        let query = schema::balance::BalancesQuery::build((owner, request).into());
 
         let balances = self.query(query).await?.balances.into();
         Ok(balances)
@@ -660,9 +666,8 @@ impl FuelClient {
         request: PaginationRequest<String>,
     ) -> io::Result<PaginatedResult<schema::contract::ContractBalance, String>> {
         let contract_id: schema::ContractId = contract.parse()?;
-        let query = schema::contract::ContractBalancesQuery::build(
-            &(contract_id, request).into(),
-        );
+        let query =
+            schema::contract::ContractBalancesQuery::build((contract_id, request).into());
 
         let balances = self.query(query).await?.contract_balances.into();
 
@@ -676,7 +681,7 @@ impl FuelClient {
     ) -> io::Result<PaginatedResult<schema::message::Message, String>> {
         let owner: Option<schema::Address> =
             owner.map(|owner| owner.parse()).transpose()?;
-        let query = schema::message::OwnedMessageQuery::build(&(owner, request).into());
+        let query = schema::message::OwnedMessageQuery::build((owner, request).into());
 
         let messages = self.query(query).await?.messages.into();
 
@@ -691,7 +696,7 @@ impl FuelClient {
     ) -> io::Result<Option<schema::message::MessageProof>> {
         let transaction_id: schema::TransactionId = transaction_id.parse()?;
         let message_id: schema::MessageId = message_id.parse()?;
-        let query = schema::message::MessageProofQuery::build(&MessageProofArgs {
+        let query = schema::message::MessageProofQuery::build(MessageProofArgs {
             transaction_id,
             message_id,
         });
@@ -708,7 +713,7 @@ impl FuelClient {
         &self,
         id: &str,
     ) -> io::Result<Option<::fuel_vm::fuel_tx::Transaction>> {
-        let query = schema::tx::TransactionQuery::build(&TxIdArgs { id: id.parse()? });
+        let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let transaction = self.query(query).await?.transaction;
 

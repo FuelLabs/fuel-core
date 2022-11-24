@@ -16,7 +16,7 @@ use super::{
     Bytes32,
 };
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct BlockByIdArgs {
     pub id: BlockId,
 }
@@ -25,10 +25,10 @@ pub struct BlockByIdArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "BlockByIdArgs"
+    variables = "BlockByIdArgs"
 )]
 pub struct BlockByIdQuery {
-    #[arguments(id = & args.id)]
+    #[arguments(id: $id)]
     pub block: Option<Block>,
 }
 
@@ -36,10 +36,10 @@ pub struct BlockByIdQuery {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
+    variables = "ConnectionArgs"
 )]
 pub struct BlocksQuery {
-    #[arguments(after = & args.after, before = & args.before, first = & args.first, last = & args.last)]
+    #[arguments(after: $after, before: $before, first: $first, last: $last)]
     pub blocks: BlockConnection,
 }
 
@@ -90,7 +90,7 @@ pub struct TimeParameters {
     pub block_time_interval: U64,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
     pub blocks_to_produce: U64,
     pub time: Option<TimeParameters>,
@@ -99,11 +99,11 @@ pub struct ProduceBlockArgs {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
-    argument_struct = "ProduceBlockArgs",
+    variables = "ProduceBlockArgs",
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(blocks_to_produce = &args.blocks_to_produce, time = &args.time)]
+    #[arguments(blocksToProduce: $blocks_to_produce, time: $time)]
     pub produce_blocks: U64,
 }
 
@@ -126,6 +126,8 @@ pub struct Header {
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Consensus {
     PoAConsensus(PoAConsensus),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -144,6 +146,7 @@ impl Block {
                 let producer_pub_key = signature.recover(&message);
                 producer_pub_key.ok()
             }
+            Consensus::Unknown => None,
         }
     }
 }

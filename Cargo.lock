@@ -1160,6 +1160,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "counter"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d458e66999348f56fd3ffcfbb7f7951542075ca8359687c703de6500c1ddccd"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1433,10 +1442,24 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a086fdece2d6206e52894d978a09b09efca1e61ac59d69a934eab74d8d9ee40"
 dependencies = [
- "cynic-proc-macros",
+ "cynic-proc-macros 1.0.0",
  "json-decode",
  "serde",
  "serde_json",
+ "surf",
+ "thiserror",
+]
+
+[[package]]
+name = "cynic"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07097754f62237ba04e4c3315d50c0f6e85e6b2b95d57256941c3ec88b03be73"
+dependencies = [
+ "cynic-proc-macros 2.2.1",
+ "serde",
+ "serde_json",
+ "static_assertions",
  "surf",
  "thiserror",
 ]
@@ -1449,8 +1472,24 @@ checksum = "dd9f0852fe3d3637d4dccb4b69e5a8f881214fc38907a528385ff71cd7b15c3e"
 dependencies = [
  "Inflector",
  "darling 0.13.4",
- "graphql-parser",
+ "graphql-parser 0.3.0",
  "lazy_static",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn",
+]
+
+[[package]]
+name = "cynic-codegen"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "738b5c475d60eb95d83af1234aba8014f3f934fd166c752339011ac05165457f"
+dependencies = [
+ "counter",
+ "darling 0.13.4",
+ "graphql-parser 0.4.0",
+ "once_cell",
  "proc-macro2",
  "quote",
  "strsim",
@@ -1463,7 +1502,17 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1cabdef46a6ff3c06e337a9c0c6b7d2f71aefae4ab582ed319a0d454ea1085f9"
 dependencies = [
- "cynic-codegen",
+ "cynic-codegen 1.0.0",
+ "syn",
+]
+
+[[package]]
+name = "cynic-proc-macros"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa32c5bf6c87846b0332ca4b912881b28c91f8945c972cedeae3fd18eaf65751"
+dependencies = [
+ "cynic-codegen 2.2.1",
  "syn",
 ]
 
@@ -2590,7 +2639,7 @@ version = "0.14.1"
 dependencies = [
  "anyhow",
  "clap",
- "cynic",
+ "cynic 2.2.1",
  "derive_more",
  "eventsource-client",
  "fuel-vm",
@@ -2599,6 +2648,7 @@ dependencies = [
  "hex",
  "insta",
  "itertools",
+ "json-decode",
  "schemafy_lib",
  "serde",
  "serde_json",
@@ -2615,7 +2665,7 @@ checksum = "04c4c4a52e2dee7e026307877d79b0bdacbb02cb155a01c2da2e56dc7838459a"
 dependencies = [
  "anyhow",
  "clap",
- "cynic",
+ "cynic 1.0.0",
  "derive_more",
  "eventsource-client",
  "fuel-vm",
@@ -3134,6 +3184,16 @@ name = "graphql-parser"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d1abd4ce5247dfc04a03ccde70f87a048458c9356c7e41d21ad8c407b3dde6f2"
+dependencies = [
+ "combine",
+ "thiserror",
+]
+
+[[package]]
+name = "graphql-parser"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ebc8013b4426d5b81a4364c419a95ed0b404af2b82e2457de52d9348f0e474"
 dependencies = [
  "combine",
  "thiserror",

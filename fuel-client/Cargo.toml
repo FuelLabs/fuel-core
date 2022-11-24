@@ -17,7 +17,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
-cynic = { version = "1.0", features = ["surf"] }
+cynic = { version = "2.2.1", features = ["http-surf"] }
 derive_more = { version = "0.99" }
 eventsource-client = "0.10.2"
 fuel-vm = { version = "0.22", features = ["serde"] }
@@ -25,6 +25,7 @@ futures = "0.3"
 futures-timer = "3.0"
 hex = "0.4"
 itertools = "0.10"
+json-decode = "0.6"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 surf = { version = "2.2", default-features = false, features = ["h1-client-rustls"] }

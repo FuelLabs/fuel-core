@@ -1,11 +1,9 @@
 ---
 source: fuel-client/src/client/schema/coin.rs
-assertion_line: 179
 expression: operation.query
-
 ---
-query Query($_0: UtxoId!) {
-  coin(utxoId: $_0) {
+query($utxoId: UtxoId!) {
+  coin(utxoId: $utxoId) {
     amount
     blockCreated
     assetId
@@ -15,4 +13,5 @@ query Query($_0: UtxoId!) {
     status
   }
 }
+
 
