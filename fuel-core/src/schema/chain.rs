@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        storage::FuelBlocks,
-        Database,
-    },
+    database::Database,
     schema::{
         block::Block,
         scalars::U64,
@@ -18,6 +15,7 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
+    db::FuelBlocks,
     model::FuelBlockDb,
 };
 

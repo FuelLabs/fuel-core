@@ -1,18 +1,20 @@
 use crate::database::{
-    storage::Receipts,
     Column,
     Database,
     KvStoreError,
 };
-use fuel_core_interfaces::common::{
-    fuel_storage::{
-        StorageInspect,
-        StorageMutate,
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::{
+            StorageInspect,
+            StorageMutate,
+        },
+        fuel_tx::{
+            Bytes32,
+            Receipt,
+        },
     },
-    fuel_tx::{
-        Bytes32,
-        Receipt,
-    },
+    db::Receipts,
 };
 use std::borrow::Cow;
 

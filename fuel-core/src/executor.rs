@@ -1,10 +1,5 @@
 use crate::{
     database::{
-        storage::{
-            ContractsLatestUtxo,
-            FuelBlocks,
-            Receipts,
-        },
         transaction::TransactionIndex,
         transactional::DatabaseTransaction,
         vm_database::VmDatabase,
@@ -64,7 +59,10 @@ use fuel_core_interfaces::{
     },
     db::{
         Coins,
+        ContractsLatestUtxo,
+        FuelBlocks,
         Messages,
+        Receipts,
         Transactions,
     },
     executor::{
@@ -200,7 +198,7 @@ impl Executor {
         } = execution_data;
 
         // Now that the transactions have been executed, generate the full header.
-        let block = block.map(|b| b.generate(&message_ids[..]));
+        let block = block.map(|b: PartialFuelBlock| b.generate(&message_ids[..]));
 
         // check transaction commitment
         if let Some(pre_exec_txs_root) = pre_exec_txs_root {

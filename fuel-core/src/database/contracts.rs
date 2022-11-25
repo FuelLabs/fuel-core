@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::ContractsLatestUtxo,
         Column,
         Database,
     },
@@ -13,7 +12,10 @@ use crate::{
 use fuel_chain_config::ContractConfig;
 use fuel_core_interfaces::{
     common::{
+        crypto,
         fuel_storage::{
+            MerkleRoot,
+            MerkleRootStorage,
             StorageAsRef,
             StorageInspect,
             StorageMutate,
@@ -30,10 +32,13 @@ use fuel_core_interfaces::{
         },
     },
     db::{
+        ContractsAssets,
         ContractsInfo,
+        ContractsLatestUtxo,
         ContractsRawCode,
     },
 };
+use itertools::Itertools;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsRawCode> for Database {
@@ -85,6 +90,59 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
+    }
+}
+
+impl StorageInspect<ContractsAssets<'_>> for Database {
+    type Error = Error;
+
+    fn get(&self, key: &(&ContractId, &AssetId)) -> Result<Option<Cow<Word>>, Error> {
+        let key = MultiKey::new(key);
+        self.get(key.as_ref(), Column::ContractsAssets)
+    }
+
+    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Error> {
+        let key = MultiKey::new(key);
+        self.exists(key.as_ref(), Column::ContractsAssets)
+    }
+}
+
+impl StorageMutate<ContractsAssets<'_>> for Database {
+    fn insert(
+        &mut self,
+        key: &(&ContractId, &AssetId),
+        value: &Word,
+    ) -> Result<Option<Word>, Error> {
+        let key = MultiKey::new(key);
+        Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
+    }
+
+    fn remove(&mut self, key: &(&ContractId, &AssetId)) -> Result<Option<Word>, Error> {
+        let key = MultiKey::new(key);
+        Database::remove(self, key.as_ref(), Column::ContractsAssets)
+    }
+}
+
+impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
+        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
+            self,
+            Column::ContractsAssets,
+            Some(parent.as_ref().to_vec()),
+            None,
+            Some(IterDirection::Forward),
+        )
+        .try_collect()?;
+
+        let root = items
+            .iter()
+            .filter_map(|(key, value)| {
+                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
+            })
+            .sorted_by_key(|t| t.0)
+            .map(|(_, value)| value.to_be_bytes());
+
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
@@ -192,7 +250,110 @@ mod tests {
     };
 
     #[test]
-    fn contract_get() {
+    fn assets_get() {
+        let balance_id: (ContractId, AssetId) =
+            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let balance: Word = 100;
+        let key = &(&balance_id.0, &balance_id.1);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsAssets>()
+            .insert(key, &balance)
+            .unwrap();
+
+        assert_eq!(
+            database
+                .storage::<ContractsAssets>()
+                .get(key)
+                .unwrap()
+                .unwrap()
+                .into_owned(),
+            balance
+        );
+    }
+
+    #[test]
+    fn assets_put() {
+        let balance_id: (ContractId, AssetId) =
+            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let balance: Word = 100;
+        let key = &(&balance_id.0, &balance_id.1);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsAssets>()
+            .insert(key, &balance)
+            .unwrap();
+
+        let returned = database
+            .storage::<ContractsAssets>()
+            .get(key)
+            .unwrap()
+            .unwrap();
+        assert_eq!(*returned, balance);
+    }
+
+    #[test]
+    fn assets_remove() {
+        let balance_id: (ContractId, AssetId) =
+            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let balance: Word = 100;
+        let key = &(&balance_id.0, &balance_id.1);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsAssets>()
+            .insert(key, &balance)
+            .unwrap();
+
+        database.storage::<ContractsAssets>().remove(key).unwrap();
+
+        assert!(!database
+            .storage::<ContractsAssets>()
+            .contains_key(key)
+            .unwrap());
+    }
+
+    #[test]
+    fn assets_exists() {
+        let balance_id: (ContractId, AssetId) =
+            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let balance: Word = 100;
+        let key = &(&balance_id.0, &balance_id.1);
+
+        let database = &mut Database::default();
+        database
+            .storage::<ContractsAssets>()
+            .insert(key, &balance)
+            .unwrap();
+
+        assert!(database
+            .storage::<ContractsAssets>()
+            .contains_key(key)
+            .unwrap());
+    }
+
+    #[test]
+    fn assets_root() {
+        let balance_id: (ContractId, AssetId) =
+            (ContractId::from([1u8; 32]), AssetId::new([1u8; 32]));
+        let balance: Word = 100;
+        let key = &(&balance_id.0, &balance_id.1);
+
+        let database = &mut Database::default();
+
+        database
+            .storage::<ContractsAssets>()
+            .insert(key, &balance)
+            .unwrap();
+
+        let root = database.storage::<ContractsAssets>().root(&balance_id.0);
+        assert!(root.is_ok())
+    }
+
+    #[test]
+    fn raw_code_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -215,7 +376,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_put() {
+    fn raw_code_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -235,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_remove() {
+    fn raw_code_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -257,7 +418,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_exists() {
+    fn raw_code_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let contract: Contract = Contract::from(vec![32u8]);
 
@@ -274,7 +435,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_get() {
+    fn latest_utxo_get() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -297,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_put() {
+    fn latest_utxo_put() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -316,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_remove() {
+    fn latest_utxo_remove() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 
@@ -338,7 +499,7 @@ mod tests {
     }
 
     #[test]
-    fn contract_utxo_id_exists() {
+    fn latest_utxo_exists() {
         let contract_id: ContractId = ContractId::from([1u8; 32]);
         let utxo_id: UtxoId = UtxoId::new(TxId::new([2u8; 32]), 4);
 

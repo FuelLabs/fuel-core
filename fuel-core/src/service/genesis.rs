@@ -1,8 +1,5 @@
 use crate::{
-    database::{
-        storage::ContractsLatestUtxo,
-        Database,
-    },
+    database::Database,
     service::{
         config::Config,
         FuelService,
@@ -30,6 +27,7 @@ use fuel_core_interfaces::{
         Coins,
         ContractsAssets,
         ContractsInfo,
+        ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
         Messages,

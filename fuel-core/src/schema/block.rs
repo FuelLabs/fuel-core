@@ -4,10 +4,6 @@ use super::scalars::{
 };
 use crate::{
     database::{
-        storage::{
-            FuelBlocks,
-            SealedBlockConsensus,
-        },
         Database,
     },
     executor::Executor,
@@ -45,7 +41,11 @@ use fuel_core_interfaces::{
         fuel_types,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     executor::{
         ExecutionBlock,
         Executor as ExecutorTrait,
