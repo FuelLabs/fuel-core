@@ -81,6 +81,7 @@ impl Executor for MockExecutor {
         Ok(ExecutionResult {
             block,
             skipped_transactions: vec![],
+            tx_status: vec![],
         })
     }
 
@@ -109,6 +110,7 @@ impl Executor for FailingMockExecutor {
             Ok(ExecutionResult {
                 block,
                 skipped_transactions: vec![],
+                tx_status: vec![],
             })
         }
     }

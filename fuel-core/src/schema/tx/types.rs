@@ -19,7 +19,6 @@ use crate::{
             U64,
         },
     },
-    tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{
     Context,
@@ -59,7 +58,10 @@ use fuel_core_interfaces::{
         Receipts,
     },
     not_found,
-    txpool::TxPoolMpsc,
+    txpool::{
+        TransactionStatus as TxStatus,
+        TxPoolMpsc,
+    },
 };
 use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;

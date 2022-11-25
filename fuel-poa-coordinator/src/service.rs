@@ -176,6 +176,7 @@ where
         let ExecutionResult {
             block,
             skipped_transactions,
+            ..
         } = self.signal_produce_block().await?;
 
         // sign the block and seal it
