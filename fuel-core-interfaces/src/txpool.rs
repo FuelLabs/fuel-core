@@ -52,10 +52,6 @@ use fuel_vm::prelude::{
     PredicateStorage,
     ProgramState,
 };
-use serde::{
-    Deserialize,
-    Serialize,
-};
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -68,7 +64,8 @@ use tokio::sync::{
 };
 
 /// The status of the transaction during its life from the tx pool until the block.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TransactionStatus {
     Submitted {
         time: Tai64,
