@@ -48,7 +48,7 @@ where
         Option<Cow<'_, <ContractsLatestUtxo as Mappable>::GetValue>>,
         Database::Error,
     > {
-        self.database.storage().get(&self.contract_id)
+        self.database.storage().get(self.contract_id)
     }
 }
 
@@ -59,7 +59,7 @@ where
     pub fn balance_root(
         &mut self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsAssets<'_>>>::Error> {
-        self.database.root(&self.contract_id).map(Into::into)
+        self.database.root(self.contract_id).map(Into::into)
     }
 }
 
@@ -70,6 +70,6 @@ where
     pub fn state_root(
         &mut self,
     ) -> Result<Bytes32, <Database as StorageInspect<ContractsState<'_>>>::Error> {
-        self.database.root(&self.contract_id).map(Into::into)
+        self.database.root(self.contract_id).map(Into::into)
     }
 }

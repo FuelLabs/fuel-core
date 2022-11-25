@@ -918,7 +918,7 @@ impl Executor {
             let maybe_utxo_id = contract.utxo()?.map(|utxo| utxo.into_owned());
             let expected_utxo_id = if self.config.utxo_validation {
                 maybe_utxo_id
-                    .ok_or(Error::ContractUtxoMissing(*contract.contract_id()))?
+                    .ok_or_else(|| Error::ContractUtxoMissing(*contract.contract_id()))?
             } else {
                 maybe_utxo_id.unwrap_or_default()
             };
@@ -929,11 +929,12 @@ impl Executor {
             ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
                     match input {
-                        // Input::CoinSigned { tx_pointer, .. }
-                        // | Input::CoinPredicate { tx_pointer, .. } => {
-                        //     // TODO: Also calculate `tx_pointer` based on utxo's pointer.
-                        //     *tx_pointer = TxPointer::new(height.into(), idx);
-                        // }
+                        Input::CoinSigned { tx_pointer, .. }
+                        | Input::CoinPredicate { tx_pointer, .. } => {
+                            let _ = tx_pointer;
+                            // TODO: Also calculate `tx_pointer` based on utxo's pointer.
+                            // *tx_pointer = TxPointer::new(height.into(), idx);
+                        }
                         Input::Contract {
                             ref mut utxo_id,
                             ref mut balance_root,
@@ -956,15 +957,16 @@ impl Executor {
             ExecutionTypes::Validation(tx) => {
                 for input in tx.inputs() {
                     match input {
-                        // Input::CoinSigned { tx_pointer, .. }
-                        // | Input::CoinPredicate { tx_pointer, .. } => {
-                        //     // TODO: Also calculate `tx_pointer` based on `utxo_id` pointer.
-                        //     if tx_pointer != &TxPointer::new(height.into(), idx) {
-                        //         return Err(Error::InvalidTransactionOutcome {
-                        //             transaction_id: tx.id(),
-                        //         })
-                        //     }
-                        // }
+                        Input::CoinSigned { tx_pointer, .. }
+                        | Input::CoinPredicate { tx_pointer, .. } => {
+                            let _ = tx_pointer;
+                            // TODO: Also calculate `tx_pointer` based on `utxo_id` pointer.
+                            // if tx_pointer != &TxPointer::new(height.into(), idx) {
+                            //     return Err(Error::InvalidTransactionOutcome {
+                            //         transaction_id: tx.id(),
+                            //     })
+                            // }
+                        }
                         Input::Contract {
                             utxo_id,
                             balance_root,
@@ -1016,64 +1018,60 @@ impl Executor {
                 //  to avoid it in the future.
                 let mut outputs = tx.outputs().clone();
                 for output in outputs.iter_mut() {
-                    match output {
-                        Output::Contract {
-                            ref mut balance_root,
-                            ref mut state_root,
-                            ref input_index,
-                        } => {
-                            let contract_id =
-                                if let Some(Input::Contract { contract_id, .. }) =
-                                    tx.inputs().get(*input_index as usize)
-                                {
-                                    contract_id
-                                } else {
-                                    return Err(Error::InvalidTransactionOutcome {
-                                        transaction_id: tx.id(),
-                                    })
-                                };
+                    if let Output::Contract {
+                        ref mut balance_root,
+                        ref mut state_root,
+                        ref input_index,
+                    } = output
+                    {
+                        let contract_id =
+                            if let Some(Input::Contract { contract_id, .. }) =
+                                tx.inputs().get(*input_index as usize)
+                            {
+                                contract_id
+                            } else {
+                                return Err(Error::InvalidTransactionOutcome {
+                                    transaction_id: tx.id(),
+                                })
+                            };
 
-                            let mut contract = ContractRef::new(&mut *db, contract_id);
-                            *balance_root = contract.balance_root()?;
-                            *state_root = contract.state_root()?;
-                        }
-                        _ => {}
+                        let mut contract = ContractRef::new(&mut *db, contract_id);
+                        *balance_root = contract.balance_root()?;
+                        *state_root = contract.state_root()?;
                     }
                 }
                 *tx.outputs_mut() = outputs;
             }
             ExecutionTypes::Validation(tx) => {
                 for output in tx.outputs() {
-                    match output {
-                        Output::Contract {
-                            balance_root,
-                            state_root,
-                            input_index,
-                        } => {
-                            let contract_id =
-                                if let Some(Input::Contract { contract_id, .. }) =
-                                    tx.inputs().get(*input_index as usize)
-                                {
-                                    contract_id
-                                } else {
-                                    return Err(Error::InvalidTransactionOutcome {
-                                        transaction_id: tx.id(),
-                                    })
-                                };
+                    if let Output::Contract {
+                        balance_root,
+                        state_root,
+                        input_index,
+                    } = output
+                    {
+                        let contract_id =
+                            if let Some(Input::Contract { contract_id, .. }) =
+                                tx.inputs().get(*input_index as usize)
+                            {
+                                contract_id
+                            } else {
+                                return Err(Error::InvalidTransactionOutcome {
+                                    transaction_id: tx.id(),
+                                })
+                            };
 
-                            let mut contract = ContractRef::new(&mut *db, contract_id);
-                            if balance_root != &contract.balance_root()? {
-                                return Err(Error::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
-                            if state_root != &contract.state_root()? {
-                                return Err(Error::InvalidTransactionOutcome {
-                                    transaction_id: tx.id(),
-                                })
-                            }
+                        let mut contract = ContractRef::new(&mut *db, contract_id);
+                        if balance_root != &contract.balance_root()? {
+                            return Err(Error::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
                         }
-                        _ => {}
+                        if state_root != &contract.state_root()? {
+                            return Err(Error::InvalidTransactionOutcome {
+                                transaction_id: tx.id(),
+                            })
+                        }
                     }
                 }
             }
