@@ -12,7 +12,10 @@ use crate::{
 use fuel_chain_config::ContractConfig;
 use fuel_core_interfaces::{
     common::{
+        crypto,
         fuel_storage::{
+            MerkleRoot,
+            MerkleRootStorage,
             StorageAsRef,
             StorageInspect,
             StorageMutate,
@@ -29,11 +32,13 @@ use fuel_core_interfaces::{
         },
     },
     db::{
+        ContractsAssets,
         ContractsInfo,
         ContractsLatestUtxo,
         ContractsRawCode,
     },
 };
+use itertools::Itertools;
 use std::borrow::Cow;
 
 impl StorageInspect<ContractsRawCode> for Database {
@@ -85,6 +90,59 @@ impl StorageMutate<ContractsLatestUtxo> for Database {
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<UtxoId>, Self::Error> {
         Database::remove(self, key.as_ref(), Column::ContractsLatestUtxo)
+    }
+}
+
+impl StorageInspect<ContractsAssets<'_>> for Database {
+    type Error = Error;
+
+    fn get(&self, key: &(&ContractId, &AssetId)) -> Result<Option<Cow<Word>>, Error> {
+        let key = MultiKey::new(key);
+        self.get(key.as_ref(), Column::ContractsAssets)
+    }
+
+    fn contains_key(&self, key: &(&ContractId, &AssetId)) -> Result<bool, Error> {
+        let key = MultiKey::new(key);
+        self.exists(key.as_ref(), Column::ContractsAssets)
+    }
+}
+
+impl StorageMutate<ContractsAssets<'_>> for Database {
+    fn insert(
+        &mut self,
+        key: &(&ContractId, &AssetId),
+        value: &Word,
+    ) -> Result<Option<Word>, Error> {
+        let key = MultiKey::new(key);
+        Database::insert(self, key.as_ref(), Column::ContractsAssets, *value)
+    }
+
+    fn remove(&mut self, key: &(&ContractId, &AssetId)) -> Result<Option<Word>, Error> {
+        let key = MultiKey::new(key);
+        Database::remove(self, key.as_ref(), Column::ContractsAssets)
+    }
+}
+
+impl MerkleRootStorage<ContractId, ContractsAssets<'_>> for Database {
+    fn root(&mut self, parent: &ContractId) -> Result<MerkleRoot, Error> {
+        let items: Vec<_> = Database::iter_all::<Vec<u8>, Word>(
+            self,
+            Column::ContractsAssets,
+            Some(parent.as_ref().to_vec()),
+            None,
+            Some(IterDirection::Forward),
+        )
+        .try_collect()?;
+
+        let root = items
+            .iter()
+            .filter_map(|(key, value)| {
+                (&key[..parent.len()] == parent.as_ref()).then_some((key, value))
+            })
+            .sorted_by_key(|t| t.0)
+            .map(|(_, value)| value.to_be_bytes());
+
+        Ok(crypto::ephemeral_merkle_root(root).into())
     }
 }
 
