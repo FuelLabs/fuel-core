@@ -101,7 +101,7 @@ impl Block {
             .storage::<SealedBlockConsensus>()
             .get(&id)
             .map(|c| c.map(|c| c.into_owned().into()))?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(KvStoreError::NotFound(file!(), line!()))?;
 
         Ok(consensus)
     }
@@ -117,7 +117,7 @@ impl Block {
                 Ok(Transaction(
                     db.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?
+                        .and_then(|v| v.ok_or(KvStoreError::NotFound(file!(), line!())))?
                         .into_owned(),
                 ))
             })
@@ -359,7 +359,7 @@ where
             db.storage::<FuelBlocks>()
                 .get(id)
                 .transpose()
-                .ok_or(KvStoreError::NotFound)?
+                .ok_or(KvStoreError::NotFound(file!(), line!()))?
         })
         .try_collect()?;
 

@@ -331,7 +331,7 @@ impl BlockProducerDatabase for Database {
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
         let id = self
             .get_block_id(fuel_height)?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(KvStoreError::NotFound(file!(), line!()))?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 

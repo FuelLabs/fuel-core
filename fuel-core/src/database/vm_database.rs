@@ -134,7 +134,7 @@ impl InterpreterStorage for VmDatabase {
             // this will return 0x00**32 for block height 0 as well
             self.database
                 .get_block_id(block_height.into())?
-                .ok_or_else(|| KvStoreError::NotFound.into())
+                .ok_or_else(|| KvStoreError::NotFound(file!(), line!()).into())
         }
     }
 

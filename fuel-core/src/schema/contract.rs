@@ -57,7 +57,7 @@ impl Contract {
         let contract = db
             .storage::<ContractsRawCode>()
             .get(&self.0)?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(KvStoreError::NotFound(file!(), line!()))?
             .into_owned();
         Ok(HexString(contract.into()))
     }

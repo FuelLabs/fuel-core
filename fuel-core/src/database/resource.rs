@@ -116,7 +116,7 @@ impl<'a> AssetsQuery<'a> {
                         .database
                         .storage::<Coins>()
                         .get(&id)?
-                        .ok_or(KvStoreError::NotFound)?;
+                        .ok_or(KvStoreError::NotFound(file!(), line!()))?;
 
                     Ok::<_, KvStoreError>(Resource::Coin { id, fields: coin })
                 })
@@ -150,7 +150,7 @@ impl<'a> AssetsQuery<'a> {
                         .database
                         .storage::<Messages>()
                         .get(&id)?
-                        .ok_or(KvStoreError::NotFound)?;
+                        .ok_or(KvStoreError::NotFound(file!(), line!()))?;
 
                     Ok::<_, KvStoreError>(Resource::Message {
                         id,

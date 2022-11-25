@@ -184,7 +184,7 @@ impl CoinQuery {
                             db.storage::<Coins>()
                                 .get(&id)
                                 .transpose()
-                                .ok_or(KvStoreError::NotFound)?
+                                .ok_or(KvStoreError::NotFound(file!(), line!()))?
                                 .map(|coin| Coin(id, coin.into_owned()))
                         })
                         .try_collect()?;

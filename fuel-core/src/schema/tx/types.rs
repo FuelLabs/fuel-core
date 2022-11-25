@@ -145,7 +145,7 @@ impl SuccessStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(KvStoreError::NotFound(file!(), line!()))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)
@@ -175,7 +175,7 @@ impl FailureStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(KvStoreError::NotFound(file!(), line!()))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)

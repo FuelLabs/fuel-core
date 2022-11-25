@@ -162,7 +162,7 @@ impl Database {
                 .map(|tx_id| {
                     self.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound))
+                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound(file!(), line!())))
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;

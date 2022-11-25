@@ -158,7 +158,7 @@ impl MessageQuery {
                                     db.storage::<Messages>()
                                         .get(msg_id)
                                         .transpose()
-                                        .ok_or(KvStoreError::NotFound)?
+                                        .ok_or(KvStoreError::NotFound(file!(), line!()))?
                                         .map(|f| f.into_owned())
                                 })
                                 .try_collect()?;

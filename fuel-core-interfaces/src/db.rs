@@ -79,8 +79,8 @@ impl From<Error> for std::io::Error {
 pub enum KvStoreError {
     #[error("generic error occurred")]
     Error(Box<dyn std::error::Error + Send + Sync>),
-    #[error("resource not found")]
-    NotFound,
+    #[error("resource not found in file: {0} at line: {1}")]
+    NotFound(&'static str, u32),
 }
 
 impl From<Error> for KvStoreError {
