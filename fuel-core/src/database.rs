@@ -70,6 +70,7 @@ mod receipts;
 mod sealed_block;
 mod state;
 
+pub mod balances;
 pub mod metadata;
 pub mod resource;
 pub mod transaction;
