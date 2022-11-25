@@ -1,7 +1,7 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
 use cynic::{
-    http::SurfExt,
+    http::ReqwestExt,
     GraphQlResponse,
     Id,
     MutationBuilder,
@@ -86,7 +86,7 @@ pub mod types;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
-    url: surf::Url,
+    url: reqwest::Url,
 }
 
 impl FromStr for FuelClient {
@@ -98,7 +98,7 @@ impl FromStr for FuelClient {
             raw_url = format!("http://{}", raw_url);
         }
 
-        let mut url = surf::Url::parse(&raw_url)
+        let mut url = reqwest::Url::parse(&raw_url)
             .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
         url.set_path("/graphql");
         Ok(Self { url })
@@ -141,7 +141,8 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = surf::post(&self.url)
+        let response = reqwest::Client::new()
+            .post(self.url.clone())
             .run_graphql(q)
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;

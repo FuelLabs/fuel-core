@@ -1457,10 +1457,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07097754f62237ba04e4c3315d50c0f6e85e6b2b95d57256941c3ec88b03be73"
 dependencies = [
  "cynic-proc-macros 2.2.1",
+ "reqwest",
  "serde",
  "serde_json",
  "static_assertions",
- "surf",
  "thiserror",
 ]
 
@@ -2649,10 +2649,10 @@ dependencies = [
  "insta",
  "itertools",
  "json-decode",
+ "reqwest",
  "schemafy_lib",
  "serde",
  "serde_json",
- "surf",
  "tai64",
  "thiserror",
 ]
