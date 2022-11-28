@@ -21,6 +21,7 @@ use fuel_core_interfaces::{
         CoinStatus,
         Message,
     },
+    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -116,7 +117,7 @@ impl<'a> AssetsQuery<'a> {
                         .database
                         .storage::<Coins>()
                         .get(&id)?
-                        .ok_or(KvStoreError::NotFound)?;
+                        .ok_or(not_found!(Coins))?;
 
                     Ok::<_, KvStoreError>(Resource::Coin { id, fields: coin })
                 })
@@ -150,7 +151,7 @@ impl<'a> AssetsQuery<'a> {
                         .database
                         .storage::<Messages>()
                         .get(&id)?
-                        .ok_or(KvStoreError::NotFound)?;
+                        .ok_or(not_found!(Messages))?;
 
                     Ok::<_, KvStoreError>(Resource::Message {
                         id,

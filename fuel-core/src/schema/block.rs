@@ -9,7 +9,6 @@ use crate::{
             SealedBlockConsensus,
         },
         Database,
-        KvStoreError,
     },
     executor::Executor,
     model::{
@@ -59,6 +58,7 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -101,7 +101,7 @@ impl Block {
             .storage::<SealedBlockConsensus>()
             .get(&id)
             .map(|c| c.map(|c| c.into_owned().into()))?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(not_found!(SealedBlockConsensus))?;
 
         Ok(consensus)
     }
@@ -117,7 +117,7 @@ impl Block {
                 Ok(Transaction(
                     db.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?
+                        .and_then(|v| v.ok_or(not_found!(Transactions)))?
                         .into_owned(),
                 ))
             })
@@ -359,7 +359,7 @@ where
             db.storage::<FuelBlocks>()
                 .get(id)
                 .transpose()
-                .ok_or(KvStoreError::NotFound)?
+                .ok_or(not_found!(FuelBlocks))?
         })
         .try_collect()?;
 
