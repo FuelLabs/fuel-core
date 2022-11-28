@@ -16,6 +16,7 @@ use fuel_core_interfaces::{
             MerkleRootStorage,
             Word,
         },
+        storage::ReadContractBytes,
         tai64::Tai64,
     },
     db::Error,
@@ -23,6 +24,8 @@ use fuel_core_interfaces::{
     not_found,
 };
 use std::borrow::Cow;
+
+use super::Column;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -101,6 +104,19 @@ where
 {
     fn root(&mut self, key: &K) -> Result<MerkleRoot, Self::Error> {
         MerkleRootStorage::<K, M>::root(&mut self.database, key)
+    }
+}
+
+impl ReadContractBytes for VmDatabase {
+    type Error = Error;
+
+    fn read_contract_bytes(
+        &self,
+        key: &ContractId,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Self::Error> {
+        self.database
+            .read(key.as_ref(), Column::ContractsRawCode, buf)
     }
 }
 

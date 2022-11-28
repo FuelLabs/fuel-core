@@ -19,6 +19,8 @@ members = [
   "fuel-tests",
   "fuel-txpool",
   "xtask",
+]
+exclude = [
   "version-compatibility",
 ]
 
@@ -26,3 +28,6 @@ members = [
 codegen-units = 1
 lto = "fat"
 panic = "abort"
+
+[patch.crates-io]
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "freesig/avoid-code-clone" }

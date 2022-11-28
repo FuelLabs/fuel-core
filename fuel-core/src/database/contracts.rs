@@ -13,6 +13,7 @@ use crate::{
 use fuel_chain_config::ContractConfig;
 use fuel_core_interfaces::{
     common::{
+        consts::WORD_SIZE,
         fuel_storage::{
             StorageAsRef,
             StorageInspect,
@@ -54,7 +55,20 @@ impl StorageMutate<ContractsRawCode> for Database {
         key: &ContractId,
         value: &[u8],
     ) -> Result<Option<Contract>, Error> {
-        Database::insert(self, key.as_ref(), Column::ContractsRawCode, value)
+        // Pad contract to word size so it can be
+        // copied straight to vm memory.
+        let mut buf = value.to_vec();
+        let pad_len = value.len() + value.len() % WORD_SIZE;
+        buf.resize(pad_len, 0);
+        Ok(
+            Database::insert_raw_bytes(
+                self,
+                key.as_ref(),
+                Column::ContractsRawCode,
+                buf,
+            )?
+            .map(Contract::from),
+        )
     }
 
     fn remove(&mut self, key: &ContractId) -> Result<Option<Contract>, Error> {

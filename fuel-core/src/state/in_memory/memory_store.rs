@@ -1,12 +1,7 @@
 use crate::{
     database::Column,
     state::{
-        in_memory::{
-            column_key,
-            is_column,
-        },
         BatchOperations,
-        ColumnId,
         IterDirection,
         KeyValueStore,
         Result,
@@ -17,47 +12,63 @@ use itertools::Itertools;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    mem::size_of,
     sync::Mutex,
 };
+use strum::EnumCount;
 
 #[derive(Default, Debug)]
 pub struct MemoryStore {
-    inner: Mutex<HashMap<Vec<u8>, Vec<u8>>>,
+    inner: [Mutex<HashMap<Vec<u8>, Vec<u8>>>; Column::COUNT],
 }
 
 impl KeyValueStore for MemoryStore {
     fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[Column::to_index(&column)]
             .lock()
             .expect("poisoned")
-            .get(&column_key(key, column))
+            .get(key)
             .cloned())
     }
 
+    fn read(&self, key: &[u8], column: Column, buf: &mut [u8]) -> Result<Option<usize>> {
+        let lock = self.inner[Column::to_index(&column)]
+            .lock()
+            .expect("poisoned");
+
+        match lock.get(key) {
+            Some(p) => {
+                let p: &[u8] = p.as_ref();
+                if p.len() > buf.len() {
+                    Err(crate::state::Error::ReadOverflow)
+                } else {
+                    // Safe index due to above check.
+                    buf[..p.len()].copy_from_slice(p);
+                    Ok(Some(p.len()))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
     fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[Column::to_index(&column)]
             .lock()
             .expect("poisoned")
-            .insert(column_key(key, column), value))
+            .insert(key.to_vec(), value))
     }
 
     fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>> {
-        Ok(self
-            .inner
+        Ok(self.inner[Column::to_index(&column)]
             .lock()
             .expect("poisoned")
-            .remove(&column_key(key, column)))
+            .remove(key))
     }
 
     fn exists(&self, key: &[u8], column: Column) -> Result<bool> {
-        Ok(self
-            .inner
+        Ok(self.inner[Column::to_index(&column)]
             .lock()
             .expect("poisoned")
-            .contains_key(&column_key(key, column)))
+            .contains_key(key))
     }
 
     fn iter_all(
@@ -69,13 +80,12 @@ impl KeyValueStore for MemoryStore {
     ) -> Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + '_> {
         // clone entire set so we can drop the lock
         let mut copy: Vec<(Vec<u8>, Vec<u8>)> = self
-            .inner
+            .inner[Column::to_index(&column)]
             .lock()
             .expect("poisoned")
             .iter()
-            .filter(|(key, _)| is_column(key, column))
             // strip column
-            .map(|(key, value)| (key[size_of::<ColumnId>()..].to_vec(), value.clone()))
+            .map(|(key, value)| (key.clone(), value.clone()))
             // filter prefix
             .filter(|(key, _)| {
                 if let Some(prefix) = &prefix {

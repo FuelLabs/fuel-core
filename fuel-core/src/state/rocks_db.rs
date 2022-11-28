@@ -147,6 +147,31 @@ impl KeyValueStore for RocksDb {
         value
     }
 
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> super::Result<Option<usize>> {
+        let result = self
+            .db
+            .get_pinned_cf(&self.cf(column), key)
+            .map_err(|e| Error::DatabaseError(Box::new(e)))?;
+        match result {
+            Some(p) => {
+                let p: &[u8] = p.as_ref();
+                if p.len() > buf.len() {
+                    Err(Error::ReadOverflow)
+                } else {
+                    // Safe index due to above check.
+                    buf[..p.len()].copy_from_slice(p);
+                    Ok(Some(p.len()))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
     fn put(
         &self,
         key: &[u8],

@@ -53,6 +53,7 @@ pub type KVItem = Result<(Vec<u8>, Vec<u8>)>;
 
 pub trait KeyValueStore {
     fn get(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
+    fn read(&self, key: &[u8], column: Column, buf: &mut [u8]) -> Result<Option<usize>>;
     fn put(&self, key: &[u8], column: Column, value: Vec<u8>) -> Result<Option<Vec<u8>>>;
     fn delete(&self, key: &[u8], column: Column) -> Result<Option<Vec<u8>>>;
     fn exists(&self, key: &[u8], column: Column) -> Result<bool>;

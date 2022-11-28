@@ -122,6 +122,54 @@ pub enum Column {
     FuelBlockConsensus = 16,
 }
 
+impl Column {
+    /// Get the index for each column.
+    /// This index is used for array access within
+    /// the in memory database.
+    /// It does not need to match `Self as usize` but
+    /// it does need to be sequential starting from 0.
+    pub const fn to_index(&self) -> usize {
+        match self {
+            Column::Metadata => 0,
+            Column::ContractsRawCode => 1,
+            Column::ContractsInfo => 2,
+            Column::ContractsState => 3,
+            Column::ContractsLatestUtxo => 4,
+            Column::ContractsAssets => 5,
+            Column::Coins => 6,
+            Column::OwnedCoins => 7,
+            Column::Transactions => 8,
+            Column::TransactionStatus => 9,
+            Column::TransactionsByOwnerBlockIdx => 10,
+            Column::Receipts => 11,
+            Column::FuelBlocks => 12,
+            Column::FuelBlockIds => 13,
+            Column::Messages => 14,
+            Column::OwnedMessageIds => 15,
+            Column::FuelBlockConsensus => 16,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use enum_iterator::all;
+    use strum::EnumCount;
+
+    use super::*;
+
+    #[test]
+    fn test_to_index() {
+        let mut set: HashSet<usize> = (0..Column::COUNT).collect();
+        for i in all::<Column>().map(|c| c.to_index()) {
+            set.remove(&i);
+        }
+        assert!(set.is_empty());
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Database {
     data: DataSource,
@@ -207,6 +255,21 @@ impl Database {
         }
     }
 
+    /// Insert raw bytes without any serialization.
+    fn insert_raw_bytes<K: AsRef<[u8]>>(
+        &self,
+        key: K,
+        column: Column,
+        value: Vec<u8>,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let result = self.data.put(key.as_ref(), column, value)?;
+        if let Some(previous) = result {
+            Ok(Some(previous))
+        } else {
+            Ok(None)
+        }
+    }
+
     fn remove<V: DeserializeOwned>(
         &self,
         key: &[u8],
@@ -227,6 +290,15 @@ impl Database {
             .get(key, column)?
             .map(|val| bincode::deserialize(&val).map_err(|_| Error::Codec))
             .transpose()
+    }
+
+    fn read(
+        &self,
+        key: &[u8],
+        column: Column,
+        buf: &mut [u8],
+    ) -> Result<Option<usize>, Error> {
+        self.data.read(key, column, buf)
     }
 
     // TODO: Rename to `contains_key` to be the same as `StorageInspect`
