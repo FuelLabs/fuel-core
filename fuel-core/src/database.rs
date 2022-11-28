@@ -33,6 +33,7 @@ use fuel_core_interfaces::{
         FuelBlockDb,
         SealedFuelBlock,
     },
+    not_found,
     p2p::P2pDb,
     poa_coordinator::BlockDb,
     relayer::RelayerDb,
@@ -331,7 +332,7 @@ impl BlockProducerDatabase for Database {
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
         let id = self
             .get_block_id(fuel_height)?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(not_found!("BlockId"))?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 

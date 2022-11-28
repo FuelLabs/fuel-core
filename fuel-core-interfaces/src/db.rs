@@ -79,8 +79,36 @@ impl From<Error> for std::io::Error {
 pub enum KvStoreError {
     #[error("generic error occurred")]
     Error(Box<dyn std::error::Error + Send + Sync>),
-    #[error("resource not found")]
-    NotFound,
+    /// This error should be created with `not_found` macro.
+    #[error("resource of type `{0}` was not found at the: {1}")]
+    NotFound(&'static str, &'static str),
+}
+
+/// Creates `KvStoreError::NotFound` error with file and line information inside.
+///
+/// # Examples
+///
+/// ```
+/// use fuel_core_interfaces::not_found;
+/// use fuel_core_interfaces::db::Messages;
+///
+/// let string_type = not_found!("BlockId");
+/// let mappable_type = not_found!(Messages);
+/// let mappable_path = not_found!(fuel_core_interfaces::db::Coins);
+/// ```
+#[macro_export]
+macro_rules! not_found {
+    ($name: literal) => {
+        $crate::db::KvStoreError::NotFound($name, concat!(file!(), ":", line!()))
+    };
+    ($ty: path) => {
+        $crate::db::KvStoreError::NotFound(
+            ::core::any::type_name::<
+                <$ty as $crate::common::fuel_storage::Mappable>::GetValue,
+            >(),
+            concat!(file!(), ":", line!()),
+        )
+    };
 }
 
 impl From<Error> for KvStoreError {
@@ -110,5 +138,24 @@ impl From<Error> for InterpreterError {
 impl From<KvStoreError> for InterpreterError {
     fn from(e: KvStoreError) -> Self {
         InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn not_found_output() {
+        #[rustfmt::skip]
+        assert_eq!(
+            format!("{}", not_found!("BlockId")),
+            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
+        );
+        #[rustfmt::skip]
+        assert_eq!(
+            format!("{}", not_found!(Coins)),
+            format!("resource of type `fuel_core_interfaces::model::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
+        );
     }
 }

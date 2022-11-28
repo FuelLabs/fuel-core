@@ -44,6 +44,7 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::Deserializable,
     },
     db::Transactions,
+    not_found,
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
@@ -159,7 +160,7 @@ impl TxQuery {
                         block.map(|(block_height, block_id)| {
                             db.storage::<FuelBlocks>().get(&block_id)
                                 .transpose()
-                                .ok_or(KvStoreError::NotFound)?
+                                .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
                                     let mut txs = fuel_block
                                         .into_owned()
@@ -192,7 +193,7 @@ impl TxQuery {
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
                         let tx = db.storage::<Transactions>().get(tx_id)
                             .transpose()
-                            .ok_or(KvStoreError::NotFound)?;
+                            .ok_or(not_found!(Transactions))?;
 
                         Ok((tx?, block_height))
                     })
@@ -292,7 +293,7 @@ impl TxQuery {
                                 let tx = db
                                     .storage::<Transactions>()
                                     .get(&tx_id)?
-                                    .ok_or(KvStoreError::NotFound)?
+                                    .ok_or(not_found!(Transactions))?
                                     .into_owned();
                                 Ok((cursor, tx))
                             })
