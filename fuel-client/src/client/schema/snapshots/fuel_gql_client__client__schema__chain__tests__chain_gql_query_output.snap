@@ -2,7 +2,7 @@
 source: fuel-client/src/client/schema/chain.rs
 expression: operation.query
 ---
-query Query {
+query {
   chain {
     baseChainHeight
     name
@@ -20,6 +20,12 @@ query Query {
         prevRoot
         time
         applicationHash
+      }
+      consensus {
+        __typename
+        ... on PoAConsensus {
+          signature
+        }
       }
       transactions {
         id
@@ -42,4 +48,5 @@ query Query {
     }
   }
 }
+
 

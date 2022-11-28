@@ -21,6 +21,10 @@ members = [
   "xtask",
 ]
 
+exclude = [
+  "version-compatibility",
+]
+
 [profile.release]
 codegen-units = 1
 lto = "fat"

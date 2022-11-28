@@ -6,3 +6,5 @@
 .vscode
 .envrc
 .direnv
+.cov
+lcov.info

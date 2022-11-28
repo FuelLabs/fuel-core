@@ -27,7 +27,7 @@ use std::convert::{
 pub mod transparent_receipt;
 pub mod transparent_tx;
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct TxIdArgs {
     pub id: TransactionId,
 }
@@ -37,10 +37,10 @@ pub struct TxIdArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "TxIdArgs"
+    variables = "TxIdArgs"
 )]
 pub struct TransactionQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub transaction: Option<OpaqueTransaction>,
 }
 
@@ -48,10 +48,10 @@ pub struct TransactionQuery {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
+    variables = "ConnectionArgs"
 )]
 pub struct TransactionsQuery {
-    #[arguments(after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(after: $after, before: $before, first: $first, last: $last)]
     pub transactions: TransactionConnection,
 }
 
@@ -170,7 +170,10 @@ impl TryFrom<ProgramState> for fuel_vm::prelude::ProgramState {
 pub enum TransactionStatus {
     SubmittedStatus(SubmittedStatus),
     SuccessStatus(SuccessStatus),
+    SqueezedOutStatus(SqueezedOutStatus),
     FailureStatus(FailureStatus),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -196,7 +199,13 @@ pub struct FailureStatus {
     pub program_state: Option<ProgramState>,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct SqueezedOutStatus {
+    pub reason: String,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
 pub struct TransactionsByOwnerConnectionArgs {
     /// Select transactions based on related `owner`s
     pub owner: Address,
@@ -236,21 +245,32 @@ impl From<(Address, PaginationRequest<String>)> for TransactionsByOwnerConnectio
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "TransactionsByOwnerConnectionArgs"
+    variables = "TransactionsByOwnerConnectionArgs"
 )]
 pub struct TransactionsByOwnerQuery {
-    #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(owner: $owner, after: $after, before: $before, first: $first, last: $last)]
     pub transactions_by_owner: TransactionConnection,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Subscription",
+    variables = "TxIdArgs"
+)]
+pub struct StatusChangeSubscription {
+    #[arguments(id: $id)]
+    pub status_change: TransactionStatus,
 }
 
 // mutations
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct TxArg {
     pub tx: HexString,
 }
 
-#[derive(cynic::FragmentArguments)]
+#[derive(cynic::QueryVariables)]
 pub struct DryRunArg {
     pub tx: HexString,
     pub utxo_validation: Option<bool>,
@@ -260,10 +280,10 @@ pub struct DryRunArg {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "DryRunArg"
+    variables = "DryRunArg"
 )]
 pub struct DryRun {
-    #[arguments(tx = &args.tx, utxo_validation = &args.utxo_validation)]
+    #[arguments(tx: $tx, utxoValidation: $utxo_validation)]
     pub dry_run: Vec<transparent_receipt::Receipt>,
 }
 
@@ -271,10 +291,10 @@ pub struct DryRun {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Mutation",
-    argument_struct = "TxArg"
+    variables = "TxArg"
 )]
 pub struct Submit {
-    #[arguments(tx = &args.tx)]
+    #[arguments(tx: $tx)]
     pub submit: TransactionIdFragment,
 }
 

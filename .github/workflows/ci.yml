@@ -95,9 +95,9 @@ jobs:
           - command: make
             args: check --locked
           - command: test
-            args: --tests --all-features --workspace
+            args: --all-features --workspace
           - command: test
-            args: --tests --no-default-features --workspace
+            args: --no-default-features --workspace
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}

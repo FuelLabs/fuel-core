@@ -43,6 +43,7 @@ use fuel_core_interfaces::{
     txpool::Sender as TxPoolSender,
 };
 use fuel_txpool::{
+    service::TxStatusChange,
     Config as TxPoolConfig,
     MockDb as TxPoolDb,
     ServiceBuilder as TxPoolServiceBuilder,
@@ -56,6 +57,7 @@ use std::sync::Arc;
 use tokio::sync::{
     broadcast,
     mpsc,
+    Semaphore,
 };
 
 const COIN_AMOUNT: u64 = 1_000_000_000;
@@ -116,10 +118,7 @@ async fn block_producer() -> Result<()> {
 
     let mut txpool_builder = TxPoolServiceBuilder::new();
 
-    let (tx_status_sender, mut tx_status_receiver) = broadcast::channel(100);
-
-    // Remove once tx_status events are used
-    tokio::spawn(async move { while (tx_status_receiver.recv().await).is_ok() {} });
+    let tx_status_sender = TxStatusChange::new(100);
 
     let (txpool_sender, txpool_receiver) = mpsc::channel(100);
     let (incoming_tx_sender, incoming_tx_receiver) = broadcast::channel(100);
@@ -157,9 +156,10 @@ async fn block_producer() -> Result<()> {
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
         }),
-        executor: Box::new(MockExecutor(mock_db.clone())),
+        executor: Arc::new(MockExecutor(mock_db.clone())),
         relayer: Box::new(MockRelayer::default()),
         lock: Default::default(),
+        dry_run_semaphore: Semaphore::new(1),
     };
 
     // Add new transactions

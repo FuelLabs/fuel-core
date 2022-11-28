@@ -33,10 +33,10 @@ pub struct Message {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "OwnedMessagesConnectionArgs"
+    variables = "OwnedMessagesConnectionArgs"
 )]
 pub struct OwnedMessageQuery {
-    #[arguments(owner = &args.owner, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(owner: $owner, after: $after, before: $before, first: $first, last: $last)]
     pub messages: MessageConnection,
 }
 
@@ -54,7 +54,7 @@ pub struct MessageEdge {
     pub node: Message,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct OwnedMessagesConnectionArgs {
     /// Filter messages based on an owner
     pub owner: Option<Address>,
@@ -73,10 +73,10 @@ pub struct OwnedMessagesConnectionArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "MessageProofArgs"
+    variables = "MessageProofArgs"
 )]
 pub struct MessageProofQuery {
-    #[arguments(transaction_id = &args.transaction_id, message_id = &args.message_id)]
+    #[arguments(transactionId: $transaction_id, messageId: $message_id)]
     pub message_proof: Option<MessageProof>,
 }
 
@@ -103,7 +103,7 @@ pub struct MessageProof {
     pub data: HexString,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct MessageProofArgs {
     /// Transaction id that contains the output message.
     pub transaction_id: TransactionId,

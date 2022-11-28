@@ -4,6 +4,7 @@ use crate::client::{
         BlockId,
         ConnectionArgs,
         PageInfo,
+        Signature,
         Tai64Timestamp,
         U64,
     },
@@ -15,7 +16,7 @@ use super::{
     Bytes32,
 };
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct BlockByIdArgs {
     pub id: BlockId,
 }
@@ -24,10 +25,10 @@ pub struct BlockByIdArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "BlockByIdArgs"
+    variables = "BlockByIdArgs"
 )]
 pub struct BlockByIdQuery {
-    #[arguments(id = & args.id)]
+    #[arguments(id: $id)]
     pub block: Option<Block>,
 }
 
@@ -35,10 +36,10 @@ pub struct BlockByIdQuery {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ConnectionArgs"
+    variables = "ConnectionArgs"
 )]
 pub struct BlocksQuery {
-    #[arguments(after = & args.after, before = & args.before, first = & args.first, last = & args.last)]
+    #[arguments(after: $after, before: $before, first: $first, last: $last)]
     pub blocks: BlockConnection,
 }
 
@@ -72,6 +73,7 @@ pub struct BlockEdge {
 pub struct Block {
     pub id: BlockId,
     pub header: Header,
+    pub consensus: Consensus,
     pub transactions: Vec<TransactionIdFragment>,
 }
 
@@ -88,7 +90,7 @@ pub struct TimeParameters {
     pub block_time_interval: U64,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ProduceBlockArgs {
     pub blocks_to_produce: U64,
     pub time: Option<TimeParameters>,
@@ -97,11 +99,11 @@ pub struct ProduceBlockArgs {
 #[derive(cynic::QueryFragment, Debug)]
 #[cynic(
     schema_path = "./assets/schema.sdl",
-    argument_struct = "ProduceBlockArgs",
+    variables = "ProduceBlockArgs",
     graphql_type = "Mutation"
 )]
 pub struct BlockMutation {
-    #[arguments(blocks_to_produce = &args.blocks_to_produce, time = &args.time)]
+    #[arguments(blocksToProduce: $blocks_to_produce, time: $time)]
     pub produce_blocks: U64,
 }
 
@@ -118,6 +120,35 @@ pub struct Header {
     pub prev_root: Bytes32,
     pub time: Tai64Timestamp,
     pub application_hash: Bytes32,
+}
+
+#[derive(cynic::InlineFragments, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub enum Consensus {
+    PoAConsensus(PoAConsensus),
+    #[cynic(fallback)]
+    Unknown,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct PoAConsensus {
+    pub signature: Signature,
+}
+
+impl Block {
+    /// Returns the block producer public key, if any.
+    pub fn block_producer(&self) -> Option<fuel_vm::fuel_crypto::PublicKey> {
+        let message = self.header.id.clone().into_message();
+        match &self.consensus {
+            Consensus::PoAConsensus(poa) => {
+                let signature = poa.signature.clone().into_signature();
+                let producer_pub_key = signature.recover(&message);
+                producer_pub_key.ok()
+            }
+            Consensus::Unknown => None,
+        }
+    }
 }
 
 #[cfg(test)]

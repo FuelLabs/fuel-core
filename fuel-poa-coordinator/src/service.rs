@@ -36,10 +36,7 @@ use fuel_core_interfaces::{
         BlockDb,
         TransactionPool,
     },
-    txpool::{
-        TxStatus,
-        TxStatusBroadcast,
-    },
+    txpool::TxStatus,
 };
 use parking_lot::Mutex;
 use std::{
@@ -79,7 +76,7 @@ impl Service {
 
     pub async fn start<S, T>(
         &self,
-        txpool_broadcast: broadcast::Receiver<TxStatusBroadcast>,
+        txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
         block_producer: Arc<dyn BlockProducer>,
@@ -141,7 +138,7 @@ where
     db: S,
     block_producer: Arc<dyn BlockProducer>,
     txpool: T,
-    txpool_broadcast: broadcast::Receiver<TxStatusBroadcast>,
+    txpool_broadcast: broadcast::Receiver<TxStatus>,
     import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
     /// Last block creation time. When starting up, this is initialized
     /// to `Instant::now()`, which delays the first block on startup for
@@ -250,11 +247,8 @@ where
         Ok(())
     }
 
-    async fn on_txpool_event(
-        &mut self,
-        txpool_event: &TxStatusBroadcast,
-    ) -> anyhow::Result<()> {
-        match txpool_event.status {
+    async fn on_txpool_event(&mut self, txpool_event: &TxStatus) -> anyhow::Result<()> {
+        match txpool_event {
             TxStatus::Submitted => match self.trigger {
                 Trigger::Instant => {
                     self.produce_block().await?;
@@ -284,7 +278,7 @@ where
                     Ok(())
                 }
             },
-            TxStatus::Executed => Ok(()), // This has been processed already
+            TxStatus::Completed => Ok(()), // This has been processed already
             TxStatus::SqueezedOut { .. } => {
                 // TODO: If this is the only tx, set timer deadline to last_block_time + max_block_time
                 Ok(())

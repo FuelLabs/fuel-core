@@ -6,6 +6,10 @@ use crate::{
         KvStoreError,
     },
     model::BlockHeight,
+    query::{
+        transaction_status_change,
+        TxnStatusChangeState,
+    },
     schema::scalars::{
         Address,
         Bytes32,
@@ -25,6 +29,7 @@ use async_graphql::{
     },
     Context,
     Object,
+    Subscription,
 };
 use fuel_core_interfaces::{
     block_producer::BlockProducer,
@@ -39,9 +44,15 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::Deserializable,
     },
     db::Transactions,
+    not_found,
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
+use futures::{
+    Stream,
+    StreamExt,
+    TryStreamExt,
+};
 use itertools::Itertools;
 use std::{
     borrow::Cow,
@@ -50,7 +61,10 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::oneshot;
+use tokio_stream::wrappers::BroadcastStream;
 use types::Transaction;
+
+use self::types::TransactionStatus;
 
 pub mod input;
 pub mod output;
@@ -146,7 +160,7 @@ impl TxQuery {
                         block.map(|(block_height, block_id)| {
                             db.storage::<FuelBlocks>().get(&block_id)
                                 .transpose()
-                                .ok_or(KvStoreError::NotFound)?
+                                .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
                                     let mut txs = fuel_block
                                         .into_owned()
@@ -179,7 +193,7 @@ impl TxQuery {
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
                         let tx = db.storage::<Transactions>().get(tx_id)
                             .transpose()
-                            .ok_or(KvStoreError::NotFound)?;
+                            .ok_or(not_found!(Transactions))?;
 
                         Ok((tx?, block_height))
                     })
@@ -279,7 +293,7 @@ impl TxQuery {
                                 let tx = db
                                     .storage::<Transactions>()
                                     .get(&tx_id)?
-                                    .ok_or(KvStoreError::NotFound)?
+                                    .ok_or(not_found!(Transactions))?
                                     .into_owned();
                                 Ok((cursor, tx))
                             })
@@ -346,5 +360,55 @@ impl TxMutation {
 
         let tx = Transaction(tx);
         Ok(tx)
+    }
+}
+
+#[derive(Default)]
+pub struct TxStatusSubscription;
+
+struct StreamState {
+    txpool: Arc<TxPoolService>,
+    db: Database,
+}
+
+#[Subscription]
+impl TxStatusSubscription {
+    /// Returns a stream of status updates for the given transaction id.
+    /// If the current status is [`TransactionStatus::Success`], [`TransactionStatus::SqueezedOut`]
+    /// or [`TransactionStatus::Failed`] the stream will return that and end immediately.
+    /// If the current status is [`TransactionStatus::Submitted`] this will be returned
+    /// and the stream will wait for a future update.
+    ///
+    /// This stream will wait forever so it's advised to use within a timeout.
+    ///
+    /// It is possible for the stream to miss an update if it is polled slower
+    /// then the updates arrive. In such a case the stream will close without
+    /// a status. If this occurs the stream can simply be restarted to return
+    /// the latest status.
+    async fn status_change(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(desc = "The ID of the transaction")] id: TransactionId,
+    ) -> impl Stream<Item = async_graphql::Result<TransactionStatus>> {
+        let txpool = ctx.data_unchecked::<Arc<TxPoolService>>().clone();
+        let db = ctx.data_unchecked::<Database>().clone();
+        let rx = BroadcastStream::new(txpool.tx_update_subscribe());
+        let state = Box::new(StreamState { txpool, db });
+
+        transaction_status_change(state, rx.boxed(), id.into())
+            .await
+            .map_err(async_graphql::Error::from)
+    }
+}
+
+#[async_trait::async_trait]
+impl TxnStatusChangeState for StreamState {
+    async fn get_tx_status(
+        &self,
+        id: fuel_core_interfaces::common::fuel_types::Bytes32,
+    ) -> anyhow::Result<Option<TransactionStatus>> {
+        Ok(types::get_tx_status(id, &self.db, &self.txpool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Database lookup failed {:?}", e))?)
     }
 }

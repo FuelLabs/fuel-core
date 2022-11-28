@@ -32,6 +32,9 @@ pub enum TransactionStatus {
         time: Tai64,
         program_state: Option<ProgramState>,
     },
+    SqueezedOut {
+        reason: String,
+    },
     Failure {
         block_id: String,
         time: Tai64,
@@ -59,6 +62,12 @@ impl TryFrom<SchemaTxStatus> for TransactionStatus {
                 reason: s.reason,
                 program_state: s.program_state.map(TryInto::try_into).transpose()?,
             },
+            SchemaTxStatus::SqueezedOutStatus(s) => {
+                TransactionStatus::SqueezedOut { reason: s.reason }
+            }
+            SchemaTxStatus::Unknown => {
+                return Err(Self::Error::UnknownVariant("SchemaTxStatus"))
+            }
         })
     }
 }
