@@ -658,7 +658,7 @@ mod test {
             .unwrap();
 
         // wait max_tx_idle_time - causes block production to occur if
-        // consumable gas > 0 is not checked.
+        // pending txs > 0 is not checked.
         time::sleep(Duration::from_millis(TX_IDLE_TIME_MS)).await;
 
         // send stop
