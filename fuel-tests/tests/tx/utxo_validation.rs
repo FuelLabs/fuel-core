@@ -24,7 +24,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 #[tokio::test]
 async fn submit_utxo_verified_tx_with_min_gas_price() {
@@ -236,11 +236,11 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
                 Opcode::RET(REG_ONE).to_bytes().into_iter().collect(),
                 vec![],
             )
-            .gas_limit(1000 + i as u64)
+            .gas_limit(10000)
             .add_unsigned_coin_input(
                 secret,
                 rng.gen(),
-                rng.gen_range(1..1000),
+                rng.gen_range((100000 + i as u64)..(200000 + i as u64)),
                 Default::default(),
                 Default::default(),
                 0,
@@ -251,26 +251,30 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // collect all tx ids
-    let tx_ids: HashSet<_> = txs.iter().map(|tx| tx.id()).collect();
+    let tx_ids: BTreeSet<_> = txs.iter().map(|tx| tx.id()).collect();
 
     // setup the genesis coins for spending
     test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());
+    let txs: Vec<Transaction> = txs.into_iter().map(Into::into).collect_vec();
 
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let tasks = txs
-        .into_iter()
-        .map(|tx| {
-            let client = client.clone();
-            async move { client.submit_and_await_commit(&tx.into()).await }
-        })
-        .collect_vec();
+    let tasks = txs.iter().map(|tx| client.submit_and_await_commit(tx));
 
-    let _: Vec<_> = join_all(tasks)
+    let tx_status: Vec<TransactionStatus> = join_all(tasks)
         .await
         .into_iter()
         .try_collect()
         .expect("expected successful transactions");
+
+    // assert all txs are successful
+    for status in tx_status {
+        assert!(
+            matches!(status, TransactionStatus::Success { .. }),
+            "expected successful tx status, got: {:?}",
+            status
+        );
+    }
 
     let total_blocks = client
         .blocks(PaginationRequest {
@@ -290,7 +294,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // ensure all transactions are included across all the blocks
-    let included_txs: HashSet<Bytes32> = total_blocks
+    let included_txs: BTreeSet<Bytes32> = total_blocks
         .results
         .iter()
         .flat_map(|b| {

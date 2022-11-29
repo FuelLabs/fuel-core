@@ -308,6 +308,12 @@ impl TxPool {
         res
     }
 
+    /// The number of pending transaction in the pool.
+    pub async fn pending_number(txpool: &RwLock<Self>) -> usize {
+        let pool = txpool.read().await;
+        pool.by_hash.len()
+    }
+
     /// The amount of gas in all includable transactions combined
     pub async fn consumable_gas(txpool: &RwLock<Self>) -> u64 {
         let pool = txpool.read().await;

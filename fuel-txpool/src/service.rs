@@ -251,6 +251,9 @@ impl Context {
                     tokio::spawn( async move {
                         let txpool = txpool.as_ref();
                     match event.unwrap() {
+                        TxPoolMpsc::PendingNumber { response } => {
+                            let _ = response.send(TxPool::pending_number(txpool).await);
+                        }
                         TxPoolMpsc::ConsumableGas { response } => {
                             let _ = response.send(TxPool::consumable_gas(txpool).await);
                         }

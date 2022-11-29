@@ -384,26 +384,16 @@ async fn can_get_message_proof() {
         let client = FuelClient::from(srv.bound_address);
 
         // Deploy the contract.
-        let deploy_id = client.submit(&contract_deploy).await.unwrap();
-
-        tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            client.await_transaction_commit(&deploy_id.to_string()),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        matches!(
+            client.submit_and_await_commit(&contract_deploy).await,
+            Ok(TransactionStatus::Success { .. })
+        );
 
         // Call the contract.
-        let call_id = client.submit(&script.into()).await.unwrap();
-
-        tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            client.await_transaction_commit(&call_id.to_string()),
-        )
-        .await
-        .unwrap()
-        .unwrap();
+        matches!(
+            client.submit_and_await_commit(&script.into()).await,
+            Ok(TransactionStatus::Success { .. })
+        );
 
         // Get the receipts from the contract call.
         let receipts = client
