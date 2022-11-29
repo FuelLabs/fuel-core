@@ -259,7 +259,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
 
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let tasks = txs.iter().map(|tx| client.submit_and_await_commit(&tx));
+    let tasks = txs.iter().map(|tx| client.submit_and_await_commit(tx));
 
     let tx_status: Vec<TransactionStatus> = join_all(tasks)
         .await
