@@ -98,6 +98,8 @@ jobs:
             args: --all-features --workspace
           - command: test
             args: --no-default-features --workspace
+          - command: test
+            args: --manifest-path version-compatibility/Cargo.toml --workspace  
     # disallow any job that takes longer than 45 minutes
     timeout-minutes: 45
     continue-on-error: ${{ matrix.skip-error || false }}

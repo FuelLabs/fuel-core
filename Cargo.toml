@@ -19,6 +19,9 @@ members = [
   "fuel-tests",
   "fuel-txpool",
   "xtask",
+]
+
+exclude = [
   "version-compatibility",
 ]
 
