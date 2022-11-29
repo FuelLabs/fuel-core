@@ -251,7 +251,11 @@ where
         match txpool_event {
             TxStatus::Submitted => match self.trigger {
                 Trigger::Instant => {
-                    self.produce_block().await?;
+                    let consumable_gas = self.txpool.total_consumable_gas().await?;
+                    // skip production if there are no consumable fees
+                    if consumable_gas > 0 {
+                        self.produce_block().await?;
+                    }
                     Ok(())
                 }
                 Trigger::Never | Trigger::Interval { .. } => Ok(()),
@@ -268,7 +272,7 @@ where
                         && self.last_block_created + min_block_time < Instant::now()
                     {
                         self.produce_block().await?;
-                    } else {
+                    } else if consumable_gas > 0 {
                         // We have at least one transaction, so tx_max_idle_time is the limit
                         self.timer
                             .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -312,6 +316,12 @@ where
             _ = self.stop.recv() => {
                 Ok(false)
             }
+            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
+            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
+            //       into the first block production trigger, we'll still call the event handler
+            //       for each tx after they've already been included into a block.
+            //       The poa service also doesn't care about events unrelated to new tx submissions,
+            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
             txpool_event = self.txpool_broadcast.recv() => {
                 self.on_txpool_event(&txpool_event.context("Broadcast receive error")?).await.context("While processing txpool event")?;
                 Ok(true)
