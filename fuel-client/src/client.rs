@@ -428,7 +428,7 @@ impl FuelClient {
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
             io::Error::new(
                 ErrorKind::NotFound,
-                format!("transaction {} not found for status", id),
+                format!("status not found for transaction {} ", id),
             )
         })?;
 
