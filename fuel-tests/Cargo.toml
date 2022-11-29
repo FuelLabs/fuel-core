@@ -25,7 +25,7 @@ harness = true
 
 [dependencies]
 async-std = "1.12"
-ethers = "0.17"
+ethers = "1.0.2"
 fuel-core = { path = "../fuel-core", default-features = false }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 fuel-gql-client = { path = "../fuel-client", features = ["test-helpers"] }

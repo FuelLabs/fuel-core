@@ -1,8 +1,8 @@
 use libp2p::{
     mdns::{
-        MdnsConfig,
-        MdnsEvent,
-        TokioMdns,
+        tokio::Behaviour,
+        Config,
+        Event,
     },
     swarm::{
         NetworkBehaviour,
@@ -20,13 +20,13 @@ use tracing::warn;
 
 #[allow(clippy::large_enum_variant)]
 pub enum MdnsWrapper {
-    Ready(TokioMdns),
+    Ready(Behaviour),
     Disabled,
 }
 
 impl Default for MdnsWrapper {
     fn default() -> Self {
-        match TokioMdns::new(MdnsConfig::default()) {
+        match Behaviour::new(Config::default()) {
             Ok(mdns) => Self::Ready(mdns),
             Err(err) => {
                 warn!("Failed to initialize mDNS: {:?}", err);
@@ -53,10 +53,7 @@ impl MdnsWrapper {
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
     ) -> Poll<
-        NetworkBehaviourAction<
-            MdnsEvent,
-            <TokioMdns as NetworkBehaviour>::ConnectionHandler,
-        >,
+        NetworkBehaviourAction<Event, <Behaviour as NetworkBehaviour>::ConnectionHandler>,
     > {
         match self {
             Self::Ready(mdns) => mdns.poll(cx, params),

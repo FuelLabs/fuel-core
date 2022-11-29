@@ -7,17 +7,33 @@ use crate::test_helpers::middleware::{
 
 use super::*;
 
+use ethers_core::types::SyncProgress;
 use test_case::test_case;
 
 #[tokio::test(start_paused = true)]
 async fn handles_syncing() {
     let eth_node = MockMiddleware::default();
     eth_node.update_data(|data| {
-        data.is_syncing = SyncingStatus::IsSyncing {
+        let status = SyncProgress {
             starting_block: 100.into(),
             current_block: 0.into(),
             highest_block: 130.into(),
-        }
+            pulled_states: None,
+            known_states: None,
+            healed_bytecode_bytes: None,
+            healed_bytecodes: None,
+            healed_trienode_bytes: None,
+            healed_trienodes: None,
+            healing_bytecode: None,
+            healing_trienodes: None,
+            synced_account_bytes: None,
+            synced_accounts: None,
+            synced_bytecode_bytes: None,
+            synced_bytecodes: None,
+            synced_storage: None,
+            synced_storage_bytes: None,
+        };
+        data.is_syncing = SyncingStatus::IsSyncing(Box::new(status));
     });
 
     let mut count = 0;
@@ -27,11 +43,26 @@ async fn handles_syncing() {
             if count == 30 {
                 data.is_syncing = SyncingStatus::IsFalse;
             } else {
-                data.is_syncing = SyncingStatus::IsSyncing {
+                let status = SyncProgress {
                     starting_block: 100.into(),
                     current_block: (100 + count).into(),
                     highest_block: 130.into(),
-                }
+                    pulled_states: None,
+                    known_states: None,
+                    healed_bytecode_bytes: None,
+                    healed_bytecodes: None,
+                    healed_trienode_bytes: None,
+                    healed_trienodes: None,
+                    healing_bytecode: None,
+                    healing_trienodes: None,
+                    synced_account_bytes: None,
+                    synced_accounts: None,
+                    synced_bytecode_bytes: None,
+                    synced_bytecodes: None,
+                    synced_storage: None,
+                    synced_storage_bytes: None,
+                };
+                data.is_syncing = SyncingStatus::IsSyncing(Box::new(status));
             }
         }
     });
