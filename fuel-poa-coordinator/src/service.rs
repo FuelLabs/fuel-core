@@ -235,7 +235,7 @@ where
                     self.timer
                         .set_timeout(min_block_time, OnConflict::Min)
                         .await;
-                } else if consumable_gas > 0 {
+                } else if self.txpool.pending_number().await? > 0 {
                     // If we still have available txs, reduce the timeout to max idle time
                     self.timer
                         .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -251,9 +251,9 @@ where
         match txpool_event {
             TxStatus::Submitted => match self.trigger {
                 Trigger::Instant => {
-                    let consumable_gas = self.txpool.total_consumable_gas().await?;
-                    // skip production if there are no consumable fees
-                    if consumable_gas > 0 {
+                    let pending_number = self.txpool.pending_number().await?;
+                    // skip production if there are no pending transactions
+                    if pending_number > 0 {
                         self.produce_block().await?;
                     }
                     Ok(())
@@ -272,7 +272,7 @@ where
                         && self.last_block_created + min_block_time < Instant::now()
                     {
                         self.produce_block().await?;
-                    } else if consumable_gas > 0 {
+                    } else if self.txpool.pending_number().await? > 0 {
                         // We have at least one transaction, so tx_max_idle_time is the limit
                         self.timer
                             .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -419,6 +419,8 @@ mod test {
 
         #[async_trait::async_trait]
         impl TransactionPool for TxPool {
+            async fn pending_number(&self) -> anyhow::Result<usize>;
+
             async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
 
             async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
@@ -573,6 +575,7 @@ mod test {
 
         let mut txpool = MockTxPool::default();
         txpool.expect_total_consumable_gas().returning(|| Ok(0));
+        txpool.expect_pending_number().returning(|| Ok(0));
 
         let mut task = Task {
             stop,
@@ -625,6 +628,7 @@ mod test {
 
         let mut txpool = MockTxPool::default();
         txpool.expect_total_consumable_gas().returning(|| Ok(0));
+        txpool.expect_pending_number().returning(|| Ok(0));
 
         let task = Task {
             stop,

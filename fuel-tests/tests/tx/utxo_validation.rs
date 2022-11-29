@@ -24,7 +24,7 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 #[tokio::test]
 async fn submit_utxo_verified_tx_with_min_gas_price() {
@@ -251,20 +251,15 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // collect all tx ids
-    let tx_ids: HashSet<_> = txs.iter().map(|tx| tx.id()).collect();
+    let tx_ids: BTreeSet<_> = txs.iter().map(|tx| tx.id()).collect();
 
     // setup the genesis coins for spending
     test_builder.config_coin_inputs_from_transactions(&txs.iter().collect_vec());
+    let txs: Vec<Transaction> = txs.into_iter().map(Into::into).collect_vec();
 
     let TestContext { client, .. } = test_builder.finalize().await;
 
-    let tasks = txs
-        .into_iter()
-        .map(|tx| {
-            let client = client.clone();
-            async move { client.submit_and_await_commit(&tx.into()).await }
-        })
-        .collect_vec();
+    let tasks = txs.iter().map(|tx| client.submit_and_await_commit(&tx));
 
     let tx_status: Vec<TransactionStatus> = join_all(tasks)
         .await
@@ -299,7 +294,7 @@ async fn concurrent_tx_submission_produces_expected_blocks() {
         .collect_vec();
 
     // ensure all transactions are included across all the blocks
-    let included_txs: HashSet<Bytes32> = total_blocks
+    let included_txs: BTreeSet<Bytes32> = total_blocks
         .results
         .iter()
         .flat_map(|b| {

@@ -263,6 +263,12 @@ impl Sender {
 
 #[async_trait::async_trait]
 impl super::poa_coordinator::TransactionPool for Sender {
+    async fn pending_number(&self) -> anyhow::Result<usize> {
+        let (response, receiver) = oneshot::channel();
+        self.send(TxPoolMpsc::PendingNumber { response }).await?;
+        receiver.await.map_err(Into::into)
+    }
+
     async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
         let (response, receiver) = oneshot::channel();
         self.send(TxPoolMpsc::ConsumableGas { response }).await?;
@@ -280,6 +286,8 @@ impl super::poa_coordinator::TransactionPool for Sender {
 /// Responses are returned using `response` oneshot channel.
 #[derive(Debug)]
 pub enum TxPoolMpsc {
+    /// The number of pending transactions in the pool.
+    PendingNumber { response: oneshot::Sender<usize> },
     /// The amount of gas in all includable transactions combined
     ConsumableGas { response: oneshot::Sender<u64> },
     /// Return all sorted transactions that are includable in next block.
