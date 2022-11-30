@@ -124,11 +124,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // configure and build P2P Service
         let transport = build_transport(config.local_keypair.clone());
         let behaviour = FuelBehaviour::new(&config, codec.clone());
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .executor(Box::new(|fut| {
-                tokio::spawn(fut);
-            }))
-            .build();
+        let mut swarm =
+            SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
+                .build();
 
         // set up node's address to listen on
         let listen_multiaddr = {

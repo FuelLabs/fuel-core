@@ -21,17 +21,12 @@ where
 {
     let mut start = tokio::time::Instant::now();
     let mut loop_time = tokio::time::Instant::now();
-    while let SyncingStatus::IsSyncing {
-        starting_block,
-        current_block,
-        highest_block,
-    } = get_status(eth_node).await?
-    {
+    while let SyncingStatus::IsSyncing(is_syncing) = get_status(eth_node).await? {
         if start.elapsed() > sync_log_freq {
             let status = Status {
-                starting_block,
-                current_block,
-                highest_block,
+                starting_block: is_syncing.starting_block.as_u64().into(),
+                current_block: is_syncing.current_block.as_u64().into(),
+                highest_block: is_syncing.highest_block.as_u64().into(),
             };
             start = tokio::time::Instant::now();
             tracing::info!(
