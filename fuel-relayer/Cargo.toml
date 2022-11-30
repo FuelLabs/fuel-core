@@ -13,18 +13,14 @@ description = "Fuel Relayer"
 anyhow = "1.0"
 async-trait = "0.1"
 bytes = "1.1"
-env_logger = "0.9"
 ethers-contract = { version = "1.0.2", default-features = false, features = [
     "abigen",
 ] }
 ethers-core = { version = "1.0.2", default-features = false }
-ethers-middleware = { version = "1.0.2", default-features = false }
 ethers-providers = { version = "1.0.2", default-features = false, features = [
     "ws",
     "rustls",
 ] }
-ethers-signers = { version = "1.0.2", default-features = false }
-features = "0.10"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.14.1" }
 futures = "0.3"
 hex = "0.4"
@@ -36,7 +32,6 @@ sha3 = "0.10"
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["macros"] }
 tracing = "0.1"
-tracing-subscriber = "0.3.9"
 url = "2.2"
 
 [dev-dependencies]
