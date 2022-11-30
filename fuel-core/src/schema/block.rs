@@ -3,9 +3,7 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::{
-        Database,
-    },
+    database::Database,
     executor::Executor,
     model::{
         BlockHeight,
