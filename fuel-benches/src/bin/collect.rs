@@ -172,23 +172,6 @@ fn main() {
                     );
                 }
             }
-            // let yaml: serde_yaml::Mapping = state
-            //     .state
-            //     .into_iter()
-            //     .map(|(id, mean)| {
-            //         let ratio = map_to_ratio(baseline, mean);
-            //         if debug {
-            //             eprintln!(
-            //                 "id: {}, baseline: {}, mean: {:?}, ratio: {}",
-            //                 id, baseline, mean, ratio
-            //             );
-            //         }
-            //         (
-            //             serde_yaml::to_value(id).unwrap(),
-            //             serde_yaml::to_value(ratio).unwrap(),
-            //         )
-            //     })
-            //     .collect();
             let file = std::fs::File::create(output.clone()).unwrap();
             let writer = BufWriter::new(file);
             serde_yaml::to_writer(writer, &serde_yaml::Value::Mapping(yaml)).unwrap();

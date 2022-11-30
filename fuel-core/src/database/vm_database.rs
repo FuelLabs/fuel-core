@@ -62,24 +62,6 @@ impl VmDatabase {
         self.current_block_height
     }
 
-    pub fn from_existing_db(
-        current_block_height: u32,
-        current_timestamp: Tai64,
-        coinbase: Address,
-        database: Database,
-    ) -> Self {
-        Self {
-            current_block_height,
-            current_timestamp,
-            coinbase,
-            database,
-        }
-    }
-
-    pub fn replace_storage(&mut self, database: Database) {
-        self.database = database;
-    }
-
     pub fn database_mut(&mut self) -> &mut Database {
         &mut self.database
     }

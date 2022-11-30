@@ -20,20 +20,6 @@ const LARGE_GAS_LIMIT: u64 = u64::MAX - 1001;
 fn new_db() -> VmDatabase {
     // when rocksdb is enabled, this creates a new db instance with a temporary path
     VmDatabase::default()
-    // let db = Database::default();
-    // let current_block_height = 0;
-    // let current_timestamp = Tai64::now();
-    // let coinbase = Default::default();
-    // let tx = db.transaction();
-    // let tx = tx.as_mut();
-    // let mut vm_db = VmDatabase::from_existing_db(
-    //     current_block_height,
-    //     current_timestamp,
-    //     coinbase,
-    //     tx.clone(),
-    // );
-    // vm_db.replace_storage(tx.clone());
-    // vm_db
 }
 
 pub struct ContractCode {
