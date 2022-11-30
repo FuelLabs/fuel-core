@@ -65,9 +65,12 @@ pub struct P2pArgs {
     #[clap(long = "max_peers_connected", default_value = "50")]
     pub max_peers_connected: usize,
 
-    /// Enable random walk for p2p node discovery
-    #[clap(long = "enable_random_walk")]
-    pub enable_random_walk: bool,
+    /// Set the delay between random walks for p2p node discovery in seconds.
+    /// If it's not set the random walk will be disabled.
+    /// Also if `reserved_nodes_only_mode` is set to `true`,
+    /// the random walk will be disabled.
+    #[clap(long = "random_walk", default_value = "0")]
+    pub random_walk: u64,
 
     /// Choose to include private IPv4/IPv6 addresses as discoverable
     /// except for the ones stored in `bootstrap_nodes`
@@ -130,10 +133,6 @@ pub struct P2pArgs {
 
 impl From<P2pArgs> for anyhow::Result<P2PConfig> {
     fn from(args: P2pArgs) -> Self {
-        eprintln!(
-            "------------------------p2p address is: {:?}",
-            args.public_address
-        );
         let local_keypair = {
             match args.keypair {
                 Some(path) => {
@@ -170,6 +169,12 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             .build()
             .expect("valid gossipsub configuration");
 
+        let random_walk = if args.random_walk == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(args.random_walk))
+        };
+
         Ok(P2PConfig {
             local_keypair,
             network_name: args.network,
@@ -185,7 +190,7 @@ impl From<P2pArgs> for anyhow::Result<P2PConfig> {
             enable_mdns: args.enable_mdns,
             max_peers_connected: args.max_peers_connected,
             allow_private_addresses: args.allow_private_addresses,
-            enable_random_walk: args.enable_random_walk,
+            random_walk,
             connection_idle_timeout: Some(Duration::from_secs(
                 args.connection_idle_timeout,
             )),

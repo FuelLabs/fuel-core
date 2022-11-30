@@ -377,7 +377,7 @@ mod tests {
                 .discovery_limit(50)
                 .with_bootstrap_nodes(bootstrap_nodes)
                 .set_connection_idle_timeout(Duration::from_secs(120))
-                .enable_random_walk(true);
+                .with_random_walk(Duration::from_secs(5));
 
             config.finish()
         };

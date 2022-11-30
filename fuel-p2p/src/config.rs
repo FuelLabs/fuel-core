@@ -90,7 +90,7 @@ pub struct P2PConfig {
     pub enable_mdns: bool,
     pub max_peers_connected: usize,
     pub allow_private_addresses: bool,
-    pub enable_random_walk: bool,
+    pub random_walk: Option<Duration>,
     pub connection_idle_timeout: Option<Duration>,
 
     // 'Reserved Nodes' mode
@@ -146,7 +146,7 @@ impl P2PConfig {
             enable_mdns: false,
             max_peers_connected: 50,
             allow_private_addresses: true,
-            enable_random_walk: true,
+            random_walk: Some(Duration::from_secs(5)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,

@@ -27,8 +27,8 @@ pub struct DiscoveryConfig {
     bootstrap_nodes: Vec<Multiaddr>,
     reserved_nodes: Vec<Multiaddr>,
     reserved_nodes_only_mode: bool,
+    random_walk: Option<Duration>,
     with_mdns: bool,
-    with_random_walk: bool,
     allow_private_addresses: bool,
     network_name: String,
     max_peers_connected: usize,
@@ -42,11 +42,11 @@ impl DiscoveryConfig {
             bootstrap_nodes: vec![],
             reserved_nodes: vec![],
             reserved_nodes_only_mode: false,
+            random_walk: None,
             max_peers_connected: std::usize::MAX,
             allow_private_addresses: false,
             with_mdns: false,
             network_name,
-            with_random_walk: false,
             connection_idle_timeout: Duration::from_secs(10),
         }
     }
@@ -100,8 +100,8 @@ impl DiscoveryConfig {
         self
     }
 
-    pub fn enable_random_walk(&mut self, value: bool) -> &mut Self {
-        self.with_random_walk = value;
+    pub fn with_random_walk(&mut self, value: Duration) -> &mut Self {
+        self.random_walk = Some(value);
         self
     }
 
@@ -160,10 +160,15 @@ impl DiscoveryConfig {
             warn!("Kademlia bootstrap failed: {}", e);
         }
 
-        let next_kad_random_walk = if self.with_random_walk && !reserved_nodes_only_mode {
-            Some(Delay::new(Duration::from_secs(5)))
-        } else {
-            None
+        let next_kad_random_walk = {
+            let random_walk = self.random_walk.map(|time| Delay::new(time));
+
+            // no need to preferm random walk if we don't want the node to connect to non-whitelisted peers
+            if !reserved_nodes_only_mode {
+                random_walk
+            } else {
+                None
+            }
         };
 
         // mdns setup
