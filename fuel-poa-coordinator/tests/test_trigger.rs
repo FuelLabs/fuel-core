@@ -222,6 +222,11 @@ impl MockTxPool {
                     },
                     msg = txpool_rx.recv() => {
                         match msg.expect("Closed unexpectedly") {
+                            MockTxPoolMsg::PendingNumber(response) => {
+                                let t = txs.lock().await.clone();
+                                let resp = t.len();
+                                response.send(resp).unwrap();
+                            },
                             MockTxPoolMsg::ConsumableGas(response) => {
                                 let t = txs.lock().await.clone();
                                 let resp = t.into_iter().map(|t| t.limit()).sum();
@@ -299,6 +304,7 @@ impl MockTxPool {
 
 #[derive(Debug)]
 pub enum MockTxPoolMsg {
+    PendingNumber(oneshot::Sender<usize>),
     ConsumableGas(oneshot::Sender<u64>),
     Includable(oneshot::Sender<Vec<ArcPoolTx>>),
     Remove {
@@ -329,6 +335,17 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
 
 #[async_trait::async_trait]
 impl TransactionPool for MockTxPoolSender {
+    async fn pending_number(&self) -> anyhow::Result<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.0
+            .send(MockTxPoolMsg::PendingNumber(tx))
+            .await
+            .expect("Send error");
+        Ok(rx
+            .await
+            .expect("MockTxPool panicked in total_consumable_gas query"))
+    }
+
     async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
         let (tx, rx) = oneshot::channel();
         self.0

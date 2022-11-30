@@ -426,7 +426,10 @@ impl FuelClient {
         let query = schema::tx::TransactionQuery::build(TxIdArgs { id: id.parse()? });
 
         let tx = self.query(query).await?.transaction.ok_or_else(|| {
-            io::Error::new(ErrorKind::NotFound, format!("transaction {} not found", id))
+            io::Error::new(
+                ErrorKind::NotFound,
+                format!("status not found for transaction {} ", id),
+            )
         })?;
 
         let status = tx
