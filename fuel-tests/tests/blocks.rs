@@ -314,7 +314,10 @@ async fn block_connection_5(
 
     assert!(!blocks.results.is_empty());
     assert!(blocks.cursor.is_some());
-    // assert "first" 5 blocks are returned in descending order (latest first)
+
+    // Blocks are typically requested in descending order (latest
+    // first), but we're returning them in ascending order to keep
+    // this query in line with the GraphQL API specs and other queries.
     match pagination_direction {
         PageDirection::Forward => {
             assert_eq!(
@@ -323,7 +326,7 @@ async fn block_connection_5(
                     .into_iter()
                     .map(|b| b.header.height.0)
                     .collect_vec(),
-                rev(0..5).collect_vec()
+                (0..5).collect_vec()
             );
         }
         PageDirection::Backward => {

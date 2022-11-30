@@ -19,8 +19,8 @@ use libp2p::{
     mplex,
     noise,
     tcp::{
-        GenTcpConfig,
-        TokioTcpTransport,
+        tokio::Transport as TokioTcpTransport,
+        Config as TcpConfig,
     },
     yamux,
     Multiaddr,
@@ -145,7 +145,7 @@ impl P2PConfig {
 pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
-            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+            || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
 
         let tcp = generate_tcp_transport();
 

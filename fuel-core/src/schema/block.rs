@@ -347,10 +347,7 @@ where
             true
         })
         .take(records_to_fetch);
-    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
-    if direction == IterDirection::Forward {
-        blocks.reverse();
-    }
+    let blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
 
     // TODO: do a batch get instead
     let blocks: Vec<Cow<FuelBlockDb>> = blocks

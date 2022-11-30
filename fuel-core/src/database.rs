@@ -356,10 +356,6 @@ impl P2pDb for Database {
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        Self::get_block_height(self)
-    }
-
     fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
         Self::get_coin_config(self)
     }
@@ -372,6 +368,10 @@ impl ChainConfigDb for Database {
         &self,
     ) -> Result<Option<Vec<fuel_chain_config::MessageConfig>>, Error> {
         Self::get_message_config(self)
+    }
+
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
+        Self::get_block_height(self)
     }
 }
 
