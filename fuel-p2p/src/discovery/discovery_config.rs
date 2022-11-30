@@ -161,7 +161,7 @@ impl DiscoveryConfig {
         }
 
         let next_kad_random_walk = {
-            let random_walk = self.random_walk.map(|time| Delay::new(time));
+            let random_walk = self.random_walk.map(Delay::new);
 
             // no need to preferm random walk if we don't want the node to connect to non-whitelisted peers
             if !reserved_nodes_only_mode {
