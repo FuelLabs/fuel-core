@@ -35,6 +35,7 @@ use fuel_core_interfaces::{
         ContractsInfo,
         ContractsRawCode,
     },
+    not_found,
 };
 use std::iter::IntoIterator;
 
@@ -57,7 +58,7 @@ impl Contract {
         let contract = db
             .storage::<ContractsRawCode>()
             .get(&self.0)?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(not_found!(ContractsRawCode))?
             .into_owned();
         Ok(HexString(contract.into()))
     }

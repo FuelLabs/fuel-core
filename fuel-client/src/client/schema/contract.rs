@@ -13,7 +13,7 @@ use crate::client::{
     PaginationRequest,
 };
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ContractByIdArgs {
     pub id: ContractId,
 }
@@ -22,10 +22,10 @@ pub struct ContractByIdArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ContractByIdArgs"
+    variables = "ContractByIdArgs"
 )]
 pub struct ContractByIdQuery {
-    #[arguments(id = &args.id)]
+    #[arguments(id: $id)]
     pub contract: Option<Contract>,
 }
 
@@ -37,7 +37,7 @@ pub struct ContractBalance {
     pub asset_id: AssetId,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ContractBalanceQueryArgs {
     pub id: ContractId,
     pub asset: AssetId,
@@ -47,10 +47,10 @@ pub struct ContractBalanceQueryArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ContractBalanceQueryArgs"
+    variables = "ContractBalanceQueryArgs"
 )]
 pub struct ContractBalanceQuery {
-    #[arguments(contract = &args.id, asset = &args.asset)]
+    #[arguments(contract: $id, asset: $asset)]
     pub contract_balance: ContractBalance,
 }
 
@@ -75,7 +75,7 @@ pub struct ContractBalanceFilterInput {
     pub contract: ContractId,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ContractBalancesConnectionArgs {
     /// Filter balances based on a filter
     filter: ContractBalanceFilterInput,
@@ -108,10 +108,10 @@ pub struct ContractBalanceConnection {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ContractBalancesConnectionArgs"
+    variables = "ContractBalancesConnectionArgs"
 )]
 pub struct ContractBalancesQuery {
-    #[arguments(filter = &args.filter, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(filter: $filter, after: $after, before: $before, first: $first, last: $last)]
     pub contract_balances: ContractBalanceConnection,
 }
 

@@ -18,11 +18,9 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    db::{
-        Error,
-        KvStoreError,
-    },
+    db::Error,
     model::FuelConsensusHeader,
+    not_found,
 };
 use std::borrow::Cow;
 
@@ -134,7 +132,7 @@ impl InterpreterStorage for VmDatabase {
             // this will return 0x00**32 for block height 0 as well
             self.database
                 .get_block_id(block_height.into())?
-                .ok_or_else(|| KvStoreError::NotFound.into())
+                .ok_or_else(|| not_found!("BlockId").into())
         }
     }
 

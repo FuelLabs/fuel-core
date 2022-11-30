@@ -60,7 +60,7 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
     },
-    db::KvStoreError,
+    not_found,
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
@@ -145,7 +145,7 @@ impl SuccessStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)
@@ -175,7 +175,7 @@ impl FailureStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)

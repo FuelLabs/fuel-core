@@ -9,7 +9,6 @@ use crate::{
             SealedBlockConsensus,
         },
         Database,
-        KvStoreError,
     },
     executor::Executor,
     model::{
@@ -59,6 +58,7 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -101,7 +101,7 @@ impl Block {
             .storage::<SealedBlockConsensus>()
             .get(&id)
             .map(|c| c.map(|c| c.into_owned().into()))?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(not_found!(SealedBlockConsensus))?;
 
         Ok(consensus)
     }
@@ -117,7 +117,7 @@ impl Block {
                 Ok(Transaction(
                     db.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|v| v.ok_or(KvStoreError::NotFound))?
+                        .and_then(|v| v.ok_or(not_found!(Transactions)))?
                         .into_owned(),
                 ))
             })
@@ -347,10 +347,7 @@ where
             true
         })
         .take(records_to_fetch);
-    let mut blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
-    if direction == IterDirection::Forward {
-        blocks.reverse();
-    }
+    let blocks: Vec<(BlockHeight, fuel_types::Bytes32)> = blocks.try_collect()?;
 
     // TODO: do a batch get instead
     let blocks: Vec<Cow<FuelBlockDb>> = blocks
@@ -359,7 +356,7 @@ where
             db.storage::<FuelBlocks>()
                 .get(id)
                 .transpose()
-                .ok_or(KvStoreError::NotFound)?
+                .ok_or(not_found!(FuelBlocks))?
         })
         .try_collect()?;
 

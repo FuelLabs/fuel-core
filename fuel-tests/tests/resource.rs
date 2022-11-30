@@ -146,6 +146,7 @@ mod coins {
                 resources.iter().filter_map(|b| match b {
                     Resource::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
                     Resource::Message(_) => None,
+                    Resource::Unknown => None,
                 })
             })
             .collect();
@@ -325,6 +326,7 @@ mod messages {
                 resources.iter().filter_map(|b| match b {
                     Resource::Coin(_) => None,
                     Resource::Message(m) => Some(format!("{:#x}", m.message_id)),
+                    Resource::Unknown => None,
                 })
             })
             .collect();
@@ -523,6 +525,7 @@ mod messages_and_coins {
                 resources.iter().filter_map(|b| match b {
                     Resource::Coin(_) => None,
                     Resource::Message(m) => Some(format!("{:#x}", m.message_id)),
+                    Resource::Unknown => None,
                 })
             })
             .collect();
@@ -532,6 +535,7 @@ mod messages_and_coins {
                 resources.iter().filter_map(|b| match b {
                     Resource::Coin(c) => Some(format!("{:#x}", c.utxo_id)),
                     Resource::Message(_) => None,
+                    Resource::Unknown => None,
                 })
             })
             .collect();

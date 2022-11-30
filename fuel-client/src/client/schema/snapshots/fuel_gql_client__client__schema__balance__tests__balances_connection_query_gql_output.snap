@@ -1,11 +1,9 @@
 ---
 source: fuel-client/src/client/schema/balance.rs
-assertion_line: 137
 expression: operation.query
-
 ---
-query Query($_0: BalanceFilterInput!, $_1: Int, $_2: String, $_3: Int, $_4: String) {
-  balances(filter: $_0, first: $_1, after: $_2, last: $_3, before: $_4) {
+query($filter: BalanceFilterInput!, $after: String, $before: String, $first: Int, $last: Int) {
+  balances(filter: $filter, after: $after, before: $before, first: $first, last: $last) {
     edges {
       cursor
       node {
@@ -22,4 +20,5 @@ query Query($_0: BalanceFilterInput!, $_1: Int, $_2: String, $_3: Int, $_4: Stri
     }
   }
 }
+
 

@@ -2,11 +2,12 @@
 source: fuel-client/src/client/schema/contract.rs
 expression: operation.query
 ---
-query Query($_0: ContractId!) {
-  contract(id: $_0) {
+query($id: ContractId!) {
+  contract(id: $id) {
     id
     bytecode
     salt
   }
 }
+
 
