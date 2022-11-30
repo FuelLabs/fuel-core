@@ -39,8 +39,8 @@ use libp2p::{
         RequestResponseEvent,
         ResponseChannel,
     },
+    swarm::NetworkBehaviour,
     Multiaddr,
-    NetworkBehaviour,
     PeerId,
 };
 use std::collections::HashMap;

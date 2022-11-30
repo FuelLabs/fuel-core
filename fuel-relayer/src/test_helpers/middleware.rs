@@ -4,6 +4,7 @@ use ethers_core::types::{
     BlockId,
     Filter,
     Log,
+    SyncingStatus,
     Transaction,
     TransactionReceipt,
     TxHash,
@@ -15,7 +16,6 @@ use ethers_providers::{
     Middleware,
     Provider,
     ProviderError,
-    SyncingStatus,
 };
 use parking_lot::Mutex;
 use serde::{

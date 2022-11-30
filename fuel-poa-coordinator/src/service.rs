@@ -235,7 +235,7 @@ where
                     self.timer
                         .set_timeout(min_block_time, OnConflict::Min)
                         .await;
-                } else if consumable_gas > 0 {
+                } else if self.txpool.pending_number().await? > 0 {
                     // If we still have available txs, reduce the timeout to max idle time
                     self.timer
                         .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -251,7 +251,11 @@ where
         match txpool_event {
             TxStatus::Submitted => match self.trigger {
                 Trigger::Instant => {
-                    self.produce_block().await?;
+                    let pending_number = self.txpool.pending_number().await?;
+                    // skip production if there are no pending transactions
+                    if pending_number > 0 {
+                        self.produce_block().await?;
+                    }
                     Ok(())
                 }
                 Trigger::Never | Trigger::Interval { .. } => Ok(()),
@@ -268,7 +272,7 @@ where
                         && self.last_block_created + min_block_time < Instant::now()
                     {
                         self.produce_block().await?;
-                    } else {
+                    } else if self.txpool.pending_number().await? > 0 {
                         // We have at least one transaction, so tx_max_idle_time is the limit
                         self.timer
                             .set_timeout(max_tx_idle_time, OnConflict::Min)
@@ -312,6 +316,12 @@ where
             _ = self.stop.recv() => {
                 Ok(false)
             }
+            // TODO: This should likely be refactored to use something like tokio::sync::Notify.
+            //       Otherwise, if a bunch of txs are submitted at once and all the txs are included
+            //       into the first block production trigger, we'll still call the event handler
+            //       for each tx after they've already been included into a block.
+            //       The poa service also doesn't care about events unrelated to new tx submissions,
+            //       and shouldn't be awoken when txs are completed or squeezed out of the pool.
             txpool_event = self.txpool_broadcast.recv() => {
                 self.on_txpool_event(&txpool_event.context("Broadcast receive error")?).await.context("While processing txpool event")?;
                 Ok(true)
@@ -391,52 +401,26 @@ mod test {
             ArcPoolTx,
             BlockId,
         },
+        txpool::Error::NoMetadata,
     };
     use rand::{
         prelude::StdRng,
         Rng,
         SeedableRng,
     };
-    use std::collections::HashSet;
-
-    struct MockBlockProducer {
-        skipped_transactions: Vec<Transaction>,
-    }
-
-    #[async_trait::async_trait]
-    impl BlockProducer for MockBlockProducer {
-        async fn produce_and_execute_block(
-            &self,
-            _height: BlockHeight,
-            _max_gas: Word,
-        ) -> anyhow::Result<ExecutionResult> {
-            let result = ExecutionResult {
-                block: Default::default(),
-                skipped_transactions: self
-                    .skipped_transactions
-                    .clone()
-                    .into_iter()
-                    .map(|tx| (tx, Error::OutputAlreadyExists))
-                    .collect(),
-            };
-            Ok(result)
-        }
-
-        async fn dry_run(
-            &self,
-            _transaction: Transaction,
-            _height: Option<BlockHeight>,
-            _utxo_validation: Option<bool>,
-        ) -> anyhow::Result<Vec<Receipt>> {
-            unimplemented!()
-        }
-    }
+    use std::{
+        collections::HashSet,
+        time::Duration,
+    };
+    use tokio::time;
 
     mockall::mock! {
         TxPool {}
 
         #[async_trait::async_trait]
         impl TransactionPool for TxPool {
+            async fn pending_number(&self) -> anyhow::Result<usize>;
+
             async fn total_consumable_gas(&self) -> anyhow::Result<u64>;
 
             async fn remove_txs(&mut self, tx_ids: Vec<TxId>) -> anyhow::Result<Vec<ArcPoolTx>>;
@@ -458,6 +442,26 @@ mod test {
                 block_id: BlockId,
                 consensus: FuelBlockConsensus,
             ) -> anyhow::Result<()>;
+        }
+    }
+
+    mockall::mock! {
+        BlockProducer {}
+
+        #[async_trait::async_trait]
+        impl BlockProducer for BlockProducer {
+            async fn produce_and_execute_block(
+                &self,
+                _height: BlockHeight,
+                _max_gas: Word,
+            ) -> anyhow::Result<ExecutionResult>;
+
+            async fn dry_run(
+                &self,
+                _transaction: Transaction,
+                _height: Option<BlockHeight>,
+                _utxo_validation: Option<bool>,
+            ) -> anyhow::Result<Vec<Receipt>>;
         }
     }
 
@@ -487,9 +491,21 @@ mod test {
         let skipped_transactions: Vec<_> =
             (0..TX_NUM).map(|_| make_tx(&mut rng)).collect();
 
-        let block_producer = MockBlockProducer {
-            skipped_transactions: skipped_transactions.clone(),
-        };
+        let mock_skipped_txs = skipped_transactions.clone();
+
+        let mut block_producer = MockBlockProducer::default();
+        block_producer
+            .expect_produce_and_execute_block()
+            .returning(move |_, _| {
+                Ok(ExecutionResult {
+                    block: Default::default(),
+                    skipped_transactions: mock_skipped_txs
+                        .clone()
+                        .into_iter()
+                        .map(|tx| (tx, Error::OutputAlreadyExists))
+                        .collect(),
+                })
+            });
 
         let mut db = MockDatabase::default();
         db.expect_block_height()
@@ -525,10 +541,130 @@ mod test {
             txpool_broadcast,
             import_block_events_tx,
             last_block_created: Instant::now(),
-            trigger: Default::default(),
+            trigger: Trigger::Instant,
             timer: DeadlineClock::new(),
         };
 
         assert!(task.produce_block().await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn does_not_produce_when_txpool_empty_in_instant_mode() {
+        // verify the PoA service doesn't trigger empty blocks to be produced when there are
+        // irrelevant updates from the txpool
+        let mut rng = StdRng::seed_from_u64(2322);
+        let secret_key = SecretKey::random(&mut rng);
+
+        let (_stop_tx, stop) = mpsc::channel(1);
+        let (_txpool_tx, txpool_broadcast) = broadcast::channel(1);
+        let (import_block_events_tx, mut import_block_receiver_tx) =
+            broadcast::channel(1);
+        tokio::spawn(async move {
+            import_block_receiver_tx.recv().await.unwrap();
+        });
+
+        let mut block_producer = MockBlockProducer::default();
+
+        block_producer
+            .expect_produce_and_execute_block()
+            .returning(|_, _| panic!("Block production should not be called"));
+
+        let mut db = MockDatabase::default();
+        db.expect_block_height()
+            .returning(|| Ok(BlockHeight::from(1u32)));
+
+        let mut txpool = MockTxPool::default();
+        txpool.expect_total_consumable_gas().returning(|| Ok(0));
+        txpool.expect_pending_number().returning(|| Ok(0));
+
+        let mut task = Task {
+            stop,
+            block_gas_limit: 1000000,
+            signing_key: Some(Secret::new(secret_key.into())),
+            db,
+            block_producer: Arc::new(block_producer),
+            txpool,
+            txpool_broadcast,
+            import_block_events_tx,
+            last_block_created: Instant::now(),
+            trigger: Trigger::Instant,
+            timer: DeadlineClock::new(),
+        };
+
+        // simulate some txpool events to see if any block production is erroneously triggered
+        task.on_txpool_event(&TxStatus::Submitted).await.unwrap();
+        task.on_txpool_event(&TxStatus::Completed).await.unwrap();
+        task.on_txpool_event(&TxStatus::SqueezedOut { reason: NoMetadata })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn hybrid_production_doesnt_produce_empty_blocks_when_txpool_is_empty() {
+        // verify the PoA service doesn't alter the hybrid block timing when
+        // receiving txpool events if txpool is actually empty
+        let mut rng = StdRng::seed_from_u64(2322);
+        let secret_key = SecretKey::random(&mut rng);
+
+        const TX_IDLE_TIME_MS: u64 = 50u64;
+
+        let (stop_tx, stop) = mpsc::channel(1);
+        let (txpool_tx, txpool_broadcast) = broadcast::channel(10);
+        let (import_block_events_tx, mut import_block_receiver_tx) =
+            broadcast::channel(1);
+        tokio::spawn(async move {
+            let _ = import_block_receiver_tx.recv().await;
+        });
+
+        let mut block_producer = MockBlockProducer::default();
+
+        block_producer
+            .expect_produce_and_execute_block()
+            .returning(|_, _| panic!("Block production should not be called"));
+
+        let mut db = MockDatabase::default();
+        db.expect_block_height()
+            .returning(|| Ok(BlockHeight::from(1u32)));
+
+        let mut txpool = MockTxPool::default();
+        txpool.expect_total_consumable_gas().returning(|| Ok(0));
+        txpool.expect_pending_number().returning(|| Ok(0));
+
+        let task = Task {
+            stop,
+            block_gas_limit: 1000000,
+            signing_key: Some(Secret::new(secret_key.into())),
+            db,
+            block_producer: Arc::new(block_producer),
+            txpool,
+            txpool_broadcast,
+            import_block_events_tx,
+            last_block_created: Instant::now(),
+            trigger: Trigger::Hybrid {
+                min_block_time: Duration::from_millis(100),
+                max_tx_idle_time: Duration::from_millis(TX_IDLE_TIME_MS),
+                max_block_time: Duration::from_millis(1000),
+            },
+            timer: DeadlineClock::new(),
+        };
+
+        let jh = tokio::spawn(task.run());
+
+        // simulate some txpool events to see if any block production is erroneously triggered
+        txpool_tx.send(TxStatus::Submitted).unwrap();
+        txpool_tx.send(TxStatus::Completed).unwrap();
+        txpool_tx
+            .send(TxStatus::SqueezedOut { reason: NoMetadata })
+            .unwrap();
+
+        // wait max_tx_idle_time - causes block production to occur if
+        // pending txs > 0 is not checked.
+        time::sleep(Duration::from_millis(TX_IDLE_TIME_MS)).await;
+
+        // send stop
+        stop_tx.send(()).await.unwrap();
+
+        // await shutdown and capture any errors
+        jh.await.unwrap();
     }
 }

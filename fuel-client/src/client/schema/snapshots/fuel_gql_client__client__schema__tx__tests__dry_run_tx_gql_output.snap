@@ -2,8 +2,8 @@
 source: fuel-client/src/client/schema/tx.rs
 expression: query.query
 ---
-mutation Mutation($_0: HexString!, $_1: Boolean) {
-  dryRun(tx: $_0, utxoValidation: $_1) {
+mutation($tx: HexString!, $utxoValidation: Boolean) {
+  dryRun(tx: $tx, utxoValidation: $utxoValidation) {
     param1
     param2
     amount
@@ -38,4 +38,5 @@ mutation Mutation($_0: HexString!, $_1: Boolean) {
     contractId
   }
 }
+
 

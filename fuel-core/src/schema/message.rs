@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use super::{
     block::Header,
     scalars::{
@@ -49,8 +47,10 @@ use fuel_core_interfaces::{
         self,
         FuelBlockConsensus,
     },
+    not_found,
 };
 use itertools::Itertools;
+use std::borrow::Cow;
 
 pub struct Message(pub(crate) model::Message);
 
@@ -158,7 +158,7 @@ impl MessageQuery {
                                     db.storage::<Messages>()
                                         .get(msg_id)
                                         .transpose()
-                                        .ok_or(KvStoreError::NotFound)?
+                                        .ok_or(not_found!(Messages))?
                                         .map(|f| f.into_owned())
                                 })
                                 .try_collect()?;

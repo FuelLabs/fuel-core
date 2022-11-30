@@ -33,8 +33,8 @@ use libp2p::{
         Protocol,
     },
     tcp::{
-        GenTcpConfig,
-        TokioTcpTransport,
+        tokio::Transport as TokioTcpTransport,
+        Config as TcpConfig,
     },
     yamux,
     InboundUpgrade,
@@ -172,7 +172,7 @@ impl P2PConfig {
 pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
-            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+            || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
 
         let tcp = generate_tcp_transport();
 

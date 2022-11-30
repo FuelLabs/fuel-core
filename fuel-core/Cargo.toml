@@ -29,7 +29,6 @@ clap = { version = "3.2", features = ["env", "derive"] }
 derive_more = { version = "0.99" }
 dirs = "4.0"
 enum-iterator = "1.2"
-env_logger = "0.9"
 fuel-block-executor = { path = "../fuel-block-executor", version = "0.14.1" }
 fuel-block-importer = { path = "../fuel-block-importer", version = "0.14.1" }
 fuel-block-producer = { path = "../fuel-block-producer", version = "0.14.1" }
