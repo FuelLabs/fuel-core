@@ -3925,9 +3925,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm"
-version = "0.41.0"
+version = "0.41.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ca5d9634c4ce6cbfc0c91d932bb7a7ae89d37c6caea98fe3f8760a23b7ac486"
+checksum = "b2a35472fe3276b3855c00f1c032ea8413615e030256429ad5349cdf67c6e1a0"
 dependencies = [
  "either",
  "fnv",
@@ -3947,9 +3947,9 @@ dependencies = [
 
 [[package]]
 name = "libp2p-swarm-derive"
-version = "0.30.2"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f61e1e960da4bb32dc4728c69e3a6cf83992507816d2a5a7dad22a187b5b0287"
+checksum = "9d527d5827582abd44a6d80c07ff8b50b4ee238a8979e05998474179e79dc400"
 dependencies = [
  "heck",
  "quote",

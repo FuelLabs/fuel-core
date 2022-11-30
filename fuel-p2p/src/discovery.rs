@@ -11,7 +11,7 @@ use libp2p::{
         KademliaEvent,
         QueryId,
     },
-    mdns::Event,
+    mdns::Event as MdnsEvent,
     multiaddr::Protocol,
     swarm::{
         ConnectionHandler,
@@ -232,7 +232,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
 
         while let Poll::Ready(mdns_event) = self.mdns.poll(cx, params) {
             match mdns_event {
-                NetworkBehaviourAction::GenerateEvent(Event::Discovered(list)) => {
+                NetworkBehaviourAction::GenerateEvent(MdnsEvent::Discovered(list)) => {
                     // inform kademlia of newly discovered local peers
                     // only if there aren't enough peers already connected
                     if self.connected_peers.len() < self.max_peers_connected {
