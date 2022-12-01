@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
         Column,
         Database,
         KvStoreError,
@@ -24,7 +23,10 @@ use fuel_core_interfaces::{
         prelude::StorageAsRef,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        Transactions,
+    },
     model::FuelBlock,
     not_found,
 };
