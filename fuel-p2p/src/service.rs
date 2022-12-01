@@ -628,30 +628,35 @@ mod tests {
 
         let (mut single_sentry_node, _) = first_sentry_nodes.pop().unwrap();
 
+        let mut sentry_node_connetions = HashSet::new();
+
         loop {
             tokio::select! {
-                event_from_first_protected = first_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_protected {
+                event_from_first_guarded = first_guarded_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_first_guarded {
                         if !first_sentry_set.remove(&peer_id)            {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
-                    tracing::info!("Event from the first protected node: {:?}", event_from_first_protected);
+                    tracing::info!("Event from the first guarded node: {:?}", event_from_first_guarded);
                 },
-                event_from_second_protected = second_guarded_node.next_event() => {
-                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_protected {
+                event_from_second_guarded = second_guarded_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = event_from_second_guarded {
                         if !second_sentry_set.remove(&peer_id)            {
                             panic!("The node should only connect to the specified reserved nodes!");
                         }
                     }
-                    tracing::info!("Event from the second protected node: {:?}", event_from_second_protected);
+                    tracing::info!("Event from the second guarded node: {:?}", event_from_second_guarded);
                 },
                 // Poll one of the reserved, sentry nodes
-                _ = single_sentry_node.next_event() => {
+                sentry_node_event = single_sentry_node.next_event() => {
+                    if let Some(FuelP2PEvent::PeerConnected(peer_id)) = sentry_node_event {
+                        sentry_node_connetions.insert(peer_id);
+                    }
                     // This reserved node has connected to more than the number of reserved nodes it is part of.
                     // It means it has discovered other nodes in the network.
-                    if single_sentry_node.get_peers_ids().len() > double_reserved_nodes_size - 2 {
-                        // At the same time, the sentry nodes have only connected to the reserved nodes.
+                    if sentry_node_connetions.len() > reserved_nodes_size {
+                        // At the same time, the guarded nodes have only connected to their reserved nodes.
                         if first_sentry_set.is_empty() && first_sentry_set.is_empty() {
                             break;
                         }
