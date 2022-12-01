@@ -1,11 +1,5 @@
 use fuel_core::{
-    database::{
-        storage::{
-            FuelBlocks,
-            SealedBlockConsensus,
-        },
-        Database,
-    },
+    database::Database,
     model::{
         FuelBlockDb,
         FuelBlockHeader,
@@ -23,6 +17,10 @@ use fuel_core_interfaces::{
         fuel_tx::UniqueIdentifier,
         secrecy::ExposeSecret,
         tai64::Tai64,
+    },
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
     },
     model::{
         FuelBlockConsensus,

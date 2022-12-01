@@ -10,14 +10,7 @@ use super::{
     },
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-            SealedBlockConsensus,
-        },
-        Database,
-    },
+    database::Database,
     query::MessageProofData,
     state::IterDirection,
 };
@@ -39,8 +32,11 @@ use fuel_core_interfaces::{
         fuel_types,
     },
     db::{
+        FuelBlocks,
         KvStoreError,
         Messages,
+        Receipts,
+        SealedBlockConsensus,
         Transactions,
     },
     model::{
