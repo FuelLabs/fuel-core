@@ -3,13 +3,7 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            SealedBlockConsensus,
-        },
-        Database,
-    },
+    database::Database,
     executor::Executor,
     model::{
         BlockHeight,
@@ -45,7 +39,11 @@ use fuel_core_interfaces::{
         fuel_types,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
     executor::{
         ExecutionBlock,
         Executor as ExecutorTrait,

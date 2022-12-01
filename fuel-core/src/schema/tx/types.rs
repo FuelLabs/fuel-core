@@ -4,13 +4,7 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-        },
-        Database,
-    },
+    database::Database,
     schema::{
         block::Block,
         contract::Contract,
@@ -59,6 +53,10 @@ use fuel_core_interfaces::{
         fuel_types::bytes::SerializableVec,
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
+    },
+    db::{
+        FuelBlocks,
+        Receipts,
     },
     not_found,
     txpool::TxPoolMpsc,

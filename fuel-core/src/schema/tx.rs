@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
         transaction::OwnedTransactionIndexCursor,
         Database,
         KvStoreError,
@@ -43,7 +42,10 @@ use fuel_core_interfaces::{
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        Transactions,
+    },
     not_found,
     txpool::TxPoolMpsc,
 };
