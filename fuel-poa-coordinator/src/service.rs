@@ -505,6 +505,7 @@ mod test {
                         .into_iter()
                         .map(|tx| (tx, Error::OutputAlreadyExists))
                         .collect(),
+                    tx_status: Default::default(),
                 })
             });
 
