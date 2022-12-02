@@ -566,15 +566,17 @@ mod tests {
         // enable mdns for faster discovery of nodes
         p2p_config.enable_mdns = true;
 
-        // let's increase the ideal mesh number
-        // this still should not affect the nodes that are enabling `reserved_nodes_only_mode`
-        let gossipsub_builder = default_gossipsub_builder()
+        // The desired mesh number is double of the size of the reserved nodes.
+        // This way the non-guarded nodes will want to try to connect to as many nodes as possible in the network.
+        // This still should not affect the guarded nodes that are enabling `reserved_nodes_only_mode`.
+        let gossipsub_config = default_gossipsub_builder()
             .mesh_n(double_reserved_nodes_size)
-            .mesh_n_low(double_reserved_nodes_size - 2)
-            .mesh_n_high(double_reserved_nodes_size + 4)
+            .mesh_n_low(double_reserved_nodes_size)
+            .mesh_n_high(double_reserved_nodes_size)
             .build()
             .expect("valid gossipsub configuration");
-        p2p_config.gossipsub_config = gossipsub_builder;
+
+        p2p_config.gossipsub_config = gossipsub_config;
 
         let build_sentry_nodes = || async {
             let instantiate_nodes: Vec<_> = (0..reserved_nodes_size)
