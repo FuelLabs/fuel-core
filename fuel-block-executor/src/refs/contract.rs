@@ -26,7 +26,7 @@ pub struct ContractRef<Database> {
     contract_id: ContractId,
 }
 
-impl<'a, Database> ContractRef<Database> {
+impl<Database> ContractRef<Database> {
     pub fn new(database: Database, contract_id: ContractId) -> Self {
         Self {
             database,
@@ -65,7 +65,7 @@ where
     ) -> Result<<ContractsLatestUtxo as Mappable>::GetValue, Error> {
         let maybe_utxo_id = self.utxo()?.map(|utxo| utxo.into_owned());
         let expected_utxo_id = if utxo_validation {
-            maybe_utxo_id.ok_or_else(|| Error::ContractUtxoMissing(self.contract_id))?
+            maybe_utxo_id.ok_or(Error::ContractUtxoMissing(self.contract_id))?
         } else {
             maybe_utxo_id.unwrap_or_default()
         };
