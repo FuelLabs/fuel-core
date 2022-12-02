@@ -914,17 +914,6 @@ impl Executor {
     where
         Tx: ExecutableTransaction,
     {
-        let expected_utxo_id = |contract: &ContractRef<&mut Database>| {
-            let maybe_utxo_id = contract.utxo()?.map(|utxo| utxo.into_owned());
-            let expected_utxo_id = if self.config.utxo_validation {
-                maybe_utxo_id
-                    .ok_or_else(|| Error::ContractUtxoMissing(*contract.contract_id()))?
-            } else {
-                maybe_utxo_id.unwrap_or_default()
-            };
-            Result::<_, Error>::Ok(expected_utxo_id)
-        };
-
         match tx {
             ExecutionTypes::Production(tx) => {
                 for input in tx.inputs_mut() {
@@ -942,8 +931,9 @@ impl Executor {
                             ref contract_id,
                             ..
                         } => {
-                            let mut contract = ContractRef::new(&mut *db, contract_id);
-                            *utxo_id = expected_utxo_id(&contract)?;
+                            let mut contract = ContractRef::new(&mut *db, *contract_id);
+                            *utxo_id =
+                                contract.validated_utxo(self.config.utxo_validation)?;
                             *balance_root = contract.balance_root()?;
                             *state_root = contract.state_root()?;
                             // TODO: Also calculate `tx_pointer` based on utxo's pointer.
@@ -974,8 +964,11 @@ impl Executor {
                             contract_id,
                             ..
                         } => {
-                            let mut contract = ContractRef::new(&mut *db, contract_id);
-                            if *utxo_id != expected_utxo_id(&contract)? {
+                            let mut contract = ContractRef::new(&mut *db, *contract_id);
+                            if utxo_id
+                                != &contract
+                                    .validated_utxo(self.config.utxo_validation)?
+                            {
                                 return Err(Error::InvalidTransactionOutcome {
                                     transaction_id: tx.id(),
                                 })
@@ -1035,7 +1028,7 @@ impl Executor {
                                 })
                             };
 
-                        let mut contract = ContractRef::new(&mut *db, contract_id);
+                        let mut contract = ContractRef::new(&mut *db, *contract_id);
                         *balance_root = contract.balance_root()?;
                         *state_root = contract.state_root()?;
                     }
@@ -1061,7 +1054,7 @@ impl Executor {
                                 })
                             };
 
-                        let mut contract = ContractRef::new(&mut *db, contract_id);
+                        let mut contract = ContractRef::new(&mut *db, *contract_id);
                         if balance_root != &contract.balance_root()? {
                             return Err(Error::InvalidTransactionOutcome {
                                 transaction_id: tx.id(),
@@ -2844,7 +2837,7 @@ mod tests {
         // Assert the balance root should not be affected.
         let empty_state = Bytes32::from(*empty_sum());
         assert_eq!(
-            ContractRef::new(db, &contract_id).balance_root().unwrap(),
+            ContractRef::new(db, contract_id).balance_root().unwrap(),
             empty_state
         );
     }
