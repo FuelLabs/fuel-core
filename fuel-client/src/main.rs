@@ -64,6 +64,7 @@ impl CliArgs {
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     futures::executor::block_on(CliArgs::parse().exec());
 }
