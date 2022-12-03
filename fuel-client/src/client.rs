@@ -1,7 +1,6 @@
 use crate::client::schema::contract::ContractBalanceQueryArgs;
 use anyhow::Context;
 use cynic::{
-    http::ReqwestExt,
     GraphQlResponse,
     Id,
     MutationBuilder,
@@ -86,7 +85,7 @@ pub mod types;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FuelClient {
-    url: reqwest::Url,
+    url: url::Url,
 }
 
 impl FromStr for FuelClient {
@@ -98,7 +97,7 @@ impl FromStr for FuelClient {
             raw_url = format!("http://{}", raw_url);
         }
 
-        let mut url = reqwest::Url::parse(&raw_url)
+        let mut url = url::Url::parse(&raw_url)
             .with_context(|| format!("Invalid fuel-core URL: {}", str))?;
         url.set_path("/graphql");
         Ok(Self { url })
@@ -128,6 +127,33 @@ pub fn from_strings_errors_to_std_error(errors: Vec<String>) -> io::Error {
     io::Error::new(io::ErrorKind::Other, e)
 }
 
+pub trait UReqExt {
+    /// Runs a GraphQL query with the parameters in `Request`, deserializes
+    /// the and returns the result.
+    fn run_graphql<ResponseData, Vars>(
+        self,
+        operation: Operation<ResponseData, Vars>,
+    ) -> io::Result<GraphQlResponse<ResponseData>>
+    where
+        Vars: serde::Serialize,
+        ResponseData: serde::de::DeserializeOwned + 'static;
+}
+
+impl UReqExt for ureq::Request {
+    fn run_graphql<ResponseData, Vars>(
+        self,
+        operation: Operation<ResponseData, Vars>,
+    ) -> io::Result<GraphQlResponse<ResponseData>>
+    where
+        Vars: serde::Serialize,
+        ResponseData: serde::de::DeserializeOwned + 'static,
+    {
+        self.send_json(operation)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+            .into_json::<GraphQlResponse<ResponseData>>()
+    }
+}
+
 impl FuelClient {
     pub fn new(url: impl AsRef<str>) -> anyhow::Result<Self> {
         Self::from_str(url.as_ref())
@@ -141,12 +167,7 @@ impl FuelClient {
         Vars: serde::Serialize,
         ResponseData: serde::de::DeserializeOwned + 'static,
     {
-        let response = reqwest::Client::new()
-            .post(self.url.clone())
-            .run_graphql(q)
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
+        let response = ureq::post(self.url.clone().as_str()).run_graphql(q)?;
         Self::decode_response(response)
     }
 

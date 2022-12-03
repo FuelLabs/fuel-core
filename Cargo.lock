@@ -936,6 +936,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chunked_transfer"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fff857943da45f546682664a79488be82e69e43c1a7a2307679ab9afb3a66d2e"
+
+[[package]]
 name = "ciborium"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1442,9 +1448,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07097754f62237ba04e4c3315d50c0f6e85e6b2b95d57256941c3ec88b03be73"
 dependencies = [
  "cynic-proc-macros",
- "reqwest",
  "serde",
- "serde_json",
  "static_assertions",
  "thiserror",
 ]
@@ -2453,12 +2457,13 @@ dependencies = [
  "hex",
  "insta",
  "itertools",
- "reqwest",
  "schemafy_lib",
  "serde",
  "serde_json",
  "tai64",
  "thiserror",
+ "ureq",
+ "url",
 ]
 
 [[package]]
@@ -6732,6 +6737,25 @@ name = "untrusted"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a156c684c91ea7d62626509bce3cb4e1d9ed5c4d978f7b4352658f96a4c26b4a"
+
+[[package]]
+name = "ureq"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97acb4c28a254fd7a4aeec976c46a7fa404eac4d7c134b30c75144846d7cb8f"
+dependencies = [
+ "base64 0.13.1",
+ "chunked_transfer",
+ "flate2",
+ "log",
+ "once_cell",
+ "rustls 0.20.7",
+ "serde",
+ "serde_json",
+ "url",
+ "webpki 0.22.0",
+ "webpki-roots",
+]
 
 [[package]]
 name = "url"
