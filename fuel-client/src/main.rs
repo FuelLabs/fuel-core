@@ -64,7 +64,7 @@ impl CliArgs {
     }
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() {
-    futures::executor::block_on(CliArgs::parse().exec());
+    CliArgs::parse().exec().await;
 }
