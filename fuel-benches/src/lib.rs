@@ -1,5 +1,4 @@
 use fuel_core::database::vm_database::VmDatabase;
-pub use fuel_database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
     TransactionBuilder,
@@ -8,6 +7,7 @@ pub use fuel_core_interfaces::common::{
     consts::*,
     prelude::*,
 };
+pub use fuel_database::Database;
 pub use rand::Rng;
 use std::{
     io,
