@@ -1,21 +1,19 @@
 use crate::{
-    database::Column,
-    state::{
-        in_memory::{
-            column_key,
-            memory_store::MemoryStore,
-        },
-        BatchOperations,
-        DataSource,
-        IterDirection,
-        KeyValueStore,
-        Result,
-        TransactableStorage,
-        Transaction,
-        TransactionError,
-        TransactionResult,
-        WriteOperation,
+    in_memory::{
+        column_key,
+        memory_store::MemoryStore,
     },
+    BatchOperations,
+    Column,
+    DataSource,
+    IterDirection,
+    KeyValueStore,
+    Result,
+    TransactableStorage,
+    Transaction,
+    TransactionError,
+    TransactionResult,
+    WriteOperation,
 };
 use itertools::{
     EitherOrBoth,
@@ -48,7 +46,7 @@ impl MemoryTransactionView {
         }
     }
 
-    pub fn commit(&self) -> crate::state::Result<()> {
+    pub fn commit(&self) -> Result<()> {
         self.data_source.batch_write(
             &mut self
                 .changes
@@ -199,7 +197,7 @@ impl TransactableStorage for MemoryTransactionView {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::TransactionError;
+    use crate::TransactionError;
 
     #[test]
     fn get_returns_from_view() {

@@ -1,15 +1,11 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-        KvStoreError,
-    },
-    state::{
-        Error,
-        IterDirection,
-    },
+    tables::Messages,
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    KvStoreError,
 };
-use fuel_chain_config::MessageConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
@@ -22,7 +18,6 @@ use fuel_core_interfaces::{
             MessageId,
         },
     },
-    db::Messages,
     model::Message,
 };
 use std::{
@@ -108,38 +103,6 @@ impl Database {
         let start = start.map(|v| v.deref().to_vec());
         self.iter_all::<Vec<u8>, Message>(Column::Messages, None, start, direction)
             .map(|res| res.map(|(_, message)| message))
-    }
-
-    pub fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error> {
-        let configs = self
-            .all_messages(None, None)
-            .filter_map(|msg| {
-                // Return only unspent messages
-                if let Ok(msg) = msg {
-                    if msg.fuel_block_spend.is_none() {
-                        Some(Ok(msg))
-                    } else {
-                        None
-                    }
-                } else {
-                    Some(msg)
-                }
-            })
-            .map(|msg| -> Result<MessageConfig, Error> {
-                let msg = msg?;
-
-                Ok(MessageConfig {
-                    sender: msg.sender,
-                    recipient: msg.recipient,
-                    nonce: msg.nonce,
-                    amount: msg.amount,
-                    data: msg.data,
-                    da_height: msg.da_height,
-                })
-            })
-            .collect::<Result<Vec<MessageConfig>, Error>>()?;
-
-        Ok(Some(configs))
     }
 }
 

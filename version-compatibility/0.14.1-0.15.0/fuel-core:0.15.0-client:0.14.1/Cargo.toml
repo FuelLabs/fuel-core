@@ -12,4 +12,5 @@ path = "test.rs"
 # TODO: Use `0.15.0` when it is released
 f-client = { version = "=0.14.1", package = "fuel-gql-client", features = ["test-helpers"] }
 fuel-core = { path = "../../../fuel-core" }
+fuel-database = { path = "../../../fuel-database" }
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }

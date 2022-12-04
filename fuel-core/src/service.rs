@@ -1,5 +1,5 @@
-use crate::database::Database;
 use anyhow::Error as AnyError;
+use fuel_database::Database;
 use futures::FutureExt;
 use modules::Modules;
 use std::{

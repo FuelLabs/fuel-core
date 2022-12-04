@@ -1,37 +1,25 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::{
-        Error,
-        IterDirection,
-        MultiKey,
-    },
-};
-use fuel_chain_config::ContractConfig;
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageAsRef,
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_tx::UtxoId,
-        fuel_types::{
-            Bytes32,
-            Word,
-        },
-        fuel_vm::prelude::{
-            AssetId,
-            Contract,
-            ContractId,
-        },
-    },
-    db::{
-        ContractsInfo,
+    tables::{
         ContractsLatestUtxo,
         ContractsRawCode,
+    },
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    MultiKey,
+};
+use fuel_core_interfaces::common::{
+    fuel_storage::{
+        StorageInspect,
+        StorageMutate,
+    },
+    fuel_tx::UtxoId,
+    fuel_types::Word,
+    fuel_vm::prelude::{
+        AssetId,
+        Contract,
+        ContractId,
     },
 };
 use std::borrow::Cow;
@@ -107,79 +95,6 @@ impl Database {
                 (AssetId::new(key[32..].try_into().unwrap()), balance)
             })
         })
-    }
-
-    pub fn get_contract_config(
-        &self,
-    ) -> Result<Option<Vec<ContractConfig>>, anyhow::Error> {
-        let configs = self
-            .iter_all::<Vec<u8>, Word>(Column::ContractsRawCode, None, None, None)
-            .map(|raw_contract_id| -> Result<ContractConfig, anyhow::Error> {
-                let contract_id =
-                    ContractId::new(raw_contract_id.unwrap().0[..32].try_into()?);
-
-                let code: Vec<u8> = self
-                    .storage::<ContractsRawCode>()
-                    .get(&contract_id)?
-                    .unwrap()
-                    .into_owned()
-                    .into();
-
-                let (salt, _) = self
-                    .storage::<ContractsInfo>()
-                    .get(&contract_id)
-                    .unwrap()
-                    .expect("Contract does not exist")
-                    .into_owned();
-
-                let state = Some(
-                    self.iter_all::<Vec<u8>, Bytes32>(
-                        Column::ContractsState,
-                        Some(contract_id.as_ref().to_vec()),
-                        None,
-                        None,
-                    )
-                    .map(|res| -> Result<(Bytes32, Bytes32), anyhow::Error> {
-                        let safe_res = res?;
-
-                        // We don't need to store ContractId which is the first 32 bytes of this
-                        // key, as this Vec is already attached to that ContractId
-                        let state_key = Bytes32::new(safe_res.0[32..].try_into()?);
-
-                        Ok((state_key, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<Result<Vec<(Bytes32, Bytes32)>, anyhow::Error>>()?,
-                );
-
-                let balances = Some(
-                    self.iter_all::<Vec<u8>, u64>(
-                        Column::ContractsAssets,
-                        Some(contract_id.as_ref().to_vec()),
-                        None,
-                        None,
-                    )
-                    .map(|res| -> Result<(AssetId, u64), anyhow::Error> {
-                        let safe_res = res?;
-
-                        let asset_id = AssetId::new(safe_res.0[32..].try_into()?);
-
-                        Ok((asset_id, safe_res.1))
-                    })
-                    .filter(|val| val.is_ok())
-                    .collect::<Result<Vec<(AssetId, u64)>, anyhow::Error>>()?,
-                );
-
-                Ok(ContractConfig {
-                    code,
-                    salt,
-                    state,
-                    balances,
-                })
-            })
-            .collect::<Result<Vec<ContractConfig>, anyhow::Error>>()?;
-
-        Ok(Some(configs))
     }
 }
 

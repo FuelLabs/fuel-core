@@ -11,10 +11,6 @@ use fuel_core_interfaces::{
         },
         fuel_types::Address,
     },
-    db::{
-        KvStoreError,
-        Messages,
-    },
     executor::{
         Error as ExecutorError,
         ExecutionBlock,
@@ -28,6 +24,10 @@ use fuel_core_interfaces::{
         FuelBlockDb,
         Message,
     },
+};
+use fuel_database::{
+    tables::Messages,
+    KvStoreError,
 };
 use std::{
     borrow::Cow,

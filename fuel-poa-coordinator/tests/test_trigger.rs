@@ -24,16 +24,14 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
         SecretKeyWrapper,
     },
-    poa_coordinator::{
-        BlockDb,
-        TransactionPool,
-    },
+    poa_coordinator::TransactionPool,
     txpool::{
         PoolTransaction,
         TxStatus,
     },
 };
 use fuel_poa_coordinator::{
+    BlockDb,
     Config,
     Service,
     Trigger,

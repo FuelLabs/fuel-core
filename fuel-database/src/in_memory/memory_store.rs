@@ -1,17 +1,15 @@
 use crate::{
-    database::Column,
-    state::{
-        in_memory::{
-            column_key,
-            is_column,
-        },
-        BatchOperations,
-        ColumnId,
-        IterDirection,
-        KeyValueStore,
-        Result,
-        TransactableStorage,
+    in_memory::{
+        column_key,
+        is_column,
     },
+    BatchOperations,
+    Column,
+    ColumnId,
+    IterDirection,
+    KeyValueStore,
+    Result,
+    TransactableStorage,
 };
 use itertools::Itertools;
 use std::{

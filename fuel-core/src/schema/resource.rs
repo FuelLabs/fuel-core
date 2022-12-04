@@ -1,8 +1,4 @@
 use crate::{
-    database::{
-        resource::AssetSpendTarget,
-        Database,
-    },
     resource_query::{
         random_improve,
         SpendQuery,
@@ -27,6 +23,10 @@ use async_graphql::{
     Union,
 };
 use fuel_core_interfaces::common::fuel_tx;
+use fuel_database::{
+    tables::resource::AssetSpendTarget,
+    Database,
+};
 use itertools::Itertools;
 
 #[derive(InputObject)]
@@ -99,11 +99,10 @@ impl ResourceQuery {
             let utxos = exclude
                 .utxos
                 .into_iter()
-                .map(|utxo| crate::database::resource::ResourceId::Utxo(utxo.0));
-            let messages = exclude
-                .messages
-                .into_iter()
-                .map(|message| crate::database::resource::ResourceId::Message(message.0));
+                .map(|utxo| fuel_database::tables::resource::ResourceId::Utxo(utxo.0));
+            let messages = exclude.messages.into_iter().map(|message| {
+                fuel_database::tables::resource::ResourceId::Message(message.0)
+            });
             utxos.chain(messages).collect()
         });
 
@@ -117,11 +116,13 @@ impl ResourceQuery {
                 resources
                     .into_iter()
                     .map(|resource| match resource {
-                        crate::database::resource::Resource::Coin { id, fields } => {
-                            Resource::Coin(Coin(id, fields))
-                        }
-                        crate::database::resource::Resource::Message {
-                            fields, ..
+                        fuel_database::tables::resource::Resource::Coin {
+                            id,
+                            fields,
+                        } => Resource::Coin(Coin(id, fields)),
+                        fuel_database::tables::resource::Resource::Message {
+                            fields,
+                            ..
                         } => Resource::Message(Message(fields)),
                     })
                     .collect_vec()

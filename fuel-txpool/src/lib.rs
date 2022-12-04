@@ -1,5 +1,6 @@
 pub mod config;
 mod containers;
+mod db;
 pub mod service;
 pub mod txpool;
 pub mod types;
@@ -10,6 +11,7 @@ pub mod mock_db;
 pub use mock_db::MockDb;
 
 pub use config::Config;
+pub use db::TxPoolDb;
 pub use fuel_core_interfaces::txpool::Error;
 pub use service::{
     Service,

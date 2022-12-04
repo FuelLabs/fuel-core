@@ -1,12 +1,8 @@
-use crate::{
-    database::Database,
-    schema::scalars::{
-        Address,
-        AssetId,
-        UtxoId,
-        U64,
-    },
-    state::IterDirection,
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    UtxoId,
+    U64,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -26,12 +22,16 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
-    db::Coins,
     model::{
         Coin as CoinModel,
         CoinStatus as CoinStatusModel,
     },
+};
+use fuel_database::{
     not_found,
+    tables::Coins,
+    Database,
+    IterDirection,
 };
 use itertools::Itertools;
 

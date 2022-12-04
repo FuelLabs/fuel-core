@@ -1,4 +1,6 @@
 use super::*;
+use crate::RelayerDb;
+use fuel_database::tables::Messages;
 use futures::TryStreamExt;
 
 #[cfg(test)]

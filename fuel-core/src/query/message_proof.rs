@@ -6,14 +6,13 @@ use fuel_core_interfaces::{
         fuel_types::MessageId,
         prelude::*,
     },
-    db::KvStoreError,
     model::{
         FuelBlockDb,
         MessageProof,
     },
+    txpool::TransactionStatus,
 };
-
-use crate::tx_pool::TransactionStatus;
+use fuel_database::KvStoreError;
 
 #[cfg(test)]
 mod test;

@@ -22,6 +22,7 @@ ethers-providers = { version = "1.0.2", default-features = false, features = [
     "rustls",
 ] }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", package = "fuel-core-interfaces", version = "0.14.1" }
+fuel-database = { path = "../fuel-database", version = "0.14.1", default-features = false }
 futures = "0.3"
 hex = "0.4"
 once_cell = "1.4"

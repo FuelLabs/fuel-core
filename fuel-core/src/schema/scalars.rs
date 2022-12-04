@@ -1,7 +1,4 @@
-use crate::{
-    database::transaction::OwnedTransactionIndexCursor,
-    model::BlockHeight,
-};
+use crate::model::BlockHeight;
 use async_graphql::{
     connection::CursorType,
     InputValueError,
@@ -14,6 +11,7 @@ use fuel_core_interfaces::common::{
     fuel_types,
     tai64::Tai64,
 };
+use fuel_database::tables::transaction::OwnedTransactionIndexCursor;
 use std::{
     convert::TryInto,
     fmt::{

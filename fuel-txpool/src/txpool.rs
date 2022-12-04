@@ -3,6 +3,7 @@ use crate::{
         dependency::Dependency,
         price_sort::PriceSort,
     },
+    db::TxPoolDb,
     service::TxStatusChange,
     types::*,
     Config,
@@ -22,10 +23,7 @@ use fuel_core_interfaces::{
         FuelBlock,
         TxInfo,
     },
-    txpool::{
-        InsertionResult,
-        TxPoolDb,
-    },
+    txpool::InsertionResult,
 };
 use fuel_metrics::txpool_metrics::TXPOOL_METRICS;
 use std::{

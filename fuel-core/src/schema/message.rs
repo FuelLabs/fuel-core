@@ -9,11 +9,7 @@ use super::{
         U64,
     },
 };
-use crate::{
-    database::Database,
-    query::MessageProofData,
-    state::IterDirection,
-};
+use crate::query::MessageProofData;
 use anyhow::anyhow;
 use async_graphql::{
     connection::{
@@ -31,19 +27,23 @@ use fuel_core_interfaces::{
         fuel_tx,
         fuel_types,
     },
-    db::{
+    model::{
+        self,
+        FuelBlockConsensus,
+    },
+};
+use fuel_database::{
+    not_found,
+    tables::{
         FuelBlocks,
-        KvStoreError,
         Messages,
         Receipts,
         SealedBlockConsensus,
         Transactions,
     },
-    model::{
-        self,
-        FuelBlockConsensus,
-    },
-    not_found,
+    Database,
+    IterDirection,
+    KvStoreError,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -287,7 +287,8 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction_status(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<crate::tx_pool::TransactionStatus>, KvStoreError> {
+    ) -> Result<Option<fuel_core_interfaces::txpool::TransactionStatus>, KvStoreError>
+    {
         Ok(self.0.get_tx_status(transaction_id)?)
     }
 

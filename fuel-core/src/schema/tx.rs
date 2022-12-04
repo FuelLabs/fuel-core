@@ -1,9 +1,4 @@
 use crate::{
-    database::{
-        transaction::OwnedTransactionIndexCursor,
-        Database,
-        KvStoreError,
-    },
     model::BlockHeight,
     query::{
         transaction_status_change,
@@ -16,7 +11,6 @@ use crate::{
         SortedTxCursor,
         TransactionId,
     },
-    state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -42,12 +36,18 @@ use fuel_core_interfaces::{
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
-    db::{
+    txpool::TxPoolMpsc,
+};
+use fuel_database::{
+    not_found,
+    tables::{
+        transaction::OwnedTransactionIndexCursor,
         FuelBlocks,
         Transactions,
     },
-    not_found,
-    txpool::TxPoolMpsc,
+    Database,
+    IterDirection,
+    KvStoreError,
 };
 use fuel_txpool::Service as TxPoolService;
 use futures::{

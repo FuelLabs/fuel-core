@@ -1,10 +1,6 @@
 use crate::{
     common::{
         fuel_asm::Word,
-        fuel_storage::{
-            StorageAsRef,
-            StorageInspect,
-        },
         fuel_tx::{
             field::{
                 Inputs,
@@ -26,19 +22,12 @@ use crate::{
             UtxoId,
         },
         fuel_types::MessageId,
-        fuel_vm::storage::ContractsRawCode,
-    },
-    db::{
-        Coins,
-        Error as DbStateError,
-        KvStoreError,
-        Messages,
+        prelude::ProgramState,
+        tai64::Tai64,
     },
     model::{
         ArcPoolTx,
-        BlockHeight,
-        Coin,
-        Message,
+        BlockId,
         TxInfo,
     },
 };
@@ -59,6 +48,28 @@ use tokio::sync::{
     mpsc,
     oneshot,
 };
+
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransactionStatus {
+    Submitted {
+        time: Tai64,
+    },
+    Success {
+        block_id: BlockId,
+        time: Tai64,
+        result: Option<ProgramState>,
+    },
+    SqueezedOut {
+        reason: String,
+    },
+    Failed {
+        block_id: BlockId,
+        time: Tai64,
+        reason: String,
+        result: Option<ProgramState>,
+    },
+}
 
 /// Transaction used by the transaction pool.
 #[derive(Debug, Eq, PartialEq)]
@@ -171,32 +182,6 @@ impl From<Checked<Create>> for PoolTransaction {
 pub struct InsertionResult {
     pub inserted: ArcPoolTx,
     pub removed: Vec<ArcPoolTx>,
-}
-
-pub trait TxPoolDb:
-    StorageInspect<Coins, Error = KvStoreError>
-    + StorageInspect<ContractsRawCode, Error = DbStateError>
-    + StorageInspect<Messages, Error = KvStoreError>
-    + Send
-    + Sync
-{
-    fn utxo(&self, utxo_id: &UtxoId) -> Result<Option<Coin>, KvStoreError> {
-        self.storage::<Coins>()
-            .get(utxo_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn contract_exist(&self, contract_id: &ContractId) -> Result<bool, DbStateError> {
-        self.storage::<ContractsRawCode>().contains_key(contract_id)
-    }
-
-    fn message(&self, message_id: &MessageId) -> Result<Option<Message>, KvStoreError> {
-        self.storage::<Messages>()
-            .get(message_id)
-            .map(|t| t.map(|t| t.as_ref().clone()))
-    }
-
-    fn current_block_height(&self) -> Result<BlockHeight, KvStoreError>;
 }
 
 /// RPC client for doing calls to the TxPool through an MPSC channel.

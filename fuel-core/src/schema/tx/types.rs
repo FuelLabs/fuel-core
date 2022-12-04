@@ -3,23 +3,19 @@ use super::{
     output::Output,
     receipt::Receipt,
 };
-use crate::{
-    database::Database,
-    schema::{
-        block::Block,
-        contract::Contract,
-        scalars::{
-            AssetId,
-            Bytes32,
-            HexString,
-            Salt,
-            Tai64Timestamp,
-            TransactionId,
-            TxPointer,
-            U64,
-        },
+use crate::schema::{
+    block::Block,
+    contract::Contract,
+    scalars::{
+        AssetId,
+        Bytes32,
+        HexString,
+        Salt,
+        Tai64Timestamp,
+        TransactionId,
+        TxPointer,
+        U64,
     },
-    tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{
     Context,
@@ -54,12 +50,18 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
     },
-    db::{
+    txpool::{
+        TransactionStatus as TxStatus,
+        TxPoolMpsc,
+    },
+};
+use fuel_database::{
+    not_found,
+    tables::{
         FuelBlocks,
         Receipts,
     },
-    not_found,
-    txpool::TxPoolMpsc,
+    Database,
 };
 use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;

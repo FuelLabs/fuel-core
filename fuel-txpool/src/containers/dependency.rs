@@ -1,4 +1,5 @@
 use crate::{
+    db::TxPoolDb,
     types::*,
     Error,
 };
@@ -20,7 +21,6 @@ use fuel_core_interfaces::{
         CoinStatus,
         TxInfo,
     },
-    txpool::TxPoolDb,
 };
 use std::collections::{
     HashMap,

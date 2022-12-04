@@ -1,9 +1,6 @@
-use crate::{
-    database::Database,
-    service::{
-        config::Config,
-        FuelService,
-    },
+use crate::service::{
+    config::Config,
+    FuelService,
 };
 use anyhow::Result;
 use fuel_chain_config::{
@@ -23,7 +20,14 @@ use fuel_core_interfaces::{
             ContractId,
         },
     },
-    db::{
+    model::{
+        Coin,
+        CoinStatus,
+        Message,
+    },
+};
+use fuel_database::{
+    tables::{
         Coins,
         ContractsAssets,
         ContractsInfo,
@@ -32,11 +36,7 @@ use fuel_core_interfaces::{
         ContractsState,
         Messages,
     },
-    model::{
-        Coin,
-        CoinStatus,
-        Message,
-    },
+    Database,
 };
 use itertools::Itertools;
 
@@ -49,8 +49,16 @@ impl FuelService {
 
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
+            let chain_height = config
+                .chain_conf
+                .initial_state
+                .as_ref()
+                .and_then(|c| c.height)
+                .unwrap_or_default();
+            let chain_name = &config.chain_conf.chain_name;
+
             // initialize the chain id
-            database.init(config)?;
+            database.init(chain_height, chain_name)?;
 
             if let Some(initial_state) = &config.chain_conf.initial_state {
                 Self::init_coin_state(database, initial_state)?;
@@ -226,12 +234,12 @@ mod tests {
                 AssetId,
             },
         },
-        db::Coins,
         model::{
             DaBlockHeight,
             Message,
         },
     };
+    use fuel_database::tables::Coins;
     use itertools::Itertools;
     use rand::{
         rngs::StdRng,

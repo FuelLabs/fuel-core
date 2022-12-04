@@ -3,6 +3,7 @@ use crate::{
         DeadlineClock,
         OnConflict,
     },
+    BlockDb,
     Config,
     Trigger,
 };
@@ -32,10 +33,7 @@ use fuel_core_interfaces::{
         FuelBlockPoAConsensus,
         SecretKeyWrapper,
     },
-    poa_coordinator::{
-        BlockDb,
-        TransactionPool,
-    },
+    poa_coordinator::TransactionPool,
     txpool::TxStatus,
 };
 use parking_lot::Mutex;

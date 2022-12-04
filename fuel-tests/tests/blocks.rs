@@ -1,5 +1,4 @@
 use fuel_core::{
-    database::Database,
     model::{
         FuelBlockDb,
         FuelBlockHeader,
@@ -18,14 +17,17 @@ use fuel_core_interfaces::{
         secrecy::ExposeSecret,
         tai64::Tai64,
     },
-    db::{
-        FuelBlocks,
-        SealedBlockConsensus,
-    },
     model::{
         FuelBlockConsensus,
         FuelConsensusHeader,
     },
+};
+use fuel_database::{
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
+    Database,
 };
 use fuel_gql_client::{
     client::{

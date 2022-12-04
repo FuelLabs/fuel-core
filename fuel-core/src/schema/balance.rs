@@ -1,21 +1,7 @@
-use crate::{
-    database::{
-        resource::{
-            AssetQuery,
-            AssetSpendTarget,
-            AssetsQuery,
-        },
-        Database,
-    },
-    schema::scalars::{
-        Address,
-        AssetId,
-        U64,
-    },
-    state::{
-        Error,
-        IterDirection,
-    },
+use crate::schema::scalars::{
+    Address,
+    AssetId,
+    U64,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -32,6 +18,16 @@ use async_graphql::{
 use fuel_core_interfaces::common::{
     fuel_tx,
     fuel_types,
+};
+use fuel_database::{
+    tables::resource::{
+        AssetQuery,
+        AssetSpendTarget,
+        AssetsQuery,
+    },
+    Database,
+    Error,
+    IterDirection,
 };
 use itertools::Itertools;
 use std::{

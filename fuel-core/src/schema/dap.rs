@@ -1,9 +1,5 @@
 use crate::{
-    database::{
-        transactional::DatabaseTransaction,
-        vm_database::VmDatabase,
-        Database,
-    },
+    database::vm_database::VmDatabase,
     schema::scalars::U64,
 };
 use async_graphql::{
@@ -21,6 +17,10 @@ use fuel_core_interfaces::{
         },
     },
     model::FuelBlockDb,
+};
+use fuel_database::{
+    transactional::DatabaseTransaction,
+    Database,
 };
 use futures::lock::Mutex;
 use std::{

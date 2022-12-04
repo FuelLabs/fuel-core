@@ -1,6 +1,6 @@
 use crate::{
-    database::Database,
-    state::in_memory::transaction::MemoryTransactionView,
+    in_memory::transaction::MemoryTransactionView,
+    Database,
 };
 use std::{
     fmt::Debug,
@@ -13,7 +13,7 @@ use std::{
 
 #[derive(Clone, Debug)]
 pub struct DatabaseTransaction {
-    // The primary datastores
+    // The primary datastore
     changes: Arc<MemoryTransactionView>,
     // The inner db impl using these stores
     database: Database,
@@ -53,7 +53,7 @@ impl Default for DatabaseTransaction {
 
 impl DatabaseTransaction {
     /// Commit all the changes in this transaction to the data source
-    pub fn commit(self) -> crate::state::Result<()> {
+    pub fn commit(self) -> crate::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
     }

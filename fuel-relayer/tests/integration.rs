@@ -1,10 +1,7 @@
 #![cfg(feature = "test-helpers")]
 
-use fuel_core_interfaces::{
-    common::fuel_storage::StorageAsRef,
-    db::Messages,
-    relayer::RelayerDb,
-};
+use fuel_core_interfaces::common::fuel_storage::StorageAsRef;
+use fuel_database::tables::Messages;
 use fuel_relayer::{
     bridge::message::SentMessageFilter,
     mock_db::MockDb,
@@ -14,6 +11,7 @@ use fuel_relayer::{
         LogTestHelper,
     },
     Config,
+    RelayerDb,
     RelayerHandle,
 };
 

@@ -1,17 +1,11 @@
 use crate::{
-    database::{
-        transaction::TransactionIndex,
-        transactional::DatabaseTransaction,
-        vm_database::VmDatabase,
-        Database,
-    },
+    database::vm_database::VmDatabase,
     model::{
         BlockHeight,
         Coin,
         CoinStatus,
     },
     service::Config,
-    tx_pool::TransactionStatus,
 };
 use fuel_core_interfaces::{
     common::{
@@ -57,14 +51,6 @@ use fuel_core_interfaces::{
         },
         state::StateTransition,
     },
-    db::{
-        Coins,
-        ContractsLatestUtxo,
-        FuelBlocks,
-        Messages,
-        Receipts,
-        Transactions,
-    },
     executor::{
         Error,
         ExecutionBlock,
@@ -82,6 +68,20 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+    txpool::TransactionStatus,
+};
+use fuel_database::{
+    tables::{
+        transaction::TransactionIndex,
+        Coins,
+        ContractsLatestUtxo,
+        FuelBlocks,
+        Messages,
+        Receipts,
+        Transactions,
+    },
+    transactional::DatabaseTransaction,
+    Database,
 };
 use fuel_storage::{
     StorageAsMut,

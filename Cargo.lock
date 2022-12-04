@@ -2302,6 +2302,7 @@ dependencies = [
  "async-trait",
  "fuel-block-producer",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-txpool",
  "itertools",
  "parking_lot 0.12.1",
@@ -2317,6 +2318,7 @@ version = "0.14.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-poa-coordinator",
  "hex",
  "insta",
@@ -2350,6 +2352,7 @@ dependencies = [
  "fuel-chain-config",
  "fuel-core-bft",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-metrics",
  "fuel-p2p",
  "fuel-poa-coordinator",
@@ -2364,13 +2367,11 @@ dependencies = [
  "mockall",
  "num_cpus",
  "rand 0.8.5",
- "rocksdb",
  "serde",
  "serde_json",
  "serde_with",
  "strum",
  "strum_macros",
- "tempfile",
  "test-case",
  "thiserror",
  "tokio",
@@ -2390,6 +2391,7 @@ dependencies = [
  "criterion",
  "fuel-core",
  "fuel-core-interfaces",
+ "fuel-database",
  "rand 0.8.5",
 ]
 
@@ -2437,6 +2439,25 @@ dependencies = [
  "serde",
  "sha2 0.10.6",
  "zeroize",
+]
+
+[[package]]
+name = "fuel-database"
+version = "0.14.1"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "enum-iterator",
+ "fuel-core-interfaces",
+ "fuel-metrics",
+ "itertools",
+ "rand 0.8.5",
+ "rocksdb",
+ "serde",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -2494,6 +2515,7 @@ dependencies = [
  "bincode",
  "ctor",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-metrics",
  "futures",
  "futures-timer",
@@ -2532,6 +2554,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-interfaces",
+ "fuel-database",
  "humantime-serde",
  "mockall",
  "parking_lot 0.12.1",
@@ -2552,6 +2575,7 @@ dependencies = [
  "ethers-core",
  "ethers-providers",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-relayer",
  "futures",
  "hex",
@@ -2594,6 +2618,7 @@ dependencies = [
  "ethers",
  "fuel-core",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-gql-client",
  "fuel-poa-coordinator",
  "fuel-relayer",
@@ -2639,6 +2664,7 @@ dependencies = [
  "async-trait",
  "fuel-chain-config",
  "fuel-core-interfaces",
+ "fuel-database",
  "fuel-metrics",
  "fuel-txpool",
  "parking_lot 0.12.1",

@@ -1,15 +1,10 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-        KvStoreError,
-    },
-    model::BlockHeight,
-    state::{
-        Error,
-        IterDirection,
-    },
-    tx_pool::TransactionStatus,
+    tables::Transactions,
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    KvStoreError,
 };
 use fuel_core_interfaces::{
     common::{
@@ -23,7 +18,8 @@ use fuel_core_interfaces::{
         },
         fuel_types::Address,
     },
-    db::Transactions,
+    model::BlockHeight,
+    txpool::TransactionStatus,
 };
 use std::{
     borrow::Cow,

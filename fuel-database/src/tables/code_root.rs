@@ -1,23 +1,19 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::Error,
+    tables::ContractsInfo,
+    Column,
+    Database,
+    Error,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_vm::prelude::{
-            Bytes32,
-            ContractId,
-            Salt,
-        },
+use fuel_core_interfaces::common::{
+    fuel_storage::{
+        StorageInspect,
+        StorageMutate,
     },
-    db::ContractsInfo,
+    fuel_vm::prelude::{
+        Bytes32,
+        ContractId,
+        Salt,
+    },
 };
 use std::borrow::Cow;
 

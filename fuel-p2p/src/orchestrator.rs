@@ -12,7 +12,6 @@ use fuel_core_interfaces::{
         GossipData,
         GossipsubMessageAcceptance,
         GossipsubMessageInfo,
-        P2pDb,
         P2pRequestEvent,
         TransactionBroadcast,
         TransactionGossipData,
@@ -60,6 +59,7 @@ use crate::{
         FuelP2PEvent,
         FuelP2PService,
     },
+    P2pDb,
 };
 
 /// Orchestrates various p2p-related events between the inner `P2pService`

@@ -7,7 +7,6 @@ use crate::{
     common::fuel_tx::Transaction,
     model::ConsensusVote,
 };
-use async_trait::async_trait;
 use std::{
     fmt::Debug,
     sync::Arc,
@@ -108,10 +107,4 @@ impl<T: Debug + Send + 'static> NetworkData<T> for GossipData<T> {
     fn take_data(&mut self) -> Option<T> {
         self.data.take()
     }
-}
-
-#[async_trait]
-pub trait P2pDb: Send + Sync {
-    async fn get_sealed_block(&self, height: BlockHeight)
-        -> Option<Arc<SealedFuelBlock>>;
 }

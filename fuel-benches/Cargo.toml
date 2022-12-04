@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 fuel-core = { path = "../fuel-core" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
+fuel-database = { path = "../fuel-database", default-features = false }
 rand = "0.8"
 
 [dev-dependencies]

@@ -1,32 +1,26 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    state::{
-        Error,
-        IterDirection,
-        MultiKey,
-    },
+    tables::ContractsAssets,
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    MultiKey,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::{
-            MerkleRoot,
-            StorageInspect,
-            StorageMutate,
-        },
-        fuel_vm::{
-            crypto,
-            prelude::{
-                AssetId,
-                ContractId,
-                MerkleRootStorage,
-                Word,
-            },
+use fuel_core_interfaces::common::{
+    fuel_storage::{
+        MerkleRoot,
+        StorageInspect,
+        StorageMutate,
+    },
+    fuel_vm::{
+        crypto,
+        prelude::{
+            AssetId,
+            ContractId,
+            MerkleRootStorage,
+            Word,
         },
     },
-    db::ContractsAssets,
 };
 use itertools::Itertools;
 use std::borrow::Cow;

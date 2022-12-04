@@ -13,7 +13,6 @@ use crate::{
         },
         fuel_vm::backtrace::Backtrace,
     },
-    db::KvStoreError,
     model::{
         BlockId,
         FuelBlock,
@@ -102,12 +101,6 @@ pub enum TransactionValidityError {
     Validation(#[from] CheckError),
     #[error("Datastore error occurred")]
     DataStoreError(Box<dyn StdError + Send + Sync>),
-}
-
-impl From<KvStoreError> for TransactionValidityError {
-    fn from(e: KvStoreError) -> Self {
-        Self::DataStoreError(Box::new(e))
-    }
 }
 
 #[derive(Error, Debug)]
@@ -270,18 +263,6 @@ impl ExecutionKind {
 impl From<Backtrace> for Error {
     fn from(e: Backtrace) -> Self {
         Error::Backtrace(Box::new(e))
-    }
-}
-
-impl From<KvStoreError> for Error {
-    fn from(e: KvStoreError) -> Self {
-        Error::CorruptedBlockState(Box::new(e))
-    }
-}
-
-impl From<crate::db::Error> for Error {
-    fn from(e: crate::db::Error) -> Self {
-        Error::CorruptedBlockState(Box::new(e))
     }
 }
 

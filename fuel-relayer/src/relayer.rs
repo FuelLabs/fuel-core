@@ -5,6 +5,7 @@
 use crate::{
     log::EthEventLog,
     Config,
+    RelayerDb,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -22,11 +23,7 @@ use ethers_providers::{
     Provider,
     ProviderError,
 };
-use fuel_core_interfaces::{
-    db::Messages,
-    model::Message,
-    relayer::RelayerDb,
-};
+use fuel_core_interfaces::model::Message;
 use std::{
     convert::TryInto,
     ops::Deref,

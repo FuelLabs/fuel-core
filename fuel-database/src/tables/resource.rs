@@ -1,4 +1,13 @@
-use crate::database::Database;
+use crate::{
+    not_found,
+    tables::{
+        Coins,
+        Messages,
+    },
+    Database,
+    Error,
+    KvStoreError,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -10,18 +19,11 @@ use fuel_core_interfaces::{
             Word,
         },
     },
-    db::{
-        Coins,
-        Error,
-        KvStoreError,
-        Messages,
-    },
     model::{
         Coin,
         CoinStatus,
         Message,
     },
-    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -211,6 +213,8 @@ impl<'a> AssetQuery<'a> {
         self.query.unspent_resources()
     }
 }
+
+// TODO: Move definition of `ResourceId` and `Resource` to `fuel-core-interfaces`
 
 /// The id of the resource.
 #[derive(Clone, Debug, PartialEq, Eq)]

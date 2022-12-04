@@ -1,4 +1,3 @@
-use crate::database::Database;
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
@@ -18,9 +17,12 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    db::Error,
     model::FuelConsensusHeader,
+};
+use fuel_database::{
     not_found,
+    Database,
+    Error,
 };
 use std::borrow::Cow;
 
