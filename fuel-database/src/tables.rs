@@ -114,23 +114,3 @@ impl Mappable for Transactions {
 
 // TODO: Add macro to define all common tables to avoid copy/paste of the code.
 // TODO: Add macro to define common unit tests.
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::not_found;
-
-    #[test]
-    fn not_found_output() {
-        #[rustfmt::skip]
-        assert_eq!(
-            format!("{}", not_found!("BlockId")),
-            format!("resource of type `BlockId` was not found at the: {}:{}", file!(), line!() - 1)
-        );
-        #[rustfmt::skip]
-        assert_eq!(
-            format!("{}", not_found!(Coins)),
-            format!("resource of type `fuel_core_interfaces::model::coin::Coin` was not found at the: {}:{}", file!(), line!() - 1)
-        );
-    }
-}
