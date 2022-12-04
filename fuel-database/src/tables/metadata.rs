@@ -1,44 +1,32 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-    },
-    model::BlockHeight,
-    service::config::Config,
-    state::Error,
+    Column,
+    Database,
+    Error,
 };
+use fuel_core_interfaces::model::BlockHeight;
 
 pub(crate) const DB_VERSION_KEY: &[u8] = b"version";
 pub(crate) const CHAIN_NAME_KEY: &[u8] = b"chain_name";
 pub(crate) const CHAIN_HEIGHT_KEY: &[u8] = b"chain_height";
-pub(crate) const FINALIZED_DA_HEIGHT_KEY: &[u8] = b"finalized_da_height";
-pub(crate) const LAST_PUBLISHED_BLOCK_HEIGHT_KEY: &[u8] = b"last_publish_block_height";
 
 /// Can be used to perform migrations in the future.
 pub(crate) const DB_VERSION: u32 = 0;
 
 impl Database {
-    pub fn init(&self, config: &Config) -> Result<(), Error> {
+    pub fn init(
+        &self,
+        chain_height: BlockHeight,
+        chain_name: &String,
+    ) -> Result<(), Error> {
         // check only for one field if it initialized or not.
-        self.insert(
-            CHAIN_NAME_KEY,
-            Column::Metadata,
-            config.chain_conf.chain_name.clone(),
-        )
-        .and_then(|v: Option<String>| {
-            if v.is_some() {
-                Err(Error::ChainAlreadyInitialized)
-            } else {
-                Ok(())
-            }
-        })?;
-
-        let chain_height = config
-            .chain_conf
-            .initial_state
-            .as_ref()
-            .and_then(|c| c.height)
-            .unwrap_or_default();
+        self.insert(CHAIN_NAME_KEY, Column::Metadata, chain_name)
+            .and_then(|v: Option<String>| {
+                if v.is_some() {
+                    Err(Error::ChainAlreadyInitialized)
+                } else {
+                    Ok(())
+                }
+            })?;
 
         let _: Option<u32> = self.insert(DB_VERSION_KEY, Column::Metadata, DB_VERSION)?;
         let _: Option<BlockHeight> =
