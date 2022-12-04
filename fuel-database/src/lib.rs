@@ -38,33 +38,33 @@ pub mod transactional;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
     ContractsRawCode = 1,
-    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
+    /// See [`ContractsRawCode`](crate::tables::ContractsRawCode)
     ContractsInfo = 2,
-    /// See [`ContractsState`](fuel_core_interfaces::db::ContractsState)
+    /// See [`ContractsState`](crate::tables::ContractsState)
     ContractsState = 3,
-    /// See [`ContractsLatestUtxo`](fuel_core_interfaces::db::ContractsLatestUtxo)
+    /// See [`ContractsLatestUtxo`](crate::tables::ContractsLatestUtxo)
     ContractsLatestUtxo = 4,
-    /// See [`ContractsAssets`](fuel_vm::storage::ContractsAssets)
+    /// See [`ContractsAssets`](crate::tables::ContractsAssets)
     ContractsAssets = 5,
-    /// See [`Coins`](fuel_core_interfaces::db::Coins)
+    /// See [`Coins`](crate::tables::Coins)
     Coins = 6,
     /// The column of the table that stores `true` if `owner` owns `Coin` with `coin_id`
     OwnedCoins = 7,
-    /// See [`Transactions`](fuel_core_interfaces::db::Transactions)
+    /// See [`Transactions`](crate::tables::Transactions)
     Transactions = 8,
     /// Transaction id to current status
     TransactionStatus = 9,
     /// The column of the table of all `owner`'s transactions
     TransactionsByOwnerBlockIdx = 10,
-    /// See [`Receipts`](fuel_core_interfaces::db::Receipts)
+    /// See [`Receipts`](crate::tables::Receipts)
     Receipts = 11,
-    /// See [`FuelBlocks`](fuel_core_interfaces::db::FuelBlocks)
+    /// See [`FuelBlocks`](crate::tables::FuelBlocks)
     FuelBlocks = 12,
     /// Maps fuel block id to fuel block hash
     FuelBlockIds = 13,
-    /// See [`Messages`](fuel_core_interfaces::db::Messages)
+    /// See [`Messages`](crate::tables::Messages)
     Messages = 14,
     /// The column of the table that stores `true` if `owner` owns `Message` with `message_id`
     OwnedMessageIds = 15,

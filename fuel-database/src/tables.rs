@@ -1,19 +1,3 @@
-// Storages implementation
-// TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
-mod block;
-mod code_root;
-mod coin;
-mod contracts;
-mod message;
-mod receipts;
-mod sealed_block;
-mod state;
-
-pub mod balances;
-pub mod metadata;
-pub mod resource;
-pub mod transaction;
-
 use fuel_core_interfaces::{
     common::{
         fuel_tx::{
@@ -32,6 +16,22 @@ use fuel_core_interfaces::{
         Message,
     },
 };
+
+// Storages implementation
+// TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
+mod block;
+mod code_root;
+mod coin;
+mod contracts;
+mod message;
+mod receipts;
+mod sealed_block;
+mod state;
+
+pub mod balances;
+pub mod metadata;
+pub mod resource;
+pub mod transaction;
 
 pub use fuel_core_interfaces::common::{
     fuel_storage::Mappable,
@@ -85,7 +85,7 @@ impl Mappable for SealedBlockConsensus {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of coins. Each [`Coin`](crate::model::Coin) is represented by unique `UtxoId`.
+/// The storage table of coins. Each [`Coin`](fuel_core_interfaces::model::Coin) is represented by unique `UtxoId`.
 pub struct Coins;
 
 impl Mappable for Coins {
@@ -94,7 +94,7 @@ impl Mappable for Coins {
     type GetValue = Self::SetValue;
 }
 
-/// The storage table of bridged Ethereum [`Message`](crate::model::Message)s.
+/// The storage table of bridged Ethereum [`Message`](fuel_core_interfaces::model::Message)s.
 pub struct Messages;
 
 impl Mappable for Messages {
