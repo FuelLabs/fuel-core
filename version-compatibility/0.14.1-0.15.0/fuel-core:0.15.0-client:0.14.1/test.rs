@@ -8,13 +8,11 @@ mod test {
         fuel_tx,
         fuel_tx::UniqueIdentifier,
     };
-    use fuel_core::{
-        database::Database,
-        service::{
-            Config,
-            FuelService,
-        },
+    use fuel_core::service::{
+        Config,
+        FuelService,
     };
+    use fuel_database::Database;
 
     // `cynic/http-surf` from client can work with new version of `fuel-core`
     #[tokio::test]

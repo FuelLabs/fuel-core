@@ -185,6 +185,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
             config: config.clone(),
         }),
         relayer: Box::new(MaybeRelayerAdapter {
+            #[cfg(feature = "relayer")]
             database: database.clone(),
             #[cfg(feature = "relayer")]
             relayer_synced: relayer.as_ref().map(|r| r.listen_synced()),
@@ -278,6 +279,7 @@ impl ExecutorTrait for ExecutorAdapter {
 }
 
 struct MaybeRelayerAdapter {
+    #[cfg(feature = "relayer")]
     database: Database,
     #[cfg(feature = "relayer")]
     relayer_synced: Option<RelayerSynced>,

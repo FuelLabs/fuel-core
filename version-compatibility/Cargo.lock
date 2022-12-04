@@ -1617,6 +1617,8 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with",
+ "strum",
+ "strum_macros",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1694,6 +1696,7 @@ name = "fuel-core-0_15_0-client-0_14_1"
 version = "0.0.0"
 dependencies = [
  "fuel-core 0.14.1",
+ "fuel-database",
  "fuel-gql-client 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
 ]
@@ -1881,6 +1884,7 @@ version = "0.14.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces 0.14.1",
+ "fuel-database",
  "humantime-serde",
  "parking_lot 0.12.1",
  "serde",
