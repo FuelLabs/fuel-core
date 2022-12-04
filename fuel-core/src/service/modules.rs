@@ -1,13 +1,10 @@
 #![allow(clippy::let_unit_value)]
 use crate::{
     chain_config::BlockProduction,
-    database::Database,
     executor::Executor,
     service::Config,
 };
 use anyhow::Result;
-#[cfg(feature = "p2p")]
-use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     self,
     block_producer::{
@@ -21,15 +18,19 @@ use fuel_core_interfaces::{
         ExecutionResult,
         Executor as ExecutorTrait,
     },
-    relayer::RelayerDb,
-    txpool::{
-        Sender,
-        TxPoolDb,
-    },
+    txpool::Sender,
 };
+use fuel_database::Database;
+#[cfg(feature = "p2p")]
+use fuel_p2p::P2pDb;
+#[cfg(feature = "relayer")]
+use fuel_relayer::RelayerDb;
 #[cfg(feature = "relayer")]
 use fuel_relayer::RelayerSynced;
-use fuel_txpool::service::TxStatusChange;
+use fuel_txpool::{
+    service::TxStatusChange,
+    TxPoolDb,
+};
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::{
@@ -292,12 +293,16 @@ impl BlockProducerRelayer for MaybeRelayerAdapter {
             if let Some(sync) = self.relayer_synced.as_ref() {
                 sync.await_synced().await?;
             }
-        }
 
-        Ok(self
-            .database
-            .get_finalized_da_height()
-            .await
-            .unwrap_or_default())
+            Ok(self
+                .database
+                .get_finalized_da_height()
+                .await
+                .unwrap_or_default())
+        }
+        #[cfg(not(feature = "relayer"))]
+        {
+            Ok(Default::default())
+        }
     }
 }

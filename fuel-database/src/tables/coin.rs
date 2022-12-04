@@ -1,16 +1,11 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-        KvStoreError,
-    },
-    model::Coin,
-    state::{
-        Error,
-        IterDirection,
-    },
+    tables::Coins,
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    KvStoreError,
 };
-use fuel_chain_config::CoinConfig;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::{
@@ -23,8 +18,7 @@ use fuel_core_interfaces::{
             UtxoId,
         },
     },
-    db::Coins,
-    model::CoinStatus,
+    model::Coin,
 };
 use std::borrow::Cow;
 
@@ -111,41 +105,5 @@ impl Database {
                 )
             })
         })
-    }
-
-    pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
-        let configs = self
-            .iter_all::<Vec<u8>, Coin>(Column::Coins, None, None, None)
-            .filter_map(|coin| {
-                // Return only unspent coins
-                if let Ok(coin) = coin {
-                    if coin.1.status == CoinStatus::Unspent {
-                        Some(Ok(coin))
-                    } else {
-                        None
-                    }
-                } else {
-                    Some(coin)
-                }
-            })
-            .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
-                let coin = raw_coin?;
-
-                let byte_id = Bytes32::new(coin.0[..32].try_into()?);
-                let output_index = coin.0[32];
-
-                Ok(CoinConfig {
-                    tx_id: Some(byte_id),
-                    output_index: Some(output_index.into()),
-                    block_created: Some(coin.1.block_created),
-                    maturity: Some(coin.1.maturity),
-                    owner: coin.1.owner,
-                    amount: coin.1.amount,
-                    asset_id: coin.1.asset_id,
-                })
-            })
-            .collect::<Result<Vec<CoinConfig>, anyhow::Error>>()?;
-
-        Ok(Some(configs))
     }
 }

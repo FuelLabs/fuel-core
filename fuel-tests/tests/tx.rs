@@ -1,6 +1,5 @@
 use crate::helpers::TestContext;
 use fuel_core::{
-    database::Database,
     executor::Executor,
     service::{
         Config,
@@ -26,6 +25,7 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
 };
+use fuel_database::Database;
 use fuel_gql_client::client::{
     types::TransactionStatus,
     FuelClient,

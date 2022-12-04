@@ -1,7 +1,28 @@
 #![allow(missing_docs)]
 
+use crate::RelayerDb;
 use async_trait::async_trait;
-
+use fuel_core_interfaces::{
+    common::{
+        fuel_storage::StorageAsMut,
+        fuel_tx::MessageId,
+        prelude::{
+            StorageInspect,
+            StorageMutate,
+        },
+    },
+    model::{
+        BlockHeight,
+        CheckedMessage,
+        DaBlockHeight,
+        Message,
+        SealedFuelBlock,
+    },
+};
+use fuel_database::{
+    tables::Messages,
+    KvStoreError,
+};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -9,27 +30,6 @@ use std::{
         Arc,
         Mutex,
     },
-};
-
-use fuel_core_interfaces::{
-    common::{
-        fuel_tx::MessageId,
-        prelude::{
-            StorageInspect,
-            StorageMutate,
-        },
-    },
-    db::{
-        KvStoreError,
-        Messages,
-    },
-    model::{
-        BlockHeight,
-        DaBlockHeight,
-        Message,
-        SealedFuelBlock,
-    },
-    relayer::RelayerDb,
 };
 
 #[derive(Default)]
@@ -67,6 +67,7 @@ impl StorageInspect<Messages> for MockDb {
         Ok(self.data.lock().unwrap().messages.contains_key(key))
     }
 }
+
 impl StorageMutate<Messages> for MockDb {
     fn insert(
         &mut self,
@@ -88,6 +89,12 @@ impl StorageMutate<Messages> for MockDb {
 
 #[async_trait]
 impl RelayerDb for MockDb {
+    async fn insert_message(&mut self, message: &CheckedMessage) {
+        let _ = self
+            .storage::<Messages>()
+            .insert(message.id(), message.as_ref());
+    }
+
     async fn get_chain_height(&self) -> BlockHeight {
         self.data.lock().unwrap().chain_height
     }

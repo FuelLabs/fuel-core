@@ -1,9 +1,6 @@
-use fuel_core::{
-    database::Database,
-    service::{
-        Config,
-        FuelService,
-    },
+use fuel_core::service::{
+    Config,
+    FuelService,
 };
 use fuel_core_interfaces::{
     common::{
@@ -12,6 +9,7 @@ use fuel_core_interfaces::{
     },
     model::FuelBlockConsensus,
 };
+use fuel_database::Database;
 use fuel_gql_client::{
     client::{
         types::TransactionStatus,

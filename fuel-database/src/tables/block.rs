@@ -1,17 +1,14 @@
 use crate::{
-    database::{
-        Column,
-        Database,
-        KvStoreError,
+    not_found,
+    tables::{
+        FuelBlocks,
+        Transactions,
     },
-    model::{
-        BlockHeight,
-        FuelBlockDb,
-    },
-    state::{
-        Error,
-        IterDirection,
-    },
+    Column,
+    Database,
+    Error,
+    IterDirection,
+    KvStoreError,
 };
 use fuel_core_interfaces::{
     common::{
@@ -23,12 +20,11 @@ use fuel_core_interfaces::{
         prelude::StorageAsRef,
         tai64::Tai64,
     },
-    db::{
-        FuelBlocks,
-        Transactions,
+    model::{
+        BlockHeight,
+        FuelBlock,
+        FuelBlockDb,
     },
-    model::FuelBlock,
-    not_found,
 };
 use itertools::Itertools;
 use std::{

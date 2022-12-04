@@ -1,5 +1,4 @@
 use crate::{
-    database::Database,
     schema::{
         block::Block,
         scalars::U64,
@@ -15,8 +14,11 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsRef,
         fuel_tx,
     },
-    db::FuelBlocks,
     model::FuelBlockDb,
+};
+use fuel_database::{
+    tables::FuelBlocks,
+    Database,
 };
 
 pub const DEFAULT_NAME: &str = "Fuel.testnet";

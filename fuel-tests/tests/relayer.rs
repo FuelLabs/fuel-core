@@ -5,28 +5,26 @@ use ethers::{
         SyncingStatus,
     },
 };
-use fuel_core::{
-    database::Database,
-    service::{
-        Config,
-        FuelService,
+use fuel_core::service::{
+    Config,
+    FuelService,
+};
+use fuel_core_interfaces::common::{
+    fuel_crypto::SecretKey,
+    fuel_tx::{
+        field::Inputs,
+        Input,
+        TransactionBuilder,
+    },
+    fuel_types::MessageId,
+    prelude::{
+        Address,
+        Output,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_crypto::SecretKey,
-        fuel_tx::{
-            field::Inputs,
-            Input,
-            TransactionBuilder,
-        },
-        fuel_types::MessageId,
-        prelude::{
-            Address,
-            Output,
-        },
-    },
-    db::Messages,
+use fuel_database::{
+    tables::Messages,
+    Database,
 };
 use fuel_gql_client::{
     client::{

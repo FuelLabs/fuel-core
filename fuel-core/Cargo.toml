@@ -37,6 +37,7 @@ fuel-core-bft = { path = "../fuel-core-bft", version = "0.14.1" }
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.14.1", features = [
     "serde",
 ] }
+fuel-database = { path = "../fuel-database", version = "0.14.1", default-features = false }
 fuel-metrics = { path = "../fuel-metrics", version = "0.14.1", optional = true }
 fuel-p2p = { path = "../fuel-p2p", version = "0.14.1", optional = true }
 fuel-poa-coordinator = { path = "../fuel-poa-coordinator", version = "0.14.1" }
@@ -49,16 +50,11 @@ itertools = "0.10"
 lazy_static = "1.4"
 num_cpus = "1.13"
 rand = "0.8"
-rocksdb = { version = "0.19", default-features = false, features = [
-    "lz4",
-    "multi-threaded-cf"
-], optional = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["raw_value"] }
 serde_with = "1.11"
 strum = "0.24"
 strum_macros = "0.24"
-tempfile = "3.3"
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["macros", "rt-multi-thread"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -84,10 +80,11 @@ mockall = "0.11"
 test-case = "2.2"
 
 [features]
-metrics = ["dep:fuel-metrics"]
+metrics = ["dep:fuel-metrics", "fuel-database/metrics"]
+rocksdb = ["fuel-database/rocksdb"]
 default = ["rocksdb", "metrics", "debug"]
 debug = ["fuel-core-interfaces/debug"]
 relayer = ["dep:fuel-relayer"]
 p2p = ["dep:fuel-p2p"]
 # features to enable in production, but increase build times
-production = ["rocksdb?/jemalloc", "metrics", "relayer"]
+production = ["fuel-database/production", "metrics", "relayer"]

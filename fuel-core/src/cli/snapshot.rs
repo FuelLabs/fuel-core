@@ -32,7 +32,7 @@ pub async fn exec(command: Command) -> anyhow::Result<()> {
         ChainConfig,
         StateConfig,
     };
-    use fuel_core::database::Database;
+    use fuel_database::Database;
 
     let path = command.database_path;
     let config: ChainConfig = command.chain_config.parse()?;

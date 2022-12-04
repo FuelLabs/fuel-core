@@ -5,7 +5,6 @@ use fuel_core::{
         MessageConfig,
         StateConfig,
     },
-    database::Database,
     service::{
         Config,
         FuelService,
@@ -25,6 +24,7 @@ use fuel_core_interfaces::{
         DaBlockHeight,
     },
 };
+use fuel_database::Database;
 use rand::{
     rngs::StdRng,
     Rng,

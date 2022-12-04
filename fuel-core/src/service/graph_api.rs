@@ -1,6 +1,5 @@
 use super::modules::Modules;
 use crate::{
-    database::Database,
     schema::{
         build_schema,
         dap,
@@ -44,6 +43,7 @@ use axum::{
     Json,
     Router,
 };
+use fuel_database::Database;
 use futures::Stream;
 use serde_json::json;
 use std::net::{

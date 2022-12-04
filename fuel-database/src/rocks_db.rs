@@ -1,20 +1,16 @@
 use crate::{
-    database::{
-        metadata::{
-            DB_VERSION,
-            DB_VERSION_KEY,
-        },
-        Column,
+    tables::metadata::{
+        DB_VERSION,
+        DB_VERSION_KEY,
     },
-    state::{
-        BatchOperations,
-        Error,
-        IterDirection,
-        KVItem,
-        KeyValueStore,
-        TransactableStorage,
-        WriteOperation,
-    },
+    BatchOperations,
+    Column,
+    Error,
+    IterDirection,
+    KVItem,
+    KeyValueStore,
+    TransactableStorage,
+    WriteOperation,
 };
 #[cfg(feature = "metrics")]
 use fuel_metrics::core_metrics::DATABASE_METRICS;
@@ -128,7 +124,7 @@ impl RocksDb {
 }
 
 impl KeyValueStore for RocksDb {
-    fn get(&self, key: &[u8], column: Column) -> crate::state::Result<Option<Vec<u8>>> {
+    fn get(&self, key: &[u8], column: Column) -> crate::Result<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
         DATABASE_METRICS.read_meter.inc();
         let value = self
@@ -152,7 +148,7 @@ impl KeyValueStore for RocksDb {
         key: &[u8],
         column: Column,
         value: Vec<u8>,
-    ) -> crate::state::Result<Option<Vec<u8>>> {
+    ) -> crate::Result<Option<Vec<u8>>> {
         #[cfg(feature = "metrics")]
         {
             DATABASE_METRICS.write_meter.inc();
@@ -165,11 +161,7 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn delete(
-        &self,
-        key: &[u8],
-        column: Column,
-    ) -> crate::state::Result<Option<Vec<u8>>> {
+    fn delete(&self, key: &[u8], column: Column) -> crate::Result<Option<Vec<u8>>> {
         let prev = self.get(key, column)?;
         self.db
             .delete_cf(&self.cf(column), key)
@@ -177,7 +169,7 @@ impl KeyValueStore for RocksDb {
             .map(|_| prev)
     }
 
-    fn exists(&self, key: &[u8], column: Column) -> crate::state::Result<bool> {
+    fn exists(&self, key: &[u8], column: Column) -> crate::Result<bool> {
         // use pinnable mem ref to avoid memcpy of values associated with the key
         // since we're just checking for the existence of the key
         self.db

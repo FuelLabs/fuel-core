@@ -1,16 +1,9 @@
-use crate::{
-    database::{
-        Database,
-        KvStoreError,
-    },
-    schema::scalars::{
-        AssetId,
-        ContractId,
-        HexString,
-        Salt,
-        U64,
-    },
-    state::IterDirection,
+use crate::schema::scalars::{
+    AssetId,
+    ContractId,
+    HexString,
+    Salt,
+    U64,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -24,18 +17,21 @@ use async_graphql::{
     InputObject,
     Object,
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsRef,
-        fuel_tx,
-        fuel_types,
-    },
-    db::{
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsRef,
+    fuel_tx,
+    fuel_types,
+};
+use fuel_database::{
+    not_found,
+    tables::{
         ContractsAssets,
         ContractsInfo,
         ContractsRawCode,
     },
-    not_found,
+    Database,
+    IterDirection,
+    KvStoreError,
 };
 use std::iter::IntoIterator;
 

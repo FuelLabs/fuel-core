@@ -1,5 +1,5 @@
 use fuel_core::database::vm_database::VmDatabase;
-pub use fuel_core::database::Database;
+pub use fuel_database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
     StorageSlot,
     TransactionBuilder,

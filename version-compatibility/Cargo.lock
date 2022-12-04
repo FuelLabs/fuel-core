@@ -1526,6 +1526,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "fuel-core-interfaces 0.14.1",
+ "fuel-database",
  "parking_lot 0.12.1",
  "tokio",
  "tracing",
@@ -1551,6 +1552,7 @@ version = "0.14.1"
 dependencies = [
  "anyhow",
  "fuel-core-interfaces 0.14.1",
+ "fuel-database",
  "fuel-poa-coordinator 0.14.1",
  "hex",
  "itertools",
@@ -1601,6 +1603,7 @@ dependencies = [
  "fuel-chain-config 0.14.1",
  "fuel-core-bft 0.14.1",
  "fuel-core-interfaces 0.14.1",
+ "fuel-database",
  "fuel-metrics 0.14.1",
  "fuel-poa-coordinator 0.14.1",
  "fuel-sync 0.14.1",
@@ -1611,13 +1614,9 @@ dependencies = [
  "lazy_static",
  "num_cpus",
  "rand 0.8.5",
- "rocksdb",
  "serde",
  "serde_json",
  "serde_with",
- "strum",
- "strum_macros",
- "tempfile",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1776,6 +1775,24 @@ dependencies = [
  "serde",
  "sha2 0.10.6",
  "zeroize",
+]
+
+[[package]]
+name = "fuel-database"
+version = "0.14.1"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "enum-iterator",
+ "fuel-core-interfaces 0.14.1",
+ "fuel-metrics 0.14.1",
+ "itertools",
+ "rocksdb",
+ "serde",
+ "strum",
+ "strum_macros",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
@@ -1941,6 +1958,7 @@ dependencies = [
  "async-trait",
  "fuel-chain-config 0.14.1",
  "fuel-core-interfaces 0.14.1",
+ "fuel-database",
  "fuel-metrics 0.14.1",
  "parking_lot 0.12.1",
  "thiserror",

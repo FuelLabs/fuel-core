@@ -34,7 +34,6 @@ use fuel_core_interfaces::{
         fuel_vm::consts::REG_ZERO,
         prelude::StorageAsMut,
     },
-    db::Coins,
     executor::ExecutionResult,
     model::{
         Coin,
@@ -42,6 +41,7 @@ use fuel_core_interfaces::{
     },
     txpool::Sender as TxPoolSender,
 };
+use fuel_database::tables::Coins;
 use fuel_txpool::{
     service::TxStatusChange,
     Config as TxPoolConfig,

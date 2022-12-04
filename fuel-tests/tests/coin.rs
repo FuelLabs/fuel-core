@@ -1,5 +1,4 @@
 use fuel_core::{
-    database::Database,
     model::{
         Coin,
         CoinStatus,
@@ -9,20 +8,21 @@ use fuel_core::{
         FuelService,
     },
 };
-use fuel_core_interfaces::{
-    common::{
-        fuel_storage::StorageAsMut,
-        fuel_tx::{
-            AssetId,
-            UtxoId,
-        },
-        fuel_vm::prelude::{
-            Address,
-            Bytes32,
-            Word,
-        },
+use fuel_core_interfaces::common::{
+    fuel_storage::StorageAsMut,
+    fuel_tx::{
+        AssetId,
+        UtxoId,
     },
-    db::Coins,
+    fuel_vm::prelude::{
+        Address,
+        Bytes32,
+        Word,
+    },
+};
+use fuel_database::{
+    tables::Coins,
+    Database,
 };
 use fuel_gql_client::client::{
     schema::coin::CoinStatus as SchemeCoinStatus,

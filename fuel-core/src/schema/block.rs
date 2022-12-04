@@ -3,7 +3,6 @@ use super::scalars::{
     Tai64Timestamp,
 };
 use crate::{
-    database::Database,
     executor::Executor,
     model::{
         BlockHeight,
@@ -18,7 +17,6 @@ use crate::{
         tx::types::Transaction,
     },
     service::Config,
-    state::IterDirection,
 };
 use anyhow::anyhow;
 use async_graphql::{
@@ -39,11 +37,6 @@ use fuel_core_interfaces::{
         fuel_types,
         tai64::Tai64,
     },
-    db::{
-        FuelBlocks,
-        SealedBlockConsensus,
-        Transactions,
-    },
     executor::{
         ExecutionBlock,
         Executor as ExecutorTrait,
@@ -56,7 +49,16 @@ use fuel_core_interfaces::{
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
+};
+use fuel_database::{
     not_found,
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+        Transactions,
+    },
+    Database,
+    IterDirection,
 };
 use itertools::Itertools;
 use std::{

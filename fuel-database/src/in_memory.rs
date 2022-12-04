@@ -1,6 +1,6 @@
 use crate::{
-    database::Column,
-    state::ColumnId,
+    Column,
+    ColumnId,
 };
 
 pub mod memory_store;

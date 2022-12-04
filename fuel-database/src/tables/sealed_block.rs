@@ -1,6 +1,11 @@
-use crate::database::{
+use crate::{
+    tables::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
     Column,
     Database,
+    KvStoreError,
 };
 use fuel_core_interfaces::{
     common::prelude::{
@@ -8,11 +13,6 @@ use fuel_core_interfaces::{
         StorageAsRef,
         StorageInspect,
         StorageMutate,
-    },
-    db::{
-        FuelBlocks,
-        KvStoreError,
-        SealedBlockConsensus,
     },
     model::{
         FuelBlockConsensus,

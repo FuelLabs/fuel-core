@@ -1,4 +1,5 @@
 use crate::{
+    db::TxPoolDb,
     Config,
     TxPool,
 };
@@ -15,7 +16,6 @@ use fuel_core_interfaces::{
     txpool::{
         self,
         Error,
-        TxPoolDb,
         TxPoolMpsc,
         TxStatus,
         TxUpdate,

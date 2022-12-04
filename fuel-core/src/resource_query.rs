@@ -1,18 +1,4 @@
-use crate::{
-    database::{
-        resource::{
-            AssetQuery,
-            AssetSpendTarget,
-            Exclude,
-            Resource,
-            ResourceId,
-        },
-        Database,
-        KvStoreError,
-    },
-    model::Coin,
-    state::Error as StateError,
-};
+use crate::model::Coin;
 use core::mem::swap;
 use fuel_core_interfaces::{
     common::{
@@ -23,6 +9,18 @@ use fuel_core_interfaces::{
         },
     },
     model::Message,
+};
+use fuel_database::{
+    tables::resource::{
+        AssetQuery,
+        AssetSpendTarget,
+        Exclude,
+        Resource,
+        ResourceId,
+    },
+    Database,
+    Error as StateError,
+    KvStoreError,
 };
 use itertools::Itertools;
 use rand::prelude::*;
@@ -221,12 +219,9 @@ impl From<StateError> for ResourceQueryError {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        database::Database,
-        model::{
-            Coin,
-            CoinStatus,
-        },
+    use crate::model::{
+        Coin,
+        CoinStatus,
     };
     use assert_matches::assert_matches;
     use fuel_core_interfaces::{
@@ -244,14 +239,17 @@ mod tests {
             },
             fuel_types::MessageId,
         },
-        db::{
-            Coins,
-            Messages,
-        },
         model::{
             DaBlockHeight,
             Message,
         },
+    };
+    use fuel_database::{
+        tables::{
+            Coins,
+            Messages,
+        },
+        Database,
     };
     use itertools::Itertools;
 

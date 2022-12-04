@@ -33,14 +33,14 @@ use fuel_core_interfaces::{
             UtxoId,
         },
     },
-    db::{
-        Coins,
-        Messages,
-    },
     model::{
         ArcPoolTx,
         CoinStatus,
     },
+};
+use fuel_database::tables::{
+    Coins,
+    Messages,
 };
 use std::{
     cmp::Reverse,
