@@ -49,8 +49,18 @@ async fn cant_produce_at_genesis_height() {
 
 #[tokio::test]
 async fn can_produce_initial_block() {
-    // simple happy path for producing the first block
-    let ctx = TestContext::default();
+    // setup dummy genesis block
+    let genesis_height = 0u32.into();
+    let genesis_block = FuelBlockDb::default();
+
+    let db = MockDb {
+        blocks: Arc::new(Mutex::new(
+            vec![(genesis_height, genesis_block)].into_iter().collect(),
+        )),
+        ..Default::default()
+    };
+
+    let ctx = TestContext::default_from_db(db);
     let producer = ctx.producer();
 
     let result = producer
@@ -171,12 +181,24 @@ async fn cant_produce_if_previous_block_da_height_too_high() {
 
 #[tokio::test]
 async fn production_fails_on_execution_error() {
+    // setup dummy genesis block
+    let genesis_height = 0u32.into();
+    let genesis_block = FuelBlockDb::default();
+
+    let db = MockDb {
+        blocks: Arc::new(Mutex::new(
+            vec![(genesis_height, genesis_block)].into_iter().collect(),
+        )),
+        ..Default::default()
+    };
+
     let ctx = TestContext {
         executor: Arc::new(FailingMockExecutor(Mutex::new(Some(
             fuel_core_interfaces::executor::Error::TransactionIdCollision(
                 Default::default(),
             ),
         )))),
+        db,
         ..TestContext::default()
     };
 

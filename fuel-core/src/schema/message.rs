@@ -314,6 +314,8 @@ impl MessageProofData for MessageProofContext<'_> {
             .get(block_id)?
             .map(Cow::into_owned)
         {
+            // TODO: https://github.com/FuelLabs/fuel-core/issues/816
+            Some(FuelBlockConsensus::Genesis(_)) => Ok(Default::default()),
             Some(FuelBlockConsensus::PoA(c)) => Ok(Some(c.signature)),
             None => Ok(None),
         }

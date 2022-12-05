@@ -549,7 +549,8 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
                 poa.signature
                     .verify(&pk, &message)
                     .expect("expected signature to be valid");
-            } //_ => panic!("invalid sealed data"),
+            }
+            _ => panic!("invalid sealed data"),
         }
     }
 

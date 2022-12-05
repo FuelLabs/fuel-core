@@ -20,11 +20,10 @@ use fuel_core_interfaces::{
             prelude::*,
         },
     },
-    model::FuelBlockDb,
+    not_found,
 };
 use futures::lock::Mutex;
 use std::{
-    borrow::Cow,
     collections::HashMap,
     io,
     sync,
@@ -142,7 +141,7 @@ impl ConcreteStorage {
     ) -> Result<VmDatabase, InterpreterError> {
         let block = storage
             .get_current_block()?
-            .unwrap_or_else(|| Cow::Owned(FuelBlockDb::fix_me_default_block()))
+            .ok_or(not_found!("Block for VMDatabase"))?
             .into_owned();
 
         let vm_database = VmDatabase::new(

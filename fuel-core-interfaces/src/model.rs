@@ -16,6 +16,7 @@ use crate::common::{
 pub use block::{
     BlockId,
     ConsensusType,
+    Empty,
     FuelApplicationHeader,
     FuelBlock,
     FuelBlockConsensus,
@@ -23,6 +24,7 @@ pub use block::{
     FuelBlockHeader,
     FuelBlockPoAConsensus,
     FuelConsensusHeader,
+    Genesis,
     PartialFuelBlock,
     PartialFuelBlockHeader,
     SealedFuelBlock,

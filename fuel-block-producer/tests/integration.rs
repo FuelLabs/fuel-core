@@ -38,6 +38,7 @@ use fuel_core_interfaces::{
     model::{
         Coin,
         CoinStatus,
+        FuelBlockDb,
     },
     txpool::Sender as TxPoolSender,
 };
@@ -52,7 +53,10 @@ use rand::{
     Rng,
     SeedableRng,
 };
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    Mutex,
+};
 use tokio::sync::{
     broadcast,
     mpsc,
@@ -143,7 +147,14 @@ async fn block_producer() -> Result<()> {
     let txpool = txpool_builder.build().unwrap();
     txpool.start().await?;
 
-    let mock_db = MockDb::default();
+    let mock_db = MockDb {
+        blocks: Arc::new(Mutex::new(
+            vec![(0u32.into(), FuelBlockDb::default())]
+                .into_iter()
+                .collect(),
+        )),
+        ..Default::default()
+    };
 
     let block_producer = Producer {
         config: fuel_block_producer::config::Config {

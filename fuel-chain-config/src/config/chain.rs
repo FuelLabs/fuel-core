@@ -30,6 +30,8 @@ use super::{
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+// TODO: Remove not consensus/network fields from `ChainConfig` or create a new config only
+//  for consensus/network fields.
 #[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {

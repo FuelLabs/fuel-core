@@ -31,6 +31,7 @@ use async_graphql::{
     Context,
     InputObject,
     Object,
+    SimpleObject,
     Union,
 };
 use fuel_core_interfaces::{
@@ -53,6 +54,7 @@ use fuel_core_interfaces::{
         FuelBlockConsensus,
         FuelBlockHeader,
         FuelConsensusHeader,
+        Genesis as FuelGenesis,
         PartialFuelBlock,
         PartialFuelBlockHeader,
     },
@@ -73,7 +75,21 @@ pub struct Header(pub(crate) FuelBlockHeader);
 
 #[derive(Union)]
 pub enum Consensus {
+    Genesis(Genesis),
     PoA(PoAConsensus),
+}
+
+#[derive(SimpleObject)]
+pub struct Genesis {
+    /// The chain configs define what consensus type to use, what settlement layer to use,
+    /// rules of block validity, etc.
+    pub chain_config_hash: Bytes32,
+    /// The Binary Merkle Tree hash of all genesis coins.
+    pub coins_hash: Bytes32,
+    /// The Binary Merkle Tree hash of state, balances, contracts code hash of each contract.
+    pub contracts_hash: Bytes32,
+    /// The Binary Merkle Tree hash of all genesis messages.
+    pub messages_hash: Bytes32,
 }
 
 pub struct PoAConsensus {
@@ -508,9 +524,21 @@ impl From<FuelBlockDb> for Header {
     }
 }
 
+impl From<FuelGenesis> for Genesis {
+    fn from(genesis: FuelGenesis) -> Self {
+        Genesis {
+            chain_config_hash: genesis.chain_config_hash.into(),
+            coins_hash: genesis.coins_hash.into(),
+            contracts_hash: genesis.contracts_hash.into(),
+            messages_hash: genesis.messages_hash.into(),
+        }
+    }
+}
+
 impl From<FuelBlockConsensus> for Consensus {
     fn from(consensus: FuelBlockConsensus) -> Self {
         match consensus {
+            FuelBlockConsensus::Genesis(genesis) => Consensus::Genesis(genesis.into()),
             FuelBlockConsensus::PoA(poa) => Consensus::PoA(PoAConsensus {
                 signature: poa.signature.into(),
             }),
