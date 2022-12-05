@@ -376,9 +376,7 @@ impl State {
         let dependant_groups = groups
             .iter()
             .filter(|(_, samples)| {
-                samples
-                    .first()
-                    .map_or(false, |sample| throughput.contains_key(sample))
+                samples.iter().any(|sample| throughput.contains_key(sample))
             })
             .map(|(name, samples)| {
                 let mut samples = samples
@@ -542,11 +540,12 @@ mod tests {
             groups: Default::default(),
         };
         for line in input.lines() {
-            extract_state(line, &mut state, false);
+            extract_state(line, &mut state, true);
         }
 
         eprintln!("{}", serde_yaml::to_string(&state.to_yaml()).unwrap());
     }
+
     #[test]
     fn serialize_gas_costs() {
         let input = r#"
