@@ -85,11 +85,11 @@ pub struct Genesis {
     /// rules of block validity, etc.
     pub chain_config_hash: Bytes32,
     /// The Binary Merkle Tree root of all genesis coins.
-    pub coins_hash: Bytes32,
+    pub coins_root: Bytes32,
     /// The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
-    pub contracts_hash: Bytes32,
+    pub contracts_root: Bytes32,
     /// The Binary Merkle Tree root of all genesis messages.
-    pub messages_hash: Bytes32,
+    pub messages_root: Bytes32,
 }
 
 pub struct PoAConsensus {
@@ -528,9 +528,9 @@ impl From<FuelGenesis> for Genesis {
     fn from(genesis: FuelGenesis) -> Self {
         Genesis {
             chain_config_hash: genesis.chain_config_hash.into(),
-            coins_hash: genesis.coins_hash.into(),
-            contracts_hash: genesis.contracts_hash.into(),
-            messages_hash: genesis.messages_hash.into(),
+            coins_root: genesis.coins_root.into(),
+            contracts_root: genesis.contracts_root.into(),
+            messages_root: genesis.messages_root.into(),
         }
     }
 }
