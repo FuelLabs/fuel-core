@@ -2740,7 +2740,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.22.5"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#aff1f48c35fea620f2df3354f15942aae695ed24"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#96f2acdaee277ace0e44680bd689dbf9fe799420"
 dependencies = [
  "anyhow",
  "fuel-asm",

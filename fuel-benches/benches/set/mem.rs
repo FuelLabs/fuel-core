@@ -50,16 +50,11 @@ pub fn run(c: &mut Criterion) {
     l.sort_unstable();
     linear.extend(l);
 
-    let mut mem_cfei = c.benchmark_group("cfei");
-    for i in &linear {
-        mem_cfei.throughput(Throughput::Bytes(*i as u64));
-        run_group_ref(
-            &mut mem_cfei,
-            format!("{}", i),
-            VmBench::new(Opcode::CFEI(*i)).with_cleanup(vec![Opcode::CFSI(*i)]),
-        );
-    }
-    mem_cfei.finish();
+    run_group_ref(
+        &mut c.benchmark_group("cfei"),
+        "cfei",
+        VmBench::new(Opcode::CFEI(1)).with_cleanup(vec![Opcode::CFSI(1)]),
+    );
 
     let mut mem_mcl = c.benchmark_group("mcl");
     for i in &linear {

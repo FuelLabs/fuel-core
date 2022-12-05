@@ -93,6 +93,7 @@ struct State {
 struct Costs(HashMap<String, Cost>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
 enum Cost {
     Relative(u64),
     Dependant {

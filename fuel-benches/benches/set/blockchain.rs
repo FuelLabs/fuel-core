@@ -26,63 +26,44 @@ pub fn run(c: &mut Criterion) {
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
-    let mut bal = c.benchmark_group("bal");
+    run_group_ref(
+        &mut c.benchmark_group("bal"),
+        "bal",
+        VmBench::new(Opcode::BAL(0x10, 0x10, 0x11))
+            .with_data(asset.iter().chain(contract.iter()).copied().collect())
+            .with_prepare_script(vec![
+                Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+                Opcode::ADDI(0x11, 0x10, asset.len() as Immediate12),
+            ])
+            .with_dummy_contract(contract)
+            .with_prepare_db(move |mut db| {
+                let mut asset_inc = AssetId::zeroed();
 
-    for i in linear.clone() {
-        bal.throughput(Throughput::Bytes(i));
-        run_group_ref(
-            &mut bal,
-            format!("{}", i),
-            VmBench::new(Opcode::BAL(0x10, 0x10, 0x11))
-                .with_data(asset.iter().chain(contract.iter()).copied().collect())
-                .with_prepare_script(vec![
-                    Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
-                    Opcode::ADDI(0x11, 0x10, asset.len() as Immediate12),
-                ])
-                .with_dummy_contract(contract)
-                .with_prepare_db(move |mut db| {
-                    let mut asset_inc = AssetId::zeroed();
+                asset_inc.as_mut()[..8].copy_from_slice(&(1 as u64).to_be_bytes());
 
-                    for i in 0..i {
-                        asset_inc.as_mut()[..8]
-                            .copy_from_slice(&(i as u64).to_be_bytes());
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset_inc, 1)?;
 
-                        db.merkle_contract_asset_id_balance_insert(
-                            &contract, &asset_inc, i,
-                        )?;
-                    }
+                db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
 
-                    db.merkle_contract_asset_id_balance_insert(&contract, &asset, 100)?;
+                Ok(db)
+            }),
+    );
 
-                    Ok(db)
-                }),
-        );
-    }
+    run_group_ref(
+        &mut c.benchmark_group("sww"),
+        "sww",
+        VmBench::contract(rng, Opcode::SWW(REG_ZERO, 0x29, REG_ONE))
+            .expect("failed to prepare contract")
+            .with_prepare_db(move |mut db| {
+                let mut key = Bytes32::zeroed();
 
-    bal.finish();
+                key.as_mut()[..8].copy_from_slice(&(1 as u64).to_be_bytes());
 
-    let mut sww = c.benchmark_group("sww");
-    for i in linear.clone() {
-        sww.throughput(Throughput::Bytes(i));
-        run_group_ref(
-            &mut sww,
-            format!("{}", i),
-            VmBench::contract(rng, Opcode::SWW(REG_ZERO, 0x29, REG_ONE))
-                .expect("failed to prepare contract")
-                .with_prepare_db(move |mut db| {
-                    let mut key = Bytes32::zeroed();
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
 
-                    for i in 0..i {
-                        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
-
-                        db.merkle_contract_state_insert(&contract, &key, &key)?;
-                    }
-
-                    Ok(db)
-                }),
-        );
-    }
-    sww.finish();
+                Ok(db)
+            }),
+    );
 
     let mut call = c.benchmark_group("call");
 
