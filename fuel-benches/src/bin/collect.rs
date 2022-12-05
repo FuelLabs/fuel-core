@@ -7,7 +7,10 @@ use serde::{
 };
 use serde_json::Value;
 use std::{
-    collections::HashMap,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     fmt::Display,
     io::{
         BufRead,
@@ -187,7 +190,8 @@ fn extract_state(line: &str, state: &mut State, debug: bool) {
             }
         }
         Some(Output::Group(Group { id, benches })) => {
-            state.groups.entry(id).or_default().extend(benches);
+            state.groups.entry(id.clone()).or_default().extend(benches);
+            eprintln!("{} complete", id);
         }
         _ => (),
     }
@@ -289,6 +293,24 @@ pub fn default_gas_costs() -> GasCostsValues {
 impl State {
     fn to_rust_code(&self) -> String {
         let value = serde_yaml::to_value(self.to_gas_costs()).unwrap();
+        let yaml = self.to_yaml();
+        let have = yaml
+            .as_mapping()
+            .unwrap()
+            .keys()
+            .map(|k| k.as_str().unwrap())
+            .collect::<HashSet<_>>();
+        let all_keys = value
+            .as_mapping()
+            .unwrap()
+            .keys()
+            .map(|k| k.as_str().unwrap())
+            .collect::<HashSet<_>>();
+
+        let diff = have.symmetric_difference(&all_keys).collect::<Vec<_>>();
+
+        eprintln!("Warning the following keys were not set by this bench:\n{:?}\nWas this intentional?", diff);
+
         let map = value.as_mapping().unwrap();
         let indent = "        ";
         let inner = map

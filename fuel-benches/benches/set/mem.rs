@@ -43,7 +43,6 @@ pub fn run(c: &mut Criterion) {
     );
 
     let linear = vec![1, 10, 100, 1_000, 10_000, 100_000];
-    // let linear = vec![1, 10, 100, 1_000, 10_000];
     // let linear = vec![1, 10, 25, 50, 75, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1_000];
 
     let mut mem_cfei = c.benchmark_group("cfei");
@@ -109,6 +108,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
+    let linear = vec![1, 10, 100, 1_000, 10_000];
     let mut mem_mcpi = c.benchmark_group("mcpi");
     for i in &linear {
         mem_mcpi.throughput(Throughput::Bytes(*i as u64));

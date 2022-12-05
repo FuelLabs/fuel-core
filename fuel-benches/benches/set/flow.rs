@@ -42,7 +42,7 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
-        &mut c.benchmark_group("ret_script"),
+        &mut c.benchmark_group("ret"),
         "ret (script)",
         VmBench::new(Opcode::RET(REG_ONE)),
     );
