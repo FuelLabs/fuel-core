@@ -270,15 +270,15 @@ type Genesis {
 	"""
 	chainConfigHash: Bytes32!
 	"""
-	The Binary Merkle Tree hash of all genesis coins.
+	The Binary Merkle Tree root of all genesis coins.
 	"""
 	coinsHash: Bytes32!
 	"""
-	The Binary Merkle Tree hash of state, balances, contracts code hash of each contract.
+	The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
 	"""
 	contractsHash: Bytes32!
 	"""
-	The Binary Merkle Tree hash of all genesis messages.
+	The Binary Merkle Tree root of all genesis messages.
 	"""
 	messagesHash: Bytes32!
 }

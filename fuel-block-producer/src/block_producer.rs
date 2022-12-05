@@ -204,7 +204,8 @@ impl Producer {
 
     fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
         // TODO: It is not guaranteed that the genesis height is `0` height. Update the code to
-        //  use a genesis height from the database.
+        //  use a genesis height from the database. If the `height` less than genesis height ->
+        //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
             Err(Error::GenesisBlock.into())

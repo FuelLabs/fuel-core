@@ -84,11 +84,11 @@ pub struct Genesis {
     /// The chain configs define what consensus type to use, what settlement layer to use,
     /// rules of block validity, etc.
     pub chain_config_hash: Bytes32,
-    /// The Binary Merkle Tree hash of all genesis coins.
+    /// The Binary Merkle Tree root of all genesis coins.
     pub coins_hash: Bytes32,
-    /// The Binary Merkle Tree hash of state, balances, contracts code hash of each contract.
+    /// The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
     pub contracts_hash: Bytes32,
-    /// The Binary Merkle Tree hash of all genesis messages.
+    /// The Binary Merkle Tree root of all genesis messages.
     pub messages_hash: Bytes32,
 }
 
