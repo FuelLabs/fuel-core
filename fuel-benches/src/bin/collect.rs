@@ -37,6 +37,10 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
 
+    /// Path to saved json for input. Defaults to stdin.
+    #[arg(short, long)]
+    input: Option<PathBuf>,
+
     /// Print the input and output.
     #[arg(short, long)]
     debug: bool,
@@ -106,9 +110,11 @@ struct Sample {
     throughput: u64,
     time: u64,
 }
+
 fn main() {
     let Args {
         baseline,
+        input,
         output,
         debug,
         format,
@@ -124,8 +130,30 @@ fn main() {
     ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
         .expect("Error setting Ctrl-C handler");
 
-    let stdin = std::io::stdin();
-    let mut reader = BufReader::new(stdin);
+    let readers: Vec<Box<dyn BufRead>> = match input {
+        Some(path) => {
+            if path.is_dir() {
+                std::fs::read_dir(path)
+                    .unwrap()
+                    .filter_map(|dir| {
+                        let dir = dir.unwrap();
+                        dir.file_type().unwrap().is_file().then(|| {
+                            let r: Box<dyn BufRead> = Box::new(BufReader::new(
+                                std::fs::File::open(dir.path()).unwrap(),
+                            ));
+                            r
+                        })
+                    })
+                    .collect()
+            } else {
+                vec![Box::new(BufReader::new(std::fs::File::open(path).unwrap()))]
+            }
+        }
+        None => {
+            let stdin = std::io::stdin();
+            vec![Box::new(BufReader::new(stdin))]
+        }
+    };
 
     let mut line = String::new();
     let mut state = State {
@@ -135,8 +163,21 @@ fn main() {
         groups: HashMap::new(),
         baseline: baseline.unwrap_or_else(|| "noop/noop".to_string()),
     };
+    let mut readers = readers.into_iter();
+    let mut reader = readers.next().unwrap();
     while let Err(TryRecvError::Empty) = rx.try_recv() {
-        let _ = reader.read_line(&mut line).unwrap();
+        match reader.read_line(&mut line) {
+            Ok(amount) if amount == 0 => {
+                reader = match readers.next() {
+                    Some(r) => r,
+                    None => break,
+                };
+            }
+            Ok(_) => (),
+            Err(e) => {
+                dbg!(e);
+            }
+        }
 
         if debug {
             eprintln!("{}", line);

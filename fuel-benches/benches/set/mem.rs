@@ -42,8 +42,13 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
-    let linear = vec![1, 10, 100, 1_000, 10_000, 100_000];
-    // let linear = vec![1, 10, 25, 50, 75, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1_000];
+    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u32)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
 
     let mut mem_cfei = c.benchmark_group("cfei");
     for i in &linear {
@@ -56,13 +61,6 @@ pub fn run(c: &mut Criterion) {
     }
     mem_cfei.finish();
 
-    let mut linear = vec![1, 10, 100];
-    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
-        .take(5)
-        .map(|f| f as u32)
-        .collect::<Vec<_>>();
-    l.sort_unstable();
-    linear.extend(l);
     let mut mem_mcl = c.benchmark_group("mcl");
     for i in &linear {
         mem_mcl.throughput(Throughput::Bytes(*i as u64));
@@ -108,22 +106,21 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
-    let linear = vec![1, 10, 100, 1_000, 10_000];
-    let mut mem_mcpi = c.benchmark_group("mcpi");
-    for i in &linear {
-        mem_mcpi.throughput(Throughput::Bytes(*i as u64));
-        run_group_ref(
-            &mut mem_mcpi,
-            format!("{}", i),
-            VmBench::new(Opcode::MCPI(0x10, REG_ZERO, *i as Immediate12))
-                .with_prepare_script(vec![
-                    Opcode::MOVI(0x11, *i),
-                    Opcode::ALOC(0x11),
-                    Opcode::ADDI(0x10, REG_HP, 1),
-                ]),
-        );
-    }
-    mem_mcpi.finish();
+    // let mut mem_mcpi = c.benchmark_group("mcpi");
+    // for i in &linear {
+    //     mem_mcpi.throughput(Throughput::Bytes(*i as u64));
+    //     run_group_ref(
+    //         &mut mem_mcpi,
+    //         format!("{}", i),
+    //         VmBench::new(Opcode::MCPI(0x10, REG_ZERO, *i as Immediate12))
+    //             .with_prepare_script(vec![
+    //                 Opcode::MOVI(0x11, *i),
+    //                 Opcode::ALOC(0x11),
+    //                 Opcode::ADDI(0x10, REG_HP, 1),
+    //             ]),
+    //     );
+    // }
+    // mem_mcpi.finish();
 
     let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {

@@ -1,3 +1,5 @@
+use std::iter::successors;
+
 use super::run_group_ref;
 
 use criterion::{
@@ -14,14 +16,19 @@ use rand::{
 pub fn run(c: &mut Criterion) {
     let rng = &mut StdRng::seed_from_u64(2322u64);
 
-    let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000];
-    // let cases = vec![1_000_000];
+    let mut linear = vec![1, 10, 100, 1000, 10_000];
+    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u64)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
     let mut bal = c.benchmark_group("bal");
 
-    for i in cases.clone() {
+    for i in linear.clone() {
         bal.throughput(Throughput::Bytes(i));
         run_group_ref(
             &mut bal,
@@ -55,7 +62,7 @@ pub fn run(c: &mut Criterion) {
     bal.finish();
 
     let mut sww = c.benchmark_group("sww");
-    for i in cases.clone() {
+    for i in linear.clone() {
         sww.throughput(Throughput::Bytes(i));
         run_group_ref(
             &mut sww,
@@ -78,9 +85,8 @@ pub fn run(c: &mut Criterion) {
     sww.finish();
 
     let mut call = c.benchmark_group("call");
-    let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 
-    for i in cases {
+    for i in linear {
         let mut code = vec![0u8; i as usize];
 
         rng.fill_bytes(&mut code);
