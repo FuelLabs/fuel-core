@@ -1,10 +1,12 @@
 use crate::InterpreterError;
-use std::io::ErrorKind;
-use thiserror::Error;
+use std::io::{
+    Error as StdError,
+    ErrorKind,
+};
 
 // TODO: Use either `KvStoreError` or `Error`
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 #[non_exhaustive]
 pub enum Error {
     #[error("error performing binary serialization")]
@@ -21,7 +23,7 @@ pub enum Error {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum KvStoreError {
     #[error("generic error occurred")]
     Error(Box<dyn std::error::Error + Send + Sync>),
@@ -55,9 +57,9 @@ macro_rules! not_found {
     };
 }
 
-impl From<Error> for std::io::Error {
+impl From<Error> for StdError {
     fn from(e: Error) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+        StdError::new(ErrorKind::Other, e)
     }
 }
 
@@ -73,21 +75,21 @@ impl From<KvStoreError> for Error {
     }
 }
 
-impl From<KvStoreError> for std::io::Error {
+impl From<KvStoreError> for StdError {
     fn from(e: KvStoreError) -> Self {
-        std::io::Error::new(ErrorKind::Other, e)
+        StdError::new(ErrorKind::Other, e)
     }
 }
 
 impl From<Error> for InterpreterError {
     fn from(e: Error) -> Self {
-        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+        InterpreterError::Io(StdError::new(ErrorKind::Other, e))
     }
 }
 
 impl From<KvStoreError> for InterpreterError {
     fn from(e: KvStoreError) -> Self {
-        InterpreterError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+        InterpreterError::Io(StdError::new(ErrorKind::Other, e))
     }
 }
 

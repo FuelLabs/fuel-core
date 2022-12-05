@@ -12,7 +12,7 @@ use fuel_database::tables::SealedBlockConsensus;
 pub trait BlockDb: Send + Sync {
     fn block_height(&self) -> Result<BlockHeight>;
 
-    // Returns error if already sealed
+    /// Returns error if already sealed
     fn seal_block(
         &mut self,
         block_id: BlockId,
