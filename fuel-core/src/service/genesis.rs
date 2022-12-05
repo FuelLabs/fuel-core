@@ -70,11 +70,11 @@ impl Merklization for Message {
 impl Merklization for Coin {
     fn root(&mut self) -> Result<MerkleRoot> {
         let coin_hash = *Hasher::default()
-            .chain(&self.owner)
+            .chain(self.owner)
             .chain(self.amount.to_be_bytes())
-            .chain(&self.asset_id)
+            .chain(self.asset_id)
             .chain((*self.maturity).to_be_bytes())
-            .chain(&[self.status as u8])
+            .chain([self.status as u8])
             .chain((*self.block_created).to_be_bytes())
             .finalize();
 
@@ -119,7 +119,7 @@ impl<'a> Merklization for ContractRef<'a> {
             // `ContractId` already is based on contract's code and salt so we don't need it.
             .chain(self.contract_id.as_ref())
             .chain(utxo.tx_id().as_ref())
-            .chain(&[utxo.output_index()])
+            .chain([utxo.output_index()])
             .chain(state_root.as_slice())
             .chain(balance_root.as_slice())
             .finalize();
@@ -143,8 +143,8 @@ impl Merklization for ChainConfig {
         // TODO: Hash settlement configuration
         let config_hash = *Hasher::default()
             // `ContractId` based on contract's code and salt so we don't need it.
-            .chain(&self.block_gas_limit.to_be_bytes())
-            .chain(&self.transaction_parameters.root()?)
+            .chain(self.block_gas_limit.to_be_bytes())
+            .chain(self.transaction_parameters.root()?)
             .finalize();
 
         Ok(config_hash)
