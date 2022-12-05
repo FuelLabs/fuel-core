@@ -78,7 +78,7 @@ impl Merklization for Coin {
             .chain((*self.block_created).to_be_bytes())
             .finalize();
 
-        Ok(coin_hash.into())
+        Ok(coin_hash)
     }
 }
 
@@ -124,7 +124,7 @@ impl<'a> Merklization for ContractRef<'a> {
             .chain(balance_root.as_slice())
             .finalize();
 
-        Ok(contract_hash.into())
+        Ok(contract_hash)
     }
 }
 
@@ -147,7 +147,7 @@ impl Merklization for ChainConfig {
             .chain(&self.transaction_parameters.root()?)
             .finalize();
 
-        Ok(config_hash.into())
+        Ok(config_hash)
     }
 }
 
@@ -204,8 +204,8 @@ impl FuelService {
                         .chain_conf
                         .initial_state
                         .as_ref()
-                        .map(|config| config.height.unwrap_or(0u32.into()))
-                        .unwrap_or(0u32.into()),
+                        .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
+                        .unwrap_or_else(|| 0u32.into()),
                     time: fuel_core_interfaces::common::tai64::Tai64::UNIX_EPOCH,
                     generated: Empty,
                 },
