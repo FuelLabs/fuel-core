@@ -2,36 +2,25 @@
 use crate::{
     chain_config::BlockProduction,
     database::Database,
-    executor::Executor,
-    service::Config,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            PoACoordinatorAdapter,
+        },
+        Config,
+    },
 };
 use anyhow::Result;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     self,
-    common::{
-        fuel_tx::Receipt,
-        prelude::{
-            Transaction,
-            Word,
-        },
-    },
-    executor::{
-        Error,
-        ExecutionBlock,
-        ExecutionResult,
-        Executor as ExecutorTrait,
-    },
-    model::BlockHeight,
-    relayer::RelayerDb,
     txpool::{
         Sender,
         TxPoolDb,
     },
 };
-#[cfg(feature = "relayer")]
-use fuel_relayer::RelayerSynced;
 use fuel_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;
@@ -250,86 +239,4 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         #[cfg(feature = "p2p")]
         network_service: Arc::new(network_service),
     })
-}
-
-struct ExecutorAdapter {
-    database: Database,
-    config: Config,
-}
-
-#[async_trait::async_trait]
-impl ExecutorTrait for ExecutorAdapter {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.execute(block)
-    }
-
-    fn dry_run(
-        &self,
-        block: ExecutionBlock,
-        utxo_validation: Option<bool>,
-    ) -> std::result::Result<Vec<Vec<Receipt>>, Error> {
-        let executor = Executor {
-            database: self.database.clone(),
-            config: self.config.clone(),
-        };
-        executor.dry_run(block, utxo_validation)
-    }
-}
-
-struct MaybeRelayerAdapter {
-    database: Database,
-    #[cfg(feature = "relayer")]
-    relayer_synced: Option<RelayerSynced>,
-}
-
-#[async_trait::async_trait]
-impl fuel_block_producer::block_producer::Relayer for MaybeRelayerAdapter {
-    async fn get_best_finalized_da_height(
-        &self,
-    ) -> Result<fuel_core_interfaces::model::DaBlockHeight> {
-        #[cfg(feature = "relayer")]
-        {
-            if let Some(sync) = self.relayer_synced.as_ref() {
-                sync.await_synced().await?;
-            }
-        }
-
-        Ok(self
-            .database
-            .get_finalized_da_height()
-            .await
-            .unwrap_or_default())
-    }
-}
-
-struct PoACoordinatorAdapter {
-    block_producer: Arc<fuel_block_producer::Producer>,
-}
-
-#[async_trait::async_trait]
-impl fuel_poa_coordinator::service::BlockProducer for PoACoordinatorAdapter {
-    async fn produce_and_execute_block(
-        &self,
-        height: BlockHeight,
-        max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult> {
-        self.block_producer
-            .produce_and_execute_block(height, max_gas)
-            .await
-    }
-
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>> {
-        self.block_producer
-            .dry_run(transaction, height, utxo_validation)
-            .await
-    }
 }

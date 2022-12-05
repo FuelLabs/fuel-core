@@ -1,6 +1,9 @@
 use crate::{
     db::BlockProducerDatabase,
-    ports::TxPool,
+    ports::{
+        Relayer,
+        TxPool,
+    },
     Config,
 };
 use anyhow::{
@@ -60,12 +63,6 @@ pub enum Error {
         best: DaBlockHeight,
         previous_block: DaBlockHeight,
     },
-}
-
-#[async_trait::async_trait]
-pub trait Relayer: Sync + Send {
-    /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
 }
 
 pub struct Producer {

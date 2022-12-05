@@ -33,7 +33,7 @@ use fuel_core_interfaces::{
     },
 };
 use fuel_poa_coordinator::{
-    service::BlockProducer,
+    ports::BlockProducer,
     Config,
     Service,
     Trigger,

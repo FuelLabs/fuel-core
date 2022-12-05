@@ -1,7 +1,7 @@
 use super::db::BlockProducerDatabase;
-use crate::{
-    block_producer::Relayer,
-    ports::TxPool,
+use crate::ports::{
+    Relayer,
+    TxPool,
 };
 use anyhow::Result;
 use fuel_core_interfaces::{
