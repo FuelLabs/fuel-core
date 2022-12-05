@@ -2480,6 +2480,7 @@ dependencies = [
  "serde_json",
  "tai64",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
