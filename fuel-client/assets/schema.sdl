@@ -272,15 +272,15 @@ type Genesis {
 	"""
 	The Binary Merkle Tree root of all genesis coins.
 	"""
-	coinsHash: Bytes32!
+	coinsRoot: Bytes32!
 	"""
 	The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
 	"""
-	contractsHash: Bytes32!
+	contractsRoot: Bytes32!
 	"""
 	The Binary Merkle Tree root of all genesis messages.
 	"""
-	messagesHash: Bytes32!
+	messagesRoot: Bytes32!
 }
 
 type Header {
