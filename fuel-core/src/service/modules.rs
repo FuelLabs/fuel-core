@@ -1,11 +1,15 @@
 #![allow(clippy::let_unit_value)]
 use crate::{
     chain_config::BlockProduction,
-    database::Database,
+    database::{
+        transactional::DatabaseTransaction,
+        Database,
+    },
     executor::Executor,
     service::Config,
 };
 use anyhow::Result;
+use fuel_block_producer::block_producer::Executor as ExecutorTrait;
 #[cfg(feature = "p2p")]
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
@@ -20,8 +24,7 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionBlock,
-        ExecutionResult,
-        Executor as ExecutorTrait,
+        UncommittedResult,
     },
     model::BlockHeight,
     relayer::RelayerDb,
@@ -48,7 +51,7 @@ use tokio::{
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
     pub block_importer: Arc<fuel_block_importer::Service>,
-    pub block_producer: Arc<fuel_block_producer::Producer>,
+    pub block_producer: Arc<fuel_block_producer::Producer<ExecutorAdapter>>,
     pub coordinator: Arc<CoordinatorService>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
@@ -252,14 +255,17 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     })
 }
 
-struct ExecutorAdapter {
+pub struct ExecutorAdapter {
     database: Database,
     config: Config,
 }
 
 #[async_trait::async_trait]
-impl ExecutorTrait for ExecutorAdapter {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
+impl ExecutorTrait<DatabaseTransaction> for ExecutorAdapter {
+    fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<DatabaseTransaction>, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
@@ -307,16 +313,18 @@ impl fuel_block_producer::block_producer::Relayer for MaybeRelayerAdapter {
 }
 
 struct PoACoordinatorAdapter {
-    block_producer: Arc<fuel_block_producer::Producer>,
+    block_producer: Arc<fuel_block_producer::Producer<ExecutorAdapter>>,
 }
 
 #[async_trait::async_trait]
-impl fuel_poa_coordinator::service::BlockProducer for PoACoordinatorAdapter {
+impl fuel_poa_coordinator::service::BlockProducer<DatabaseTransaction>
+    for PoACoordinatorAdapter
+{
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult> {
+    ) -> anyhow::Result<UncommittedResult<DatabaseTransaction>> {
         self.block_producer
             .produce_and_execute_block(height, max_gas)
             .await

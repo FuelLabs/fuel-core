@@ -1,4 +1,5 @@
 use crate::helpers::TestContext;
+use fuel_block_producer::block_producer::Executor as ExecutorTrait;
 use fuel_core::{
     database::Database,
     executor::Executor,
@@ -16,10 +17,7 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    executor::{
-        ExecutionBlock,
-        Executor as ExecutorTrait,
-    },
+    executor::ExecutionBlock,
     model::{
         FuelConsensusHeader,
         PartialFuelBlock,

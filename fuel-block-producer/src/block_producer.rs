@@ -21,8 +21,7 @@ use fuel_core_interfaces::{
     },
     executor::{
         ExecutionBlock,
-        ExecutionResult,
-        Executor,
+        UncommittedResult,
     },
     model::{
         BlockHeight,
@@ -68,11 +67,24 @@ pub trait Relayer: Sync + Send {
     async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
 }
 
-pub struct Producer {
+pub trait Executor<DbTransaction>: Sync + Send {
+    fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<DbTransaction>, fuel_core_interfaces::executor::Error>;
+
+    fn dry_run(
+        &self,
+        block: ExecutionBlock,
+        utxo_validation: Option<bool>,
+    ) -> Result<Vec<Vec<Receipt>>, fuel_core_interfaces::executor::Error>;
+}
+
+pub struct Producer<Executor> {
     pub config: Config,
     pub db: Box<dyn BlockProducerDatabase>,
     pub txpool: Box<dyn TxPool>,
-    pub executor: Arc<dyn Executor>,
+    pub executor: Arc<Executor>,
     pub relayer: Box<dyn Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
@@ -80,13 +92,16 @@ pub struct Producer {
     pub dry_run_semaphore: Semaphore,
 }
 
-impl Producer {
+impl<E: 'static> Producer<E> {
     /// Produces and execute block for the specified height
-    pub async fn produce_and_execute_block(
+    pub async fn produce_and_execute_block<DbTransaction>(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<ExecutionResult> {
+    ) -> Result<UncommittedResult<DbTransaction>>
+    where
+        E: Executor<DbTransaction>,
+    {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -119,19 +134,22 @@ impl Producer {
             .execute(ExecutionBlock::Production(block))
             .context(context_string)?;
 
-        debug!("Produced block with result: {:?}", &result);
+        debug!("Produced block with result: {:?}", result.result());
         Ok(result)
     }
 
     /// Simulate a transaction without altering any state. Does not aquire the production lock
     /// since it is basically a "read only" operation and shouldn't get in the way of normal
     /// production.
-    pub async fn dry_run(
+    pub async fn dry_run<DbTransaction>(
         &self,
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Receipt>> {
+    ) -> Result<Vec<Receipt>>
+    where
+        E: Executor<DbTransaction>,
+    {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
         // return the receipts
@@ -164,7 +182,7 @@ impl Producer {
     }
 }
 
-impl Producer {
+impl<E> Producer<E> {
     /// Create the header for a new block at the provided height
     async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;

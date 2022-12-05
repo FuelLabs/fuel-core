@@ -10,14 +10,11 @@ use crate::{
     Config,
     Producer,
 };
-use fuel_core_interfaces::{
-    executor::Executor,
-    model::{
-        FuelApplicationHeader,
-        FuelBlockDb,
-        FuelBlockHeader,
-        FuelConsensusHeader,
-    },
+use fuel_core_interfaces::model::{
+    FuelApplicationHeader,
+    FuelBlockDb,
+    FuelBlockHeader,
+    FuelConsensusHeader,
 };
 use rand::{
     rngs::StdRng,
@@ -177,7 +174,7 @@ async fn production_fails_on_execution_error() {
                 Default::default(),
             ),
         )))),
-        ..TestContext::default()
+        ..TestContext::failing()
     };
 
     let producer = ctx.producer();
@@ -197,15 +194,15 @@ async fn production_fails_on_execution_error() {
     );
 }
 
-struct TestContext {
+struct TestContext<E> {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Arc<dyn Executor>,
+    executor: Arc<E>,
     txpool: MockTxPool,
 }
 
-impl TestContext {
+impl TestContext<MockExecutor> {
     pub fn default() -> Self {
         let db = MockDb::default();
         Self::default_from_db(db)
@@ -224,8 +221,25 @@ impl TestContext {
             txpool,
         }
     }
+}
 
-    pub fn producer(self) -> Producer {
+impl TestContext<FailingMockExecutor> {
+    pub fn failing() -> Self {
+        let txpool = MockTxPool::default();
+        let relayer = MockRelayer::default();
+        let config = Config::default();
+        Self {
+            config,
+            db: Default::default(),
+            relayer,
+            executor: Arc::new(FailingMockExecutor(Mutex::new(None))),
+            txpool,
+        }
+    }
+}
+
+impl<E> TestContext<E> {
+    pub fn producer(self) -> Producer<E> {
         Producer {
             config: self.config,
             db: Box::new(self.db),

@@ -33,6 +33,7 @@ use async_graphql::{
     Object,
     Union,
 };
+use fuel_block_producer::block_producer::Executor as ExecutorTrait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -44,10 +45,7 @@ use fuel_core_interfaces::{
         SealedBlockConsensus,
         Transactions,
     },
-    executor::{
-        ExecutionBlock,
-        Executor as ExecutorTrait,
-    },
+    executor::ExecutionBlock,
     model::{
         FuelApplicationHeader,
         FuelBlockConsensus,
@@ -424,7 +422,10 @@ impl BlockMutation {
                 vec![],
             );
 
-            executor.execute(ExecutionBlock::Production(block))?;
+            executor
+                .execute(ExecutionBlock::Production(block))?
+                .into_transaction()
+                .commit()?;
         }
 
         db.get_block_height()?

@@ -12,7 +12,10 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    executor::ExecutionResult,
+    executor::{
+        ExecutionResult,
+        UncommittedResult,
+    },
     model::{
         ArcPoolTx,
         BlockHeight,
@@ -78,12 +81,12 @@ impl MockBlockProducer {
 }
 
 #[async_trait::async_trait]
-impl BlockProducer for MockBlockProducer {
+impl BlockProducer<()> for MockBlockProducer {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult> {
+    ) -> anyhow::Result<UncommittedResult<()>> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<_> = select_transactions(includable_txs, max_gas)
@@ -105,10 +108,13 @@ impl BlockProducer for MockBlockProducer {
         }
         .generate(&[]);
 
-        Ok(ExecutionResult {
-            block,
-            skipped_transactions: vec![],
-        })
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+            },
+            (),
+        ))
     }
 
     async fn dry_run(

@@ -1,6 +1,9 @@
 use super::db::BlockProducerDatabase;
 use crate::{
-    block_producer::Relayer,
+    block_producer::{
+        Executor,
+        Relayer,
+    },
     ports::TxPool,
 };
 use anyhow::Result;
@@ -21,7 +24,7 @@ use fuel_core_interfaces::{
         Error as ExecutorError,
         ExecutionBlock,
         ExecutionResult,
-        Executor,
+        UncommittedResult,
     },
     model::{
         ArcPoolTx,
@@ -71,8 +74,11 @@ impl TxPool for MockTxPool {
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-impl Executor for MockExecutor {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
+impl Executor<()> for MockExecutor {
+    fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<()>, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -80,10 +86,13 @@ impl Executor for MockExecutor {
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(*block.header().height(), block.to_db_block());
-        Ok(ExecutionResult {
-            block,
-            skipped_transactions: vec![],
-        })
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+            },
+            (),
+        ))
     }
 
     fn dry_run(
@@ -97,8 +106,11 @@ impl Executor for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor for FailingMockExecutor {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
+impl Executor<()> for FailingMockExecutor {
+    fn execute(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<()>, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -108,10 +120,13 @@ impl Executor for FailingMockExecutor {
                 ExecutionBlock::Production(b) => b.generate(&[]),
                 ExecutionBlock::Validation(b) => b,
             };
-            Ok(ExecutionResult {
-                block,
-                skipped_transactions: vec![],
-            })
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    skipped_transactions: vec![],
+                },
+                (),
+            ))
         }
     }
 

@@ -27,9 +27,13 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    executor::ExecutionResult,
+    executor::{
+        ExecutionResult,
+        UncommittedResult,
+    },
     model::{
         BlockHeight,
+        BlockId,
         FuelBlock,
         FuelBlockConsensus,
         FuelBlockPoAConsensus,
@@ -43,6 +47,7 @@ use fuel_core_interfaces::{
 };
 use parking_lot::Mutex;
 use std::{
+    marker::PhantomData,
     ops::Deref,
     sync::Arc,
 };
@@ -60,14 +65,14 @@ use tracing::{
 };
 
 #[async_trait::async_trait]
-pub trait BlockProducer: Send + Sync {
+pub trait BlockProducer<DbTransaction>: Send + Sync {
     // TODO: Right now production and execution of the block is one step, but in the future,
     //  `produce_block` should only produce a block without affecting the blockchain state.
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult>;
+    ) -> anyhow::Result<UncommittedResult<DbTransaction>>;
 
     async fn dry_run(
         &self,
@@ -75,6 +80,17 @@ pub trait BlockProducer: Send + Sync {
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
     ) -> anyhow::Result<Vec<Receipt>>;
+}
+
+pub trait DatabaseTransaction {
+    // Returns error if already sealed
+    fn seal_block(
+        &mut self,
+        block_id: BlockId,
+        consensus: FuelBlockConsensus,
+    ) -> anyhow::Result<()>;
+
+    fn commit(self) -> anyhow::Result<()>;
 }
 
 pub struct RunningService {
@@ -95,7 +111,7 @@ impl Service {
         }
     }
 
-    pub async fn start<S, T, B>(
+    pub async fn start<S, T, B, DbTransaction>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
@@ -105,7 +121,8 @@ impl Service {
     ) where
         S: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
-        B: BlockProducer + 'static,
+        B: BlockProducer<DbTransaction> + 'static,
+        DbTransaction: DatabaseTransaction + Send + Sync + 'static,
     {
         let mut running = self.running.lock();
 
@@ -128,6 +145,7 @@ impl Service {
             import_block_events_tx,
             trigger: self.config.trigger,
             timer: DeadlineClock::new(),
+            marker: Default::default(),
         };
 
         *running = Some(RunningService {
@@ -149,11 +167,12 @@ impl Service {
     }
 }
 
-pub struct Task<S, T, B>
+pub struct Task<S, T, B, DbTransaction>
 where
     S: BlockDb + Send + Sync,
     T: TransactionPool,
-    B: BlockProducer,
+    B: BlockProducer<DbTransaction>,
+    DbTransaction: DatabaseTransaction + Send + Sync,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
@@ -170,15 +189,20 @@ where
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
+    marker: PhantomData<DbTransaction>,
 }
-impl<S, T, B> Task<S, T, B>
+
+impl<S, T, B, DbTransaction> Task<S, T, B, DbTransaction>
 where
     S: BlockDb + Send,
     T: TransactionPool,
-    B: BlockProducer,
+    B: BlockProducer<DbTransaction>,
+    DbTransaction: DatabaseTransaction + Send + Sync,
 {
     // Request the block producer to make a new block, and return it when ready
-    async fn signal_produce_block(&mut self) -> anyhow::Result<ExecutionResult> {
+    async fn signal_produce_block(
+        &mut self,
+    ) -> anyhow::Result<UncommittedResult<DbTransaction>> {
         let current_height = self
             .db
             .block_height()
@@ -197,14 +221,18 @@ where
         }
 
         // Ask the block producer to create the block
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-            ..
-        } = self.signal_produce_block().await?;
+        let (
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                ..
+            },
+            mut db_transaction,
+        ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        self.seal_block(&block)?;
+        self.seal_block(&block, &mut db_transaction)?;
+        db_transaction.commit()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -374,7 +402,11 @@ where
         }
     }
 
-    fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
+    fn seal_block(
+        &mut self,
+        block: &FuelBlock,
+        db_transaction: &mut DbTransaction,
+    ) -> anyhow::Result<()> {
         if let Some(key) = &self.signing_key {
             let block_hash = block.id();
             let message = block_hash.into_message();
@@ -384,7 +416,7 @@ where
 
             let poa_signature = Signature::sign(signing_key, &message);
             let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
-            self.db.seal_block(block_hash, seal)
+            db_transaction.seal_block(block_hash, seal)
         } else {
             Err(anyhow!("no PoA signing key configured"))
         }
@@ -452,6 +484,20 @@ mod test {
         }
     }
 
+    impl DatabaseTransaction for () {
+        fn seal_block(
+            &mut self,
+            block_id: BlockId,
+            consensus: FuelBlockConsensus,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn commit(self) -> anyhow::Result<()> {
+            todo!()
+        }
+    }
+
     mockall::mock! {
         Database {}
 
@@ -474,12 +520,12 @@ mod test {
         BlockProducer {}
 
         #[async_trait::async_trait]
-        impl BlockProducer for BlockProducer {
+        impl BlockProducer<()> for BlockProducer {
             async fn produce_and_execute_block(
                 &self,
                 _height: BlockHeight,
                 _max_gas: Word,
-            ) -> anyhow::Result<ExecutionResult>;
+            ) -> anyhow::Result<UncommittedResult<()>>;
 
             async fn dry_run(
                 &self,
@@ -522,14 +568,17 @@ mod test {
         block_producer
             .expect_produce_and_execute_block()
             .returning(move |_, _| {
-                Ok(ExecutionResult {
-                    block: Default::default(),
-                    skipped_transactions: mock_skipped_txs
-                        .clone()
-                        .into_iter()
-                        .map(|tx| (tx, Error::OutputAlreadyExists))
-                        .collect(),
-                })
+                Ok(UncommittedResult::new(
+                    ExecutionResult {
+                        block: Default::default(),
+                        skipped_transactions: mock_skipped_txs
+                            .clone()
+                            .into_iter()
+                            .map(|tx| (tx, Error::OutputAlreadyExists))
+                            .collect(),
+                    },
+                    (),
+                ))
             });
 
         let mut db = MockDatabase::default();
@@ -568,6 +617,7 @@ mod test {
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
             timer: DeadlineClock::new(),
+            marker: Default::default(),
         };
 
         assert!(task.produce_block().await.is_ok());
@@ -614,6 +664,7 @@ mod test {
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
             timer: DeadlineClock::new(),
+            marker: Default::default(),
         };
 
         // simulate some txpool events to see if any block production is erroneously triggered
@@ -671,6 +722,7 @@ mod test {
                 max_block_time: Duration::from_millis(1000),
             },
             timer: DeadlineClock::new(),
+            marker: Default::default(),
         };
 
         let jh = tokio::spawn(task.run());
