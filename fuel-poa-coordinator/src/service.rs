@@ -12,9 +12,12 @@ use anyhow::{
 };
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    block_producer::BlockProducer,
     common::{
-        fuel_tx::UniqueIdentifier,
+        fuel_tx::{
+            Receipt,
+            Transaction,
+            UniqueIdentifier,
+        },
         prelude::{
             Signature,
             Word,
@@ -56,6 +59,24 @@ use tracing::{
     warn,
 };
 
+#[async_trait::async_trait]
+pub trait BlockProducer: Send + Sync {
+    // TODO: Right now production and execution of the block is one step, but in the future,
+    //  `produce_block` should only produce a block without affecting the blockchain state.
+    async fn produce_and_execute_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> anyhow::Result<ExecutionResult>;
+
+    async fn dry_run(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> anyhow::Result<Vec<Receipt>>;
+}
+
 pub struct RunningService {
     join: JoinHandle<()>,
     stop: mpsc::Sender<()>,
@@ -74,16 +95,17 @@ impl Service {
         }
     }
 
-    pub async fn start<S, T>(
+    pub async fn start<S, T, B>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
-        block_producer: Arc<dyn BlockProducer>,
+        block_producer: B,
         db: S,
     ) where
         S: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
+        B: BlockProducer + 'static,
     {
         let mut running = self.running.lock();
 
@@ -127,16 +149,17 @@ impl Service {
     }
 }
 
-pub struct Task<S, T>
+pub struct Task<S, T, B>
 where
     S: BlockDb + Send + Sync,
     T: TransactionPool,
+    B: BlockProducer,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     db: S,
-    block_producer: Arc<dyn BlockProducer>,
+    block_producer: B,
     txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatus>,
     import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
@@ -148,10 +171,11 @@ where
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
 }
-impl<S, T> Task<S, T>
+impl<S, T, B> Task<S, T, B>
 where
     S: BlockDb + Send,
     T: TransactionPool,
+    B: BlockProducer,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(&mut self) -> anyhow::Result<ExecutionResult> {
@@ -176,6 +200,7 @@ where
         let ExecutionResult {
             block,
             skipped_transactions,
+            ..
         } = self.signal_produce_block().await?;
 
         // sign the block and seal it
@@ -536,7 +561,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,
@@ -582,7 +607,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,
@@ -635,7 +660,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,

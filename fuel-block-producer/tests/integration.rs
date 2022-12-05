@@ -10,7 +10,6 @@ use fuel_block_producer::{
 };
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    block_producer::BlockProducer as Trait,
     common::{
         fuel_asm::Opcode,
         fuel_crypto::{

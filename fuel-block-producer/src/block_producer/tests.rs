@@ -1,4 +1,5 @@
 use crate::{
+    block_producer::Error,
     mocks::{
         FailingMockExecutor,
         MockDb,
@@ -10,10 +11,6 @@ use crate::{
     Producer,
 };
 use fuel_core_interfaces::{
-    block_producer::{
-        BlockProducer,
-        Error,
-    },
     executor::Executor,
     model::{
         FuelApplicationHeader,

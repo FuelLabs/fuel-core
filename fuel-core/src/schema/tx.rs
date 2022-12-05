@@ -31,7 +31,6 @@ use async_graphql::{
     Subscription,
 };
 use fuel_core_interfaces::{
-    block_producer::BlockProducer,
     common::{
         fuel_storage::StorageAsRef,
         fuel_tx::{
@@ -335,7 +334,7 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let block_producer = ctx.data_unchecked::<Arc<dyn BlockProducer>>();
+        let block_producer = ctx.data_unchecked::<Arc<fuel_block_producer::Producer>>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();

@@ -9,15 +9,6 @@ use anyhow::{
     Result,
 };
 use fuel_core_interfaces::{
-    block_producer::{
-        BlockProducer as Trait,
-        Error::{
-            GenesisBlock,
-            InvalidDaFinalizationState,
-            MissingBlock,
-        },
-        Relayer,
-    },
     common::{
         crypto::ephemeral_merkle_root,
         fuel_tx::{
@@ -43,6 +34,7 @@ use fuel_core_interfaces::{
     },
 };
 use std::sync::Arc;
+use thiserror::Error;
 use tokio::{
     sync::{
         Mutex,
@@ -54,6 +46,27 @@ use tracing::debug;
 
 #[cfg(test)]
 mod tests;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error(
+        "0 is an invalid block height for production. It is reserved for genesis data."
+    )]
+    GenesisBlock,
+    #[error("Previous block height {0} doesn't exist")]
+    MissingBlock(BlockHeight),
+    #[error("Best finalized da_height {best} is behind previous block da_height {previous_block}")]
+    InvalidDaFinalizationState {
+        best: DaBlockHeight,
+        previous_block: DaBlockHeight,
+    },
+}
+
+#[async_trait::async_trait]
+pub trait Relayer: Sync + Send {
+    /// Get the best finalized height from the DA layer
+    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
+}
 
 pub struct Producer {
     pub config: Config,
@@ -67,10 +80,9 @@ pub struct Producer {
     pub dry_run_semaphore: Semaphore,
 }
 
-#[async_trait::async_trait]
-impl Trait for Producer {
+impl Producer {
     /// Produces and execute block for the specified height
-    async fn produce_and_execute_block(
+    pub async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
@@ -111,10 +123,10 @@ impl Trait for Producer {
         Ok(result)
     }
 
-    // simulate a transaction without altering any state. Does not aquire the production lock
-    // since it is basically a "read only" operation and shouldn't get in the way of normal
-    // production.
-    async fn dry_run(
+    /// Simulate a transaction without altering any state. Does not aquire the production lock
+    /// since it is basically a "read only" operation and shouldn't get in the way of normal
+    /// production.
+    pub async fn dry_run(
         &self,
         transaction: Transaction,
         height: Option<BlockHeight>,
@@ -184,7 +196,7 @@ impl Producer {
         if best_height < previous_da_height {
             // If this happens, it could mean a block was erroneously imported
             // without waiting for our relayer's da_height to catch up to imported da_height.
-            return Err(InvalidDaFinalizationState {
+            return Err(Error::InvalidDaFinalizationState {
                 best: best_height,
                 previous_block: previous_da_height,
             }
@@ -196,7 +208,7 @@ impl Producer {
     fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
         // block 0 is reserved for genesis
         if height == 0u32.into() {
-            Err(GenesisBlock.into())
+            Err(Error::GenesisBlock.into())
         }
         // if this is the first block, fill in base metadata from genesis
         else if height == 1u32.into() {
@@ -211,7 +223,7 @@ impl Producer {
             let previous_block = self
                 .db
                 .get_block(prev_height)?
-                .ok_or(MissingBlock(prev_height))?;
+                .ok_or(Error::MissingBlock(prev_height))?;
             // TODO: this should use a proper BMT MMR
             let hash = previous_block.id();
             let prev_root = ephemeral_merkle_root(

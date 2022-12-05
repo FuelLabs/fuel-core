@@ -10,17 +10,20 @@ use anyhow::Result;
 use fuel_core_interfaces::p2p::P2pDb;
 use fuel_core_interfaces::{
     self,
-    block_producer::{
-        BlockProducer,
-        Relayer as BlockProducerRelayer,
+    common::{
+        fuel_tx::Receipt,
+        prelude::{
+            Transaction,
+            Word,
+        },
     },
-    common::fuel_tx::Receipt,
     executor::{
         Error,
         ExecutionBlock,
         ExecutionResult,
         Executor as ExecutorTrait,
     },
+    model::BlockHeight,
     relayer::RelayerDb,
     txpool::{
         Sender,
@@ -45,7 +48,7 @@ use tokio::{
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
     pub block_importer: Arc<fuel_block_importer::Service>,
-    pub block_producer: Arc<dyn BlockProducer>,
+    pub block_producer: Arc<fuel_block_producer::Producer>,
     pub coordinator: Arc<CoordinatorService>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
@@ -202,7 +205,9 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
                 txpool_builder.tx_status_subscribe(),
                 txpool_builder.sender().clone(),
                 block_import_tx,
-                block_producer.clone(),
+                PoACoordinatorAdapter {
+                    block_producer: block_producer.clone(),
+                },
                 database.clone(),
             )
             .await;
@@ -210,7 +215,6 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
         CoordinatorService::Bft(bft) => {
             bft.start(
                 p2p_request_event_sender.clone(),
-                block_producer.clone(),
                 block_importer.sender().clone(),
                 block_importer.subscribe(),
             )
@@ -283,7 +287,7 @@ struct MaybeRelayerAdapter {
 }
 
 #[async_trait::async_trait]
-impl BlockProducerRelayer for MaybeRelayerAdapter {
+impl fuel_block_producer::block_producer::Relayer for MaybeRelayerAdapter {
     async fn get_best_finalized_da_height(
         &self,
     ) -> Result<fuel_core_interfaces::model::DaBlockHeight> {
@@ -299,5 +303,33 @@ impl BlockProducerRelayer for MaybeRelayerAdapter {
             .get_finalized_da_height()
             .await
             .unwrap_or_default())
+    }
+}
+
+struct PoACoordinatorAdapter {
+    block_producer: Arc<fuel_block_producer::Producer>,
+}
+
+#[async_trait::async_trait]
+impl fuel_poa_coordinator::service::BlockProducer for PoACoordinatorAdapter {
+    async fn produce_and_execute_block(
+        &self,
+        height: BlockHeight,
+        max_gas: Word,
+    ) -> anyhow::Result<ExecutionResult> {
+        self.block_producer
+            .produce_and_execute_block(height, max_gas)
+            .await
+    }
+
+    async fn dry_run(
+        &self,
+        transaction: Transaction,
+        height: Option<BlockHeight>,
+        utxo_validation: Option<bool>,
+    ) -> anyhow::Result<Vec<Receipt>> {
+        self.block_producer
+            .dry_run(transaction, height, utxo_validation)
+            .await
     }
 }
