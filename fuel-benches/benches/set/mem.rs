@@ -1,3 +1,5 @@
+use std::iter::successors;
+
 use super::run_group_ref;
 
 use criterion::{
@@ -55,6 +57,13 @@ pub fn run(c: &mut Criterion) {
     }
     mem_cfei.finish();
 
+    let mut linear = vec![1, 10, 100];
+    let mut l = successors(Some(100_000.0f64), |n| Some(n / 1.5))
+        .take(5)
+        .map(|f| f as u32)
+        .collect::<Vec<_>>();
+    l.sort_unstable();
+    linear.extend(l);
     let mut mem_mcl = c.benchmark_group("mcl");
     for i in &linear {
         mem_mcl.throughput(Throughput::Bytes(*i as u64));

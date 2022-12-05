@@ -401,3 +401,20 @@ impl TryFrom<VmBench> for VmBenchPrepared {
         })
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::iter::successors;
+
+    #[test]
+    fn test_numbers() {
+        let iter = successors(Some(10.0f64), |n| Some(n * 10.0)).take(5);
+        eprintln!("{:?}", iter.collect::<Vec<_>>());
+        let iter = successors(Some(10.0f64), |n| Some(n.powf(1.5))).take(5);
+        eprintln!("{:?}", iter.collect::<Vec<_>>());
+        let iter = successors(Some(100_000.0f64), |n| Some(n / 1.5)).take(5);
+        eprintln!("{:?}", iter.collect::<Vec<_>>());
+        let iter = successors(Some(100_000u64), |n| n.checked_div(2)).take(5);
+        eprintln!("{:?}", iter.collect::<Vec<_>>());
+    }
+}

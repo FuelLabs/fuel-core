@@ -130,7 +130,7 @@ fn main() {
         ids: HashMap::new(),
         throughput: HashMap::new(),
         groups: HashMap::new(),
-        baseline: baseline.unwrap_or_else(|| "alu/noop".to_string()),
+        baseline: baseline.unwrap_or_else(|| "noop/noop".to_string()),
     };
     while let Err(TryRecvError::Empty) = rx.try_recv() {
         let _ = reader.read_line(&mut line).unwrap();
@@ -180,6 +180,9 @@ fn extract_state(line: &str, state: &mut State, debug: bool) {
             }
             state.ids.insert(id.clone(), mean);
             if let Some(throughput) = throughput {
+                if debug {
+                    eprintln!("throughput: {}", throughput);
+                }
                 state.throughput.insert(id, throughput);
             }
         }
@@ -492,11 +495,11 @@ mod tests {
     #[test]
     fn handles_groups() {
         let input = r#"
-        {"reason":"group-complete","group_name":"mem/mcli","benchmarks":["mem/mcli/10000","mem/mcli/100000"],"report_directory":""}
-        {"reason":"benchmark-complete","id":"mem/mcp/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
-        {"reason":"benchmark-complete","id":"mem/mcp/100000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
-        {"reason":"group-complete","group_name":"mem/mcp","benchmarks":["mem/mcp/10000","mem/mcp/100000"],"report_directory":""}
-        {"reason":"benchmark-complete","id":"mem/mcpi/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        {"reason":"group-complete","group_name":"mcli","benchmarks":["mcli/10000","mcli/100000"],"report_directory":""}
+        {"reason":"benchmark-complete","id":"mcp/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        {"reason":"benchmark-complete","id":"mcp/100000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
+        {"reason":"group-complete","group_name":"mcp","benchmarks":["mcp/10000","mcp/100000"],"report_directory":""}
+        {"reason":"benchmark-complete","id":"mcpi/10000","report_directory":"","iteration_count":[],"measured_values":[],"unit":"ns","throughput":[{"per_iteration":10000,"unit":"bytes"}], "mean":{"estimate":141.6387085050968,"lower_bound":141.05228097712418,"upper_bound":142.32943553585415,"unit":"ns"},"median":{"estimate":140.51177523784355,"lower_bound":140.39754464285716,"upper_bound":140.73739964179842,"unit":"ns"}}
         "#;
 
         let mut state = State {
@@ -512,19 +515,38 @@ mod tests {
 
         assert_eq!(state.groups.len(), 2);
         assert_eq!(
-            state.groups.get("mem/mcli").unwrap(),
-            &["mem/mcli/10000", "mem/mcli/100000"]
+            state.groups.get("mcli").unwrap(),
+            &["mcli/10000", "mcli/100000"]
         );
         assert_eq!(
-            state.groups.get("mem/mcp").unwrap(),
-            &["mem/mcp/10000", "mem/mcp/100000"]
+            state.groups.get("mcp").unwrap(),
+            &["mcp/10000", "mcp/100000"]
         );
         assert_eq!(state.ids.len(), 3);
-        assert!(state.ids.contains_key("mem/mcp/10000"));
-        assert!(state.ids.contains_key("mem/mcp/100000"));
-        assert!(state.ids.contains_key("mem/mcpi/10000"));
+        assert!(state.ids.contains_key("mcp/10000"));
+        assert!(state.ids.contains_key("mcp/100000"));
+        assert!(state.ids.contains_key("mcpi/10000"));
     }
 
+    #[test]
+    fn to_yaml() {
+        let input =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/test.json"))
+                .unwrap();
+
+        let mut state = State {
+            all: true,
+            baseline: "noop/noop".into(),
+            ids: Default::default(),
+            throughput: Default::default(),
+            groups: Default::default(),
+        };
+        for line in input.lines() {
+            extract_state(line, &mut state, false);
+        }
+
+        eprintln!("{}", serde_yaml::to_string(&state.to_yaml()).unwrap());
+    }
     #[test]
     fn serialize_gas_costs() {
         let input = r#"
