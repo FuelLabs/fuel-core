@@ -1,4 +1,3 @@
-use criterion::black_box;
 use fuel_core::database::vm_database::VmDatabase;
 pub use fuel_core::database::Database;
 use fuel_core_interfaces::common::fuel_tx::{
@@ -263,28 +262,6 @@ impl VmBench {
     }
 }
 
-impl VmBenchPrepared {
-    pub fn run(self) -> io::Result<Interpreter<VmDatabase, Script>> {
-        let Self {
-            mut vm,
-            instruction,
-            cleanup_script: _,
-        } = self;
-
-        match OpcodeRepr::from_u8(instruction.op()) {
-            OpcodeRepr::CALL => {
-                let (_, ra, rb, rc, rd, _imm) = instruction.into_inner();
-                vm.prepare_call(ra, rb, rc, rd)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-            }
-            _ => {
-                black_box(vm.instruction(black_box(instruction))?);
-            }
-        }
-        Ok(vm)
-    }
-}
-
 impl TryFrom<VmBench> for VmBenchPrepared {
     type Error = io::Error;
 
@@ -404,7 +381,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
         let cleanup_script = cleanup_script.into_iter().map(Instruction::from).collect();
 
-        let mut txtor = Transactor::new(db, params);
+        let mut txtor = Transactor::new(db, params, GasCosts::free());
 
         txtor.transact(tx);
 

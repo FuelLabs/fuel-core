@@ -4,6 +4,8 @@ use fuel_core_interfaces::common::{
         Address,
         AssetId,
     },
+    prelude::GasCosts,
+    prelude::GasCostsValues,
 };
 use itertools::Itertools;
 use rand::{
@@ -14,7 +16,11 @@ use serde::{
     Deserialize,
     Serialize,
 };
-use serde_with::skip_serializing_none;
+use serde_with::{
+    serde_as,
+    skip_serializing_none,
+    FromInto,
+};
 
 use std::{
     io::ErrorKind,
@@ -30,6 +36,7 @@ use super::{
 pub const LOCAL_TESTNET: &str = "local_testnet";
 pub const TESTNET_INITIAL_BALANCE: u64 = 10_000_000;
 
+#[serde_as]
 #[skip_serializing_none]
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 pub struct ChainConfig {
@@ -39,6 +46,9 @@ pub struct ChainConfig {
     #[serde(default)]
     pub initial_state: Option<StateConfig>,
     pub transaction_parameters: ConsensusParameters,
+    #[serde(default)]
+    #[serde_as(as = "FromInto<GasCostsValues>")]
+    pub gas_costs: GasCosts,
 }
 
 impl Default for ChainConfig {
@@ -51,6 +61,7 @@ impl Default for ChainConfig {
             block_gas_limit: ConsensusParameters::DEFAULT.max_gas_per_tx * 10, /* TODO: Pick a sensible default */
             transaction_parameters: ConsensusParameters::DEFAULT,
             initial_state: None,
+            gas_costs: GasCosts::default(),
         }
     }
 }

@@ -3,6 +3,7 @@
 resolver = "2"
 members = [
   "fuel-benches",
+  "fuel-benches-outputs",
   "fuel-block-executor",
   "fuel-block-importer",
   "fuel-block-producer",
@@ -28,7 +29,6 @@ exclude = [
 [profile.release]
 codegen-units = 1
 lto = "fat"
-panic = "abort"
 
 [patch.crates-io]
-fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "freesig/vm-benches" }
+fuel-vm = { git = "https://github.com/FuelLabs/fuel-vm", branch = "freesig/gas-cost-input" }

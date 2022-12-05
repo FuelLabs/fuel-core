@@ -7,20 +7,20 @@ use criterion::{
 use fuel_core_benches::*;
 
 pub fn run(c: &mut Criterion) {
-    let mut mem = c.benchmark_group("mem");
-
     run_group_ref(
-        &mut mem,
-        "aloc",
-        VmBench::new(Opcode::ALOC(0x10)).with_prepare_script(vec![Opcode::MOVI(0x10, 1)]),
+        &mut c.benchmark_group("lb"),
+        "lb",
+        VmBench::new(Opcode::LB(0x10, REG_ONE, 10)),
     );
 
-    run_group_ref(&mut mem, "lb", VmBench::new(Opcode::LB(0x10, REG_ONE, 10)));
-
-    run_group_ref(&mut mem, "lw", VmBench::new(Opcode::LW(0x10, REG_ONE, 10)));
+    run_group_ref(
+        &mut c.benchmark_group("lw"),
+        "lw",
+        VmBench::new(Opcode::LW(0x10, REG_ONE, 10)),
+    );
 
     run_group_ref(
-        &mut mem,
+        &mut c.benchmark_group("sb"),
         "sb",
         VmBench::new(Opcode::SB(0x10, 0x11, 0)).with_prepare_script(vec![
             Opcode::ALOC(REG_ONE),
@@ -30,7 +30,7 @@ pub fn run(c: &mut Criterion) {
     );
 
     run_group_ref(
-        &mut mem,
+        &mut c.benchmark_group("sw"),
         "sw",
         VmBench::new(Opcode::SW(0x10, 0x11, 0)).with_prepare_script(vec![
             Opcode::MOVI(0x10, 8),
@@ -40,13 +40,11 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
-    mem.finish();
-
     let linear = vec![1, 10, 100, 1_000, 10_000, 100_000];
     // let linear = vec![1, 10, 100, 1_000, 10_000];
     // let linear = vec![1, 10, 25, 50, 75, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1_000];
 
-    let mut mem_cfei = c.benchmark_group("mem/cfei");
+    let mut mem_cfei = c.benchmark_group("cfei");
     for i in &linear {
         mem_cfei.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
@@ -57,7 +55,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_cfei.finish();
 
-    let mut mem_mcl = c.benchmark_group("mem/mcl");
+    let mut mem_mcl = c.benchmark_group("mcl");
     for i in &linear {
         mem_mcl.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
@@ -72,7 +70,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcl.finish();
 
-    let mut mem_mcli = c.benchmark_group("mem/mcli");
+    let mut mem_mcli = c.benchmark_group("mcli");
     for i in &linear {
         mem_mcli.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
@@ -87,7 +85,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcli.finish();
 
-    let mut mem_mcp = c.benchmark_group("mem/mcp");
+    let mut mem_mcp = c.benchmark_group("mcp");
     for i in &linear {
         mem_mcp.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
@@ -102,7 +100,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
-    let mut mem_mcpi = c.benchmark_group("mem/mcpi");
+    let mut mem_mcpi = c.benchmark_group("mcpi");
     for i in &linear {
         mem_mcpi.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(
@@ -118,7 +116,7 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcpi.finish();
 
-    let mut mem_meq = c.benchmark_group("mem/meq");
+    let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {
         mem_meq.throughput(Throughput::Bytes(*i as u64));
         run_group_ref(

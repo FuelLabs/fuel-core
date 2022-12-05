@@ -9,9 +9,10 @@ publish = false
 ctrlc = "3.2.3"
 clap = { version = "4.0.17", features = ["derive"] }
 fuel-core = { path = "../fuel-core", default-features = false, features = ["rocksdb"] }
-fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers", "ignore_gas"] }
+fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers", "bench-helpers"] }
 rand = "0.8"
 criterion = { version = "0.4", features = ["html_reports"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.86"
 serde_yaml = "0.9.13"
 

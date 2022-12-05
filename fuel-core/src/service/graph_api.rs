@@ -70,6 +70,7 @@ pub async fn start_server(
 ) -> Result<(SocketAddr, JoinHandle<Result<()>>)> {
     let network_addr = config.addr;
     let params = config.chain_conf.transaction_parameters;
+    let gas_costs = config.chain_conf.gas_costs.clone();
     let schema = build_schema()
         .data(config)
         .data(db)
@@ -78,7 +79,7 @@ pub async fn start_server(
         .data(modules.block_producer.clone())
         .data(modules.sync.clone())
         .data(modules.coordinator.clone());
-    let schema = dap::init(schema, params).extension(Tracing).finish();
+    let schema = dap::init(schema, params, gas_costs).extension(Tracing).finish();
 
     let router = Router::new()
         .route("/playground", get(graphql_playground))

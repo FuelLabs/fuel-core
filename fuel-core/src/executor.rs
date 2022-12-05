@@ -568,6 +568,7 @@ impl Executor {
         let mut vm = Interpreter::with_storage(
             vm_db,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         );
         let vm_result: StateTransition<_> = vm
             .transact(checked_tx.clone())
@@ -745,6 +746,7 @@ impl Executor {
         if !Interpreter::<PredicateStorage>::check_predicates(
             tx,
             self.config.chain_conf.transaction_parameters,
+            self.config.chain_conf.gas_costs.clone(),
         ) {
             return Err(Error::TransactionValidity(
                 TransactionValidityError::InvalidPredicate(id),

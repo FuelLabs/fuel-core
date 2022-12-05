@@ -25,9 +25,9 @@ tokio = { version = "1.21", features = ["full"] }
 zeroize = "1.5"
 
 [features]
+bench-helpers = ["fuel-vm/bench-helpers"]
 test-helpers = [
     "fuel-vm/random", "fuel-vm/test-helpers",
 ]
 serde = ["dep:serde", "fuel-vm/serde"]
 debug = ["fuel-vm/debug"]
-ignore_gas = ["fuel-vm/ignore_gas"]

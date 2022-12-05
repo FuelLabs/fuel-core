@@ -2344,6 +2344,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuel-benches-outputs"
+version = "0.0.0"
+dependencies = [
+ "fuel-vm",
+]
+
+[[package]]
 name = "fuel-block-executor"
 version = "0.14.1"
 dependencies = [
@@ -2461,6 +2468,7 @@ dependencies = [
  "fuel-core",
  "fuel-core-interfaces",
  "rand 0.8.5",
+ "serde",
  "serde_json",
  "serde_yaml",
 ]
@@ -2732,7 +2740,7 @@ dependencies = [
 [[package]]
 name = "fuel-vm"
 version = "0.22.5"
-source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/vm-benches#ea770438acb425651435306f877d6588e481523e"
+source = "git+https://github.com/FuelLabs/fuel-vm?branch=freesig/gas-cost-input#fc031db4c40f8f3ab19591d1f0d17849001decd8"
 dependencies = [
  "anyhow",
  "fuel-asm",
@@ -6178,9 +6186,9 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "syn"
-version = "1.0.104"
+version = "1.0.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ae548ec36cf198c0ef7710d3c230987c2d6d7bd98ad6edc0274462724c585ce"
+checksum = "60b9b43d45702de4c839cb9b51d9f529c5dd26a4aff255b42b1ebc03e88ee908"
 dependencies = [
  "proc-macro2",
  "quote",

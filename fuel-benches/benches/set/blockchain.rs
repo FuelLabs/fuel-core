@@ -19,7 +19,7 @@ pub fn run(c: &mut Criterion) {
     let asset: AssetId = rng.gen();
     let contract: ContractId = rng.gen();
 
-    let mut bal = c.benchmark_group("blockchain/bal");
+    let mut bal = c.benchmark_group("bal");
 
     for i in cases.clone() {
         bal.throughput(Throughput::Bytes(i));
@@ -54,7 +54,7 @@ pub fn run(c: &mut Criterion) {
 
     bal.finish();
 
-    let mut sww = c.benchmark_group("blockchain/sww");
+    let mut sww = c.benchmark_group("sww");
     for i in cases.clone() {
         sww.throughput(Throughput::Bytes(i));
         run_group_ref(
@@ -77,7 +77,7 @@ pub fn run(c: &mut Criterion) {
     }
     sww.finish();
 
-    let mut call = c.benchmark_group("blockchain/call");
+    let mut call = c.benchmark_group("call");
     let cases = vec![1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000];
 
     for i in cases {
@@ -118,12 +118,14 @@ pub fn run(c: &mut Criterion) {
 
     call.finish();
 
-    let mut group = c.benchmark_group("blockchain/bal");
-
-    run_group_ref(&mut group, "bhei", VmBench::new(Opcode::BHEI(0x10)));
+    run_group_ref(
+        &mut c.benchmark_group("bhei"),
+        "bhei",
+        VmBench::new(Opcode::BHEI(0x10)),
+    );
 
     run_group_ref(
-        &mut group,
+        &mut c.benchmark_group("bhsh"),
         "bhsh",
         VmBench::new(Opcode::BHSH(0x10, REG_ZERO)).with_prepare_script(vec![
             Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
@@ -131,6 +133,4 @@ pub fn run(c: &mut Criterion) {
             Opcode::ADDI(0x10, REG_HP, 1),
         ]),
     );
-
-    group.finish();
 }
