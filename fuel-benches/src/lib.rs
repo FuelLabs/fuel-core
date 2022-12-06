@@ -64,6 +64,7 @@ pub struct VmBench {
     pub maturity: Word,
     pub height: Word,
     pub prepare_script: Vec<Opcode>,
+    pub post_call: Vec<Opcode>,
     pub cleanup_script: Vec<Opcode>,
     pub data: Vec<u8>,
     pub inputs: Vec<Input>,
@@ -99,6 +100,7 @@ impl VmBench {
             maturity: 0,
             height: 0,
             prepare_script: vec![],
+            post_call: vec![],
             cleanup_script: vec![],
             data: vec![],
             inputs: vec![],
@@ -209,6 +211,11 @@ impl VmBench {
         self
     }
 
+    pub fn with_post_call(mut self, post_call: Vec<Opcode>) -> Self {
+        self.post_call = post_call;
+        self
+    }
+
     pub fn with_cleanup(mut self, cleanup_script: Vec<Opcode>) -> Self {
         self.cleanup_script = cleanup_script;
         self
@@ -273,6 +280,7 @@ impl TryFrom<VmBench> for VmBenchPrepared {
             maturity,
             height,
             prepare_script,
+            post_call,
             cleanup_script,
             data,
             inputs,
@@ -392,6 +400,10 @@ impl TryFrom<VmBench> for VmBenchPrepared {
 
             vm.prepare_call(ra, rb, rc, rd)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            for op in post_call {
+                let instruction = Instruction::from(op);
+                vm.instruction(instruction).unwrap();
+            }
         }
 
         Ok(Self {

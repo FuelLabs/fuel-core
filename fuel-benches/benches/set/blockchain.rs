@@ -71,22 +71,24 @@ pub fn run(c: &mut Criterion) {
         let mut key = Bytes32::zeroed();
 
         key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
-        let data = key.iter().copied().collect();
+        let data = key.iter().copied().collect::<Vec<_>>();
 
-        let prepare_script = vec![Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData)];
-        run_group_ref(
-            &mut scwq,
-            "scwq",
-            VmBench::contract(rng, Opcode::SCWQ(0x10, 0x29, REG_ONE))
-                .expect("failed to prepare contract")
-                .with_data(data)
-                .with_prepare_script(prepare_script)
-                .with_prepare_db(move |mut db| {
-                    db.merkle_contract_state_insert(&contract, &key, &key)?;
+        let post_call = vec![
+            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            Opcode::ADDI(0x11, 0x10, ContractId::LEN as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+        ];
+        let mut bench = VmBench::contract(rng, Opcode::SCWQ(0x11, 0x29, REG_ONE))
+            .expect("failed to prepare contract")
+            .with_post_call(post_call)
+            .with_prepare_db(move |mut db| {
+                db.merkle_contract_state_insert(&contract, &key, &key)?;
 
-                    Ok(db)
-                }),
-        );
+                Ok(db)
+            });
+        bench.data.extend(data);
+        run_group_ref(&mut scwq, "scwq", bench);
     }
 
     scwq.finish();
@@ -131,6 +133,49 @@ pub fn run(c: &mut Criterion) {
 
     call.finish();
 
+    // FIXME: Currently unable to measure this as it has no inverse and the memory overflows.
+    let mut ldc = c.benchmark_group("ldc");
+
+    for i in vec![0] {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let code = ContractCode::from(code);
+        let id = code.id;
+
+        let data = id
+            .iter()
+            .copied()
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain((0 as Word).to_be_bytes().iter().copied())
+            .chain(AssetId::default().iter().copied())
+            .collect();
+
+        let prepare_script = vec![
+            Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData),
+            Opcode::ADDI(0x11, 0x10, ContractId::LEN as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::ADDI(0x11, 0x11, WORD_SIZE as Immediate12),
+            Opcode::MOVI(0x12, 100_000),
+            Opcode::MOVI(0x13, i as Immediate18),
+        ];
+
+        ldc.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut ldc,
+            format!("{}", i),
+            VmBench::new(Opcode::LDC(0x10, REG_ZERO, 0x13))
+                .with_contract_code(code)
+                .with_data(data)
+                .with_prepare_script(prepare_script)
+                .with_cleanup(vec![Opcode::RET(REG_ONE)]),
+        );
+    }
+
+    ldc.finish();
+
     let mut csiz = c.benchmark_group("csiz");
 
     for i in linear {
@@ -169,6 +214,30 @@ pub fn run(c: &mut Criterion) {
         &mut c.benchmark_group("bhsh"),
         "bhsh",
         VmBench::new(Opcode::BHSH(0x10, REG_ZERO)).with_prepare_script(vec![
+            Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
+            Opcode::ALOC(0x10),
+            Opcode::ADDI(0x10, REG_HP, 1),
+        ]),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("mint"),
+        "mint",
+        VmBench::contract(rng, Opcode::MINT(REG_ZERO))
+            .expect("failed to prepare contract"),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("burn"),
+        "burn",
+        VmBench::contract(rng, Opcode::MINT(REG_ZERO))
+            .expect("failed to prepare contract"),
+    );
+
+    run_group_ref(
+        &mut c.benchmark_group("cb"),
+        "cb",
+        VmBench::new(Opcode::CB(0x10)).with_prepare_script(vec![
             Opcode::MOVI(0x10, Bytes32::LEN as Immediate18),
             Opcode::ALOC(0x10),
             Opcode::ADDI(0x10, REG_HP, 1),

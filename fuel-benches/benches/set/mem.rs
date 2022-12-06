@@ -101,21 +101,21 @@ pub fn run(c: &mut Criterion) {
     }
     mem_mcp.finish();
 
-    // let mut mem_mcpi = c.benchmark_group("mcpi");
-    // for i in &linear {
-    //     mem_mcpi.throughput(Throughput::Bytes(*i as u64));
-    //     run_group_ref(
-    //         &mut mem_mcpi,
-    //         format!("{}", i),
-    //         VmBench::new(Opcode::MCPI(0x10, REG_ZERO, *i as Immediate12))
-    //             .with_prepare_script(vec![
-    //                 Opcode::MOVI(0x11, *i),
-    //                 Opcode::ALOC(0x11),
-    //                 Opcode::ADDI(0x10, REG_HP, 1),
-    //             ]),
-    //     );
-    // }
-    // mem_mcpi.finish();
+    let mut mem_mcpi = c.benchmark_group("mcpi");
+    for i in &[1, 10, 100, 1_000, 4_000] {
+        mem_mcpi.throughput(Throughput::Bytes(*i as u64));
+        run_group_ref(
+            &mut mem_mcpi,
+            format!("{}", i),
+            VmBench::new(Opcode::MCPI(0x10, REG_ZERO, *i as Immediate12))
+                .with_prepare_script(vec![
+                    Opcode::MOVI(0x11, *i),
+                    Opcode::ALOC(0x11),
+                    Opcode::ADDI(0x10, REG_HP, 1),
+                ]),
+        );
+    }
+    mem_mcpi.finish();
 
     let mut mem_meq = c.benchmark_group("meq");
     for i in &linear {

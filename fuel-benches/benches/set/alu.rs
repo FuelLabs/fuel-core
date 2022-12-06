@@ -84,6 +84,16 @@ pub fn run(c: &mut Criterion) {
         ]),
     );
 
+    {
+        let data = vec![0u8; 32];
+        run_group_ref(
+            &mut c.benchmark_group("gtf"),
+            "gtf",
+            VmBench::new(Opcode::gtf(0x10, REG_ZERO, GTFArgs::ScriptData))
+                .with_data(data),
+        );
+    }
+
     run_group_ref(
         &mut c.benchmark_group("lt"),
         "lt",

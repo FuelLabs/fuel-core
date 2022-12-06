@@ -49,7 +49,15 @@ where
                         }
                     }
                 }
-                if matches!(code, OpcodeRepr::CALL | OpcodeRepr::RET) {
+                if matches!(
+                    code,
+                    OpcodeRepr::CALL
+                        | OpcodeRepr::RET
+                        | OpcodeRepr::LDC
+                        | OpcodeRepr::RVRT
+                        | OpcodeRepr::LOG
+                        | OpcodeRepr::LOGD
+                ) {
                     vm.clear_receipts();
                 }
             }
