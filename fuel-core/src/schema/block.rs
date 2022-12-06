@@ -47,6 +47,7 @@ use fuel_core_interfaces::{
     },
     executor::{
         ExecutionBlock,
+        ExecutionResult,
         Executor as ExecutorTrait,
     },
     model::{
@@ -60,6 +61,7 @@ use fuel_core_interfaces::{
     },
     not_found,
 };
+use fuel_poa_coordinator::service::seal_block;
 use itertools::Itertools;
 use std::{
     borrow::Cow,
@@ -397,18 +399,18 @@ impl BlockMutation {
         time: Option<TimeParameters>,
     ) -> async_graphql::Result<U64> {
         let db = ctx.data_unchecked::<Database>();
-        let cfg = ctx.data_unchecked::<Config>().clone();
+        let config = ctx.data_unchecked::<Config>().clone();
 
-        if !cfg.manual_blocks_enabled {
+        if !config.manual_blocks_enabled {
             return Err(
                 anyhow!("Manual Blocks must be enabled to use this endpoint").into(),
             )
         }
         // todo!("trigger block production manually");
 
-        let executor = Executor {
+        let mut executor = Executor {
             database: db.clone(),
-            config: cfg,
+            config: config.clone(),
         };
 
         let block_time = get_time_closure(db, time, blocks_to_produce.0)?;
@@ -434,7 +436,9 @@ impl BlockMutation {
                 vec![],
             );
 
-            executor.execute(ExecutionBlock::Production(block))?;
+            let ExecutionResult { block, .. } =
+                executor.execute(ExecutionBlock::Production(block))?;
+            seal_block(&config.consensus_key, &block, &mut executor.database)?;
         }
 
         db.get_block_height()?

@@ -135,6 +135,35 @@ async fn produce_block() {
 }
 
 #[tokio::test]
+async fn produce_block_manually() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db, config.clone())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let new_height = client.produce_blocks(1, None).await.unwrap();
+
+    assert_eq!(1, new_height);
+    let block = client.block_by_height(1).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 1);
+    let actual_pub_key = block.block_producer().unwrap();
+    let expected_pub_key = config
+        .consensus_key
+        .unwrap()
+        .expose_secret()
+        .deref()
+        .public_key();
+    assert_eq!(actual_pub_key, expected_pub_key);
+}
+
+#[tokio::test]
 async fn produce_block_negative() {
     let db = Database::default();
 
