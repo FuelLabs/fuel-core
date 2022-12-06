@@ -347,6 +347,11 @@ impl State {
             .unwrap()
             .keys()
             .map(|k| k.as_str().unwrap())
+            .map(|k| match k {
+                "mod_op" => "mod",
+                "move_op" => "move",
+                k => k,
+            })
             .collect::<HashSet<_>>();
 
         let diff = have.symmetric_difference(&all_keys).collect::<Vec<_>>();
