@@ -183,7 +183,7 @@ where
         } = self.signal_produce_block().await?;
 
         // sign the block and seal it
-        self.seal_block(&block)?;
+        seal_block(&self.signing_key, &block, &mut self.db)?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -353,22 +353,6 @@ where
         }
     }
 
-    fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
-        if let Some(key) = &self.signing_key {
-            let block_hash = block.id();
-            let message = block_hash.into_message();
-
-            // The length of the secret is checked
-            let signing_key = key.expose_secret().deref();
-
-            let poa_signature = Signature::sign(signing_key, &message);
-            let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
-            self.db.seal_block(block_hash, seal)
-        } else {
-            Err(anyhow!("no PoA signing key configured"))
-        }
-    }
-
     /// Start event loop
     async fn run(mut self) {
         self.init_timers().await;
@@ -384,6 +368,26 @@ where
                 }
             }
         }
+    }
+}
+
+pub fn seal_block(
+    signing_key: &Option<Secret<SecretKeyWrapper>>,
+    block: &FuelBlock,
+    database: &mut dyn BlockDb,
+) -> anyhow::Result<()> {
+    if let Some(key) = signing_key {
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+
+        // The length of the secret is checked
+        let signing_key = key.expose_secret().deref();
+
+        let poa_signature = Signature::sign(signing_key, &message);
+        let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+        database.seal_block(block_hash, seal)
+    } else {
+        Err(anyhow!("no PoA signing key configured"))
     }
 }
 

@@ -13,6 +13,7 @@ use std::{
 pub(crate) static ETH_LOG_MESSAGE: Lazy<H256> =
     Lazy::new(crate::abi::bridge::message::SentMessageFilter::signature);
 
+// TODO: Move settlement fields into `ChainConfig` because it is part of the consensus.
 #[derive(Clone, Debug)]
 /// Configuration settings for the Relayer.
 pub struct Config {
@@ -22,7 +23,8 @@ pub struct Config {
     pub da_finalization: DaBlockHeight,
     /// Uri address to ethereum client.
     pub eth_client: Option<url::Url>,
-    /// Ethereum contract address. Create EthAddress into fuel_types.
+    // TODO: Create `EthAddress` into `fuel_types`.
+    /// Ethereum contract address.
     pub eth_v2_listening_contracts: Vec<H160>,
     /// Number of pages or blocks containing logs that
     /// should be downloaded in a single call to the da layer

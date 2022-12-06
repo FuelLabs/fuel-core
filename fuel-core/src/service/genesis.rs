@@ -5,16 +5,21 @@ use crate::{
         FuelService,
     },
 };
-use anyhow::Result;
+use anyhow::anyhow;
 use fuel_chain_config::{
+    ChainConfig,
     ContractConfig,
     StateConfig,
 };
 use fuel_core_interfaces::{
     common::{
+        fuel_crypto::Hasher,
+        fuel_merkle::binary,
         fuel_storage::StorageAsMut,
         fuel_tx::{
+            ConsensusParameters,
             Contract,
+            MessageId,
             UtxoId,
         },
         fuel_types::{
@@ -22,6 +27,7 @@ use fuel_core_interfaces::{
             Bytes32,
             ContractId,
         },
+        prelude::MerkleRoot,
     },
     db::{
         Coins,
@@ -30,173 +36,390 @@ use fuel_core_interfaces::{
         ContractsLatestUtxo,
         ContractsRawCode,
         ContractsState,
+        FuelBlocks,
         Messages,
     },
     model::{
         Coin,
         CoinStatus,
+        Empty,
+        FuelApplicationHeader,
+        FuelBlock,
+        FuelBlockConsensus,
+        FuelConsensusHeader,
+        Genesis,
         Message,
+        PartialFuelBlockHeader,
     },
+    not_found,
+    poa_coordinator::BlockDb,
 };
 use itertools::Itertools;
 
+trait Merklization {
+    /// Calculates the merkle root of the state of the entity.
+    fn root(&mut self) -> anyhow::Result<MerkleRoot>;
+}
+
+impl Merklization for Message {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        Ok(self.id().into())
+    }
+}
+
+impl Merklization for Coin {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        let coin_hash = *Hasher::default()
+            .chain(self.owner)
+            .chain(self.amount.to_be_bytes())
+            .chain(self.asset_id)
+            .chain((*self.maturity).to_be_bytes())
+            .chain([self.status as u8])
+            .chain((*self.block_created).to_be_bytes())
+            .finalize();
+
+        Ok(coin_hash)
+    }
+}
+
+// TODO: Reuse `ContractRef` from `fuel-executor` when it will be there.
+//  https://github.com/FuelLabs/fuel-core/pull/789
+struct ContractRef<'a> {
+    contract_id: ContractId,
+    database: &'a mut Database,
+}
+
+impl<'a> ContractRef<'a> {
+    fn new(contract_id: ContractId, database: &'a mut Database) -> Self {
+        Self {
+            contract_id,
+            database,
+        }
+    }
+}
+
+impl<'a> Merklization for ContractRef<'a> {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        let utxo = self
+            .database
+            .storage::<ContractsLatestUtxo>()
+            .get(&self.contract_id)?
+            .ok_or(not_found!(ContractsLatestUtxo))?
+            .into_owned();
+        let state_root = self
+            .database
+            .storage::<ContractsState>()
+            .root(&self.contract_id)?;
+        let balance_root = self
+            .database
+            .storage::<ContractsAssets>()
+            .root(&self.contract_id)?;
+
+        let contract_hash = *Hasher::default()
+            // `ContractId` already is based on contract's code and salt so we don't need it.
+            .chain(self.contract_id.as_ref())
+            .chain(utxo.tx_id().as_ref())
+            .chain([utxo.output_index()])
+            .chain(state_root.as_slice())
+            .chain(balance_root.as_slice())
+            .finalize();
+
+        Ok(contract_hash)
+    }
+}
+
+impl Merklization for ConsensusParameters {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Define hash algorithm for `ConsensusParameters`
+        let params_hash = Hasher::default()
+            .chain(bincode::serialize(&self)?)
+            .finalize();
+        Ok(params_hash.into())
+    }
+}
+
+impl Merklization for ChainConfig {
+    fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        // TODO: Hash settlement configuration, consensus block production
+        let config_hash = *Hasher::default()
+            .chain(self.block_gas_limit.to_be_bytes())
+            .chain(self.transaction_parameters.root()?)
+            .finalize();
+
+        Ok(config_hash)
+    }
+}
+
 impl FuelService {
     /// Loads state from the chain config into database
-    pub(crate) fn initialize_state(config: &Config, database: &Database) -> Result<()> {
-        // start a db transaction for bulk-writing
-        let mut import_tx = database.transaction();
-        let database = import_tx.as_mut();
-
+    pub(crate) fn initialize_state(
+        config: &Config,
+        database: &Database,
+    ) -> anyhow::Result<()> {
         // check if chain is initialized
         if database.get_chain_name()?.is_none() {
-            // initialize the chain id
-            database.init(config)?;
+            // start a db transaction for bulk-writing
+            let mut import_tx = database.transaction();
+            let database = import_tx.as_mut();
 
-            if let Some(initial_state) = &config.chain_conf.initial_state {
-                Self::init_coin_state(database, initial_state)?;
-                Self::init_contracts(database, initial_state)?;
-                Self::init_da_messages(database, initial_state)?;
-            }
+            Self::add_genesis_block(config, database)?;
+
+            // Write transaction to db
+            import_tx.commit()?;
         }
 
-        // Write transaction to db
-        import_tx.commit()?;
-
         Ok(())
+    }
+
+    pub fn add_genesis_block(
+        config: &Config,
+        database: &mut Database,
+    ) -> anyhow::Result<()> {
+        // Initialize the chain id and height.
+        database.init(&config.chain_conf)?;
+
+        let chain_config_hash = config.chain_conf.clone().root()?.into();
+        let coins_root =
+            Self::init_coin_state(database, &config.chain_conf.initial_state)?.into();
+        let contracts_root =
+            Self::init_contracts(database, &config.chain_conf.initial_state)?.into();
+        let (messages_root, message_ids) =
+            Self::init_da_messages(database, &config.chain_conf.initial_state)?;
+        let messages_root = messages_root.into();
+
+        let genesis = Genesis {
+            chain_config_hash,
+            coins_root,
+            contracts_root,
+            messages_root,
+        };
+
+        let block = FuelBlock::new(
+            PartialFuelBlockHeader {
+                application: FuelApplicationHeader::<Empty> {
+                    da_height: Default::default(),
+                    generated: Empty,
+                },
+                consensus: FuelConsensusHeader::<Empty> {
+                    // The genesis is a first block, so previous root is zero.
+                    prev_root: Bytes32::zeroed(),
+                    // The initial height is defined by the `ChainConfig`.
+                    // If it is `None` then it will be zero.
+                    height: config
+                        .chain_conf
+                        .initial_state
+                        .as_ref()
+                        .map(|config| config.height.unwrap_or_else(|| 0u32.into()))
+                        .unwrap_or_else(|| 0u32.into()),
+                    time: fuel_core_interfaces::common::tai64::Tai64::UNIX_EPOCH,
+                    generated: Empty,
+                },
+                metadata: None,
+            },
+            // Genesis block doesn't have any transaction.
+            vec![],
+            &message_ids,
+        );
+
+        let seal = FuelBlockConsensus::Genesis(genesis);
+        let block_id = block.id();
+        database
+            .storage::<FuelBlocks>()
+            .insert(&block_id.into(), &block.to_db_block())?;
+        database.seal_block(block_id, seal)
     }
 
     /// initialize coins
-    pub fn init_coin_state(db: &mut Database, state: &StateConfig) -> Result<()> {
+    pub fn init_coin_state(
+        db: &mut Database,
+        state: &Option<StateConfig>,
+    ) -> anyhow::Result<MerkleRoot> {
+        let mut coins_tree = binary::in_memory::MerkleTree::new();
         // TODO: Store merkle sum tree root over coins with unspecified utxo ids.
         let mut generated_output_index: u64 = 0;
-        if let Some(coins) = &state.coins {
-            for coin in coins {
-                let utxo_id = UtxoId::new(
-                    // generated transaction id([0..[out_index/255]])
-                    coin.tx_id.unwrap_or_else(|| {
-                        Bytes32::try_from(
-                            (0..(Bytes32::LEN - WORD_SIZE))
-                                .map(|_| 0u8)
-                                .chain(
-                                    (generated_output_index / 255)
-                                        .to_be_bytes()
-                                        .into_iter(),
-                                )
-                                .collect_vec()
-                                .as_slice(),
-                        )
-                        .expect("Incorrect genesis transaction id byte length")
-                    }),
-                    coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
-                        generated_output_index += 1;
-                        (generated_output_index % 255) as u8
-                    }),
-                );
+        if let Some(state) = &state {
+            if let Some(coins) = &state.coins {
+                for coin in coins {
+                    let utxo_id = UtxoId::new(
+                        // generated transaction id([0..[out_index/255]])
+                        coin.tx_id.unwrap_or_else(|| {
+                            Bytes32::try_from(
+                                (0..(Bytes32::LEN - WORD_SIZE))
+                                    .map(|_| 0u8)
+                                    .chain(
+                                        (generated_output_index / 255)
+                                            .to_be_bytes()
+                                            .into_iter(),
+                                    )
+                                    .collect_vec()
+                                    .as_slice(),
+                            )
+                            .expect("Incorrect genesis transaction id byte length")
+                        }),
+                        coin.output_index.map(|i| i as u8).unwrap_or_else(|| {
+                            generated_output_index += 1;
+                            (generated_output_index % 255) as u8
+                        }),
+                    );
 
-                let coin = Coin {
-                    owner: coin.owner,
-                    amount: coin.amount,
-                    asset_id: coin.asset_id,
-                    maturity: coin.maturity.unwrap_or_default(),
-                    status: CoinStatus::Unspent,
-                    block_created: coin.block_created.unwrap_or_default(),
-                };
+                    let mut coin = Coin {
+                        owner: coin.owner,
+                        amount: coin.amount,
+                        asset_id: coin.asset_id,
+                        maturity: coin.maturity.unwrap_or_default(),
+                        status: CoinStatus::Unspent,
+                        block_created: coin.block_created.unwrap_or_default(),
+                    };
 
-                let _ = db.storage::<Coins>().insert(&utxo_id, &coin)?;
+                    if db.storage::<Coins>().insert(&utxo_id, &coin)?.is_some() {
+                        return Err(anyhow!("Coin should not exist"))
+                    }
+                    coins_tree.push(coin.root()?.as_slice())
+                }
             }
         }
-        Ok(())
+        Ok(coins_tree.root())
     }
 
-    fn init_contracts(db: &mut Database, state: &StateConfig) -> Result<()> {
+    fn init_contracts(
+        db: &mut Database,
+        state: &Option<StateConfig>,
+    ) -> anyhow::Result<MerkleRoot> {
+        let mut contracts_tree = binary::in_memory::MerkleTree::new();
         // initialize contract state
-        if let Some(contracts) = &state.contracts {
-            for (generated_output_index, contract_config) in contracts.iter().enumerate()
-            {
-                let contract = Contract::from(contract_config.code.as_slice());
-                let salt = contract_config.salt;
-                let root = contract.root();
-                let contract_id =
-                    contract.id(&salt, &root, &Contract::default_state_root());
-                // insert contract code
-                let _ = db
-                    .storage::<ContractsRawCode>()
-                    .insert(&contract_id, contract.as_ref())?;
-                // insert contract root
-                let _ = db
-                    .storage::<ContractsInfo>()
-                    .insert(&contract_id, &(salt, root))?;
-                let _ = db.storage::<ContractsLatestUtxo>().insert(
-                    &contract_id,
-                    &UtxoId::new(
-                        // generated transaction id([0..[out_index/255]])
-                        Bytes32::try_from(
-                            (0..(Bytes32::LEN - WORD_SIZE))
-                                .map(|_| 0u8)
-                                .chain(
-                                    (generated_output_index as u64 / 255)
-                                        .to_be_bytes()
-                                        .into_iter(),
+        if let Some(state) = &state {
+            if let Some(contracts) = &state.contracts {
+                for (generated_output_index, contract_config) in
+                    contracts.iter().enumerate()
+                {
+                    let contract = Contract::from(contract_config.code.as_slice());
+                    let salt = contract_config.salt;
+                    let root = contract.root();
+                    let contract_id =
+                        contract.id(&salt, &root, &Contract::default_state_root());
+                    // insert contract code
+                    if db
+                        .storage::<ContractsRawCode>()
+                        .insert(&contract_id, contract.as_ref())?
+                        .is_some()
+                    {
+                        return Err(anyhow!("Contract code should not exist"))
+                    }
+
+                    // insert contract root
+                    if db
+                        .storage::<ContractsInfo>()
+                        .insert(&contract_id, &(salt, root))?
+                        .is_some()
+                    {
+                        return Err(anyhow!("Contract info should not exist"))
+                    }
+                    if db
+                        .storage::<ContractsLatestUtxo>()
+                        .insert(
+                            &contract_id,
+                            &UtxoId::new(
+                                // generated transaction id([0..[out_index/255]])
+                                Bytes32::try_from(
+                                    (0..(Bytes32::LEN - WORD_SIZE))
+                                        .map(|_| 0u8)
+                                        .chain(
+                                            (generated_output_index as u64 / 255)
+                                                .to_be_bytes()
+                                                .into_iter(),
+                                        )
+                                        .collect_vec()
+                                        .as_slice(),
                                 )
-                                .collect_vec()
-                                .as_slice(),
-                        )
-                        .expect("Incorrect genesis transaction id byte length"),
-                        generated_output_index as u8,
-                    ),
-                )?;
-                Self::init_contract_state(db, &contract_id, contract_config)?;
-                Self::init_contract_balance(db, &contract_id, contract_config)?;
+                                .expect("Incorrect genesis transaction id byte length"),
+                                generated_output_index as u8,
+                            ),
+                        )?
+                        .is_some()
+                    {
+                        return Err(anyhow!("Contract utxo should not exist"))
+                    }
+                    Self::init_contract_state(db, &contract_id, contract_config)?;
+                    Self::init_contract_balance(db, &contract_id, contract_config)?;
+                    contracts_tree
+                        .push(ContractRef::new(contract_id, db).root()?.as_slice());
+                }
             }
         }
-        Ok(())
+        Ok(contracts_tree.root())
     }
 
     fn init_contract_state(
         db: &mut Database,
         contract_id: &ContractId,
         contract: &ContractConfig,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         // insert state related to contract
         if let Some(contract_state) = &contract.state {
             for (key, value) in contract_state {
-                db.storage::<ContractsState>()
-                    .insert(&(contract_id, key), value)?;
+                if db
+                    .storage::<ContractsState>()
+                    .insert(&(contract_id, key), value)?
+                    .is_some()
+                {
+                    return Err(anyhow!("Contract state should not exist"))
+                }
             }
         }
         Ok(())
     }
 
-    fn init_da_messages(db: &mut Database, state: &StateConfig) -> Result<()> {
-        if let Some(message_state) = &state.messages {
-            for msg in message_state {
-                let message = Message {
-                    sender: msg.sender,
-                    recipient: msg.recipient,
-                    nonce: msg.nonce,
-                    amount: msg.amount,
-                    data: msg.data.clone(),
-                    da_height: msg.da_height,
-                    fuel_block_spend: None,
-                };
+    fn init_da_messages(
+        db: &mut Database,
+        state: &Option<StateConfig>,
+    ) -> anyhow::Result<(MerkleRoot, Vec<MessageId>)> {
+        let mut message_tree = binary::in_memory::MerkleTree::new();
+        let mut message_ids = vec![];
+        if let Some(state) = &state {
+            if let Some(message_state) = &state.messages {
+                for msg in message_state {
+                    let mut message = Message {
+                        sender: msg.sender,
+                        recipient: msg.recipient,
+                        nonce: msg.nonce,
+                        amount: msg.amount,
+                        data: msg.data.clone(),
+                        da_height: msg.da_height,
+                        fuel_block_spend: None,
+                    };
 
-                db.storage::<Messages>().insert(&message.id(), &message)?;
+                    let message_id = message.id();
+                    if db
+                        .storage::<Messages>()
+                        .insert(&message_id, &message)?
+                        .is_some()
+                    {
+                        return Err(anyhow!("Message should not exist"))
+                    }
+                    message_tree.push(message.root()?.as_slice());
+                    message_ids.push(message_id);
+                }
             }
         }
 
-        Ok(())
+        Ok((message_tree.root(), message_ids))
     }
 
     fn init_contract_balance(
         db: &mut Database,
         contract_id: &ContractId,
         contract: &ContractConfig,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         // insert balances related to contract
         if let Some(balances) = &contract.balances {
             for (key, value) in balances {
-                db.storage::<ContractsAssets>()
-                    .insert(&(contract_id, key), value)?;
+                if db
+                    .storage::<ContractsAssets>()
+                    .insert(&(contract_id, key), value)?
+                    .is_some()
+                {
+                    return Err(anyhow!("Contract balance should not exist"))
+                }
             }
         }
         Ok(())

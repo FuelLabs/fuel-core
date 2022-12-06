@@ -22,6 +22,12 @@ query($after: String, $before: String, $first: Int, $last: Int) {
         }
         consensus {
           __typename
+          ... on Genesis {
+            chainConfigHash
+            coinsRoot
+            contractsRoot
+            messagesRoot
+          }
           ... on PoAConsensus {
             signature
           }
