@@ -1,10 +1,8 @@
 use super::db::BlockProducerDatabase;
-use crate::{
-    block_producer::{
-        Executor,
-        Relayer,
-    },
-    ports::TxPool,
+use crate::ports::{
+    Executor,
+    Relayer,
+    TxPool,
 };
 use anyhow::Result;
 use fuel_core_interfaces::{
@@ -90,6 +88,7 @@ impl Executor<()> for MockExecutor {
             ExecutionResult {
                 block,
                 skipped_transactions: vec![],
+                tx_status: vec![],
             },
             (),
         ))
@@ -124,6 +123,7 @@ impl Executor<()> for FailingMockExecutor {
                 ExecutionResult {
                     block,
                     skipped_transactions: vec![],
+                    tx_status: vec![],
                 },
                 (),
             ))

@@ -3,6 +3,7 @@ use crate::{
         DeadlineClock,
         OnConflict,
     },
+    ports::BlockProducer,
     Config,
     Trigger,
 };
@@ -231,7 +232,7 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        self.seal_block(&block, &mut db_transaction)?;
+        seal_block(&self.signing_key, &block, &mut self.db)?;
         db_transaction.commit()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
@@ -402,26 +403,6 @@ where
         }
     }
 
-    fn seal_block(
-        &mut self,
-        block: &FuelBlock,
-        db_transaction: &mut DbTransaction,
-    ) -> anyhow::Result<()> {
-        if let Some(key) = &self.signing_key {
-            let block_hash = block.id();
-            let message = block_hash.into_message();
-
-            // The length of the secret is checked
-            let signing_key = key.expose_secret().deref();
-
-            let poa_signature = Signature::sign(signing_key, &message);
-            let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
-            db_transaction.seal_block(block_hash, seal)
-        } else {
-            Err(anyhow!("no PoA signing key configured"))
-        }
-    }
-
     /// Start event loop
     async fn run(mut self) {
         self.init_timers().await;
@@ -437,6 +418,26 @@ where
                 }
             }
         }
+    }
+}
+
+pub fn seal_block(
+    signing_key: &Option<Secret<SecretKeyWrapper>>,
+    block: &FuelBlock,
+    database: &mut dyn BlockDb,
+) -> anyhow::Result<()> {
+    if let Some(key) = signing_key {
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+
+        // The length of the secret is checked
+        let signing_key = key.expose_secret().deref();
+
+        let poa_signature = Signature::sign(signing_key, &message);
+        let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+        database.seal_block(block_hash, seal)
+    } else {
+        Err(anyhow!("no PoA signing key configured"))
     }
 }
 
@@ -576,6 +577,7 @@ mod test {
                             .into_iter()
                             .map(|tx| (tx, Error::OutputAlreadyExists))
                             .collect(),
+                        tx_status: Default::default(),
                     },
                     (),
                 ))

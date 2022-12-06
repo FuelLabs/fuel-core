@@ -165,7 +165,7 @@ enum CoinStatus {
 	SPENT
 }
 
-union Consensus = PoAConsensus
+union Consensus = Genesis | PoAConsensus
 
 type ConsensusParameters {
 	contractMaxSize: U64!
@@ -262,6 +262,26 @@ type FailureStatus {
 	programState: ProgramState
 }
 
+
+type Genesis {
+	"""
+	The chain configs define what consensus type to use, what settlement layer to use,
+	rules of block validity, etc.
+	"""
+	chainConfigHash: Bytes32!
+	"""
+	The Binary Merkle Tree root of all genesis coins.
+	"""
+	coinsRoot: Bytes32!
+	"""
+	The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
+	"""
+	contractsRoot: Bytes32!
+	"""
+	The Binary Merkle Tree root of all genesis messages.
+	"""
+	messagesRoot: Bytes32!
+}
 
 type Header {
 	"""

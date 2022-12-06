@@ -1,12 +1,15 @@
 #![allow(clippy::let_unit_value)]
 use crate::{
     chain_config::BlockProduction,
-    database::{
-        transactional::DatabaseTransaction,
-        Database,
+    database::Database,
+    service::{
+        adapters::{
+            ExecutorAdapter,
+            MaybeRelayerAdapter,
+            PoACoordinatorAdapter,
+        },
+        Config,
     },
-    executor::Executor,
-    service::Config,
 };
 use anyhow::Result;
 use fuel_block_producer::block_producer::Executor as ExecutorTrait;
@@ -33,8 +36,6 @@ use fuel_core_interfaces::{
         TxPoolDb,
     },
 };
-#[cfg(feature = "relayer")]
-use fuel_relayer::RelayerSynced;
 use fuel_txpool::service::TxStatusChange;
 use futures::future::join_all;
 use std::sync::Arc;

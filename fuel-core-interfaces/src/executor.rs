@@ -18,6 +18,7 @@ use crate::{
         FuelBlock,
         PartialFuelBlock,
     },
+    txpool::TransactionStatus,
 };
 use fuel_vm::fuel_tx::Transaction;
 use std::error::Error as StdError;
@@ -49,6 +50,14 @@ pub struct ExecutionResult {
     /// The list of skipped transactions with corresponding errors. Those transactions were
     /// not included in the block and didn't affect the state of the blockchain.
     pub skipped_transactions: Vec<(Transaction, Error)>,
+    /// The status of the transactions execution included into the block.
+    pub tx_status: Vec<TransactionExecutionStatus>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionExecutionStatus {
+    pub id: Bytes32,
+    pub status: TransactionStatus,
 }
 
 /// The uncommitted result of transactions execution with database transaction.

@@ -36,7 +36,7 @@ use fuel_core_interfaces::{
     },
 };
 use fuel_poa_coordinator::{
-    service::BlockProducer,
+    ports::BlockProducer,
     Config,
     Service,
     Trigger,
@@ -112,6 +112,7 @@ impl BlockProducer<()> for MockBlockProducer {
             ExecutionResult {
                 block,
                 skipped_transactions: vec![],
+                tx_status: vec![],
             },
             (),
         ))
@@ -555,7 +556,8 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
                 poa.signature
                     .verify(&pk, &message)
                     .expect("expected signature to be valid");
-            } //_ => panic!("invalid sealed data"),
+            }
+            _ => panic!("invalid sealed data"),
         }
     }
 
