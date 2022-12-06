@@ -5,11 +5,9 @@ use fuel_core_interfaces::{
         ImportBlockBroadcast,
         ImportBlockMpsc,
     },
-    block_producer::BlockProducer,
     p2p::P2pRequestEvent,
 };
 use parking_lot::Mutex;
-use std::sync::Arc;
 use tokio::{
     sync::{
         broadcast,
@@ -35,7 +33,6 @@ impl Service {
     pub async fn start(
         &self,
         _p2p_consensus: mpsc::Sender<P2pRequestEvent>,
-        _block_producer: Arc<dyn BlockProducer>,
         _block_importer_sender: mpsc::Sender<ImportBlockMpsc>,
         _block_importer_broadcast: broadcast::Receiver<ImportBlockBroadcast>,
     ) {

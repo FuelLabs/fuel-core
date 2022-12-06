@@ -3,7 +3,6 @@
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    block_producer::BlockProducer,
     common::{
         consts::REG_ZERO,
         fuel_tx::TransactionBuilder,
@@ -34,6 +33,7 @@ use fuel_core_interfaces::{
     },
 };
 use fuel_poa_coordinator::{
+    ports::BlockProducer,
     Config,
     Service,
     Trigger,
@@ -398,7 +398,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
                 broadcast_rx,
                 txpool.sender(),
                 txpool.import_block_tx.clone(),
-                Arc::new(MockBlockProducer::new(txpool.sender(), db.clone())),
+                MockBlockProducer::new(txpool.sender(), db.clone()),
                 db,
             )
             .await;
@@ -469,13 +469,12 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -516,14 +515,12 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db.clone(),
         )
         .await;
@@ -580,13 +577,12 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -676,13 +672,12 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -736,13 +731,12 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -819,13 +813,12 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;

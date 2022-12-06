@@ -1527,6 +1527,7 @@ dependencies = [
  "async-trait",
  "fuel-core-interfaces 0.14.1",
  "parking_lot 0.12.1",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -1863,6 +1864,7 @@ name = "fuel-poa-coordinator"
 version = "0.14.1"
 dependencies = [
  "anyhow",
+ "async-trait",
  "fuel-core-interfaces 0.14.1",
  "humantime-serde",
  "parking_lot 0.12.1",
