@@ -140,9 +140,8 @@ impl Merklization for ConsensusParameters {
 
 impl Merklization for ChainConfig {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
-        // TODO: Hash settlement configuration
+        // TODO: Hash settlement configuration, consensus block production
         let config_hash = *Hasher::default()
-            // `ContractId` based on contract's code and salt so we don't need it.
             .chain(self.block_gas_limit.to_be_bytes())
             .chain(self.transaction_parameters.root()?)
             .finalize();
