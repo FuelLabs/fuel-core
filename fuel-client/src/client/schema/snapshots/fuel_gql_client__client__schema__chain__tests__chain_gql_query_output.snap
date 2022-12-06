@@ -23,6 +23,12 @@ query {
       }
       consensus {
         __typename
+        ... on Genesis {
+          chainConfigHash
+          coinsRoot
+          contractsRoot
+          messagesRoot
+        }
         ... on PoAConsensus {
           signature
         }

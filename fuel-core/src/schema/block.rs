@@ -222,14 +222,8 @@ impl BlockQuery {
             (Some(id), None) => id.into(),
             (None, Some(height)) => {
                 let height: u64 = height.into();
-                if height == 0 {
-                    return Err(async_graphql::Error::new(
-                        "Genesis block isn't implemented yet",
-                    ))
-                } else {
-                    db.get_block_id(height.try_into()?)?
-                        .ok_or("Block height non-existent")?
-                }
+                db.get_block_id(height.try_into()?)?
+                    .ok_or("Block height non-existent")?
             }
             (None, None) => {
                 return Err(async_graphql::Error::new("Missing either id or height"))

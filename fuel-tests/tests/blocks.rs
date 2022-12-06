@@ -30,7 +30,10 @@ use fuel_core_interfaces::{
 use fuel_gql_client::{
     client::{
         schema::{
-            block::TimeParameters,
+            block::{
+                Consensus,
+                TimeParameters,
+            },
             U64,
         },
         types::TransactionStatus,
@@ -76,22 +79,28 @@ async fn block() {
 }
 
 #[tokio::test]
-async fn produce_block() {
-    let db = Database::default();
-
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
-
-    let srv = FuelService::from_database(db, config.clone())
+async fn get_genesis_block() {
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
         .await
         .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
+    let tx = fuel_tx::Transaction::default();
+    client.submit_and_await_commit(&tx).await.unwrap();
 
-    let new_height = client.produce_blocks(5, None).await.unwrap();
+    let block = client.block_by_height(0).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 0);
+    assert!(matches!(block.consensus, Consensus::Genesis(_)));
+}
 
-    assert_eq!(5, new_height);
+#[tokio::test]
+async fn produce_block() {
+    let config = Config::local_node();
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
 
     let tx = fuel_tx::Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
@@ -118,8 +127,7 @@ async fn produce_block() {
             .deref()
             .public_key();
 
-        // Block height is now 6 after being advance 5
-        assert!(6 == block_height);
+        assert!(1 == block_height);
         assert_eq!(actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
