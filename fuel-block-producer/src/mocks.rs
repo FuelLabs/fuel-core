@@ -1,8 +1,10 @@
 use super::db::BlockProducerDatabase;
-use crate::ports::TxPool;
+use crate::ports::{
+    Relayer,
+    TxPool,
+};
 use anyhow::Result;
 use fuel_core_interfaces::{
-    block_producer::Relayer,
     common::{
         fuel_storage::StorageInspect,
         fuel_tx::{
