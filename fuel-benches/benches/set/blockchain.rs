@@ -65,9 +65,35 @@ pub fn run(c: &mut Criterion) {
             }),
     );
 
+    let mut scwq = c.benchmark_group("scwq");
+
+    for i in 1..=1 {
+        let mut key = Bytes32::zeroed();
+
+        key.as_mut()[..8].copy_from_slice(&(i as u64).to_be_bytes());
+        let data = key.iter().copied().collect();
+
+        let prepare_script = vec![Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData)];
+        run_group_ref(
+            &mut scwq,
+            "scwq",
+            VmBench::contract(rng, Opcode::SCWQ(0x10, 0x29, REG_ONE))
+                .expect("failed to prepare contract")
+                .with_data(data)
+                .with_prepare_script(prepare_script)
+                .with_prepare_db(move |mut db| {
+                    db.merkle_contract_state_insert(&contract, &key, &key)?;
+
+                    Ok(db)
+                }),
+        );
+    }
+
+    scwq.finish();
+
     let mut call = c.benchmark_group("call");
 
-    for i in linear {
+    for i in linear.clone() {
         let mut code = vec![0u8; i as usize];
 
         rng.fill_bytes(&mut code);
@@ -104,6 +130,34 @@ pub fn run(c: &mut Criterion) {
     }
 
     call.finish();
+
+    let mut csiz = c.benchmark_group("csiz");
+
+    for i in linear {
+        let mut code = vec![0u8; i as usize];
+
+        rng.fill_bytes(&mut code);
+
+        let code = ContractCode::from(code);
+        let id = code.id;
+
+        let data = id.iter().copied().collect();
+
+        let prepare_script = vec![Opcode::gtf(0x10, 0x00, GTFArgs::ScriptData)];
+
+        csiz.throughput(Throughput::Bytes(i));
+
+        run_group_ref(
+            &mut csiz,
+            format!("{}", i),
+            VmBench::new(Opcode::CSIZ(0x11, 0x10))
+                .with_contract_code(code)
+                .with_data(data)
+                .with_prepare_script(prepare_script),
+        );
+    }
+
+    csiz.finish();
 
     run_group_ref(
         &mut c.benchmark_group("bhei"),
