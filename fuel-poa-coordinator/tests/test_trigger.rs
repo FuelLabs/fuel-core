@@ -108,6 +108,7 @@ impl BlockProducer for MockBlockProducer {
         Ok(ExecutionResult {
             block,
             skipped_transactions: vec![],
+            tx_status: vec![],
         })
     }
 

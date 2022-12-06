@@ -9,7 +9,6 @@ use crate::{
         Error,
         IterDirection,
     },
-    tx_pool::TransactionStatus,
 };
 use fuel_core_interfaces::{
     common::{
@@ -24,6 +23,7 @@ use fuel_core_interfaces::{
         fuel_types::Address,
     },
     db::Transactions,
+    txpool::TransactionStatus,
 };
 use std::{
     borrow::Cow,
@@ -111,17 +111,17 @@ impl Database {
 
     pub fn update_tx_status(
         &self,
-        tx_id: &Bytes32,
+        id: &Bytes32,
         status: TransactionStatus,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.insert(tx_id, Column::TransactionStatus, status)
+        self.insert(id, Column::TransactionStatus, status)
     }
 
     pub fn get_tx_status(
         &self,
-        tx_id: &Bytes32,
+        id: &Bytes32,
     ) -> Result<Option<TransactionStatus>, Error> {
-        self.get(&tx_id.deref()[..], Column::TransactionStatus)
+        self.get(&id.deref()[..], Column::TransactionStatus)
     }
 }
 

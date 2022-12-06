@@ -37,6 +37,7 @@ use crate::{
     model::{
         ArcPoolTx,
         BlockHeight,
+        BlockId,
         Coin,
         Message,
         TxInfo,
@@ -49,16 +50,41 @@ use derive_more::{
 use fuel_vm::prelude::{
     Interpreter,
     PredicateStorage,
+    ProgramState,
 };
 use std::{
     fmt::Debug,
     sync::Arc,
 };
+use tai64::Tai64;
 use thiserror::Error;
 use tokio::sync::{
     mpsc,
     oneshot,
 };
+
+/// The status of the transaction during its life from the tx pool until the block.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TransactionStatus {
+    Submitted {
+        time: Tai64,
+    },
+    Success {
+        block_id: BlockId,
+        time: Tai64,
+        result: Option<ProgramState>,
+    },
+    SqueezedOut {
+        reason: String,
+    },
+    Failed {
+        block_id: BlockId,
+        time: Tai64,
+        reason: String,
+        result: Option<ProgramState>,
+    },
+}
 
 /// Transaction used by the transaction pool.
 #[derive(Debug, Eq, PartialEq)]

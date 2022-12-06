@@ -5,8 +5,10 @@ use std::sync::{
 };
 
 use super::*;
-use crate::tx_pool::TransactionStatus;
-use fuel_core_interfaces::common::tai64::Tai64;
+use fuel_core_interfaces::{
+    common::tai64::Tai64,
+    txpool::TransactionStatus,
+};
 use test_case::test_case;
 
 struct Input<I>

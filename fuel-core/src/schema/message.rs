@@ -44,6 +44,7 @@ use fuel_core_interfaces::{
         FuelBlockConsensus,
     },
     not_found,
+    txpool::TransactionStatus,
 };
 use itertools::Itertools;
 use std::borrow::Cow;
@@ -287,7 +288,7 @@ impl MessageProofData for MessageProofContext<'_> {
     fn transaction_status(
         &self,
         transaction_id: &fuel_core_interfaces::common::prelude::Bytes32,
-    ) -> Result<Option<crate::tx_pool::TransactionStatus>, KvStoreError> {
+    ) -> Result<Option<TransactionStatus>, KvStoreError> {
         Ok(self.0.get_tx_status(transaction_id)?)
     }
 
