@@ -6,6 +6,7 @@ use crate::{
     },
 };
 use anyhow::anyhow;
+use fuel_block_executor::refs::ContractRef;
 use fuel_chain_config::{
     ChainConfig,
     ContractConfig,
@@ -82,42 +83,27 @@ impl Merklization for Coin {
     }
 }
 
-// TODO: Reuse `ContractRef` from `fuel-executor` when it will be there.
-//  https://github.com/FuelLabs/fuel-core/pull/789
-struct ContractRef<'a> {
-    contract_id: ContractId,
-    database: &'a mut Database,
-}
-
-impl<'a> ContractRef<'a> {
-    fn new(contract_id: ContractId, database: &'a mut Database) -> Self {
-        Self {
-            contract_id,
-            database,
-        }
-    }
-}
-
-impl<'a> Merklization for ContractRef<'a> {
+impl<'a> Merklization for ContractRef<&'a mut Database> {
     fn root(&mut self) -> anyhow::Result<MerkleRoot> {
+        let contract_id = *self.contract_id();
         let utxo = self
-            .database
+            .database()
             .storage::<ContractsLatestUtxo>()
-            .get(&self.contract_id)?
+            .get(&contract_id)?
             .ok_or(not_found!(ContractsLatestUtxo))?
             .into_owned();
         let state_root = self
-            .database
+            .database_mut()
             .storage::<ContractsState>()
-            .root(&self.contract_id)?;
+            .root(&contract_id)?;
         let balance_root = self
-            .database
+            .database_mut()
             .storage::<ContractsAssets>()
-            .root(&self.contract_id)?;
+            .root(&contract_id)?;
 
         let contract_hash = *Hasher::default()
             // `ContractId` already is based on contract's code and salt so we don't need it.
-            .chain(self.contract_id.as_ref())
+            .chain(contract_id.as_ref())
             .chain(utxo.tx_id().as_ref())
             .chain([utxo.output_index()])
             .chain(state_root.as_slice())
@@ -342,7 +328,7 @@ impl FuelService {
                     Self::init_contract_state(db, &contract_id, contract_config)?;
                     Self::init_contract_balance(db, &contract_id, contract_config)?;
                     contracts_tree
-                        .push(ContractRef::new(contract_id, db).root()?.as_slice());
+                        .push(ContractRef::new(&mut *db, contract_id).root()?.as_slice());
                 }
             }
         }

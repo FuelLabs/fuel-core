@@ -606,15 +606,15 @@ impl Executor {
             self.config.utxo_validation,
         )?;
 
-        // persist any outputs
+        // Persist utxos first and after calculate the not utxo outputs
         self.persist_output_utxos(
             *header.height(),
             &tx_id,
             tx_db_transaction.deref_mut(),
-            vm_result.tx().inputs(),
-            vm_result.tx().outputs(),
+            tx.inputs(),
+            tx.outputs(),
         )?;
-        self.compute_outputs(
+        self.compute_not_utxo_outputs(
             match execution_kind {
                 ExecutionKind::Production => ExecutionTypes::Production(&mut tx),
                 ExecutionKind::Validation => ExecutionTypes::Validation(&tx),
@@ -943,7 +943,6 @@ impl Executor {
                 }
             }
             // Needed to convince the compiler that tx is taken by ref here
-            #[allow(clippy::needless_borrow)]
             ExecutionTypes::Validation(tx) => {
                 for input in tx.inputs() {
                     match input {
@@ -997,7 +996,7 @@ impl Executor {
     /// Computes all zeroed or variable outputs.
     /// In production mode, updates the outputs with computed values.
     /// In validation mode, compares the outputs with computed inputs.
-    fn compute_outputs<Tx>(
+    fn compute_not_utxo_outputs<Tx>(
         &self,
         tx: ExecutionTypes<&mut Tx, &Tx>,
         db: &mut Database,
@@ -2621,6 +2620,16 @@ mod tests {
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
         assert_eq!(executed_tx.outputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.outputs()[0].balance_root(), Some(&empty_state));
+
+        let expected_tx = block.transactions()[2].clone();
+        let storage_tx = executor
+            .database
+            .storage::<Transactions>()
+            .get(&executed_tx.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]
@@ -2681,6 +2690,16 @@ mod tests {
         );
         assert_eq!(executed_tx.inputs()[0].state_root(), Some(&empty_state));
         assert_eq!(executed_tx.inputs()[0].balance_root(), Some(&empty_state));
+
+        let expected_tx = block.transactions()[2].clone();
+        let storage_tx = executor
+            .database
+            .storage::<Transactions>()
+            .get(&expected_tx.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]
@@ -2781,6 +2800,16 @@ mod tests {
             executed_tx.inputs()[0].balance_root(),
             executed_tx.outputs()[0].balance_root()
         );
+
+        let expected_tx = block.transactions()[2].clone();
+        let storage_tx = executor
+            .database
+            .storage::<Transactions>()
+            .get(&expected_tx.id())
+            .unwrap()
+            .unwrap()
+            .into_owned();
+        assert_eq!(storage_tx, expected_tx);
     }
 
     #[test]

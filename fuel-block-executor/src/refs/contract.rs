@@ -37,6 +37,14 @@ impl<Database> ContractRef<Database> {
     pub fn contract_id(&self) -> &ContractId {
         &self.contract_id
     }
+
+    pub fn database(&self) -> &Database {
+        &self.database
+    }
+
+    pub fn database_mut(&mut self) -> &mut Database {
+        &mut self.database
+    }
 }
 
 impl<Database> ContractRef<Database>
