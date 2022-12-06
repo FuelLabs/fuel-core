@@ -1,4 +1,4 @@
-use crate::database::Database;
+use crate::database::{Column, Database};
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
@@ -23,6 +23,8 @@ use fuel_core_interfaces::{
     not_found,
 };
 use std::borrow::Cow;
+use fuel_core_interfaces::db::ContractsState;
+use crate::state::IterDirection;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -142,11 +144,27 @@ impl InterpreterStorage for VmDatabase {
 
     fn merkle_contract_state_range(
         &self,
-        _id: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
+        id: &ContractId,
+        start_key: &Bytes32,
+        range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         unimplemented!()
+        // let iterator = self.database.iter_all(
+        //     Column::ContractsState,
+        //     Some(id.as_ref().to_vec()),
+        //     Vec(start_key),
+        //     Some(IterDirection::Forward),
+        // );
+        //
+        // let mut prevKey = None;
+        //
+        // let mut rangeCount = 0;
+        //
+        // while rangeCount < range {
+        //     iterator.next()
+        // }
+        //
+        // return Result(Vec(0));
     }
 
     fn merkle_contract_state_insert_range(
@@ -155,7 +173,7 @@ impl InterpreterStorage for VmDatabase {
         _start_key: &Bytes32,
         _values: &[Bytes32],
     ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
+        
     }
 
     fn merkle_contract_state_remove_range(
