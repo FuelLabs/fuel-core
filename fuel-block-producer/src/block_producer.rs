@@ -203,17 +203,12 @@ impl Producer {
     }
 
     fn previous_block_info(&self, height: BlockHeight) -> Result<PreviousBlockInfo> {
+        // TODO: It is not guaranteed that the genesis height is `0` height. Update the code to
+        //  use a genesis height from the database. If the `height` less than genesis height ->
+        //  return a new error.
         // block 0 is reserved for genesis
         if height == 0u32.into() {
             Err(Error::GenesisBlock.into())
-        }
-        // if this is the first block, fill in base metadata from genesis
-        else if height == 1u32.into() {
-            // TODO: what should initial genesis data be here?
-            Ok(PreviousBlockInfo {
-                prev_root: Default::default(),
-                da_height: Default::default(),
-            })
         } else {
             // get info from previous block height
             let prev_height = height - 1u32.into();

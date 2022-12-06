@@ -18,7 +18,7 @@ use super::{
 
 #[derive(cynic::QueryVariables, Debug)]
 pub struct BlockByIdArgs {
-    pub id: BlockId,
+    pub id: Option<BlockId>,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -29,6 +29,22 @@ pub struct BlockByIdArgs {
 )]
 pub struct BlockByIdQuery {
     #[arguments(id: $id)]
+    pub block: Option<Block>,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct BlockByHeightArgs {
+    pub height: Option<U64>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(
+    schema_path = "./assets/schema.sdl",
+    graphql_type = "Query",
+    variables = "BlockByHeightArgs"
+)]
+pub struct BlockByHeightQuery {
+    #[arguments(height: $height)]
     pub block: Option<Block>,
 }
 
@@ -125,9 +141,19 @@ pub struct Header {
 #[derive(cynic::InlineFragments, Debug)]
 #[cynic(schema_path = "./assets/schema.sdl")]
 pub enum Consensus {
+    Genesis(Genesis),
     PoAConsensus(PoAConsensus),
     #[cynic(fallback)]
     Unknown,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema_path = "./assets/schema.sdl")]
+pub struct Genesis {
+    pub chain_config_hash: Bytes32,
+    pub coins_root: Bytes32,
+    pub contracts_root: Bytes32,
+    pub messages_root: Bytes32,
 }
 
 #[derive(cynic::QueryFragment, Debug)]
@@ -141,6 +167,7 @@ impl Block {
     pub fn block_producer(&self) -> Option<fuel_vm::fuel_crypto::PublicKey> {
         let message = self.header.id.clone().into_message();
         match &self.consensus {
+            Consensus::Genesis(_) => Some(Default::default()),
             Consensus::PoAConsensus(poa) => {
                 let signature = poa.signature.clone().into_signature();
                 let producer_pub_key = signature.recover(&message);
@@ -159,7 +186,16 @@ mod tests {
     fn block_by_id_query_gql_output() {
         use cynic::QueryBuilder;
         let operation = BlockByIdQuery::build(BlockByIdArgs {
-            id: BlockId::default(),
+            id: Some(BlockId::default()),
+        });
+        insta::assert_snapshot!(operation.query)
+    }
+
+    #[test]
+    fn block_by_height_query_gql_output() {
+        use cynic::QueryBuilder;
+        let operation = BlockByHeightQuery::build(BlockByHeightArgs {
+            height: Some(U64(0)),
         });
         insta::assert_snapshot!(operation.query)
     }
