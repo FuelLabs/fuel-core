@@ -63,6 +63,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     let block_id = sealed_block_header.header.id();
     let signature = match sealed_block_header.consensus {
         FuelBlockConsensus::PoA(poa) => poa.signature,
+        _ => panic!("Not expected consensus"),
     };
     signature
         .verify(&poa_public, &block_id.into_message())
@@ -78,6 +79,7 @@ async fn can_get_sealed_block_from_poa_produced_block() {
     let block_id = sealed_block.block.header().id();
     let signature = match sealed_block.consensus {
         FuelBlockConsensus::PoA(poa) => poa.signature,
+        _ => panic!("Not expected consensus"),
     };
     signature
         .verify(&poa_public, &block_id.into_message())

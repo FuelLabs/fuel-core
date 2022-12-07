@@ -3,6 +3,7 @@
 mod deadline_clock;
 
 pub mod config;
+pub mod ports;
 pub mod service;
 
 pub use config::{

@@ -64,6 +64,7 @@ use types::{
 };
 
 use crate::client::schema::{
+    block::BlockByHeightArgs,
     resource::ExcludeInput,
     tx::DryRunArg,
 };
@@ -537,8 +538,22 @@ impl FuelClient {
     }
 
     pub async fn block(&self, id: &str) -> io::Result<Option<schema::block::Block>> {
-        let query =
-            schema::block::BlockByIdQuery::build(BlockByIdArgs { id: id.parse()? });
+        let query = schema::block::BlockByIdQuery::build(BlockByIdArgs {
+            id: Some(id.parse()?),
+        });
+
+        let block = self.query(query).await?.block;
+
+        Ok(block)
+    }
+
+    pub async fn block_by_height(
+        &self,
+        height: u64,
+    ) -> io::Result<Option<schema::block::Block>> {
+        let query = schema::block::BlockByHeightQuery::build(BlockByHeightArgs {
+            height: Some(U64(height)),
+        });
 
         let block = self.query(query).await?.block;
 
