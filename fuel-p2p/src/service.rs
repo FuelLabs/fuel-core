@@ -543,7 +543,7 @@ mod tests {
 
         TcpListener::bind(socket)
             .and_then(|listener| listener.local_addr())
-            .map(|addr| addr.port())            
+            .map(|addr| addr.port())
             // Safety: used only in tests, it is expected that there exists a free port
             .expect("A free tcp port exists")
     }
