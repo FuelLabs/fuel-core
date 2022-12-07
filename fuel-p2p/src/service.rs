@@ -537,10 +537,7 @@ mod tests {
         FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
     }
 
-    /// attaches PeerId to the Multiaddr
-    fn build_node_multiaddr(peer_id: PeerId, address: Multiaddr) -> Multiaddr {
-        format!("{}/p2p/{}", address, peer_id).parse().unwrap()
-    }
+    
 
     /// returns a free tcp port number for a node to listen on
     fn get_unused_port() -> u16 {
@@ -573,7 +570,7 @@ mod tests {
                     Multiaddr::from(IpAddr::V4(Ipv4Addr::from([127, 0, 0, 1])));
                 addr.push(Protocol::Tcp(tcp_port));
                 let peer_id = PeerId::from_public_key(&keypair.public());
-                build_node_multiaddr(peer_id, addr)
+                format!("{}/p2p/{}", addr, peer_id).parse().unwrap()
             };
 
             Self {
