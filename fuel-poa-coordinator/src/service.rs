@@ -3,6 +3,7 @@ use crate::{
         DeadlineClock,
         OnConflict,
     },
+    ports::BlockProducer,
     Config,
     Trigger,
 };
@@ -12,7 +13,6 @@ use anyhow::{
 };
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    block_producer::BlockProducer,
     common::{
         fuel_tx::UniqueIdentifier,
         prelude::{
@@ -74,16 +74,17 @@ impl Service {
         }
     }
 
-    pub async fn start<S, T>(
+    pub async fn start<S, T, B>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
-        block_producer: Arc<dyn BlockProducer>,
+        block_producer: B,
         db: S,
     ) where
         S: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
+        B: BlockProducer + 'static,
     {
         let mut running = self.running.lock();
 
@@ -127,16 +128,17 @@ impl Service {
     }
 }
 
-pub struct Task<S, T>
+pub struct Task<S, T, B>
 where
     S: BlockDb + Send + Sync,
     T: TransactionPool,
+    B: BlockProducer,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
     db: S,
-    block_producer: Arc<dyn BlockProducer>,
+    block_producer: B,
     txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatus>,
     import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
@@ -148,10 +150,11 @@ where
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
 }
-impl<S, T> Task<S, T>
+impl<S, T, B> Task<S, T, B>
 where
     S: BlockDb + Send,
     T: TransactionPool,
+    B: BlockProducer,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(&mut self) -> anyhow::Result<ExecutionResult> {
@@ -176,10 +179,11 @@ where
         let ExecutionResult {
             block,
             skipped_transactions,
+            ..
         } = self.signal_produce_block().await?;
 
         // sign the block and seal it
-        self.seal_block(&block)?;
+        seal_block(&self.signing_key, &block, &mut self.db)?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -349,22 +353,6 @@ where
         }
     }
 
-    fn seal_block(&mut self, block: &FuelBlock) -> anyhow::Result<()> {
-        if let Some(key) = &self.signing_key {
-            let block_hash = block.id();
-            let message = block_hash.into_message();
-
-            // The length of the secret is checked
-            let signing_key = key.expose_secret().deref();
-
-            let poa_signature = Signature::sign(signing_key, &message);
-            let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
-            self.db.seal_block(block_hash, seal)
-        } else {
-            Err(anyhow!("no PoA signing key configured"))
-        }
-    }
-
     /// Start event loop
     async fn run(mut self) {
         self.init_timers().await;
@@ -380,6 +368,26 @@ where
                 }
             }
         }
+    }
+}
+
+pub fn seal_block(
+    signing_key: &Option<Secret<SecretKeyWrapper>>,
+    block: &FuelBlock,
+    database: &mut dyn BlockDb,
+) -> anyhow::Result<()> {
+    if let Some(key) = signing_key {
+        let block_hash = block.id();
+        let message = block_hash.into_message();
+
+        // The length of the secret is checked
+        let signing_key = key.expose_secret().deref();
+
+        let poa_signature = Signature::sign(signing_key, &message);
+        let seal = FuelBlockConsensus::PoA(FuelBlockPoAConsensus::new(poa_signature));
+        database.seal_block(block_hash, seal)
+    } else {
+        Err(anyhow!("no PoA signing key configured"))
     }
 }
 
@@ -504,6 +512,7 @@ mod test {
                         .into_iter()
                         .map(|tx| (tx, Error::OutputAlreadyExists))
                         .collect(),
+                    tx_status: Default::default(),
                 })
             });
 
@@ -536,7 +545,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,
@@ -582,7 +591,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,
@@ -635,7 +644,7 @@ mod test {
             block_gas_limit: 1000000,
             signing_key: Some(Secret::new(secret_key.into())),
             db,
-            block_producer: Arc::new(block_producer),
+            block_producer,
             txpool,
             txpool_broadcast,
             import_block_events_tx,

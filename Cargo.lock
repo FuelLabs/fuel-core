@@ -2307,6 +2307,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "rand 0.8.5",
  "rstest",
+ "thiserror",
  "tokio",
  "tracing",
 ]
@@ -2459,6 +2460,7 @@ dependencies = [
  "serde_json",
  "tai64",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

@@ -11,6 +11,7 @@ description = "Fuel Core PoA Coordinator"
 
 [dependencies]
 anyhow = "1.0"
+async-trait = "0.1"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.14.1" }
 humantime-serde = "1.1.1"
 parking_lot = "0.12"
@@ -19,7 +20,6 @@ tokio = { version = "1.21", features = ["full"] }
 tracing = "0.1"
 
 [dev-dependencies]
-async-trait = "0.1"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", features = ["test-helpers"] }
 mockall = "0.11"
 rand = "0.8"

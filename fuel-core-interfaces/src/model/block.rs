@@ -422,34 +422,6 @@ impl FuelBlockDb {
     pub fn consensus_type(&self) -> ConsensusType {
         self.header.consensus_type()
     }
-
-    /// Hack until we completely remove the need for meaningless
-    /// default headers.
-    pub fn fix_me_default_block() -> Self {
-        Self {
-            header: FuelBlockHeader {
-                application: FuelApplicationHeader {
-                    da_height: Default::default(),
-                    generated: GeneratedApplicationFields {
-                        transactions_count: Default::default(),
-                        output_messages_count: Default::default(),
-                        transactions_root: Default::default(),
-                        output_messages_root: Default::default(),
-                    },
-                },
-                consensus: FuelConsensusHeader {
-                    prev_root: Default::default(),
-                    height: Default::default(),
-                    time: Tai64::UNIX_EPOCH,
-                    generated: GeneratedConsensusFields {
-                        application_hash: Default::default(),
-                    },
-                },
-                metadata: None,
-            },
-            transactions: Default::default(),
-        }
-    }
 }
 
 /// Fuel block with all transaction data included
@@ -616,11 +588,31 @@ impl From<FuelBlock> for PartialFuelBlock {
     }
 }
 
+/// The first block of the blockchain is a genesis block. It determines the initial state of the
+/// network - contracts states, contracts balances, unspent coins, and messages. It also contains
+/// the hash on the initial config of the network that defines the consensus rules for following
+/// blocks.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Genesis {
+    /// The chain config define what consensus type to use, what settlement layer to use,
+    /// rules of block validity, etc.
+    pub chain_config_hash: Bytes32,
+    /// The Binary Merkle Tree root of all genesis coins.
+    pub coins_root: Bytes32,
+    /// The Binary Merkle Tree root of state, balances, contracts code hash of each contract.
+    pub contracts_root: Bytes32,
+    /// The Binary Merkle Tree root of all genesis messages.
+    pub messages_root: Bytes32,
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The consensus related data that doesn't live on the
 /// header.
 pub enum FuelBlockConsensus {
+    /// The genesis block defines the consensus rules for future blocks.
+    Genesis(Genesis),
     PoA(FuelBlockPoAConsensus),
 }
 
@@ -628,6 +620,7 @@ impl FuelBlockConsensus {
     /// Retrieve the block producer address from the consensus data
     pub fn block_producer(&self, block_id: &BlockId) -> anyhow::Result<Address> {
         match &self {
+            FuelBlockConsensus::Genesis(_) => Ok(Address::zeroed()),
             FuelBlockConsensus::PoA(poa_data) => {
                 let public_key = poa_data.signature.recover(block_id.as_message())?;
                 let address = Input::owner(&public_key);
@@ -681,41 +674,6 @@ impl FuelBlockPoAConsensus {
     /// Create a new block consensus.
     pub fn new(signature: Signature) -> Self {
         Self { signature }
-    }
-}
-
-impl SealedFuelBlock {
-    //// Hack until we can completely remove meaningless
-    //// default headers.
-    pub fn fix_me_default_block() -> Self {
-        Self {
-            block: FuelBlock {
-                header: FuelBlockHeader {
-                    application: FuelApplicationHeader {
-                        da_height: Default::default(),
-                        generated: GeneratedApplicationFields {
-                            transactions_count: Default::default(),
-                            output_messages_count: Default::default(),
-                            transactions_root: Default::default(),
-                            output_messages_root: Default::default(),
-                        },
-                    },
-                    consensus: FuelConsensusHeader {
-                        prev_root: Default::default(),
-                        height: Default::default(),
-                        time: Tai64::UNIX_EPOCH,
-                        generated: GeneratedConsensusFields {
-                            application_hash: Default::default(),
-                        },
-                    },
-                    metadata: None,
-                },
-                transactions: Default::default(),
-            },
-            consensus: FuelBlockConsensus::PoA(FuelBlockPoAConsensus {
-                signature: Default::default(),
-            }),
-        }
     }
 }
 

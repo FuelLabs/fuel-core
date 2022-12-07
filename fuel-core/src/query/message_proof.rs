@@ -11,9 +11,8 @@ use fuel_core_interfaces::{
         FuelBlockDb,
         MessageProof,
     },
+    txpool::TransactionStatus,
 };
-
-use crate::tx_pool::TransactionStatus;
 
 #[cfg(test)]
 mod test;

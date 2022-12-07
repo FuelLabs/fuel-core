@@ -1,4 +1,5 @@
 use crate::{
+    block_producer::Error,
     mocks::{
         FailingMockExecutor,
         MockDb,
@@ -10,10 +11,6 @@ use crate::{
     Producer,
 };
 use fuel_core_interfaces::{
-    block_producer::{
-        BlockProducer,
-        Error,
-    },
     executor::Executor,
     model::{
         FuelApplicationHeader,
@@ -52,7 +49,6 @@ async fn cant_produce_at_genesis_height() {
 
 #[tokio::test]
 async fn can_produce_initial_block() {
-    // simple happy path for producing the first block
     let ctx = TestContext::default();
     let producer = ctx.producer();
 
@@ -210,7 +206,15 @@ struct TestContext {
 
 impl TestContext {
     pub fn default() -> Self {
-        let db = MockDb::default();
+        let genesis_height = 0u32.into();
+        let genesis_block = FuelBlockDb::default();
+
+        let db = MockDb {
+            blocks: Arc::new(Mutex::new(
+                vec![(genesis_height, genesis_block)].into_iter().collect(),
+            )),
+            ..Default::default()
+        };
         Self::default_from_db(db)
     }
 
