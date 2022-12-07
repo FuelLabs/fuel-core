@@ -19,8 +19,8 @@ use libp2p::{
     mplex,
     noise,
     tcp::{
-        GenTcpConfig,
-        TokioTcpTransport,
+        tokio::Transport as TokioTcpTransport,
+        Config as TcpConfig,
     },
     yamux,
     Multiaddr,
@@ -56,6 +56,9 @@ pub struct P2PConfig {
 
     /// IP address for Swarm to listen on
     pub address: IpAddr,
+
+    /// Optional address of your local node made reachable for other nodes in the network.
+    pub public_address: Option<Multiaddr>,
 
     /// The TCP port that Swarm listens on
     pub tcp_port: u16,
@@ -111,6 +114,7 @@ impl P2PConfig {
             local_keypair,
             network_name: network_name.into(),
             address: IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0])),
+            public_address: None,
             tcp_port: 0,
             max_block_size: 100_000,
             bootstrap_nodes: vec![],
@@ -141,7 +145,7 @@ impl P2PConfig {
 pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
-            || TokioTcpTransport::new(GenTcpConfig::new().port_reuse(true).nodelay(true));
+            || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
 
         let tcp = generate_tcp_transport();
 

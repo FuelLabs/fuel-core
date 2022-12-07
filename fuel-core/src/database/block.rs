@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
         Column,
         Database,
         KvStoreError,
@@ -24,8 +23,12 @@ use fuel_core_interfaces::{
         prelude::StorageAsRef,
         tai64::Tai64,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        Transactions,
+    },
     model::FuelBlock,
+    not_found,
 };
 use itertools::Itertools;
 use std::{
@@ -162,7 +165,7 @@ impl Database {
                 .map(|tx_id| {
                     self.storage::<Transactions>()
                         .get(tx_id)
-                        .and_then(|tx| tx.ok_or(KvStoreError::NotFound))
+                        .and_then(|tx| tx.ok_or(not_found!(Transactions)))
                         .map(Cow::into_owned)
                 })
                 .try_collect()?;

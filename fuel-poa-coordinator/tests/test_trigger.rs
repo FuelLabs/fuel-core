@@ -3,7 +3,6 @@
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
-    block_producer::BlockProducer,
     common::{
         consts::REG_ZERO,
         fuel_tx::TransactionBuilder,
@@ -34,6 +33,7 @@ use fuel_core_interfaces::{
     },
 };
 use fuel_poa_coordinator::{
+    ports::BlockProducer,
     Config,
     Service,
     Trigger,
@@ -108,6 +108,7 @@ impl BlockProducer for MockBlockProducer {
         Ok(ExecutionResult {
             block,
             skipped_transactions: vec![],
+            tx_status: vec![],
         })
     }
 
@@ -222,6 +223,11 @@ impl MockTxPool {
                     },
                     msg = txpool_rx.recv() => {
                         match msg.expect("Closed unexpectedly") {
+                            MockTxPoolMsg::PendingNumber(response) => {
+                                let t = txs.lock().await.clone();
+                                let resp = t.len();
+                                response.send(resp).unwrap();
+                            },
                             MockTxPoolMsg::ConsumableGas(response) => {
                                 let t = txs.lock().await.clone();
                                 let resp = t.into_iter().map(|t| t.limit()).sum();
@@ -299,6 +305,7 @@ impl MockTxPool {
 
 #[derive(Debug)]
 pub enum MockTxPoolMsg {
+    PendingNumber(oneshot::Sender<usize>),
     ConsumableGas(oneshot::Sender<u64>),
     Includable(oneshot::Sender<Vec<ArcPoolTx>>),
     Remove {
@@ -329,6 +336,17 @@ fn test_signing_key() -> Secret<SecretKeyWrapper> {
 
 #[async_trait::async_trait]
 impl TransactionPool for MockTxPoolSender {
+    async fn pending_number(&self) -> anyhow::Result<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.0
+            .send(MockTxPoolMsg::PendingNumber(tx))
+            .await
+            .expect("Send error");
+        Ok(rx
+            .await
+            .expect("MockTxPool panicked in total_consumable_gas query"))
+    }
+
     async fn total_consumable_gas(&self) -> anyhow::Result<u64> {
         let (tx, rx) = oneshot::channel();
         self.0
@@ -380,7 +398,7 @@ async fn clean_startup_shutdown_each_trigger() -> anyhow::Result<()> {
                 broadcast_rx,
                 txpool.sender(),
                 txpool.import_block_tx.clone(),
-                Arc::new(MockBlockProducer::new(txpool.sender(), db.clone())),
+                MockBlockProducer::new(txpool.sender(), db.clone()),
                 db,
             )
             .await;
@@ -451,13 +469,12 @@ async fn never_trigger_never_produces_blocks() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -498,14 +515,12 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db.clone(),
         )
         .await;
@@ -535,7 +550,8 @@ async fn instant_trigger_produces_block_instantly() -> anyhow::Result<()> {
                 poa.signature
                     .verify(&pk, &message)
                     .expect("expected signature to be valid");
-            } //_ => panic!("invalid sealed data"),
+            }
+            _ => panic!("invalid sealed data"),
         }
     }
 
@@ -562,13 +578,12 @@ async fn interval_trigger_produces_blocks_periodically() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -658,13 +673,12 @@ async fn interval_trigger_doesnt_react_to_full_txpool() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -718,13 +732,12 @@ async fn hybrid_trigger_produces_blocks_correctly() -> anyhow::Result<()> {
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;
@@ -801,13 +814,12 @@ async fn hybrid_trigger_reacts_correctly_to_full_txpool() -> anyhow::Result<()> 
 
     let (mut txpool, broadcast_rx) = MockTxPool::spawn();
     let producer = MockBlockProducer::new(txpool.sender(), db.clone());
-    let producer = Arc::new(producer);
     service
         .start(
             broadcast_rx,
             txpool.sender(),
             txpool.import_block_tx.clone(),
-            producer.clone(),
+            producer,
             db,
         )
         .await;

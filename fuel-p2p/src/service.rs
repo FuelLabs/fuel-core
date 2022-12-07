@@ -49,6 +49,7 @@ use libp2p::{
         ResponseChannel,
     },
     swarm::{
+        AddressScore,
         SwarmBuilder,
         SwarmEvent,
     },
@@ -123,11 +124,9 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         // configure and build P2P Service
         let transport = build_transport(config.local_keypair.clone());
         let behaviour = FuelBehaviour::new(&config, codec.clone());
-        let mut swarm = SwarmBuilder::new(transport, behaviour, local_peer_id)
-            .executor(Box::new(|fut| {
-                tokio::spawn(fut);
-            }))
-            .build();
+        let mut swarm =
+            SwarmBuilder::with_tokio_executor(transport, behaviour, local_peer_id)
+                .build();
 
         // set up node's address to listen on
         let listen_multiaddr = {
@@ -149,6 +148,10 @@ impl<Codec: NetworkCodec> FuelP2PService<Codec> {
         let network_metadata = NetworkMetadata { gossipsub_topics };
 
         let metrics = config.metrics;
+
+        if let Some(public_address) = config.public_address {
+            let _ = swarm.add_external_address(public_address, AddressScore::Infinite);
+        }
 
         Ok(Self {
             local_peer_id,

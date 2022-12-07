@@ -11,7 +11,7 @@ use crate::client::{
     PaginationRequest,
 };
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct BalanceArgs {
     pub owner: Address,
     pub asset_id: AssetId,
@@ -21,10 +21,10 @@ pub struct BalanceArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "BalanceArgs"
+    variables = "BalanceArgs"
 )]
 pub struct BalanceQuery {
-    #[arguments(owner = &args.owner, asset_id = &args.asset_id)]
+    #[arguments(owner: $owner, assetId: $asset_id)]
     pub balance: Balance,
 }
 
@@ -35,7 +35,7 @@ pub struct BalanceFilterInput {
     pub owner: Address,
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct BalancesConnectionArgs {
     /// Filter coins based on a filter
     filter: BalanceFilterInput,
@@ -75,10 +75,10 @@ impl From<(Address, PaginationRequest<String>)> for BalancesConnectionArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "BalancesConnectionArgs"
+    variables = "BalancesConnectionArgs"
 )]
 pub struct BalancesQuery {
-    #[arguments(filter = &args.filter, after = &args.after, before = &args.before, first = &args.first, last = &args.last)]
+    #[arguments(filter: $filter, after: $after, before: $before, first: $first, last: $last)]
     pub balances: BalanceConnection,
 }
 

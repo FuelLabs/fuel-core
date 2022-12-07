@@ -1,6 +1,5 @@
 use crate::{
     database::{
-        storage::FuelBlocks,
         transaction::OwnedTransactionIndexCursor,
         Database,
         KvStoreError,
@@ -32,7 +31,6 @@ use async_graphql::{
     Subscription,
 };
 use fuel_core_interfaces::{
-    block_producer::BlockProducer,
     common::{
         fuel_storage::StorageAsRef,
         fuel_tx::{
@@ -43,7 +41,11 @@ use fuel_core_interfaces::{
         fuel_types,
         fuel_vm::prelude::Deserializable,
     },
-    db::Transactions,
+    db::{
+        FuelBlocks,
+        Transactions,
+    },
+    not_found,
     txpool::TxPoolMpsc,
 };
 use fuel_txpool::Service as TxPoolService;
@@ -159,7 +161,7 @@ impl TxQuery {
                         block.map(|(block_height, block_id)| {
                             db.storage::<FuelBlocks>().get(&block_id)
                                 .transpose()
-                                .ok_or(KvStoreError::NotFound)?
+                                .ok_or(not_found!(FuelBlocks))?
                                 .map(|fuel_block| {
                                     let mut txs = fuel_block
                                         .into_owned()
@@ -192,7 +194,7 @@ impl TxQuery {
                     .map(|(tx_id, block_height)| -> Result<(Cow<FuelTx>, &BlockHeight), KvStoreError> {
                         let tx = db.storage::<Transactions>().get(tx_id)
                             .transpose()
-                            .ok_or(KvStoreError::NotFound)?;
+                            .ok_or(not_found!(Transactions))?;
 
                         Ok((tx?, block_height))
                     })
@@ -292,7 +294,7 @@ impl TxQuery {
                                 let tx = db
                                     .storage::<Transactions>()
                                     .get(&tx_id)?
-                                    .ok_or(KvStoreError::NotFound)?
+                                    .ok_or(not_found!(Transactions))?
                                     .into_owned();
                                 Ok((cursor, tx))
                             })
@@ -332,7 +334,7 @@ impl TxMutation {
         // for read-only calls.
         utxo_validation: Option<bool>,
     ) -> async_graphql::Result<Vec<receipt::Receipt>> {
-        let block_producer = ctx.data_unchecked::<Arc<dyn BlockProducer>>();
+        let block_producer = ctx.data_unchecked::<Arc<fuel_block_producer::Producer>>();
 
         let mut tx = FuelTx::from_bytes(&tx.0)?;
         tx.precompute();

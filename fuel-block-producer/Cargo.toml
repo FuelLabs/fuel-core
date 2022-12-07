@@ -14,6 +14,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 fuel-core-interfaces = { path = "../fuel-core-interfaces", version = "0.14.1" }
 parking_lot = "0.12"
+thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
 tracing = { version = "0.1" }
 

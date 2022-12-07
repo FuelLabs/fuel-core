@@ -24,6 +24,7 @@ use fuel_core_interfaces::{
         },
     },
     db::Coins,
+    model::CoinStatus,
 };
 use std::borrow::Cow;
 
@@ -115,6 +116,18 @@ impl Database {
     pub fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
         let configs = self
             .iter_all::<Vec<u8>, Coin>(Column::Coins, None, None, None)
+            .filter_map(|coin| {
+                // Return only unspent coins
+                if let Ok(coin) = coin {
+                    if coin.1.status == CoinStatus::Unspent {
+                        Some(Ok(coin))
+                    } else {
+                        None
+                    }
+                } else {
+                    Some(coin)
+                }
+            })
             .map(|raw_coin| -> Result<CoinConfig, anyhow::Error> {
                 let coin = raw_coin?;
 

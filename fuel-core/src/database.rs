@@ -1,11 +1,5 @@
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            SealedBlockConsensus,
-        },
-        transactional::DatabaseTransaction,
-    },
+    database::transactional::DatabaseTransaction,
     state::{
         in_memory::memory_store::MemoryStore,
         DataSource,
@@ -26,6 +20,10 @@ use fuel_core_interfaces::{
         StorageAsMut,
         StorageAsRef,
     },
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
     model::{
         BlockHeight,
         BlockId,
@@ -33,6 +31,7 @@ use fuel_core_interfaces::{
         FuelBlockDb,
         SealedFuelBlock,
     },
+    not_found,
     p2p::P2pDb,
     poa_coordinator::BlockDb,
     relayer::RelayerDb,
@@ -62,7 +61,6 @@ use tempfile::TempDir;
 
 // Storages implementation
 // TODO: Move to separate `database/storage` folder, because it is only implementation of storages traits.
-mod balances;
 mod block;
 mod code_root;
 mod coin;
@@ -72,9 +70,9 @@ mod receipts;
 mod sealed_block;
 mod state;
 
+pub mod balances;
 pub mod metadata;
 pub mod resource;
-pub mod storage;
 pub mod transaction;
 pub mod transactional;
 pub mod vm_database;
@@ -87,13 +85,13 @@ pub mod vm_database;
 pub enum Column {
     /// The column id of metadata about the blockchain
     Metadata = 0,
-    /// See [`ContractsRawCode`](fuel_vm::storage::ContractsRawCode)
+    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
     ContractsRawCode = 1,
-    /// See [`ContractsRawCode`](fuel_vm::storage::ContractsRawCode)
+    /// See [`ContractsRawCode`](fuel_core_interfaces::db::ContractsRawCode)
     ContractsInfo = 2,
-    /// See [`ContractsState`](fuel_vm::storage::ContractsState)
+    /// See [`ContractsState`](fuel_core_interfaces::db::ContractsState)
     ContractsState = 3,
-    /// See [`ContractsLatestUtxo`](storage::ContractsLatestUtxo)
+    /// See [`ContractsLatestUtxo`](fuel_core_interfaces::db::ContractsLatestUtxo)
     ContractsLatestUtxo = 4,
     /// See [`ContractsAssets`](fuel_vm::storage::ContractsAssets)
     ContractsAssets = 5,
@@ -107,9 +105,9 @@ pub enum Column {
     TransactionStatus = 9,
     /// The column of the table of all `owner`'s transactions
     TransactionsByOwnerBlockIdx = 10,
-    /// See [`Receipts`](storage::Receipts)
+    /// See [`Receipts`](fuel_core_interfaces::db::Receipts)
     Receipts = 11,
-    /// See [`FuelBlocks`](storage::FuelBlocks)
+    /// See [`FuelBlocks`](fuel_core_interfaces::db::FuelBlocks)
     FuelBlocks = 12,
     /// Maps fuel block id to fuel block hash
     FuelBlockIds = 13,
@@ -331,7 +329,7 @@ impl BlockProducerDatabase for Database {
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>> {
         let id = self
             .get_block_id(fuel_height)?
-            .ok_or(KvStoreError::NotFound)?;
+            .ok_or(not_found!("BlockId"))?;
         self.storage::<FuelBlocks>().get(&id).map_err(Into::into)
     }
 
@@ -355,10 +353,6 @@ impl P2pDb for Database {
 /// Implement `ChainConfigDb` so that `Database` can be passed to
 /// `StateConfig's` `generate_state_config()` method
 impl ChainConfigDb for Database {
-    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
-        Self::get_block_height(self)
-    }
-
     fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>> {
         Self::get_coin_config(self)
     }
@@ -371,6 +365,10 @@ impl ChainConfigDb for Database {
         &self,
     ) -> Result<Option<Vec<fuel_chain_config::MessageConfig>>, Error> {
         Self::get_message_config(self)
+    }
+
+    fn get_block_height(&self) -> Result<Option<BlockHeight>, Error> {
+        Self::get_block_height(self)
     }
 }
 

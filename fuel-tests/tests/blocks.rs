@@ -1,8 +1,5 @@
 use fuel_core::{
-    database::{
-        storage::FuelBlocks,
-        Database,
-    },
+    database::Database,
     model::{
         FuelBlockDb,
         FuelBlockHeader,
@@ -18,14 +15,25 @@ use fuel_core_interfaces::{
         fuel_storage::StorageAsMut,
         fuel_tx,
         fuel_tx::UniqueIdentifier,
+        secrecy::ExposeSecret,
         tai64::Tai64,
     },
-    model::FuelConsensusHeader,
+    db::{
+        FuelBlocks,
+        SealedBlockConsensus,
+    },
+    model::{
+        FuelBlockConsensus,
+        FuelConsensusHeader,
+    },
 };
 use fuel_gql_client::{
     client::{
         schema::{
-            block::TimeParameters,
+            block::{
+                Consensus,
+                TimeParameters,
+            },
             U64,
         },
         types::TransactionStatus,
@@ -40,6 +48,7 @@ use itertools::{
     Itertools,
 };
 use rstest::rstest;
+use std::ops::Deref;
 
 #[tokio::test]
 async fn block() {
@@ -49,6 +58,9 @@ async fn block() {
     let mut db = Database::default();
     db.storage::<FuelBlocks>()
         .insert(&id.into(), &block)
+        .unwrap();
+    db.storage::<SealedBlockConsensus>()
+        .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
         .unwrap();
 
     // setup server & client
@@ -67,20 +79,28 @@ async fn block() {
 }
 
 #[tokio::test]
-async fn produce_block() {
-    let db = Database::default();
-
-    let mut config = Config::local_node();
-
-    config.manual_blocks_enabled = true;
-
-    let srv = FuelService::from_database(db, config).await.unwrap();
+async fn get_genesis_block() {
+    let srv = FuelService::from_database(Database::default(), Config::local_node())
+        .await
+        .unwrap();
 
     let client = FuelClient::from(srv.bound_address);
+    let tx = fuel_tx::Transaction::default();
+    client.submit_and_await_commit(&tx).await.unwrap();
 
-    let new_height = client.produce_blocks(5, None).await.unwrap();
+    let block = client.block_by_height(0).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 0);
+    assert!(matches!(block.consensus, Consensus::Genesis(_)));
+}
 
-    assert_eq!(5, new_height);
+#[tokio::test]
+async fn produce_block() {
+    let config = Config::local_node();
+    let srv = FuelService::from_database(Database::default(), config.clone())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
 
     let tx = fuel_tx::Transaction::default();
     client.submit_and_await_commit(&tx).await.unwrap();
@@ -93,20 +113,54 @@ async fn produce_block() {
     if let TransactionStatus::Success { block_id, .. } =
         transaction_response.unwrap().status
     {
-        let block_height: u64 = client
+        let block = client
             .block(block_id.to_string().as_str())
             .await
             .unwrap()
+            .unwrap();
+        let actual_pub_key = block.block_producer().unwrap();
+        let block_height: u64 = block.header.height.into();
+        let expected_pub_key = config
+            .consensus_key
             .unwrap()
-            .header
-            .height
-            .into();
+            .expose_secret()
+            .deref()
+            .public_key();
 
-        // Block height is now 6 after being advance 5
-        assert!(6 == block_height);
+        assert!(1 == block_height);
+        assert_eq!(actual_pub_key, expected_pub_key);
     } else {
         panic!("Wrong tx status");
     };
+}
+
+#[tokio::test]
+async fn produce_block_manually() {
+    let db = Database::default();
+
+    let mut config = Config::local_node();
+
+    config.manual_blocks_enabled = true;
+
+    let srv = FuelService::from_database(db, config.clone())
+        .await
+        .unwrap();
+
+    let client = FuelClient::from(srv.bound_address);
+
+    let new_height = client.produce_blocks(1, None).await.unwrap();
+
+    assert_eq!(1, new_height);
+    let block = client.block_by_height(1).await.unwrap().unwrap();
+    assert_eq!(block.header.height.0, 1);
+    let actual_pub_key = block.block_producer().unwrap();
+    let expected_pub_key = config
+        .consensus_key
+        .unwrap()
+        .expose_secret()
+        .deref()
+        .public_key();
+    assert_eq!(actual_pub_key, expected_pub_key);
 }
 
 #[tokio::test]
@@ -272,6 +326,9 @@ async fn block_connection_5(
         db.storage::<FuelBlocks>()
             .insert(&id.into(), &block)
             .unwrap();
+        db.storage::<SealedBlockConsensus>()
+            .insert(&id.into(), &FuelBlockConsensus::PoA(Default::default()))
+            .unwrap();
     }
 
     // setup server & client
@@ -292,7 +349,10 @@ async fn block_connection_5(
 
     assert!(!blocks.results.is_empty());
     assert!(blocks.cursor.is_some());
-    // assert "first" 5 blocks are returned in descending order (latest first)
+
+    // Blocks are typically requested in descending order (latest
+    // first), but we're returning them in ascending order to keep
+    // this query in line with the GraphQL API specs and other queries.
     match pagination_direction {
         PageDirection::Forward => {
             assert_eq!(
@@ -301,7 +361,7 @@ async fn block_connection_5(
                     .into_iter()
                     .map(|b| b.header.height.0)
                     .collect_vec(),
-                rev(0..5).collect_vec()
+                (0..5).collect_vec()
             );
         }
         PageDirection::Backward => {
