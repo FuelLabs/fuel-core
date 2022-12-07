@@ -477,12 +477,19 @@ mod tests {
             Topic,
         },
         identity::Keypair,
+        multiaddr::Protocol,
         swarm::SwarmEvent,
         Multiaddr,
         PeerId,
     };
     use std::{
         collections::HashSet,
+        net::{
+            IpAddr,
+            Ipv4Addr,
+            SocketAddrV4,
+            TcpListener,
+        },
         sync::Arc,
         time::Duration,
     };
@@ -521,7 +528,9 @@ mod tests {
     }
 
     /// helper function for building FuelP2PService
-    fn build_fuel_p2p_service(mut p2p_config: P2PConfig) -> FuelP2PService<BincodeCodec> {
+    fn build_service_from_config(
+        mut p2p_config: P2PConfig,
+    ) -> FuelP2PService<BincodeCodec> {
         p2p_config.local_keypair = Keypair::generate_secp256k1(); // change keypair for each Node
         let max_block_size = p2p_config.max_block_size;
 
@@ -533,11 +542,66 @@ mod tests {
         format!("{}/p2p/{}", address, peer_id).parse().unwrap()
     }
 
+    /// returns a free tcp port number for a node to listen on
+    fn get_unused_port() -> u16 {
+        let socket = SocketAddrV4::new(Ipv4Addr::from([0, 0, 0, 0]), 0);
+
+        TcpListener::bind(socket)
+            .and_then(|listener| listener.local_addr())
+            .map(|addr| addr.port())            
+            // Safety: used only in tests, it is expected that there exists a free port
+            .expect("A free tcp port exists")
+    }
+
+    /// Holds node data needed to initialize the P2P Service
+    /// It provides correct `multiaddr` for other nodes to connect to
+    #[derive(Debug, Clone)]
+    struct NodeData {
+        keypair: Keypair,
+        tcp_port: u16,
+        multiaddr: Multiaddr,
+    }
+
+    impl NodeData {
+        /// Generates a random `keypair` and takes a free tcp port and returns it as `NodeData`
+        fn random() -> Self {
+            let keypair = Keypair::generate_secp256k1();
+            let tcp_port = get_unused_port();
+
+            let multiaddr = {
+                let mut addr =
+                    Multiaddr::from(IpAddr::V4(Ipv4Addr::from([127, 0, 0, 1])));
+                addr.push(Protocol::Tcp(tcp_port));
+                let peer_id = PeerId::from_public_key(&keypair.public());
+                build_node_multiaddr(peer_id, addr)
+            };
+
+            Self {
+                keypair,
+                tcp_port,
+                multiaddr,
+            }
+        }
+
+        /// Combines `NodeData` with `P2pConfig` to create a `FuelP2PService`
+        fn create_service(
+            &self,
+            mut p2p_config: P2PConfig,
+        ) -> FuelP2PService<BincodeCodec> {
+            let max_block_size = p2p_config.max_block_size;
+            p2p_config.tcp_port = self.tcp_port;
+            p2p_config.local_keypair = self.keypair.clone();
+
+            FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
+        }
+    }
+
     #[tokio::test]
     #[instrument]
     async fn p2p_service_works() {
-        let mut fuel_p2p_service =
-            build_fuel_p2p_service(P2PConfig::default_with_network("p2p_service_works"));
+        let mut fuel_p2p_service = build_service_from_config(
+            P2PConfig::default_with_network("p2p_service_works"),
+        );
 
         loop {
             match fuel_p2p_service.swarm.select_next_some().await {
@@ -578,58 +642,51 @@ mod tests {
 
         p2p_config.gossipsub_config = gossipsub_config;
 
-        let build_sentry_nodes = || async {
-            let instantiate_nodes: Vec<_> = (0..reserved_nodes_size)
-                .map(|_| async {
-                    let mut node = build_fuel_p2p_service(p2p_config.clone());
+        let build_sentry_nodes = || {
+            let guarded_node = NodeData::random();
 
-                    let node_address = match node.swarm.select_next_some().await {
-                        SwarmEvent::NewListenAddr { address, .. } => Some(address),
-                        _ => None,
-                    };
-
-                    (node, node_address.unwrap())
-                })
+            let reserved_nodes: Vec<NodeData> = (0..reserved_nodes_size)
+                .map(|_| NodeData::random())
                 .collect();
 
-            // collect sentry nodes
-            let sentry_nodes = futures::future::join_all(instantiate_nodes).await;
-
-            // store resrved nodes' addresses
-            let reserved_nodes: Vec<Multiaddr> = sentry_nodes
-                .iter()
-                .map(|(node, address)| {
-                    build_node_multiaddr(node.local_peer_id, address.clone())
-                })
-                .collect();
-
-            // set up the guraded node with `reserved_nodes_only_mode`
-            let guarded_node = {
-                let mut config = p2p_config.clone();
-                config.reserved_nodes = reserved_nodes;
-                config.reserved_nodes_only_mode = true;
-                build_fuel_p2p_service(config)
+            // set up the guraded node service with `reserved_nodes_only_mode`
+            let guarded_node_service = {
+                let mut p2p_config = p2p_config.clone();
+                p2p_config.reserved_nodes = reserved_nodes
+                    .iter()
+                    .map(|node| node.multiaddr.clone())
+                    .collect();
+                p2p_config.reserved_nodes_only_mode = true;
+                guarded_node.create_service(p2p_config)
             };
 
-            (guarded_node, sentry_nodes)
+            let sentry_nodes: Vec<FuelP2PService<BincodeCodec>> = reserved_nodes
+                .into_iter()
+                .map(|node| {
+                    let mut p2p_config = p2p_config.clone();
+                    // sentry nodes will hold a guarded node as their reserved node
+                    p2p_config.reserved_nodes = vec![guarded_node.multiaddr.clone()];
+                    node.create_service(p2p_config)
+                })
+                .collect();
+
+            (guarded_node_service, sentry_nodes)
         };
 
-        let (mut first_guarded_node, mut first_sentry_nodes) = build_sentry_nodes().await;
-        let (mut second_guarded_node, mut second_sentry_nodes) =
-            build_sentry_nodes().await;
+        let (mut first_guarded_node, mut first_sentry_nodes) = build_sentry_nodes();
+        let (mut second_guarded_node, mut second_sentry_nodes) = build_sentry_nodes();
 
         let mut first_sentry_set: HashSet<_> = first_sentry_nodes
             .iter()
-            .map(|(node, _)| node.local_peer_id)
+            .map(|node| node.local_peer_id)
             .collect();
 
         let mut second_sentry_set: HashSet<_> = second_sentry_nodes
             .iter()
-            .map(|(node, _)| node.local_peer_id)
+            .map(|node| node.local_peer_id)
             .collect();
 
-        let (mut single_sentry_node, _) = first_sentry_nodes.pop().unwrap();
-
+        let mut single_sentry_node = first_sentry_nodes.pop().unwrap();
         let mut sentry_node_connetions = HashSet::new();
 
         loop {
@@ -667,15 +724,13 @@ mod tests {
                 }
                 // Keep polling other nodes to do their work
                 _ = async {
-                    for (node, _) in &mut first_sentry_nodes {
-                        node.next_event().await;
+                    for sentry_node in &mut first_sentry_nodes {
+                        sentry_node.next_event().await;
                     }
-
-
                 } => {},
                 _ = async {
-                    for (node, _) in &mut second_sentry_nodes {
-                        node.next_event().await;
+                    for sentry_node in &mut second_sentry_nodes {
+                        sentry_node.next_event().await;
                     }
                 } => {}
             };
@@ -690,10 +745,10 @@ mod tests {
         // Node A
         let mut p2p_config = P2PConfig::default_with_network("nodes_connected_via_mdns");
         p2p_config.enable_mdns = true;
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
+        let mut node_a = build_service_from_config(p2p_config.clone());
 
         // Node B
-        let mut node_b = build_fuel_p2p_service(p2p_config);
+        let mut node_b = build_service_from_config(p2p_config);
 
         loop {
             tokio::select! {
@@ -719,22 +774,16 @@ mod tests {
         // Node A
         let mut p2p_config =
             P2PConfig::default_with_network("nodes_connected_via_identify");
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
 
-        let node_a_address = match node_a.swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => Some(address),
-            _ => None,
-        };
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
-            node_a.local_peer_id,
-            node_a_address.clone().unwrap(),
-        )];
-        let mut node_b = build_fuel_p2p_service(p2p_config.clone());
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = build_service_from_config(p2p_config.clone());
 
         // Node C
-        let mut node_c = build_fuel_p2p_service(p2p_config);
+        let mut node_c = build_service_from_config(p2p_config);
 
         loop {
             tokio::select! {
@@ -763,21 +812,15 @@ mod tests {
     #[tokio::test]
     #[instrument]
     async fn peer_info_updates_work() {
-        // Node A
         let mut p2p_config = P2PConfig::default_with_network("peer_info_updates_work");
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
 
-        let node_a_address = match node_a.swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => Some(address),
-            _ => None,
-        };
+        // Node A
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
-            node_a.local_peer_id,
-            node_a_address.clone().unwrap(),
-        )];
-        let mut node_b = build_fuel_p2p_service(p2p_config);
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = build_service_from_config(p2p_config);
 
         loop {
             tokio::select! {
@@ -834,11 +877,6 @@ mod tests {
     async fn gossipsub_broadcast(broadcast_request: GossipsubBroadcastRequest) {
         let mut p2p_config =
             P2PConfig::default_with_network("gossipsub_exchanges_messages");
-        let topics = vec![
-            NEW_TX_GOSSIP_TOPIC.into(),
-            NEW_BLOCK_GOSSIP_TOPIC.into(),
-            CON_VOTE_GOSSIP_TOPIC.into(),
-        ];
 
         let selected_topic: GossipTopic = {
             let topic = match broadcast_request {
@@ -853,20 +891,12 @@ mod tests {
         let mut message_sent = false;
 
         // Node A
-        p2p_config.topics = topics.clone();
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
-
-        let node_a_address = match node_a.swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => Some(address),
-            _ => None,
-        };
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
-            node_a.local_peer_id,
-            node_a_address.clone().unwrap(),
-        )];
-        let mut node_b = build_fuel_p2p_service(p2p_config.clone());
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = build_service_from_config(p2p_config.clone());
 
         loop {
             tokio::select! {
@@ -943,19 +973,12 @@ mod tests {
         let mut p2p_config = P2PConfig::default_with_network("request_response_works");
 
         // Node A
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
-
-        let node_a_address = match node_a.swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => Some(address),
-            _ => None,
-        };
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
-            node_a.local_peer_id,
-            node_a_address.clone().unwrap(),
-        )];
-        let mut node_b = build_fuel_p2p_service(p2p_config.clone());
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = build_service_from_config(p2p_config.clone());
 
         let (tx_test_end, mut rx_test_end) = mpsc::channel(1);
 
@@ -1028,19 +1051,13 @@ mod tests {
         // Node A
         // setup request timeout to 0 in order for the Request to fail
         p2p_config.set_request_timeout = Duration::from_secs(0);
-        let mut node_a = build_fuel_p2p_service(p2p_config.clone());
 
-        let node_a_address = match node_a.swarm.select_next_some().await {
-            SwarmEvent::NewListenAddr { address, .. } => Some(address),
-            _ => None,
-        };
+        let node_a_data = NodeData::random();
+        let mut node_a = node_a_data.create_service(p2p_config.clone());
 
         // Node B
-        p2p_config.bootstrap_nodes = vec![build_node_multiaddr(
-            node_a.local_peer_id,
-            node_a_address.clone().unwrap(),
-        )];
-        let mut node_b = build_fuel_p2p_service(p2p_config.clone());
+        p2p_config.bootstrap_nodes = vec![node_a_data.multiaddr];
+        let mut node_b = build_service_from_config(p2p_config.clone());
 
         let (tx_test_end, mut rx_test_end) = tokio::sync::mpsc::channel(1);
 
