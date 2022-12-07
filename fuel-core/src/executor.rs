@@ -13,7 +13,10 @@ use crate::{
     service::Config,
 };
 use fuel_block_executor::refs::ContractRef;
-use fuel_block_producer::ports::DBTransaction;
+use fuel_block_producer::ports::{
+    DBTransaction,
+    Executor as ExecutorTrait,
+};
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -117,7 +120,7 @@ struct ExecutionData {
     skipped_transactions: Vec<(Transaction, Error)>,
 }
 
-impl fuel_block_producer::ports::Executor<Database> for Executor {
+impl ExecutorTrait<Database> for Executor {
     fn execute_without_commit(
         &self,
         block: ExecutionBlock,
@@ -1317,7 +1320,6 @@ impl Fee for CreateCheckedMetadata {
 mod tests {
     use super::*;
     use crate::model::FuelBlock;
-    use fuel_block_producer::ports::Executor as ExecutorTrait;
     use fuel_core_interfaces::{
         common::{
             consts::REG_PC,
@@ -1752,9 +1754,9 @@ mod tests {
                 let mut block = FuelBlock::default();
                 *block.transactions_mut() = vec![script.clone().into()];
 
-                producer
+                assert!(producer
                     .execute_and_commit(ExecutionBlock::Production(block.into()))
-                    .expect("Should produce a block");
+                    .is_ok());
                 let receipts = producer
                     .database
                     .storage::<Receipts>()

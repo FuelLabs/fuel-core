@@ -180,7 +180,6 @@ pub struct MockDb {
 }
 
 impl BlockProducerDatabase for MockDb {
-    /// fetch previously committed block at given height
     fn get_block(&self, fuel_height: BlockHeight) -> Result<Option<Cow<FuelBlockDb>>> {
         let blocks = self.blocks.lock().unwrap();
 

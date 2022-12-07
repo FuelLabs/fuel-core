@@ -71,6 +71,7 @@ pub struct UncommittedResult<DbTransaction> {
 }
 
 impl<DbTransaction> UncommittedResult<DbTransaction> {
+    /// Create a new instance of `UncommittedResult`.
     pub fn new(result: ExecutionResult, database_transaction: DbTransaction) -> Self {
         Self {
             result,
@@ -78,6 +79,7 @@ impl<DbTransaction> UncommittedResult<DbTransaction> {
         }
     }
 
+    /// Returns a reference to the `ExecutionResult`.
     pub fn result(&self) -> &ExecutionResult {
         &self.result
     }

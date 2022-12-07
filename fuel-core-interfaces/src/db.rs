@@ -47,7 +47,13 @@ pub trait Transactional {
 pub trait DatabaseTransaction<Database>:
     Transactional + core::fmt::Debug + Send + Sync
 {
+    // TODO: After removing of `Box<dyn DatabaseTransaction>` replace this method with
+    //  `AsRef<Database>` trait.
+    /// Returns the reference to the `Database` instance.
     fn database(&self) -> &Database;
+    // TODO: After removing of `Box<dyn DatabaseTransaction>` replace this method with
+    //  `AsMut<Database>` trait.
+    /// Returns the mutable reference to the `Database` instance.
     fn database_mut(&mut self) -> &mut Database;
 }
 

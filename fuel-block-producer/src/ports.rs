@@ -18,13 +18,13 @@ use fuel_core_interfaces::{
 use std::borrow::Cow;
 
 pub trait BlockProducerDatabase: Send + Sync {
-    /// fetch previously committed block at given height
+    /// Fetch previously committed block at given height.
     fn get_block(
         &self,
         fuel_height: BlockHeight,
     ) -> anyhow::Result<Option<Cow<FuelBlockDb>>>;
 
-    /// Fetch the current block height
+    /// Fetch the current block height.
     fn current_block_height(&self) -> anyhow::Result<BlockHeight>;
 }
 
@@ -66,6 +66,9 @@ pub trait Executor<Database: ?Sized>: Sync + Send {
         block: ExecutionBlock,
     ) -> Result<UncommittedResult<DBTransaction<Database>>, ExecutorError>;
 
+    /// Executes the block without committing it to the database. During execution collects the
+    /// receipts to return them. The `utxo_validation` field can be used to disable the validation
+    /// of utxos during execution.
     fn dry_run(
         &self,
         block: ExecutionBlock,

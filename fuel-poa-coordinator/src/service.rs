@@ -193,11 +193,7 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(
-            &self.signing_key,
-            &block,
-            &mut *db_transaction.database_mut(),
-        )?;
+        seal_block(&self.signing_key, &block, db_transaction.database_mut())?;
         db_transaction.commit_box()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
@@ -471,33 +467,20 @@ mod test {
         }
     }
 
-    struct DatabaseTransaction {
-        database: MockDatabase,
-    }
+    mockall::mock! {
+        #[derive(Debug)]
+        DatabaseTransaction{}
 
-    impl core::fmt::Debug for DatabaseTransaction {
-        fn fmt(&self, _f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-            Ok(())
-        }
-    }
+        impl Transactional for DatabaseTransaction {
+            fn commit(self) -> Result<(), DBError>;
 
-    impl Transactional for DatabaseTransaction {
-        fn commit(self) -> Result<(), DBError> {
-            Ok(())
+            fn commit_box(self: Box<Self>) -> Result<(), DBError>;
         }
 
-        fn commit_box(self: Box<Self>) -> Result<(), DBError> {
-            Ok(())
-        }
-    }
+        impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
+            fn database(&self) -> &MockDatabase;
 
-    impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
-        fn database(&self) -> &MockDatabase {
-            &self.database
-        }
-
-        fn database_mut(&mut self) -> &mut MockDatabase {
-            &mut self.database
+            fn database_mut(&mut self) -> &mut MockDatabase;
         }
     }
 
@@ -549,12 +532,37 @@ mod test {
 
         let mock_skipped_txs = skipped_transactions.clone();
 
+        let mut seq = mockall::Sequence::new();
+
         let mut block_producer = MockBlockProducer::default();
         block_producer
             .expect_produce_and_execute_block()
+            .times(1)
+            .in_sequence(&mut seq)
             .returning(move |_, _| {
                 let mut db = MockDatabase::default();
-                db.expect_seal_block().returning(|_, _| Ok(()));
+                // We expect that `seal_block` should be called 1 time after `produce_and_execute_block`.
+                db.expect_seal_block()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_, _| Ok(()));
+
+                let mut db_transaction = MockDatabaseTransaction::default();
+                db_transaction.expect_database_mut().times(1).return_var(db);
+
+                // Check that `commit` is called after `seal_block`.
+                db_transaction
+                    .expect_commit_box()
+                    // Verifies that `commit_box` have been called.
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(()));
+                db_transaction
+                    .expect_commit()
+                    // TODO: After removing `commit_box` set `times(1)`
+                    .times(0)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(()));
                 Ok(UncommittedResult::new(
                     ExecutionResult {
                         block: Default::default(),
@@ -565,7 +573,7 @@ mod test {
                             .collect(),
                         tx_status: Default::default(),
                     },
-                    Box::new(DatabaseTransaction { database: db }),
+                    Box::new(db_transaction),
                 ))
             });
 
