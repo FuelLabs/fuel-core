@@ -7,6 +7,7 @@ use crate::{
         MockRelayer,
         MockTxPool,
     },
+    ports::Executor,
     Config,
     Producer,
 };
@@ -173,7 +174,7 @@ async fn production_fails_on_execution_error() {
                 Default::default(),
             ),
         )))),
-        ..TestContext::failing()
+        ..TestContext::default()
     };
 
     let producer = ctx.producer();
@@ -193,15 +194,15 @@ async fn production_fails_on_execution_error() {
     );
 }
 
-struct TestContext<E> {
+struct TestContext {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Arc<E>,
+    executor: Arc<dyn Executor<MockDb>>,
     txpool: MockTxPool,
 }
 
-impl TestContext<MockExecutor> {
+impl TestContext {
     pub fn default() -> Self {
         let genesis_height = 0u32.into();
         let genesis_block = FuelBlockDb::default();
@@ -228,28 +229,11 @@ impl TestContext<MockExecutor> {
             txpool,
         }
     }
-}
 
-impl TestContext<FailingMockExecutor> {
-    pub fn failing() -> Self {
-        let txpool = MockTxPool::default();
-        let relayer = MockRelayer::default();
-        let config = Config::default();
-        Self {
-            config,
-            db: Default::default(),
-            relayer,
-            executor: Arc::new(FailingMockExecutor(Mutex::new(None))),
-            txpool,
-        }
-    }
-}
-
-impl<E> TestContext<E> {
-    pub fn producer(self) -> Producer<E> {
+    pub fn producer(self) -> Producer<MockDb> {
         Producer {
             config: self.config,
-            db: Box::new(self.db),
+            db: self.db,
             txpool: Box::new(self.txpool),
             executor: self.executor,
             relayer: Box::new(self.relayer),

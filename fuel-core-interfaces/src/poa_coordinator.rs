@@ -1,15 +1,8 @@
 use crate::{
     common::fuel_tx::TxId,
-    model::{
-        ArcPoolTx,
-        BlockHeight,
-    },
+    model::ArcPoolTx,
 };
 use anyhow::Result;
-
-pub trait BlockDb: Send + Sync {
-    fn block_height(&self) -> Result<BlockHeight>;
-}
 
 #[async_trait::async_trait]
 pub trait TransactionPool {

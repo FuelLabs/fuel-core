@@ -13,7 +13,7 @@ use crate::{
     service::Config,
 };
 use fuel_block_executor::refs::ContractRef;
-use fuel_block_producer::block_producer::Executor as ExecutorTrait;
+use fuel_block_producer::ports::DBTransaction;
 use fuel_core_interfaces::{
     common::{
         fuel_asm::Word,
@@ -62,6 +62,7 @@ use fuel_core_interfaces::{
         FuelBlocks,
         Messages,
         Receipts,
+        Transactional,
         Transactions,
     },
     executor::{
@@ -116,11 +117,11 @@ struct ExecutionData {
     skipped_transactions: Vec<(Transaction, Error)>,
 }
 
-impl ExecutorTrait<DatabaseTransaction> for Executor {
-    fn execute(
+impl fuel_block_producer::ports::Executor<Database> for Executor {
+    fn execute_without_commit(
         &self,
         block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DatabaseTransaction>, Error> {
+    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
         self.execute_inner(block, &self.database)
     }
 
@@ -150,7 +151,7 @@ impl ExecutorTrait<DatabaseTransaction> for Executor {
                 ..
             },
             temporary_db,
-        ) = executor.execute(block)?.into();
+        ) = executor.execute_without_commit(block)?.into();
 
         // If one of the transactions fails, return an error.
         if let Some((_, err)) = skipped_transactions.into_iter().next() {
@@ -162,7 +163,7 @@ impl ExecutorTrait<DatabaseTransaction> for Executor {
             .iter()
             .map(|tx| {
                 let id = tx.id();
-                StorageInspect::<Receipts>::get(temporary_db.as_ref(), &id)
+                StorageInspect::<Receipts>::get(temporary_db.database(), &id)
                     .transpose()
                     .unwrap_or_else(|| Ok(Default::default()))
                     .map(|v| v.into_owned())
@@ -179,7 +180,7 @@ impl Executor {
         &self,
         block: ExecutionBlock,
         database: &Database,
-    ) -> Result<UncommittedResult<DatabaseTransaction>, Error> {
+    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
         // Compute the block id before execution if there is one.
         let pre_exec_block_id = block.id();
         // Get the transaction root before execution if there is one.
@@ -250,7 +251,7 @@ impl Executor {
                 skipped_transactions,
                 tx_status,
             },
-            block_db_transaction,
+            Box::new(block_db_transaction),
         ))
     }
 
@@ -1316,6 +1317,7 @@ impl Fee for CreateCheckedMetadata {
 mod tests {
     use super::*;
     use crate::model::FuelBlock;
+    use fuel_block_producer::ports::Executor as ExecutorTrait;
     use fuel_core_interfaces::{
         common::{
             consts::REG_PC,
@@ -1517,11 +1519,11 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute(ExecutionTypes::Production(block.into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionTypes::Production(block.into()))
+            .unwrap();
 
-        let validation_result = verifier.execute(ExecutionTypes::Validation(block));
+        let validation_result =
+            verifier.execute_and_commit(ExecutionTypes::Validation(block));
         assert!(validation_result.is_ok());
         assert!(skipped_transactions.is_empty());
     }
@@ -1541,9 +1543,8 @@ mod tests {
             skipped_transactions,
             ..
         } = producer
-            .execute(ExecutionBlock::Production(block.into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block.into()))
+            .unwrap();
 
         assert!(skipped_transactions.is_empty());
         assert_ne!(
@@ -1623,9 +1624,8 @@ mod tests {
                 skipped_transactions,
                 ..
             } = producer
-                .execute(ExecutionBlock::Production(block.into()))
-                .unwrap()
-                .into_result();
+                .execute_and_commit(ExecutionBlock::Production(block.into()))
+                .unwrap();
 
             assert_eq!(skipped_transactions.len(), 1);
             assert_eq!(block.transactions().len(), 2);
@@ -1684,9 +1684,8 @@ mod tests {
                 skipped_transactions,
                 ..
             } = producer
-                .execute(ExecutionBlock::Production(block.into()))
-                .unwrap()
-                .into_result();
+                .execute_and_commit(ExecutionBlock::Production(block.into()))
+                .unwrap();
             assert!(skipped_transactions.is_empty());
             let produced_txs = produced_block.transactions().to_vec();
 
@@ -1699,9 +1698,8 @@ mod tests {
                 block: validated_block,
                 ..
             } = validator
-                .execute(ExecutionBlock::Validation(produced_block))
-                .unwrap()
-                .into_result();
+                .execute_and_commit(ExecutionBlock::Validation(produced_block))
+                .unwrap();
             assert_eq!(validated_block.transactions(), produced_txs);
         }
 
@@ -1755,11 +1753,8 @@ mod tests {
                 *block.transactions_mut() = vec![script.clone().into()];
 
                 producer
-                    .execute(ExecutionBlock::Production(block.into()))
-                    .expect("Should produce a block")
-                    .into_transaction()
-                    .commit()
-                    .unwrap();
+                    .execute_and_commit(ExecutionBlock::Production(block.into()))
+                    .expect("Should produce a block");
                 let receipts = producer
                     .database
                     .storage::<Receipts>()
@@ -1804,7 +1799,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -1824,7 +1819,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(
                 validation_err,
@@ -1846,7 +1841,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(validation_err, Error::CoinbaseOutputIsInvalid));
         }
@@ -1869,7 +1864,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(validation_err, Error::CoinbaseSeveralOutputs));
         }
@@ -1893,7 +1888,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(validation_err, Error::CoinbaseOutputIsInvalid));
         }
@@ -1913,7 +1908,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(validation_err, Error::CoinbaseAmountMismatch));
         }
@@ -1939,7 +1934,7 @@ mod tests {
                 config: Config::local_node(),
             };
             let validation_err = validator
-                .execute(ExecutionBlock::Validation(block))
+                .execute_and_commit(ExecutionBlock::Validation(block))
                 .expect_err("Expected error because coinbase if invalid");
             assert!(matches!(validation_err, Error::NotSupportedTransaction(_)));
         }
@@ -2293,9 +2288,8 @@ mod tests {
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
-            .execute(ExecutionBlock::Production(block.into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block.into()))
+            .unwrap();
 
         // modify change amount
         if let Transaction::Script(script) = &mut block.transactions_mut()[1] {
@@ -2304,7 +2298,8 @@ mod tests {
             }
         }
 
-        let verify_result = verifier.execute(ExecutionBlock::Validation(block));
+        let verify_result =
+            verifier.execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             verify_result,
             Err(Error::InvalidTransactionOutcome { transaction_id }) if transaction_id == tx_id
@@ -2339,14 +2334,14 @@ mod tests {
         *block.transactions_mut() = vec![tx];
 
         let ExecutionResult { mut block, .. } = producer
-            .execute(ExecutionBlock::Production(block.into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block.into()))
+            .unwrap();
 
         // randomize transaction commitment
         block.header_mut().application.generated.transactions_root = rng.gen();
 
-        let verify_result = verifier.execute(ExecutionBlock::Validation(block));
+        let verify_result =
+            verifier.execute_and_commit(ExecutionBlock::Validation(block));
 
         assert!(matches!(verify_result, Err(Error::InvalidTransactionRoot)))
     }
@@ -2375,9 +2370,8 @@ mod tests {
             skipped_transactions,
             ..
         } = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         let err = &skipped_transactions[0].1;
         // assert block failed to validate when transaction didn't contain any coin inputs
@@ -2469,18 +2463,13 @@ mod tests {
             .unwrap();
         assert_eq!(coin.status, CoinStatus::Unspent);
 
-        let (
-            ExecutionResult {
-                block,
-                skipped_transactions,
-                ..
-            },
-            db_transaction,
-        ) = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into();
-        db_transaction.commit().unwrap();
+        let ExecutionResult {
+            block,
+            skipped_transactions,
+            ..
+        } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
         // `tx2` should be skipped.
         assert_eq!(block.transactions().len(), 2 /* coinbase and `tx1` */);
         assert_eq!(skipped_transactions.len(), 1);
@@ -2535,9 +2524,8 @@ mod tests {
             skipped_transactions,
             ..
         } = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
         assert_eq!(
             block.transactions().len(),
             3 // coinbase, `tx2` and `tx3`
@@ -2578,11 +2566,9 @@ mod tests {
             transactions: vec![tx],
         };
 
-        let (ExecutionResult { block, .. }, db_transaction) = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into();
-        db_transaction.commit().unwrap();
+        let ExecutionResult { block, .. } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // assert the tx coin is spent
         let coin = db
@@ -2638,7 +2624,9 @@ mod tests {
 
         let ExecutionResult {
             block, tx_status, ..
-        } = executor.execute(ExecutionBlock::Production(block)).unwrap();
+        } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
         let empty_state = Bytes32::from(*empty_sum());
@@ -2702,7 +2690,9 @@ mod tests {
 
         let ExecutionResult {
             block, tx_status, ..
-        } = executor.execute(ExecutionBlock::Production(block)).unwrap();
+        } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // Assert the balance and state roots should be the same before and after execution.
         let empty_state = Bytes32::from(*empty_sum());
@@ -2812,7 +2802,9 @@ mod tests {
 
         let ExecutionResult {
             block, tx_status, ..
-        } = executor.execute(ExecutionBlock::Production(block)).unwrap();
+        } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         let empty_state = Bytes32::from(*empty_sum());
         let executed_tx = block.transactions()[2].as_script().unwrap();
@@ -2892,7 +2884,9 @@ mod tests {
             transactions: vec![create.into(), foreign_transfer.into()],
         };
 
-        let _ = executor.execute(ExecutionBlock::Production(block)).unwrap();
+        let _ = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // Assert the balance root should not be affected.
         let empty_state = Bytes32::from(*empty_sum());
@@ -2978,11 +2972,9 @@ mod tests {
             transactions: vec![tx.into()],
         };
 
-        let (ExecutionResult { block, .. }, db_transaction) = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into();
-        db_transaction.commit().unwrap();
+        let ExecutionResult { block, .. } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // assert the tx coin is spent
         let coin = db
@@ -3038,10 +3030,7 @@ mod tests {
         };
 
         setup
-            .execute(ExecutionBlock::Production(first_block))
-            .unwrap()
-            .into_transaction()
-            .commit()
+            .execute_and_commit(ExecutionBlock::Production(first_block))
             .unwrap();
 
         let producer_view = db.transaction().deref_mut().clone();
@@ -3053,15 +3042,15 @@ mod tests {
             block: second_block,
             ..
         } = producer
-            .execute(ExecutionBlock::Production(second_block))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(second_block))
+            .unwrap();
 
         let verifier = Executor {
             database: db,
             config: Config::local_node(),
         };
-        let verify_result = verifier.execute(ExecutionBlock::Validation(second_block));
+        let verify_result =
+            verifier.execute_and_commit(ExecutionBlock::Validation(second_block));
         assert!(verify_result.is_ok());
     }
 
@@ -3122,10 +3111,7 @@ mod tests {
         };
 
         setup
-            .execute(ExecutionBlock::Production(first_block))
-            .unwrap()
-            .into_transaction()
-            .commit()
+            .execute_and_commit(ExecutionBlock::Production(first_block))
             .unwrap();
 
         let producer_view = db.transaction().deref_mut().clone();
@@ -3138,9 +3124,8 @@ mod tests {
             block: mut second_block,
             ..
         } = producer
-            .execute(ExecutionBlock::Production(second_block))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(second_block))
+            .unwrap();
         // Corrupt the utxo_id of the contract output
         if let Transaction::Script(script) = &mut second_block.transactions_mut()[1] {
             if let Input::Contract { utxo_id, .. } = &mut script.inputs_mut()[0] {
@@ -3153,7 +3138,8 @@ mod tests {
             database: db,
             config: Config::local_node(),
         };
-        let verify_result = verifier.execute(ExecutionBlock::Validation(second_block));
+        let verify_result =
+            verifier.execute_and_commit(ExecutionBlock::Validation(second_block));
 
         assert!(matches!(
             verify_result,
@@ -3179,11 +3165,9 @@ mod tests {
             transactions: vec![deploy.into(), script.into()],
         };
 
-        let (ExecutionResult { block, .. }, db_transaction) = executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into();
-        db_transaction.commit().unwrap();
+        let ExecutionResult { block, .. } = executor
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .unwrap();
 
         // ensure that all utxos with an amount are stored into the utxo set
         for (idx, output) in block.transactions()[2]
@@ -3236,10 +3220,7 @@ mod tests {
         };
 
         executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into_transaction()
-            .commit()
+            .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
         for idx in 0..2 {
@@ -3316,12 +3297,11 @@ mod tests {
         };
 
         let ExecutionResult { block, .. } = make_executor(&[&message])
-            .execute(ExecutionBlock::Production(block))
-            .expect("block execution failed unexpectedly")
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block))
+            .expect("block execution failed unexpectedly");
 
         make_executor(&[&message])
-            .execute(ExecutionBlock::Validation(block))
+            .execute_and_commit(ExecutionBlock::Validation(block))
             .expect("block validation failed unexpectedly");
     }
 
@@ -3339,9 +3319,8 @@ mod tests {
             mut block,
             ..
         } = make_executor(&[]) // No messages in the db
-            .execute(ExecutionBlock::Production(block.clone().into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block.clone().into()))
+            .unwrap();
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
@@ -3350,13 +3329,13 @@ mod tests {
 
         // Produced block is valid
         make_executor(&[]) // No messages in the db
-            .execute(ExecutionBlock::Validation(block.clone()))
+            .execute_and_commit(ExecutionBlock::Validation(block.clone()))
             .unwrap();
 
         // Invalidate block by returning back `tx` with not existing message
         block.transactions_mut().push(tx);
         let res = make_executor(&[]) // No messages in the db
-            .execute(ExecutionBlock::Validation(block));
+            .execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             res,
             Err(Error::TransactionValidity(
@@ -3379,9 +3358,8 @@ mod tests {
             mut block,
             ..
         } = make_executor(&[&message])
-            .execute(ExecutionBlock::Production(block.clone().into()))
-            .unwrap()
-            .into_result();
+            .execute_and_commit(ExecutionBlock::Production(block.clone().into()))
+            .unwrap();
         let err = &skipped_transactions[0].1;
         assert!(matches!(
             err,
@@ -3392,12 +3370,13 @@ mod tests {
 
         // Produced block is valid
         make_executor(&[&message])
-            .execute(ExecutionBlock::Validation(block.clone()))
+            .execute_and_commit(ExecutionBlock::Validation(block.clone()))
             .unwrap();
 
         // Invalidate block by return back `tx` with not ready message.
         block.transactions_mut().push(tx);
-        let res = make_executor(&[&message]).execute(ExecutionBlock::Validation(block));
+        let res = make_executor(&[&message])
+            .execute_and_commit(ExecutionBlock::Validation(block));
         assert!(matches!(
             res,
             Err(Error::TransactionValidity(
@@ -3525,10 +3504,7 @@ mod tests {
         };
 
         executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into_transaction()
-            .commit()
+            .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
         let receipts = database
@@ -3605,10 +3581,7 @@ mod tests {
         };
 
         executor
-            .execute(ExecutionBlock::Production(block))
-            .unwrap()
-            .into_transaction()
-            .commit()
+            .execute_and_commit(ExecutionBlock::Production(block))
             .unwrap();
 
         let receipts = database

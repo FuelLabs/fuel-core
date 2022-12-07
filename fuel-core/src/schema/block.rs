@@ -34,7 +34,7 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
-use fuel_block_producer::block_producer::Executor as ExecutorTrait;
+use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -408,7 +408,7 @@ impl BlockMutation {
         }
         // todo!("trigger block production manually");
 
-        let mut executor = Executor {
+        let executor = Executor {
             database: db.clone(),
             config: config.clone(),
         };
@@ -436,10 +436,11 @@ impl BlockMutation {
                 vec![],
             );
 
-            let (ExecutionResult { block, .. }, db_transaction) =
-                executor.execute(ExecutionBlock::Production(block))?.into();
-            db_transaction.commit()?;
-            seal_block(&config.consensus_key, &block, &mut executor.database)?;
+            let (ExecutionResult { block, .. }, mut db_transaction) = executor
+                .execute_without_commit(ExecutionBlock::Production(block))?
+                .into();
+            seal_block(&config.consensus_key, &block, db_transaction.database_mut())?;
+            db_transaction.commit_box()?;
         }
 
         db.get_block_height()?

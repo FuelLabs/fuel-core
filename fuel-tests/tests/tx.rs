@@ -1,5 +1,5 @@
 use crate::helpers::TestContext;
-use fuel_block_producer::block_producer::Executor as ExecutorTrait;
+use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core::{
     database::Database,
     executor::Executor,
@@ -428,10 +428,10 @@ async fn get_transactions_from_manual_blocks() {
 
     // process blocks and save block height
     executor
-        .execute(ExecutionBlock::Production(first_test_block))
+        .execute_and_commit(ExecutionBlock::Production(first_test_block))
         .unwrap();
     executor
-        .execute(ExecutionBlock::Production(second_test_block))
+        .execute_and_commit(ExecutionBlock::Production(second_test_block))
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]

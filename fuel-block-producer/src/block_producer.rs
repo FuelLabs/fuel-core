@@ -1,9 +1,6 @@
 use crate::{
-    db::BlockProducerDatabase,
-    ports::{
-        Relayer,
-        TxPool,
-    },
+    ports,
+    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
@@ -64,47 +61,28 @@ pub enum Error {
     },
 }
 
-#[async_trait::async_trait]
-pub trait Relayer: Sync + Send {
-    /// Get the best finalized height from the DA layer
-    async fn get_best_finalized_da_height(&self) -> Result<DaBlockHeight>;
-}
-
-pub trait Executor<DbTransaction>: Sync + Send {
-    fn execute(
-        &self,
-        block: ExecutionBlock,
-    ) -> Result<UncommittedResult<DbTransaction>, fuel_core_interfaces::executor::Error>;
-
-    fn dry_run(
-        &self,
-        block: ExecutionBlock,
-        utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, fuel_core_interfaces::executor::Error>;
-}
-
-pub struct Producer<Executor> {
+pub struct Producer<Database> {
     pub config: Config,
-    pub db: Box<dyn BlockProducerDatabase>,
-    pub txpool: Box<dyn TxPool>,
-    pub executor: Arc<Executor>,
-    pub relayer: Box<dyn Relayer>,
+    pub db: Database,
+    pub txpool: Box<dyn ports::TxPool>,
+    pub executor: Arc<dyn ports::Executor<Database>>,
+    pub relayer: Box<dyn ports::Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
     pub dry_run_semaphore: Semaphore,
 }
 
-impl<E: 'static> Producer<E> {
+impl<Database> Producer<Database>
+where
+    Database: BlockProducerDatabase + 'static,
+{
     /// Produces and execute block for the specified height
-    pub async fn produce_and_execute_block<DbTransaction>(
+    pub async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<UncommittedResult<DbTransaction>>
-    where
-        E: Executor<DbTransaction>,
-    {
+    ) -> Result<UncommittedResult<ports::DBTransaction<Database>>> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -134,7 +112,7 @@ impl<E: 'static> Producer<E> {
         );
         let result = self
             .executor
-            .execute(ExecutionBlock::Production(block))
+            .execute_without_commit(ExecutionBlock::Production(block))
             .context(context_string)?;
 
         debug!("Produced block with result: {:?}", result.result());
@@ -149,10 +127,7 @@ impl<E: 'static> Producer<E> {
         transaction: Transaction,
         height: Option<BlockHeight>,
         utxo_validation: Option<bool>,
-    ) -> Result<Vec<Receipt>>
-    where
-        E: Executor<DbTransaction>,
-    {
+    ) -> Result<Vec<Receipt>> {
         // setup the block with the provided tx and optional height
         // dry_run execute tx on the executor
         // return the receipts
@@ -185,7 +160,10 @@ impl<E: 'static> Producer<E> {
     }
 }
 
-impl<E> Producer<E> {
+impl<Database> Producer<Database>
+where
+    Database: BlockProducerDatabase,
+{
     /// Create the header for a new block at the provided height
     async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;

@@ -162,7 +162,7 @@ async fn block_producer() -> Result<()> {
             coinbase_recipient: Address::default(),
             metrics: false,
         },
-        db: Box::new(mock_db.clone()),
+        db: mock_db.clone(),
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
         }),

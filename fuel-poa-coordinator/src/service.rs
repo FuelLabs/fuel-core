@@ -3,7 +3,11 @@ use crate::{
         DeadlineClock,
         OnConflict,
     },
-    ports::BlockProducer,
+    ports::{
+        BlockDb,
+        BlockProducer,
+        DBTransaction,
+    },
     Config,
     Trigger,
 };
@@ -14,11 +18,7 @@ use anyhow::{
 use fuel_core_interfaces::{
     block_importer::ImportBlockBroadcast,
     common::{
-        fuel_tx::{
-            Receipt,
-            Transaction,
-            UniqueIdentifier,
-        },
+        fuel_tx::UniqueIdentifier,
         prelude::{
             Signature,
             Word,
@@ -34,21 +34,16 @@ use fuel_core_interfaces::{
     },
     model::{
         BlockHeight,
-        BlockId,
         FuelBlock,
         FuelBlockConsensus,
         FuelBlockPoAConsensus,
         SecretKeyWrapper,
     },
-    poa_coordinator::{
-        BlockDb,
-        TransactionPool,
-    },
+    poa_coordinator::TransactionPool,
     txpool::TxStatus,
 };
 use parking_lot::Mutex;
 use std::{
-    marker::PhantomData,
     ops::Deref,
     sync::Arc,
 };
@@ -64,35 +59,6 @@ use tracing::{
     error,
     warn,
 };
-
-#[async_trait::async_trait]
-pub trait BlockProducer<DbTransaction>: Send + Sync {
-    // TODO: Right now production and execution of the block is one step, but in the future,
-    //  `produce_block` should only produce a block without affecting the blockchain state.
-    async fn produce_and_execute_block(
-        &self,
-        height: BlockHeight,
-        max_gas: Word,
-    ) -> anyhow::Result<UncommittedResult<DbTransaction>>;
-
-    async fn dry_run(
-        &self,
-        transaction: Transaction,
-        height: Option<BlockHeight>,
-        utxo_validation: Option<bool>,
-    ) -> anyhow::Result<Vec<Receipt>>;
-}
-
-pub trait DatabaseTransaction {
-    // Returns error if already sealed
-    fn seal_block(
-        &mut self,
-        block_id: BlockId,
-        consensus: FuelBlockConsensus,
-    ) -> anyhow::Result<()>;
-
-    fn commit(self) -> anyhow::Result<()>;
-}
 
 pub struct RunningService {
     join: JoinHandle<()>,
@@ -112,18 +78,17 @@ impl Service {
         }
     }
 
-    pub async fn start<S, T, B, DbTransaction>(
+    pub async fn start<D, T, B>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
         block_producer: B,
-        db: S,
+        db: D,
     ) where
-        S: BlockDb + Send + Clone + 'static,
+        D: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
-        B: BlockProducer<DbTransaction> + 'static,
-        DbTransaction: DatabaseTransaction + Send + Sync + 'static,
+        B: BlockProducer<D> + 'static,
     {
         let mut running = self.running.lock();
 
@@ -146,7 +111,6 @@ impl Service {
             import_block_events_tx,
             trigger: self.config.trigger,
             timer: DeadlineClock::new(),
-            marker: Default::default(),
         };
 
         *running = Some(RunningService {
@@ -168,17 +132,16 @@ impl Service {
     }
 }
 
-pub struct Task<S, T, B, DbTransaction>
+pub struct Task<D, T, B>
 where
-    S: BlockDb + Send + Sync,
+    D: BlockDb + Send + Sync,
     T: TransactionPool,
-    B: BlockProducer<DbTransaction>,
-    DbTransaction: DatabaseTransaction + Send + Sync,
+    B: BlockProducer<D>,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
-    db: S,
+    db: D,
     block_producer: B,
     txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatus>,
@@ -190,20 +153,18 @@ where
     trigger: Trigger,
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
-    marker: PhantomData<DbTransaction>,
 }
 
-impl<S, T, B, DbTransaction> Task<S, T, B, DbTransaction>
+impl<D, T, B> Task<D, T, B>
 where
-    S: BlockDb + Send,
+    D: BlockDb + Send,
     T: TransactionPool,
-    B: BlockProducer<DbTransaction>,
-    DbTransaction: DatabaseTransaction + Send + Sync,
+    B: BlockProducer<D>,
 {
     // Request the block producer to make a new block, and return it when ready
     async fn signal_produce_block(
         &mut self,
-    ) -> anyhow::Result<UncommittedResult<DbTransaction>> {
+    ) -> anyhow::Result<UncommittedResult<DBTransaction<D>>> {
         let current_height = self
             .db
             .block_height()
@@ -232,8 +193,12 @@ where
         ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(&self.signing_key, &block, &mut self.db)?;
-        db_transaction.commit()?;
+        seal_block(
+            &self.signing_key,
+            &block,
+            &mut *db_transaction.database_mut(),
+        )?;
+        db_transaction.commit_box()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -454,6 +419,10 @@ mod test {
                 TxId,
             },
         },
+        db::{
+            Error as DBError,
+            Transactional,
+        },
         executor::Error,
         model::{
             ArcPoolTx,
@@ -485,27 +454,12 @@ mod test {
         }
     }
 
-    impl DatabaseTransaction for () {
-        fn seal_block(
-            &mut self,
-            block_id: BlockId,
-            consensus: FuelBlockConsensus,
-        ) -> anyhow::Result<()> {
-            todo!()
-        }
-
-        fn commit(self) -> anyhow::Result<()> {
-            todo!()
-        }
-    }
-
     mockall::mock! {
         Database {}
 
         unsafe impl Sync for Database {}
         unsafe impl Send for Database {}
 
-        #[async_trait::async_trait]
         impl BlockDb for Database {
             fn block_height(&self) -> anyhow::Result<BlockHeight>;
 
@@ -517,16 +471,46 @@ mod test {
         }
     }
 
+    struct DatabaseTransaction {
+        database: MockDatabase,
+    }
+
+    impl core::fmt::Debug for DatabaseTransaction {
+        fn fmt(&self, _f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            Ok(())
+        }
+    }
+
+    impl Transactional for DatabaseTransaction {
+        fn commit(self) -> Result<(), DBError> {
+            Ok(())
+        }
+
+        fn commit_box(self: Box<Self>) -> Result<(), DBError> {
+            Ok(())
+        }
+    }
+
+    impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
+        fn database(&self) -> &MockDatabase {
+            &self.database
+        }
+
+        fn database_mut(&mut self) -> &mut MockDatabase {
+            &mut self.database
+        }
+    }
+
     mockall::mock! {
         BlockProducer {}
 
         #[async_trait::async_trait]
-        impl BlockProducer<()> for BlockProducer {
+        impl BlockProducer<MockDatabase> for BlockProducer {
             async fn produce_and_execute_block(
                 &self,
                 _height: BlockHeight,
                 _max_gas: Word,
-            ) -> anyhow::Result<UncommittedResult<()>>;
+            ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>>;
 
             async fn dry_run(
                 &self,
@@ -569,6 +553,8 @@ mod test {
         block_producer
             .expect_produce_and_execute_block()
             .returning(move |_, _| {
+                let mut db = MockDatabase::default();
+                db.expect_seal_block().returning(|_, _| Ok(()));
                 Ok(UncommittedResult::new(
                     ExecutionResult {
                         block: Default::default(),
@@ -579,14 +565,13 @@ mod test {
                             .collect(),
                         tx_status: Default::default(),
                     },
-                    (),
+                    Box::new(DatabaseTransaction { database: db }),
                 ))
             });
 
         let mut db = MockDatabase::default();
         db.expect_block_height()
             .returning(|| Ok(BlockHeight::from(1u32)));
-        db.expect_seal_block().returning(|_, _| Ok(()));
 
         let mut txpool = MockTxPool::default();
         // Test created for only for this check.
@@ -619,7 +604,6 @@ mod test {
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
             timer: DeadlineClock::new(),
-            marker: Default::default(),
         };
 
         assert!(task.produce_block().await.is_ok());
@@ -666,7 +650,6 @@ mod test {
             last_block_created: Instant::now(),
             trigger: Trigger::Instant,
             timer: DeadlineClock::new(),
-            marker: Default::default(),
         };
 
         // simulate some txpool events to see if any block production is erroneously triggered
@@ -724,7 +707,6 @@ mod test {
                 max_block_time: Duration::from_millis(1000),
             },
             timer: DeadlineClock::new(),
-            marker: Default::default(),
         };
 
         let jh = tokio::spawn(task.run());
