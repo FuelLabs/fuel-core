@@ -537,8 +537,6 @@ mod tests {
         FuelP2PService::new(p2p_config, BincodeCodec::new(max_block_size)).unwrap()
     }
 
-    
-
     /// returns a free tcp port number for a node to listen on
     fn get_unused_port() -> u16 {
         let socket = SocketAddrV4::new(Ipv4Addr::from([0, 0, 0, 0]), 0);
