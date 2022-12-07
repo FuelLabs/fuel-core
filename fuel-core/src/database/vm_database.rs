@@ -1,4 +1,14 @@
-use crate::database::{Column, Database};
+use crate::{
+    database::{
+        Column,
+        Database,
+    },
+    state::{
+        IterDirection,
+        MultiKey,
+        WriteOperation,
+    },
+};
 use anyhow::anyhow;
 use fuel_core_interfaces::{
     common::{
@@ -18,13 +28,20 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    db::Error,
+    db::{
+        ContractsState,
+        Error,
+    },
     model::FuelConsensusHeader,
     not_found,
 };
-use std::borrow::Cow;
-use fuel_core_interfaces::db::ContractsState;
-use crate::state::IterDirection;
+use primitive_types::U256;
+use std::{
+    borrow::Cow,
+    ops::Deref,
+};
+use std::thread::current;
+use fuel_core_interfaces::common::fuel_tx::Bytes64;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -144,44 +161,129 @@ impl InterpreterStorage for VmDatabase {
 
     fn merkle_contract_state_range(
         &self,
-        id: &ContractId,
+        contract: &ContractId,
         start_key: &Bytes32,
         range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
-        unimplemented!()
-        // let iterator = self.database.iter_all(
-        //     Column::ContractsState,
-        //     Some(id.as_ref().to_vec()),
-        //     Vec(start_key),
-        //     Some(IterDirection::Forward),
-        // );
-        //
-        // let mut prevKey = None;
-        //
-        // let mut rangeCount = 0;
-        //
-        // while rangeCount < range {
-        //     iterator.next()
-        // }
-        //
-        // return Result(Vec(0));
+        let mut iterator = self.database.iter_all::<Bytes64, Bytes32>(
+            Column::ContractsState,
+            Some(contract.as_ref().to_vec()),
+            Some(MultiKey::new(&(contract, start_key)).into()),
+            Some(IterDirection::Forward),
+        );
+
+        let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        let mut rangeCount = 0;
+
+        let mut results = vec![];
+
+        while rangeCount < range {
+            let entry = iterator.next();
+
+            if let Some(value) = entry {
+                let value = value?;
+                let multikey = value.0;
+
+                let state_contract_id = Bytes32::new(multikey.as_ref()[0..32].try_into()?);
+                let state_key = U256::from_big_endian(&multikey.as_ref()[32..]);
+
+                if (state_contract_id != contract) {
+
+                }
+                if (state_key != current_key) {
+
+                }
+
+
+                if value.0 != MultiKey::new(&(contract, current_key)).into()
+            } else {
+                results.push(None);
+            };
+
+            if (entry.is_none()) {}
+
+            current_key =
+                current_key
+                    .checked_add(1.into())
+                    .ok_or(Error::Other(anyhow!(
+                        "current_key overflowed during computation"
+                    )))?;
+        }
+
+        return Result(Vec(0))
     }
 
     fn merkle_contract_state_insert_range(
         &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _values: &[Bytes32],
+        contract: &ContractId,
+        start_key: &Bytes32,
+        values: &[Bytes32],
     ) -> Result<Option<()>, Self::DataError> {
-        
+        let mut found_unset = false;
+
+        let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        let transaction = self.database.transaction();
+        let transaction_db = transaction.deref();
+
+        for value in values {
+            current_key =
+                current_key
+                    .checked_add(1.into())
+                    .ok_or(Error::Other(anyhow!(
+                        "current_key overflowed during computation"
+                    )))?;
+            let mut key_bytes = [0u8; 32];
+            current_key.to_big_endian(&mut key_bytes);
+
+            let option = transaction_db.insert(
+                MultiKey::new(&(contract, key_bytes)).into(),
+                Column::ContractsState,
+                value.into_vec(),
+            )?;
+
+            found_unset |= option.is_none();
+        }
+
+        transaction.commit()?;
+
+        return Ok((!found_unset).then(|| ()))
     }
 
     fn merkle_contract_state_remove_range(
         &mut self,
-        _contract: &ContractId,
-        _start_key: &Bytes32,
-        _range: Word,
+        contract: &ContractId,
+        start_key: &Bytes32,
+        range: Word,
     ) -> Result<Option<()>, Self::DataError> {
-        unimplemented!()
+        let mut found_unset = false;
+
+        let mut current_key = U256::from_big_endian(start_key.as_ref());
+
+        let transaction = self.database.transaction();
+        let transaction_db = transaction.deref();
+
+        for _ in 0..range {
+            current_key =
+                current_key
+                    .checked_add(1.into())
+                    .ok_or(Error::Other(anyhow!(
+                        "current_key overflowed during computation"
+                    )))?;
+            let mut key_bytes = [0u8; 32];
+            current_key.to_big_endian(&mut key_bytes);
+
+            let option = transaction_db.remove(
+                MultiKey::new(&(contract, key_bytes)).into(),
+                Column::ContractsState,
+            )?;
+
+            found_unset |= option.is_none();
+        }
+
+        transaction.commit()?;
+
+        return Ok((!found_unset).then(|| ()))
     }
 }

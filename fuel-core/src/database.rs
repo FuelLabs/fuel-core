@@ -54,6 +54,7 @@ use std::{
 
 #[cfg(feature = "rocksdb")]
 use crate::state::rocks_db::RocksDb;
+use crate::state::WriteOperation;
 #[cfg(feature = "rocksdb")]
 use std::path::Path;
 #[cfg(feature = "rocksdb")]
@@ -253,6 +254,13 @@ impl Database {
                     Ok((key, value))
                 })
             })
+    }
+
+    fn batch_write(
+        &self,
+        entries: &mut dyn Iterator<Item = WriteOperation>,
+    ) -> Result<(), Error> {
+        self.data.batch_write(entries)
     }
 
     pub fn transaction(&self) -> DatabaseTransaction {
