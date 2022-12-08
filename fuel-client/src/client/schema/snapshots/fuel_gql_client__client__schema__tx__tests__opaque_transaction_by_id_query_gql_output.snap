@@ -2,8 +2,8 @@
 source: fuel-client/src/client/schema/tx.rs
 expression: operation.query
 ---
-query Query($_0: TransactionId!) {
-  transaction(id: $_0) {
+query($id: TransactionId!) {
+  transaction(id: $id) {
     rawPayload
     receipts {
       rawPayload
@@ -40,4 +40,5 @@ query Query($_0: TransactionId!) {
     }
   }
 }
+
 

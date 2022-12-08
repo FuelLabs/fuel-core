@@ -16,10 +16,7 @@ use fuel_core_interfaces::{
         },
         tai64::Tai64,
     },
-    executor::{
-        ExecutionBlock,
-        Executor as ExecutorTrait,
-    },
+    executor::ExecutionBlock,
     model::{
         FuelConsensusHeader,
         PartialFuelBlock,
@@ -430,10 +427,10 @@ async fn get_transactions_from_manual_blocks() {
 
     // process blocks and save block height
     executor
-        .execute(ExecutionBlock::Production(first_test_block))
+        .execute_and_commit(ExecutionBlock::Production(first_test_block))
         .unwrap();
     executor
-        .execute(ExecutionBlock::Production(second_test_block))
+        .execute_and_commit(ExecutionBlock::Production(second_test_block))
         .unwrap();
 
     // Query for first 4: [coinbase_tx1, 0, 1, 2]

@@ -1,9 +1,8 @@
 ---
 source: fuel-client/src/client/schema/node_info.rs
-assertion_line: 31
 expression: operation.query
 ---
-query Query {
+query {
   nodeInfo {
     utxoValidation
     vmBacktrace
@@ -13,4 +12,5 @@ query Query {
     nodeVersion
   }
 }
+
 

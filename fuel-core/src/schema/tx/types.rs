@@ -4,13 +4,7 @@ use super::{
     receipt::Receipt,
 };
 use crate::{
-    database::{
-        storage::{
-            FuelBlocks,
-            Receipts,
-        },
-        Database,
-    },
+    database::Database,
     schema::{
         block::Block,
         contract::Contract,
@@ -25,7 +19,6 @@ use crate::{
             U64,
         },
     },
-    tx_pool::TransactionStatus as TxStatus,
 };
 use async_graphql::{
     Context,
@@ -60,8 +53,15 @@ use fuel_core_interfaces::{
         fuel_vm::prelude::ProgramState as VmProgramState,
         tai64::Tai64,
     },
-    db::KvStoreError,
-    txpool::TxPoolMpsc,
+    db::{
+        FuelBlocks,
+        Receipts,
+    },
+    not_found,
+    txpool::{
+        TransactionStatus as TxStatus,
+        TxPoolMpsc,
+    },
 };
 use fuel_txpool::Service as TxPoolService;
 use std::sync::Arc;
@@ -145,7 +145,7 @@ impl SuccessStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)
@@ -175,7 +175,7 @@ impl FailureStatus {
         let block = db
             .storage::<FuelBlocks>()
             .get(&self.block_id.into())?
-            .ok_or(KvStoreError::NotFound)?
+            .ok_or(not_found!(FuelBlocks))?
             .into_owned();
         let block = Block::from(block);
         Ok(block)

@@ -46,6 +46,8 @@ pub struct SpendQueryElementInput {
 pub enum Resource {
     Coin(Coin),
     Message(Message),
+    #[cynic(fallback)]
+    Unknown,
 }
 
 impl Resource {
@@ -53,11 +55,12 @@ impl Resource {
         match self {
             Resource::Coin(c) => c.amount.0,
             Resource::Message(m) => m.amount.0,
+            Resource::Unknown => 0,
         }
     }
 }
 
-#[derive(cynic::FragmentArguments, Debug)]
+#[derive(cynic::QueryVariables, Debug)]
 pub struct ResourcesToSpendArgs {
     /// The `Address` of the assets' resources owner.
     owner: Address,
@@ -84,9 +87,9 @@ impl From<ResourcesToSpendArgsTuple> for ResourcesToSpendArgs {
 #[cynic(
     schema_path = "./assets/schema.sdl",
     graphql_type = "Query",
-    argument_struct = "ResourcesToSpendArgs"
+    variables = "ResourcesToSpendArgs"
 )]
 pub struct ResourcesToSpendQuery {
-    #[arguments(owner = &args.owner, query_per_asset = &args.query_per_asset, excluded_ids = &args.excluded_ids)]
+    #[arguments(owner: $owner, queryPerAsset: $query_per_asset, excludedIds: $excluded_ids)]
     pub resources_to_spend: Vec<Vec<Resource>>,
 }

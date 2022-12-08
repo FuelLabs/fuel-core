@@ -18,6 +18,7 @@ pub use config::{
     VMConfig,
 };
 
+pub mod adapters;
 pub mod config;
 pub(crate) mod genesis;
 pub mod graph_api;

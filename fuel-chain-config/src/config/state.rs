@@ -52,8 +52,12 @@ impl StateConfig {
 }
 
 pub trait ChainConfigDb {
+    /// Returns *all* unspent coin configs available in the database.
     fn get_coin_config(&self) -> anyhow::Result<Option<Vec<CoinConfig>>>;
+    /// Returns *alive* contract configs available in the database.
     fn get_contract_config(&self) -> Result<Option<Vec<ContractConfig>>, anyhow::Error>;
+    /// Returns *all* unspent message configs available in the database.
     fn get_message_config(&self) -> Result<Option<Vec<MessageConfig>>, Error>;
+    /// Returns the last available block height.
     fn get_block_height(&self) -> Result<Option<BlockHeight>, Error>;
 }

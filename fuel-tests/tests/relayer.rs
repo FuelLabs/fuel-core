@@ -1,6 +1,9 @@
 use ethers::{
     providers::Middleware,
-    types::Log,
+    types::{
+        Log,
+        SyncingStatus,
+    },
 };
 use fuel_core::{
     database::Database,
@@ -313,18 +316,14 @@ async fn handle(
         "eth_syncing" => {
             let r = mock.syncing().await.unwrap();
             match r {
-                ethers::providers::SyncingStatus::IsFalse => {
+                SyncingStatus::IsFalse => {
                     json!({ "id": id, "jsonrpc": "2.0", "result": false })
                 }
-                ethers::providers::SyncingStatus::IsSyncing {
-                    starting_block,
-                    current_block,
-                    highest_block,
-                } => {
+                SyncingStatus::IsSyncing(status) => {
                     json!({ "id": id, "jsonrpc": "2.0", "result": {
-                        "starting_block": starting_block, 
-                        "current_block": current_block,
-                        "highest_block": highest_block,
+                        "starting_block": status.starting_block, 
+                        "current_block": status.current_block,
+                        "highest_block": status.highest_block,
                     } })
                 }
             }

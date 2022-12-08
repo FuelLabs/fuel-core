@@ -2,7 +2,7 @@
 source: fuel-client/src/client/schema/chain.rs
 expression: operation.query
 ---
-query Query {
+query {
   chain {
     baseChainHeight
     name
@@ -23,6 +23,12 @@ query Query {
       }
       consensus {
         __typename
+        ... on Genesis {
+          chainConfigHash
+          coinsRoot
+          contractsRoot
+          messagesRoot
+        }
         ... on PoAConsensus {
           signature
         }
@@ -48,4 +54,5 @@ query Query {
     }
   }
 }
+
 

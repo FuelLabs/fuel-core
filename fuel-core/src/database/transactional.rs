@@ -2,6 +2,10 @@ use crate::{
     database::Database,
     state::in_memory::transaction::MemoryTransactionView,
 };
+use fuel_core_interfaces::db::{
+    Error,
+    Transactional,
+};
 use std::{
     fmt::Debug,
     ops::{
@@ -25,12 +29,6 @@ impl AsRef<Database> for DatabaseTransaction {
     }
 }
 
-impl DerefMut for DatabaseTransaction {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.database
-    }
-}
-
 impl AsMut<Database> for DatabaseTransaction {
     fn as_mut(&mut self) -> &mut Database {
         self.deref_mut()
@@ -45,17 +43,36 @@ impl Deref for DatabaseTransaction {
     }
 }
 
+impl DerefMut for DatabaseTransaction {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.database
+    }
+}
+
 impl Default for DatabaseTransaction {
     fn default() -> Self {
         Database::default().transaction()
     }
 }
 
-impl DatabaseTransaction {
-    /// Commit all the changes in this transaction to the data source
-    pub fn commit(self) -> crate::state::Result<()> {
+impl Transactional for DatabaseTransaction {
+    fn commit(self) -> crate::state::Result<()> {
         // TODO: should commit be fallible if this api is meant to be atomic?
         self.changes.commit()
+    }
+
+    fn commit_box(self: Box<Self>) -> Result<(), Error> {
+        self.changes.commit()
+    }
+}
+
+impl fuel_core_interfaces::db::DatabaseTransaction<Database> for DatabaseTransaction {
+    fn database(&self) -> &Database {
+        &self.database
+    }
+
+    fn database_mut(&mut self) -> &mut Database {
+        &mut self.database
     }
 }
 

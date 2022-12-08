@@ -3,7 +3,6 @@ use libp2p::{
     core::{
         connection::ConnectionId,
         either::EitherOutput,
-        transport::ListenerId,
         ConnectedPoint,
         PublicKey,
     },
@@ -29,6 +28,12 @@ use libp2p::{
     },
     Multiaddr,
     PeerId,
+};
+use libp2p_swarm::derive_prelude::{
+    ConnectionClosed,
+    DialFailure,
+    FromSwarm,
+    ListenFailure,
 };
 use std::{
     collections::{
@@ -189,62 +194,108 @@ impl NetworkBehaviour for PeerInfoBehaviour {
         list
     }
 
-    fn inject_connection_established(
-        &mut self,
-        peer_id: &PeerId,
-        connection_id: &ConnectionId,
-        connected_point: &ConnectedPoint,
-        failed_addresses: Option<&Vec<Multiaddr>>,
-        other_established: usize,
-    ) {
-        self.ping.inject_connection_established(
-            peer_id,
-            connection_id,
-            connected_point,
-            failed_addresses,
-            other_established,
-        );
+    fn on_swarm_event(&mut self, event: FromSwarm<Self::ConnectionHandler>) {
+        match event {
+            FromSwarm::ConnectionEstablished(e) => {
+                self.ping
+                    .on_swarm_event(FromSwarm::ConnectionEstablished(e));
+                self.identify
+                    .on_swarm_event(FromSwarm::ConnectionEstablished(e));
+                self.insert_peer(&e.peer_id, e.endpoint.clone());
 
-        self.identify.inject_connection_established(
-            peer_id,
-            connection_id,
-            connected_point,
-            failed_addresses,
-            other_established,
-        );
-
-        self.insert_peer(peer_id, connected_point.clone());
-
-        let addresses = self.addresses_of_peer(peer_id);
-        self.insert_peer_addresses(peer_id, addresses);
-    }
-
-    fn inject_connection_closed(
-        &mut self,
-        peer_id: &PeerId,
-        conn: &ConnectionId,
-        endpoint: &ConnectedPoint,
-        handler: <Self::ConnectionHandler as IntoConnectionHandler>::Handler,
-        remaining_established: usize,
-    ) {
-        let (ping_handler, identity_handler) = handler.into_inner();
-        self.identify.inject_connection_closed(
-            peer_id,
-            conn,
-            endpoint,
-            identity_handler,
-            remaining_established,
-        );
-        self.ping.inject_connection_closed(
-            peer_id,
-            conn,
-            endpoint,
-            ping_handler,
-            remaining_established,
-        );
-
-        // todo: we could keep it in a cache for a while
-        self.peers.remove(peer_id);
+                let addresses = self.addresses_of_peer(&e.peer_id);
+                self.insert_peer_addresses(&e.peer_id, addresses);
+            }
+            FromSwarm::ConnectionClosed(e) => {
+                let (ping_handler, identity_handler) = e.handler.into_inner();
+                let ping_event = ConnectionClosed {
+                    handler: ping_handler,
+                    peer_id: e.peer_id,
+                    connection_id: e.connection_id,
+                    endpoint: e.endpoint,
+                    remaining_established: e.remaining_established,
+                };
+                self.ping
+                    .on_swarm_event(FromSwarm::ConnectionClosed(ping_event));
+                let identify_event = ConnectionClosed {
+                    handler: identity_handler,
+                    peer_id: e.peer_id,
+                    connection_id: e.connection_id,
+                    endpoint: e.endpoint,
+                    remaining_established: e.remaining_established,
+                };
+                self.identify
+                    .on_swarm_event(FromSwarm::ConnectionClosed(identify_event));
+                self.peers.remove(&e.peer_id);
+            }
+            FromSwarm::AddressChange(e) => {
+                self.ping.on_swarm_event(FromSwarm::AddressChange(e));
+                self.identify.on_swarm_event(FromSwarm::AddressChange(e));
+            }
+            FromSwarm::DialFailure(e) => {
+                let (ping_handler, identity_handler) = e.handler.into_inner();
+                let ping_event = DialFailure {
+                    peer_id: e.peer_id,
+                    handler: ping_handler,
+                    error: e.error,
+                };
+                let identity_event = DialFailure {
+                    peer_id: e.peer_id,
+                    handler: identity_handler,
+                    error: e.error,
+                };
+                self.ping.on_swarm_event(FromSwarm::DialFailure(ping_event));
+                self.identify
+                    .on_swarm_event(FromSwarm::DialFailure(identity_event));
+            }
+            FromSwarm::ListenFailure(e) => {
+                let (ping_handler, identity_handler) = e.handler.into_inner();
+                let ping_event = ListenFailure {
+                    handler: ping_handler,
+                    local_addr: e.local_addr,
+                    send_back_addr: e.send_back_addr,
+                };
+                let identity_event = ListenFailure {
+                    handler: identity_handler,
+                    local_addr: e.local_addr,
+                    send_back_addr: e.send_back_addr,
+                };
+                self.ping
+                    .on_swarm_event(FromSwarm::ListenFailure(ping_event));
+                self.identify
+                    .on_swarm_event(FromSwarm::ListenFailure(identity_event));
+            }
+            FromSwarm::NewListener(e) => {
+                self.ping.on_swarm_event(FromSwarm::NewListener(e));
+                self.identify.on_swarm_event(FromSwarm::NewListener(e));
+            }
+            FromSwarm::ExpiredListenAddr(e) => {
+                self.ping.on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+                self.identify
+                    .on_swarm_event(FromSwarm::ExpiredListenAddr(e));
+            }
+            FromSwarm::ListenerError(e) => {
+                self.ping.on_swarm_event(FromSwarm::ListenerError(e));
+                self.identify.on_swarm_event(FromSwarm::ListenerError(e));
+            }
+            FromSwarm::ListenerClosed(e) => {
+                self.ping.on_swarm_event(FromSwarm::ListenerClosed(e));
+                self.identify.on_swarm_event(FromSwarm::ListenerClosed(e));
+            }
+            FromSwarm::NewExternalAddr(e) => {
+                self.ping.on_swarm_event(FromSwarm::NewExternalAddr(e));
+                self.identify.on_swarm_event(FromSwarm::NewExternalAddr(e));
+            }
+            FromSwarm::ExpiredExternalAddr(e) => {
+                self.ping.on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+                self.identify
+                    .on_swarm_event(FromSwarm::ExpiredExternalAddr(e));
+            }
+            FromSwarm::NewListenAddr(e) => {
+                self.ping.on_swarm_event(FromSwarm::NewListenAddr(e));
+                self.identify.on_swarm_event(FromSwarm::NewListenAddr(e));
+            }
+        }
     }
 
     fn poll(
@@ -385,99 +436,21 @@ impl NetworkBehaviour for PeerInfoBehaviour {
         Poll::Pending
     }
 
-    fn inject_event(
+    fn on_connection_handler_event(
         &mut self,
         peer_id: PeerId,
-        connection: ConnectionId,
-        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+        connection_id: ConnectionId,
+        event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as
+            ConnectionHandler>::OutEvent,
     ) {
         match event {
             EitherOutput::First(ping_event) => {
-                self.ping.inject_event(peer_id, connection, ping_event)
+                self.ping
+                    .on_connection_handler_event(peer_id, connection_id, ping_event)
             }
-            EitherOutput::Second(identify_event) => {
-                self.identify
-                    .inject_event(peer_id, connection, identify_event)
-            }
+            EitherOutput::Second(identify_event) => self
+                .identify
+                .on_connection_handler_event(peer_id, connection_id, identify_event),
         }
-    }
-
-    fn inject_address_change(
-        &mut self,
-        peer_id: &PeerId,
-        conn: &ConnectionId,
-        old: &ConnectedPoint,
-        new: &ConnectedPoint,
-    ) {
-        self.ping.inject_address_change(peer_id, conn, old, new);
-        self.identify.inject_address_change(peer_id, conn, old, new);
-    }
-
-    fn inject_dial_failure(
-        &mut self,
-        peer_id: Option<PeerId>,
-        handler: Self::ConnectionHandler,
-        error: &libp2p::swarm::DialError,
-    ) {
-        let (ping_handler, identity_handler) = handler.into_inner();
-        self.identify
-            .inject_dial_failure(peer_id, identity_handler, error);
-        self.ping.inject_dial_failure(peer_id, ping_handler, error);
-    }
-
-    fn inject_new_listener(&mut self, id: ListenerId) {
-        self.ping.inject_new_listener(id);
-        self.identify.inject_new_listener(id);
-    }
-
-    fn inject_new_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-        self.ping.inject_new_listen_addr(id, addr);
-        self.identify.inject_new_listen_addr(id, addr);
-    }
-
-    fn inject_expired_listen_addr(&mut self, id: ListenerId, addr: &Multiaddr) {
-        self.ping.inject_expired_listen_addr(id, addr);
-        self.identify.inject_expired_listen_addr(id, addr);
-    }
-
-    fn inject_new_external_addr(&mut self, addr: &Multiaddr) {
-        self.ping.inject_new_external_addr(addr);
-        self.identify.inject_new_external_addr(addr);
-    }
-
-    fn inject_expired_external_addr(&mut self, addr: &Multiaddr) {
-        self.ping.inject_expired_external_addr(addr);
-        self.identify.inject_expired_external_addr(addr);
-    }
-
-    fn inject_listen_failure(
-        &mut self,
-        local_addr: &Multiaddr,
-        send_back_addr: &Multiaddr,
-        handler: Self::ConnectionHandler,
-    ) {
-        let (ping_handler, identity_handler) = handler.into_inner();
-        self.identify
-            .inject_listen_failure(local_addr, send_back_addr, identity_handler);
-        self.ping
-            .inject_listen_failure(local_addr, send_back_addr, ping_handler);
-    }
-
-    fn inject_listener_error(
-        &mut self,
-        id: ListenerId,
-        err: &(dyn std::error::Error + 'static),
-    ) {
-        self.ping.inject_listener_error(id, err);
-        self.identify.inject_listener_error(id, err);
-    }
-
-    fn inject_listener_closed(
-        &mut self,
-        id: ListenerId,
-        reason: Result<(), &std::io::Error>,
-    ) {
-        self.ping.inject_listener_closed(id, reason);
-        self.identify.inject_listener_closed(id, reason);
     }
 }

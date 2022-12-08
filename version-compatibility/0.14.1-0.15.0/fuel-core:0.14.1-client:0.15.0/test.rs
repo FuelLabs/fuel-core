@@ -16,6 +16,30 @@ mod test {
         fuel_tx::UniqueIdentifier,
     };
 
+    // `cynic/http-reqwest` from client can work with old version of `fuel-core`
+    #[tokio::test]
+    async fn submit_tx() {
+        let db = Database::default();
+
+        let config = Config::local_node();
+
+        let srv = FuelService::from_database(db, config.clone())
+            .await
+            .unwrap();
+
+        let client = FuelClient::from(srv.bound_address);
+
+        let tx = fuel_tx::Transaction::default();
+        client.submit_and_await_commit(&tx).await.unwrap();
+
+        let transaction_response = client
+            .transaction(&format!("{:#x}", tx.id()))
+            .await
+            .unwrap();
+
+        assert!(transaction_response.is_some());
+    }
+
     #[tokio::test]
     async fn produce_block_compatible() {
         let db = Database::default();

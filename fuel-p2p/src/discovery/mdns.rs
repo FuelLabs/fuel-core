@@ -1,8 +1,8 @@
 use libp2p::{
     mdns::{
-        MdnsConfig,
-        MdnsEvent,
-        TokioMdns,
+        tokio::Behaviour as TokioMdns,
+        Config,
+        Event as MdnsEvent,
     },
     swarm::{
         NetworkBehaviour,
@@ -26,7 +26,7 @@ pub enum MdnsWrapper {
 
 impl Default for MdnsWrapper {
     fn default() -> Self {
-        match TokioMdns::new(MdnsConfig::default()) {
+        match TokioMdns::new(Config::default()) {
             Ok(mdns) => Self::Ready(mdns),
             Err(err) => {
                 warn!("Failed to initialize mDNS: {:?}", err);
