@@ -139,7 +139,7 @@ impl P2pArgs {
             .finalize();
 
         let local_keypair = {
-            match keypair {
+            match self.keypair {
                 Some(path) => {
                     let phrase = std::fs::read_to_string(path)?;
 
@@ -184,7 +184,7 @@ impl P2pArgs {
             local_keypair,
             network_name: self.network,
             checksum,
-            address: args
+            address: self
                 .address
                 .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::from([0, 0, 0, 0]))),
             public_address: self.public_address,
