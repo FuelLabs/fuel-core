@@ -403,12 +403,12 @@ where
 
     fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
+            // Inbound node receives the checksum andompares it to its own checksum.
+            // If they do not match the connection is rejected.
             let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
             if res != self.checksum {
                 return Err(FuelUpgradeError::IncorrectChecksum)
             }
-
-            write_length_prefixed(&mut socket, &self.checksum).await?;
 
             Ok(socket)
         }
@@ -426,12 +426,12 @@ where
 
     fn upgrade_outbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
+            // Outbound node sends their own checksum for comparison with the inbound node.
             write_length_prefixed(&mut socket, &self.checksum).await?;
 
-            let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
-            if res != self.checksum {
-                return Err(FuelUpgradeError::IncorrectChecksum)
-            }
+            // Note: outbound node does not need to receive the checksum from the inbound node,
+            // since inbound node will reject the connection if the two don't match on its side.
+
             Ok(socket)
         }
         .boxed()
