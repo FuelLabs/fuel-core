@@ -34,6 +34,7 @@ use fuel_core_interfaces::{
     db::{
         ContractsState,
         Error,
+        Transactional,
     },
     model::FuelConsensusHeader,
     not_found,
@@ -44,7 +45,6 @@ use std::{
     ops::Deref,
     thread::current,
 };
-use fuel_core_interfaces::db::Transactional;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -179,7 +179,7 @@ impl InterpreterStorage for VmDatabase {
 
         let mut range_count = 0;
 
-        let mut results: Vec<Option<Cow<Bytes32>>> = vec![];
+        let mut results = vec![];
 
         while range_count < range {
             let entry_option = iterator.next();
@@ -197,9 +197,12 @@ impl InterpreterStorage for VmDatabase {
                     // Iterator moved beyond contract range, populate with None until end of range
                     for _ in range_count..range {
                         results.push(None);
+                        current_key.checked_add(1.into()).ok_or(Error::Other(
+                            anyhow!("current_key overflowed during computation"),
+                        ))?;
                     }
                     // Iterator no longer useful, return
-                    return results.into()
+                    return Ok(results)
                 } else if state_key != current_key {
                     while (state_key != current_key) && (range_count < range) {
                         // Iterator moved beyond next expected key, push none and increment range
@@ -213,12 +216,18 @@ impl InterpreterStorage for VmDatabase {
                 }
                 // State key matches, put value into results
                 if state_key == current_key {
-                    results.push(value.into());
+                    results.push(Some(Cow::Owned(value)));
                 }
             } else {
                 // No iterator returned, populate with None until end of range
                 for _ in range_count..range {
                     results.push(None);
+                    range_count += 1;
+                    current_key
+                        .checked_add(1.into())
+                        .ok_or(Error::Other(anyhow!(
+                            "current_key overflowed during computation"
+                        )))?;
                 }
             };
             range_count += 1;
@@ -299,4 +308,79 @@ impl InterpreterStorage for VmDatabase {
 
         return Ok((!found_unset).then(|| ()))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clear_range() {
+        let db = Database::default();
+    }
+
+    #[test]
+    fn read_single_value() {}
+
+    #[test]
+    fn read_sequential_set_data() {}
+
+    #[test]
+    fn read_over_unset_region_same_contract() {}
+
+    #[test]
+    fn read_overrun_contract_id() {}
+
+    #[test]
+    fn read_range_overruns_keyspace_mismatched_contract_id() {}
+
+    #[test]
+    fn read_range_overruns_keyspace_unset_key_range() {
+        // may be untestable
+    }
+
+    #[test]
+    fn read_range_overruns_iterator_empty() {}
+
+    #[test]
+    fn insert_single_unset() {}
+
+    #[test]
+    fn insert_single_set() {}
+
+    #[test]
+    fn insert_range_over_unset() {}
+
+    #[test]
+    fn insert_range_partially_unset_start() {}
+
+    #[test]
+    fn insert_range_partially_unset_middle() {}
+
+    #[test]
+    fn insert_range_partially_unset_end() {}
+
+    #[test]
+    fn insert_range_fully_set() {}
+
+    #[test]
+    fn remove_single_unset() {}
+
+    #[test]
+    fn remove_single_set() {}
+
+    #[test]
+    fn remove_range_over_unset() {}
+
+    #[test]
+    fn remove_range_partially_unset_start() {}
+
+    #[test]
+    fn remove_range_partially_unset_middle() {}
+
+    #[test]
+    fn remove_range_partially_unset_end() {}
+
+    #[test]
+    fn remove_range_fully_set() {}
 }
