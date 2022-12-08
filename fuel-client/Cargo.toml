@@ -24,6 +24,8 @@ eventsource-client = "0.10.2"
 fuel-vm = { version = "0.22", features = ["serde"] }
 futures = "0.3"
 hex = "0.4"
+# Included to enable webpki in the eventsource client
+hyper-rustls = { version = "0.22", features = ["webpki-tokio"] }
 itertools = "0.10"
 reqwest = { version = "0.11", default-features = false, features = ["rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }

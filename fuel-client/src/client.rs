@@ -193,7 +193,7 @@ impl FuelClient {
                     format!("Failed to add header to client {:?}", e),
                 )
             })?
-            .build_with_conn(HttpsConnector::with_native_roots());
+            .build_with_conn(HttpsConnector::with_webpki_roots());
 
         let mut last = None;
 
