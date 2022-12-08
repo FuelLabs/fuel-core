@@ -18,7 +18,10 @@ use fuel_core_interfaces::{
             StorageInspect,
             StorageMutate,
         },
-        fuel_tx::Bytes32,
+        fuel_tx::{
+            Bytes32,
+            Bytes64,
+        },
         prelude::{
             Address,
             ContractId,
@@ -39,9 +42,8 @@ use primitive_types::U256;
 use std::{
     borrow::Cow,
     ops::Deref,
+    thread::current,
 };
-use std::thread::current;
-use fuel_core_interfaces::common::fuel_tx::Bytes64;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
@@ -161,57 +163,67 @@ impl InterpreterStorage for VmDatabase {
 
     fn merkle_contract_state_range(
         &self,
-        contract: &ContractId,
+        contract_id: &ContractId,
         start_key: &Bytes32,
         range: Word,
     ) -> Result<Vec<Option<Cow<Bytes32>>>, Self::DataError> {
         let mut iterator = self.database.iter_all::<Bytes64, Bytes32>(
             Column::ContractsState,
-            Some(contract.as_ref().to_vec()),
-            Some(MultiKey::new(&(contract, start_key)).into()),
+            Some(contract_id.as_ref().to_vec()),
+            Some(MultiKey::new(&(contract_id, start_key)).into()),
             Some(IterDirection::Forward),
         );
 
         let mut current_key = U256::from_big_endian(start_key.as_ref());
 
-        let mut rangeCount = 0;
+        let mut range_count = 0;
 
-        let mut results = vec![];
+        let mut results: Vec<Option<Cow<Bytes32>>> = vec![];
 
-        while rangeCount < range {
-            let entry = iterator.next();
+        while range_count < range {
+            let entry_option = iterator.next();
 
-            if let Some(value) = entry {
-                let value = value?;
-                let multikey = value.0;
+            if let Some(entry) = entry_option {
+                let entry = entry?;
+                let multikey = entry.0;
+                let value = entry.1;
 
-                let state_contract_id = Bytes32::new(multikey.as_ref()[0..32].try_into()?);
+                let state_contract_id =
+                    Bytes32::new(multikey.as_ref()[0..32].try_into()?);
                 let state_key = U256::from_big_endian(&multikey.as_ref()[32..]);
 
-                if (state_contract_id != contract) {
-
+                if state_contract_id != contract_id {
+                    // Iterator moved beyond contract range, populate with None until end of range
+                    for _ in range_count..range {
+                        results.push(None);
+                    }
+                    // Iterator no longer useful, return
+                    return results.into()
+                } else if state_key != current_key {
+                    while (state_key != current_key) && (range_count < range) {
+                        // Iterator moved beyond next expected key, push none and increment range
+                        // count until we find the current key
+                        results.push(None);
+                        range_count += 1;
+                        current_key.checked_add(1.into()).ok_or(Error::Other(
+                            anyhow!("current_key overflowed during computation"),
+                        ))?;
+                    }
                 }
-                if (state_key != current_key) {
-
+                // State key matches, put value into results
+                if state_key == current_key {
+                    results.push(value.into());
                 }
-
-
-                if value.0 != MultiKey::new(&(contract, current_key)).into()
             } else {
-                results.push(None);
+                // No iterator returned, populate with None until end of range
+                for _ in range_count..range {
+                    results.push(None);
+                }
             };
-
-            if (entry.is_none()) {}
-
-            current_key =
-                current_key
-                    .checked_add(1.into())
-                    .ok_or(Error::Other(anyhow!(
-                        "current_key overflowed during computation"
-                    )))?;
+            range_count += 1;
         }
 
-        return Result(Vec(0))
+        return Ok(results)
     }
 
     fn merkle_contract_state_insert_range(
