@@ -1,5 +1,4 @@
 use crate::helpers::TestContext;
-use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core::{
     database::Database,
     executor::Executor,

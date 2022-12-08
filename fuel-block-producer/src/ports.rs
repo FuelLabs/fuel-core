@@ -5,7 +5,6 @@ use fuel_core_interfaces::{
     executor::{
         Error as ExecutorError,
         ExecutionBlock,
-        ExecutionResult,
         UncommittedResult,
     },
     model::{
@@ -49,16 +48,6 @@ pub trait Relayer: Sync + Send {
 pub type DBTransaction<Database> = Box<dyn DatabaseTransaction<Database>>;
 
 pub trait Executor<Database: ?Sized>: Sync + Send {
-    /// Executes the block and commits the result of the execution into the inner `Database`.
-    fn execute_and_commit(
-        &self,
-        block: ExecutionBlock,
-    ) -> Result<ExecutionResult, ExecutorError> {
-        let (result, db_transaction) = self.execute_without_commit(block)?.into();
-        db_transaction.commit_box()?;
-        Ok(result)
-    }
-
     /// Executes the block and returns the result of execution with uncommitted database
     /// transaction.
     fn execute_without_commit(

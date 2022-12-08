@@ -120,6 +120,18 @@ struct ExecutionData {
     skipped_transactions: Vec<(Transaction, Error)>,
 }
 
+impl Executor {
+    /// Executes the block and commits the result of the execution into the inner `Database`.
+    pub fn execute_and_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<ExecutionResult, Error> {
+        let (result, db_transaction) = self.execute_without_commit(block)?.into();
+        db_transaction.commit_box()?;
+        Ok(result)
+    }
+}
+
 impl ExecutorTrait<Database> for Executor {
     fn execute_without_commit(
         &self,

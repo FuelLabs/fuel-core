@@ -436,6 +436,10 @@ impl BlockMutation {
                 vec![],
             );
 
+            // TODO: Instead of using raw `Executor` here, we need to use `CM` - Consensus Module.
+            //  It will guarantee that the block is entirely valid and all information is stored.
+            //  For that, we need to manually trigger block production and reset/ignore timers
+            //  inside CM for `blocks_to_produce` blocks.
             let (ExecutionResult { block, .. }, mut db_transaction) = executor
                 .execute_without_commit(ExecutionBlock::Production(block))?
                 .into();
