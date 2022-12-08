@@ -2594,6 +2594,7 @@ version = "0.0.0"
 dependencies = [
  "async-std",
  "ethers",
+ "fuel-block-producer",
  "fuel-core",
  "fuel-core-interfaces",
  "fuel-gql-client",

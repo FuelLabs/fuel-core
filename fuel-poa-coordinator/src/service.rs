@@ -3,7 +3,11 @@ use crate::{
         DeadlineClock,
         OnConflict,
     },
-    ports::BlockProducer,
+    ports::{
+        BlockDb,
+        BlockProducer,
+        DBTransaction,
+    },
     Config,
     Trigger,
 };
@@ -24,7 +28,10 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    executor::ExecutionResult,
+    executor::{
+        ExecutionResult,
+        UncommittedResult,
+    },
     model::{
         BlockHeight,
         FuelBlock,
@@ -32,10 +39,7 @@ use fuel_core_interfaces::{
         FuelBlockPoAConsensus,
         SecretKeyWrapper,
     },
-    poa_coordinator::{
-        BlockDb,
-        TransactionPool,
-    },
+    poa_coordinator::TransactionPool,
     txpool::TxStatus,
 };
 use parking_lot::Mutex;
@@ -74,17 +78,17 @@ impl Service {
         }
     }
 
-    pub async fn start<S, T, B>(
+    pub async fn start<D, T, B>(
         &self,
         txpool_broadcast: broadcast::Receiver<TxStatus>,
         txpool: T,
         import_block_events_tx: broadcast::Sender<ImportBlockBroadcast>,
         block_producer: B,
-        db: S,
+        db: D,
     ) where
-        S: BlockDb + Send + Clone + 'static,
+        D: BlockDb + Send + Clone + 'static,
         T: TransactionPool + Send + Sync + 'static,
-        B: BlockProducer + 'static,
+        B: BlockProducer<D> + 'static,
     {
         let mut running = self.running.lock();
 
@@ -128,16 +132,16 @@ impl Service {
     }
 }
 
-pub struct Task<S, T, B>
+pub struct Task<D, T, B>
 where
-    S: BlockDb + Send + Sync,
+    D: BlockDb + Send + Sync,
     T: TransactionPool,
-    B: BlockProducer,
+    B: BlockProducer<D>,
 {
     stop: mpsc::Receiver<()>,
     block_gas_limit: Word,
     signing_key: Option<Secret<SecretKeyWrapper>>,
-    db: S,
+    db: D,
     block_producer: B,
     txpool: T,
     txpool_broadcast: broadcast::Receiver<TxStatus>,
@@ -150,14 +154,17 @@ where
     /// Deadline clock, used by the triggers
     timer: DeadlineClock,
 }
-impl<S, T, B> Task<S, T, B>
+
+impl<D, T, B> Task<D, T, B>
 where
-    S: BlockDb + Send,
+    D: BlockDb + Send,
     T: TransactionPool,
-    B: BlockProducer,
+    B: BlockProducer<D>,
 {
     // Request the block producer to make a new block, and return it when ready
-    async fn signal_produce_block(&mut self) -> anyhow::Result<ExecutionResult> {
+    async fn signal_produce_block(
+        &mut self,
+    ) -> anyhow::Result<UncommittedResult<DBTransaction<D>>> {
         let current_height = self
             .db
             .block_height()
@@ -176,14 +183,18 @@ where
         }
 
         // Ask the block producer to create the block
-        let ExecutionResult {
-            block,
-            skipped_transactions,
-            ..
-        } = self.signal_produce_block().await?;
+        let (
+            ExecutionResult {
+                block,
+                skipped_transactions,
+                ..
+            },
+            mut db_transaction,
+        ) = self.signal_produce_block().await?.into();
 
         // sign the block and seal it
-        seal_block(&self.signing_key, &block, &mut self.db)?;
+        seal_block(&self.signing_key, &block, db_transaction.database_mut())?;
+        db_transaction.commit_box()?;
 
         let mut tx_ids_to_remove = Vec::with_capacity(skipped_transactions.len());
         for (tx, err) in skipped_transactions {
@@ -404,6 +415,10 @@ mod test {
                 TxId,
             },
         },
+        db::{
+            Error as DBError,
+            Transactional,
+        },
         executor::Error,
         model::{
             ArcPoolTx,
@@ -441,7 +456,6 @@ mod test {
         unsafe impl Sync for Database {}
         unsafe impl Send for Database {}
 
-        #[async_trait::async_trait]
         impl BlockDb for Database {
             fn block_height(&self) -> anyhow::Result<BlockHeight>;
 
@@ -454,15 +468,32 @@ mod test {
     }
 
     mockall::mock! {
+        #[derive(Debug)]
+        DatabaseTransaction{}
+
+        impl Transactional for DatabaseTransaction {
+            fn commit(self) -> Result<(), DBError>;
+
+            fn commit_box(self: Box<Self>) -> Result<(), DBError>;
+        }
+
+        impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
+            fn database(&self) -> &MockDatabase;
+
+            fn database_mut(&mut self) -> &mut MockDatabase;
+        }
+    }
+
+    mockall::mock! {
         BlockProducer {}
 
         #[async_trait::async_trait]
-        impl BlockProducer for BlockProducer {
+        impl BlockProducer<MockDatabase> for BlockProducer {
             async fn produce_and_execute_block(
                 &self,
                 _height: BlockHeight,
                 _max_gas: Word,
-            ) -> anyhow::Result<ExecutionResult>;
+            ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>>;
 
             async fn dry_run(
                 &self,
@@ -501,25 +532,54 @@ mod test {
 
         let mock_skipped_txs = skipped_transactions.clone();
 
+        let mut seq = mockall::Sequence::new();
+
         let mut block_producer = MockBlockProducer::default();
         block_producer
             .expect_produce_and_execute_block()
+            .times(1)
+            .in_sequence(&mut seq)
             .returning(move |_, _| {
-                Ok(ExecutionResult {
-                    block: Default::default(),
-                    skipped_transactions: mock_skipped_txs
-                        .clone()
-                        .into_iter()
-                        .map(|tx| (tx, Error::OutputAlreadyExists))
-                        .collect(),
-                    tx_status: Default::default(),
-                })
+                let mut db = MockDatabase::default();
+                // We expect that `seal_block` should be called 1 time after `produce_and_execute_block`.
+                db.expect_seal_block()
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|_, _| Ok(()));
+
+                let mut db_transaction = MockDatabaseTransaction::default();
+                db_transaction.expect_database_mut().times(1).return_var(db);
+
+                // Check that `commit` is called after `seal_block`.
+                db_transaction
+                    .expect_commit_box()
+                    // Verifies that `commit_box` have been called.
+                    .times(1)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(()));
+                db_transaction
+                    .expect_commit()
+                    // TODO: After removing `commit_box` set `times(1)`
+                    .times(0)
+                    .in_sequence(&mut seq)
+                    .returning(|| Ok(()));
+                Ok(UncommittedResult::new(
+                    ExecutionResult {
+                        block: Default::default(),
+                        skipped_transactions: mock_skipped_txs
+                            .clone()
+                            .into_iter()
+                            .map(|tx| (tx, Error::OutputAlreadyExists))
+                            .collect(),
+                        tx_status: Default::default(),
+                    },
+                    Box::new(db_transaction),
+                ))
             });
 
         let mut db = MockDatabase::default();
         db.expect_block_height()
             .returning(|| Ok(BlockHeight::from(1u32)));
-        db.expect_seal_block().returning(|_, _| Ok(()));
 
         let mut txpool = MockTxPool::default();
         // Test created for only for this check.

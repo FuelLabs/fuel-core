@@ -1,12 +1,13 @@
-use super::db::BlockProducerDatabase;
 use crate::ports::{
+    BlockProducerDatabase,
+    DBTransaction,
+    Executor,
     Relayer,
     TxPool,
 };
 use anyhow::Result;
 use fuel_core_interfaces::{
     common::{
-        fuel_storage::StorageInspect,
         fuel_tx::{
             MessageId,
             Receipt,
@@ -14,14 +15,14 @@ use fuel_core_interfaces::{
         fuel_types::Address,
     },
     db::{
-        KvStoreError,
-        Messages,
+        Error,
+        Transactional,
     },
     executor::{
         Error as ExecutorError,
         ExecutionBlock,
         ExecutionResult,
-        Executor,
+        UncommittedResult,
     },
     model::{
         ArcPoolTx,
@@ -71,8 +72,36 @@ impl TxPool for MockTxPool {
 #[derive(Default)]
 pub struct MockExecutor(pub MockDb);
 
-impl Executor for MockExecutor {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
+#[derive(Debug)]
+struct DatabaseTransaction {
+    database: MockDb,
+}
+
+impl Transactional for DatabaseTransaction {
+    fn commit(self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn commit_box(self: Box<Self>) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl fuel_core_interfaces::db::DatabaseTransaction<MockDb> for DatabaseTransaction {
+    fn database(&self) -> &MockDb {
+        &self.database
+    }
+
+    fn database_mut(&mut self) -> &mut MockDb {
+        &mut self.database
+    }
+}
+
+impl Executor<MockDb> for MockExecutor {
+    fn execute_without_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<DBTransaction<MockDb>>, ExecutorError> {
         let block = match block {
             ExecutionBlock::Production(block) => block.generate(&[]),
             ExecutionBlock::Validation(block) => block,
@@ -80,11 +109,16 @@ impl Executor for MockExecutor {
         // simulate executor inserting a block
         let mut block_db = self.0.blocks.lock().unwrap();
         block_db.insert(*block.header().height(), block.to_db_block());
-        Ok(ExecutionResult {
-            block,
-            skipped_transactions: vec![],
-            tx_status: vec![],
-        })
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+                tx_status: vec![],
+            },
+            Box::new(DatabaseTransaction {
+                database: self.0.clone(),
+            }),
+        ))
     }
 
     fn dry_run(
@@ -98,8 +132,11 @@ impl Executor for MockExecutor {
 
 pub struct FailingMockExecutor(pub Mutex<Option<ExecutorError>>);
 
-impl Executor for FailingMockExecutor {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, ExecutorError> {
+impl Executor<MockDb> for FailingMockExecutor {
+    fn execute_without_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<DBTransaction<MockDb>>, ExecutorError> {
         // simulate an execution failure
         let mut err = self.0.lock().unwrap();
         if let Some(err) = err.take() {
@@ -109,11 +146,16 @@ impl Executor for FailingMockExecutor {
                 ExecutionBlock::Production(b) => b.generate(&[]),
                 ExecutionBlock::Validation(b) => b,
             };
-            Ok(ExecutionResult {
-                block,
-                skipped_transactions: vec![],
-                tx_status: vec![],
-            })
+            Ok(UncommittedResult::new(
+                ExecutionResult {
+                    block,
+                    skipped_transactions: vec![],
+                    tx_status: vec![],
+                },
+                Box::new(DatabaseTransaction {
+                    database: MockDb::default(),
+                }),
+            ))
         }
     }
 
@@ -131,31 +173,13 @@ impl Executor for FailingMockExecutor {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct MockDb {
     pub blocks: Arc<Mutex<HashMap<BlockHeight, FuelBlockDb>>>,
     pub messages: Arc<Mutex<HashMap<MessageId, Message>>>,
 }
 
-impl StorageInspect<Messages> for MockDb {
-    type Error = KvStoreError;
-
-    fn get(
-        &self,
-        key: &MessageId,
-    ) -> std::result::Result<Option<Cow<Message>>, Self::Error> {
-        let messages = self.messages.lock().unwrap();
-        Ok(messages.get(key).cloned().map(Cow::Owned))
-    }
-
-    fn contains_key(&self, key: &MessageId) -> std::result::Result<bool, Self::Error> {
-        let messages = self.messages.lock().unwrap();
-        Ok(messages.contains_key(key))
-    }
-}
-
 impl BlockProducerDatabase for MockDb {
-    /// fetch previously committed block at given height
     fn get_block(&self, fuel_height: BlockHeight) -> Result<Option<Cow<FuelBlockDb>>> {
         let blocks = self.blocks.lock().unwrap();
 

@@ -162,7 +162,7 @@ async fn block_producer() -> Result<()> {
             coinbase_recipient: Address::default(),
             metrics: false,
         },
-        db: Box::new(mock_db.clone()),
+        db: mock_db.clone(),
         txpool: Box::new(TxPoolAdapter {
             sender: txpool.sender().clone(),
         }),
@@ -214,7 +214,8 @@ async fn block_producer() -> Result<()> {
     } = block_producer
         .produce_and_execute_block(1u32.into(), max_gas_per_block)
         .await
-        .expect("Failed to generate block");
+        .expect("Failed to generate block")
+        .into_result();
 
     // Check that the generated block looks right
     assert_eq!(generated_block.transactions().len(), 2);
@@ -248,7 +249,8 @@ async fn block_producer() -> Result<()> {
     } = block_producer
         .produce_and_execute_block(2u32.into(), max_gas_per_block)
         .await
-        .expect("Failed to generate block");
+        .expect("Failed to generate block")
+        .into_result();
 
     // Check that the generated block looks right
     assert_eq!(generated_block.transactions().len(), 1);
@@ -274,7 +276,8 @@ async fn block_producer() -> Result<()> {
     } = block_producer
         .produce_and_execute_block(3u32.into(), max_gas_per_block)
         .await
-        .expect("Failed to generate block");
+        .expect("Failed to generate block")
+        .into_result();
 
     // Check that the generated block looks right
     assert_eq!(generated_block.transactions().len(), 0);

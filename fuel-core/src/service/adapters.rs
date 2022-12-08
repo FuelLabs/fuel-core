@@ -3,6 +3,7 @@ use crate::{
     executor::Executor,
     service::Config,
 };
+use fuel_block_producer::ports::DBTransaction;
 use fuel_core_interfaces::{
     common::{
         fuel_tx::{
@@ -14,8 +15,7 @@ use fuel_core_interfaces::{
     executor::{
         Error,
         ExecutionBlock,
-        ExecutionResult,
-        Executor as ExecutorTrait,
+        UncommittedResult,
     },
     model::BlockHeight,
     relayer::RelayerDb,
@@ -30,13 +30,16 @@ pub struct ExecutorAdapter {
 }
 
 #[async_trait::async_trait]
-impl ExecutorTrait for ExecutorAdapter {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error> {
+impl fuel_block_producer::ports::Executor<Database> for ExecutorAdapter {
+    fn execute_without_commit(
+        &self,
+        block: ExecutionBlock,
+    ) -> Result<UncommittedResult<DBTransaction<Database>>, Error> {
         let executor = Executor {
             database: self.database.clone(),
             config: self.config.clone(),
         };
-        executor.execute(block)
+        executor.execute_without_commit(block)
     }
 
     fn dry_run(
@@ -79,16 +82,16 @@ impl fuel_block_producer::ports::Relayer for MaybeRelayerAdapter {
 }
 
 pub struct PoACoordinatorAdapter {
-    pub block_producer: Arc<fuel_block_producer::Producer>,
+    pub block_producer: Arc<fuel_block_producer::Producer<Database>>,
 }
 
 #[async_trait::async_trait]
-impl fuel_poa_coordinator::ports::BlockProducer for PoACoordinatorAdapter {
+impl fuel_poa_coordinator::ports::BlockProducer<Database> for PoACoordinatorAdapter {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult> {
+    ) -> anyhow::Result<UncommittedResult<DBTransaction<Database>>> {
         self.block_producer
             .produce_and_execute_block(height, max_gas)
             .await
