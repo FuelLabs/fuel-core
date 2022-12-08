@@ -2364,6 +2364,7 @@ dependencies = [
  "lazy_static",
  "mockall",
  "num_cpus",
+ "primitive-types",
  "rand 0.8.5",
  "rocksdb",
  "serde",
