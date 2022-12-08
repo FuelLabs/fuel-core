@@ -51,7 +51,7 @@ pub(crate) fn default_gossipsub_config() -> GossipsubConfig {
         .expect("valid gossipsub configuration")
 }
 
-/// Given a `P2pConfig` creates a Gossipsub Behaviour
+/// Given a `P2pConfig` containing `GossipsubConfig` creates a Gossipsub Behaviour
 pub(crate) fn build_gossipsub_behaviour(p2p_config: &P2PConfig) -> Gossipsub {
     if p2p_config.metrics {
         // Move to Metrics related feature flag

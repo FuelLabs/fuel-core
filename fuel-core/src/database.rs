@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use fuel_block_producer::db::BlockProducerDatabase;
+use fuel_block_producer::ports::BlockProducerDatabase;
 use fuel_chain_config::{
     ChainConfigDb,
     CoinConfig,
@@ -33,10 +33,10 @@ use fuel_core_interfaces::{
     },
     not_found,
     p2p::P2pDb,
-    poa_coordinator::BlockDb,
     relayer::RelayerDb,
     txpool::TxPoolDb,
 };
+use fuel_poa_coordinator::ports::BlockDb;
 use serde::{
     de::DeserializeOwned,
     Serialize,

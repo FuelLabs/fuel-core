@@ -1,9 +1,6 @@
 use crate::{
-    db::BlockProducerDatabase,
-    ports::{
-        Relayer,
-        TxPool,
-    },
+    ports,
+    ports::BlockProducerDatabase,
     Config,
 };
 use anyhow::{
@@ -24,8 +21,7 @@ use fuel_core_interfaces::{
     },
     executor::{
         ExecutionBlock,
-        ExecutionResult,
-        Executor,
+        UncommittedResult,
     },
     model::{
         BlockHeight,
@@ -65,25 +61,28 @@ pub enum Error {
     },
 }
 
-pub struct Producer {
+pub struct Producer<Database> {
     pub config: Config,
-    pub db: Box<dyn BlockProducerDatabase>,
-    pub txpool: Box<dyn TxPool>,
-    pub executor: Arc<dyn Executor>,
-    pub relayer: Box<dyn Relayer>,
+    pub db: Database,
+    pub txpool: Box<dyn ports::TxPool>,
+    pub executor: Arc<dyn ports::Executor<Database>>,
+    pub relayer: Box<dyn ports::Relayer>,
     // use a tokio lock since we want callers to yield until the previous block
     // execution has completed (which may take a while).
     pub lock: Mutex<()>,
     pub dry_run_semaphore: Semaphore,
 }
 
-impl Producer {
+impl<Database> Producer<Database>
+where
+    Database: BlockProducerDatabase + 'static,
+{
     /// Produces and execute block for the specified height
     pub async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> Result<ExecutionResult> {
+    ) -> Result<UncommittedResult<ports::DBTransaction<Database>>> {
         //  - get previous block info (hash, root, etc)
         //  - select best da_height from relayer
         //  - get available txs from txpool
@@ -113,10 +112,10 @@ impl Producer {
         );
         let result = self
             .executor
-            .execute(ExecutionBlock::Production(block))
+            .execute_without_commit(ExecutionBlock::Production(block))
             .context(context_string)?;
 
-        debug!("Produced block with result: {:?}", &result);
+        debug!("Produced block with result: {:?}", result.result());
         Ok(result)
     }
 
@@ -161,7 +160,10 @@ impl Producer {
     }
 }
 
-impl Producer {
+impl<Database> Producer<Database>
+where
+    Database: BlockProducerDatabase,
+{
     /// Create the header for a new block at the provided height
     async fn new_header(&self, height: BlockHeight) -> Result<PartialFuelBlockHeader> {
         let previous_block_info = self.previous_block_info(height)?;

@@ -37,7 +37,7 @@ use tokio::{
 pub struct Modules {
     pub txpool: Arc<fuel_txpool::Service>,
     pub block_importer: Arc<fuel_block_importer::Service>,
-    pub block_producer: Arc<fuel_block_producer::Producer>,
+    pub block_producer: Arc<fuel_block_producer::Producer<Database>>,
     pub coordinator: Arc<CoordinatorService>,
     pub sync: Arc<fuel_sync::Service>,
     #[cfg(feature = "relayer")]
@@ -167,7 +167,7 @@ pub async fn start_modules(config: &Config, database: &Database) -> Result<Modul
     let max_dry_run_concurrency = num_cpus::get();
     let block_producer = Arc::new(fuel_block_producer::Producer {
         config: config.block_producer.clone(),
-        db: Box::new(database.clone()),
+        db: database.clone(),
         txpool: Box::new(fuel_block_producer::adapters::TxPoolAdapter {
             sender: txpool_builder.sender().clone(),
         }),

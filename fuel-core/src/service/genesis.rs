@@ -39,6 +39,7 @@ use fuel_core_interfaces::{
         ContractsState,
         FuelBlocks,
         Messages,
+        Transactional,
     },
     model::{
         Coin,
@@ -53,8 +54,8 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
     },
     not_found,
-    poa_coordinator::BlockDb,
 };
+use fuel_poa_coordinator::ports::BlockDb;
 use itertools::Itertools;
 
 trait Merklization {

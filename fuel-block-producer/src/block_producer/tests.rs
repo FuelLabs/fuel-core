@@ -7,17 +7,15 @@ use crate::{
         MockRelayer,
         MockTxPool,
     },
+    ports::Executor,
     Config,
     Producer,
 };
-use fuel_core_interfaces::{
-    executor::Executor,
-    model::{
-        FuelApplicationHeader,
-        FuelBlockDb,
-        FuelBlockHeader,
-        FuelConsensusHeader,
-    },
+use fuel_core_interfaces::model::{
+    FuelApplicationHeader,
+    FuelBlockDb,
+    FuelBlockHeader,
+    FuelConsensusHeader,
 };
 use rand::{
     rngs::StdRng,
@@ -200,7 +198,7 @@ struct TestContext {
     config: Config,
     db: MockDb,
     relayer: MockRelayer,
-    executor: Arc<dyn Executor>,
+    executor: Arc<dyn Executor<MockDb>>,
     txpool: MockTxPool,
 }
 
@@ -232,10 +230,10 @@ impl TestContext {
         }
     }
 
-    pub fn producer(self) -> Producer {
+    pub fn producer(self) -> Producer<MockDb> {
         Producer {
             config: self.config,
-            db: Box::new(self.db),
+            db: self.db,
             txpool: Box::new(self.txpool),
             executor: self.executor,
             relayer: Box::new(self.relayer),

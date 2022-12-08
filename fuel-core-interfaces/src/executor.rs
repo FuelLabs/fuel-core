@@ -2,7 +2,6 @@ use crate::{
     common::{
         fuel_tx::{
             CheckError,
-            Receipt,
             TxId,
             UtxoId,
         },
@@ -61,6 +60,50 @@ pub struct TransactionExecutionStatus {
     pub status: TransactionStatus,
 }
 
+/// The uncommitted result of transactions execution with database transaction.
+/// The caller should commit the result by itself.
+#[derive(Debug)]
+pub struct UncommittedResult<DbTransaction> {
+    /// The execution result.
+    result: ExecutionResult,
+    /// The database transaction with not committed state.
+    database_transaction: DbTransaction,
+}
+
+impl<DbTransaction> UncommittedResult<DbTransaction> {
+    /// Create a new instance of `UncommittedResult`.
+    pub fn new(result: ExecutionResult, database_transaction: DbTransaction) -> Self {
+        Self {
+            result,
+            database_transaction,
+        }
+    }
+
+    /// Returns a reference to the `ExecutionResult`.
+    pub fn result(&self) -> &ExecutionResult {
+        &self.result
+    }
+
+    /// Return the result and database transaction.
+    ///
+    /// The service can unpack the `UncommittedResult`, apply some changes and pack it again into
+    /// `UncommittedResult`. Because `commit` of the database transaction consumes `self`,
+    /// after committing it is not possible create `UncommittedResult`.
+    pub fn into(self) -> (ExecutionResult, DbTransaction) {
+        (self.result, self.database_transaction)
+    }
+
+    /// Discards the database transaction and returns only the result of execution.
+    pub fn into_result(self) -> ExecutionResult {
+        self.result
+    }
+
+    /// Discards the result and return database transaction.
+    pub fn into_transaction(self) -> DbTransaction {
+        self.database_transaction
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 /// The kind of execution.
 pub enum ExecutionKind {
@@ -68,16 +111,6 @@ pub enum ExecutionKind {
     Production,
     /// Validating a block.
     Validation,
-}
-
-pub trait Executor: Sync + Send {
-    fn execute(&self, block: ExecutionBlock) -> Result<ExecutionResult, Error>;
-
-    fn dry_run(
-        &self,
-        block: ExecutionBlock,
-        utxo_validation: Option<bool>,
-    ) -> Result<Vec<Vec<Receipt>>, Error>;
 }
 
 #[derive(Debug, Error)]

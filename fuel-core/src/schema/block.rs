@@ -34,6 +34,7 @@ use async_graphql::{
     SimpleObject,
     Union,
 };
+use fuel_block_producer::ports::Executor as ExecutorTrait;
 use fuel_core_interfaces::{
     common::{
         fuel_storage::StorageAsRef,
@@ -48,7 +49,6 @@ use fuel_core_interfaces::{
     executor::{
         ExecutionBlock,
         ExecutionResult,
-        Executor as ExecutorTrait,
     },
     model::{
         FuelApplicationHeader,
@@ -408,7 +408,7 @@ impl BlockMutation {
         }
         // todo!("trigger block production manually");
 
-        let mut executor = Executor {
+        let executor = Executor {
             database: db.clone(),
             config: config.clone(),
         };
@@ -436,9 +436,15 @@ impl BlockMutation {
                 vec![],
             );
 
-            let ExecutionResult { block, .. } =
-                executor.execute(ExecutionBlock::Production(block))?;
-            seal_block(&config.consensus_key, &block, &mut executor.database)?;
+            // TODO: Instead of using raw `Executor` here, we need to use `CM` - Consensus Module.
+            //  It will guarantee that the block is entirely valid and all information is stored.
+            //  For that, we need to manually trigger block production and reset/ignore timers
+            //  inside CM for `blocks_to_produce` blocks.
+            let (ExecutionResult { block, .. }, mut db_transaction) = executor
+                .execute_without_commit(ExecutionBlock::Production(block))?
+                .into();
+            seal_block(&config.consensus_key, &block, db_transaction.database_mut())?;
+            db_transaction.commit_box()?;
         }
 
         db.get_block_height()?

@@ -12,7 +12,14 @@ use fuel_core_interfaces::{
             Secret,
         },
     },
-    executor::ExecutionResult,
+    db::{
+        Error,
+        Transactional,
+    },
+    executor::{
+        ExecutionResult,
+        UncommittedResult,
+    },
     model::{
         ArcPoolTx,
         BlockHeight,
@@ -23,17 +30,18 @@ use fuel_core_interfaces::{
         PartialFuelBlockHeader,
         SecretKeyWrapper,
     },
-    poa_coordinator::{
-        BlockDb,
-        TransactionPool,
-    },
+    poa_coordinator::TransactionPool,
     txpool::{
         PoolTransaction,
         TxStatus,
     },
 };
 use fuel_poa_coordinator::{
-    ports::BlockProducer,
+    ports::{
+        BlockDb,
+        BlockProducer,
+        DBTransaction,
+    },
     Config,
     Service,
     Trigger,
@@ -77,13 +85,38 @@ impl MockBlockProducer {
     }
 }
 
+#[derive(Debug)]
+struct DatabaseTransaction {
+    database: MockDatabase,
+}
+
+impl Transactional for DatabaseTransaction {
+    fn commit(self) -> Result<(), Error> {
+        Ok(())
+    }
+
+    fn commit_box(self: Box<Self>) -> Result<(), Error> {
+        Ok(())
+    }
+}
+
+impl fuel_core_interfaces::db::DatabaseTransaction<MockDatabase> for DatabaseTransaction {
+    fn database(&self) -> &MockDatabase {
+        &self.database
+    }
+
+    fn database_mut(&mut self) -> &mut MockDatabase {
+        &mut self.database
+    }
+}
+
 #[async_trait::async_trait]
-impl BlockProducer for MockBlockProducer {
+impl BlockProducer<MockDatabase> for MockBlockProducer {
     async fn produce_and_execute_block(
         &self,
         height: BlockHeight,
         max_gas: Word,
-    ) -> anyhow::Result<ExecutionResult> {
+    ) -> anyhow::Result<UncommittedResult<DBTransaction<MockDatabase>>> {
         let includable_txs: Vec<_> = self.txpool_sender.includable().await;
 
         let transactions: Vec<_> = select_transactions(includable_txs, max_gas)
@@ -105,11 +138,16 @@ impl BlockProducer for MockBlockProducer {
         }
         .generate(&[]);
 
-        Ok(ExecutionResult {
-            block,
-            skipped_transactions: vec![],
-            tx_status: vec![],
-        })
+        Ok(UncommittedResult::new(
+            ExecutionResult {
+                block,
+                skipped_transactions: vec![],
+                tx_status: vec![],
+            },
+            Box::new(DatabaseTransaction {
+                database: self.database.clone(),
+            }),
+        ))
     }
 
     async fn dry_run(
@@ -153,12 +191,12 @@ fn select_transactions(
         .collect()
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct MockDatabase {
     inner: Arc<RwLock<MockDatabaseInner>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct MockDatabaseInner {
     height: u32,
     consensus: HashMap<BlockId, FuelBlockConsensus>,
