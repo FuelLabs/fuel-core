@@ -44,6 +44,7 @@ use std::{
     ops::Deref,
     thread::current,
 };
+use fuel_core_interfaces::db::Transactional;
 
 /// Used to store metadata relevant during the execution of a transaction
 #[derive(Clone, Debug)]
