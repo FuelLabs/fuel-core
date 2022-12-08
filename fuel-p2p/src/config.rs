@@ -403,7 +403,7 @@ where
 
     fn upgrade_inbound(self, mut socket: C, _: Self::Info) -> Self::Future {
         async move {
-            // Inbound node receives the checksum andompares it to its own checksum.
+            // Inbound node receives the checksum and compares it to its own checksum.
             // If they do not match the connection is rejected.
             let res = read_length_prefixed(&mut socket, self.checksum.len()).await?;
             if res != self.checksum {
