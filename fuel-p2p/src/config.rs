@@ -7,32 +7,51 @@ use crate::gossipsub::{
     },
 };
 
+use fuel_core_interfaces::common::secrecy::Zeroize;
+use futures::{
+    future,
+    AsyncRead,
+    AsyncWrite,
+    TryFutureExt,
+};
 use libp2p::{
     core::{
         muxing::StreamMuxerBox,
         transport::Boxed,
+        UpgradeInfo,
     },
     identity::{
         secp256k1::SecretKey,
         Keypair,
     },
     mplex,
-    noise,
+    noise::{
+        self,
+        NoiseAuthenticated,
+        NoiseError,
+        NoiseOutput,
+        Protocol,
+    },
     tcp::{
         tokio::Transport as TokioTcpTransport,
         Config as TcpConfig,
     },
     yamux,
+    InboundUpgrade,
     Multiaddr,
+    OutboundUpgrade,
     PeerId,
     Transport,
 };
 
+use core::future::Future;
 use std::{
+    collections::HashSet,
     net::{
         IpAddr,
         Ipv4Addr,
     },
+    pin::Pin,
     time::Duration,
 };
 
@@ -71,8 +90,14 @@ pub struct P2PConfig {
     pub enable_mdns: bool,
     pub max_peers_connected: usize,
     pub allow_private_addresses: bool,
-    pub enable_random_walk: bool,
+    pub random_walk: Option<Duration>,
     pub connection_idle_timeout: Option<Duration>,
+
+    // 'Reserved Nodes' mode
+    /// Priority nodes that the node should maintain connection to
+    pub reserved_nodes: Vec<Multiaddr>,
+    /// Should the node only accept connection requests from the Reserved Nodes
+    pub reserved_nodes_only_mode: bool,
 
     // `PeerInfo` fields
     /// The interval at which identification requests are sent to
@@ -121,8 +146,10 @@ impl P2PConfig {
             enable_mdns: false,
             max_peers_connected: 50,
             allow_private_addresses: true,
-            enable_random_walk: true,
+            random_walk: Some(Duration::from_secs(5)),
             connection_idle_timeout: Some(Duration::from_secs(120)),
+            reserved_nodes: vec![],
+            reserved_nodes_only_mode: false,
             topics: vec![
                 NEW_TX_GOSSIP_TOPIC.into(),
                 NEW_BLOCK_GOSSIP_TOPIC.into(),
@@ -142,7 +169,7 @@ impl P2PConfig {
 /// TCP/IP, Websocket
 /// Noise as encryption layer
 /// mplex or yamux for multiplexing
-pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMuxerBox)> {
+pub(crate) fn build_transport(p2p_config: &P2PConfig) -> Boxed<(PeerId, StreamMuxerBox)> {
     let transport = {
         let generate_tcp_transport =
             || TokioTcpTransport::new(TcpConfig::new().port_reuse(true).nodelay(true));
@@ -153,11 +180,12 @@ pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMu
             libp2p::websocket::WsConfig::new(generate_tcp_transport()).or_transport(tcp);
 
         libp2p::dns::TokioDnsConfig::system(ws_tcp).unwrap()
-    };
+    }
+    .upgrade(libp2p::core::upgrade::Version::V1);
 
-    let auth_config = {
+    let noise_authenticated = {
         let dh_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&local_keypair)
+            .into_authentic(&p2p_config.local_keypair)
             .expect("Noise key generation failed");
 
         noise::NoiseConfig::xx(dh_keys).into_authenticated()
@@ -171,10 +199,123 @@ pub(crate) fn build_transport(local_keypair: Keypair) -> Boxed<(PeerId, StreamMu
         libp2p::core::upgrade::SelectUpgrade::new(yamux_config, mplex_config)
     };
 
-    transport
-        .upgrade(libp2p::core::upgrade::Version::V1)
-        .authenticate(auth_config)
-        .multiplex(multiplex_config)
-        .timeout(TRANSPORT_TIMEOUT)
-        .boxed()
+    if p2p_config.reserved_nodes_only_mode {
+        transport
+            .authenticate(NoiseWithReservedNodes::new(
+                noise_authenticated,
+                &p2p_config.reserved_nodes,
+            ))
+            .multiplex(multiplex_config)
+            .timeout(TRANSPORT_TIMEOUT)
+            .boxed()
+    } else {
+        transport
+            .authenticate(noise_authenticated)
+            .multiplex(multiplex_config)
+            .timeout(TRANSPORT_TIMEOUT)
+            .boxed()
+    }
+}
+
+/// Wrapper over Noise protocol authentication.
+/// Used in case where the local node wants to limit
+/// who establishes the connection with it.
+/// During the Identity (PeerId) exchange, the node can check if the inbound connection
+/// comes from a whitelisted peer, in case it's not the connection is rejected.
+/// Same check is added to any outbound connections, just in case.
+#[derive(Clone)]
+struct NoiseWithReservedNodes<P, C: Zeroize, R> {
+    noise_authenticated: NoiseAuthenticated<P, C, R>,
+    reserved_nodes: HashSet<PeerId>,
+}
+
+impl<P, C: Zeroize, R> NoiseWithReservedNodes<P, C, R> {
+    fn new(
+        noise_authenticated: NoiseAuthenticated<P, C, R>,
+        reserved_nodes: &[Multiaddr],
+    ) -> Self {
+        Self {
+            noise_authenticated,
+            reserved_nodes: reserved_nodes
+                .iter()
+                // Safety: as is the case with `bootstrap_nodes` it is assumed that `reserved_nodes` [`Multiadr`]
+                // come with PeerId included, in case they are not the `unwrap()` will only panic when the node is started.
+                .map(|address| PeerId::try_from_multiaddr(address).unwrap())
+                .collect(),
+        }
+    }
+}
+
+/// Checks if PeerId of the remote node is contained within the reserved nodes.
+/// It rejects the connection otherwise.
+fn accept_reserved_node<T>(
+    reserved_nodes: &HashSet<PeerId>,
+    remote_peer_id: PeerId,
+    io: NoiseOutput<T>,
+) -> future::Ready<Result<(PeerId, NoiseOutput<T>), NoiseError>> {
+    if reserved_nodes.contains(&remote_peer_id) {
+        future::ok((remote_peer_id, io))
+    } else {
+        future::err(NoiseError::AuthenticationFailed)
+    }
+}
+
+impl<P, C: Zeroize, R> UpgradeInfo for NoiseWithReservedNodes<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo,
+{
+    type Info = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::Info;
+    type InfoIter = <NoiseAuthenticated<P, C, R> as UpgradeInfo>::InfoIter;
+
+    fn protocol_info(&self) -> Self::InfoIter {
+        self.noise_authenticated.protocol_info()
+    }
+}
+
+impl<T, P, C, R> InboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo
+        + InboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
+        + 'static,
+    <NoiseAuthenticated<P, C, R> as InboundUpgrade<T>>::Future: Send,
+    T: AsyncRead + AsyncWrite + Send + 'static,
+    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
+{
+    type Output = (PeerId, NoiseOutput<T>);
+    type Error = NoiseError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_inbound(self, socket: T, info: Self::Info) -> Self::Future {
+        Box::pin(
+            self.noise_authenticated
+                .upgrade_inbound(socket, info)
+                .and_then(move |(remote_peer_id, io)| {
+                    accept_reserved_node(&self.reserved_nodes, remote_peer_id, io)
+                }),
+        )
+    }
+}
+
+impl<T, P, C, R> OutboundUpgrade<T> for NoiseWithReservedNodes<P, C, R>
+where
+    NoiseAuthenticated<P, C, R>: UpgradeInfo
+        + OutboundUpgrade<T, Output = (PeerId, NoiseOutput<T>), Error = NoiseError>
+        + 'static,
+    <NoiseAuthenticated<P, C, R> as OutboundUpgrade<T>>::Future: Send,
+    T: AsyncRead + AsyncWrite + Send + 'static,
+    C: Protocol<C> + AsRef<[u8]> + Zeroize + Send + 'static,
+{
+    type Output = (PeerId, NoiseOutput<T>);
+    type Error = NoiseError;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send>>;
+
+    fn upgrade_outbound(self, socket: T, info: Self::Info) -> Self::Future {
+        Box::pin(
+            self.noise_authenticated
+                .upgrade_outbound(socket, info)
+                .and_then(move |(remote_peer_id, io)| {
+                    accept_reserved_node(&self.reserved_nodes, remote_peer_id, io)
+                }),
+        )
+    }
 }

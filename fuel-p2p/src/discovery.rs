@@ -63,6 +63,9 @@ pub struct DiscoveryBehaviour {
     /// List of bootstrap nodes and their addresses
     bootstrap_nodes: Vec<(PeerId, Multiaddr)>,
 
+    /// List of reserved nodes and their addresses
+    reserved_nodes: Vec<(PeerId, Multiaddr)>,
+
     /// Track the connected peers
     connected_peers: HashSet<PeerId>,
 
@@ -86,7 +89,7 @@ pub struct DiscoveryBehaviour {
     max_peers_connected: usize,
 
     /// If false, `addresses_of_peer` won't return any private IPv4/IPv6 address,
-    /// except for the ones stored in `bootstrap_nodes`.
+    /// except for the ones stored in `bootstrap_nodes` and `reserved_peers`.
     allow_private_addresses: bool,
 }
 
@@ -272,6 +275,7 @@ impl NetworkBehaviour for DiscoveryBehaviour {
         let mut list = self
             .bootstrap_nodes
             .iter()
+            .chain(self.reserved_nodes.iter())
             .filter_map(|(current_peer_id, multiaddr)| {
                 if current_peer_id == peer_id {
                     Some(multiaddr.clone())
@@ -373,7 +377,7 @@ mod tests {
                 .discovery_limit(50)
                 .with_bootstrap_nodes(bootstrap_nodes)
                 .set_connection_idle_timeout(Duration::from_secs(120))
-                .enable_random_walk(true);
+                .with_random_walk(Duration::from_secs(5));
 
             config.finish()
         };
