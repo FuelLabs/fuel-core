@@ -84,7 +84,12 @@ impl<Codec: NetworkCodec> FuelBehaviour<Codec> {
                 .discovery_limit(p2p_config.max_peers_connected)
                 .allow_private_addresses(p2p_config.allow_private_addresses)
                 .with_bootstrap_nodes(p2p_config.bootstrap_nodes.clone())
-                .enable_random_walk(p2p_config.enable_random_walk);
+                .with_reserved_nodes(p2p_config.reserved_nodes.clone())
+                .enable_reserved_nodes_only_mode(p2p_config.reserved_nodes_only_mode);
+
+            if let Some(random_walk) = p2p_config.random_walk {
+                discovery_config.with_random_walk(random_walk);
+            }
 
             if let Some(duration) = p2p_config.connection_idle_timeout {
                 discovery_config.set_connection_idle_timeout(duration);
